@@ -64,9 +64,16 @@ Vector3 TransformNormal(const Vector3 &normal, const Hmx::Matrix3 &mat) {
     // RESIDUAL 99.68293 canonical / 94.31707 fuzzy, 23 rows, all register and
     // stack-slot permutation: the image INTERLEAVES the three rows -- three
     // fmuls, then three nx-fmadds sharing f7=nx as the multiplicand, then the
-    // three closing fmadds -- and holds nx in one register across all of it,
-    // where we schedule more of each row before moving on.  Zero `[sym]` rows,
-    // i.e. nothing here is a wrong callee.
+    // three closing fmadds -- and holds nx in one register across all of it.
+    // w26-a correction: we emit the SAME 3+3+3 grouping (three fmuls, then
+    // three fmadds on one term, then three on the other); the two later groups
+    // are TRANSPOSED, i.e. we fuse the row's third term second and its nx
+    // second term third, whereas the image does nx second and the third term
+    // last.  So this is not "we finish a row before starting the next" -- the
+    // grouping agrees and only which term is fused at each of the two later
+    // positions differs, which is a rounding difference (the fused product is
+    // the unrounded one), not just a register rename.
+    // Zero `[sym]` rows, i.e. nothing here is a wrong callee.
     //
     // ⚠ METHOD NOTE for whoever reads the numbers next: a large
     // (normalized - fuzzy) gap is NOT a wrong-callee tell.  This row has the
@@ -78,6 +85,23 @@ Vector3 TransformNormal(const Vector3 &normal, const Hmx::Matrix3 &mat) {
     // for `[sym]` rows under name_check, or ask
     // query_functions(objdiff_pattern='WRONG_CALLEE') -- which, asked of all
     // three of these units, returns a measured empty set.
+    //
+    // w26-a: 27 more spellings, every one still 18/41 (or 17), i.e. c2
+    // canonicalises them all to the same tree and the emitted order is
+    // invariant under all of them.  Tried: explicit parentheses `(t1 + t2) +
+    // t3`; partial-sum locals per row; a reused single partial-sum local;
+    // three partial-sum locals declared together; compound `+=` in three
+    // statements per row; every product named; only the FIRST / only the
+    // SECOND / only the THIRD product named; the second and third named;
+    // `normal.x` used directly so every multiplicand is a memory leaf; a
+    // second named copy of nx; and a `Vector3 acc` accumulator copied out.
+    // MECHANISM HYPOTHESIS: the two later fma positions are chosen by the c2
+    // commutative operand sort (C2RS-BRIDGE 8.7), whose key is a hash over
+    // the product's two leaves; the three products of a row are structurally
+    // identical (one named local x one stack leaf), so every spelling above
+    // reproduces the same three keys and the same order.  Moving it needs a
+    // leaf whose identity actually changes -- and the one that moves (nx) is
+    // shared by all three rows, so a per-row change is not available either.
     result.y = ny * inv.y.y + nx * inv.y.x + nz * inv.y.z;
     result.x = nz * inv.x.z + nx * inv.x.x + ny * inv.x.y;
     result.z = ny * inv.z.y + nx * inv.z.x + nz * inv.z.z;
@@ -800,6 +824,12 @@ void RndMesh::UpdateSphere() {
 //     Vector3::operator*= and the vector's end() -- all correctly written in
 //     natural x,y,z order, all shared by the whole engine.  Changing one to
 //     chase a row here would move thousands of unrelated functions.
+//     SUPERSEDED FOR GetDistanceToPlane by w26-a, and the reason is worth
+//     keeping: the rows were never the LOAD order at all.  They are which of
+//     the two y/z products c2 emits as `fmuls` -- a register/instruction pick,
+//     not a load -- and it IS reachable from source, by changing a leaf's
+//     CLASS rather than its position.  See the w26-a note in the body.  The
+//     other three named here are untouched by that finding.
 // MEASURED NEGATIVES on this class, each a full build, each EXACTLY inert on
 // BOTH rulers: declaration reorder and argument inlining and commuting the
 // combining operator (FillCompressedVertex); swapping -Dot's arguments and
@@ -820,10 +850,27 @@ float RndMesh::GetDistanceToPlane(const Plane &p, Vector3 &v) {
         // evaluated left-to-right natively, so it is spelled out here with
         // the image's grouping.  Order INSIDE the pair is inert on MSVC
         // (both spellings emit the same fmuls/fmadds pick).
-        float dot = (p.c * v.z + p.b * v.y) + p.a * v.x + p.d;
+        //
+        // w26-a CLOSED (99.9375 -> 100.0, 8 rows): the residual was NOT the load
+        // order of Plane::Dot's triple but WHICH of the two y/z products c2
+        // makes the `fmuls` (the other becomes the `fmadds`).  That is decided
+        // by the c2 commutative operand sort (C2RS-BRIDGE 8.7), whose key for a
+        // product is a hash of its two leaves -- so writing the pair the other
+        // way round in source is inert (measured: 4 spellings, 88/96 unchanged),
+        // exactly as the w22 note below records.  What DOES move it is changing
+        // a leaf's CLASS: `p.c`/`p.b` are memory leaves (a load folded into the
+        // tree), and naming them as locals makes them variable leaves with their
+        // own sids, which re-orders the pair.  Each scope needs its OWN pair --
+        // hoisting one pair over both expressions changes the shape (measured:
+        // 96 -> 98 instructions).
+        float pb = p.b;
+        float pc = p.c;
+        float dot = (pc * v.z + pb * v.y) + p.a * v.x + p.d;
         for (auto it = Verts().begin(); it != Verts().end(); ++it) {
             Multiply(it->pos, world, v58);
-            float dotted = (p.b * v58.y + p.c * v58.z) + p.a * v58.x + p.d;
+            float vpb = p.b;
+            float vpc = p.c;
+            float dotted = (vpc * v58.z + vpb * v58.y) + p.a * v58.x + p.d;
             if (std::fabs(dotted) < std::fabs(dot)) {
                 dot = dotted;
                 v = v58;
@@ -837,6 +884,23 @@ float RndMesh::GetDistanceToPlane(const Plane &p, Vector3 &v) {
 // (0x100) for the loop's end() and adds size*0x60 + begin; we do the
 // reverse.  VertVector::end() spelled `mVerts + mNumVerts`, `&mVerts[size()]`
 // and `begin() + size()` are all inert here, so the order is not end()'s.
+//
+// w26-a, 16 more spellings, still 107/111 (all at idx 78-82, the BACK-EDGE
+// recompute of end(); the ENTRY copy of the same expression at idx 49-55
+// already agrees with the image, in both builds): pointer and reference
+// bindings of Verts() (`const`/non-const), `&Verts()[0]`/`&Verts()[size()]`,
+// index loop, bare `Vert*` loop, `it++`, `it += 1`, reversed `!=` operands,
+// a hoisted `begin()`, a hoisted begin+size pair, and the same loop rewritten
+// as `while` and as a `for(;;)` with the increment moved into the body.
+// MECHANISM HYPOTHESIS, stated as one: end() is `&mVerts[mNumVerts]`, so its
+// two leaves are both r29-relative loads off the same base and differ only by
+// the displacement fold (0x100 vs 0x104) in the c2 commutative-sort key
+// (C2RS-BRIDGE 8.7).  That key is not reachable from this function -- the
+// expression lives in the shared Mesh.h nested class -- and the two
+// instantiations of it are coloured oppositely here, which is a property of
+// the live set across the body rather than of the expression.  Nothing was
+// found that flips the back-edge copy without either flipping the entry copy
+// or changing the instruction count.
 bool RndMesh::MakeWorldSphere(Sphere &s, bool b) {
     if (b) {
         if (mShowing) {
@@ -883,14 +947,27 @@ Vector3 RndMesh::SkinVertex(const RndMesh::Vert &vert, Vector3 *vptr) {
     if (NumBones() > 0) {
         Transform tf60;
         tf60.Zero();
+        // w26-a CLOSED (99.98165 -> 100.0, 14 rows): the residual was two
+        // callee-saved pairs (r24<->r25, r26<->r27) plus the emission order of
+        // the two `addi rX, r5, 0x48/0x20` base pointers.  `vert.boneIndices`
+        // and `&vert.boneWeights.x` were `la`-class address expressions folded
+        // straight into their loads, so which of the two got hoisted first --
+        // and therefore which register each took -- was the scheduler's pick
+        // and not something a declaration reorder could reach (measured: 5
+        // spellings inert at 95/109, including moving the bone-index read out
+        // of the compare and reordering the `&&` operands).  Naming them as
+        // pointer locals gives each its own candidate with its own id, and
+        // both the order and the registers fall out right (109/109).
+        const short *bi = vert.boneIndices;
+        const float *bw = &vert.boneWeights.x;
         for (int i = 0; i < 4; i++) {
-            if (vert.boneIndices[i] < NumBones()) {
-                int boneIdx = vert.boneIndices[i];
+            if (bi[i] < NumBones()) {
+                int boneIdx = bi[i];
                 RndTransformable *curBoneTrans = BoneTransAt(boneIdx);
-                if ((&vert.boneWeights.x)[i] != 0.0f && curBoneTrans) {
+                if (bw[i] != 0.0f && curBoneTrans) {
                     Transform tf90;
                     Multiply(BoneOffsetAt(boneIdx), curBoneTrans->WorldXfm(), tf90);
-                    ScaleAddEq(tf60, tf90, (&vert.boneWeights.x)[i]);
+                    ScaleAddEq(tf60, tf90, bw[i]);
                 }
             }
         }
@@ -1982,6 +2059,28 @@ DataNode RndMesh::OnConfigureMesh(const DataArray *da) {
 // declaring i9 before i88.  WORSE: `while (it != end()) d >> *it++;` (97.5).
 // Not tried on purpose: seeding i5 from another zero-valued local (i9/i88)
 // would invent a use -- flagged, not shipped.
+//
+// w26-a CONFIRMS the w21-be reading by decoding the permutation out of the
+// diff rather than eyeballing it, and it is exactly ONE cyclic shift of eight
+// registers, not a scattering of 51 independent rows:
+//     value   image   ours        value    image   ours
+//     zero     r21     r28         c8/bool  r26     r25
+//     this     r22     r21         i9       r27     r26
+//     d        r23     r22         TheDebug r28     r27
+//     kAssert  r24     r23
+//     Mesh.cpp r25     r24
+// So every other row is the same shift seen from a different value; nothing
+// else about the function differs, and the image's extra instruction is the
+// single `mr r28, r21` at row 174 (804 vs 800 bytes on both sides is that one
+// instruction).  Five more spellings MEASURED INERT this wave at 101/210 --
+// all six initialisers collapsed onto one line, b3 declared first, i8c/i88/i9
+// grouped onto one line, the five ints declared in reverse, and int instead of
+// unsigned for i8c/i88/i9.  c2 canonicalises the declaration forms, so the
+// coalescing decision is not reachable from how the zero-initialisers are
+// spelled; it is a c2rs §8.4 tie-0 pop-order / §8.6 `cost` preference question
+// (`CAND asg id 1 reg r28 cost r10:-1 r26:-1 r28:-1 r29:-1 r30:-1` -- the zero
+// web is pulled to r28 by copy preferences, not by its priority of -10, which
+// would have popped it above the pri -36/-37 pair).
 //
 // NOT A DEFECT: rows 62 and 159 call different MakeString instantiations
 // (`$$BY0BD@...$$BY04` vs our `$$BY08...$$BY0DH@`) while referencing the SAME
