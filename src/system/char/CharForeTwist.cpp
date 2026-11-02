@@ -128,6 +128,24 @@ void CharForeTwist::Poll() {
     // of the first Dot differs (image y + (x + z), ours x + (z + y)) and the
     // FPR colouring.  w21-al already measured the hz-binding and all 42
     // explicit-paren spellings; not repeated.
+    // w26-k (2026-11-02): mechanism, from the c2 tap.  The residual is the
+    // SECOND allocator, not COLOR.  This function has five FP colour
+    // candidates and all five are long-lived values that land in f0/f13/f31
+    // (id12 pri20 tie56 -> f0, id14 pri20 tie50 -> f13, id5 pri14 tie37 -> f0,
+    // id13 pri12 tie62 -> f31, id15 pri4 tie134 -> f13); every register in the
+    // Dot/Cross block below (f2..f12) is a regasg first-fit selection over the
+    // sched3 order (39 of them), so no priority/tie key decides it.  Two
+    // concrete consequences of that order: the image loads handxfm.m.z.x ONCE
+    // into f10 and reuses it for both Dot and Cross, where we emit `lfs 32(r30)`
+    // twice (0xac and 0xc8), and the image's first Dot starts from the .z term
+    // (`y + (x + z)`) where ours starts from .y.  Eleven further spellings were
+    // measured in w26-k against the c2 replay + objdiff (name_check) ruler and
+    // all were inert or worse than the 92.0150 fuzzy below: a `const Vector3
+    // &hz` shared by Dot and Cross (inert), the same as a by-value copy (72.9),
+    // reversed Dot operands (inert), v98 declared before the Clamp (inert),
+    // newbias hoisted above the block (inert), a named `float hzx` feeding an
+    // inlined first Dot (89.8), the first Dot written as `y + (x + z)` (90.6),
+    // hz bound only for Cross (inert), and parentxfm.m.x bound by name (inert).
     const Vector3 &py = parentxfm.m.y;
     float clamped = Clamp(-1.0f, 1.0f, Dot(py, handxfm.m.z));
     Vector3 v98;
