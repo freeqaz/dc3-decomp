@@ -139,6 +139,16 @@ void Box::GrowToContain(const Vector3 &vec, bool b) {
 }
 
 bool Box::Clamp(Vector3 &v) {
+    // w26-f5 (fuzzy 99.5, canonical 100.0): the two charged rows are the two
+    // `or`s folding the three ClampEq flags.  The image emits `or r10, r9, r10`
+    // then `or r11, r10, r11` -- ((x|y)|z) with the partial in src1; we emit
+    // ((z|y)|x).  c1 evaluates the three calls x,y,z on both sides, so the only
+    // difference is the order c2 re-emits the flattened chain in (C2RS-BRIDGE
+    // 8.7), and source associativity is inert: explicit left- and right-nested
+    // parens and `(bool)` casts each measured byte-identical.  A named
+    // accumulator, `|=`, int flags and three named bools all change the emitted
+    // shape (canonical 77.5-92.0).  The flags are branch-minted, so their sids
+    // follow the clamp order in both builds; nothing tried moved the sort.
     return ClampEq(v.x, mMin.x, mMax.x) | ClampEq(v.y, mMin.y, mMax.y) | ClampEq(v.z, mMin.z, mMax.z);
 }
 
@@ -858,7 +868,16 @@ void Sphere::GrowToContain(const Sphere &s) {
         // expression does under /fp:fast. Routing the products through Vector3
         // aggregates is what reproduces that.
         Vector3 dir, p, q, a, b;
-        dir.Set(dx * invDist, dy * invDist, dz * invDist);
+        // w26-f5: binding invDist as a reference moves the commutative
+        // operand sort (C2RS-BRIDGE 8.7) for the three Scale products below
+        // and for one of the dir products: 5 charged rows -> 3, fuzzy
+        // 99.462 -> 99.677, canonical still 100.0.  The three left (the x and
+        // y `dx*inv` products and the y Scale product) do not respond to
+        // binding the source components, naming the products, reordering the
+        // Vector3 declarations or re-spelling the Set as three component
+        // stores -- all measured inert.  See the lane note for the residual.
+        const float &inv = invDist;
+        dir.Set(dx * inv, dy * inv, dz * inv);
         Scale(dir, radius, p);
         Scale(dir, s.radius, q);
         Subtract(center, p, a);
@@ -917,12 +936,23 @@ static inline bool BehindPlane(const Plane &p, const Vector3 &v, float negRadius
 
 bool operator>(const Sphere &s, const Frustum &f) {
     float negRadius = -s.radius;
+    // w26-f5 a binding per plane leaves only the `top` Dot's a*centre.x pair in
+    // the wrong operand order: five references occupy five consecutive symbol
+    // ids, and the image needs the four plane-first instances (back, left,
+    // right, top) in the low band with `bottom` above it.  Leaving `f.front`
+    // inline frees the first slot, so the five bindings land where the image's
+    // keys put them.  References only -- behaviour unchanged.
+    const Plane &pb = f.back;
+    const Plane &pl = f.left;
+    const Plane &pr = f.right;
+    const Plane &pt = f.top;
+    const Plane &pbo = f.bottom;
     return BehindPlane(f.front, s.center, negRadius)
-        || BehindPlane(f.back, s.center, negRadius)
-        || BehindPlane(f.left, s.center, negRadius)
-        || BehindPlane(f.right, s.center, negRadius)
-        || BehindPlane(f.top, s.center, negRadius)
-        || BehindPlane(f.bottom, s.center, negRadius);
+        || BehindPlane(pb, s.center, negRadius)
+        || BehindPlane(pl, s.center, negRadius)
+        || BehindPlane(pr, s.center, negRadius)
+        || BehindPlane(pt, s.center, negRadius)
+        || BehindPlane(pbo, s.center, negRadius);
 }
 
 bool Intersect(const Segment &seg, const Sphere &sphere) {
@@ -1063,6 +1093,14 @@ bool Intersect(
 ) {
     // Moller-Trumbore using shifted views into the frame matrix:
     // e1 = {fx.y, fx.z, fy.x} (elements 1-3) and e2 = {fy.z, fz.x, fz.y} (elements 5-7)
+    // w26-f5 (fuzzy 98.784, canonical 100.0): all nine charged rows are
+    // multiplicand order, and in every one the image emits the FIRST-written
+    // factor first (`fmuls f12, f8, f9` for e2.x*v2.y, etc.).  Swapping the
+    // factors in source is byte-identical -- c2 sorts each commutative use list
+    // by key, so source order only survives a tie -- and naming every e1/e2/v2
+    // component regresses canonical to 81.0 because it re-hoists the twelve-load
+    // block.  The residual sits on the memory-leaf base temp, whose sort key is
+    // fixed by that temp's sid (C2RS-BRIDGE 8.7), not by the spelling.
     const Vector3 &e2 = *(const Vector3 *)((const char *)&tri + 0x20);
     const Vector3 &e1 = *(const Vector3 *)((const char *)&tri + 0x10);
 
