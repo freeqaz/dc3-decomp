@@ -743,6 +743,23 @@ Vector2 &DxRnd::DrawString(
     // scope, before MILO_ASSERT, inside the inner loop, or aliasing `pos`.  With
     // the shaderMgr alias back on SetVConstant as well, it reads 96.09 again.
     // An `unsigned long` temp for the pack, or a cast, is inert.
+    //
+    // STILL OPEN (w26-f8, fuzzy 99.77477, canonical 100.0).  Residual (a) is
+    // one two-way exchange: image r23 = `s` and r22 = TheShaderMgr's page
+    // base, we hold them the other way round.  Tap (`c2rs stage cands
+    // --regasg --fn DrawString`): the page base is id76 pri -21 tie 0
+    // (code#104) and `s` is id6 pri -24 tie 237 (arena#7); the page base pops
+    // first and takes r23.  The tie is already won by `s`, so only PRIORITY can
+    // flip it, and the gap is 3.  The C2RS-BRIDGE 8.8 global-OBJECT reference
+    // binding -- the lever that closed DrawLargeQuad in this same file -- was
+    // measured at five placements here and every one is inert or worse:
+    // bind + call through `RndShaderMgr &mgr` for the early pair 99.02252 /
+    // 95.86487 (SetVConstant only), 99.33784 (SetTransform only), binding
+    // alone (no call rewritten) INERT at 99.77477, binding at function scope
+    // before MILO_ASSERT INERT, and a binding at the tail SetVConstant
+    // 99.63063.  Naming the Hmx::Matrix4 temporary costs to 94.60.  So this
+    // row is not a leaf-key question; it is a priority gap between two
+    // long-lived candidates.
     const Hmx::Color &col = color;
     while ((c = *s) != 0) {
         if (c == '\n') {

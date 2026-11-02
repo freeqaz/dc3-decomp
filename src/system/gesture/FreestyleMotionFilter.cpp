@@ -53,6 +53,20 @@ void FreestyleMotionFilter::UpdateFilters(SkeletonUpdateData const &skeletonData
                 float z2 = vz * vz;
                 float sum = x2 + z2;
                 if (sum + y2 > mVelocityThreshold) {
+                    // STILL OPEN (w26-f8, fuzzy 99.78494, canonical 100.0): the
+                    // two residual rows are the ADD TREE, not the registers.
+                    // Image: f0 = f13 + f0 then + f12, i.e. (y2 + x2) + z2.
+                    // Ours: f13 = f13 + f12 then + f0, i.e. (y2 + z2) + x2.
+                    // Source-ORDER spelling is inert (x2+y2+z2, y2+x2+z2,
+                    // z2+y2+x2, a named `total`, a named first sum -- all five
+                    // exactly 99.78494), so c2 picks the pairing, not the
+                    // source.  What DOES move it is explicit parentheses, which
+                    // change c1's folding before contraction: `(x2 + y2) + z2`
+                    // and `(y2 + x2) + z2` reach 99.89247 (one row left), while
+                    // `(x2 + z2) + y2` -- the tree the source already parses to
+                    // -- collapses to 96.18279.  Not landed: 99.89247 still
+                    // emits a different association from the image's, so it
+                    // changes float rounding without reaching the image's.
                     mMovementAmount = sqrtf(x2 + z2 + y2);
                     mMoveTime = (float)skeleton->ElapsedMs();
                     return;

@@ -267,6 +267,28 @@ JoypadType ReadSingleXinputJoypad(
     // 0x825FCEF8 `extrwi r8, r11, 1, 26` feeds TranslateStick's bool argument
     // DIRECTLY.  An unsigned char makes MSVC re-normalise it at every call
     // site with the `subic`/`subfe` pair.
+    // STILL OPEN (w26-f8, fuzzy 99.78261, canonical 100.0): one two-way
+    // exchange between this flag and `rx`.  Image: `clrlwi r31, r31, 24`
+    // narrows setup_flag IN PLACE, the flag keeps r31 to the end and `rx`
+    // takes the volatile r7.  Ours: the zero-extended value is its own temp
+    // (`clrlwi r7, r31, 24`) that takes r7, and `rx` takes r31.  Tap for this
+    // TU (c2rs stage cands --regasg --fn ReadSingleXinputJoypad): id32, the
+    // narrow temp, is pri -8 tie 106 with an allowed set spanning the volatiles
+    // (it takes r7); id24, the `rx` local, is pri -9 tie 92 and nonvolatile-only
+    // (it takes r31).  Since the image narrows in place, the image plausibly has
+    // ONE candidate here where we have two -- a candidate-count difference, not
+    // a key one.  Spellings measured inert at 99.78261 (canonical 100.0):
+    // `!setup_flag`, `setup_flag ? false : true`; worse: `unsigned char`
+    // deadzone_apply 98.74, `setup_flag = (setup_flag == 0)` 98.33,
+    // `(0 == setup_flag)` 98.29.
+    //
+    // MEASUREMENT NOTE: this TU does NOT reproduce through the per-object path.
+    // `ninja build/.../Joypad_Xinput.obj` + `obj_patch_chain.py --apply` reads
+    // fuzzy 99.73430 / canonical 99.95169, and `verify_objs_patched.py
+    // --verify-manifest` then reports the object as drifted while
+    // obj_patch_chain reports "anon_ns=0, dynamic_init=0, guard=0,
+    // bool_mangle=0, atexit_scope=0, build_metadata=0".  A full `ninja`
+    // restores 99.78261 / 100.0.  Judge this row from a full build only.
     bool deadzone_apply = (setup_flag == 0);
     TranslateStick(stick_lx, lx, 0, deadzone_apply);
 
