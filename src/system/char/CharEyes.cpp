@@ -973,6 +973,37 @@ void CharEyes::NextLook() {
         // tie-0 hoisted-address shape of C2RS-BRIDGE 8.4, where the source
         // lever is the code band's C-F count (how many demotions precede the
         // band), not anything spelled here.
+        //
+        // w27-l (2026-11-02, 99.57085 canonical / 98.72065 fuzzy, 495 rows,
+        // 62 mismatch rows): re-adjudicated against the listing; NOT a
+        // behaviour difference. There is no opcode change, no immediate change,
+        // no different callee and no branch polarity change anywhere in the 62
+        // rows. What they are:
+        //   * 8 pure relocation names -- `lbl_82F5E80C` is our
+        //     `?$S6@?BF@??NextLook` guard, `lbl_82F5E808`/`lbl_82F5E804` are
+        //     `interestCheat`/`blinkCheat`; those three addresses carry no name
+        //     in config/373307D9/symbols.txt, and CopyRef/SetObjConcrete over
+        //     FlowLabel/SpotlightDrawer vs CharInterest are ICF aliases
+        //     (0x823EFAA0 and 0x8283F540 in icf_aliases.map). Nothing in source
+        //     can move a name the target does not have.
+        //   * the r22<->r24 rotation (head base) plus the commutative operand
+        //     orders that ride it -- `fmuls f30,f30,f0` vs `f30,f0,f30`, the
+        //     post-tan fadds, the projection/Set rows.
+        //   * one DISPLACED instruction only: `fsubs f0, f0, f31` (idx 437/439).
+        // Re-derived by hand because a row-aligned read can invent a field swap
+        // (w27-h): target idx 163-173 is `mTarget.z < dirXfm.v.z` compared with
+        // the two loads assigned the other way round, and both sides' `fdivs`
+        // is (dirXfm.v.z - headXfm.v.z) / (mTarget.z - headXfm.v.z). Same
+        // operands, same result.
+        // MEASURED AND REJECTED (C2RS-BRIDGE 8.4 free-count lever): binding one
+        // more named pointer/reference to `dirTrans` INSIDE the `if (dirTrans)`
+        // block, before the WorldXfm() call, moves fuzzy 98.72065 -> 98.74089
+        // (canonical unchanged at 99.57085, 1976 B unchanged) -- reproducibly,
+        // for both `RndTransformable *dirT = dirTrans;` and
+        // `RndTransformable &dirT = *dirTrans;`. The same binding placed one
+        // statement earlier, outside the null test, is inert, so it is a
+        // scheduling/priority shift and nothing else. It is a redundant alias
+        // that no original source would contain; not landed.
         Vector3 newFacing = facingDir;
         float dz = (facingDir.z - lastFacing.z) * 45.0f;
         float dx = (facingDir.x - lastFacing.x) * 45.0f;

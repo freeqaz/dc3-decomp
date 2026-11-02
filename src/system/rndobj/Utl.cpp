@@ -2124,6 +2124,26 @@ void ResetNormals(RndMesh *m) {
                 //      SCORE-NEUTRAL: 54 rows -> 53 rows but canonical 99.032326
                 //      before and after, to all six digits.  Kept the symmetric
                 //      three-declarations-together spelling.
+                // w27-l (2026-11-02, 99.03636 canonical / 98.48080 fuzzy, 496
+                // rows): the two-instruction gap is the IMAGE's two-address
+                // multiply, and the three `Verts()` spellings measured this
+                // round do not produce it.  Re-read from the listing: the image
+                // emits `mr r9, r7 / mulli r9, r9, 0x60` and `mr r7, r4 /
+                // mulli r7, r7, 0x60` at idx 229-237 where we emit
+                // `mulli r9, r7, 0x60` / `mulli r7, r4, 0x60`; both compute the
+                // same byte offset (the index register is dead on both sides at
+                // the point of the copy, so this is not a liveness difference --
+                // it is c2 choosing the dst==src form of the scale).  Nothing
+                // observable follows: the remaining 50 rows are the documented
+                // schedule inversion, its f0/f12/f13 cascade and two `lfs`
+                // offset swaps, and objdiff reports diff_op none.
+                // MEASURED, all keep 1972 B and change nothing: `m->Verts(i)`
+                // instead of `m->Verts()[i]` for one, two or all three of
+                // v0/v1/v2 (99.03636 / 98.48080 every combination -- the
+                // accessor inlines to the same tree).  `face[k]` for
+                // `face[k % 3]` REGRESSES to 93.06263 / 91.92121, so the
+                // redundant `% 3` is load-bearing for the surrounding schedule;
+                // do not "simplify" it.
                 const RndMesh::Vert &v0 = m->Verts()[face[k % 3]];
                 const RndMesh::Vert &v1 = m->Verts()[face[(k + 1) % 3]];
                 const RndMesh::Vert &v2 = m->Verts()[face[(k + 2) % 3]];

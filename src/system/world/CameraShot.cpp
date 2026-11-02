@@ -603,6 +603,31 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
         // `else if (hasTarget) ... else thisFocalDist = 0;` (99.4, +0x10 frame,
         // f23 save). Both inits must stay up front; declaring them at the top
         // of the doDOF block is bit-identical.
+        //
+        // w27-l (2026-11-02, 99.68689 canonical / 99.46184 fuzzy, 512 rows):
+        // the whole charged residual is ONE instruction, and it is the
+        // CONSTANT'S COLOUR, not this block's spelling. Read both listings at
+        // the doDOF entry: the image loads __real@00000000 into f30 and never
+        // reloads it (`lfs f30` at idx 14), so `thisFocalDist = 0` is a
+        // self-move the allocator deletes; ours loads the same constant into
+        // f28 (idx 14), so BOTH inits become real moves (`fmr f30, f28` at idx
+        // 281, `fmr f29, f28` at 283) and the image's `cmplwi cr6, r26, 0`
+        // (the `if (focus)` test) slides two slots later.  The f28/f29/f30
+        // rotation through both interpolator blocks is downstream of that one
+        // choice: the constant is live across an IDENTICAL range on both sides
+        // (last use `stfs <const>, 0x54(r31)`, i.e. screenVec.y = 0.0f, at idx
+        // 233), so no spelling of the body changes the priority order.
+        // Measured this round: `0.0f` literals (canonical and fuzzy inert);
+        // one-line `float a = 0, b = 0;` (inert); `b = 0; a = b;` and the
+        // swapped declaration order (canonical inert, fuzzy 99.46184 ->
+        // 99.45206 -- do not land either).
+        // The three entries under objdiff's "Function Call Diff" are ICF
+        // aliases, not source differences: MakeString<_D3DFORMAT> and
+        // MakeString<CamShotFrame::BlendEaseMode> are the same body
+        // (0x82610090), and the two `$$BY...` asserts are one pointer-shaped
+        // group (994 MakeString aliases in build/373307D9/icf_aliases.map).
+        // objdiff already scores all three rows EQUAL; the block is display
+        // only (C2RS-BRIDGE 9).
         float thisFocalDist = 0;
         float otherFocalDist = 0;
         if (focus) {

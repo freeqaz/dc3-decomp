@@ -223,6 +223,16 @@ void NgPostProc::DoBloom() {
         // load (so it dies there), then stores w1,w2,w3; we load w1,w0,w2,w3 and
         // recycle r11 for the third, which forces `stw r11,4(r7)` two slots
         // earlier.  No source spelling found moves the death point of the temp.
+        // w27-l (2026-11-02, 99.584366 canonical / 99.5535 fuzzy, 486 rows):
+        // still exactly that schedule -- the charged rows are idx 458-463, the
+        // 16-byte copy out of the temporary, and nothing else: `lwz r6,0xc` /
+        // `lwz r10,0x8` (image) against `lwz r6,0x8` / `lwz r11,0xc` (ours), with
+        // the image's `stw r11,0x4(r7)` one slot earlier.  Two further rows in
+        // objdiff's "Function Call Diff" block are not source differences and
+        // cost nothing: Hmx::Color::operator== and Hmx::Rect::operator== are one
+        // ICF body (0x82712120 in icf_aliases.map), and our `sBloomDebugCounter`
+        // relocates to 0x830A8A30, which symbols.txt itself calls
+        // `lbl_830A8A30` -- the image has no name there to match.
         s_prevBloomColor = Hmx::Color(-1, -1, -1, -1);
     }
 

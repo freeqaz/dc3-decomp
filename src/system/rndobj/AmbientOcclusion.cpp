@@ -1339,6 +1339,26 @@ struct FacePriority {
 // of which the largest are two 16-byte copy word orders.  Re-deriving the
 // frame (which local the image keeps where) is the next step, not another
 // spelling of this body.
+//
+// w27-l (2026-11-02, 94.43366 canonical / 93.34728 fuzzy): w26-k stands --
+// re-adjudicated against the listing, still not a behaviour difference.  No
+// comparison, immediate, callee or branch polarity differs; every `diff_arg`
+// row is a register or an r1-relative offset, and both sides read and write
+// the same fields in the same order.  The clearest single statement of the
+// mechanism is the cluster at idx 380-395, at `i0/i1/i2`:
+//     image: sth r5,0x50(r31) / sth r6,0x50(r31) / sth r4,0x50(r31)
+//     ours : (nothing there)
+// The image homes each of the three u16 face indices into ONE 2-byte scratch
+// slot, 0x50(r31), which it then writes six times (idx 380/386/391/674/676/
+// 678) and NEVER reads as a u16 -- a dead home store.  Reproducing it would
+// need a statement whose only effect is a store nothing reads, i.e. invented
+// code; not landed.  The frame gap is the same story at whole-local scale:
+// image 0x4E0 vs ours 0x4D0, and the three `Vector3` results are the same
+// objects in a different order (image wp2=0x1F0, wp0=0x200, wp1=0x210; ours
+// wp1=0x1E0, wp2=0x1F0, wp0=0x200), which is why 39 u16 user slots ride a
+// uniform -0x4 shift.  Register side: 56 GPR swap pairs, r10/r11 (32) and
+// r10/r9 (22) dominant, all downstream of where those three Vector3s and the
+// two `mObjectsTessellate` iterator homes land.
 void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
     if (mObjectsTessellate.empty())
         return;
