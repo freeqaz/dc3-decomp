@@ -124,14 +124,22 @@ void CharClipGroup::AddClip(CharClip *clip) {
 // copy; the non-const sites (LightPreset::SyncNewSpotlights, 100) compare
 // inside an `if`, which the `if` spellings above did not reproduce here.
 // w24-c1 (56.81, unchanged; same 23 rows): `mClips.find(clip) !=
-// mClips.end()` re-measured -- it only flips the subf operands (it then
-// computes end - find, the image's order) and the end() add is still sunk
-// past `bl find`; 56.8 canonical either way.  The image finishes
-// begin()+size()*0x14 into r31 before the call; we hold begin and size in
-// r30/r31 and add after.  Not reachable from this function's source without
-// touching ObjPtrVec::end() const in obj/Object.h (PCH header, whole-binary).
+// mClips.end()` re-measured -- it only flips the subf operands and the end()
+// add is still sunk past `bl find`; 56.8 canonical either way.
+// w31-d (56.81 -> 100, 128 B = the image's 128 B): the residual was exactly
+// the c2 schedule/colour chicken-and-egg documented in the C2RS-BRIDGE:
+// `end()` = begin() + size() is not a stored pointer, so c2 sank the
+// `mulli`/`add` past `bl find`, which made the COUNT live across the call --
+// a nonvolatile COLOR candidate (tap: id 3 sym 4/k04 pri 7 tie 6 allowed
+// { r14..r30 } -> r30) -- and the extra saved register is the 8-byte frame.
+// Binding `end()` to a const REFERENCE (C2RS-BRIDGE 8.8: bind, do not copy)
+// materialises the iterator before the call: the image's shape, one saved
+// GPR (r31), the tap's two nonvolatile candidates collapse to one.  A plain
+// named copy (or `find != end`, `begin()+size()`, a named count, an if/else)
+// is folded back by c1 and stays at 56.81.
 bool CharClipGroup::HasClip(CharClip *clip) const {
-    return mClips.end() != mClips.find(clip);
+    const ObjPtrVec<CharClip>::const_iterator &end = mClips.end();
+    return mClips.find(clip) != end;
 }
 
 int CharClipGroup::QueueRandom(int pos, int end) const {
