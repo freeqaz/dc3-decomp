@@ -909,7 +909,32 @@ struct WrapPoint {
  *  (C2RS-BRIDGE §8.11 statement boundaries + §8.4 C-F pop order), and the
  *  six extras are the rematerialisation that split forces.  Worth pairing
  *  with the `this` = r30 vs r27 cascade above -- both are the same §8.4 tie-0
- *  ordering decision. */
+ *  ordering decision.
+ *
+ *  w31-a (2026-11-03): C2RS-BRIDGE §20's rotation-guard lever (the one that
+ *  took ConstructMeshes 90.94 -> 94.66) does NOT transfer here -- MEASURED,
+ *  and it is actively harmful.  Guarding the `lines` bounds loop below with
+ *  `if (lines.begin() != lines.end())` reads 94.90 canonical / 93.4 fuzzy
+ *  against this 97.05 / 95.58, with 690 instruction rows instead of 681 and
+ *  15 insert / 19 delete instead of 6 / 12; it also moves the frame and
+ *  reshuffles the whole `li` group.  The reason is visible before any variant
+ *  is written: the lever works by reproducing a SECOND evaluation of a loop
+ *  condition, and this image has none to reproduce.  Function-bounded
+ *  multiset over each side's own bytes (ours 669 instrs / 2676 B, target 675 /
+ *  2700 B): compare and branch MULTIPLICITIES are identical -- cmplw 1 each,
+ *  cmpw 4 each, and every cmplwi/fcmpu/branch form equal -- while all six of
+ *  the image's extra instructions are bookkeeping (1 add, 1 lwz, 2 mr,
+ *  1 mulli, 1 stw), none of them a cmp or a b.  A guard adds a compare plus a
+ *  branch; there is nothing here for it to match.  (The two `do { } while` loops in this
+ *  body already sit under `if (wps[0].nextIdx != -1)` / `if (idx != 0)`, so
+ *  the shape the lever calls for is present where the source has it.)
+ *
+ *  Behaviour is settled independently of any of that: the RELOCATION-SYMBOL
+ *  multiset over each side's own byte range is 113 on both, and every entry
+ *  that differs is one of the two ICF-fold classes already named above --
+ *  3 `vector<Line>::erase` against `vector<VFilterInputFrame>::erase`, and the
+ *  assert `MakeString` instantiations against the group survivor.  No wrong
+ *  constant, no wrong global and no wrong callee. */
 void RndText::WrapText(
     const unsigned short *wideChars, int wLen, float *charWidths,
     HX_VECTOR(Line) &lines, Hmx::Rect &bounds, float scale
