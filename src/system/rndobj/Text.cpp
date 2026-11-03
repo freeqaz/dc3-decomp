@@ -909,7 +909,32 @@ struct WrapPoint {
  *  (C2RS-BRIDGE §8.11 statement boundaries + §8.4 C-F pop order), and the
  *  six extras are the rematerialisation that split forces.  Worth pairing
  *  with the `this` = r30 vs r27 cascade above -- both are the same §8.4 tie-0
- *  ordering decision. */
+ *  ordering decision.
+ *
+ *  w31-a (2026-11-03): C2RS-BRIDGE §20's rotation-guard lever (the one that
+ *  took ConstructMeshes 90.94 -> 94.66) does NOT transfer here -- MEASURED,
+ *  and it is actively harmful.  Guarding the `lines` bounds loop below with
+ *  `if (lines.begin() != lines.end())` reads 94.90 canonical / 93.4 fuzzy
+ *  against this 97.05 / 95.58, with 690 instruction rows instead of 681 and
+ *  15 insert / 19 delete instead of 6 / 12; it also moves the frame and
+ *  reshuffles the whole `li` group.  The reason is visible before any variant
+ *  is written: the lever works by reproducing a SECOND evaluation of a loop
+ *  condition, and this image has none to reproduce.  Function-bounded
+ *  multiset over each side's own bytes (ours 669 instrs / 2676 B, target 675 /
+ *  2700 B): compare and branch MULTIPLICITIES are identical -- cmplw 1 each,
+ *  cmpw 4 each, and every cmplwi/fcmpu/branch form equal -- while all six of
+ *  the image's extra instructions are bookkeeping (1 add, 1 lwz, 2 mr,
+ *  1 mulli, 1 stw), none of them a cmp or a b.  A guard adds a compare plus a
+ *  branch; there is nothing here for it to match.  (The two `do { } while` loops in this
+ *  body already sit under `if (wps[0].nextIdx != -1)` / `if (idx != 0)`, so
+ *  the shape the lever calls for is present where the source has it.)
+ *
+ *  Behaviour is settled independently of any of that: the RELOCATION-SYMBOL
+ *  multiset over each side's own byte range is 113 on both, and every entry
+ *  that differs is one of the two ICF-fold classes already named above --
+ *  3 `vector<Line>::erase` against `vector<VFilterInputFrame>::erase`, and the
+ *  assert `MakeString` instantiations against the group survivor.  No wrong
+ *  constant, no wrong global and no wrong callee. */
 void RndText::WrapText(
     const unsigned short *wideChars, int wLen, float *charWidths,
     HX_VECTOR(Line) &lines, Hmx::Rect &bounds, float scale
@@ -3162,6 +3187,25 @@ void RndText::FontMap::SetupCharacter(
     // across the virtual AspectRatio() call (`fmr f26, f0` at 0x25f4).  This
     // local does NOT reproduce it (w7-bs): wherever it is declared it merges
     // into the single `lfs f30, 0x0(r30)`; it is kept for readability only.
+    // w31-a (2026-11-03): the one placement w7-bs did not try -- hoisting the
+    // declaration ABOVE the `z0` statement and using it there, which is where
+    // the image's `fmr` sits (between the mZOffset load and the z0 `fmadds`)
+    // -- is byte-inert too: 98.40945 canonical / 97.54330 fuzzy, 38 diff_arg
+    // + 2 insert + 2 delete, identical to the current spelling.  c1 folds the
+    // copy away wherever it is written, so the image's extra `fmr` is a c2
+    // live-range split across the AspectRatio() call, not a source value.
+    //
+    // w31-a behaviour certificate for the whole function: the
+    // RELOCATION-SYMBOL multiset over each side's own byte range is 23 on
+    // both sides and IDENTICAL, so no constant, callee, global or string in
+    // this body is wrong.  The 42 residual swap instructions are ONE FPR
+    // rotation, not 8 independent faults: volatile side, the image holds
+    // sum/charW/advW in f13/f12/f0 and we hold them in f0/f13/f12; saved
+    // side, the image holds size/z0/circle/0.5/scaledCenter in
+    // f26/f27/f28/f29/f30 and we hold z0/circle/0.5/scaledCenter/mSize in
+    // the same five.  Both follow the regasg first-fit list (f0 f13 f12 ...,
+    // then f31..f14) over the sched3 def stream -- C2RS-BRIDGE §8.2 -- which
+    // is why the `size` copy cannot be re-keyed from source.
     float size = state.mSize;
     auto _tmp1 = mFont->AspectRatio();
     float italics = state.mItalics * size;
