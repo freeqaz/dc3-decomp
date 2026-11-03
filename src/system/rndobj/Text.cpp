@@ -3187,6 +3187,25 @@ void RndText::FontMap::SetupCharacter(
     // across the virtual AspectRatio() call (`fmr f26, f0` at 0x25f4).  This
     // local does NOT reproduce it (w7-bs): wherever it is declared it merges
     // into the single `lfs f30, 0x0(r30)`; it is kept for readability only.
+    // w31-a (2026-11-03): the one placement w7-bs did not try -- hoisting the
+    // declaration ABOVE the `z0` statement and using it there, which is where
+    // the image's `fmr` sits (between the mZOffset load and the z0 `fmadds`)
+    // -- is byte-inert too: 98.40945 canonical / 97.54330 fuzzy, 38 diff_arg
+    // + 2 insert + 2 delete, identical to the current spelling.  c1 folds the
+    // copy away wherever it is written, so the image's extra `fmr` is a c2
+    // live-range split across the AspectRatio() call, not a source value.
+    //
+    // w31-a behaviour certificate for the whole function: the
+    // RELOCATION-SYMBOL multiset over each side's own byte range is 23 on
+    // both sides and IDENTICAL, so no constant, callee, global or string in
+    // this body is wrong.  The 42 residual swap instructions are ONE FPR
+    // rotation, not 8 independent faults: volatile side, the image holds
+    // sum/charW/advW in f13/f12/f0 and we hold them in f0/f13/f12; saved
+    // side, the image holds size/z0/circle/0.5/scaledCenter in
+    // f26/f27/f28/f29/f30 and we hold z0/circle/0.5/scaledCenter/mSize in
+    // the same five.  Both follow the regasg first-fit list (f0 f13 f12 ...,
+    // then f31..f14) over the sched3 def stream -- C2RS-BRIDGE §8.2 -- which
+    // is why the `size` copy cannot be re-keyed from source.
     float size = state.mSize;
     auto _tmp1 = mFont->AspectRatio();
     float italics = state.mItalics * size;
