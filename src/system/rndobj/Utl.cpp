@@ -2704,6 +2704,17 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
         // it), and the box1/box2 store sinking is the list scheduler's, since
         // SetBoxExtent is already first in the source and moving it later was
         // measured at 90.5-92.1 by w7-bx.
+        //
+        // w31-a (2026-11-03) strengthened that to the two checks a masked
+        // instruction multiset cannot make.  Over each side's own byte range
+        // (2928 B / 732 instructions on BOTH) the mnemonics are identical AND
+        // the compare/branch multiset is identical -- cmplw, cmpw, cmplwi,
+        // fcmpu and every branch form at equal multiplicity, so no condition
+        // is evaluated a different number of times.  The RELOCATION-SYMBOL
+        // multiset is 109 on both sides and IDENTICAL, so no constant, global
+        // or callee differs either.  What is left is placement: the list
+        // scheduler's store sinking plus the §8.7 commutative key on the six
+        // `fmuls f31, f12` / `fmuls f12, f31` rows.
         Vector3 box1, box2;
         Scale(partsys->BoxExtent1(), scale, box1);
         Scale(partsys->BoxExtent2(), scale, box2);
