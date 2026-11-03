@@ -728,6 +728,33 @@ void JoypadPollCommon() {
             // 127.0f / 1/127.0f pair it must keep hoisting, so the budget is
             // exactly one register.  Everything above this paragraph was
             // re-confirmed against the current tree; no new spelling landed.
+            //
+            // w31-b (2026-11-03): LOCALISED to an address, and the third FPR is
+            // NOT the entry initialiser.  Prologue: image `stfd f30,-0xa8` /
+            // `stfd f31,-0xa0` and frame 0x12d0; ours adds `stfd f29,-0xb0` and
+            // frame 0x12e0.  f31 = __real@42480000 (127.0f), f30/f29 =
+            // __real@3c010204 (1/127.0f) on the two sides -- and our EXTRA
+            // register is f30, loaded at 0x70/0x74 (`lfs f30,
+            // __real@00000000@l(r11)` / `stfs f30,0x7c(r1)`) where the image
+            // loads the same constant into volatile f0.  The two sites that
+            // share it are the `pressures[] = { 0 }` initialiser and the
+            // in-loop `pressures[p] = 0.0f` reset (image 0x6c and 0x198, each
+            // `lis __real@00000000@h` + `lfs f0,@l`; ours has ONE `lis` and one
+            // load reused).  So c2 CSEs the two zero sites and hoists the load
+            // to entry, making it live across the loop's calls -> callee-saved.
+            // DIAGNOSTIC, not a candidate: deleting the pre-loop initialiser
+            // (which the reset loop makes redundant) does NOT remove the third
+            // FPR -- f30 survives, the frame stays 0x12e0, and it scores worse
+            // (95.43 vs 96.81 canonical), so the value being kept alive is the
+            // loop's, not the initialiser's.  Also inert on the register:
+            // `pressures[p] = 0` (int), unrolled `pressures[0] = 0.0f`, `= {}`
+            // value-init, `= { 0.0f }`, a named `const float zeroF`, a named
+            // `float *pr = pressures`, `*(pressures + p)`, `0.0f * 1.0f`, and
+            // declaring `pressures` after `pro_guitar` (which also costs 1.5).
+            // `x = y = 0.0f` in the stick else-arm costs 0.27.  Both sides are
+            // 661 vs 658 instructions: the image materialises 0.0f twice where
+            // we materialise it once, which is exactly the 2-instruction gap
+            // plus our extra stfd/lfd pair.
             for (int k = 0; k < kNumAnalogSticks; k++) {
                 float x;
                 float y;

@@ -405,6 +405,40 @@ void ReadFunc(BINKIO *bink, bool startRead) {
             // moves fuzzy UP by 0.98 (88.20 -> 89.18) but moves canonical DOWN
             // by 0.10 (90.848 -> 90.752), so it is not a win and is not taken.
             // There is no unicorn row for this function.
+            //
+            // w31-b (2026-11-03): the whole two-word byte-swap block was
+            // extracted from objdiff's own aligned rows (both sides, the 55
+            // instructions between `li r12,0xff` and the two `std`s) and
+            // EXECUTED symbolically over 2000 random (d0, d1) pairs with the
+            // PPC subset the block uses (ld, rldicl, rldicr, rldimi, rlwinm,
+            // clrrwi, and, or, li, addi): the two blocks produce the SAME two
+            // 64-bit results on 2000/2000. Two sensitivity controls, each a
+            // single-operand edit that changes no register number in a way
+            // objdiff would mask, fire: `rldicr r12,r12,48,15` -> `...,56,7`
+            // gives 0/2000 and `and r9,r11,r12` -> `and r9,r10,r12` gives
+            // 11/2000. So the differently-ordered mask rotations and the
+            // `rldicl ...,48,16` vs `rldicl ...,48,24` + `rldicr ...,0,31`
+            // substitution are scheduling of the same computation, not a
+            // different one. The only remaining instruction delta is the
+            // r29/r30 callee-saved pair (bf vs the hoisted zero), which is a
+            // colour tie, not arithmetic. Body is 2 instructions SHORT of the
+            // image's 210, so nothing here can be banked as a gain either.
+            //
+            // w31-b: the tap names the tie. `c2rs stage cands` on this TU:
+            //   id 6 pri 53 tie 73 ben 21 ref 13 sym 7/k04 -> r30
+            //   id 4 pri 50 tie  4 ben 43 ref 22 sym 5/k04 -> r29
+            // id 6 is the `int bytesRead = 0` local and id 4 is `bf`; the
+            // image needs `bf` (id 4) to pop FIRST, i.e. its priority must
+            // reach id 6's. Measured inert on the register (all 88.20476 /
+            // 90.84762, unchanged): reading the DoingARead flag through `bf`
+            // instead of `bink`, dropping `uBytesRead` and casting at each of
+            // the four use sites, and an extra named `File *fp = bf->pFile;`
+            // (folded away -- and it would be fabricated anyway). Declaration
+            // order is not the lever either: moving `int bytesRead = 0;` up
+            // to precede `BINKIOFILE *bf`, inside or outside the guard, costs
+            // 1.9 canonical. So this is a priority inversion in the 50-53 band
+            // with the two candidates in the same blocks; the §6.2 handle is
+            // refs-per-block and no honest spelling moves the count.
             XTEABlock *block = (XTEABlock *)bf->pBufBack;
             while (block < (XTEABlock *)((unsigned char *)bf->pBufBack + bytesRead)) {
                 block->mData[1] = EndianSwap(block->mData[1]);
