@@ -332,14 +332,45 @@ void NgEnviron::Select(const Vector3 *pos) {
     // inert: a `RndShaderMgr &` bound in the FogEnable arm (byte-identical
     // per-object).  Worse: the same binding in the else arm, 95.669; a
     // redundant `fogParams.x = 0.0f;` after the constant vector, 96.812.
+    // SOLVED (w31-c, 2026-11-03), and the lever was the POINTER, not the
+    // reference: `RndShaderMgr *mgr = &TheShaderMgr;` in the FogEnable arm,
+    // with BOTH calls going through `mgr->`, is 96.899796 -> 98.55215
+    // canonical and 96.50102 -> 98.26585 fuzzy.  A reference folds back to the
+    // global expression and is byte-inert; the pointer is a distinct IL value,
+    // so c1 stops sharing the FogEnable arm's TheShaderMgr node with the else
+    // arm and the image's own per-arm formation comes back.  BOTH calls have
+    // to move: the pointer on SetVConstant alone or on SetPConstant alone is
+    // the 96.90 baseline exactly.  Inert refinements measured: declaring mgr
+    // above the Vector4 (98.47034 per-object, same), `RndShaderMgr *const`
+    // (same), a second `mgr2 = mgr` (same); the scoped `{ RndShaderMgr *mgr
+    // = ...; }` form is much worse (96.81799, i.e. no gain) because each
+    // short range re-folds, and a pointer in the ELSE arm too is 94.27.
+    // What is left is scheduling of the same instructions: we copy the loaded
+    // pointer into r29 (`mr r29, r3`) and use it across the SetVConstant
+    // call, where the image reloads `lwz r3, 0(r30)` from the address at each
+    // site; plus the Vector4 store order and two `lwz r3, 0(r30)` placements.
     // The remaining rows are the Vector4 ctor's store order (image x,z,w
     // with y last; ours w,x,z with y last) and the fade/LRFade block.
+    //
+    // w31-c (2026-11-03): the fade/plane arithmetic is FAITHFUL -- re-derived
+    // from 826A4DD0..826A4F7C.  fadeRefDot is the y,z,x `fmadds` chain in f10;
+    // leftPlane stores 0,0,0,1 (f31/f30 = 0.0f/1.0f), tests lrFade.x != .y,
+    // scale = f30/(y-x), x/y/z as `fadeDir.k * scale` (fadeDir FIRST, matching
+    // the source's operand order), w as `fneg((x + dot) * scale)`.  rightPlane
+    // reuses the SAME f10 dot, tests .z != .w, and multiplies scale-first
+    // (`fmuls f13,f10,f13`), which is also how the source writes it.  Nothing
+    // in this block changes a value.  After the pointer fix above, the whole
+    // function's insert/delete set is 7 instructions in 5 clusters: the two
+    // `mr r29, r3` / `lwz r11, 0(r29)` copies of the shader manager, two
+    // `lwz r3, 0(r30)` placements, and the Vector4/plane store ORDER (same
+    // four slots, same values).
     if (FogEnable()) {
         Vector4 fogParams(FogEnd(), 1.0f / (FogEnd() - FogStart()), 0.0f, 1.0f);
-        TheShaderMgr.SetVConstant((VShaderConstant)0x5b, fogParams);
+        RndShaderMgr *mgr = &TheShaderMgr;
+        mgr->SetVConstant((VShaderConstant)0x5b, fogParams);
         const Hmx::Color &fogColor = FogColor();
         Vector4 fogColorVec(fogColor.red, fogColor.green, fogColor.blue, fogColor.alpha);
-        TheShaderMgr.SetPConstant((PShaderConstant)0x5a, fogColorVec);
+        mgr->SetPConstant((PShaderConstant)0x5a, fogColorVec);
     } else {
         Vector4 fogParams(0.0f, 0.0f, 0.0f, 1.0f);
         TheShaderMgr.SetVConstant((VShaderConstant)0x5b, fogParams);
