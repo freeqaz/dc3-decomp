@@ -38,29 +38,29 @@ bool RndXfmCache::GetXfms(
     unsigned int numBones,
     const float *&outFloats
 ) const {
-    // FLOOR 75.0 canonical / 74.0 raw (w8-h).  The residual is entirely the
-    // scheduling of the two mMeshPtrs reads: the image issues BOTH loads before
+    // 83.33334 canonical / 83.125 fuzzy (w31-c).  The two mMeshPtrs tests are
+    // written END first, which is the order the image forms them: 826B16BC
+    // `slwi r11,r11,2` on endIndex precedes 826B16C0's start-index form, and the
+    // end slot is reached as `lwz r11,-0x4(r11)`.  Swapping those two operands
+    // (pure reorder of two side-effect-free compares; the short-circuit is
+    // unchanged) is 75.0 -> 83.33334 canonical, 73.958 -> 83.125 fuzzy, and it
+    // is the whole of the gain -- the earlier 75.0 readings were taken with the
+    // start index written first.
+    // RESIDUAL (2 instructions, scheduling): the image issues BOTH loads before
     // the first `cmplw` (`lwzx r10,r10,r3` then `lwz r11,-0x4(r11)`, then
-    // `cmplw r10,r4` / `bne` / `cmplw r11,r4` / `bne`), while we compare-and-branch
-    // on the first before computing the second.  MEASURED NEGATIVE: hoisting both
-    // reads into named locals inside an `else` block guarded by the bounds test --
-    // the one spelling that removes the short-circuit barrier by hand -- is 75.0
-    // canonical and 73.5 raw, i.e. no better on the canonical ruler and one row
-    // WORSE on the relocation-sensitive one.  MSVC re-sinks the second load behind
-    // the first branch regardless of how the source is blocked.
-    // w18-a (75.0 canonical, rows 6-17 unchanged): three more spellings, none
-    // hoists the second mMeshPtrs load above the first compare: index written
-    // `startIndex + numBones - 1` (inert); an early-return nested form with
-    // both loads in named locals (inert); `(a != mesh) | (b != mesh)` DOES put
-    // both loads in the image's order but lowers the test to subf/subfe/or.
-    // (73.3).  The image's two compare-and-branch pairs after both loads are a
-    // shape none of the short-circuit spellings reach.
+    // `cmplw r10,r4` / `bne` / `cmplw r11,r4` / `bne`); we still compare-and-
+    // branch on the end read before forming the start address.  Re-measured
+    // inert from this order: both reads into named locals inside an `else`
+    // guarded by the bounds test (83.33334 either way), and
+    // `(a != mesh) | (b != mesh)` (73.33 -- it lowers to subf/subfe/or).
+    // The instruction multiset and every constant already agree, so what is
+    // left is c2 emitting the second load behind the first branch.
     bool valid;
     const float *floats;
     unsigned int endIndex = startIndex + numBones;
     if ((endIndex > unk1b580)
-        || (mMeshPtrs[startIndex] != mesh)
-        || (mMeshPtrs[endIndex - 1] != mesh)) {
+        || (mMeshPtrs[endIndex - 1] != mesh)
+        || (mMeshPtrs[startIndex] != mesh)) {
         floats = nullptr;
         valid = false;
     } else {
