@@ -1202,6 +1202,13 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
     // `fmr f0,f12` + `lfs f12,0x8(r26)` re-read of vel.z in the drag block,
     // and one extra `fsubs` in the three-phase size fork.  No member, call
     // or constant differs, so the body is behaviour-equivalent as written.
+    // w31-a (2026-11-03) re-derived both halves on the current tree:
+    // function-bounded multiset is ours 581 / target 585 with exactly
+    // +1 fmr, +1 fsubs, +1 lfs, +1 stfs on the target side, and the
+    // RELOCATION-SYMBOL multiset is 79 on both sides and differs ONLY in the
+    // two auto-timer statics above (`?_t@?1??MoveParticles...` / `?$S9@...`
+    // here against the image's unnamed `lbl_830DFAA8` / `lbl_830DFAAC`).
+    // Nothing else in the body resolves to a different symbol.
 
     if (mActiveParticles == NULL || frameSpan == 0.0f)
         return;
