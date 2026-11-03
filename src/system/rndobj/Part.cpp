@@ -1209,6 +1209,18 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
     // two auto-timer statics above (`?_t@?1??MoveParticles...` / `?$S9@...`
     // here against the image's unnamed `lbl_830DFAA8` / `lbl_830DFAAC`).
     // Nothing else in the body resolves to a different symbol.
+    //
+    // w31-c (2026-11-03) re-adjudicated all four and they are NOT arithmetic
+    // differences.  The fork: the image spends one `fsubs f0,f24,f0` per arm
+    // (826BFBFC / 826BFC18 / 826BFC24); we cross-jump arms 1 and 3 onto ONE
+    // `fsubs 0,24,0` at 0x844 whose f0 is loaded differently per arm (0x44
+    // p->birthFrame in arm 1, the already-loaded 0x70 value in arm 3) -- same
+    // subtraction, one fewer instruction, which is why our body is SHORTER
+    // (581 vs 585) and why the score is not a shortened-body artifact.  The
+    // tileTime home store is dead on both sides (nothing reads 0x64(r31)), and
+    // the `fmr`/`lfs` pair is a store-then-reload round trip of the same float
+    // with no write in between.  The remaining 131 rows are register
+    // permutation (f0<->f13 alone is 23 of 146 swapped instructions).
 
     if (mActiveParticles == NULL || frameSpan == 0.0f)
         return;
