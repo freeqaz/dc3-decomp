@@ -101,6 +101,20 @@ END_COPYS
 // each access into a displacement and only forms the temp for _M_erase's
 // `this`.  Open question: which accessor's inline body forms the explicit
 // address.
+// w31-e 2026-11-03 (98.555, same 9 rows): nothing new to add on the r26
+// placement, but the residual's SHAPE is worth stating precisely, because it is
+// not pure placement -- the instruction multiset differs by exactly two rows.
+// Aligned against the image: target has one `addi r26, r30, 0x60` at 158 that
+// we emit at 172 (the base address moved late), our three `lwz rX, 0x4(r26)`
+// become `0x64(r30)` displacement loads, and at 178 the image RELOADS
+// `lwz r11, 0x64(r30)` where we CSE the already-live _M_finish pointer into
+// `clrrwi r11, r10, 0`.  So the image refused a CSE we perform, and that is
+// downstream of the same missing address temp: with r26 formed at the head of
+// the >1 arm, the back() reload is a distinct memory operand, and without it
+// the load is CSE'd.  Four lanes (w7-bv, w21-p, w21-an, w24-c3) have already
+// spent the spellings that reach this from FlowPickOne.cpp; the address temp
+// belongs to ObjPtrVec's inline accessors in ObjPtr_p.h (PCH-reached).  Left
+// as measured rather than respelled a fifth time.
 bool FlowPickOne::Activate() {
     FLOW_LOG("Activate\n");
     mStopRequested = false;
