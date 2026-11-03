@@ -653,6 +653,15 @@ int CharBonesSamples::FracToSample(float *frac) const {
 // double-conversion temps; the image keeps all six live at once
 // (0x50/0x58/0x60/0x70/0x80/0x90) and that is what puts q0/q1 at 0x90/0x80
 // -- so the frame and the vects-arm schedule are one residual, not two.
+// w31-d (2026-11-03): re-checked against the listing -- no new lever, no
+// defect.  The whole-function opcode multiset delta is exactly the documented
+// one: our two `extsh` (the `short comp` truncate) plus one `mr` in the
+// vects-arm conversion schedule; every other row pairs 1:1.  The ROTX
+// compressed arm is the same interpolation written from the other end (image
+// `(srcNext - src)*frac + src`, ours `(src - srcNext)*frac + srcNext`) -- a
+// /fp:fast reassociation, not a different value.  Do not re-run the `short`
+// ladder: int / unsigned short / CompressionType all land 82.2-91.7 and the
+// two extsh are its entire cost (w7-by, w16-c, w26-r2 above).
 void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, float frac) {
     char *src = mRawData + mTotalSize * sample + byteOffset;
     if (frac == 0.0f) {

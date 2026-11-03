@@ -146,6 +146,18 @@ void CharForeTwist::Poll() {
     // newbias hoisted above the block (inert), a named `float hzx` feeding an
     // inlined first Dot (89.8), the first Dot written as `y + (x + z)` (90.6),
     // hz bound only for Cross (inert), and parentxfm.m.x bound by name (inert).
+    // w31-d (2026-11-03): re-derived independently from the two listings, with
+    // the Transform layout the code itself uses (Matrix3 rows at 0x0/0x10/0x20,
+    // v at 0x30): target rows 33-72 form Cross.x = py.y*hz.z - py.z*hz.y,
+    // Cross.y = py.z*hz.x - py.x*hz.z, -Cross.z = hz.y*py.x - py.y*hz.x, then
+    // Dot(py,hz) = y + (x + z) and Dot(px,v98) = x + (z + y); ours forms the
+    // same three cross terms (two of them negated-then-fmsubs, same signs) and
+    // the same two dots.  Values agree; the deltas are that association and
+    // register choice, plus ONE redundant `lfs 0x20(r30)` (we reload h.z.x,
+    // the image keeps it in f10) with no store or call between the two loads.
+    // Our body is 134 instructions against the image's 133, so nothing here is
+    // a shortened-body artifact.  No behaviour defect.  The remaining handle
+    // would have to be the regasg first-fit order, not source.
     const Vector3 &py = parentxfm.m.y;
     float clamped = Clamp(-1.0f, 1.0f, Dot(py, handxfm.m.z));
     Vector3 v98;

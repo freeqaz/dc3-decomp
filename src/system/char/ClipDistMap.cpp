@@ -227,6 +227,15 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
                 // everything on a pointer).  The image's lfs mBStart behaves as
                 // if it depended on the stfs (it issues last) while the stfs
                 // itself is NOT prioritised -- no spelling found gives both.
+                // w31-d (2026-11-03): opcode multiset is IDENTICAL (91 = 91
+                // instructions, no insert/delete/opcode delta), so this is a
+                // placement residual and not a form one: exactly three
+                // instructions move -- the `stfs f0,0x0(r7)` (curBeat) is
+                // emitted BEFORE `extsw r10,r9` here and AFTER it in the image,
+                // and the `lfs f13,0x14(r3)` (mBStart) is emitted before the
+                // `lfd`/`fcfid` pair here and after both conversions in the
+                // image.  The stored values are the same fields at the same
+                // offsets with the same fdivs/fadds.  No behaviour defect.
                 node.curBeat = curBeat;
                 node.nextBeat = BeatB(rowIdx);
             }
