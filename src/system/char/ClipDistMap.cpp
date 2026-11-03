@@ -236,8 +236,24 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
                 // `lfd`/`fcfid` pair here and after both conversions in the
                 // image.  The stored values are the same fields at the same
                 // offsets with the same fdivs/fadds.  No behaviour defect.
+                // FIXED (93.40659 -> 100 canonical, 99.45055 fuzzy, 364 B =
+                // the image's 364 B): binding the CONVERTED sample rate to a
+                // const reference (C2RS-BRIDGE 8.8 -- bind, do not copy) is
+                // what gives both moves at once.  The reference keeps
+                // `(float)mSamplesPerBeat` a distinct IL value, so the
+                // int->float conversion chain and the mBStart load are no
+                // longer folded into one operand pattern: mBStart issues after
+                // both fcfids (the image's slot) and the curBeat store is
+                // deferred past the extsw.  A plain named `float` is inert
+                // (93.40659, w21-q's local), and `const float &` to mBStart or
+                // to the quotient is inert or worse; only the RATE binding
+                // moves it.  Residual: one FPR pair swap (our converted rowIdx
+                // lands in f13 and mBStart in f12, the image the other way
+                // round) -- regasg first-fit, unchanged by five further
+                // spellings, so fuzzy stays 99.45055 while canonical is 100.
                 node.curBeat = curBeat;
-                node.nextBeat = BeatB(rowIdx);
+                const float &spb = (float)mSamplesPerBeat;
+                node.nextBeat = mBStart + (float)rowIdx / spb;
             }
         }
     }
