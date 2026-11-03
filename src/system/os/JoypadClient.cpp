@@ -215,6 +215,25 @@ void JoypadClient::Poll() {
             // &mRepeatTimer across the first Reset and then derives the hold
             // timer as `subi r3, r28, 0x30`; two of the five rows are only the
             // ThePlatformMgr anchor landing in r27 instead of r28 as a result.
+            //
+            // w31-b (2026-11-03): the mechanism is now named exactly, and it is
+            // one instruction, not five. The image computes the SECOND call's
+            // receiver first -- `addi r28, r31, 0x40` (&mRepeatTimer, into a
+            // callee-saved GPR because it must survive the first bl) -- and
+            // derives the first call's receiver from it as `subi r3, r28, 0x30`
+            // (= &mHoldTimer; Timer is 0x30 bytes, mHoldTimer 0x10 and
+            // mRepeatTimer 0x40, so this is faithful). We materialise each
+            // address at its own use site, so the image is 29 instructions and
+            // we are 28 -- one SHORT, which is why no score on this row may be
+            // banked until that instruction exists. Call order is NOT the lever:
+            // swapping the two Reset statements scores 94.48276 (+0.0345, an
+            // alignment coincidence -- our 0x40 addi then lines up with the
+            // image's) while emitting the calls in the opposite order to the
+            // image, and it is reverted. Every binding form that should force
+            // the callee-saved materialisation -- `Timer &` for one and for
+            // both, `Timer *`, `t[-1]`, pointer arithmetic off the repeat timer
+            // -- is folded back to `r31 + constant` at each use site, and a
+            // `for` loop instead of the do/while costs 0.07.
             pRepeat->mHoldTimer.Reset();
             pRepeat->mRepeatTimer.Reset();
         } else {
