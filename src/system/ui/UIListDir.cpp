@@ -332,6 +332,24 @@ void UIListDir::ListEntered() {
     Handle(msg, false);
 }
 
+// w31-e 2026-11-03 (98.916, unchanged): the residual is a pure ALLOCATION
+// residual and the instruction multiset already agrees -- 371 rows both sides,
+// 19 register-only diff_args, and the four non-register rows are two
+// `stw rN, 0x54(r1)` pairs that the two builds place at different points
+// (image 18/110, ours 24/64; identical opcode, displacement and count).  The
+// frame is identical too (0x220 both, 18 callee-saved GPR / 13 FPR both), and
+// the stack diff reports exactly one user slot, 0x54, PERMUTED (same offset,
+// different variable: image spills the call result there, we spill
+// fadeCountEnd).  c2rs tap on the contested registers, from a live run of
+// `regasg.sh src/system/ui/UIListDir.cpp BuildDrawState@UIListDir`:
+//   id 38 sym38/k04 pri 12   tie 199 -> r28   (also r28 in the image)
+//   id 12 sym13/k04 pri -100 tie 58  -> r17
+//   id 10 sym11/k04 pri -114 tie 122 -> r15
+//   id 57 sym14/k04 pri -86  tie 71  -> r14
+// The three that disagree with the image are separated by 14 to 74 priority
+// units, not by 1, so this is not the "add or remove one merge point" lever
+// (C2RS-BRIDGE 6.2b) -- it is sched0/first-fit over a 371-instruction body, the
+// class the w28 lessons say to stop spelling at.  Left as measured.
 void UIListDir::BuildDrawState(
     UIListWidgetDrawState &drawState, UIListState const &state, UIComponent::State compState, float subListOffset, bool allowHighlight
 ) const {

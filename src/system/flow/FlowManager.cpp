@@ -62,6 +62,24 @@
 // (erase 563 < Set 585) and the inlining did not move.
 // w18-d (80.58): an explicit instantiation of ObjPtrVec<FlowNode>::Set ahead of
 // the erase instantiation does not stop Set being inlined into erase (inert).
+// w31-e 2026-11-03: the COMDAT-order rule is now confirmed on BOTH SIDES of
+// this row, which is what turns it from a correlation into a prediction.
+// w21-d measured "erase<T> inlines Set<T> iff erase's COMDAT precedes Set's"
+// across 19 of our TUs; it had the image side of LightPreset.  Adding the image
+// side here: the dtk split target build/373307D9/obj/system/flow/FlowManager.obj
+// numbers Set<FlowNode> at section 50 and erase<FlowNode> at 94, and its erase
+// is 240 B (calls Set) -- exactly what the rule predicts.  LightPreset's image
+// object is the mirror (erase 400 < Set 421, erase 276 B = inlined).  Ours is
+// inverted in both: FlowManager erase 579 < Set 589 (276 B, inlined) and
+// LightPreset Set 1301 < erase 2218 (240 B, calls).  So ONE mechanism, seen
+// twice, predicts both rows and their mirror-image branch counts (9 delete / 6
+// insert here, 6 / 9 there).  Re-measured inert this lane: deleting the
+// explicit erase<FlowNode> instantiation below moves the pair 579/589 -> 563/569
+// -- erase still precedes Set, still 276 B (this is w18-d's result reproduced on
+// the current tree).  The order is therefore not reachable from this .cpp: it
+// is set by which member the TU's earlier code demands first, and both orders
+// the header makes available (`remove` -> erase -> Set, and an early push_back
+// -> insert -> Set) are decided inside ObjPtr_p.h.
 // w24-c2 (80.58, BLOCKED-PCH): residual unchanged -- rows 39-54, the inlined
 // Set body (10 inserted rows) where the image does `bl Set<FlowNode>`, plus an
 // r26/r27/r28 permutation. New observation, not built: in the image's
