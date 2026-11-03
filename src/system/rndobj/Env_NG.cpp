@@ -334,6 +334,19 @@ void NgEnviron::Select(const Vector3 *pos) {
     // redundant `fogParams.x = 0.0f;` after the constant vector, 96.812.
     // The remaining rows are the Vector4 ctor's store order (image x,z,w
     // with y last; ours w,x,z with y last) and the fade/LRFade block.
+    //
+    // w31-c (2026-11-03): the fade/plane arithmetic is FAITHFUL -- re-derived
+    // from 826A4DD0..826A4F7C.  fadeRefDot is the y,z,x `fmadds` chain in f10;
+    // leftPlane stores 0,0,0,1 (f31/f30 = 0.0f/1.0f), tests lrFade.x != .y,
+    // scale = f30/(y-x), x/y/z as `fadeDir.k * scale` (fadeDir FIRST, matching
+    // the source's operand order), w as `fneg((x + dot) * scale)`.  rightPlane
+    // reuses the SAME f10 dot, tests .z != .w, and multiplies scale-first
+    // (`fmuls f13,f10,f13`), which is also how the source writes it.  So the
+    // insert/delete rows are: the 6-instruction double formation of
+    // TheShaderMgr (a 3I/3D pair, us 3 SHORT), the Vector4/plane store ORDER
+    // (same four slots, same values), and one `addi r5,r1,0x110` scheduling
+    // slot.  Nothing here changes a value.  Not re-attempted from this wave:
+    // the arms already measured (see above).
     if (FogEnable()) {
         Vector4 fogParams(FogEnd(), 1.0f / (FogEnd() - FogStart()), 0.0f, 1.0f);
         TheShaderMgr.SetVConstant((VShaderConstant)0x5b, fogParams);
