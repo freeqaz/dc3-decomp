@@ -1018,6 +1018,21 @@ void DecodeDxt3Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
 // spellings, inline Swiz helpers (by ref and by value), and all 90 orders of
 // the a0/a1/array/lookup declarations (byteOffsets before bitOffsets is
 // required; otherwise inert).
+//
+// w31-c (2026-11-03): DECODE RE-ADJUDICATED against the listing, no bug.  The
+// two stack tables are byteOffsets at r1-0x60 (reached via r26, index
+// i+(j<<2) from `add r25, r5, r4`) and bitOffsets at r1-0x50 (reached via r10,
+// index i off the `slwi r5, r5, 2` bias), so the swizzle is on `byte`
+// (`clrlwi. r5, r11, 31` with r11 from the r26 table) and the `>= 6` test is
+// on `bit` (`cmplwi cr6, r8, 0x6`, r8 from the r10 table) -- exactly as
+// written.  Endpoints: lbz r28,0x1(r3) feeds the code==0 store and
+// lbz r27,0x0(r3) the code==1 store, so a0 = uc[1], a1 = uc[0], and
+// `cmplw r9,r10` (r9 = a0, r10 = a1) + bgt selects the /7 arm when a0 > a1.
+// Both interpolators match term for term and both are `divwu` (unsigned),
+// matching the (unsigned int) casts: (6-code)*a0 + (code-1)*a1 + 2 over 5, and
+// (8-code)*a0 + (code-1)*a1 + 3 over 7.  The single remaining row is the
+// `clrlwi` placement described above, i.e. a same-value truncation (byte is
+// 0..5), so this is a placement residual, not a decode error.
 void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
     // The two alpha endpoints live in the block's first 16-bit word, and the
     // Xbox 360 stores that word byte-swapped -- the same swizzle the index
