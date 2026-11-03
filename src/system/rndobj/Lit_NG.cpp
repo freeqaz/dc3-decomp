@@ -81,6 +81,28 @@ RndTex *NgLight::CreateShadowTex() {
 // topPoint back (0x80 is reused by conePoint/edgeDir) and reuses 0xb0 for both
 // closest and the scaled edge copy; ours keeps xfm2.m.y in r26-r28 and five
 // floats in f26-f29 across the block.  Not a statement-order problem.
+//
+// w31-c (2026-11-03) -- GEOMETRY ADJUDICATED, no behaviour bug, and this is a
+// PLACEMENT residual rather than a missing instruction.  Opcode multisets are
+// EQUAL (309 vs 309): the only difference is the callee-save sequence -- the
+// image has 2 `stfd`/2 `lfd` + `__savegprlr_27`, we have 2 extra `bl`s and
+// `__savefpr_26` + `__savegprlr_24`.  Both `bge/bgt/blt/bne` counts match once
+// they are read as the bf/bt forms llvm-mc prints.  Re-derived from the image
+// instruction by instruction: sc = c - v; the three products; both range
+// tests; perp = sc - m.y*(sum); Normalize; topPoint/botPoint/conePoint;
+// `1.0f/Dot(edgeDir,edgeDir)` as fdivs f12,f7,f12 with f7 = __real@3f800000;
+// `Dot(dir,closest) < 0` early true; `Length(closest) < sphereRadius` -- all
+// identical, and the epsilon sits on the same side of both comparisons.
+// The ONE source-level infidelity is the association of the axisProj sum: the
+// image re-derives (px+pz)+py (826B910C `fadds f13,f13,f12` then 826B9150
+// `fadds f13,f13,f11`), our `pz + (px + py)` gives (px+py)+pz.  Measured and
+// REJECTED: `px + pz + py` 57.72, `(px + pz) + py` / `py + (px + pz)` /
+// `float axisDot = px + pz` all 61.21, `const float &axisDot = px + pz` 62.38,
+// `pz + px + py` and `const float &axisDot = px + pz + py` both 53.81 -- every
+// alternative is worse than the 63.15 this spelling scores, and the fadds
+// multiset is identical either way.  The remaining register assignment is the
+// second allocator (none of f26-f29 appears in the `cands` list; all live only
+// after the single Normalize call), so there is no colour decision to name.
 bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     const Transform &xfm1 = WorldXfm();
     const Transform &xfm2 = WorldXfm();
