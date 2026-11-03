@@ -902,6 +902,19 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
     // before fileExists (inert, same 6 rows). Also refuted (w12-d): a typed
     // WIN32_FILE_ATTRIBUTE_DATA with `*(s64 *)&fileInfo.ftLastWriteTime` (inert).
     // w18-d: `attrResult != 0` (equal semantics) is byte-inert, same 6 rows.
+    // w31-b (2026-11-03): MEASURED AS A PLACEMENT RESIDUAL, not a work item.
+    // Both sides are 116 instructions and the opcode+immediate multiset is
+    // IDENTICAL -- the only keys present on one side and not the other are the
+    // six branch displacements, which move because the block itself moves.
+    // Everything the body computes agrees with the image: `subic r8,r3,1` +
+    // `subfe r28,r8,r9` is exactly `(attrResult - 1) != -1`, i.e.
+    // attrResult != 0; writeTime is `ld` from fileInfo+0x14 into the s64 slot
+    // and written with `li r5,8`; the four `stw r11,0/4/8/0xc(r29)` tail is the
+    // dst[0..3] reorder; fileInfo is at r1+0x80 and the s64 at r1+0x60, the
+    // same slots the image uses. What differs is only WHERE c2 schedules the
+    // `lis gLastCachedResource` (1 slot) and the operator== argument setup
+    // (3 slots) relative to the writeTime `std`: the image straddles the std,
+    // we sink both below it. No source handle was found for a sched0 slot.
     bool fileExists = (attrResult - 1) != (-1);
     s64 writeTime = *(s64 *)(fileInfo + 0x14);
     // `==` is correct here and is NOT the rb3-xenon drift bug it looks like.
