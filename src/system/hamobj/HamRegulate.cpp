@@ -217,6 +217,16 @@ void HamRegulate::Poll() {
     //      "move value first" rule, which is why writing the adds that way
     //      uniformly does not reproduce the image.  Inert or worse (measured
     //      this pass): dropping the named `dt` (97.14).
+    // w33-b (fuzzy 99.434525 -> 99.64286, canonical 100.0, 168 instructions /
+    // 672 B unchanged): binding posDelta to a `const Vector3 &pd` BEFORE the
+    // sqrt, so the sqrt, both scale products and the else arm read through
+    // it, moved the 8.7 commutative key enough that the two `fmuls` scale
+    // products (51/52) and the index 151 add now take the image's operand
+    // order -- three rows the w26-f2 note had left.  Binding only the scale products,
+    // after the sqrt, reaches 99.52381; the source operand order is itself
+    // inert (`scale * pd.x` is byte-identical), so the key, not the spelling,
+    // decides.  Left: 12 rows, all pure moveZ/moveRot colour (image f28/f27,
+    // ours f27/f28) -- the pri-14/pri-21 tie above, untouched by this lever.
     float moveZ = 0.0f;
     float dt = TheTaskMgr.DeltaSeconds();
     float moveX;
@@ -227,11 +237,12 @@ void HamRegulate::Poll() {
 
     if (!mCharacter->Teleported()) {
         float maxMove = mMaxSpeed * absDt;
-        float posMag = sqrtf(posDelta.x * posDelta.x + posDelta.y * posDelta.y);
+        const Vector3 &pd = posDelta;
+        float posMag = sqrtf(pd.x * pd.x + pd.y * pd.y);
         if (posMag > 0.0f && posMag > maxMove) {
             float scale = maxMove / posMag;
-            moveX = posDelta.x * scale;
-            moveY = posDelta.y * scale;
+            moveX = pd.x * scale;
+            moveY = pd.y * scale;
             moveZ = scale * moveZ;
             moveRot = scale * rotDelta;
         } else {
