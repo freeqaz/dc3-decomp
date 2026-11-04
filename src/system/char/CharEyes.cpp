@@ -1218,6 +1218,17 @@ stateReset:
 // three blink-position ones) to function scope while leaving the assignments
 // where they are measured byte-identical at the pre-reorder baseline: MSVC
 // assigns slots by liveness, not by declaration position.
+//
+// w32-b: the whole residual is an EQUIVALENCE CLASS, measured not argued.
+// Both sides are 662 instructions; with registers, stack displacements and
+// branch targets abstracted, the opcode/shape/constant multisets are
+// IDENTICAL.  So every `diff_arg` row is one of: which physical FPR carries a
+// value, the operand order of a commutative float op, or a stack
+// displacement.  No wrong constant, wrong field, wrong callee, or missing
+// instruction -- no behaviour hangs on any of the 99 rows.  What is left is
+// c2 first-fit FPR assignment, the commutative sort key (C2RS-BRIDGE 8.7),
+// and MSVC's liveness-ordered frame slots; the 72-variant declaration sweep
+// above is the measurement that the slot map has no source handle left.
 void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
     if (DataVariable("no_lids").Int(0))
         return;
