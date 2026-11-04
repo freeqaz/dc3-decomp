@@ -631,6 +631,22 @@ void EventTrigger::UnregisterEvents() {
 // calls the String(Symbol) ctor where the image calls String(const char *) --
 // wrong callee); `*it = Symbol(str.c_str())` (89.63).  The image has only the
 // ~String unwind funclet, so 0x54 is not an RAII local.
+// w34-a (2026-11-04, behaviour verdict): AGREES, including both apparent offset
+// differences.  The image keeps &*it in r30 (node + 8) and addresses the Symbol
+// as 0x0(r30); we keep the node in r30 and address it as 0x8(r30).  Those are
+// the same byte on both sides, and so are the two assignment stores
+// (`stw r11, 0x0(r30)` against `stw r11, 0x8(r30)`).  The image's two extra
+// `stw r30, 0x54(r31)` stores are dead: nothing in either listing loads
+// 0x54(r31), and neither call receives that slot as an argument, so they are
+// home-slot spills of the address temp that the allocator never reloads.  The
+// loop bound, the "lighting_" comparison, and the strstr / String / Symbol
+// callees all agree.  MEASURED NEGATIVE this lane, all byte-inert at
+// 89.65714 / 88.22857: an explicit iterator for-loop; `Symbol &sym = *it;`
+// used for both reads and the write; the same reference used for the reads
+// only; and `Symbol *sym = it.operator->();`.  Mechanism hypothesis: the dead
+// home stores are emitted by the original's front end for a reference-valued
+// dereference temp, and nothing in this source spelling asks for that temp, so
+// the multiplicity difference has no source operand.
 void EventTrigger::CleanupEventCase(std::list<Symbol> &syms) {
     FOREACH (it, syms) {
         if (strstr(it->Str(), "lighting_")) {
