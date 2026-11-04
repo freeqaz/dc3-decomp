@@ -325,6 +325,19 @@ void RndConsole::MoveLevel(int level) {
         // ways; on the evidence this is MSVC's copy-propagation cleaning up an
         // inlined by-value template parameter that the image's build left in
         // place.  Faithful Clamp form kept.
+        //
+        // w34-a (2026-11-04, behaviour verdict): AGREES, and the forwarding that
+        // costs these rows is safe here.  Both sides add level into mLevel,
+        // store it at 0x5c, test it against zero, clamp against
+        // gCallStack - gCallStackPtr + 2, store the clamped value, and load
+        // gCallStackPtr[mLevel - 2] into 0x58.  The image reloads mLevel from
+        // 0x5c where we forward the register, and no store or call lies between
+        // that store and the read, so both produce the same index.  The image's
+        // `add` + dead `clrrwi` + separate `cmpwi cr6` is our fused `add.` with
+        // the CR0 branch: the same value tested against the same zero.
+        // Mechanism hypothesis: copy propagation drops the inlined Clamp
+        // argument's home slot in our build and keeps it in the original's,
+        // which is also what decides whether the index re-reads memory.
         mLevel += level;
         mLevel = Clamp((int)(gCallStack - gCallStackPtr + 2), 0, mLevel);
         mDebugging = gCallStackPtr[mLevel - 2];
