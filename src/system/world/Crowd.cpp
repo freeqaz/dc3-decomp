@@ -850,6 +850,13 @@ void WorldCrowd::Set3DCharXfm(
 void WorldCrowd::Apply3DCharXfm(
     const std::list<CharData>::iterator &charItr, int char3DIdx, RndCam *cam
 ) {
+    // Residual (canonical 100, fuzzy 99.84772, 3 rows): commutative operand
+    // order inside the inlined Cross() from math/Vec.h, whose operands are
+    // memory leaves. Putting the cross arguments in named references (both
+    // arms), binding the focus and placement transforms, and writing 0.0f for
+    // the zero component all measured inert. Two memory leaves sort on the
+    // base temp's sid (C2RS-BRIDGE 8.7), so the handle is an upstream temp
+    // count, not this expression's spelling.
     MILO_ASSERT_RANGE(char3DIdx, 0, charItr->m3DChars.size(), 0x29D);
     Character *itrChar = charItr->mDef.mChar;
     if (itrChar && mPlacementMesh) {
