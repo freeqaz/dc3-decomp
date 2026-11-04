@@ -184,6 +184,18 @@ void RndRibbon::ConstructMesh() {
             // inert), and the named `faces` reference in place of
             // mMesh->Faces() (76.794).  What is left is a register-pressure
             // decision, not a spelling.
+            // w34-b (2026-11-04): behaviour verdict first -- no divergence.
+            // Per-side multisets (alignment-free, so a misaligned row view
+            // cannot invent a field swap): store and load multisets are
+            // IDENTICAL, the callee set is IDENTICAL, and the only mnemonic
+            // difference in 102 instructions is that one clrlwi.  It is
+            // REDUNDANT on the image's side: the value it truncates is
+            // consumed by `sth` (which truncates anyway) and as a face-array
+            // byte offset bounded far below 65536, so both sides store the
+            // same bytes at the same addresses, verified by hand against the
+            // listing at 0xE8/0x120-0x160.  Named the face index
+            // (`int faceIdx = base + side * 2`) this lane: byte-identical,
+            // 80.78432 unchanged.
             mMesh->Faces()[base + side * 2 + 1].Set(v2, v3, v0);
         }
     }

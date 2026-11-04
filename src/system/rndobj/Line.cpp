@@ -464,6 +464,22 @@ inline void Subtract(const Vector3 &v, const Vector2 &d, Vector3 &dst) {
 // in the one spelling tried this round: reading viewPos1.x/.y/.z straight
 // from the struct instead of binding them to locals costs 5.0 canonical
 // (82.58741 -> 77.58741), which re-confirms w21-c's locals are load-bearing.
+//
+// w34-b (2026-11-04): behaviour verdict first -- no divergence.  The two
+// streams are byte-identical through instruction 97 (the whole pt1 == pt2
+// path and both projections), and after that every difference is one of:
+// a register, an instruction ORDER, a branch displacement, or an address
+// temp the two builds materialise differently.  The apparent +0x40
+// displacement set (our `stfs 0x0/0x4(r9)` against the image's
+// `0x40/0x44(r7)`) is exactly that: r9 = r7 + 0x40, so the EFFECTIVE
+// addresses agree.  Callee multiset identical, and every store value lands
+// on the same field, verified against the listing.  The per-side load
+// multiset differs only where the image re-reads a value we forward -- the
+// same class the CacheData row closed on -- but the forwarded thing here is
+// already a member reference, so section 8.8 has no copy to break.
+// Measured and rejected this lane: proj2 stores written y-then-x to match
+// the image's emitted order (79.01049) and `const float &ix/&iy` inside
+// NormalizeDir (79.43706).  The row is order, not value.
 void RndLine::UpdateLinePair(RndLine::Point *pt1, RndLine::Point *pt2) {
     VertsMap vmap;
     MapVerts((pt1 - &mPoints[0]), vmap);

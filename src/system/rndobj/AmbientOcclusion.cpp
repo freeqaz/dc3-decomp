@@ -162,6 +162,20 @@ void RndAmbientOcclusion::BlendVert(
     // take identical inputs, and the final `Set(0.0f)` is present on both.
     // Nothing to fix here; the residual is the regasg first-fit selection
     // described above.
+    // w34-b (2026-11-04): the strongest equivalence certificate this row has
+    // had.  Comparing each side's OWN instruction stream (not the aligned row
+    // view, which pairs across a permutation and invents field swaps), the
+    // normalised instruction multiset is IDENTICAL: 136 instructions and
+    // 544 bytes on both sides, the same opcodes with the same immediates,
+    // the same store and load displacements, and the same callee set.  So
+    // there is no value, field, immediate, call or loop-bound difference to
+    // find -- the residual is order alone.  First divergence is instruction
+    // 14: the image issues `lfs f12, 4(r30)` one slot before its `fadds`,
+    // i.e. sched0 interleaving, not source order, so no spelling reaches it.
+    // Measured this lane and rejected: `const float &tx = v2.tangent.x;`
+    // (canonical unchanged 88.661766, fuzzy 85.83088 -> 85.79412) and moving
+    // the `Vector4 tang = out.tangent;` copy to the top of the function
+    // (75.39706: the position of that copy is load-bearing).
     Vector4 tang = out.tangent;
     tang.x = v2.tangent.x + tang.x;
     out.pos *= 0.5f;
