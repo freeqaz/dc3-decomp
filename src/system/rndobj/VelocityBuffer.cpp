@@ -55,6 +55,13 @@ bool RndXfmCache::GetXfms(
     // `(a != mesh) | (b != mesh)` (73.33 -- it lowers to subf/subfe/or).
     // The instruction multiset and every constant already agree, so what is
     // left is c2 emitting the second load behind the first branch.
+    // w34-a (2026-11-04, behaviour verdict): AGREES, re-derived from both
+    // listings.  Both sides test endIndex against 0x1b580, form
+    // &mMeshPtrs[endIndex] and mMeshPtrs[startIndex], load both slots, and
+    // return the same &unk1f40[startIndex * 12] (mulli 0x30, addi 0x1f40) or a
+    // null pointer with false.  The 2I/2D rows are the two identical slwi/lwzx
+    // pairs exchanging position with the end-index load, so no value, offset,
+    // bound or callee differs.
     bool valid;
     const float *floats;
     unsigned int endIndex = startIndex + numBones;
