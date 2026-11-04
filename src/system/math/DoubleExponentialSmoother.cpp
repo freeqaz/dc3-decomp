@@ -13,6 +13,17 @@ void DoubleExponentialSmoother::Smooth(float value, float delta) {
     newBeta = Min(newBeta, 1.0f);
     float oldPrev = mPrevLevel;
     mPrevLevel = newAlpha * (value - mLevel) + mLevel;
+    // w33-d, C2RS-BRIDGE 16, measured and REVERTED: binding the difference by
+    // const reference escapes c1's single-use fold, and it does move the inlined
+    // expansions -- Vector3DESmoother::Smooth 99.73684 -> 99.82456 with
+    // canonical held at 100.  But this body is also the out-of-line
+    // DoubleExponentialSmoother::Smooth, which a binding after the level store
+    // takes from fuzzy 100.00000 to 99.65517, and a binding before the store
+    // takes Vector3DESmoother to 65.41.  Net -1 row at fuzzy 100, so neither
+    // form is bankable.  This is the concrete form of the constraint in the
+    // Vector3DESmoother::Smooth note: the out-of-line body and all three
+    // inlined expansions are ONE body, so no spelling can move expansions 2/3
+    // without moving the out-of-line copy that already matches.
     mTrend = ((mPrevLevel - oldPrev) - mTrend) * newBeta + mTrend;
     mLevel = mTrend + mPrevLevel;
 }
