@@ -210,8 +210,10 @@ bool BoxMapLighting::CacheData(LightParams_Spot &spot) {
         if (spot.mBottomRadius >= spot.mTopRadius
             && (spot.mColor.red > 0.003921569f || spot.mColor.green > 0.003921569f
                 || spot.mColor.blue > 0.003921569f)) {
-            float f3 = (spot.mTopRadius * spot.mBeamLength)
-                / (spot.mBottomRadius - spot.mTopRadius);
+            const float &topR = spot.mTopRadius;
+            const float &bottomR = spot.mBottomRadius;
+            const float &beamL = spot.mBeamLength;
+            float f3 = (topR * beamL) / (bottomR - topR);
             Vector3 v58;
             Scale(spot.mDirection, f3, v58);
             Vector3 v4c;
@@ -234,10 +236,24 @@ bool BoxMapLighting::CacheData(LightParams_Spot &spot) {
     // condition's loads live, and forms `&spot.mApex` with `addi rN, r4, 0x20`.
     // Everything else differs only in registers.  No behaviour difference: the
     // same three fields, the same f3/f1/f2 algebra and the same six stores in
-    // both, re-derived from the target listing.  Measured inert this lane:
-    // swapping the product's operands, dropping f3's parentheses, and
-    // declaring v58 above f3 (all 83.228, byte-identical).  The reload is a
-    // liveness decision -- the image has nothing live across the branch.
+    // both, re-derived from the target listing.
+    // w34-b (2026-11-04): the three reloads are REACHED, and the binding is the
+    // lever.  Naming the operands as plain `float` locals is byte-inert (c1
+    // folds them back onto the condition's loads), but the same three names as
+    // `const float &` survive copy propagation and each becomes its own load in
+    // the body -- which is exactly the image's three reloads.  83.22785 ->
+    // 97.87342 canonical, 80.0 -> 95.658226 fuzzy; the load, store and callee
+    // multisets become IDENTICAL side for side, and the object goes 300 -> 312
+    // B against the image's 316.  Same under functionRelocDiffs=all, so the
+    // gain is not an immediate artifact, and behaviour is unchanged (a
+    // reference to a member reads the same field at the same point).
+    // What is LEFT is one dead `addi rN, r4, 0x20`: the image materialises
+    // &spot.mApex and never uses it; binding `spot.mApex` to a local reference
+    // to imitate it COSTS 5 points (92.8481), so it is a c1 artifact of the
+    // original's expression tree, not a spelling to chase.
+    // Also measured this lane and worse: reversing the radius comparison
+    // (83.139), merging the two `if`s into one `&&` chain (byte-identical), and
+    // hoisting the colour test above the radius test (79.722).
     mQueued_Spot.RemoveEntry();
     return false;
 }
