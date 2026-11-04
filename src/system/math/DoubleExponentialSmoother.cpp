@@ -73,6 +73,13 @@ void Vector3DESmoother::ForceValue(Vector3 v) {
 // reload, and the length sums y*y first: non-PCH probe diff 235 -> 10, the one
 // row left is the commutative fmadds inside the inlined mY Smooth().
 void Vector2DESmoother::Smooth(Vector2 v, float dt, bool normalize) {
+    // Residual (canonical 100, fuzzy 99.87013, 1 row): the same commutative
+    // operand order as the Vector3 expansions, in this function's SECOND
+    // inlined DoubleExponentialSmoother::Smooth (mY). The c2 operand dump puts
+    // `change` at nodes 7 and the clamped `newBeta` at nodes 6, so the order is
+    // fixed by node count before the sid hash, and no uniform spelling can make
+    // the mY expansion differ from mX. 13 named/operator/const-ref spellings
+    // measured inert, 1 worse; see the note in Vector3DESmoother::Smooth.
     DoubleExponentialSmoother &sx = mX;
     DoubleExponentialSmoother &sy = mY;
     sx.Smooth(v.x, dt);
