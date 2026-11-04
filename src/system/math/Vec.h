@@ -340,9 +340,11 @@ inline void Normalize(const Vector3 &in, Vector3 &out) {
 }
 
 inline void NormalizeScale(const Vector3 &in, float scalar, Vector3 &out) {
-    float inv = 0;
     float len = Length(in);
-    if (len != 0) {
+    float inv;
+    if (len == 0.0f) {
+        inv = 0.0f;
+    } else {
         inv = 1.0f / len;
     }
     Scale(in, inv * scalar, out);
