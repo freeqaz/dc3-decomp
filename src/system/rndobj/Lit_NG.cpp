@@ -103,6 +103,10 @@ RndTex *NgLight::CreateShadowTex() {
 // multiset is identical either way.  The remaining register assignment is the
 // second allocator (none of f26-f29 appears in the `cands` list; all live only
 // after the single Normalize call), so there is no colour decision to name.
+// w35-b (2026-11-04): the two named radius locals kept mTopRadius/mBotRadius
+// live from the Normalize call onward. Reading the members at the use site
+// lets each load land next to it, as in the image (i117/i119).
+// 63.14563/60.330097 -> 64.43366/61.56958, body 1236/1236 unchanged.
 bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     const Transform &xfm1 = WorldXfm();
     const Transform &xfm2 = WorldXfm();
@@ -135,9 +139,6 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     Vector3 dir = perp;
     Normalize(dir, dir);
 
-    float topR = mTopRadius;
-    float botR = mBotRadius;
-
     Vector3 topPoint = xfm1.v;
     // dirTop is declared first because the image claims its slot first: the
     // two 16-byte copies out of `dir` go 0x70 -> 0xa0 (dirTop, the one later
@@ -151,7 +152,7 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     Vector3 botPoint = xfm1.v;
     Vector3 toSphere = sphereCenter;
 
-    dirTop *= topR;
+    dirTop *= mTopRadius;
     topPoint += dirTop;
 
     axisRange *= range;
@@ -159,7 +160,7 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
 
     toSphere -= topPoint;
 
-    dirBot *= botR;
+    dirBot *= mBotRadius;
     Vector3 conePoint = botPoint;
     conePoint += dirBot;
 
