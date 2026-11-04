@@ -204,6 +204,12 @@ void RndTexBlender::DrawBlendList(
 // (97.80425), and binding the manager at the top for GetWork is worse (99.47344).
 // A landable fix would have to reach the inlined copy alone, which the source
 // cannot express here.
+// w32-a: the POINTER form of the same binding (`RndShaderMgr *shaderMgr =
+// &TheShaderMgr;`) is byte-identical here -- 99.63126 canonical on the
+// per-object path, the same digits as the reference, so the pointer/reference
+// asymmetry measured on NgEnviron::Select (w31-c) does not transfer to this
+// global.  The 2 surplus instructions remain the `stw r29, 0x50(r31)` home
+// stores the image does not emit.
 void RndTexBlender::DrawShowing() {
     if (TheRnd.DrawMode() == Rnd::kDrawNormal
         && ((TheRnd.ProcCmds() & kProcessWorld) != 0 || TheRnd.ProcCmds() == 0)
