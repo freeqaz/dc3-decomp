@@ -108,7 +108,7 @@ void SpotlightDrawer::Init() {
     sEnviron = Hmx::Object::New<RndEnviron>();
     sEnviron->SetUseApproxes(false);
     REGISTER_OBJ_FACTORY(SpotlightDrawer)
-    // FLOOR 93.929 canonical (w8-h).  The image stores New()'s result into
+    // MECHANISM (w8-h; re-measured w33-c): 93.929 canonical.  The image stores New()'s result into
     // sDefault FIRST (stw at 828275E4), writes 0.0f to 0x64 through the
     // still-live result, then RELOADS sDefault (lwz at 828275F0) for Select();
     // we store sDefault last and never reload, which swaps the two `lis` and
@@ -130,9 +130,15 @@ void SpotlightDrawer::Init() {
     // the field store) still sinks the global store past the field store and
     // adds a `clrrwi r3, r3, 0` for the reload: 90.7, worse.
     // Reading the global for the field store is the only thing that moves the
-    // store, and that is the 90.357 negative above.  Treat this as a floor until
-    // someone finds a construct that pins the global store ahead of the field
-    // store without also forcing a reload for the field store.
+    // store, and that is the 90.357 negative above.  Open question: a construct
+    // that pins the global store ahead of the field store without also forcing a
+    // read-back for the field store.
+    // w33-c behaviour verdict: EQUIVALENT.  The image reloads sDefault with
+    // `lwz` where we keep the New() result in r3 -- same value, same Select()
+    // receiver (relocation-set check: our only symbol delta is that one extra
+    // sDefault reference).  Re-measured on this tree: target statement order is
+    // byte-inert at 93.929; naming the global on all three lines is 90.357 and
+    // emits `clrrwi r3, r3, 0`, not the image's `lwz`.
     SpotlightDrawer *ptr = Hmx::Object::New<SpotlightDrawer>();
     ptr->mParams.mLightingInfluence = 0.0f;
     sDefault = ptr;

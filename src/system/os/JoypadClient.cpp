@@ -191,7 +191,7 @@ void JoypadClient::Poll() {
     JoypadRepeat *pRepeat = mRepeats;
     do {
         if (ThePlatformMgr.GuideShowing()) {
-            // NOTE (w7-av): 94.45 is an address-anchor floor.  The image forms
+            // MECHANISM (w7-av; w33-c): 94.45 is an address-anchor divergence.  The image forms
             // `addi r28, r31, 0x40` (the repeat timer) into a CALLEE-SAVED
             // register before the first call and derives the hold timer from it
             // as `subi r3, r28, 0x30`, which is why it saves one GPR more than
@@ -202,7 +202,7 @@ void JoypadClient::Poll() {
             // arithmetic off the repeat timer -- MSVC folds both back to
             // `r31 + constant` at the use site.
             //
-            // CONFIRMED FLOOR (w9-a): rb3-xenon's os/JoypadClient.cpp carries a
+            // CROSS-BINARY CONFIRMATION (w9-a): rb3-xenon's os/JoypadClient.cpp carries a
             // byte-identical body and its ?Poll@JoypadClient@@AAAXXZ reads the
             // SAME 94.44827 -- two binaries, two lanes, one number.  Three more
             // spellings refuted here, all 94.44827 with the same five rows,
@@ -234,6 +234,13 @@ void JoypadClient::Poll() {
             // both, `Timer *`, `t[-1]`, pointer arithmetic off the repeat timer
             // -- is folded back to `r31 + constant` at each use site, and a
             // `for` loop instead of the do/while costs 0.07.
+            // w33-c behaviour verdict: EQUIVALENT.  Both sides Reset
+            // mHoldTimer then mRepeatTimer (r31+0x10, then r31+0x40); the image
+            // derives the first address as (r31+0x40)-0x30, which is the same
+            // address -- it is the address materialisation, not the calls, that
+            // differs.  Probe: a named `Timer *repeatTimer = &pRepeat->mRepeatTimer`
+            // used for the second Reset is inert (94.44827), i.e. c1 folds it
+            // back to r31+constant exactly as the earlier forms did.
             pRepeat->mHoldTimer.Reset();
             pRepeat->mRepeatTimer.Reset();
         } else {

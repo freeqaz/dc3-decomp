@@ -85,7 +85,7 @@ END_COPYS
 void ClipCollide::SetTypeDef(DataArray *da) {
     Hmx::Object::SetTypeDef(da);
     if (da) {
-        // NOTE (w7-av): 94.42 is a temp-slot/scheduling floor.  Two rows left:
+        // MECHANISM (w7-av; w33-c): 94.42 is a temp-slot/scheduling residue.  Rows left:
         // `li r5, 0x1` one slot early (the FindArray `fail` default), and the
         // Sym(0) sret at r1+0x54 where the image reuses r1+0x50 -- the slot the
         // Symbol("modes") temp occupied.  Refuted: one-expression
@@ -117,6 +117,11 @@ void ClipCollide::SetTypeDef(DataArray *da) {
         // In SetFX the order flips between sites of identical source
         // (coreArr->FindArray("mode"/"volume"/... ), so it is a scheduler
         // tie, not a source shape.
+        // w33-c behaviour verdict: EQUIVALENT.  The only delta is the position
+        // of `li r5, 0x1` (FindArray's fail argument) relative to `mr r3, r31`:
+        // same instruction, same value, same register, same callees, and the
+        // relocation-symbol multiset is identical.  Probe: naming the bool
+        // (`bool fail = true;`) is inert at 94.44444 -- it folds to the same li.
         DataArray *modesArr = da->FindArray("modes");
         DataArray *modeArr = modesArr->Array(1);
         mMode = modeArr->Sym(0);

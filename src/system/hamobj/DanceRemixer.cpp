@@ -361,6 +361,13 @@ float DanceRemixer::JumpedBeat(float beat) const {
     // its own statement, and both of those combined.  Opcode multiset is
     // IDENTICAL and the count is 44 = 44, so nothing is missing -- the whole
     // residual is the -0x8 displacement and the f0/f13 flip it induces.
+    // w33-c behaviour verdict: EQUIVALENT.  Both sides compute
+    // (beat - (float)fromBeat) + (float)toBeat with the same fsubs/fadds order;
+    // the relocation-symbol multiset is empty on both sides (no globals or
+    // callees in the body) and the instruction counts are 44 = 44.  The only
+    // delta is the int->double scratch slot: the image reuses -0x10 for both
+    // conversions, we take -0x8 for the second, which is c1 frame-temp
+    // allocation rather than an expression shape.
     return (beat - (float)fromBeat) + (float)toBeat;
 }
 
