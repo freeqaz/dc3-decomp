@@ -237,6 +237,15 @@ BEGIN_LOADS(RndTexRenderer)
     mDirty = true;
 END_LOADS
 
+// w32-a: the ~60 r23/r24 rows are ONE colour decision, not a per-site value
+// exchange.  The instruction count (1078/1078), the opcode multiset and the
+// relocation-symbol multiset all match the image; only the register number of
+// `this` differs, on every one of its uses.  The c2 colour worklist names the
+// pair exactly: `this` is id 2, pri -82, tie 6 -> r24, while id 217
+// (sym 199/k03, arena#224, pri -86, tie 168) -> r23, and the image holds that
+// value in r24.  Closing it needs that candidate to outrank `this`, i.e. pri
+// above -82 or a tie-key win, neither of which any spelling of this body
+// reaches -- it is a priority ordering, not a source-visible operand order.
 void RndTexRenderer::DrawToTexture() {
     if (TheRnd.DrawMode() != 0)
         return;

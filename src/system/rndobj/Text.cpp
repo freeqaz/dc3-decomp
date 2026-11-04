@@ -315,6 +315,14 @@ BEGIN_LOADS(RndText)
     // branch and splitting `int i, j, k` into three declarations are inert
     // (canonical unchanged), so the frame delta is a slot-shape difference,
     // not a missing local.
+    // w32-a: the relocation-symbol multiset is equal once ICF folds are
+    // resolved against retail's own map.  Our `operator>>(BinStream&,
+    // Vector2&)` and the image's `operator>>(BinStream&, Key<float>&)` are the
+    // SAME address (0x826ee638, hamobj:DancerSequence.obj / rndobj:CamAnim.obj),
+    // and our `operator>>(BinStream&, Hmx::Color&)` and the image's
+    // `operator>>(BinStream&, Hmx::Rect&)` are both 0x82628210 (rndobj:Mesh.obj
+    // / rndobj:Cam.obj).  Those two rows are therefore fold artifacts, not
+    // wrong callees, and objdiff scores them equal for that reason.
     StyleData style;
     ObjPtr<RndFontBase> font(this);
     if (d.rev > 15) {

@@ -1686,6 +1686,16 @@ void RndParticleSys::InitParticle(
     } else {
         particle->deathFrame = particle->birthFrame + RandomFloat(mLife.x, mLife.y);
     }
+    // w32-a: the residual is instruction SHAPEI not a value.  Our 683
+    // instructions and the image's 683 are identical and the relocation-symbol
+    // multisets are equal (74/74)I'll The only mnemonic difference is that the
+    // image emits `fmr f12, f27` on the false arm and ONE shared
+    // `stfs f12, 0x3c(r31)` after the joinI where we store once per armI'll
+    // That shared-store shape is not reachable from this branch structure:
+    // spelling it as a merge local assigned in both armsI and as an
+    // initialise-to-zero armI both measure 99.29429 canonical -- byte-identical
+    // to the ternary aboveI'll  Binding the speed scale below to
+    // `const float &` is canonical-inert too (99.29429I fuzzy -0.015I)I'll
     particle->pos.w = particle->deathFrame > particle->birthFrame
         ? 1.0f / (particle->deathFrame - particle->birthFrame)
         : 0;
