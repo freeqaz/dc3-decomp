@@ -9,7 +9,8 @@
 
 Hmx::Object *RndMatAnim::sOwner;
 
-// FLOOR 89.500 canonical (w8-h).  The 13 instructions of the inlined
+// RESIDUAL 89.500 canonical / 88.750 fuzzy (w8-h).  The 13 instructions of
+// the inlined
 // ObjPtr<RndTex>(DeferOwner(), tex) are identical; the residual is a 2-instruction
 // permutation of the join block with the SAME multiset on both sides.  The image
 // anchors sOwner first and starts its load BEFORE the compiler-generated vtable
@@ -30,6 +31,18 @@ Hmx::Object *RndMatAnim::sOwner;
 // stores, so the dead ObjPtr vptr store survives (image has none).  The image
 // needs the load AFTER the AddRef block yet with sOwner's address taking r11
 // before the TexPtr vptr; no tried spelling gives both.
+// w34-a (2026-11-04, behaviour verdict): AGREES. Both sides store the same five
+// words at the same offsets with the same values -- ObjRefConcrete vptr 0x0,
+// mObject 0xc, ring links 0x4/0x8, TexPtr vptr 0x0, mOwner 0x10 = sOwner -- and
+// the four charged rows are the two address halves exchanging r10/r11 around a
+// load that moves by one slot, not a value or offset difference, so there is no
+// behavioural divergence here.  MEASURED NEGATIVE this lane: binding the global
+// to a pointer reference (`Hmx::Object *&owner = sOwner; mOwner = owner;`) is
+// byte-inert at 89.50000 / 88.75000.  (Initialising it in the mem-init list is
+// not available: mOwner is ObjPtr's member, not TexPtr's, which is why the
+// DeferOwner() form exists.)  Mechanism hypothesis: c2's scheduler places an
+// independent leaf load across the compiler-inserted derived-vptr store, and no
+// source operand participates in that decision.
 RndMatAnim::TexPtr::TexPtr(RndTex *tex) : ObjPtr<RndTex>(DeferOwner(), tex) {
     mOwner = sOwner;
 }

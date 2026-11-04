@@ -272,6 +272,14 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
 // ctor in the source, line order notwithstanding, and is still proven nothrow),
 // so no definition-order spelling can bring the funclet back; it needs the
 // original's may-throw construct inside Init, which nothing in the image names.
+// w34-a (2026-11-04, behaviour verdict): AGREES.  The field stores match the
+// image exactly -- mTracking 0xaa0 = 0, mTrackingID 0xaac = -1, unkac4 0xac4 =
+// 0.0f, the three mCamDisplacements words 0xac8/0xacc/0xad0 = 0, and the same
+// 0x50(r31) spill of &mCamDisplacements -- as do the vtable store, the ??_H
+// array-construction loop (counter 0x13, stride 0x74, count 6 per call), and
+// both sides emit the same frame size and the same two `mr r3, r30` argument
+// setups.  Nothing in the block carries a different value, field offset or
+// call, so the charged rows are placement alone.
 Skeleton::Skeleton() : mTracking(kSkeletonNotTracked), mTrackingID(-1), unkac4(0) {
     Init();
 }
