@@ -158,7 +158,7 @@ namespace {
         // exactly but drags the TheRnd lwz below it, 83.3 (same with an
         // explicit `Rnd &rnd = TheRnd;` first); three plain member copies
         // 74.9; computing scale first 64.9.
-        // NOTE (w7-av): 94.42 is a one-slot scheduling floor.  The image stores
+        // MECHANISM (w7-av; w33-c): 94.42 is a one-slot store-order conflict.  The image stores
         // rect.x immediately after loading DrawUtlVec3.x (`lfs f0` / `stfs f0,
         // 0x0(r3)`) and only then loads y and z; we hoist all three loads.  Do
         // NOT try to fix it by writing the x store earlier: both
@@ -175,6 +175,12 @@ namespace {
         // Min is the same fsel); fsel operand from rect.w vs vz.  The shapes
         // that store x before loading y/z all move `lwz TheRnd` below that
         // store (the image keeps it above), the rest leave stfs x after stfs y.
+        // w33-c behaviour verdict: EQUIVALENT.  The same three values land in
+        // rect.x/y/w and the scale/fsel arithmetic is identical; only the store
+        // order differs (image stores x first, we store y first), with equal
+        // instruction counts (36 = 36).  Re-measured on this tree: storing x
+        // directly 83.06; direct store plus `Rnd *rnd = &TheRnd;` also 83.06 --
+        // forcing the x store drags the TheRnd load off row 4 either way.
         float vx = DrawUtlVec3.x;
         float vy = DrawUtlVec3.y;
         float vz = DrawUtlVec3.z;
