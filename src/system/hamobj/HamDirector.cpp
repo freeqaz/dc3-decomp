@@ -2013,8 +2013,8 @@ bool HamDirector::GetPracticeFrames(Key<Symbol> *&startKey, Key<Symbol> *&endKey
             // so the second-loop idx v2 still takes r11 while the image wants
             // it in r10.
             if (startIdx < idx && startIdx != -1 && idx != -1) {
-                startKey = &(*keys)[startIdx];
                 endKey = &(*keys)[idx];
+                startKey = &(*keys)[startIdx];
                 return true;
             }
         }
