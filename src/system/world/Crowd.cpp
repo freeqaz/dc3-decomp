@@ -850,6 +850,13 @@ void WorldCrowd::Set3DCharXfm(
 void WorldCrowd::Apply3DCharXfm(
     const std::list<CharData>::iterator &charItr, int char3DIdx, RndCam *cam
 ) {
+    // Residual (canonical 100, fuzzy 99.84772, 3 rows): commutative operand
+    // order inside the inlined Cross() from math/Vec.h, whose operands are
+    // memory leaves. Putting the cross arguments in named references (both
+    // arms), binding the focus and placement transforms, and writing 0.0f for
+    // the zero component all measured inert. Two memory leaves sort on the
+    // base temp's sid (C2RS-BRIDGE 8.7), so the handle is an upstream temp
+    // count, not this expression's spelling.
     MILO_ASSERT_RANGE(char3DIdx, 0, charItr->m3DChars.size(), 0x29D);
     Character *itrChar = charItr->mDef.mChar;
     if (itrChar && mPlacementMesh) {
@@ -1101,6 +1108,17 @@ void WorldCrowd::DrawShowing() {
     // instantiation and its MakeString to <char const[19],int,char const[5]>.
     // Both are 16-byte-POD / any-4-byte-enum folds of our own instantiations --
     // the same representative MakeString name appears in CamShotFrame::Interp.
+    // w33-d (2026-11-04): canonical 100, fuzzy 99.90923 over 10 diff_arg rows.
+    // Rows 97/106 are two symbol relocations (lis then addi) resolved
+    // link-time; canonical 100 and no source lever. Seven rows (103, 151,
+    // 156, 388, 394, 577, 579) move the same value between f23 and f24, the
+    // callee-saved pair spanning a call, and row 456 is the rect loop's
+    // `y + h` fadds operand order. Nine spellings (named refs for the
+    // half-extents and the hoisted
+    // 0.5f, reordered extent expressions, a named rect sum) measured inert.
+    // This unit's per-object path is INEXACT for this function, reading
+    // 99.86385 canonical 99.98487 against these report values, so any candidate
+    // must be measured on a full ninja.
     START_AUTO_TIMER("crowd_draw");
     if (!mPlacementMesh) return;
     Draw3DChars();

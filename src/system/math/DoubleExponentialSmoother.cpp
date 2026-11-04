@@ -13,6 +13,17 @@ void DoubleExponentialSmoother::Smooth(float value, float delta) {
     newBeta = Min(newBeta, 1.0f);
     float oldPrev = mPrevLevel;
     mPrevLevel = newAlpha * (value - mLevel) + mLevel;
+    // w33-d, C2RS-BRIDGE 16, measured and REVERTED: binding the difference by
+    // const reference escapes c1's single-use fold, and it does move the inlined
+    // expansions -- Vector3DESmoother::Smooth 99.73684 -> 99.82456 with
+    // canonical held at 100.  But this body is also the out-of-line
+    // DoubleExponentialSmoother::Smooth, which a binding after the level store
+    // takes from fuzzy 100.00000 to 99.65517, and a binding before the store
+    // takes Vector3DESmoother to 65.41.  Net -1 row at fuzzy 100, so neither
+    // form is bankable.  This is the concrete form of the constraint in the
+    // Vector3DESmoother::Smooth note: the out-of-line body and all three
+    // inlined expansions are ONE body, so no spelling can move expansions 2/3
+    // without moving the out-of-line copy that already matches.
     mTrend = ((mPrevLevel - oldPrev) - mTrend) * newBeta + mTrend;
     mLevel = mTrend + mPrevLevel;
 }
@@ -62,6 +73,13 @@ void Vector3DESmoother::ForceValue(Vector3 v) {
 // reload, and the length sums y*y first: non-PCH probe diff 235 -> 10, the one
 // row left is the commutative fmadds inside the inlined mY Smooth().
 void Vector2DESmoother::Smooth(Vector2 v, float dt, bool normalize) {
+    // Residual (canonical 100, fuzzy 99.87013, 1 row): the same commutative
+    // operand order as the Vector3 expansions, in this function's SECOND
+    // inlined DoubleExponentialSmoother::Smooth (mY). The c2 operand dump puts
+    // `change` at nodes 7 and the clamped `newBeta` at nodes 6, so the order is
+    // fixed by node count before the sid hash, and no uniform spelling can make
+    // the mY expansion differ from mX. 13 named/operator/const-ref spellings
+    // measured inert, 1 worse; see the note in Vector3DESmoother::Smooth.
     DoubleExponentialSmoother &sx = mX;
     DoubleExponentialSmoother &sy = mY;
     sx.Smooth(v.x, dt);
@@ -129,6 +147,28 @@ void Vector3DESmoother::Smooth(Vector3 v, float dt, bool normalize) {
     //     difference can only come from the operand sids, which is the 1024-wrap
     //     question in C2RS-BRIDGE 8.9. Do not re-run the 14 named-local and
     //     operator spellings listed above; they are measured.
+    // w33-d (2026-11-04): confirmed from c2's own operand dump (c2rs
+    // `stage cands --regasg --payload`, the `CQT cqlo3` lines). In every one of
+    // the three inlined expansions the mTrend fmadds sorts `change`
+    // (SU 1, nodes 7 -> 0107xxxx) ahead of the clamped `newBeta`
+    // (SU 1, nodes 6 -> 0106xxxx); the three measured key pairs are
+    // 01076e1c/0106499e, 0107291c/01060bbe and 0107995c/010609de, and all three
+    // expansions carry the SAME counts. Declination is by node count before any
+    // sid hash, so no uniform source spelling can make expansions 2 and 3
+    // differ from expansion 1: that needs those counts to tie so the
+    // per-expansion hash decides. c1 folds every node-adding spelling tried
+    // (`+ 0.0f`, `* 1.0f`, `Max(mBeta * delta, 0.0f)`) back off before c2 sees
+    // the tree; 18 spellings measured inert and 2 worse, so nothing was landed.
+    // The one lever that DOES escape that fold is C2RS-BRIDGE 16's const-ref
+    // binding of the difference. It was measured and rejected: it lifts THIS
+    // row to 99.82456 but takes the out-of-line DoubleExponentialSmoother::
+    // Smooth from fuzzy 100.00000 to 99.65517, net -1 row at fuzzy 100. See the
+    // note on that body.
+    // The mLevel fadds row is a different sub-case: both operands are temp
+    // leaves keyed (sid << 6) & 0xffff (here 00019780 for mTrend against
+    // 000168c0 for mPrevLevel, i.e. mTrend sorts first, the image wants
+    // mPrevLevel first). That needs a temp layout where mTrend's sid wraps past
+    // a multiple of 1024, the open question in C2RS-BRIDGE 8.9.
     // Also measured (w25-fa): mX in place of the sx ref is inert; dropping all
     // three refs flips the 2nd expansion's mPrevLevel fmadds the wrong way.
     DoubleExponentialSmoother &sx = mX;
