@@ -168,9 +168,9 @@ bool FlowPickOne::Activate() {
         // out-of-line block), so it is the `if` body, not the `else`.
         if (numChildren > 1) {
             // Same bool-in-a-local shape as kChoiceOrdered.
+            FlowNode *lastChosen = nullptr;
             bool haveHistory = mIndex >= 0 && mIndex < (int)mChoiceHistory.size();
             if (!haveHistory) {
-                FlowNode *lastChosen = nullptr;
                 if (!mChoiceHistory.empty()) {
                     lastChosen = mChoiceHistory.back();
                 }
