@@ -44,6 +44,11 @@
 #include "utl\Symbol.h"
 #include "utl\TimeConversion.h"
 #include "xdk\XAPILIB.h"
+#ifdef HX_NATIVE
+// The native cache backend's entry points (CacheMgrNativeInit).  Header-only
+// declaration, so the Xbox build never sees it.
+#include "platform/Cache_Native.h"
+#endif
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -505,9 +510,15 @@ void SystemInit(const char *config) {
     CheatsInit();
     TheMC.Init();
     FileCache::Init();
-#ifndef HX_NATIVE
-    // Native has no CacheMgrXbox (XContent): its TU is not in the native
-    // build, and SystemPoll null-checks TheCacheMgr.
+#ifdef HX_NATIVE
+    // Native's cache backend is a plain directory tree ($DC3_CACHE_DIR, else
+    // ~/.local/share/dc3/cache) in native/src/platform/Cache_Stub.cpp; the
+    // CacheMgrXbox TU (XContent) is not in the native build.  The cache has to
+    // exist before SaveLoadManager::Init(), which creates the song-info cache
+    // and the global-options cache through it, so it is created here -- the
+    // image's own slot, ahead of every consumer.
+    CacheMgrNativeInit();
+#else
     CacheMgrInit();
 #endif
     // Native builds the image's NetCacheMgrXbox too: with no Xbox LIVE its

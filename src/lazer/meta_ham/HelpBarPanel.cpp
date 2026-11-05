@@ -119,8 +119,9 @@ void HelpBarPanel::Unload() {
 void HelpBarPanel::FinishLoad() {
     UIPanel::FinishLoad();
 #ifdef HX_NATIVE
-    // PLATFORM: native never creates TheSaveLoadMgr (no Xbox save-device
-    // flow; App registers a NativeSaveLoadStub object instead).
+    // TheSaveLoadMgr is the real manager (SaveLoadManager::Init runs in App's
+    // native ctor arm), but this panel is built before App constructs it on
+    // some paths, so the check stays.
     if (TheSaveLoadMgr)
 #endif
     TheSaveLoadMgr->AddSink(this);

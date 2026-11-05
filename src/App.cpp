@@ -82,25 +82,12 @@ extern void HttpServerShutdown();
 // instead of silently failing.
 // ---------------------------------------------------------------------------
 
-// SaveLoadManager stub — DTA polls {saveload_mgr is_idle} after {saveload_mgr activate}
-// to fire saveload_complete. We're always idle (no save system on native).
-class NativeSaveLoadStub : public Hmx::Object {
-public:
-    NativeSaveLoadStub() {}
-    virtual DataNode Handle(DataArray *msg, bool rev) {
-        Symbol sym = msg->Sym(1);
-        // DTA: {saveload_mgr activate} — start save/load process
-        if (sym == "activate") return 0;
-        // DTA: {saveload_mgr is_idle} — always idle, no save in progress
-        if (sym == "is_idle") return DataNode(1);
-        // DTA: {saveload_mgr is_initial_load_done} — always done
-        if (sym == "is_initial_load_done") return DataNode(1);
-        // DTA: {saveload_mgr is_autosave_enabled ...}
-        if (sym == "is_autosave_enabled") return DataNode(0);
-        if (sym == "autosave") return DataNode(0);
-        return Hmx::Object::Handle(msg, rev);
-    }
-};
+// (There is no saveload_mgr stub any more: SaveLoadManager::Init() runs in the
+// native ctor arm below, in the image's own slot, so "saveload_mgr" is the real
+// manager.  The stub could not coexist with it -- Hmx::Object::SetName
+// MILO_FAILs on a name collision (src/system/obj/Object.cpp:582-585) -- and it
+// answered is_autosave_enabled 0 / is_initial_load_done 1, which the real
+// manager answers from the profile and from its own state.)
 
 // Native-only options (native/dta/ui/options/options_gameplay.dta): camera
 // blend and the ImGui debug panel have no image equivalent, so they are not
@@ -391,6 +378,21 @@ App::App(int argc, char **argv) {
         TheSynth->SetDir(commonBankDir);
     }
 
+    // The image's save/load manager, in the image's own slot: right after the
+    // common sound bank and before CharInit (the #else arm below runs
+    // SaveLoadManager::Init() at exactly this point).  Its ctor names
+    // "saveload_mgr" in ObjectDir::Main, which is what DTA's
+    // {saveload_mgr ...} reaches; every subsystem it drives is up by now
+    // (SystemInit created TheCacheMgr and ThePlatformMgr, FixedSizeSaveable
+    // sized the profile stream, MetaPanel::Init -- which names
+    // "memcardmgr" -- runs later).  Its Poll is driven from the native frame
+    // loop, and it stays inert until Activate() sets the load/save flags.
+    SaveLoadManager::Init();
+    if (showSplash && TheSplasher) TheSplasher->Poll();
+#ifdef __EMSCRIPTEN__
+    if (showSplash) emscripten_sleep(0);
+#endif
+
     // Character system
     CharInit();
     if (showSplash && TheSplasher) TheSplasher->Poll();
@@ -482,7 +484,11 @@ App::App(int argc, char **argv) {
     // (w23-misc). There is no platform_mgr stub any more: native
     // SystemInit runs ThePlatformMgr.Init (w23-g14), which names the real
     // object "platform_mgr" (PlatformMgr_Native.cpp, w23-si), so DTA reaches
-    // the image's PlatformMgr handlers.
+    // the image's PlatformMgr handlers.  There is no saveload_mgr stub either
+    // any more: SaveLoadManager::Init ran above (after the common bank, where
+    // the image runs it), so DTA reaches the real manager's handlers
+    // (activate / is_idle / is_initial_load_done / is_autosave_enabled /
+    // manual_save / enable_autosave / disable_autosave).
     {
         auto registerStub = [](const char *name, Hmx::Object *obj) {
             if (!ObjectDir::Main()->FindObject(name, false, false)) {
@@ -491,7 +497,6 @@ App::App(int argc, char **argv) {
                 delete obj;
             }
         };
-        registerStub("saveload_mgr", new NativeSaveLoadStub());
         // Not a stub: a native-only object the native options screen talks to.
         registerStub("native_settings", new NativeSettingsObject());
         // These don't need smart handlers — bare stubs are sufficient
@@ -803,9 +808,10 @@ App::App(int argc, char **argv) {
 // 3e7fed8b5 and Synth appended in c09c65e61 with no ordering rationale).
 //
 // Native-only differences that remain, each because native lacks the subsystem:
-//  - TheSaveLoadMgr is null on native (SaveLoadManager::Init is in the Xbox-only
-//    App ctor block; DTA "saveload_mgr" is NativeSaveLoadStub), so it is guarded.
-//    TheLeaderboards is likewise null (MetaPanel::Init, #ifndef HX_NATIVE); the
+//  - TheSaveLoadMgr is the real manager (SaveLoadManager::Init runs in the
+//    native ctor arm); the null check stays because Poll is also reached from
+//    milo-tests, which never constructs App.
+//    TheLeaderboards is null on native (MetaPanel::Init, #ifndef HX_NATIVE); the
 //    image already guards it.
 //  - TheRockCentral is polled un-Init'd: ThePlatformMgr.IsConnected() is false on
 //    native, so it never logs in; its only other work goes to DingoServerNative,
