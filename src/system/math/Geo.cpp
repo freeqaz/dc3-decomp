@@ -595,15 +595,16 @@ bool Intersect(const Triangle &tri, const Box &box) {
     // never written; a `float[9][4]` with an explicit trailing 0 makes MSVC store
     // nine extra zeros retail does not.
     Vector3 axes[9];
-    axes[0].Set(0.0f, -e0z, e0y);
-    axes[1].Set(0.0f, -e1z, e1y);
-    axes[2].Set(0.0f, -e2z, e2y);
-    axes[3].Set(e0z, 0.0f, -e0x);
-    axes[4].Set(e1z, 0.0f, -e1x);
-    axes[5].Set(e2z, 0.0f, -e2x);
-    axes[6].Set(-e0y, e0x, 0.0f);
-    axes[7].Set(-e1y, e1x, 0.0f);
-    axes[8].Set(-e2y, e2x, 0.0f);
+    const float zero = 0.0f;
+    axes[0].Set(zero, -e0z, e0y);
+    axes[1].Set(zero, -e1z, e1y);
+    axes[2].Set(zero, -e2z, e2y);
+    axes[3].Set(e0z, zero, -e0x);
+    axes[4].Set(e1z, zero, -e1x);
+    axes[5].Set(e2z, zero, -e2x);
+    axes[6].Set(-e0y, e0x, zero);
+    axes[7].Set(-e1y, e1x, zero);
+    axes[8].Set(-e2y, e2x, zero);
 
     float radii[9];
     unsigned int i = 0;
