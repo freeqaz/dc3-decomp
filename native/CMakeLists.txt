@@ -1250,12 +1250,17 @@ set(DC3_NATIVE_SOURCES
 # (FFmpeg*.cpp are genex list items and stay in both; allow-multiple-definition
 #  tolerates the duplicate.)
 set(DC3_NATIVE_CORE_SOURCES_ENGINE ${DC3_NATIVE_CORE_SOURCES})
+# src/platform/Cache_Stub.cpp is deliberately NOT in this removal list (it used
+# to be, because it was an empty placeholder whose engine twin was the real
+# thing -- the engine's copy is still a 127-byte comment). It now defines the
+# native cache backend (CacheMgrNative/CacheNative/CacheIDNative), and
+# src/system/utl/CacheMgr.cpp's HX_NATIVE branch references the factory that
+# lives in it, so every engine-linking target must compile it.
 list(REMOVE_ITEM DC3_NATIVE_CORE_SOURCES_ENGINE
     src/audio/AudioDevice.cpp
     src/platform/AsyncFile_Native.cpp
     src/platform/BinkMovie_Stub.cpp
     src/platform/BoneSetup.cpp
-    src/platform/Cache_Stub.cpp
     src/platform/Cam_Native.cpp
     src/platform/CDReader_Native.cpp
     src/platform/ChecksumData_Stub.cpp
@@ -1423,6 +1428,11 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/ContentMgr_Stub.cpp
     src/platform/Achievements_Stub.cpp
     src/platform/MemcardMgr_Stub.cpp
+    # Native cache backend (CacheMgrNative/CacheNative/CacheIDNative). Needed
+    # here for the same reason as on the desktop targets: CacheMgr.cpp's
+    # HX_NATIVE branch calls CacheMgrCreateNativeBackend(), which only this TU
+    # defines. (The engine's own Cache_Stub.cpp is a comment-only placeholder.)
+    src/platform/Cache_Stub.cpp
     src/platform/WebMovieImpl.cpp
     src/platform/NetXbox_Stub.cpp
     src/platform/KinectShare_Stub.cpp
@@ -2024,6 +2034,7 @@ if(BUILD_TESTS)
         tests/test_lp64_literals.cpp
         tests/test_clamp_fsel_nan.cpp
         tests/test_native_memory_lp64.cpp
+        tests/test_cache_native.cpp
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
