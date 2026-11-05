@@ -1594,32 +1594,33 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                 FacePriority *pPtr = (FacePriority *)priBegin;
                 do {
                     RndMesh::Face &face = mesh->Faces(pPtr->faceIndex);
-                    // RESIDUAL (w7-bw, 92.38 canonical): the image loads each
-                    // index once and reuses the register for the Edge fields,
-                    // AND homes a dead u16 temp per index (sth 0x50(r31) at
-                    // 826E14A0/B4/C8).  u16 locals give the reuse but no temp;
-                    // direct Verts(FaceVert(face, k)) gives the temp but the
-                    // Edge stores then reload the face (91.0); `int` locals
-                    // 92.0; const-ref-bound temps 92.3, no store.  Hoisting the
-                    // midpoint = 0xffff stores above this lookup (image order,
-                    // 826E1464..70) regresses to 90.2 (regswap wave, as am saw).
-                    unsigned short i0 = FaceVert(face, 0);
-                    unsigned short i1 = FaceVert(face, 1);
-                    unsigned short i2 = FaceVert(face, 2);
-                    RndMesh::Vert &vert0 = mesh->Verts(i0);
-                    RndMesh::Vert &vert1 = mesh->Verts(i1);
-                    RndMesh::Vert &vert2 = mesh->Verts(i2);
+                    // w36-a (2026-11-05): read the face at each use site.  The
+                    // image emits one `lhz 0x0(r30)` per use of v1 and one
+                    // `sth` per Edge field; naming `unsigned short i0/i1/i2`
+                    // let c1 keep the value in a register and ELIDE three of
+                    // the Edge stores (ours 121 vs the image's 124).  Spelling
+                    // the read as FaceVert(face, k) -- i.e. `(&face.v1)[k]`,
+                    // the pointer-index form, NOT `face.v1` -- restores them:
+                    // 93.34728 -> 94.53161 fuzzy, and the `lhz` and `sth`
+                    // multisets both become equal to the image's.  (The member
+                    // spelling `face.v1` is byte-inert; the old note's "direct
+                    // Verts(FaceVert(face, k)) ... 91.0" no longer reproduces
+                    // on this tree.)  Still open: hoisting the midpoint =
+                    // 0xffff stores above this lookup regresses to 90.2.
+                    RndMesh::Vert &vert0 = mesh->Verts(FaceVert(face, 0));
+                    RndMesh::Vert &vert1 = mesh->Verts(FaceVert(face, 1));
+                    RndMesh::Vert &vert2 = mesh->Verts(FaceVert(face, 2));
 
                     // Construct 3 midpoint edges
                     Edge edge01, edge12, edge20;
-                    edge01.v0 = i0;
-                    edge01.v1 = i1;
+                    edge01.v0 = FaceVert(face, 0);
+                    edge01.v1 = FaceVert(face, 1);
                     edge01.midpoint = 0xffff;
-                    edge12.v0 = i1;
-                    edge12.v1 = i2;
+                    edge12.v0 = FaceVert(face, 1);
+                    edge12.v1 = FaceVert(face, 2);
                     edge12.midpoint = 0xffff;
-                    edge20.v0 = i2;
-                    edge20.v1 = i0;
+                    edge20.v0 = FaceVert(face, 2);
+                    edge20.v1 = FaceVert(face, 0);
                     edge20.midpoint = 0xffff;
 
                     RndMesh::Vert blendVert01;
@@ -1751,14 +1752,14 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
 
                     // Set up 3 edges and check which were split
                     Edge edges[3];
-                    edges[0].v0 = face.v1;
-                    edges[0].v1 = face.v2;
+                    edges[0].v0 = FaceVert(face, 0);
+                    edges[0].v1 = FaceVert(face, 1);
                     edges[0].midpoint = 0xffff;
-                    edges[1].v0 = face.v2;
-                    edges[1].v1 = face.v3;
+                    edges[1].v0 = FaceVert(face, 1);
+                    edges[1].v1 = FaceVert(face, 2);
                     edges[1].midpoint = 0xffff;
-                    edges[2].v0 = face.v3;
-                    edges[2].v1 = face.v1;
+                    edges[2].v0 = FaceVert(face, 2);
+                    edges[2].v1 = FaceVert(face, 0);
                     edges[2].midpoint = 0xffff;
 
                     unsigned short mids[3] = {0xffff, 0xffff, 0xffff};
@@ -1823,9 +1824,9 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                         newFaces.push_back(fb);
                     } else if (splitCount == 2) {
                         // 2 edges split: create blend vert + faces
-                        RndMesh::Vert &vert0 = mesh->Verts(face.v1);
-                        RndMesh::Vert &vert1 = mesh->Verts(face.v2);
-                        RndMesh::Vert &vert2 = mesh->Verts(face.v3);
+                        RndMesh::Vert &vert0 = mesh->Verts(FaceVert(face, 0));
+                        RndMesh::Vert &vert1 = mesh->Verts(FaceVert(face, 1));
+                        RndMesh::Vert &vert2 = mesh->Verts(FaceVert(face, 2));
 
                         RndMesh::Vert blendA;
                         RndMesh::Vert blendB;
@@ -1844,42 +1845,42 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                         // Edge 0 (v0-v1)
                         if (mids[0] == 0xffff) {
                             RndMesh::Face tmpA;
-                            tmpA.Set(blendIdx, face.v1, face.v2);
+                            tmpA.Set(blendIdx, FaceVert(face, 0), FaceVert(face, 1));
                             newFaces.push_back(tmpA);
                         } else {
                             RndMesh::Face tmpA;
-                            tmpA.Set(blendIdx, face.v1, mids[0]);
+                            tmpA.Set(blendIdx, FaceVert(face, 0), mids[0]);
                             newFaces.push_back(tmpA);
                             RndMesh::Face tmpB;
-                            tmpB.Set(blendIdx, mids[0], face.v2);
+                            tmpB.Set(blendIdx, mids[0], FaceVert(face, 1));
                             newFaces.push_back(tmpB);
                         }
 
                         // Edge 1 (v1-v2)
                         if (mids[1] == 0xffff) {
                             RndMesh::Face tmpA;
-                            tmpA.Set(blendIdx, face.v2, face.v3);
+                            tmpA.Set(blendIdx, FaceVert(face, 1), FaceVert(face, 2));
                             newFaces.push_back(tmpA);
                         } else {
                             RndMesh::Face tmpA;
-                            tmpA.Set(blendIdx, face.v2, mids[1]);
+                            tmpA.Set(blendIdx, FaceVert(face, 1), mids[1]);
                             newFaces.push_back(tmpA);
                             RndMesh::Face tmpB;
-                            tmpB.Set(blendIdx, mids[1], face.v3);
+                            tmpB.Set(blendIdx, mids[1], FaceVert(face, 2));
                             newFaces.push_back(tmpB);
                         }
 
                         // Edge 2 (v2-v0)
                         if (mids[2] == 0xffff) {
                             RndMesh::Face tmpA;
-                            tmpA.Set(blendIdx, face.v3, face.v1);
+                            tmpA.Set(blendIdx, FaceVert(face, 2), FaceVert(face, 0));
                             newFaces.push_back(tmpA);
                         } else {
                             RndMesh::Face tmpA;
-                            tmpA.Set(blendIdx, face.v3, mids[2]);
+                            tmpA.Set(blendIdx, FaceVert(face, 2), mids[2]);
                             newFaces.push_back(tmpA);
                             RndMesh::Face tmpB;
-                            tmpB.Set(blendIdx, mids[2], face.v1);
+                            tmpB.Set(blendIdx, mids[2], FaceVert(face, 0));
                             newFaces.push_back(tmpB);
                         }
 
