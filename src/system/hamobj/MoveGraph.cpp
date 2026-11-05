@@ -302,6 +302,18 @@ bool MoveGraph::FindVariantPair(
         // they are a fold artifact and cost no points, not a wrong callee.
         // No value differs: nothing stores to the vector on either side and
         // every exit lands on the same block.
+        // w36-b (98.10329 -> 99.04225 canonical, 97.07042 -> 98.05634 fuzzy): of the
+        // four `_M_start` reloads, the two at the `begin()` sites ARE reachable
+        // from source and the two at the loop top are not.  Spelling that one
+        // read as `p1->Variants().begin()` instead of through the bound
+        // reference reproduces the image's `lwz r10,0(r11)` + `lwz r10,0(r10)`
+        // pair exactly, while `variants.empty()` / `.size()` / `[i]` keep
+        // reading through the reference.  Reading EVERY use off the call
+        // (i.e. dropping the reference) also earns the loop-top reload but
+        // moves the `size()` loads to start-then-finish instead of the
+        // image's finish-then-start and lands at 98.009, so it is worse than
+        // leaving those two rows alone.  The remaining two deletes are the
+        // loop-top reloads.
         const std::vector<MoveVariant *> &variants = p1->Variants();
         if (variants.empty()) {
             return false;
@@ -309,7 +321,7 @@ bool MoveGraph::FindVariantPair(
         if (v1) {
             vref1 = v1;
         } else {
-            vref1 = *variants.begin();
+            vref1 = *p1->Variants().begin();
             if (!s.Null()) {
                 unsigned int count = variants.size();
                 for (unsigned int i = 0; i < count; i++) {
@@ -332,7 +344,7 @@ bool MoveGraph::FindVariantPair(
             if (v2) {
                 vref2 = v2;
             } else {
-                vref2 = *variants.begin();
+                vref2 = *p2->Variants().begin();
                 if (!s.Null()) {
                     unsigned int count = variants.size();
                     for (unsigned int i = 0; i < count; i++) {
