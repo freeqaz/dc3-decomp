@@ -334,8 +334,12 @@ void CharLipSyncDriver::UpdatePlayback(CharLipSync::PlayBack *pb, float weight, 
                 // spelling probed is an LT/GT test and gets threaded (102/103):
                 // `!(w < 0)` assert, `0 > w` fail test with `w < 0` re-test,
                 // a 0.0 double literal, a `w <= 0 && w != 0` re-test; `w >= 0 ||
-                // w != w` and a nested GE/LT test add code (70/105).  Open
-                // question: a NaN-safe source form whose IL test is GE.
+                // w != w` and a nested GE/LT test add code (70/105).
+                // DECIDED 2026-11-05, owner delegated: do NOT take the GE form.
+                // Native correctness outranks one fuzzy row, so a NaN weight must
+                // not print FAIL on the port where the image ignores it. What is
+                // still open is a NaN-safe source form whose IL test is GE; none
+                // of the eight probed is one.
                 // w26-f14 (measured in this tree, exact): the og-dc3 form
                 // `MILO_ASSERT_FMT(curWeight >= 0.0f, "weight = %f", curWeight)`
                 // alone closes the row -- fuzzy 99.951454 -> 100.000000 with
@@ -345,8 +349,9 @@ void CharLipSyncDriver::UpdatePlayback(CharLipSync::PlayBack *pb, float weight, 
                 // (fp:fast) skips the fail, so native would print FAIL: (and abort
                 // under MILO_FATAL_FAILS=1) on an input the image ignores.
                 // `!(curWeight < 0.0f)` is NaN-safe and reproduces 99.951454
-                // (LT in the IL, threaded).  A behaviour trade for the owner, not
-                // a compiler limit.
+                // (LT in the IL, threaded).  This is a behaviour trade settled in
+                // favour of native correctness, not a compiler limit -- do not
+                // re-open it for the score without a NaN-safe GE form.
                 if (0.0f > curWeight)
                     curWeight = 0.0f;
                 ScaleAddViseme(clip, curWeight);
