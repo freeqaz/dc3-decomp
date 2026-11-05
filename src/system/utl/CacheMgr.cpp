@@ -76,7 +76,21 @@ CacheResult CacheMgr::GetLastResult() { return mLastResult; }
 void CacheMgr::SetLastResult(CacheResult c) { mLastResult = c; }
 void CacheMgr::SetOp(OpType t) { mOpCur = t; }
 CacheMgr::OpType CacheMgr::GetOp() { return mOpCur; }
-CacheMgr *CacheMgr::CreateCacheMgr() { return new CacheMgrXbox(); }
+#ifdef HX_NATIVE
+// The native backend (CacheMgrNative) is defined in
+// native/src/platform/Cache_Stub.cpp, which this decomp TU cannot see, so it
+// is constructed through a factory there. The decomp build never defines
+// HX_NATIVE and keeps the image's body verbatim.
+extern CacheMgr *CacheMgrCreateNativeBackend();
+#endif
+
+CacheMgr *CacheMgr::CreateCacheMgr() {
+#ifdef HX_NATIVE
+    return CacheMgrCreateNativeBackend();
+#else
+    return new CacheMgrXbox();
+#endif
+}
 
 void CacheMgrInit() {
     MILO_ASSERT(TheCacheMgr == NULL, 0x12);
