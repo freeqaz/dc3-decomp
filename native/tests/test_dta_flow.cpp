@@ -67,11 +67,32 @@ static bool FileExists(const std::string &p) {
     return ::stat(p.c_str(), &st) == 0;
 }
 
+// Wall-clock backstop for one engine run.  This is a HANG detector, not a
+// performance budget: a hung engine emits no further telemetry and is caught
+// only by this cap, so the number only has to be far enough above a healthy
+// run that a busy machine cannot reach it.
+//
+// Measured 2026-11-05, 5000-frame `ymca.txt` run: 67 s on a quiet box (load
+// ~25), and the same work exceeds 120 s with several lanes building at once.
+// That was a real false red: two consecutive landing gates failed
+// DtaFlowTest.NoCrashCleanExit on `Engine timed out (hung during DTA flow)`
+// while the engine was running normally -- 4760 frames at the cap, no signal,
+// no assertion -- and the identical binary passed in 67 s once the box went
+// quiet.  A/B against the pre-change engine (3000 frames, alternating, three
+// pairs) found no throughput difference at all: 40/31/28 s vs 32/31/29 s.
+//
+// 300 s is ~4.5x the idle cost, which covers the contention seen so far.  A
+// genuinely hung run still fails, just after 300 s instead of 120.  Only the
+// 5000-frame flow uses it: the shorter flows already sit at 3.6x or better of
+// their own cost and keep their tighter caps, so a hang there is still
+// reported quickly.
+static constexpr int kEngineWallClockSeconds = 300;
+
 // `extraEnv` is prepended to the command as further VAR=value assignments
 // (e.g. "DC3_CONTROLLER_MODE=faithful").  `fastBoot` false leaves
 // DC3_FAST_BOOT out, so boot screens advance as the image's do -- title_screen
 // in particular then waits for a confirm instead of auto-advancing.
-static DtaRunResult RunDtaFlow(int maxFrames, int timeout = 120,
+static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeconds,
                                const char *scriptName = "ymca.txt",
                                const char *extraEnv = "", bool fastBoot = true) {
     std::string binary = GetDc3NativePath();
@@ -143,7 +164,7 @@ protected:
     static void SetUpTestSuite() {
         if (!getenv("DC3_DTA_FLOW_TESTS"))
             return;
-        sResult = RunDtaFlow(5000, 120);
+        sResult = RunDtaFlow(5000, kEngineWallClockSeconds);
         sRanEngine = true;
     }
 
@@ -272,7 +293,11 @@ TEST_F(DtaFlowTest, NoCrashCleanExit) {
     EXPECT_EQ(sResult.signal, 0)
         << "Engine crashed with signal " << sResult.signal;
     EXPECT_FALSE(sResult.timedOut)
-        << "Engine timed out (hung during DTA flow)";
+        << "Engine did not finish inside its wall-clock cap. This is a hang "
+           "OR a machine too loaded to complete a healthy run -- the "
+           "5000-frame flow costs ~67 s at load 25 and exceeded 120 s with "
+           "several lanes building. Re-run on a quiet box before treating it "
+           "as a regression; the cap is kEngineWallClockSeconds.";
     EXPECT_EQ(sResult.exitCode, 0)
         << "Engine exited with code " << sResult.exitCode;
 }
