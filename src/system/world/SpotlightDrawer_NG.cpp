@@ -1119,8 +1119,16 @@ inline void vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_fill_insert_a
         this->_M_finish += __n;
 
         // Manual backward copy loop to match target codegen
-        pointer src = __old_finish - __n;
+        // w39-a: `dst` FIRST, then `src` derived from it.  Written the other way
+        // round (`src = __old_finish - __n; dst = __old_finish;`) c1 copy-propagates
+        // `dst` into `src + __n` and emits a FOURTH instruction rematerialising it
+        // (`add r31, r27, r28`) where the image keeps `__old_finish` in r31 across
+        // the __uninitialized_copy call.  Same values either way: the image's own
+        // `subf r28, r27, r31` (src = __old_finish - n*0x50, derived from the
+        // register holding __old_finish) is this declaration order.  396 B / 99
+        // instructions, 99/99 identical.
         pointer dst = __old_finish;
+        pointer src = dst - __n;
         // w22-hx BEHAVIOURAL FIX (port of rb3-xenon 561a44549): `src - __pos`
         // is already an element count.  DC3 image 0x82822968 has ONE divide
         // (`divw. r11, r11, r25` with r25 = 0x50, feeding the `ble`); the extra
