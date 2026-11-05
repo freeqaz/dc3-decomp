@@ -1230,14 +1230,22 @@ void HamCharacter::Poll() {
     _strlwr(texName);
     strcat(texName, ".tex");
 
-    // RESIDUAL (w9-f, 99.13386 canonical, 1016 B): exactly 3 rows of 255, and the
-    // branch structure below is already the image's.  At both Find sites the image
-    // emits the RECORD-FORM move `mr. r4, r3` (8249167C and 82491698), copying the
-    // result into r4 -- SetDiffuseTex's argument register, since the call inlines
-    // to `SetObjConcrete(&mat->..., tex)` with r3 = 0x40(mat) -- and testing it in
-    // the same instruction.  We test in place with `cmplwi r3, 0x0` and defer a
-    // single `mr r4, r3` to just before the call.  Ours is the cheaper codegen (one
-    // move, not two); making MSVC home the value in r4 early is not expressible.
+    // CLOSED (w37-c, 99.13386 -> 100.0 canonical AND fuzzy, 1020 B -> 1016 B).
+    // The w9-f residual was that at both Find sites the image emits the
+    // RECORD-FORM move `mr. r4, r3` (8249167C and 82491698), copying the result
+    // into r4 -- SetDiffuseTex's argument register, since the call inlines to
+    // `SetObjConcrete(&mat->..., tex)` with r3 = 0x40(mat) -- and testing it in
+    // the same instruction, while we tested in place with `cmplwi r3, 0x0` and
+    // deferred ONE `mr r4, r3` to just before the call (255 instructions against
+    // the image's 254).  The cause is the MERGE: `tex` was one variable with two
+    // definitions joined at SetDiffuseTex, so c2 gave the merged value r3 and
+    // copied once at the join.  Duplicating the use per arm -- one
+    // `mat->SetDiffuseTex(tex)` on each successful Find, with the fallback Find
+    // and the notify nested under the failure arm -- removes the merge variable,
+    // each arm homes the result in r4 itself, and c2 cross-jumps the two calls
+    // back into the image's single block.  Exactly one SetDiffuseTex call per
+    // successful Find on both spellings, same order, same arguments: behaviour
+    // unchanged.
     // REFUTED (w9-f): folding the two finds into one condition,
     //   if (!(tex = Find(texName)) && !(tex = Find("base.tex"))) notify; else set;
     // is far worse -- 99.13386 -> 94.4, 3 rows -> 17 -- because the && chain moves
@@ -1250,13 +1258,15 @@ void HamCharacter::Poll() {
     // w16-b: inverting the last test (`if (!tex) notify; else set;`) is 93.5,
     // 15 structural rows -- refuted.
     RndTex *tex = Find<RndTex>(texName, false);
-    if (!tex) {
-        tex = Find<RndTex>("base.tex", false);
-    }
     if (tex) {
         mat->SetDiffuseTex(tex);
     } else {
-        MILO_NOTIFY_ONCE("%s could not find viseme texture %s", PathName(this), texName);
+        tex = Find<RndTex>("base.tex", false);
+        if (tex) {
+            mat->SetDiffuseTex(tex);
+        } else {
+            MILO_NOTIFY_ONCE("%s could not find viseme texture %s", PathName(this), texName);
+        }
     }
 }
 
