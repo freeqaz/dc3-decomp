@@ -3195,13 +3195,17 @@ void BuildVisit(BSPNode *node) {
         lastIt->mTransform.m.y.Set(1, 0, 0);
     }
 
-    // x = y cross z
-    Cross(lastIt->mTransform.m.y, lastIt->mTransform.m.z, lastIt->mTransform.m.x);
+    Vector3 &yAxis = lastIt->mTransform.m.y;
+    Vector3 &zAxis = lastIt->mTransform.m.z;
 
-    Normalize(lastIt->mTransform.m.x, lastIt->mTransform.m.x);
+    // x = y cross z
+    Cross(yAxis, zAxis, lastIt->mTransform.m.x);
+
+    Vector3 &xAxis = lastIt->mTransform.m.x;
+    Normalize(xAxis, xAxis);
 
     // y = z cross x
-    Cross(lastIt->mTransform.m.z, lastIt->mTransform.m.x, lastIt->mTransform.m.y);
+    Cross(zAxis, xAxis, yAxis);
 
     // Add large quad.  Retail materialises each corner immediately before its
     // push_back, so +/-10000.0f stay live in callee-saved f30/f31 across the
