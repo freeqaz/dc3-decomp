@@ -856,7 +856,8 @@ void CamShotCrowd::GetSelectedCrowd(
         RndMultiMeshProxy *proxy = it->first;
         MILO_ASSERT(proxy, 0xA06);
         RndMultiMesh *multiMesh = proxy->MultiMesh();
-        if (!proxy->Refs().empty() && multiMesh) {
+        Hmx::Object *obj = proxy;
+        if (!obj->Refs().empty() && multiMesh) {
             crowdChars.push_back(std::make_pair(multiMesh, proxy->Index()));
             {
                 std::list<RndMultiMesh::Instance>::iterator dummy;
