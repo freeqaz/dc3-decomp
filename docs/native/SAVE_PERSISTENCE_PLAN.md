@@ -84,6 +84,24 @@ trusting the size check in `FixedSizeSaveable.cpp:153-160` to fire first.
    but **unloaded**, and let the load mark it loaded.
 5. **`sUnlockAll = false`** — only after a load demonstrably restores campaign/rank state.
 
+### Phase 3 landed — what it changed beyond the four call sites
+
+Wiring the chain has one user-visible consequence, because `enter_gameplay`
+gates on `{profile_mgr has_seen_tutorial kTutorialGeneral}` (`ui/global.dta:230`)
+and `ProfileMgr::HasSeenTutorial` is
+
+    mTutorialsSeen & tutorial || mGlobalOptionsSaveState != kMetaProfileLoaded
+
+The second clause is the image's "persistence is broken, do not nag" fallback.
+Native took it on every boot while nothing loaded the global-options cache, so
+the first-run move tutorial was always suppressed.  With the cache wired it
+loads, a fresh profile has the bit unset, and the tutorial appears between
+`multiuser_screen` and `loading_screen` (`ui/tutorial/tutorial.dta:1014-1109`).
+That is the image's behaviour; `scripts/dc3-input-flows/ymca.txt` now drives its
+five screens.  Worth knowing before phase 5: the same clause is why a machine
+with **no** cache directory behaves like a first-run console, and why the DTA
+flow tests' expected screen chain depends on `$DC3_CACHE_DIR`.
+
 ## How to know it works
 
 Not "the flow stops erroring". A save must be written, the process restarted, and the *same* profile
