@@ -475,6 +475,18 @@ static const float sMeterConsts[] = { 0.2f, 40.0f, 0.7f, 0.0f };
  *  ??$MakeString@W4_D3DFORMAT@@@@... where ours is ??$MakeString@H@@... --
  *  the usual identical-COMDAT fold of MakeString<int> onto another 4-byte
  *  instantiation, not a source defect. */
+/* w47-a (2026-11-06): behaviour adjudicated against the map and the retail
+ * image -- no defect.  The two differing relocation names are an ICF fold and
+ * a dtk placeholder: `??$MakeString@W4_D3DFORMAT@@@@` (rnddx9:Rnd.obj) and
+ * `??$MakeString@H@@` (Memory_Xbox.obj) both sit at 0x82610090 in
+ * ham_xbox_r.map, and `lbl_820B4590` is this TU's own sMeterConsts -- the
+ * retail .rdata at 0x820B4590 reads 0.2f, 40.0f, 0.7f, the three indices used.
+ * The BASE-ONLY opcode+displacement multiset is EMPTY and the one missing
+ * instruction is a redundant `mr` (the image materialises TheRnd into r11 and
+ * moves it to r3; we load straight into r3).  Five spellings inert at 91.25581:
+ * barWidth declared before barLeft, a `const float &` and a plain-copy binding
+ * of sMeterConsts[1] for levelNorm, the same reference for peakNorm, and
+ * `Rnd &rnd = TheRnd`. */
 void Synth::DrawMeter(float &y, float level, float peakHold, const char *name) {
     Hmx::Color grey(0.5f, 0.5f, 0.5f, 1.0f);
     Hmx::Color black(0.0f, 0.0f, 0.0f, 1.0f);

@@ -252,6 +252,16 @@ void SkeletonUpdate::UpdateFakeArmPos() {
 // the same padData mSticks[1][0] / mTriggers[] loads and the same
 // mJointPositions stores, every arithmetic value equal; objdiff diff_op none;
 // unicorn EQUIVALENT at harness h4.  No defect found.
+// w47-a (2026-11-06): re-derived arm 1 value by value (0x1d4/0x1d8/0x1dc =
+// elbowRight x/y/z, 0x1e4/0x1e8/0x1ec = wristRight x/y/z).  The BASE-ONLY
+// opcode+displacement multiset is EMPTY: every store offset we emit exists in
+// the image, so no joint is written to a wrong place.  The residual is exactly
+// THREE instructions -- `lfs 0x1d8` and `lfs 0x1dc` (arm 1, where the image
+// RELOADS elbow.y/.z and c2 forwards our stores instead; same values either
+// way) and one dead `addi r11, r31, 0x1e4` in arm 3.  Direct reads at the
+// wrist stores measure 88.13 (z,x,y) / 88.13 (z,y,x) / 85.99 (x,y,z), all
+// worse; dropping the arm-3 `wrist` reference is inert; wrist-before-hand is
+// 90.20.
 void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
     JoypadData *padData = JoypadGetPadData(0);
     float ry = padData->mSticks[1][0];

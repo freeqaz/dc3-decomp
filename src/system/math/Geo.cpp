@@ -667,6 +667,14 @@ bool Intersect(const Triangle &tri, const Box &box) {
 // nine fsubs and the commutative operand pairing. The previous lanes' stop
 // notes for idx 36-38 (commutative canonicalisation) and idx 47-58 (scheduler
 // order) name exactly these; nothing new to try. Left as-is.
+// w47-a (2026-11-06): independent certificate for that verdict. OPCODE,
+// DISPLACEMENT and RELOCATION-SYMBOL multisets are all EQUAL (108 instructions
+// on each side, 432 B = 432 B), so nothing observable differs -- this is a
+// permutation, not a defect.  Seven more spellings this wave, all INERT at
+// 92.52778: `const float &` and plain-copy bindings of the tempDot frame
+// components, `const float &` bindings of tri.origin.x/y and of seg.start.x/y,
+// `Set()` in place of `Scale()`, and swapping the x/y translate statements.
+// Binding dotXX/dotYY's shared frame.y costs 0.58 (91.94444).
 bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
     float segDirY = seg.end.y - seg.start.y;
     float segDirX = seg.end.x - seg.start.x;

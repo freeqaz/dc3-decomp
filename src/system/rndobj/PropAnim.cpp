@@ -929,6 +929,19 @@ DataNode RndPropAnim::ForeachKeyframe(const DataArray *da) {
 // flag.  Together with w7-bt's discriminator (`return 0;` in the else arm
 // drops the flag) that pins the difference to a front-end EH decision, not to
 // a spelling of the DataNode.
+// w47-a (2026-11-06): re-read from the listing, not inherited.  The whole
+// residual is the EH return-object state -- the RELOCATION-SYMBOL multiset is
+// EQUAL (no wrong callee, constant or global), and the opcode+displacement
+// multiset differs only by the +0x10 frame and the two `li 1`.  The image does
+// have EH funclets for this body (`__unwind$159581` = `lwz r3, 0x50(r31); bl
+// operator delete`), so this is not "no EH at all": the image simply has no
+// state VARIABLE, while ours writes 1 to 0x50 after each copy-ctor into sret
+// and homes the sret pointer to the write-only 0xd4(r31).  Eight spellings
+// re-measured this wave, all INERT at 92.77344: direct-init `DataNode
+// ret(flowArr)` in each arm, `const DataNode ret` in each arm, `return
+// DataNode(ret)`, `DataNode ret(flowArr, kDataArray)`, and an explicit-type
+// arm 2.  `if (!mFlowLabels.empty())` is 90.38281 -- worse.  No source handle
+// on the state variable was found.
 DataNode RndPropAnim::OnListFlowLabels(DataArray *arr) {
     if (mFlowLabels.size() != 0) {
         DataArray *flowArr = new DataArray(mFlowLabels.size());
