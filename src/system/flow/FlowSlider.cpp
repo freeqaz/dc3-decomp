@@ -302,3 +302,41 @@ void FlowSlider::ReActivate() {
     TheFlowMgr->AddEventTime(sym, timer.Ms());
 }
 
+
+// ---------------------------------------------------------------------------
+// w48-b (2026-11-06) EQUIVALENCE CERTIFICATE -- FlowSlider::UpdateActivations,
+// canonical 98.95288 / fuzzy 98.69110.  191 instructions and 764 B on BOTH
+// sides (180 equal / 10 diff_arg / 1 insert / 1 delete).
+// Placed at END OF FILE so that no line above it moves (this TU has no
+// MILO_ASSERT at all).
+//
+// BEHAVIOUR: no divergence, in two parts.
+//   (a) 10 rows are ONE BIJECTION OF TWO FLOAT CONSTANTS.  The image has
+//       f31 = 1.0f and f30 = 0.0f; ours has f30 = 1.0f and f31 = 0.0f.
+//       Substituting T.f30 <-> B.f31 makes all ten identical: the two pool
+//       loads (idx 35/36), the fmr/fsubs rows (87, 88, 107, 111, 141, 143)
+//       and both `fcmpu ..., 0.0f` rows (160, 179).  Nothing reads a
+//       different value anywhere.
+//   (b) idx 146/148: `lwz r11, 0x0(r30)` -- the curCase vtable load for
+//       IsRunning() -- is emitted one instruction EARLIER here than in the
+//       image, on one side of `mr r3, r30`.  Same pair, same order relative
+//       to the mtctr/bctrl.
+//
+// MECHANISM (c2rs tap, 40 candidates): the two pool constants are
+//   id 25  pri -33 tie 35 ben 6 ref 6 sym 46/k03 -> f31  [the 0.0f constant]
+//   id 26  pri -33 tie 34 ben 5 ref 5 sym 47/k03 -> f30  [the 1.0f constant]
+// IDENTICAL priority.  The tie key -- the forward-walk visit ordinal -- decides
+// by exactly ONE unit, 35 > 34, and the image has them the other way round.
+// Every source spelling of BOTH constants is BYTE-IDENTICAL, re-measured this
+// wave: `t = 1.0f - f`, `f = 0.0f`, `t = 0.0f`, `intensity = 0.0f`, `(double)1`
+// in the mEaseFunc call, all uses replaced by literals at once, and the two
+// declarations swapped.  So the tie is set by the IL visit order and not by the
+// source text, and the constants are not source-visible candidates.
+// The only spellings that move that order are the operand orders of the two
+// comparisons that consume the 0.0f constant --
+// `sIntensity == 0.0f && mAlwaysRun == 0` and
+// `mAlwaysRun > 0 || sIntensity != 0.0f` -- and both cost 3.5pp (95.49738),
+// because they are what shares the constant's live range in the first place.
+// `IsRunning() > 0`, `IsRunning()` and `IsRunning() != 0` are all
+// byte-identical, so the scheduling row has no source handle either.
+// ---------------------------------------------------------------------------

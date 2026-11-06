@@ -653,3 +653,48 @@ BEGIN_HANDLERS(UIListDir)
     HANDLE_ACTION(test_scroll, mTestState.Scroll(_msg->Int(2), false))
     HANDLE_SUPERCLASS(RndDir)
 END_HANDLERS
+
+// ---------------------------------------------------------------------------
+// w48-b (2026-11-06) EQUIVALENCE CERTIFICATE -- UIListDir::BuildDrawState,
+// canonical 98.91599 / fuzzy 98.63144.  369 instructions on BOTH sides and
+// 1476 B = 1476 B (348 equal / 19 diff_arg / 2 delete / 2 insert), so this is
+// not an instruction-count artifact.
+// Placed at END OF FILE deliberately.  MILO_ASSERT takes an explicit line
+// LITERAL rather than __LINE__ (src/system/os/Debug.h:93), but nothing above
+// this line is touched at all, so the certificate cannot perturb its own row.
+//
+// BEHAVIOUR: no divergence.  All 38 branch and call rows align 1:1 on both
+// sides and every mismatch is a register name or the home slot of a value that
+// is live either way.  The four `bl` rows that read like wrong callees
+// (?Fail@NetStream, ?Parent@Node<ObjPtrList<CharLookAt>>,
+// ?UncompressedSize@AsyncFile against our real names) are the documented
+// ICF-alias carve-out: same folded address, and
+// scripts/check_alias_map_soundness.py gates that map on a relocation-charged
+// body test.
+//
+// MECHANISM: three long-lived values are one register low.  Decoded from the
+// listing -- image (numDisplayWithData, fadeCountStart, fadeCountEnd) =
+// (r28, r15, r17); ours = (r15, r17, r14).  c2rs tap:
+//   id 12  pri -100 tie 58  ben 9 ref 9 sym 13/k04 -> r17  [fadeCountStart]
+//   id  9  pri -102 tie  8  ben 6 ref 6 sym 10/k04 -> r16  [numDisplay]
+//   id 10  pri -114 tie 122 ben 6 ref 6 sym 11/k04 -> r15  [numDisplayWithData]
+//   id 57  pri  -86 tie 71  ben 1 ref 5 sym 14/k04 org split1#95 allowed {r14}
+// `showing` holds r28 in BOTH builds (idx 173 `mr r28, r3` is an EQUAL row).
+// The image puts numDisplayWithData there as well, TIME-SHARED with showing --
+// which is exactly why the image must home it (`stw r3,0x54` at idx 18 and
+// `stw r28,0x54` at idx 110, reloaded at idx 329) and why that value, and not
+// fadeCountEnd, is the one c2 splits.  Ours has r15 free for it and never
+// needs a home, so we split fadeCountEnd instead.
+// The nearest competitors are 12-14 priority units apart, so the
+// C2RS-BRIDGE 6.2b "add or remove one merge point" lever (worth about one
+// unit) cannot reach the ordering; and which value c2 splits in the first
+// place is the split pass, not a source spelling.
+// 26 spellings measured across lanes, all inert or worse.  This wave added:
+// swapping the numDisplay / numDisplayWithData declaration order 96.74797,
+// a named count feeding reserve and the loop bound (byte-identical), and
+// `unsigned int numDisplayWithData` 98.57723.  Already on record: the guarded
+// do/while, fadeCountEnd as a min expression, halfDisplay moved before
+// NumDisplayWithData, four named-count forms, four const-reference bindings,
+// elem at function scope, the ternary fadeCountStart, prevData placement,
+// scrollGap, and the totalGap rewrite.
+// ---------------------------------------------------------------------------
