@@ -916,7 +916,6 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
     // (3 slots) relative to the writeTime `std`: the image straddles the std,
     // we sink both below it. No source handle was found for a sched0 slot.
     bool fileExists = (attrResult - 1) != (-1);
-    s64 writeTime = *(s64 *)(fileInfo + 0x14);
     // `==` is correct here and is NOT the rb3-xenon drift bug it looks like.
     // rb3-xenon spells this `!=`; dc3's target settles it. The target calls
     // ??8String@@QBA_NABVFixedString@@@Z (operator==) at this site. The branch
@@ -935,6 +934,7 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
     *gStreamBuffer << (u8)Holmes::kCacheFile << str;
     *gStreamBuffer << fileExists;
 
+    s64 writeTime = *(s64 *)(fileInfo + 0x14);
     if (fileExists) {
         gStreamBuffer->WriteEndian(&writeTime, 8);
     }
