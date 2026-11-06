@@ -188,23 +188,21 @@ void MetaPanel::Init() {
     // unloaded profiles) and load the file, and the load is what marks it
     // loaded.
     //
-    // BUG-OPEN (w23-g04): sUnlockAll = true surfaces all content as unlocked
-    // and not-new; the image starts with it false. It dates from before
-    // native had profiles (9c98fbef0). The save/load chain is wired
-    // (SaveLoadManager::Init runs in App's native ctor arm, TheMemcardMgr is
-    // initialised above, the native cache backend exists) and phase 4 loads
-    // the profile through it, so what remains is the last phase of
-    // docs/native/SAVE_PERSISTENCE_PLAN.md -- flipping this flag -- rather
-    // than missing plumbing. Read-only -- no grant/save/signin machinery is
-    // touched.
-    // Measured (w23-misc, headless DC3_HTTP boot to main_screen, flipping it
-    // with {toggle_unlock_all}): with false, all 54 rank unlockables
-    // (metagame_rank.dta: crew/outfits, venues incl. throneroom, avatar
-    // items) read locked and 1 of 66 songs (blackandtan) leaves the library;
-    // has_finished_campaign goes 1 -> 0 (credits play as text, campaign eras
-    // gate on in-memory CampaignProgress). Difficulties are unaffected
-    // (HamProfile::IsDifficultyUnlockedForProfile returns true).
-    sUnlockAll = true;
+    // sUnlockAll is NOT forced here. The image leaves it at its static
+    // default (false) and so do we: it surfaced as `true` on native only
+    // because nothing persisted, so a fresh-profile lock set would have been
+    // permanent (9c98fbef0). The save/load chain now restores it from the
+    // file -- SaveLoadManager::Init runs in App's native ctor arm, the
+    // MemcardMgr is initialised above, the native cache backend exists, and
+    // the profile loads through the image's own autoload (phase 4). Content
+    // is therefore locked until a load says otherwise, which is the whole
+    // point: with the mask on, a broken load and a working one looked
+    // identical. See docs/native/SAVE_PERSISTENCE_PLAN.md phase 5.
+    //
+    // It is not only the unlock reads that the mask was hiding. HasCheated()
+    // is `sUnlockAll || TheProfileMgr.GetAllUnlocked()` and
+    // HamProfile::IsUnsaved() returns false whenever it is true, so with the
+    // mask on the profile's own progress was never autosaved either.
     TheProfileMgr.InitNative();
 #else
     TheProfileMgr.Init();
