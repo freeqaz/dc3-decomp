@@ -87,26 +87,29 @@ void OSCMessenger::Poll() {
     }
 }
 
-// RESIDUAL (w7-ar, 91.8 canonical): every instruction and every register now
-// matches; the only diff is where MSVC puts the merged exit block. The image
-// emits it right after the val-found arm and branches BACK to it from the
-// placeholder arm (target 0x827E7D78..0x827E7D88, then `b .L_827E7D78` at
-// 0x827E7DD8); we emit the placeholder arm first and the exit last. Dropping the
-// `return` here for a single tail `return intValue;` reproduces the image's
-// instruction MULTISET exactly -- two ~String calls instead of our three -- but
-// MSVC then still orders the blocks our way, so it measures 86.9 instead. Both
-// spellings are behaviourally identical (str is destroyed exactly once on each
-// path either way); the higher-scoring one is kept. The same residual, and only
-// this residual, is what holds GetFloat below at 36.5.
-// w16-d (91.8): also measured -- `if (!val) {placeholder} else {found}` with a
-// single tail return lays the placeholder arm first (34.3); hoisting newValue
-// out of its block scope is byte-identical.
+// The two statements in the value arm are stored flag-first on purpose: c2
+// then emits them load-then-store, as the image does, and -- the reason it
+// matters -- colours the loaded value onto `intValue`'s own pseudo-register
+// (r29) rather than onto a fresh one. With the load written first the value
+// lands in a separate register from the parameter, so c2 cannot tail-merge
+// the two `return intValue;` sites: the placeholder arm keeps its own copy
+// of the exit sequence (three ~String calls, 256 bytes) instead of branching
+// back into the value arm's exit. Flag-first keeps a single register, c2
+// merges the returns, and the placeholder arm ends in `b` to the value arm's
+// exit (target 0x827E7D78..0x827E7D88, `b .L_827E7D78` at 0x827E7DD8).
+// Both orders are behaviourally identical -- `mHasNewValue` (0x89) and
+// `buffer` (0x8) are disjoint, so neither store can affect the load.
+// Measured alternatives, all lower: a single tail `return intValue;` gets the
+// image's registers and instruction multiset but lays the merged exit last
+// (86.9); `if (!val) {placeholder} else {found}` lays the placeholder arm
+// first (34.3 and 66.1 for the two orders); `goto` to a shared label and the
+// placeholder-first early-return forms are below 35.
 int OSCMessenger::GetInt(String str, int intValue) {
     OSCValue *val = GetValue(str);
     if (val) {
         MILO_ASSERT(val->mType == 'i', 0x131);
-        intValue = *(int *)val->buffer;
         val->mHasNewValue = 0;
+        intValue = *(int *)val->buffer;
         return intValue;
     }
     {
@@ -156,33 +159,28 @@ int OSCMessenger::MakeOSCAddress(String str, char *buf) {
     return len - rem + 4;
 }
 
-// RESIDUAL (w7-ar, 36.5 canonical): the two 20-instruction blocks objdiff calls
-// insert/delete are now instruction-for-instruction IDENTICAL -- the whole
-// residual is the block-placement difference described above GetInt. Refuted
-// here: `if (!val) {...; return fValue;}` followed by the found-path
-// (36.4, flips the branch to `bne` and inlines the placeholder arm) and adding
-// a `return` to the found arm (36.5, but introduces an r28<->r29 swap because
-// fValue lives in f31 and one fewer GPR is needed). Do not re-derive those.
-// w21-h (36.5, unchanged): the image lays the placeholder arm AFTER the
-// epilogue (`beq .L_827E7EE4` out, `b .L_827E7ECC` back into the ~String(str)
-// tail); we lay it inline.  Measured, none moves the block: early `return
-// fValue;` in the found arm with the placeholder at function scope (36.5,
-// r28<->r29 swap); `if (val == nullptr) {placeholder; return fValue;}` first
-// (36.4, bne); an explicit `if (!val) goto add; ...; return fValue; add: {...}`
-// (36.4 -- MSVC re-lays the goto target inline as the fall-through); two
-// separate ifs `if (val) {...} if (!val) {...}` (36.5, byte-identical).
-// The lever-1 `_Expr_val` trick in fixable-control-flow.md is the opposite
-// direction (it keeps a block inline that we sink).  24 matched functions in
-// the image have an arm after the epilogue (scan of build/373307D9/asm); the
-// ones read (DeleteParentDirs, GetSongIDFromShortName, HasCrazeMove) are loops
-// or early-return-with-different-value shapes, not this one.
+// Same shape as GetInt above, and the same lever: the flag store is written
+// first so c2 colours the loaded value onto fValue's own pseudo-register and
+// can tail-merge the two returns, which reproduces the image's shared exit
+// (0x827E7E08..0x827E7E18, branch back at 0x827E7E68). Behaviourally
+// identical -- mHasNewValue (0x89) and buffer (0x8) are disjoint.
+// Spelling matters only as a pair, so record what was refuted here at 36.5
+// when the lever was still missing: the single tail return (w7-ar) and the
+// placeholder arm written first, `if (!val) {...; return fValue;}` (flips the
+// branch to `bne` and inlines the placeholder arm); `if (val == nullptr) {...}`
+// first; an explicit `if (!val) goto add; ...; add: {...}` (MSVC re-lays the
+// goto target as the fall-through); two separate ifs (byte-identical); and
+// adding a `return` to the found arm WITHOUT the store reorder, which
+// introduces an r28<->r29 swap and stays at 36.5.
 float OSCMessenger::GetFloat(String str, float fValue) {
     OSCValue *val = GetValue(str);
     if (val) {
         MILO_ASSERT(val->mType == 'f', 0x149);
-        fValue = *(float *)val->buffer;
         val->mHasNewValue = 0;
-    } else {
+        fValue = *(float *)val->buffer;
+        return fValue;
+    }
+    {
         OSCValue newValue;
         newValue.mAddress = str;
         newValue.mHasNewValue = 0;
