@@ -1704,14 +1704,32 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
             // `curFlip = flip` pair. The old two-variable spelling kept the copy
             // live in r18 and forced a genuine spill in the else arm
             // (`sth r10,0x50(r1)` / `lhz r3,0x50(r1)`), which is now gone.
-            if (flip & 1) {
+            //
+            // w46-b (2026-11-06): the INCREMENT belongs INSIDE the test.
+            // Written as `if (flip & 1) { ... } flip++;` MSVC re-reads the
+            // counter at the end of the body (`lwz r10,0x54(r1)`, `addi`,
+            // `stw`) -- one extra load that the image does not have, and its
+            // absence is what re-keys the whole loop. `if (flip++ & 1)` emits
+            // the image's exact four-instruction run (load, `clrlwi.`,
+            // `addi`, `stw`) before the branch. A post-increment tests the
+            // pre-increment value, so the winding sequence is unchanged;
+            // checked store by store against the target listing: both arms
+            // still write the same six face indices per pair. Measured
+            // canonical 78.96722 -> 80.14052, fuzzy 75.07963 -> 76.26464;
+            // equal rows 148 -> 152, inserts 39 -> 36, deletes 43 -> 41 over
+            // the same 427-instruction image.
+            // Residual note: the ELSE arm still spills a face index
+            // (`sth r10,0x50(r1)` / `lhz r3,0x50(r1)`) where the image uses
+            // `mr r6, r5`. That is the per-segment vertex IV's register
+            // pressure (r15 += 0x120 once a segment, versus the image's
+            // r30 += 0x60 once a vertex), not the flip counter.
+            if (flip++ & 1) {
                 faces[iFace].Set(nextRow, cur - 1, nextRow + 1);
                 faces[iFace + 1].Set(nextRow + 1, cur - 1, cur);
             } else {
                 faces[iFace].Set(cur - 1, cur, nextRow);
                 faces[iFace + 1].Set(nextRow, cur, nextRow + 1);
             }
-            flip++;
             cur = cur + 1;
             iFace += 2;
             fCount--;
