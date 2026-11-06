@@ -1523,11 +1523,34 @@ void SaveLoadManager::SetState(State newState) {
             break;
         }
         case 5:
+#ifdef HX_NATIVE
+            // PLATFORM: state 5 is "the search found a storage device that
+            // holds no save".  The image decides between loading anyway
+            // (state 9) and asking the player, through a dialog, whether to
+            // create save data (state 6) by testing mDeviceIDState == 2, i.e.
+            // "a device id was already chosen".  On native the storage device
+            // is the save directory: MemcardMgr::IsStorageDeviceValid always
+            // answers true and MemcardMgr::SelectDevice answers
+            // DeviceChosenMsg immediately, so there is no second device to
+            // offer and the device question is settled.  Taking the load arm
+            // unconditionally is what makes the no-save path independent of
+            // whether the song-cache phase happened to set mDeviceIDState: the
+            // load reports kMCFileNotFound (8), 0x45 re-checks the container
+            // (8 again), 0x46 runs the image's create -- a SaveMemcardAction
+            // with createType 1, serialising the profile into the memcard
+            // buffer -- and 0x43 is what marks the profile loaded.  Without
+            // this, a boot whose cache phase did not choose a device would sit
+            // on the mc_auto_load_no_save_found dialog with pad 0 permanently
+            // unloaded (HasValidSaveData() false for the rest of the session).
+            mDeviceIDState = 2;
+            SetState((State)9);
+#else
             if (mDeviceIDState == 2) {
                 SetState((State)9);
             } else {
                 SetState((State)6);
             }
+#endif
             break;
         case 9:
             MILO_ASSERT(mDeviceIDState == kDeviceID_Chosen, 0x4AB);
