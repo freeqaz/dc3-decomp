@@ -1,7 +1,7 @@
 # Native save persistence — implementing the image's chain
 
-Status: **phase 1 and 2 in flight** (2026-11-05). Written after a read-only survey of the whole
-save/load surface, so the next lane does not have to re-derive it.
+Status: **phases 1-4 landed, phase 5 remaining** (2026-11-06). Written after a read-only survey of
+the whole save/load surface, so the next lane does not have to re-derive it.
 
 Goal: profile progress, song cache and global options survive a restart on the native port, with
 `sUnlockAll` finally false. The approach is the image's own `SaveLoadManager` state machine running
@@ -101,6 +101,56 @@ That is the image's behaviour; `scripts/dc3-input-flows/ymca.txt` now drives its
 five screens.  Worth knowing before phase 5: the same clause is why a machine
 with **no** cache directory behaves like a first-run console, and why the DTA
 flow tests' expected screen chain depends on `$DC3_CACHE_DIR`.
+
+### Phase 4 landed — pad 0 signed in, unloaded, and loaded by the load
+
+`ProfileMgr::InitNative()` is now `Init()` and nothing else: the
+`SetSaveState(kMetaProfileLoaded)` fiction is gone.  Pad 0 is signed in by the
+native platform manager and stays `kMetaProfileUnloaded`, which is what makes
+`SaveLoadManager`'s autoload find it (`GetNewlySignedIn` returns unloaded
+profiles) and read the file.
+
+**The missing-file path is the image's own.**  With an empty `DC3_SAVE_DIR` the
+state machine runs (`SetState` trace, decimal -> hex):
+
+    1 -> 2 -> 0x15 -> 0x20 -> 0x21 -> 0x23 -> 0x26 -> 0x2C -> 0x31 -> 0x33
+    -> 0x35 -> 0x38 -> 3 -> 5 -> 0xB -> 0x45 -> 0x46 -> 0x43 -> 3 -> 0x67 -> 0
+
+`0xB` is `OnLoadGame`, whose result is `kMCFileNotFound`; `0x45` re-checks the
+container (not found again); `0x46` runs the image's create — a
+`SaveMemcardAction` with `createType 1` — which writes `profile_0_save.dat`
+(1,153,964 B); `0x43` calls `SaveLoadProfileComplete(profile, 1)`, and that is
+the only thing that marks the profile loaded.  So a fresh console and a fresh
+native save directory behave the same way: the first boot creates the profile
+and then loads it.
+
+The one native-only decision is in `SaveLoadManager::SetState`'s `case 5`
+(`kS_AutoloadDeviceFound`: a device was found with no save on it).  The image
+branches on `mDeviceIDState == 2` ("a device id was already chosen") between
+loading anyway (state 9) and opening the `mc_auto_load_no_save_found` dialog
+(state 6, `mc_button_create_data` / `mc_button_cancel`).  A healthy native boot
+reached state 5 with `mDeviceIDState == 2` **because the song-cache mount had
+chosen the device** — the right answer for the wrong reason.  Native now takes
+the load arm unconditionally (`#ifdef HX_NATIVE`), because the save directory
+*is* the device and `MemcardMgr` has no second one to offer.  With that forced
+back to `mDeviceIDState == 0`, the pre-change binary stops in state 6 with
+`get_dialog_msg` = `mc_auto_load_no_save_found_fmt`, writes no file, and leaves
+`get_savable_profile_count` at 0 for the whole session.
+
+**The unloaded window is the image's too.**  Nothing loads a profile before the
+`wait_main_after_saveload_screen` enter handler calls `{saveload_mgr activate}`,
+so attract -> autosave_warning -> title run with pad 0 unloaded on the console as
+well.  At `title_screen` the DTA answers `has_active_profile` 0,
+`get_savable_profile_count` 0, `get_num_valid_profiles` 0,
+`get_first_savable_profile` null, `is_initial_load_done` 0 — no reader sees stale
+data, and the readers reachable there are already gated: `title.dta`'s
+`check_for_nag` block is behind `{profile_mgr has_active_profile}`;
+`SkeletonIdentifier::SetUpInitialProfiles` sets fitness only for a valid
+profile, and `HandleProfileLoadComplete` re-runs that same function after the
+load; `ProfileMgr::PurgeOldData` tests for `kMetaProfileDelete`;
+`AccomplishmentProgress::Poll` is a no-op with no pending awards.  Everything
+else (`HamUI::TakeSnapshot`, the endgame paths, `MetaPerformer`, `BustAMovePanel`)
+runs after gameplay, i.e. after the load.
 
 ## How to know it works
 

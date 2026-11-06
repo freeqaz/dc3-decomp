@@ -303,15 +303,14 @@ float ProfileMgr::GetExcessVideoLag() const {
 void ProfileMgr::SetVenuePreference(Symbol venue) { mVenuePreference = venue; }
 
 #ifdef HX_NATIVE
-// Native entry point: the image's Init() (below, shared with the Xbox build)
-// plus the one native-only fiction -- pad-0's profile is marked loaded so
-// HasValidSaveData() is true and endgame grants land on a real profile
-// (native has no Xbox signin/save-device flow to load it). ctor left
-// mState = kMetaProfileUnloaded (0), so the SetSaveState assert
-// (mState != kMetaProfileUnchanged) does not fire.
+// Native entry point: the image's Init() (below, shared with the Xbox build).
+// Pad 0 is signed in by the native platform manager but its profile stays
+// kMetaProfileUnloaded, which is what makes SaveLoadManager's autoload find it
+// (GetNewlySignedIn returns unloaded profiles) and load the file; the load is
+// what marks it loaded (SaveLoadManager's state 0x43 -> SaveLoadProfileComplete
+// -> kMetaProfileLoaded).
 void ProfileMgr::InitNative() {
     Init();
-    mProfiles[0]->SetSaveState(kMetaProfileLoaded);
 }
 #endif
 

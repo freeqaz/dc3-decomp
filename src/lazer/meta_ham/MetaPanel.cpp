@@ -181,18 +181,22 @@ void MetaPanel::Init() {
     MetagameRank::Preinit();
 #ifdef HX_NATIVE
     // PLATFORM: native runs ProfileMgr::Init() through InitNative(), which is
-    // Init() plus marking pad-0's profile loaded (no Xbox signin/save flow).
-    // Leaderboards (Xbox Live score upload/download) are not created.
+    // Init() and nothing else (no Xbox signin/save flow, no Leaderboards).
+    // Pad 0 is signed in by the native platform manager but its profile is
+    // left kMetaProfileUnloaded, exactly as the image leaves it: that is what
+    // makes SaveLoadManager's autoload find it (GetNewlySignedIn returns
+    // unloaded profiles) and load the file, and the load is what marks it
+    // loaded.
     //
     // BUG-OPEN (w23-g04): sUnlockAll = true surfaces all content as unlocked
     // and not-new; the image starts with it false. It dates from before
-    // native had profiles (9c98fbef0). The save/load chain is now wired
+    // native had profiles (9c98fbef0). The save/load chain is wired
     // (SaveLoadManager::Init runs in App's native ctor arm, TheMemcardMgr is
-    // initialised above, and the native cache backend exists), so this is
-    // waiting on the two remaining phases of docs/native/SAVE_PERSISTENCE_PLAN.md
-    // (pad 0 signed in but UNLOADED so the image's autoload finds the file,
-    // then this flag) rather than on missing plumbing. Read-only -- no
-    // grant/save/signin machinery is touched.
+    // initialised above, the native cache backend exists) and phase 4 loads
+    // the profile through it, so what remains is the last phase of
+    // docs/native/SAVE_PERSISTENCE_PLAN.md -- flipping this flag -- rather
+    // than missing plumbing. Read-only -- no grant/save/signin machinery is
+    // touched.
     // Measured (w23-misc, headless DC3_HTTP boot to main_screen, flipping it
     // with {toggle_unlock_all}): with false, all 54 rank unlockables
     // (metagame_rank.dta: crew/outfits, venues incl. throneroom, avatar
