@@ -53,6 +53,27 @@ struct HttpRun {
     std::string driver; // the driver's own verdict lines
 };
 
+// The engine's persistence root for this run: DC3_CACHE_DIR and DC3_SAVE_DIR
+// both point inside it and it starts empty.
+//
+// Not hygiene -- correctness.  Since the save/load chain was wired
+// (SaveLoadManager::Init + CacheMgrNativeInit), a boot with the developer's
+// ~/.local/share/dc3/cache present loads it, and a boot without one creates it;
+// either way the run both depends on and writes machine state outside the tree,
+// and the first-run move tutorial's presence depends on that state
+// (ProfileMgr::HasSeenTutorial's `mGlobalOptionsSaveState != kMetaProfileLoaded`
+// fallback).  mkdtemp gives every run the same empty start and keeps the write
+// here.  Same mechanism as test_dta_flow.cpp's MakePersistenceRoot().
+std::string PersistenceRoot() {
+    char tmpl[] = "/tmp/dc3-http-input-XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    if (!dir) return std::string();
+    std::string root(dir);
+    mkdir((root + "/cache").c_str(), 0755);
+    mkdir((root + "/saves").c_str(), 0755);
+    return root;
+}
+
 // Boot to main_screen, then POST confirm until the screen changes (at most
 // `tries` presses, 2 s apart).  Everything is bounded: the engine is killed by
 // PID (never by pattern), and `timeout` caps the whole run.
@@ -77,10 +98,20 @@ HttpRun RunHttpPressOnMain(int port, int tries) {
     }
     close(fd);
     std::string log = logTmpl;
+    std::string persist = PersistenceRoot();
+    if (persist.empty()) {
+        r.setupError =
+            "could not create a temporary persistence root (mkdtemp "
+            "'/tmp/dc3-http-input-XXXXXX'); without one the engine would read "
+            "and write ~/.local/share/dc3 instead";
+        return r;
+    }
     std::ostringstream sh;
     sh << "cd " << BinaryDir() << " && "
        << "( MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1"
        << " DC3_HTTP=1 DC3_HTTP_PORT=" << port << " MILO_MAX_FRAMES=0"
+       << " DC3_CACHE_DIR=" << persist << "/cache"
+       << " DC3_SAVE_DIR=" << persist << "/saves"
        << " MILO_INPUT_SCRIPT=" << script
        << " timeout 240 ./dc3-native > " << log << " 2>&1 & echo $! > " << log << ".pid ); "
        << "pid=$(cat " << log << ".pid); api=http://127.0.0.1:" << port << "/api; "
