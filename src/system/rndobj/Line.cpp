@@ -720,7 +720,22 @@ void RndLine::UpdateLine(RndLine::Point *start, RndLine::Point *end) {
 
         if (dot < 0.9998499751091003f) {
             Intersect(prevRay, oldPrevRay, side);
-            side.Set(side.x - proj.x, side.y - proj.y);
+            // w46-a (2026-11-06): two member stores, not `side.Set(x - px, y - py)`.
+            // `Set` computes both operands before either store; writing the
+            // members lets each `fsubs` feed its own store, and the phase-5
+            // vertex code downstream of it re-aligns: canonical 90.328400 ->
+            // 92.343193, fuzzy 87.82840 -> 89.66568.  The store order is the
+            // image's (idx 148/149: `stfs f13, 0(r28)` then `stfs f0, 0(r30)`),
+            // and the body does not shrink (1360 B, 340 instructions, before
+            // and after; the image is 1352 / 338).
+            // Equal-row accounting, stated rather than hidden: EQUAL 189 -> 187
+            // of a total that also drops 355 -> 351.  The eight one-sided rows
+            // (insert 17 -> 13, delete 15 -> 11) become aligned rows; the two
+            // lost exacts are the aligner pairing across a permutation in the
+            // phase-5 loops (idx 305 `lfs` vs `addi`, idx 340 `fadds` vs `fmr`),
+            // not instructions that stopped matching.
+            side.x = side.x - proj.x;
+            side.y = side.y - proj.y;
         }
     }
 
@@ -734,32 +749,32 @@ void RndLine::UpdateLine(RndLine::Point *start, RndLine::Point *end) {
     // position of the nearest visible point. `mPoints.back()` is evaluated
     // once per block (the image hoists the bound out of the first loop and
     // counts with divwu, then re-evaluates it before MapVerts).
+    // w46-a (2026-11-06): written as a STRUCT COPY, not six int stores.
+    // Copying `Vector2` (unk[8..9]) and `Vector4` (unk[0..3]) moves exactly the
+    // same 8 and 16 bytes, but the wider copy is what stops MSVC converting the
+    // counted loop into a CTR loop: with the six int stores it emitted
+    // `mtctr`/`bdnz`/`stwu`, where the image has `addic.` + a condition branch
+    // and walks the destination at +0x0..+0xc.  Per loop the change removes an
+    // `mtctr`, a `bdnz` and a `stwu` and adds an `addic.`, and the six stores
+    // then land in the image's order.  Canonical 88.23669 -> 90.32840, fuzzy
+    // 85.39645 -> 87.82840, equal rows 167 -> 189 of 357, and the body does not
+    // shrink (1356 -> 1360 B against the image's 1352).
     if (&mPoints[0] == start) {
         Point *last = &mPoints.back();
         if (end + 1 <= last) {
-            int *endSide = &end->unk[8];
-            int *endView = &end->unk[0];
+            Vector2 *endSide = (Vector2 *)&end->unk[8];
+            Vector4 *endView = (Vector4 *)&end->unk[0];
             for (Point *p = end + 1; p <= last; p++) {
-                int *ptData = &p->unk[0];
-                ptData[8] = endSide[0];
-                ptData[9] = endSide[1];
-                ptData[0] = endView[0];
-                ptData[1] = endView[1];
-                ptData[2] = endView[2];
-                ptData[3] = endView[3];
+                *(Vector2 *)&p->unk[8] = *endSide;
+                *(Vector4 *)&p->unk[0] = *endView;
             }
         }
     } else if (&mPoints[0] < start) {
-        int *startSide = &start->unk[8];
-        int *startView = &start->unk[0];
+        Vector2 *startSide = (Vector2 *)&start->unk[8];
+        Vector4 *startView = (Vector4 *)&start->unk[0];
         for (Point *p = &mPoints[0]; p < start; p++) {
-            int *ptData = &p->unk[0];
-            ptData[8] = startSide[0];
-            ptData[9] = startSide[1];
-            ptData[0] = startView[0];
-            ptData[1] = startView[1];
-            ptData[2] = startView[2];
-            ptData[3] = startView[3];
+            *(Vector2 *)&p->unk[8] = *startSide;
+            *(Vector4 *)&p->unk[0] = *startView;
         }
     }
 

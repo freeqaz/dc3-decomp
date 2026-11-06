@@ -176,13 +176,21 @@ void RndAmbientOcclusion::BlendVert(
     // (canonical unchanged 88.661766, fuzzy 85.83088 -> 85.79412) and moving
     // the `Vector4 tang = out.tangent;` copy to the top of the function
     // (75.39706: the position of that copy is load-bearing).
+    // w46-a (2026-11-06): the two remaining tangent adds are independent
+    // (each reads and writes its OWN component of the local `tang`), so their
+    // source order is inert -- and writing x/y/z makes sched0 emit them in the
+    // image's order instead of ours: 88.661766 -> 88.676471 canonical,
+    // 85.83088 -> 85.84559 fuzzy, one row, body unchanged at 544 B / 136
+    // instructions on both sides.  The rest of the residual is instruction
+    // order only: every other multiset (mnemonic, branch, relocation,
+    // displacement) is identical.
     Vector4 tang = out.tangent;
     tang.x = v2.tangent.x + tang.x;
     out.pos *= 0.5f;
     out.tex *= 0.5f;
     Multiply(out.color, 0.5f, out.color);
-    tang.z = v2.tangent.z + tang.z;
     tang.y = v2.tangent.y + tang.y;
+    tang.z = v2.tangent.z + tang.z;
     Normalize(out.norm, out.norm);
     Normalize((Vector3 &)tang, (Vector3 &)tang);
     out.tangent.x = tang.x;
