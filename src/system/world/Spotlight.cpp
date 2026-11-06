@@ -1475,9 +1475,22 @@ void Spotlight::BuildCone(BeamDef &def) {
         // `top` 92.78245 / 92.23859; anchor on `mid` 92.78245 / 92.23859;
         // anchor on `bot` 93.29825 / 92.85965 (kept).  Declaration ORDER is
         // inert (all six permutations byte-identical); it is the derivation
-        // that matters.  Residual: the image represents the loop counter as
-        // the plain `s` and forms the face indices with `add r, s, 0xffff` +
-        // clrlwi, we bias the counter by 0x10000 and subtract it back.
+        // that matters.
+        //
+        // w45-a (2026-11-06): name the face index `i = s - 17` and express the
+        // four face corners in terms of it.  Written as `s - 17` / `s - 1` /
+        // `s + 15` / `s + 16` the same value is reached by FOUR different
+        // expressions, so c2 carries `s - 17` as a biased induction variable
+        // (0x10000 bias, `addi r9,r30,0x11` to recover s) and rebuilds every
+        // corner from it, which is the whole 161-203 row cluster plus the
+        // r24<->r26 register cascade.  With one named `i` it keeps a single
+        // value and derives the corners by +1/+16/+17/+32/+33, matching the
+        // image's derived-corner form.  Measured canonical / fuzzy:
+        // 93.29825 / 92.89474 -> 95.07719 / 93.84912; object 1132 -> 1140 B
+        // (the image's size).  Negative control: declaring the same `i` but
+        // leaving the face arguments in `s` form is byte-identical to the old
+        // build (93.29825 / 92.89474), so the gain is the corner expressions,
+        // not the extra declaration.
         unsigned int bot = s + 15;
         unsigned int top = bot - 32;
         unsigned int mid = bot - 16;
@@ -1494,11 +1507,13 @@ void Spotlight::BuildCone(BeamDef &def) {
         verts[bot].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
         verts[bot].tex.Set(uvX, 1.0f);
 
-        int fi = (s - 17) * 4;
-        faces[fi].Set(s - 17, s - 1, s);
-        faces[fi + 1].Set(s - 17, s, s - 16);
-        faces[fi + 2].Set(s - 1, s + 15, s + 16);
-        faces[fi + 3].Set(s - 1, s + 16, s);
+        // `i` is the face-row index; every corner below is derived from it.
+        unsigned int i = s - 17;
+        int fi = i * 4;
+        faces[fi].Set(i, i + 16, i + 17);
+        faces[fi + 1].Set(i, i + 17, i + 1);
+        faces[fi + 2].Set(i + 16, i + 32, i + 33);
+        faces[fi + 3].Set(i + 16, i + 33, i + 17);
 
         angle += angleStep;
     }
