@@ -1114,12 +1114,24 @@ DataNode OnCycleTestDancer(DataArray *) {
         // `li r29, 0x0` sits at 82865D4C, i.e. after the empty test, so `i` is
         // scoped to the loop rather than declared alongside `name`.
         int i = 0;
-        // RESIDUAL (w7-am, 98.9 canonical): the one non-register row left is
-        // 82865D84 `mr r29, r10` -- the image computes `i + 1` into a scratch,
-        // compares THAT against the size and only then copies it back into the
-        // callee-saved `i`, where we increment r29 in place.  Everything else
-        // in the diff is register permutation, which the canonical ruler
-        // forgives.
+        // RESIDUAL (w39-f): we are one instruction SHORT of the image, 93
+        // against 94.  The missing one is 82865D84 `mr r29, r10`: the image
+        // computes `i + 1` into a scratch, compares THAT against the size and
+        // only then copies it back into the callee-saved `i`, where we
+        // increment r29 in place.  Every other row is a register permutation
+        // that the canonical ruler forgives, and the mnemonic multiset differs
+        // by exactly that one `mr`.  Because the body is short, no score gain
+        // here is admissible until the `mr` exists.
+        // 20 spellings measured and none produces it: `i = i + 1`, `++i`,
+        // `i += 1`, `i++` moved into the body, a hoisted `size`, a hoisted
+        // `n`, an `int nn = i; nn += 1; i = nn;` temp, a `const int &` binding
+        // of `i + 1`, and `(unsigned)(i + 1)` in the test (95.9, and it is a
+        // different bound).  The c2 colour tap shows `i` is already TWO
+        // candidates here -- sym 6/k04 id 5 (pri 17 tie 65, nonvolatile-only)
+        // and the same symbol id 6 (pri 17 tie 86) -- so the two versions the
+        // image separates both exist; what differs is which one carries the
+        // increment.  That is a version merge after colouring, not a priority
+        // or tie disagreement.
         for (; (unsigned)i < (unsigned)dancers.size(); i++) {
             if (dancers[i] == name) {
                 break;
