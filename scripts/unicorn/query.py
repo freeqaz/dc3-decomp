@@ -27,6 +27,12 @@ ARTIFACT_CLASS_NOTES = {
     "regalloc": "ARTIFACT: register values only",
     "stack_layout": "ARTIFACT: differing frame addresses",
     "merged_call": "ARTIFACT: ICF-merged callee",
+    "call_count_static_match": "USUALLY ARTIFACT: both objects reference the same "
+                               "REL24 multiset, so the call sites agree and the "
+                               "co-loader's per-side trampoline set differs. NOT "
+                               "always -- a wrong loop bound keeps the same multiset "
+                               "and still runs a different number of times, so read "
+                               "the control flow before dismissing.",
     "merged_arg": "ARTIFACT: ICF-merged callee argument",
     "fpr_precision": "ARTIFACT: FMA/precision on a float return",
     "orig_error": "ARTIFACT: the ORIGINAL binary faults; property of the target",

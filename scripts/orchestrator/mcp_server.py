@@ -1139,7 +1139,11 @@ class DecompMCPServer:
                                     "(the only differing values are addresses the harness assigns per "
                                     "side; 79% of all divergent rows), 'cap_exhausted' 72%, "
                                     "'cap_exhausted_decomp' 97%, 'cap_exhausted_orig' 98%, 'call_count' "
-                                    "83%, 'build_env', 'regalloc', 'merged_call', 'merged_arg', "
+                                    "83%, 'call_count_static_match' (both objects reference the SAME "
+                                    "REL24 multiset, so the call SITES agree and the co-loader's "
+                                    "per-side trampoline set is the likelier cause -- but a wrong loop "
+                                    "bound keeps the same multiset, so read the control flow before "
+                                    "dismissing it), 'build_env', 'regalloc', 'merged_call', 'merged_arg', "
                                     "'stack_layout', 'fpr_precision', 'orig_error', 'scratch_return_reg' "
                                     "(r3/f1 differs on a function that does not return in that "
                                     "register). NOT PINPOINTED: "
@@ -1153,7 +1157,8 @@ class DecompMCPServer:
                                 ),
                                 "enum": [
                                     "logic", "build_env", "regalloc",
-                                    "call_count", "call_arg", "return_value",
+                                    "call_count", "call_count_static_match",
+                                    "call_arg", "return_value",
                                     "scratch_return_reg",
                                     "object_memory", "error", "orig_error",
                                     "merged_call", "merged_arg",
