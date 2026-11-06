@@ -226,30 +226,27 @@ bool WordWrap_CanBreakLineAt(const wchar_t *cur, const wchar_t *start) {
     if (cur == start)
         return false;
 
-    // w26-x: the two `mr`s are in the front-end, not reachable by spelling.
-    // The tap shows them as real `mr` tuples in block 0 (`RT 2 mr d{r5} u{r3~}`,
-    // `RT 3 mr d{r4} u{r4}`) -- a copy of each parameter at entry, which is why
-    // `cur` lives in r5 and `ch` is staged `lhz r3` + `rlandi r31, r3` instead
-    // of the image's single `lhz r31, 0(r3)`.  Measured inert (no instruction
-    // changes) on this row: `cur[0]` instead of `*cur`; `unsigned short ch`;
-    // `*(cur - 1)`; `*(cur + 1)`; a named `next`; declaring `ch` after
-    // `option`; `(unsigned int)cur - (unsigned int)start` and the
-    // cast-the-difference form of the distance test; `const wchar_t *const`
-    // and `__restrict` parameters; `!(cur != start)`.  `int ch` is much worse
-    // (83.7 fuzzy).  The copies are emitted before any statement is seen, so
-    // the open question is which c1 construct makes it copy a pointer formal.
-    // Attempt 2, INERT (wave 7, lane w7-y): reading g_uOption before the
-    // character -- the image's `lis r10, g_uOption@h` sits one slot ahead of its
-    // `lhz r31, 0x0(r3)` -- changes nothing, 97.60 either way.  The residual is
-    // that the image loads the character STRAIGHT into its callee-saved register
-    // and leaves `cur` in r3 for the function's whole life, while we copy `cur`
-    // into r5 first (`mr r5, r3`, our only insert) and stage the character
-    // through r3.  Nothing in the statement order reaches that choice.
-    wchar_t ch = *cur;
+    // w39-g (2026-11-06): `ch` and `prev` are NOT named locals in the original,
+    // and that is what the old residual here was.  Hoisting `*cur` / `cur[-1]`
+    // into `wchar_t` locals gives c1 a value whose 16-bit-ness it can prove
+    // from the single `lhz` definition, so the `(unsigned short)c` truncation
+    // inside CantStartLine/CantEndLine folds away -- and the image still emits
+    // it (`clrlwi r6, r31, 16` on ch, `clrlwi r6, r4, 16` on prev).  Reading
+    // the character at each use keeps the value 32-bit-typed at the call site,
+    // the truncation survives, and the whole residual closes: 97.575760 ->
+    // 100.000000 canonical, 96.454544 -> 99.969696 fuzzy, body 163 -> 165
+    // instructions and 652 -> 660 bytes, exactly the image's 165 / 660.
+    // `cur` is a parameter this function never advances, so re-reading it is
+    // the same value every time -- behaviour is unchanged.  This also removes
+    // the `mr r5, r3` entry copy (`cur` stays in r3 for the function's life, as
+    // in the image) and flips `prev` back into r4 with its `mr r10, r4` copy.
+    // Refuted here, so they are not retried: `unsigned int ch` alone 87.96,
+    // `unsigned int prev` alone 96.61, both together 86.99, the helpers taking
+    // `unsigned int c` 93.33, and dropping the `(unsigned short)` casts 97.58.
     unsigned int option = g_uOption;
 
     // If current char is whitespace, check if next char can't start a line
-    if (ch == 0x9 || ch == 0xD || ch == 0x20 || ch == 0x3000) {
+    if (*cur == 0x9 || *cur == 0xD || *cur == 0x20 || *cur == 0x3000) {
         if (CantStartLine(cur[1], option))
             return false;
     }
@@ -264,15 +261,14 @@ bool WordWrap_CanBreakLineAt(const wchar_t *cur, const wchar_t *start) {
 #endif
         || (cur[-2] != 0x9 && cur[-2] != 0xD && cur[-2] != 0x20 && cur[-2] != 0x3000)
         || cur[-1] != 0x22
-        || ch == 0x9 || ch == 0xD || ch == 0x20 || ch == 0x3000) {
+        || *cur == 0x9 || *cur == 0xD || *cur == 0x20 || *cur == 0x3000) {
         // ok
     } else {
         return false;
     }
 
-    wchar_t prev = cur[-1];
-    if (prev == 0x9 || prev == 0xD || prev == 0x20 || prev == 0x3000
-        || ch != 0x22
+    if (cur[-1] == 0x9 || cur[-1] == 0xD || cur[-1] == 0x20 || cur[-1] == 0x3000
+        || *cur != 0x22
         || (cur[1] != 0x9 && cur[1] != 0xD && cur[1] != 0x20 && cur[1] != 0x3000)) {
         // ok
     } else {
@@ -280,9 +276,9 @@ bool WordWrap_CanBreakLineAt(const wchar_t *cur, const wchar_t *start) {
     }
 
     // Check if this is a valid break position
-    if (ch == 0x9 || ch == 0xD || ch == 0x20 || ch == 0x3000
-        || IsEastAsianChar(ch) || IsEastAsianChar(prev) || prev == 0x2D) {
-        return !CantStartLine(ch, option) && !CantEndLine(prev, option);
+    if (*cur == 0x9 || *cur == 0xD || *cur == 0x20 || *cur == 0x3000
+        || IsEastAsianChar(*cur) || IsEastAsianChar(cur[-1]) || cur[-1] == 0x2D) {
+        return !CantStartLine(*cur, option) && !CantEndLine(cur[-1], option);
     }
 
     return false;
