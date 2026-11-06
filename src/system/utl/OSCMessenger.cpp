@@ -159,31 +159,19 @@ int OSCMessenger::MakeOSCAddress(String str, char *buf) {
     return len - rem + 4;
 }
 
-// RESIDUAL (w7-ar, 36.5 canonical): the two 20-instruction blocks objdiff calls
-// insert/delete are now instruction-for-instruction IDENTICAL -- the whole
-// residual is the block-placement difference described above GetInt. Refuted
-// here: `if (!val) {...; return fValue;}` followed by the found-path
-// (36.4, flips the branch to `bne` and inlines the placeholder arm) and adding
-// a `return` to the found arm (36.5, but introduces an r28<->r29 swap because
-// fValue lives in f31 and one fewer GPR is needed). Do not re-derive those.
-// w21-h (36.5, unchanged): the image lays the placeholder arm AFTER the
-// epilogue (`beq .L_827E7EE4` out, `b .L_827E7ECC` back into the ~String(str)
-// tail); we lay it inline.  Measured, none moves the block: early `return
-// fValue;` in the found arm with the placeholder at function scope (36.5,
-// r28<->r29 swap); `if (val == nullptr) {placeholder; return fValue;}` first
-// (36.4, bne); an explicit `if (!val) goto add; ...; return fValue; add: {...}`
-// (36.4 -- MSVC re-lays the goto target inline as the fall-through); two
-// separate ifs `if (val) {...} if (!val) {...}` (36.5, byte-identical).
-// The lever-1 `_Expr_val` trick in fixable-control-flow.md is the opposite
-// direction (it keeps a block inline that we sink).  24 matched functions in
-// the image have an arm after the epilogue (scan of build/373307D9/asm); the
-// ones read (DeleteParentDirs, GetSongIDFromShortName, HasCrazeMove) are loops
-// or early-return-with-different-value shapes, not this one.
 // Same shape as GetInt above, and the same lever: the flag store is written
 // first so c2 colours the loaded value onto fValue's own pseudo-register and
 // can tail-merge the two returns, which reproduces the image's shared exit
 // (0x827E7E08..0x827E7E18, branch back at 0x827E7E68). Behaviourally
 // identical -- mHasNewValue (0x89) and buffer (0x8) are disjoint.
+// Spelling matters only as a pair, so record what was refuted here at 36.5
+// when the lever was still missing: the single tail return (w7-ar) and the
+// placeholder arm written first, `if (!val) {...; return fValue;}` (flips the
+// branch to `bne` and inlines the placeholder arm); `if (val == nullptr) {...}`
+// first; an explicit `if (!val) goto add; ...; add: {...}` (MSVC re-lays the
+// goto target as the fall-through); two separate ifs (byte-identical); and
+// adding a `return` to the found arm WITHOUT the store reorder, which
+// introduces an r28<->r29 swap and stays at 36.5.
 float OSCMessenger::GetFloat(String str, float fValue) {
     OSCValue *val = GetValue(str);
     if (val) {
