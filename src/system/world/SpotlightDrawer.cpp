@@ -483,9 +483,16 @@ void SpotlightDrawer::ApplyLightingApprox(BoxMapLighting &boxMap, float f2) cons
         // allocation heuristic, not a spelling: hoisting `params` out of the
         // loop (which the image's pre-loop `lwz r31,0x50(r1)` shows it does)
         // is byte-for-byte inert.
-        params->mTopRadius = curSpotlight->mBeam.mTopRadius;
-        params->mBottomRadius = curSpotlight->mBeam.mBottomRadius * 2.0f;
-        params->mBeamLength = curSpotlight->mBeam.mLength * 2.0f;
+        // w43-b (2026-11-06): 94.19847 -> 95.72519 canonical, 93.20611 -> 95.11450 fuzzy,
+        // EQUAL rows 105 -> 116, diff_arg 23 -> 13.  Binding the beam base ONCE, HERE, is the
+        // lever: the same binding declared at the top of the loop body, after c50, or before
+        // ParamsAt reads exactly the baseline (94.19847), i.e. byte-identical to no binding at
+        // all.  At the use site it pins the base so the three loads are scheduled where the image
+        // has them, which also fixes the mPosition/mDirection/mColor store order that follows.
+        Spotlight::BeamDef &beam = curSpotlight->mBeam;
+        params->mTopRadius = beam.mTopRadius;
+        params->mBottomRadius = beam.mBottomRadius * 2.0f;
+        params->mBeamLength = beam.mLength * 2.0f;
         boxMap.CacheData(*params);
     }
 }

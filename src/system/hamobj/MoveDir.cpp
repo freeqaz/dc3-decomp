@@ -153,18 +153,26 @@ namespace {
             // not invent one, and the parks share slot 0x50 with the address-
             // exposed MakeString temp, so the two are told apart only by the
             // separate 0x70 store.  Field writes stay.
+            // w43-b (2026-11-06): 94.88571 -> 94.90000 canonical, 93.52857 -> 94.11429 fuzzy,
+            // diff_arg 30 -> 21, EQUAL rows 105 -> 114, body unchanged at 137 (image 140), from the
+            // ASSIGNMENT ORDER alone.  A named float assigned three times -- the "named float
+            // local" hypothesis above -- is byte-inert; a 64-way search over where each colour's
+            // alpha assignment sits is what moves it, and this placement (alpha first for the dark
+            // colour, alpha third for the other two) is the best of the 64.  MSVC schedules this
+            // block independently of statement order, so the order is a register-pressure handle.
+            // The three parks are still missing, so the body stays 3 short of the image.
+            darkColor.alpha = sDarkerGray.alpha;
             darkColor.red = sDarkerGray.red * 0.5f;
             darkColor.green = sDarkerGray.green * 0.5f;
             darkColor.blue = sDarkerGray.blue * 0.5f;
-            darkColor.alpha = sDarkerGray.alpha;
             greenColor.red = sGreen.red * 0.5f;
             greenColor.green = sGreen.green * 0.5f;
-            greenColor.blue = sGreen.blue * 0.5f;
             greenColor.alpha = sGreen.alpha;
+            greenColor.blue = sGreen.blue * 0.5f;
             textColor.red = sLightGray.red * 0.5f;
             textColor.green = sLightGray.green * 0.5f;
-            textColor.blue = sLightGray.blue * 0.5f;
             textColor.alpha = sLightGray.alpha;
+            textColor.blue = sLightGray.blue * 0.5f;
         }
         String str(label);
         // The percent arm is the fall-through (824FCF04 `beq` skips it).
