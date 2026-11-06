@@ -334,6 +334,87 @@ class TestClassifyDivergence(unittest.TestCase):
         cls = self.classify(result, decomp, orig, [], [])
         self.assertEqual(cls, "data_layout")
 
+    def _call_count_pair(self):
+        """A DIVERGENT pair whose reason is call_count_mismatch."""
+        decomp = MockExecutionResult(call_log=[make_call_log_entry(0)])
+        orig = MockExecutionResult(
+            call_log=[make_call_log_entry(0), make_call_log_entry(1)]
+        )
+        result = self.compare(decomp, orig, [], [])
+        self.assertEqual(result.details["reason"], "call_count_mismatch")
+        return result, decomp, orig
+
+    def test_call_count_static_match_same_callees(self):
+        """Identical REL24 multisets -> the call sites agree.
+
+        The co-loader picks which callees run as logged trampolines per side,
+        so a differing logged count on identical call sites is the harness, not
+        a missing call. Measured on four native-frontier rows (17/17, 56/56,
+        27/27, 23/23 `bl` rows EQUAL on both sides).
+        """
+        result, decomp, orig = self._call_count_pair()
+        d_rel = [make_reloc(0x10, "?Col4@Matrix4@Hmx@@QBA?AVVector4@@H@Z", "REL24")] * 16
+        o_rel = [make_reloc(0x80, "?Col4@Matrix4@Hmx@@QBA?AVVector4@@H@Z", "REL24")] * 16
+        cls = self.classify(result, decomp, orig, d_rel, o_rel)
+        self.assertEqual(cls, "call_count_static_match")
+
+    def test_call_count_static_match_is_order_and_offset_independent(self):
+        """Different offsets and emission order still compare equal."""
+        result, decomp, orig = self._call_count_pair()
+        d_rel = [make_reloc(0x10, "alpha", "REL24"), make_reloc(0x20, "beta", "REL24")]
+        o_rel = [make_reloc(0x400, "beta", "REL24"), make_reloc(0x900, "alpha", "REL24")]
+        cls = self.classify(result, decomp, orig, d_rel, o_rel)
+        self.assertEqual(cls, "call_count_static_match")
+
+    def test_call_count_kept_when_multisets_differ(self):
+        """A real structural difference must NOT be excused.
+
+        Two call sites in the image, three in ours -- this is the shape of a
+        genuinely extra call, and it has to stay in the real-bug class.
+        """
+        result, decomp, orig = self._call_count_pair()
+        d_rel = [make_reloc(0x10, "alpha", "REL24")] * 3
+        o_rel = [make_reloc(0x80, "alpha", "REL24")] * 2
+        cls = self.classify(result, decomp, orig, d_rel, o_rel)
+        self.assertEqual(cls, "call_count")
+
+    def test_call_count_kept_when_callee_names_differ(self):
+        """Same COUNT but different callees is a wrong-callee bug, not artifact."""
+        result, decomp, orig = self._call_count_pair()
+        d_rel = [make_reloc(0x10, "alpha", "REL24")]
+        o_rel = [make_reloc(0x80, "beta", "REL24")]
+        cls = self.classify(result, decomp, orig, d_rel, o_rel)
+        self.assertEqual(cls, "call_count")
+
+    def test_call_count_kept_with_no_relocations(self):
+        """No reloc info at all -> conservative `call_count`, never the excuse."""
+        result, decomp, orig = self._call_count_pair()
+        cls = self.classify(result, decomp, orig, [], [])
+        self.assertEqual(cls, "call_count")
+
+    def test_call_count_ignores_non_rel24_relocations(self):
+        """Only REL24 is a call; REFHI/REFLO/ADDR32 describe addresses."""
+        result, decomp, orig = self._call_count_pair()
+        d_rel = [make_reloc(0x10, "alpha", "REL24")]
+        o_rel = [make_reloc(0x10, "alpha", "REL24"),
+                 make_reloc(0x14, "someGlobal", "ADDR32")]
+        cls = self.classify(result, decomp, orig, d_rel, o_rel)
+        self.assertEqual(cls, "call_count_static_match")
+
+    def test_merged_call_still_wins_over_static_match(self):
+        """A merged symbol is unfixable; that verdict outranks the new class."""
+        result, decomp, orig = self._call_count_pair()
+        from scripts.unicorn_runner.comparator import ComparisonResult
+        result = ComparisonResult(
+            "DIVERGENT",
+            {**result.details, "reason": "call_count_mismatch"},
+            warnings=["Call #0: decomp targets X, original targets merged_826A1234"],
+        )
+        d_rel = [make_reloc(0x10, "alpha", "REL24")]
+        o_rel = [make_reloc(0x80, "alpha", "REL24")]
+        cls = self.classify(result, decomp, orig, d_rel, o_rel)
+        self.assertEqual(cls, "merged_call")
+
     def test_merged_arg_merged_symbol_warning(self):
         """Merged symbol in warning at same call index = merged_arg."""
         d_log = [make_call_log_entry(0, r3=1, source_offset=0x10)]

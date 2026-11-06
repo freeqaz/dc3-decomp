@@ -241,6 +241,51 @@ def has_icf_folded_callsites(decomp_relocs, orig_relocs):
     return any(len(v) > 1 for v in decomp_names_per_orig_name.values())
 
 
+def same_static_call_structure(decomp_relocs, orig_relocs):
+    """True if both objects make the SAME calls, the same number of times.
+
+    Compares the multiset of REL24 callee names as a multiset (order-independent,
+    offset-independent), so two objects that were laid out differently still
+    compare equal when their call structure agrees.
+
+    This exists because `call_count_mismatch` has a second artifact channel that
+    `has_merged` cannot see. The co-loader decides INDEPENDENTLY PER SIDE which
+    callees run as real code (unlogged) and which run as logged trampolines;
+    when those sets differ, the logged count differs while the call sites are
+    identical. `has_icf_folded_callsites` catches the case where the two sides
+    name DIFFERENT symbols, but the same channel also fires when both sides name
+    the SAME symbols and only the co-load decision differs.
+
+    Measured 2026-11-06 on the four `call_count` rows in the native frontier:
+    every one has an identical `bl` census on both sides with every call row
+    EQUAL -- Matrix4::operator* 17/17, TypeProps::Save 56/56,
+    HamWardrobe::OnSetVenue 27/27, StorePanel::ValidateOffers 23/23. A runtime
+    call-count difference cannot arise from identical, unconditionally reached
+    call sites, so those four classifications name the harness, not the source.
+
+    NOT an artifact by itself, which is why the caller gets its own class rather
+    than being filed under a known-artifact one: a loop whose trip count differs
+    (a wrong bound, a bad data layout) keeps the SAME static multiset and still
+    executes a different number of times -- a real bug this MUST keep flagging.
+    The class therefore says "the call SITES match; find the control-flow or
+    instrumentation reason", not "ignore this".
+
+    Returns False when either side makes no calls: no information to compare,
+    so the conservative `call_count` class is retained.
+    """
+    def calls(relocs):
+        counts = {}
+        for r in (relocs or []):
+            if r.get("type_name") == "REL24":
+                name = r.get("symbol_name", "")
+                counts[name] = counts.get(name, 0) + 1
+        return counts
+
+    decomp_calls = calls(decomp_relocs)
+    orig_calls = calls(orig_relocs)
+    return bool(decomp_calls) and decomp_calls == orig_calls
+
+
 def compare(decomp_result, orig_result, decomp_relocs, orig_relocs,
             symbol=None, demangled=None):
     """Compare two execution results and produce a verdict.
@@ -483,6 +528,15 @@ def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_
         'error'         — execution error on decomp side (real bug)
         'orig_error'    — execution error on original side only (test infra, unfixable)
         'call_count'    — call count mismatch without merged indicators (real bug)
+        'call_count_static_match' — call count mismatch where both objects
+                          reference the SAME multiset of REL24 callees, i.e. the
+                          call sites are identical (measured: 17/17 and 56/56
+                          `bl` rows EQUAL on both sides of four such rows). The
+                          harness co-loads callees per side, so the logged
+                          trampoline set can differ while the code does not.
+                          Investigate the control flow, do not go looking for a
+                          missing call. NOT a known-artifact class: a wrong loop
+                          bound keeps the same multiset and belongs here.
         'call_arg'      — call arg mismatch not matched by other rules (real bug)
         'return_value'  — integer/pointer return value mismatch (real bug).
                           Only assigned once the return type says r3 IS the
@@ -617,6 +671,12 @@ def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_
         # Merged symbols can cause extra/missing calls
         if has_merged:
             return "merged_call"
+        # Same calls, same number of times, both sides -- the co-loader's
+        # logged-trampoline set is the likelier cause than the source. A
+        # different-shaped set stays `call_count`, and a data-dependent trip
+        # count stays interesting here too: see the helper's docstring.
+        if same_static_call_structure(decomp_relocs, orig_relocs):
+            return "call_count_static_match"
         return "call_count"
 
     if reason == "scratch_return_reg_mismatch":
