@@ -720,7 +720,22 @@ void RndLine::UpdateLine(RndLine::Point *start, RndLine::Point *end) {
 
         if (dot < 0.9998499751091003f) {
             Intersect(prevRay, oldPrevRay, side);
-            side.Set(side.x - proj.x, side.y - proj.y);
+            // w46-a (2026-11-06): two member stores, not `side.Set(x - px, y - py)`.
+            // `Set` computes both operands before either store; writing the
+            // members lets each `fsubs` feed its own store, and the phase-5
+            // vertex code downstream of it re-aligns: canonical 90.328400 ->
+            // 92.343193, fuzzy 87.82840 -> 89.66568.  The store order is the
+            // image's (idx 148/149: `stfs f13, 0(r28)` then `stfs f0, 0(r30)`),
+            // and the body does not shrink (1360 B, 340 instructions, before
+            // and after; the image is 1352 / 338).
+            // Equal-row accounting, stated rather than hidden: EQUAL 189 -> 187
+            // of a total that also drops 355 -> 351.  The eight one-sided rows
+            // (insert 17 -> 13, delete 15 -> 11) become aligned rows; the two
+            // lost exacts are the aligner pairing across a permutation in the
+            // phase-5 loops (idx 305 `lfs` vs `addi`, idx 340 `fadds` vs `fmr`),
+            // not instructions that stopped matching.
+            side.x = side.x - proj.x;
+            side.y = side.y - proj.y;
         }
     }
 
