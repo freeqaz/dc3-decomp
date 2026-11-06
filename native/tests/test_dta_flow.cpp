@@ -3,6 +3,7 @@
 // Verifies the full DTA-driven panel flow works end-to-end using the ymca.txt
 // input script: boot → attract → title → main → choose_mode → song_select
 // → multiuser (driven by controller input: difficulty, play, skip_waiting)
+// → [first-run move tutorial, only while kTutorialGeneral is unseen]
 // → loading → preloading → real_loading → game_screen.
 //
 // Gated by DC3_DTA_FLOW_TESTS=1 (requires game assets).
@@ -221,9 +222,36 @@ TEST_F(DtaFlowTest, EnterGameplayFired) {
     // to loading_screen, proving the DTA function executed.  There is no
     // native auto-fire any more: the image's MultiUserGesturePanel::Poll
     // (82942EB8) only runs UpdateNavLists / UpdateProviderPlayerIndices.
-    EXPECT_TRUE(outputContains("Screen 'multiuser_screen' Exit (to 'loading_screen')"))
-        << "multiuser_screen never transitioned to loading_screen — "
-        << "enter_gameplay DTA function didn't fire from the menu flow";
+    //
+    // TWO exits are correct, because enter_gameplay's first clause is a
+    // tutorial gate (ui/global.dta:230):
+    //     {! {profile_mgr has_seen_tutorial kTutorialGeneral}}
+    // and ProfileMgr::HasSeenTutorial is
+    //     mTutorialsSeen & tutorial || mGlobalOptionsSaveState != kMetaProfileLoaded
+    // That second clause is the image's "persistence is broken, do not nag"
+    // fallback, and native used to take it on EVERY boot because nothing ever
+    // loaded the global-options cache — so this test asserted the shortcut.
+    // Now that the cache is wired, the answer depends on what is on disk:
+    //   * a cache whose global options exist and have kTutorialGeneral set
+    //     (any second run against the same DC3_CACHE_DIR) -> straight to
+    //     loading_screen, the old expected string;
+    //   * a FRESH cache (~/.local/share/dc3/cache absent, i.e. a new machine
+    //     or a first run) -> the global options are created with the tutorials
+    //     unset, and the first-run move tutorial is inserted first
+    //     (ui/tutorial/tutorial.dta:1014-1109).  scripts/dc3-input-flows/
+    //     ymca.txt drives its five screens; screen_4 marks kTutorialGeneral
+    //     seen and re-runs enter_gameplay, which then reaches loading_screen.
+    // Asserting only `loading_screen` is reached would not distinguish the two,
+    // so both shapes are accepted — but one of them is required, and the
+    // loading_screen Enter is required in the tutorial case.
+    bool direct = outputContains("Screen 'multiuser_screen' Exit (to 'loading_screen')");
+    bool viaTutorial =
+        outputContains("Screen 'multiuser_screen' Exit (to 'tutorial_perform_it_screen_0')")
+        && outputContains("Screen 'loading_screen' Enter");
+    EXPECT_TRUE(direct || viaTutorial)
+        << "multiuser_screen never reached loading_screen (directly or through the "
+           "first-run move tutorial) — enter_gameplay DTA function didn't fire "
+           "from the menu flow";
 }
 
 TEST_F(DtaFlowTest, LoadingChainTransitions) {
