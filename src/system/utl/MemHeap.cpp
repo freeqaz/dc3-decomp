@@ -513,16 +513,20 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
         // `newBlock`, a direct `*(FreeBlock *)((int *)block + padWords) = saved`
         // and a reference alias are all byte-identical to the current `add` +
         // `stwx` pair (13 more combinations, none better than 91.6).
+        // The two orderings below are load-bearing, not stylistic: next-before-
+        // time and padWords-before-prevBlock each mirror an ordering in the
+        // image's own sequence (w45-b: canonical unmoved at 93.25874, fuzzy
+        // 91.68532 -> 91.82517; every other field order is 91.75524 or worse).
         FreeBlock saved;
         saved.mSizeWords = blockSize;
-        saved.mTimeStamp = block->mTimeStamp;
         saved.mNextBlock = block->mNextBlock;
+        saved.mTimeStamp = block->mTimeStamp;
         FreeBlock *oldBlock = block;
         block = (FreeBlock *)((int *)block + padWords);
         *block = saved;
         InsertFreeBlock(oldBlock, padWords, prevBlock, block, block->mTimeStamp);
-        prevBlock = oldBlock;
         padWords = 0;
+        prevBlock = oldBlock;
     } else {
         blockSize = info.mSizeWords;
     }
