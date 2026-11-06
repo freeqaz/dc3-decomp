@@ -1,7 +1,7 @@
 # Native save persistence — implementing the image's chain
 
-Status: **phases 1-4 landed, phase 5 remaining** (2026-11-06). Written after a read-only survey of
-the whole save/load surface, so the next lane does not have to re-derive it.
+Status: **phases 1-5 landed** (2026-11-06). Written after a read-only survey of the whole save/load
+surface, so the next lane does not have to re-derive it.
 
 Goal: profile progress, song cache and global options survive a restart on the native port, with
 `sUnlockAll` finally false. The approach is the image's own `SaveLoadManager` state machine running
@@ -151,6 +151,71 @@ load; `ProfileMgr::PurgeOldData` tests for `kMetaProfileDelete`;
 `AccomplishmentProgress::Poll` is a no-op with no pending awards.  Everything
 else (`HamUI::TakeSnapshot`, the endgame paths, `MetaPerformer`, `BustAMovePanel`)
 runs after gameplay, i.e. after the load.
+
+### Phase 5 landed — the mask is gone, and the load is what unlocks
+
+`MetaPanel::Init`'s `HX_NATIVE` arm no longer assigns `sUnlockAll`; the image's static default
+(`false`) applies.  That is the whole change.  It is not only a read-side unmasking:
+
+    HamProfile::HasCheated()  = MetaPanel::sUnlockAll || TheProfileMgr.GetAllUnlocked()
+    HamProfile::IsUnsaved()   = false whenever HasCheated()
+    ProfileMgr::GetShouldAutosave() -> IsUnsaved()
+
+so while the mask was on, the profile's own progress was **never autosaved**.  A/B on the same
+tree, headless `DC3_HTTP` boot, fresh persistence root, mutating the loaded profile through DTA
+(`{{meta_performer current} set_campaign_complete}`, `unlock_content blackandtan`,
+`set_fitness_pounds 201.5`, `set_character_outfit emilia emilia05`) and then asking for the save the
+way the DTA does (`{saveload_mgr autosave}`):
+
+| read (post-load, main_screen) | mask on | mask off |
+|---|---|---|
+| `has_finished_campaign` | 1 | 0 -> 1 after the mutation |
+| rank unlockables unlocked (`is_content_unlocked`, 54 assets) | **54 / 54** | **0 / 54** -> 1 after `unlock_content blackandtan` |
+| `{{profile} has_cheated}` | 1 | 0 |
+| `{saveload_mgr autosave}` writes the file | **no** (manager never left idle) | yes (went busy, file mtime moved) |
+
+The pre-load window reads the mask away too.  At `title_screen`, before
+`wait_main_after_saveload_screen` activates the manager, mask-on answers `has_finished_campaign` 1
+and 54/54 unlockables unlocked with no profile loaded at all — which is exactly why a broken load
+and a working one looked identical.  Mask-off answers 0 and 0/54 there.
+
+Both boot directions, mask off, same binary:
+
+| read | fresh save dir (pre-load / post-load) | existing profile, after a restart (pre-load / post-load) |
+|---|---|---|
+| `has_active_profile` | 0 / 1 | 0 / 1 |
+| `get_savable_profile_count` | 0 / 1 | 0 / 1 |
+| `is_initial_load_done` | 0 / 1 | 0 / 1 |
+| `has_finished_campaign` | 0 / 0 | 0 / **1** |
+| rank unlockables unlocked | 0 / 0 of 54 | 0 / **1** of 54 (blackandtan) |
+| `get_fitness_pounds` | - / 130 | - / **201.5** |
+| `character_outfit emilia` | - / emilia04 | - / **emilia05** |
+| song-select rows (`{song_offer_provider num_data}`) | 54 | 55 |
+
+The counter-case is the same root with `profile_0_save.dat` removed and the cache left in place:
+every read falls back to the fresh/locked column, so the restored values came from the profile
+file, not from the cache.  The not-found path then recreates the file (1,153,964 B).  A load ->
+autosave cycle is a fixed point: the file's sha256 is unchanged across a restart.
+
+**The pre-load window re-checked with the mask off.**  The window is attract -> autosave_warning ->
+title (the load lands at frame ~357 on `wait_main_after_saveload_screen`).  The transcript for that
+window is byte-identical, after normalising timing/pointers, between a boot that has a saved profile
+on disk and one that has none — 1030 lines, 0 differences — and there are zero `FAIL:`/`NOTIFY:`
+lines in any mask-off run.  The readers that the mask used to short-circuit all either sit behind
+`{profile_mgr has_active_profile}` (`title.dta`'s `check_for_nag`), read the unloaded profile's
+own defaults (empty `mUnlockedContent`, default `CampaignProgress` — safe by construction in
+`HamProfile`'s ctor, not garbage), or are not reachable before the load.  The one place that does
+*bake in* an unlock decision is `HamSongMgr::InitializePlaylists()`, and it is rebuilt by
+`HamSongMgr::ContentDone()` when the `{content_mgr start_refresh}` that `saveload_complete` issues
+completes — i.e. after the load, which is why the song-select row count follows the restored
+profile (55 with blackandtan unlocked, 54 without).  Note it was never mask-dependent at boot
+anyway: `TheHamSongMgr.Init()` (App.cpp, both call sites) runs before `MetaPanel::Init()`, so
+`sUnlockAll` was still false when the first playlist build ran.
+
+No test encoded the mask.  `scripts/native_test.sh` reads 654 registered / 584 executed / 584
+passed / 0 failed / 70 skipped with the flag off, DTA flows included — `DtaFlowTest.SongSelectPicksYmca`
+still selects ymca at index 3 because the one lockable song, blackandtan, has rank 432 against
+ymca's 13 and so sits far below it in the ranked list.
 
 ## How to know it works
 
