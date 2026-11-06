@@ -367,3 +367,56 @@ void RndFlare::SetSteps(int i1) {
     }
     mSteps = i1;
 }
+
+// ---------------------------------------------------------------------------
+// w48-b (2026-11-06) EQUIVALENCE CERTIFICATE -- RndFlare::DrawShowing,
+// canonical 98.94405 / fuzzy 98.55944.  TARGET 286 instructions, OURS 285
+// (1144 B vs 1140 B): this row is ONE INSTRUCTION SHORT on our side.
+// Placed at END OF FILE deliberately.  MILO_ASSERT takes an explicit line
+// LITERAL rather than __LINE__ (src/system/os/Debug.h:93), so a comment could
+// not have moved an assert's message, but nothing above this line is touched
+// at all and the certificate therefore cannot perturb the row it describes.
+//
+// BEHAVIOUR: no divergence.  All 24 non-equal rows (263 equal / 21 diff_arg /
+// 2 delete / 1 insert) fall into four groups.
+//   (a) 15 rows are ONE register exchange.  The interior pointer `this-0xc0`
+//       (13-14 uses: four inlined WorldXfm calls, CalcRect, RectOffscreen and
+//       the two 0xbd(rN) drawable loads) is r27 in the image and r28 here;
+//       `useOccResult` takes whichever is left.  Same value, same instruction.
+//   (b) The instruction we do not emit is the image's `clrlwi r28, r11, 24`.
+//       It narrows a merge value that is provably 0/1 on every path -- the
+//       arms are `li r11,1` and `mr r11,r26` with r26 = 0 -- so the
+//       narrowing is a no-op and the row is not hiding a missing call or a
+//       wrong field.
+//   (c) idx 118, one commutative `fmadds`: `dir.x = offset * dir.x + v.x`.
+//       Only the x term differs; y and z (idx 122/126) already take the
+//       image's operand order from the same source spelling, which is what
+//       makes this a scheduling/key artifact rather than a form difference.
+//   (d) idx 214/215, the order of two `stfs` inside RndMat::SetColor.  The
+//       multiset is identical -- r, g and b all land on 0x2c/0x30/0x34.
+//
+// MECHANISM (c2rs tap: `cands.sh src/system/rndobj/Flare.cpp
+// DrawShowing@RndFlare`; stage-tap-obj-differs 0, replay-vs-capture-differs 0,
+// cands-errors 0, 40 candidates):
+//   id 50  pri -15  tie 15  ben 17 ref 14  sym 48/k03 org arena#51 -> r28
+//   id  5  pri -18  tie 69  ben  4 ref  4  sym  5/k04 org arena#6  -> r27
+// They are the LAST TWO POPS of the worklist.  The image's assignment is the
+// same two values with their priorities EQUAL, after which tie 69 beats tie 15
+// and `useOccResult` takes r28 first.  So the lever is THREE priority units on
+// one of the bottom two candidates.
+// 22 spellings measured this wave, none reached it.  Byte-identical to
+// baseline: an if/else with both arms assigning, and the comma form with
+// `mOcclusionReady == false`.  Everything else loses: `useOccResult =
+// !mOcclusionPending && mOcclusionReady` 97.75175, unbraced if/else 98.15734,
+// named `occOn` 98.88112, `(...) == false` 98.03147, ternary 95.91608,
+// default-false plus a single `= true` arm 98.59441, a named pending/ready
+// pair 97.75175, operands reversed 98.88811, `!(a || !b)` 97.75175, nested if
+// 98.59441, `= mOcclusionReady` 98.24476.
+// The `&&` family is REFUSED and the reason is MEASURED, not inherited: every
+// form that supplies the missing `clrlwi` ALSO grows the frame 0x130 -> 0x140
+// (`stwu r1,-0x140` at idx 5; every stack slot shifts +0x10 -- 0x50->0x60,
+// 0x58->0x68, 0x80->0x70, 0x90->0xa0), re-opening about twenty displacement
+// rows and landing the row at 97.75175.  One instruction is not worth twenty
+// rows.  Also byte-identical: deleting the never-reassigned `visibility` local
+// and comparing the literal, and `ratio > visibility`.
+// ---------------------------------------------------------------------------
