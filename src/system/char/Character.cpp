@@ -369,109 +369,31 @@ void Character::DrawShadow(const Transform &xfm, float planeD) {
     if (mShowing && !mShadow.empty()) {
         Vector3 worldPos = WorldXfm().v;
 
-        // The target builds the shadow plane through Plane(point, normal), not
-        // Plane::Set(a,b,c,d): idx 40-47 are `x*0`, `y*0 + that`, `+(z+planeD)`,
-        // `fneg` -- the constructor's
-        // `d = -(n.x*p.x + n.y*p.y + n.z*p.z)` with n = (0,0,1) and the point's
-        // z already offset by planeD (n.z*p.z folds away, n.x/n.y do not).
-        // w21-u: the plane through (worldPos.x, worldPos.y, worldPos.z +
-        // planeD) with normal (0, 0, 1), i.e. Plane(point, normal) with its
-        // dot product accumulated one term per statement.  A single-statement
-        // sum (the header ctor, or any flat `0*x + 0*y + ...` spelling) lets
-        // /fp:fast factor x*0 + y*0 into (x+y)*0 and fuse the negate; the image
-        // keeps `fmuls x*0` / `fmadds y*0 + that` (statement boundaries stop
-        // the factoring).  Same value on every input: the two zero-weighted
-        // terms are +-0 or NaN whatever the grouping.  97.32 -> 98.6.
+        // The shadow plane is Plane(point, normal) with normal (0,0,1) and the
+        // point's z already offset by planeD, so its constant is
+        // `-(0*p.x + 0*p.y + 1*(p.z + planeD))`.  The image keeps the
+        // zero-weighted products (`fmuls y*0` / `fmadds x*0`) and the offset as
+        // its OWN term (`fadds z,planeD` then `fadds dot,that`), so both the
+        // offset and the products have to survive c1 as separate values.
+        // w39-f: writing the offset as a POINT TEMP whose z is advanced in
+        // place, and building the dot from that temp's components, reproduces
+        // the image exactly (143/143 instructions, 572 B, canonical and fuzzy
+        // 100.0).  A named `float zOff` instead produces the same shape but
+        // re-schedules it -- the offset is hoisted above the `fmadds` and the
+        // component loads come out z,y,x -- for 97.18.  Refuted, do not land:
+        // `float dot = 0.0f * worldPos.y + 0.0f * worldPos.x;` as ONE statement
+        // reads HIGHER (98.86) on a body one instruction SHORTER than the
+        // image (142 vs 143), because /fp:fast factors the two zero-weighted
+        // products into `(x+y)*0` and drops the image's `fmuls`; objdiff pays
+        // for that as a cheap `replace` rather than a delete+insert pair.
         Plane pl70;
-        // w26-t: the y-product statement comes first.  c2 reassociates the two
-        // zero-weighted products into the image's `fmuls x*0` / `fmadds y*0`
-        // pair whatever their source order, but the LOAD of the first-written
-        // component is the one it schedules longest before its use.  Writing y
-        // first gives the image's y,z,x load order (it was x,z,y) and closes
-        // both diff_arg rows.  Same value on every input: the two terms are
-        // +-0 or NaN whatever the order, and IEEE addition is commutative.
-        float dot = 0.0f * worldPos.y;
-        dot += 0.0f * worldPos.x;
-        dot += worldPos.z + planeD;
+        Vector3 pt = worldPos;
+        pt.z += planeD;
+        float dot = 0.0f * pt.y;
+        dot += 0.0f * pt.x;
+        dot += pt.z;
         pl70.Set(0, 0, 1, -dot);
 
-        // w26-t residual: 2 rows (144), one cause -- the image computes
-        // `fadds f13, f13, f29` (z + planeD) as its OWN term and then adds it
-        // to the accumulator; /fp:fast flattens our `dot += z + planeD` into
-        // (dot + z) + planeD.  Same value on every input (adding a +-0 term is
-        // exact either way), so this is a shape residual, not a bug.
-        // 35 spellings measured after the two-product shape was fixed; every
-        // one is worse or inert.  INERT (the replay harness says 98.5315,
-        // exactly the unchanged shape): a `const float &` binding of
-        // (z + planeD) and of worldPos.z (the section 8.8 lever), a
-        // `const Vector3 &` alias of worldPos, and using `pl70.d` itself as
-        // the accumulator.  WORSE, all at 97.1-97.7 canonical: a const or
-        // non-const named zOff before or after the products, zOff built by
-        // `= z; += planeD`, the whole sum named, a named total feeding the Set
-        // call, explicit parens in the Set call, a `1.0f *` wrapper, a Vector3
-        // point temp with the plane built from it (that one also re-factors the
-        // two products into (x+y)*0 and fuses the negate), and moving the
-        // offset term ahead of the products.  Every spelling that DOES produce
-        // the separate `fadds z, planeD` computes it BEFORE the two products
-        // instead of in their latency shadow, which swaps the y/z loads and
-        // reverses the final `fadds`.  The scheduler slot is the whole
-        // difference; see the w21-u note below for the shapes that also lose
-        // the two-product factoring.
-        // w21-u residual (superseded: the load order is now closed -- image
-        // y,z,x, ours y,z,x): the last two adds -- the image adds
-        // (z + planeD) as one term, we emit (dot + z) + planeD.  Measured, all
-        // 97.0-97.2 or worse:
-        // a separate `shadowZ = z + planeD` statement before or after the
-        // products, `-(dot + (z + planeD))` in the Set call, a Vector3 point
-        // temp, a local inline Plane(point, normal) with an accumulator body,
-        // y-product first; `dot += z; dot += planeD;` is identical (98.6).
-        // Every spelling that keeps (z + planeD) as one term schedules it
-        // before the products and flips the fmadds operands.
-        // Old residual (before w21-u), 8 rows / 8 B at 97.32 canonical: the
-        // image does NOT reassociate the two zero-weighted terms of the plane
-        // constant.  With normal = (0,0,1) constant-propagated, f31 = 0.0f:
-        //   image  fmuls f12, f12, f31 / fmadds f0, f0, f31, f12 / fadds f13,
-        //          f13, f29 / fadds f0, f0, f13 / fneg f0, f0
-        //   ours   fadds f0, f0, f29 / fadds f13, f12, f13 /
-        //          fnmadds f0, f13, f31, f0
-        // i.e. we factor x*0 + y*0 into (x+y)*0 and fuse the negate.  It is a
-        // /fp:fast reassociation inside the INLINED Plane(point, normal) ctor
-        // in the shared header math/Mtx.h, which is also what fixes the load
-        // order (image y,z,x vs ours x,y,z).
-        // REFUTED: commuting the ctor's products to `point.x * normal.x + ...`
-        // (the operand order the image's fmuls literally shows) is byte-inert
-        // here, so the shared-header edit was reverted rather than landed on a
-        // guess.
-        // w16-c: `pl70.d = -(-pl70.d + planeD)` after a Plane(worldPos, up)
-        // is 96.1 (fnmadds + fsubs).  The same unfactored x*0 + y*0 shape is
-        // CharIKFingers::CalculateHandDest's residual.
-        // w28-b (2026-11-02): the "separate (z + planeD) term, scheduled in
-        // the products' latency shadow" hypothesis is now pinned exactly, and
-        // it is a sched0 placement, not a c1 shape.  FIVE distinct spellings
-        // that make (z + planeD) its own value -- a named `float zOff` before
-        // the products, between them, or after them, `zOff = z; zOff +=
-        // planeD`, and mutating `worldPos.z += planeD` in place -- all emit a
-        // BYTE-IDENTICAL body (canonical 97.18182 / fuzzy 97.04196): the two
-        // fadds are there, but the (z + planeD) one is hoisted to slot 41
-        // (before the fmadds instead of after it), the component loads come
-        // out z,y,x instead of the image's y,z,x, and the final add's
-        // operands swap to `fadds f0, f13, f0`.  So the shape is reachable and
-        // the image's SCHEDULE is not; every spelling that produces the extra
-        // instruction pays 1.4 points for it.
-        // REFUTED, do not land (a scoring artifact, measured here):
-        // `float dot = 0.0f * worldPos.y + 0.0f * worldPos.x;` as ONE
-        // statement, with the third term unchanged, reads canonical 98.86014 /
-        // fuzzy 98.68532 -- HIGHER than the current 98.60140 -- while the
-        // object has 142 instructions to the image's 143 and the opcode
-        // multiset is short exactly one `fmuls`.  /fp:fast factors the two
-        // zero-weighted products into (x+y)*0 and contracts to
-        // `fadds f13,f12,f13 / fmadds f0,f13,f31,f0`, i.e. it deletes the
-        // image's fmuls and changes where the accumulate happens.  objdiff
-        // pays for the move as a cheap `replace` instead of a delete+insert
-        // pair, so the graded number rises while the instruction stream moves
-        // further from the image (137/144 equal, against 142/144 here).
-        // Same score from `x*y` order swaps and from `worldPos.y * 0.0f`
-        // spellings; `-(dot + z + planeD)` inside the Set call is 94.25.
         MILO_ASSERT(GetGfxMode() == kOldGfx, 0x2E7);
         Transform tf40;
         Transpose(xfm, tf40);
