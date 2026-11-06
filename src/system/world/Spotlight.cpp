@@ -1904,6 +1904,38 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
 }
 
 
+// w48-a (2026-11-06): EQUIVALENCE CERTIFICATE for Spotlight::BuildNGQuad --
+// 90.63071 canonical / 87.33195 fuzzy, NO behaviour defect.  Placed here, after
+// this file's last MILO_ASSERT, so no assert id or static ordinal can move.
+//   1. VERTEX LOOP: the only instruction-selection difference is that the image
+//      holds -1.0f in f9 and emits `fmadds f4,f4,f9,f1` where we emit
+//      `fsubs f4,f31,f4` after three `fmuls`.  Confirmed structurally: the
+//      target loads FOUR float literals in the loop preheader (0x138..0x14c)
+//      and we load THREE (0x134..0x140); the missing one is -1.0f.  The values
+//      are identical -- b * (-1.0f) is an exact sign flip, so a + b*(-1.0f) and
+//      a - b are the same IEEE operation -- and this is the ONLY memory-multiset
+//      difference in the function (`('lfs','0')` target-only x1, `('sth','2')`
+//      base-only x1).
+//   2. FACE LOOP: the image runs 5+5 stores with ONE SHARED tail where we run
+//      6+6.  Adjudicated store by store: `bt 2` branches on `(iFace & 2) == 0`,
+//      so 0x2f0 is the IF arm and 0x320 the ELSE arm (it reads backwards until
+//      the register roles are followed).  IF f0 = (uBaseN, uPrev, base+n),
+//      f1 = (base+n, uPrev, -); ELSE f0 = (uPrev, base, uBaseN),
+//      f1 = (uBaseN, base, -).  The shared instruction is `sth r30,0x2(r11)` at
+//      0x348, reached by both arms with r30 holding uPrev on the IF path and
+//      base on the ELSE path -- exactly the two values the two Set() calls put
+//      there.  Same twelve halfwords either way.
+//   3. BuildCone's corner-derivation lever does NOT transfer to this row.
+//      BuildCone wrote four corners as four expressions over a BIASED induction
+//      variable; here `base`, `base+n` and `base+n-1` already derive from one
+//      named `base`.  Naming every corner (with `unsigned short` corners
+//      87.18 / body 952 B; ints only 88.24 / body 940 B) lets c1 fold more
+//      away and SHORTENS the body, which is the wrong direction outright.
+//   Eight spellings measured, none a gain: row-wise `rot.x/y/z.Set` 90.03,
+//   function-static const matrix 72.37 (guard machinery), file-scope const
+//   matrix 80.70, int literals in `rot.Set` exactly inert, `rowFrac`/`colFrac`
+//   scoped into their loops exactly inert, `norm.Set` hoisted above the pos
+//   Multiply 85.08.
 void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constraint) {
     auto mesh = Hmx::Object::New<RndMesh>();
     def.mBeam = mesh;

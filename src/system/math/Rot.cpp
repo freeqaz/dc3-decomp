@@ -320,6 +320,36 @@ void RotateAboutZ(const Hmx::Matrix3 &min, float f, Hmx::Matrix3 &mout) {
 // it and all of it is destructive: Cross after lenSq1 61.18, Cross after dot
 // 69.95, `const Vector3 &a = v1, &b = v2` ref-binding 49.02 (272 B).
 // Left as the scheduling/emission-order class.
+//
+// w48-a (2026-11-06): the c2rs tap settles the colour half of that class, and it
+// is NOT an FPR permutation.  `c2rs stage cands --regasg` on this TU (neutral:
+// stage-tap-obj-differs 0, replay-vs-capture-differs 0, cands-errors 0) gives
+// every candidate a DISTINCT priority (28, 22, 22, 18, 16, 14, 14, 14, 8) and
+// the selector picks the registers the image uses for the same values
+// (f0 = v1.z, f13 = v2.y, f11 = 1.0f, f12 = 0.5f, f10 = 1e-7f on both sides).
+// What differs is DOWNSTREAM of both allocators: the sched3 order of the three
+// preheader `lfs` that the inlined `Cross` emits.  Image: v1.z(0xc), v2.y(0x14),
+// v2.z(0x20); ours: v2.z(0xc), v1.z(0x14), v2.y(0x1c).  The `RT` list shows our
+// mixed products uniformly v1-first (`u{ s54 s56 }`, `u{ s48 s47 }`) while the
+// image has v1 first for x but v2 first for y and z.  That is c2's post-lowering
+// commutative sort (C2RS-BRIDGE 8.7), whose key follows MINT ORDER for these
+// temp leaves -- so it is fixed by the load schedule, and `Cross` lives in
+// math/Vec.h, a PCH-reached header that cannot be touched from this TU.
+// Eight more spellings this wave, five of them BYTE-IDENTICAL: `Dot(v1,v2)`,
+// `const float &v1z/v2z`, `LengthSquared(v1)`, named products pxx/pzz/pyy, and
+// `float z1 = v1.z`.  Destructive: `const Vector3 &a = v1;` before lenSq1
+// 64.29 (256 B) and dot-before-lenSq1 76.26 (224 B).
+// One real handle, canonical-neutral so NOT banked: `const Vector3 &b = v2;`
+// bound AT THE USE SITE just before the dot line, with `v1.x*b.x + v1.z*b.z +
+// v1.y*b.y`, keeps canonical at 90.30645 and moves fuzzy 89.41936 -> 89.66129
+// (equal 52 -> 54, diff_arg 7 -> 5, body 248 B unchanged).  Combine it with any
+// future latch on this row.
+//
+// NEGATIVE CONTROL, and the reason canonical alone must not accept a change
+// here: `float f1 = 0.25f / (sq * sq2);` -- a WRONG CONSTANT -- scores
+// 93.50000 canonical (up from 90.30645) while equal rows collapse 52 -> 24 and
+// the body grows to 256 B.  That is the XTEABlockEncrypter trap measured on
+// this row; it is exactly why the row classes are read alongside the headline.
 void MakeRotQuat(const Vector3 &v1, const Vector3 &v2, Hmx::Quat &q) {
     Vector3 vec;
     Cross(v1, v2, vec);

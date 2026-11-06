@@ -439,6 +439,45 @@ void HamRibbon::ConstructMesh() {
         // Face field-assignment spelling, the RndRibbon v0..v3 form and the
         // short/cast forms.  No source lever found for "materialise the
         // incremented face pointer".
+        //
+        // w48-a (2026-11-06): EQUIVALENCE CERTIFICATE for the whole function --
+        // 90.96605 canonical / 90.25617 fuzzy, and there is NO behaviour defect.
+        // The memory-access multiset (mnemonic, displacement) is IDENTICAL on
+        // both sides: target-only {} and base-only {} over the whole body, so
+        // every load and store in the image has a counterpart at the same field
+        // and the same width.  Face values re-derived from the target listing
+        // (0x19c..0x230): face0 = (idx, nextIdx, nextIdxUp), face1 =
+        // (nextIdxUp, idxUp, idx) -- the same twelve halfwords our two Set()
+        // calls write; only the ORDER of the three independent `sth` inside one
+        // face differs.  Both divide guards are present on both sides
+        // (`twi 6,rX,0` and `twi 5,rX,-1`); objdiff's two `replace` rows are
+        // alignment artefacts of the same pair.
+        //
+        // The body is TWO INSTRUCTIONS SHORT of the image (1288 B vs 1296 B,
+        // 322 vs 324) and both missing ones are IMAGE-ONLY AND DEAD:
+        //   * `addi r8, r11, 6` at 0x220 materialising face1's address -- r8 has
+        //     no use before its next definition, and the three stores that
+        //     follow are all `6/8/10(r11)`;
+        //   * a fourth `clrlwi rX,rX,16` (for nextIdx) where the following `sth`
+        //     already truncates.
+        // Adding either back means shipping a statement with no behaviour, which
+        // is fabricated code; the honest number for this row is the one above.
+        // The `addi +1 / clrlwi +1` mnemonic-census delta independently
+        // reproduces w29-b's finding.
+        //
+        // REFUSED, do not bank: naming the four face indices as `unsigned short`
+        // locals (`uIdx`, `uNextIdx`, `uNextIdxUp`, `uIdxUp`) reads 91.58025
+        // canonical / 90.71605 fuzzy -- +0.61 -- with equal rows 264 -> 259 and
+        // diff_arg 43 -> 49 at an unchanged body size.  That is the
+        // pattern_score_up_while_reproducing_less artefact (w39-g refused the
+        // same shape on TessellateMesh); row by row it gains equal at idx
+        // 111/118 and loses it at 99/103/104/120, i.e. it moves which neighbour
+        // carries the charge.  All 24 declaration orders of the four shorts are
+        // byte-identical, so the order is inert; the NAMED SHORT is the lever.
+        // Nine further spellings measured inert or worse: `f[0]/f[1]` 86.37,
+        // two pointers 86.37, `begin()+faceIdx` 86.37, hoisting the Faces()
+        // reference 85.12, two-shorts-only 87.88, `unsigned short nextIdx`
+        // 88.35, casts at the call site inert.
         for (int seg = 0; seg < mNumSegments; seg++) {
             int base = seg * mNumSides * 2;
             for (int side = 0; side < mNumSides; side++) {
