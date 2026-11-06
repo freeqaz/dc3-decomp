@@ -95,5 +95,45 @@ wait_screen multiuser_screen
 +150 confirm
 +270 confirm
 
+# First-run move tutorial.  enter_gameplay's gate (ui/global.dta:230) is
+# `{! {profile_mgr has_seen_tutorial kTutorialGeneral}}`, and
+# ProfileMgr::HasSeenTutorial is
+#     mTutorialsSeen & tutorial || mGlobalOptionsSaveState != kMetaProfileLoaded
+# The second clause is the image's "persistence is broken, do not nag" escape
+# hatch.  Native used to take it on every boot because nothing ever loaded the
+# global-options cache, so the tutorial was suppressed; now that the cache is
+# wired (SaveLoadManager::Init + CacheMgrNativeInit) it loads, and a fresh
+# profile gets the tutorial the image shows -- ui/tutorial/tutorial.dta:1014-1109,
+# inserted between multiuser_screen and loading_screen.
+#   screen_0  dialog, confirm -> screen_1
+#   screen_1  panel,  confirm -> screen_2
+#   screen_2  panel,  confirm -> screen_3
+#   screen_3  panel,  confirm -> screen_4
+#   screen_4  dialog, enter marks kTutorialGeneral seen and re-runs
+#             enter_gameplay; confirm -> loading_screen
+# One wait_screen per tutorial screen, because each perform-it panel has its own
+# accept window.  Measured on the wired engine (headless native, ~245 fps):
+#   * a confirm ~70 or ~220 frames after the panel's Enter is DROPPED,
+#   * a confirm ~470 frames after Enter advances it,
+#   * with no confirm the panel auto-advances ~1900 frames after Enter.
+# So the window is roughly [460, 1900] frames after Enter, and +600 lands in the
+# middle of it while keeping the whole tutorial under the 5000-frame flow cap.
+# (A single block of spaced confirms would need every offset measured against
+# the same origin, and the panels' enters are not evenly spaced.)  If the
+# tutorial never appears -- a profile that has already seen it, e.g. a second
+# run against the same DC3_CACHE_DIR -- the first wait_screen simply never
+# satisfies and the loading screens advance without any further input.
+wait_screen tutorial_perform_it_screen_0
++38 wake
++45 confirm
+wait_screen tutorial_perform_it_screen_1
++600 confirm
+wait_screen tutorial_perform_it_screen_2
++600 confirm
+wait_screen tutorial_perform_it_screen_3
++600 confirm
+wait_screen tutorial_perform_it_screen_4
++45 confirm
+
 # Loading screens auto-advance via DTA handlers:
 #   loading -> preloading -> real_loading -> game_screen

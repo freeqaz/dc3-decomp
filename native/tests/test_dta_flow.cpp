@@ -3,6 +3,7 @@
 // Verifies the full DTA-driven panel flow works end-to-end using the ymca.txt
 // input script: boot → attract → title → main → choose_mode → song_select
 // → multiuser (driven by controller input: difficulty, play, skip_waiting)
+// → [first-run move tutorial, only while kTutorialGeneral is unseen]
 // → loading → preloading → real_loading → game_screen.
 //
 // Gated by DC3_DTA_FLOW_TESTS=1 (requires game assets).
@@ -83,10 +84,53 @@ static bool FileExists(const std::string &p) {
 //
 // 300 s is ~4.5x the idle cost, which covers the contention seen so far.  A
 // genuinely hung run still fails, just after 300 s instead of 120.  Only the
-// 5000-frame flow uses it: the shorter flows already sit at 3.6x or better of
-// their own cost and keep their tighter caps, so a hang there is still
-// reported quickly.
+// long flow uses it: the shorter flows already sit at 3.6x or better of their
+// own cost and keep their tighter caps, so a hang there is still reported
+// quickly.
 static constexpr int kEngineWallClockSeconds = 300;
+
+// Frame budget for the long flow, and it is NOT a game-time budget: several UI
+// transitions are gated on real time, so the same flow costs more FRAMES on a
+// faster machine.  Measured 2026-11-06: the flow finished at frame ~4205 on a
+// box running it at ~60 fps, and on a box running it at ~555 fps it reached the
+// transition into loading_screen at frame 2626 with the transition still
+// unfinished 2374 frames (4.3 s) later -- so the old 5000 cut a healthy run
+// short and reported it as "loading_screen was never entered".  The first-run
+// move tutorial (see ymca.txt) is ~3000 of those frames.  8000 clears the worst
+// case measured with margin and still leaves a hung flow reporting through the
+// wall-clock cap above rather than running forever.
+static constexpr int kDtaFlowMaxFrames = 8000;
+
+// A private persistence root for one engine run: DC3_CACHE_DIR and DC3_SAVE_DIR
+// both point inside it, and it starts empty.
+//
+// This is not hygiene, it is what the assertions mean.  The engine's screen
+// chain depends on saved state: enter_gameplay's first clause is
+// `{! {profile_mgr has_seen_tutorial kTutorialGeneral}}` (ui/global.dta:230) and
+// ProfileMgr::HasSeenTutorial is
+//     mTutorialsSeen & tutorial || mGlobalOptionsSaveState != kMetaProfileLoaded
+// The second clause is the image's "persistence is broken, do not nag"
+// fallback, so whether the first-run move tutorial appears between
+// multiuser_screen and loading_screen hinges on whether the global-options
+// cache loaded -- i.e. on what is in the engine's cache directory.  With the
+// save/load chain wired, letting the child inherit the caller's $HOME made the
+// SAME binary take two different paths depending on what a previous run had
+// left in ~/.local/share/dc3/cache, and wrote there.  An empty root per run
+// makes every run a fresh profile (the tutorial path, which
+// scripts/dc3-input-flows/ymca.txt drives) on every machine, and keeps all of
+// the engine's state inside the fixture.
+//
+// The directory is deliberately left behind, as test_cache_native.cpp's
+// MakeTempRoot() does, so a failure can be re-run against the same state.
+static std::string MakePersistenceRoot() {
+    char tmpl[] = "/tmp/dc3-dta-flow-XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    if (!dir) return std::string();
+    std::string root(dir);
+    mkdir((root + "/cache").c_str(), 0755);
+    mkdir((root + "/saves").c_str(), 0755);
+    return root;
+}
 
 // `extraEnv` is prepended to the command as further VAR=value assignments
 // (e.g. "DC3_CONTROLLER_MODE=faithful").  `fastBoot` false leaves
@@ -114,6 +158,16 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeco
         pre.setupError = "input flow script missing:\n    " + script;
         return pre;
     }
+    std::string persistence = MakePersistenceRoot();
+    if (persistence.empty()) {
+        pre.setupError =
+            "could not create a temporary persistence root (mkdtemp "
+            "'/tmp/dc3-dta-flow-XXXXXX').  The engine's cache and save "
+            "directories have to be owned by the fixture: without them the "
+            "flow's screen chain depends on whatever ~/.local/share/dc3/cache "
+            "holds on this machine, and the run would write there.";
+        return pre;
+    }
 
     std::ostringstream cmd;
     // DC3_TEL at interval 1: GameplayReachesPlayingState reads the real
@@ -123,6 +177,8 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeco
         << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0"
         << (fastBoot ? " DC3_FAST_BOOT=1" : "")
         << " DC3_TEL=1 DC3_TEL_INTERVAL=1"
+        << " DC3_CACHE_DIR=" << persistence << "/cache"
+        << " DC3_SAVE_DIR=" << persistence << "/saves"
         << " MILO_INPUT_SCRIPT=" << script
         << " MILO_MAX_FRAMES=" << maxFrames
         << " timeout " << timeout << " " << binary << " 2>&1";
@@ -164,7 +220,7 @@ protected:
     static void SetUpTestSuite() {
         if (!getenv("DC3_DTA_FLOW_TESTS"))
             return;
-        sResult = RunDtaFlow(5000, kEngineWallClockSeconds);
+        sResult = RunDtaFlow(kDtaFlowMaxFrames, kEngineWallClockSeconds);
         sRanEngine = true;
     }
 
@@ -221,9 +277,36 @@ TEST_F(DtaFlowTest, EnterGameplayFired) {
     // to loading_screen, proving the DTA function executed.  There is no
     // native auto-fire any more: the image's MultiUserGesturePanel::Poll
     // (82942EB8) only runs UpdateNavLists / UpdateProviderPlayerIndices.
-    EXPECT_TRUE(outputContains("Screen 'multiuser_screen' Exit (to 'loading_screen')"))
-        << "multiuser_screen never transitioned to loading_screen — "
-        << "enter_gameplay DTA function didn't fire from the menu flow";
+    //
+    // TWO exits are correct, because enter_gameplay's first clause is a
+    // tutorial gate (ui/global.dta:230):
+    //     {! {profile_mgr has_seen_tutorial kTutorialGeneral}}
+    // and ProfileMgr::HasSeenTutorial is
+    //     mTutorialsSeen & tutorial || mGlobalOptionsSaveState != kMetaProfileLoaded
+    // That second clause is the image's "persistence is broken, do not nag"
+    // fallback, and native used to take it on EVERY boot because nothing ever
+    // loaded the global-options cache — so this test asserted the shortcut.
+    // Now that the cache is wired, the answer depends on what is on disk:
+    //   * a cache whose global options exist and have kTutorialGeneral set
+    //     (any second run against the same DC3_CACHE_DIR) -> straight to
+    //     loading_screen, the old expected string;
+    //   * a FRESH cache (~/.local/share/dc3/cache absent, i.e. a new machine
+    //     or a first run) -> the global options are created with the tutorials
+    //     unset, and the first-run move tutorial is inserted first
+    //     (ui/tutorial/tutorial.dta:1014-1109).  scripts/dc3-input-flows/
+    //     ymca.txt drives its five screens; screen_4 marks kTutorialGeneral
+    //     seen and re-runs enter_gameplay, which then reaches loading_screen.
+    // Asserting only `loading_screen` is reached would not distinguish the two,
+    // so both shapes are accepted — but one of them is required, and the
+    // loading_screen Enter is required in the tutorial case.
+    bool direct = outputContains("Screen 'multiuser_screen' Exit (to 'loading_screen')");
+    bool viaTutorial =
+        outputContains("Screen 'multiuser_screen' Exit (to 'tutorial_perform_it_screen_0')")
+        && outputContains("Screen 'loading_screen' Enter");
+    EXPECT_TRUE(direct || viaTutorial)
+        << "multiuser_screen never reached loading_screen (directly or through the "
+           "first-run move tutorial) — enter_gameplay DTA function didn't fire "
+           "from the menu flow";
 }
 
 TEST_F(DtaFlowTest, LoadingChainTransitions) {
@@ -295,7 +378,7 @@ TEST_F(DtaFlowTest, NoCrashCleanExit) {
     EXPECT_FALSE(sResult.timedOut)
         << "Engine did not finish inside its wall-clock cap. This is a hang "
            "OR a machine too loaded to complete a healthy run -- the "
-           "5000-frame flow costs ~67 s at load 25 and exceeded 120 s with "
+           "long flow costs ~67 s at load 25 and exceeded 120 s with "
            "several lanes building. Re-run on a quiet box before treating it "
            "as a regression; the cap is kEngineWallClockSeconds.";
     EXPECT_EQ(sResult.exitCode, 0)

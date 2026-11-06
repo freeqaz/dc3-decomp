@@ -11,6 +11,7 @@
 #include <fstream>
 #include <sstream>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 // ---------------------------------------------------------------------------
@@ -40,6 +41,27 @@ struct RunResult {
     bool timedOut;
 };
 
+// The engine's persistence root for one run: DC3_CACHE_DIR and DC3_SAVE_DIR
+// both point inside it and it starts empty.
+//
+// Since the save/load chain was wired (SaveLoadManager::Init +
+// CacheMgrNativeInit), a boot reads the caller's ~/.local/share/dc3/cache and,
+// when it is missing or out of date, writes it -- so a test would both depend
+// on and mutate developer state outside the tree, and whether the first-run
+// move tutorial appears depends on what it found there
+// (ProfileMgr::HasSeenTutorial's `mGlobalOptionsSaveState != kMetaProfileLoaded`
+// fallback).  mkdtemp gives every run the same empty start and keeps the write
+// here.  Same mechanism as test_dta_flow.cpp's MakePersistenceRoot().
+static std::string MakePersistenceRoot() {
+    char tmpl[] = "/tmp/dc3-headless-boot-XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    if (!dir) return std::string();
+    std::string root(dir);
+    mkdir((root + "/cache").c_str(), 0755);
+    mkdir((root + "/saves").c_str(), 0755);
+    return root;
+}
+
 // Run dc3-native with environment variables, capture output
 struct EnvVar { std::string key, value; };
 
@@ -52,8 +74,11 @@ static RunResult RunHeadless(
     std::string binary = GetDc3NativePath();
 
     // Build command with env vars piped through
+    std::string persist = MakePersistenceRoot();
     std::ostringstream cmd;
     cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 MILO_MAX_FRAMES=" << maxFrames;
+    if (!persist.empty())
+        cmd << " DC3_CACHE_DIR=" << persist << "/cache DC3_SAVE_DIR=" << persist << "/saves";
     if (inputScriptPath)
         cmd << " MILO_INPUT_SCRIPT=" << inputScriptPath;
     for (auto &ev : extraEnv)

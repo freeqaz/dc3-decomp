@@ -169,11 +169,15 @@ void MetaPanel::Init() {
     SongStatusMgr::Init();
     REGISTER_OBJ_FACTORY(TexLoadPanel)
     REGISTER_OBJ_FACTORY(Hmx::Object)
-#ifndef HX_NATIVE
-    // PLATFORM: native's MemcardMgr is a filesystem stub whose Init creates a
-    // save directory under $HOME; nothing on native reads or writes it.
+    // The image's MemcardMgr::Init: names "memcardmgr" in ObjectDir::Main --
+    // which is how DTA reaches it ({memcardmgr add_sink ...},
+    // native/dta/ui/options/options_gameplay.dta) -- and sinks the platform
+    // manager.  Native's implementation is filesystem-based
+    // (native/src/platform/MemcardMgr_Stub.cpp) and its Init also creates the
+    // save directory, so this now runs on both platforms.  It must precede any
+    // DTA that names memcardmgr, and in the image it sits inside this same
+    // function, ahead of ProfileMgr::Init and MetagameRank::Preinit.
     TheMemcardMgr.Init();
-#endif
     MetagameRank::Preinit();
 #ifdef HX_NATIVE
     // PLATFORM: native runs ProfileMgr::Init() through InitNative(), which is
@@ -182,17 +186,20 @@ void MetaPanel::Init() {
     //
     // BUG-OPEN (w23-g04): sUnlockAll = true surfaces all content as unlocked
     // and not-new; the image starts with it false. It dates from before
-    // native had profiles (9c98fbef0); native still has no persistent profile
-    // save, so a fresh-profile lock set would be permanent. Read-only -- no
+    // native had profiles (9c98fbef0). The save/load chain is now wired
+    // (SaveLoadManager::Init runs in App's native ctor arm, TheMemcardMgr is
+    // initialised above, and the native cache backend exists), so this is
+    // waiting on the two remaining phases of docs/native/SAVE_PERSISTENCE_PLAN.md
+    // (pad 0 signed in but UNLOADED so the image's autoload finds the file,
+    // then this flag) rather than on missing plumbing. Read-only -- no
     // grant/save/signin machinery is touched.
     // Measured (w23-misc, headless DC3_HTTP boot to main_screen, flipping it
     // with {toggle_unlock_all}): with false, all 54 rank unlockables
     // (metagame_rank.dta: crew/outfits, venues incl. throneroom, avatar
     // items) read locked and 1 of 66 songs (blackandtan) leaves the library;
     // has_finished_campaign goes 1 -> 0 (credits play as text, campaign eras
-    // gate on in-memory CampaignProgress). Every unlock earned in a session is
-    // lost at exit (TheMemcardMgr.Init is not run natively). Difficulties are
-    // unaffected (HamProfile::IsDifficultyUnlockedForProfile returns true).
+    // gate on in-memory CampaignProgress). Difficulties are unaffected
+    // (HamProfile::IsDifficultyUnlockedForProfile returns true).
     sUnlockAll = true;
     TheProfileMgr.InitNative();
 #else
