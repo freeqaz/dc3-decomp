@@ -87,26 +87,29 @@ void OSCMessenger::Poll() {
     }
 }
 
-// RESIDUAL (w7-ar, 91.8 canonical): every instruction and every register now
-// matches; the only diff is where MSVC puts the merged exit block. The image
-// emits it right after the val-found arm and branches BACK to it from the
-// placeholder arm (target 0x827E7D78..0x827E7D88, then `b .L_827E7D78` at
-// 0x827E7DD8); we emit the placeholder arm first and the exit last. Dropping the
-// `return` here for a single tail `return intValue;` reproduces the image's
-// instruction MULTISET exactly -- two ~String calls instead of our three -- but
-// MSVC then still orders the blocks our way, so it measures 86.9 instead. Both
-// spellings are behaviourally identical (str is destroyed exactly once on each
-// path either way); the higher-scoring one is kept. The same residual, and only
-// this residual, is what holds GetFloat below at 36.5.
-// w16-d (91.8): also measured -- `if (!val) {placeholder} else {found}` with a
-// single tail return lays the placeholder arm first (34.3); hoisting newValue
-// out of its block scope is byte-identical.
+// The two statements in the value arm are stored flag-first on purpose: c2
+// then emits them load-then-store, as the image does, and -- the reason it
+// matters -- colours the loaded value onto `intValue`'s own pseudo-register
+// (r29) rather than onto a fresh one. With the load written first the value
+// lands in a separate register from the parameter, so c2 cannot tail-merge
+// the two `return intValue;` sites: the placeholder arm keeps its own copy
+// of the exit sequence (three ~String calls, 256 bytes) instead of branching
+// back into the value arm's exit. Flag-first keeps a single register, c2
+// merges the returns, and the placeholder arm ends in `b` to the value arm's
+// exit (target 0x827E7D78..0x827E7D88, `b .L_827E7D78` at 0x827E7DD8).
+// Both orders are behaviourally identical -- `mHasNewValue` (0x89) and
+// `buffer` (0x8) are disjoint, so neither store can affect the load.
+// Measured alternatives, all lower: a single tail `return intValue;` gets the
+// image's registers and instruction multiset but lays the merged exit last
+// (86.9); `if (!val) {placeholder} else {found}` lays the placeholder arm
+// first (34.3 and 66.1 for the two orders); `goto` to a shared label and the
+// placeholder-first early-return forms are below 35.
 int OSCMessenger::GetInt(String str, int intValue) {
     OSCValue *val = GetValue(str);
     if (val) {
         MILO_ASSERT(val->mType == 'i', 0x131);
-        intValue = *(int *)val->buffer;
         val->mHasNewValue = 0;
+        intValue = *(int *)val->buffer;
         return intValue;
     }
     {
