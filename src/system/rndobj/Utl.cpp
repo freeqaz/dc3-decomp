@@ -3182,9 +3182,21 @@ void BuildVisit(BSPNode *node) {
     // once after the iterator and used for all 18 mentions: it does NOT home
     // the Cross() reference parameters either, and costs 0.6pp
     // (94.97 -> 94.4), so the inlined-Cross homing question stays open.
-    lastIt->mTransform.m.z = *(const Vector3 *)&plane;
+    // w43-a (2026-11-06): the sentence above -- "nothing tried so far does" -- is
+    // now answered.  MSVC DOES home an inlined callee's reference arguments, and
+    // the lever is WHERE the binding is written: a `Vector3 &` introduced at the
+    // use site is materialised into a callee-saved register and homed, while the
+    // same binding placed at the top of the block is folded into the enclosing
+    // expression (see the refused spellings above, all of which hoisted).  The
+    // image homes &m.y/&m.z twice -- once for the assignment/Set ahead of the
+    // first cross product and again for the two Cross calls -- so the binding is
+    // repeated per site rather than hoisted.  94.97321 -> 96.29762 canonical,
+    // 1300 -> 1320 B against the image's 1344.
+    Vector3 &polyNormal = lastIt->mTransform.m.z;
+    polyNormal = *(const Vector3 *)&plane;
 
-    lastIt->mTransform.m.y.Set(0, 1, 0);
+    Vector3 &polyUp = lastIt->mTransform.m.y;
+    polyUp.Set(0, 1, 0);
 
     if (fabsf(
             lastIt->mTransform.m.z.y * lastIt->mTransform.m.y.y
@@ -3192,16 +3204,21 @@ void BuildVisit(BSPNode *node) {
             + lastIt->mTransform.m.z.x * lastIt->mTransform.m.y.x
         )
         > 0.9f) {
-        lastIt->mTransform.m.y.Set(1, 0, 0);
+        polyUp.Set(1, 0, 0);
     }
 
-    // x = y cross z
-    Cross(lastIt->mTransform.m.y, lastIt->mTransform.m.z, lastIt->mTransform.m.x);
+    Vector3 &yAxis = lastIt->mTransform.m.y;
+    Vector3 &zAxis = lastIt->mTransform.m.z;
 
-    Normalize(lastIt->mTransform.m.x, lastIt->mTransform.m.x);
+    // x = y cross z
+    Vector3 &xCross = lastIt->mTransform.m.x;
+    Cross(yAxis, zAxis, xCross);
+
+    Vector3 &xAxis = lastIt->mTransform.m.x;
+    Normalize(xAxis, xAxis);
 
     // y = z cross x
-    Cross(lastIt->mTransform.m.z, lastIt->mTransform.m.x, lastIt->mTransform.m.y);
+    Cross(zAxis, xAxis, yAxis);
 
     // Add large quad.  Retail materialises each corner immediately before its
     // push_back, so +/-10000.0f stay live in callee-saved f30/f31 across the
