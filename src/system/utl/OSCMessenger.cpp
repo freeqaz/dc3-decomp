@@ -179,13 +179,20 @@ int OSCMessenger::MakeOSCAddress(String str, char *buf) {
 // the image have an arm after the epilogue (scan of build/373307D9/asm); the
 // ones read (DeleteParentDirs, GetSongIDFromShortName, HasCrazeMove) are loops
 // or early-return-with-different-value shapes, not this one.
+// Same shape as GetInt above, and the same lever: the flag store is written
+// first so c2 colours the loaded value onto fValue's own pseudo-register and
+// can tail-merge the two returns, which reproduces the image's shared exit
+// (0x827E7E08..0x827E7E18, branch back at 0x827E7E68). Behaviourally
+// identical -- mHasNewValue (0x89) and buffer (0x8) are disjoint.
 float OSCMessenger::GetFloat(String str, float fValue) {
     OSCValue *val = GetValue(str);
     if (val) {
         MILO_ASSERT(val->mType == 'f', 0x149);
-        fValue = *(float *)val->buffer;
         val->mHasNewValue = 0;
-    } else {
+        fValue = *(float *)val->buffer;
+        return fValue;
+    }
+    {
         OSCValue newValue;
         newValue.mAddress = str;
         newValue.mHasNewValue = 0;
