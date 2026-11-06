@@ -734,32 +734,32 @@ void RndLine::UpdateLine(RndLine::Point *start, RndLine::Point *end) {
     // position of the nearest visible point. `mPoints.back()` is evaluated
     // once per block (the image hoists the bound out of the first loop and
     // counts with divwu, then re-evaluates it before MapVerts).
+    // w46-a (2026-11-06): written as a STRUCT COPY, not six int stores.
+    // Copying `Vector2` (unk[8..9]) and `Vector4` (unk[0..3]) moves exactly the
+    // same 8 and 16 bytes, but the wider copy is what stops MSVC converting the
+    // counted loop into a CTR loop: with the six int stores it emitted
+    // `mtctr`/`bdnz`/`stwu`, where the image has `addic.` + a condition branch
+    // and walks the destination at +0x0..+0xc.  Per loop the change removes an
+    // `mtctr`, a `bdnz` and a `stwu` and adds an `addic.`, and the six stores
+    // then land in the image's order.  Canonical 88.23669 -> 90.32840, fuzzy
+    // 85.39645 -> 87.82840, equal rows 167 -> 189 of 357, and the body does not
+    // shrink (1356 -> 1360 B against the image's 1352).
     if (&mPoints[0] == start) {
         Point *last = &mPoints.back();
         if (end + 1 <= last) {
-            int *endSide = &end->unk[8];
-            int *endView = &end->unk[0];
+            Vector2 *endSide = (Vector2 *)&end->unk[8];
+            Vector4 *endView = (Vector4 *)&end->unk[0];
             for (Point *p = end + 1; p <= last; p++) {
-                int *ptData = &p->unk[0];
-                ptData[8] = endSide[0];
-                ptData[9] = endSide[1];
-                ptData[0] = endView[0];
-                ptData[1] = endView[1];
-                ptData[2] = endView[2];
-                ptData[3] = endView[3];
+                *(Vector2 *)&p->unk[8] = *endSide;
+                *(Vector4 *)&p->unk[0] = *endView;
             }
         }
     } else if (&mPoints[0] < start) {
-        int *startSide = &start->unk[8];
-        int *startView = &start->unk[0];
+        Vector2 *startSide = (Vector2 *)&start->unk[8];
+        Vector4 *startView = (Vector4 *)&start->unk[0];
         for (Point *p = &mPoints[0]; p < start; p++) {
-            int *ptData = &p->unk[0];
-            ptData[8] = startSide[0];
-            ptData[9] = startSide[1];
-            ptData[0] = startView[0];
-            ptData[1] = startView[1];
-            ptData[2] = startView[2];
-            ptData[3] = startView[3];
+            *(Vector2 *)&p->unk[8] = *startSide;
+            *(Vector4 *)&p->unk[0] = *startView;
         }
     }
 
