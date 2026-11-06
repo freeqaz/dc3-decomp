@@ -309,10 +309,12 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
                         // Mix crossover bands using smoothed gains
                         *s = mBand2B2 * fVar3 + fVar2 * mBand0B2 + fVar4 * mBand1A1;
 
-                        // Smooth interpolated output mix coefficients
+                        // Smooth interpolated output mix coefficients.
+                        // Retail stores these 0B2, 1A1, 2B2 -- not in band
+                        // order -- so the store order is kept as written.
                         mBand0B2 = (mBand0B2 - mBand0B1) * mSmoothCoeff + mBand0B1;
-                        mBand2B2 = (mBand2B2 - mBand2B1) * mSmoothCoeff + mBand2B1;
                         mBand1A1 = (mBand1A1 - mBand1B2) * mSmoothCoeff + mBand1B2;
+                        mBand2B2 = (mBand2B2 - mBand2B1) * mSmoothCoeff + mBand2B1;
                         s += numChans;
                     }
                 }
@@ -348,25 +350,22 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
                             float zn1 = mBand1DelayZ1[chan];
                             mBand1DelayXn[chan] = *s;
                             mBand1DelayZ1[chan] = zn;
-                            // Spelled as one left-to-right chain, not as
-                            // `-(zn*cosCoeff - inner)`: retail negates x*b0 up
-                            // front (fneg f12 at 0x82E592A4) and then subtracts
-                            // zn*cosCoeff with fnmsubs, where the double
+                            // Retail negates x*b0 up front (fneg f12 at
+                            // 0x82E592A4) and subtracts zn*cosCoeff with
+                            // fnmsubs.  Written as one expression the double
                             // negation makes MSVC build the inner sum with the
-                            // opposite sign and fix it up at the fmadds.
-                            // w27-m: naming the negated product
-                            // (`float negXb = -(x * b0);` then `negXb + xn *
-                            // cosCoeff`) DOES reproduce the image's
-                            // fneg+fmadds pair here (measured: the fneg at
-                            // 0x82E592A4 lines up and the fmadds follows), but
-                            // it re-schedules the surrounding delay-line
-                            // loads/stores and costs 2.1pp overall
-                            // (91.153 -> 89.1 canonical).  Both spellings round
-                            // identically on the x*b0 term, so this is a
-                            // scheduling cost, not a semantics one.  Left
-                            // unlanded.
-                            float y = zn1 * b0
-                                + (-(x * b0) + xn * cosCoeff + xn2 - zn * cosCoeff);
+                            // opposite sign and fix it up at the fmadds;
+                            // accumulating into a named local pins the
+                            // association across the statements, so the fneg
+                            // survives and the chain ends fnmsubs.
+                            // w27-m named only the negated product and
+                            // re-scheduled the delay-line loads/stores for
+                            // -2.1pp; the accumulator form does not.
+                            float y = -(x * b0);
+                            y += xn * cosCoeff;
+                            y += xn2;
+                            y -= zn * cosCoeff;
+                            y = zn1 * b0 + y;
                             mBand1DelayZ[chan] = y;
                             *s = (x - y) * gainCur + x;
                         }
@@ -396,10 +395,14 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
                             mBand3DelayZ[chan][1] = zn;
                             // Retail accumulates left to right and subtracts
                             // the two poles with fnmsubs (0x82E59358 /
-                            // 0x82E5935C); the nested `-(a2*zn1 - -(...))`
-                            // spelling flips both into fmsubs.
-                            float out =
-                                b1 * xn + b0 * x + b2 * xn1 - a1 * zn - a2 * zn1;
+                            // 0x82E5935C).  As one expression MSVC reassociates
+                            // the pole terms into fmsubs pairs; accumulating
+                            // into a named local keeps the left-to-right order.
+                            float out = b1 * xn;
+                            out += b0 * x;
+                            out += b2 * xn1;
+                            out -= a1 * zn;
+                            out -= a2 * zn1;
                             mBand3DelayZ[chan][0] = out;
                             *s = out;
                         }
@@ -421,8 +424,11 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
                             // Same chain as band 3 (fnmsubs at 0x82E593B8 /
                             // 0x82E593BC), but retail's first product here is
                             // b0*x, not b1*xn.
-                            float out =
-                                b0 * x + b1 * xn + b2 * xn1 - a1 * zn - a2 * zn1;
+                            float out = b0 * x;
+                            out += b1 * xn;
+                            out += b2 * xn1;
+                            out -= a1 * zn;
+                            out -= a2 * zn1;
                             mBand4DelayZ[chan][0] = out;
                             *s = out;
                         }
