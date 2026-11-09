@@ -2414,7 +2414,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         );
         float vizY = height + yBase;
         if (it != endFrame) {
-            while (it < endFrame) {
+            while (it != endFrame) {
                 if (it->Seconds() >= endSeconds)
                     break;
                 Hmx::Color lineColor;
