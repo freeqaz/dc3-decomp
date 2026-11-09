@@ -2715,6 +2715,59 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
         // or callee differs either.  What is left is placement: the list
         // scheduler's store sinking plus the §8.7 commutative key on the six
         // `fmuls f31, f12` / `fmuls f12, f31` rows.
+        //
+        // w47-x (2026-11-09): seven source levers measured against the two
+        // surviving clusters (idx 499-538, 581-612); every one refuted.
+        // Baseline for each A/B: 739 instructions, 691 equal / 25 diff_arg /
+        // 9 replace / 7 insert / 7 delete, canonical 97.333336,
+        // fuzzy 97.13525.
+        //  - SetBoxExtent moved to the very end (after SetDeltaSize), the
+        //    Scale() calls left first: 91.8 canonical, 759 instructions,
+        //    623 equal.  The call's SOURCE POSITION is what hoists the two
+        //    `addi r10/r9, r1, 0x70/0x50` pointer materialisations, so there
+        //    is no "just put the box store where the image puts its stw's".
+        //    (w7-bx measured 90.5-92.1 at this lever with the inline
+        //    spelling; the named-local spelling below is the same 91.8.)
+        //  - SetBoxExtent between SetStartSize and SetSpeed: 91.6, 760
+        //    instructions, 627 equal.  No intermediate position exists.
+        //  - The four head Vector2s restructured into named locals
+        //    (bsX/bsY, bpX/bpY, erX/erY, lifeX/lifeY -- the tail's spelling
+        //    applied to the head): canonical 97.333336 UNCHANGED, fuzzy
+        //    97.12158, 690 equal, the SAME 25 rows at 499-538 plus one new
+        //    register diff_arg at 541.  This is the strongest evidence the
+        //    head is not a spelling problem: two structurally different
+        //    spellings emit the same sequence for the whole of 499-538.
+        //  - `scale * partsys->StartSize().x` on startX/startY/deltaX/deltaY:
+        //    byte-identical (739/25/9/7/7, canonical 97.333336).  Confirms
+        //    w7-bj and closes the last "flip the commutative operands from the
+        //    source" route -- MSVC canonicalises the tree, so the six
+        //    `f31,X` vs `X,f31` rows belong to the FPR allocator, not us.
+        //  - `float invFov` hoisted above SetBubbleSize: 688 equal, 51
+        //    mismatched, and the COMMUTATIVE count RISES 6 -> 9, because it
+        //    flips `fmuls X, f31` to `fmuls f31, X` on the BubbleSize /
+        //    BubblePeriod / Life rows, which the image wants value-first.
+        //    So declaration position does steer operand order -- but in the
+        //    wrong direction everywhere except StartSize/DeltaSize, and no
+        //    single position buys both.
+        //  - `float invFov` between SetBubbleSize and SetBubblePeriod:
+        //    689 equal, commutative 8.  The current position (between
+        //    SetBubblePeriod and SetEmitRate) is the best of the three probed.
+        //  - deltaX/deltaY scoped after SetSpeed: 95.1 canonical, 749
+        //    instructions, 685 equal -- but the commutative count falls
+        //    6 -> 2, i.e. that one move fixes exactly the four rows the image
+        //    wants param-first (589/591/593/595) and costs ~34 elsewhere by
+        //    displacing the box stores.  The two clusters are coupled through
+        //    one allocator state; nothing found pays for both.
+        // Mechanism, named rather than waved at: the head's divergence is
+        // base HOISTING `lfs f3, 0x158` (Life.x) to 499 and SINKING its store
+        // to 534 -- a 35-slot live range the image never has (image: load
+        // 511, mul 513, store 515) -- which is also why base needs f3/f4/f5
+        // here while the image stays inside f7-f13.  The tail's is base
+        // emitting the eight box `stw`'s at 592-606 (ASAP after the stack
+        // reloads at 577-590) where the image emits them at 602-610, after
+        // all six float stores.  Both are list-scheduling/colouring choices;
+        // the instruction, compare/branch and relocation multisets are equal
+        // (w27-c, w31-a), so nothing else is left to change from the source.
         Vector3 box1, box2;
         Scale(partsys->BoxExtent1(), scale, box1);
         Scale(partsys->BoxExtent2(), scale, box2);
