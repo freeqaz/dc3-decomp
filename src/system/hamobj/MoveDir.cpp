@@ -2087,8 +2087,7 @@ float MoveDir::DetectFrac(int player, int beat) {
 float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     if (!mFiltersEnabled)
         return y;
-    auto &_ref0 = mMovePlayerData;
-    HamMove *move = _ref0[0].mCurMove;
+    HamMove *move = mMovePlayerData[0].mCurMove;
     if (!move)
         return y;
 
@@ -2151,9 +2150,8 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     }
 
     // Draw play clip overlay if present
-    SkeletonClip *playClip = mPlayClip;
-    if (playClip) {
-        y = DrawPlayClip(y, playClip, TheTaskMgr.CurrentMeasure());
+    if (mPlayClip) {
+        y = DrawPlayClip(y, mPlayClip, TheTaskMgr.CurrentMeasure());
     }
 
     // Draw filter version name
@@ -2339,7 +2337,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     // Draw detect frames in range
     std::pair<DetectFrame *, DetectFrame *> detectRange(nullptr, nullptr);
     DetectRange(
-        _ref0[0].mDetectFrames,
+        mMovePlayerData[0].mDetectFrames,
         detectRange,
         TheTaskMgr.CurrentMeasure(),
         TheTaskMgr.CurrentMeasure()
@@ -2405,9 +2403,9 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         float startSeconds = BeatToSeconds(beatOffset - gBeatLineData.rangeOffset);
         float endSeconds =
             BeatToSeconds((float)(measureStart + 4) + gBeatLineData.rangeScale);
-        const DetectFrame *endFrame = &_ref0[0].mDetectFrames.back() + 1;
+        const DetectFrame *endFrame = &mMovePlayerData[0].mDetectFrames.back() + 1;
         const DetectFrame *it = std::lower_bound(
-            (const DetectFrame *)&_ref0[0].mDetectFrames.front(),
+            (const DetectFrame *)&mMovePlayerData[0].mDetectFrames.front(),
             endFrame,
             startSeconds,
             DetectFrameSecondsCmp()
@@ -2569,7 +2567,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                 int idx = 0;
                 for (std::set<DetectFrame *>::iterator sit = unkf88.begin();
                      sit != unkf88.end();
-                     ++sit) {
+                     ++sit, idx++) {
                     int row = idx / gridSize;
                     int col = idx % gridSize;
                     Hmx::Rect cellRect(
@@ -2588,7 +2586,6 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                     callbacks.push_back(this);
                     unk414 = (DancerSkeleton *)skel;
                     mDancerViz->Visualize(camInput, *skel, &callbacks, false);
-                    idx++;
                 }
             }
         }
