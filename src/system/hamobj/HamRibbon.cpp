@@ -478,6 +478,67 @@ void HamRibbon::ConstructMesh() {
         // two pointers 86.37, `begin()+faceIdx` 86.37, hoisting the Faces()
         // reference 85.12, two-shorts-only 87.88, `unsigned short nextIdx`
         // 88.35, casts at the call site inert.
+        //
+        // w-hamribbon (2026-11-09): re-derived on objdiff 4.2.9 and CONFIRMED
+        // w48-a exactly -- 90.96605 canonical / 90.25617 fuzzy, 1296 B vs
+        // 1288 B, 324 vs 322 instructions, 264 equal / 43 diff_arg / 2 replace
+        // / 13 insert / 15 delete.  Nothing has drifted and there is still no
+        // behaviour defect: after the two guard rows are paired up the en-bloc
+        // multiset delta is again EXACTLY two rows, one `clrlwi` and the
+        // `addi r8,r11,0x6`.  The guards are only *scrambled*: the image's
+        // `twllei` (idx 129) sits against our `twi 5,r11,-1`, and our `twllei`
+        // (idx 124) sits against the image's `twi 5,r4,-1` (idx 139) -- the two
+        // traps are identical in both and net to zero.  So "13 inserts + 15
+        // deletes means the control flow or a block's contents differ" is
+        // FALSE; it is one register-rotation.
+        //
+        // The mechanism, named (this is the part earlier notes left as "pure
+        // scheduler"): the face loop's loop-carried/allocation seed is a single
+        // coin-flip.  Ours: seg=r28, hoisted `1-base`(subfic)=r29, `%` mask
+        // temp=r30, idx=r27.  Image: seg=r29, `1-base`=r30, idx=r28,
+        // nextIdxUp=r27, and the mask temp in VOLATILE r4.  Because the image's
+        // temp is r4, `andc r4,r11,r4` cannot fold into the divisor and r11
+        // (mNumSides) SURVIVES it -- which is what lets the image emit
+        // `add r11,r11,r6` (nextIdxUp) at 0x64, AFTER `twllei`, and what pushes
+        // the guard later.  Ours writes `andc r11,r11,r30`, overwriting the
+        // divisor in place: "divisor dies here", so nextIdxUp is pulled up to
+        // idx 119 and every one of the 22 insert/delete rows plus all 43
+        // diff_arg rows from idx 94 on follow from it.  The verts loop carries
+        // an independent 2-cycle of the same kind: ours geom=r27, v=r30,
+        // vertIdx=r29, boneIdx=r28; image geom=r28, v=r29, vertIdx=r30,
+        // boneIdx=r27.  Those 28 diff_arg rows are the same rotation.
+        //
+        // New levers measured THIS lane, all reverted -- do not repeat:
+        //   * moving `int nextIdxUp` out of the declaration group, to just
+        //     above the first Set(): BYTE-IDENTICAL.
+        //   * `f = &mMesh->Faces()[faceIdx] + 1;` instead of
+        //     `&mMesh->Faces()[faceIdx + 1]` -- the specific hypothesis for the
+        //     image's dead `addi r8,r11,0x6` (a pointer+1 materialisation).
+        //     MSVC folds both to the same 6/8/10(r11) displacements:
+        //     BYTE-IDENTICAL.  So the dead addi is scheduling, not a different
+        //     spelling, which confirms w48-a's stance by construction.
+        //   * swapping the `int vertIdx` / `int boneIdx` declarations in the v
+        //     loop: BYTE-IDENTICAL (the allocator is insensitive to declaration
+        //     order here -- matches w48-a's 24-order result).
+        //   * `int vertIdx = v * mNumSides + vertBase;` (commutative reorder):
+        //     BYTE-IDENTICAL.
+        //   * `RndMesh::Vert &vert = verts[vertIdx];` then vert.pos/norm/
+        //     boneIndices/boneWeights/tex: 83.7 canonical / 82.3 fuzzy, equal
+        //     264 -> 228, 343 rows.  Confirms the image genuinely re-derives
+        //     `_M_start` FIVE times (`lwz r11,0x100` + `add`), so the
+        //     `verts[vertIdx].field` spelling is already correct -- do not
+        //     "tidy" it into a reference.
+        // Cross-check against og-dc3-decomp's HamRibbon.cpp: it writes
+        // `(seg * mNumSides + side) * 2` and three `Faces()[faceIdx].v1/v2/v3`
+        // field stores.  The image's `slwi r3,r10,1` hoisted out of the side
+        // loop plus the per-iteration `addi r10,r10,1` prove the image uses
+        // OUR base-hoisted spelling, so the reference is not an improvement
+        // (and the field-store form is already refuted at 85.6/86.37).
+        //
+        // Conclusion: the DAG is identical on both sides; only MSVC's
+        // callee-saved assignment seed differs.  No source lever exists that
+        // changes the DAG without making the code worse, so 90.96605 is the
+        // honest number for this row.
         for (int seg = 0; seg < mNumSegments; seg++) {
             int base = seg * mNumSides * 2;
             for (int side = 0; side < mNumSides; side++) {
