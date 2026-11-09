@@ -13,6 +13,7 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -47,8 +48,13 @@ _BATCH_TO_DB_SCHEDULE = [
 _BATCH_TO_DB_HASH = compute_schedule_hash(_BATCH_TO_DB_SCHEDULE)
 
 
-def process_unit(name, decomp_path, orig_path, timeout=5_000_000):
-    """Process all functions in a unit.
+def process_unit(name, decomp_path, orig_path, timeout=5_000_000, only=None):
+    """Process a unit's functions.
+
+    `only`, when given, is a set of symbol names to restrict to. That is how a
+    targeted refresh (say, the native frontier's non-100 rows) reaches the same
+    classifier and the same DB writer as a full sweep, instead of growing a
+    second implementation of either.
 
     Returns list of result dicts with keys: symbol, verdict, class, confidence.
     """
@@ -67,6 +73,8 @@ def process_unit(name, decomp_path, orig_path, timeout=5_000_000):
     common = _find_common_text_symbols(decomp_coff, orig_coff)
 
     for sym_name in common:
+        if only is not None and sym_name not in only:
+            continue
         verdict = None
         div_class = None
         confidence = None
@@ -139,9 +147,9 @@ def process_unit(name, decomp_path, orig_path, timeout=5_000_000):
 
 def _worker(args):
     """Top-level worker for ProcessPoolExecutor (must be picklable)."""
-    name, decomp_path, orig_path, timeout = args
+    name, decomp_path, orig_path, timeout, only = args
     try:
-        results = process_unit(name, decomp_path, orig_path, timeout)
+        results = process_unit(name, decomp_path, orig_path, timeout, only)
         return (name, results, None)
     except Exception as e:
         return (name, [], str(e))
@@ -199,7 +207,33 @@ def main():
                         help="Re-test all functions (ignore existing DB verdicts)")
     parser.add_argument("--timeout", type=int, default=5_000_000,
                         help="Unicorn execution timeout in microseconds (default: 5000000)")
+    parser.add_argument("--symbols", type=str, default=None,
+                        help="Restrict to the symbols listed in this file (one per line, "
+                             "or a JSONL of records with a 'symbol' key). Units are derived "
+                             "from the DB, so only the units those symbols live in are opened.")
     args = parser.parse_args()
+
+    only = None
+    if args.symbols:
+        only = set()
+        with open(args.symbols) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                if line.startswith("{"):
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if rec.get("symbol"):
+                        only.add(rec["symbol"])
+                else:
+                    only.add(line)
+        if not only:
+            print(f"ERROR: --symbols {args.symbols} contained no symbols", file=sys.stderr)
+            return 1
+        print(f"Restricting to {len(only)} symbols from {args.symbols}", file=sys.stderr)
 
     # Initialize DB (runs migrations if needed)
     conn = init_database(args.db)
@@ -219,8 +253,34 @@ def main():
                 unit_name = name
                 break
         units = [(unit_name, decomp_path, orig_path)]
+    elif only is not None:
+        unit_of = {}
+        for sym in only:
+            row = conn.execute(
+                "SELECT unit FROM functions WHERE symbol = ?", (sym,)).fetchone()
+            if row and row[0]:
+                unit_of[sym] = row[0]
+        units = [u for u in get_all_units() if u[0] in set(unit_of.values())]
+        covered = {u[0] for u in units}
+        # A symbol whose DB unit names no objdiff unit would be requested and
+        # then never run -- reported as silence, which reads as "nothing left
+        # to do". Say so instead of returning a clean-looking summary.
+        unresolved = sorted(s for s, u in unit_of.items() if u not in covered)
+        resolved = len(only) - len(unresolved)
+        print(f"  {resolved}/{len(only)} symbols resolved to {len(units)} units",
+              file=sys.stderr)
+        if unresolved:
+            print(f"  WARNING: {len(unresolved)} requested symbols name no testable "
+                  f"unit and will not be run", file=sys.stderr)
+            for sym in unresolved[:10]:
+                print(f"    {sym}", file=sys.stderr)
     else:
         units = get_all_units()
+
+    # --symbols implies an explicit re-test request; a unit filter on
+    # "has untested functions" would drop exactly the rows we asked for.
+    if only is not None:
+        args.force = True
 
     # If not --force, filter out units where all functions already have verdicts
     if not args.force:
@@ -269,13 +329,14 @@ def main():
     total_updated = 0
     total_missing = 0
     done = 0
+    tested = set()
 
-    work = [(name, dp, op, args.timeout) for name, dp, op in units]
+    work = [(name, dp, op, args.timeout, only) for name, dp, op in units]
 
     if args.jobs == 1:
         # Single-threaded: write to DB after each unit
-        for name, dp, op, timeout in work:
-            results = process_unit(name, dp, op, timeout)
+        for name, dp, op, timeout, only_ in work:
+            results = process_unit(name, dp, op, timeout, only_)
             done += 1
 
             if not results:
@@ -284,6 +345,7 @@ def main():
                 continue
 
             # Count verdicts
+            tested.update(r["symbol"] for r in results)
             eq = sum(1 for r in results if r["verdict"] == "EQUIVALENT")
             div = sum(1 for r in results if r["verdict"] == "DIVERGENT")
             err = sum(1 for r in results if r["verdict"] == "ERROR")
@@ -319,6 +381,7 @@ def main():
                           file=sys.stderr)
                     continue
 
+                tested.update(r["symbol"] for r in results)
                 eq = sum(1 for r in results if r["verdict"] == "EQUIVALENT")
                 div = sum(1 for r in results if r["verdict"] == "DIVERGENT")
                 err = sum(1 for r in results if r["verdict"] == "ERROR")
@@ -351,6 +414,20 @@ def main():
     print(f"  ERROR:       {total_err}", file=sys.stderr)
     print(f"  SKIPPED:     {total_skip}", file=sys.stderr)
     print(f"DB writes: {total_updated} updated, {total_missing} not found in DB", file=sys.stderr)
+
+    # A requested symbol that never ran keeps whatever verdict it already had,
+    # with its original unicorn_tested_at -- indistinguishable from a row this
+    # run re-confirmed unless it is named. Silence here reads as "nothing left
+    # to do", which is the opposite of the truth for an unpaired name.
+    if only is not None:
+        not_run = sorted(set(only) - tested)
+        print(file=sys.stderr)
+        print(f"Requested: {len(only)}  ran: {len(tested)}  not run: {len(not_run)}",
+              file=sys.stderr)
+        if not_run:
+            print("NOT RUN -- these keep their previous (stale) verdict:", file=sys.stderr)
+            for sym in not_run:
+                print(f"  {sym}", file=sys.stderr)
 
     # Print verdict/class distribution from DB
     print(file=sys.stderr)
