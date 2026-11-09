@@ -209,17 +209,29 @@ the fresh report against `decomp.db` by symbol:
 | COMPLETE by verdict but still short | — | 860 | 0.2 % |
 
 **Most of the gap is no longer "missing code", but 18 % of it still is.**
-**269 authorable functions / 82,088 bytes** have no base-side body at all:
+**257 authorable functions / 82,028 bytes** have no base-side body at all — each
+confirmed by diffing it with objdiff (`base_size == 0`), not inferred from the
+report:
 
-- **185 fns / 78,568 B — `default/lib/binkxenon/**`.** RAD Game Tools'
-  closed-source Bink video decoder. There is no reference to port from and the
-  native port does not want it (it uses FFmpeg), so these are **permanently
-  unwritten by design**. They are 17.1 % of the gap in bytes and 28.7 % of it in
-  functions, and they are the single biggest reason the byte headline reads 92.85 %
-  rather than 98 %.
+- **185 fns — `default/lib/binkxenon/**`.** RAD Game Tools' closed-source Bink
+  video decoder. There is no reference to port from and the native port does not
+  want it (it uses FFmpeg), so these are **permanently unwritten by design**.
+  They are the single biggest reason the byte headline reads 92.85 % rather than
+  98 %.
 - **76 fns — `default/link_glue`**, the pseudo-unit of symbols the decomp emits
   purely to make the Xbox link succeed.
-- 8 stragglers in `system`.
+- 8 stragglers in `system`, of which **2 are real and native-critical** — see
+  [Stubs](#stubs).
+
+⚠ **`fuzzy_match_percent == null` in `report.json` does NOT mean "no body".**
+12 of the 269 rows this section originally counted that way — `floor0_*`,
+`curlx_uztosz`, `zcfree`, `jpeg_get_small`, `??6FormatString` … — **diff to
+100 % with zero mismatches** when measured live. They are report-side
+masked-equal rows (`measures.masked_equal_functions`), not missing code. The
+byte effect of the correction is small (60 B) because the report also gives them
+a degenerate size, but the *function count* was overstated by 12, and any
+worklist built from that column would have sent a lane to implement functions
+that already match. Verify with a diff, never with the column.
 
 Everything else below 100 is a *partial match*, and **zero** authorable functions
 sit at literally 0 %.
@@ -291,23 +303,35 @@ list it cannot appear on.
 
 ## Stubs
 
-`is_stub = 1`, non-excluded: **10 functions / 5,736 bytes** as of 2026-11-09
+`is_stub = 1`, non-excluded: **18 functions / 7,368 bytes** as of 2026-11-09
 (it was 455 / 113,688 in the 2026-08 measurement — stub reconstruction has
 essentially finished). These are bodies we never wrote — the target has code,
-our source has `{}` or `return 0`.
+our source has `{}` or `return 0`. Each of the 18 was confirmed live with
+objdiff (`base_size == 0`); 8 were added on 2026-11-09 by a sweep of every row
+`report.json` scores as null.
 
 | Unit | stubs | bytes |
 |---|--:|--:|
 | `default/system/synth_xbox/FFT` | 2 | 5,176 |
+| **`default/system/rndobj/Mesh`** | **2** | **1,060** |
 | `default/system/synth_xbox/Synth` | 4 | 224 |
+| `default/system/os/Debug` | 1 | 160 |
+| `default/system/ui/UI` | 1 | 132 |
+| `default/system/synth_xbox/SynthSample` | 1 | 132 |
 | `default/system/synth_xbox/HeadsetPlaybackEffect` | 1 | 100 |
 | `default/system/synth_xbox/GainEffect` | 1 | 100 |
+| `default/system/obj/TypeProps` | 1 | 100 |
 | `default/system/hamobj/MoveDir` | 1 | 96 |
 | `default/system/utl/Locale` | 1 | 40 |
+| `default/system/zlib/ZlibLicense` | 1 | 24 |
+| `default/system/jpeg/jcmaster` | 1 | 24 |
 
-The tail are trivial; `FFT` is the whole remaining stub story and it is the
-Xbox-only synth FFT cluster (`fft_altivec`, `fft_recursive`), which also owns
-three of the worst partial matches below 90 %.
+**`rndobj/Mesh` is the interesting row**: `fn_8263A360` (556 B) and `fn_8263A168`
+(504 B) are unnamed in `symbols.txt` and have no body in our tree — the only
+remaining stubs in shared engine code that the native port actually runs. Unlike
+`FFT` they are not Xbox-only, so they are the best remaining stub-reconstruction
+target. `FFT` (`fft_altivec`, `fft_recursive`) is Xbox-only and also owns three
+of the worst partial matches below 90 %.
 
 
 A stub's `current_percent` is the least trustworthy number in the table:
@@ -502,7 +526,7 @@ Ordered by how tractable the shape is, not by size. **Every row re-measured
 | Shape | size | where to start |
 |---|---|---|
 | **310 unverdicted rows** | 94,116 B | Nobody has looked. Cheapest possible triage; 108 of them (43,904 B) are below 100 % in the report, the rest already score 100 and just need the verdict written. |
-| **10 stubs** | 5,736 B | Down from 455 / 113,688. `synth_xbox/FFT` is 5,176 B of it — Xbox-only. |
+| **18 stubs** | 7,368 B | Down from 455 / 113,688. `synth_xbox/FFT` is 5,176 B of it — Xbox-only; **`rndobj/Mesh` (2 fns, 1,060 B) is the only native-critical pair left.** |
 | **0 authorable functions at literally 0 %** | 0 B | The 813-row / 116,956 B population is gone; what remains at 0 % is XDK and Bink only. |
 | **95 rows at 100 % normalized but < 100 % fuzzy** | 82,192 B | **Register permutation only** — callee-saved rotations. Closing these banks 82 KB of `matched_code` and moves `match_percent_normalized` by exactly 0. Do not look for a wrong offset here. |
 | **281 partial rows below 100 % normalized** | 294,748 B | The real codegen/semantic frontier. 73 % of it carries an AT_LIMIT cert, and 45 % of the cert population is already stale (see above), so re-measure before believing a cert. |
