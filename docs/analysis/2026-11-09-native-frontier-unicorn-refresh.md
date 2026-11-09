@@ -91,11 +91,53 @@ per side (STACK / OBJECT / GLOBAL / RDATA / TRAMPOLINE, 64 KB each).
 
 ## Unrunnable (5)
 
-- `fn_825CCF20`
-- `merged_ObjPtrListRemove`
-- `fn_8277AFC0`
-- `fn_8263A168`
-- `fn_8263A360`
+All five are names that exist only on the TARGET side, and none of them is
+unwritten source — each is a duplicate copy of a function that is already
+implemented and already scored under its other name. This was checked one at a
+time, not inferred from the `fn_` prefix (two of the five are not `fn_`-shaped):
+
+| symbol | what it is | where it is documented |
+|---|---|---|
+| `fn_8263A168` | 2nd copy of `static PackVector` (rndobj/Mesh). The NAMED copy is at **100.0/100.0**. | `src/system/rndobj/MeshVertCompress.h:18-102`; the rebind was performed and measured as an exact wash (31356 → 31356 matched) |
+| `fn_8263A360` | 2nd copy of `static FillCompressedVertex`. Named copy is 99.95683 / 8 rows. | same file; residual is scheduler-picked, three source orderings measured byte-inert |
+| `fn_8277AFC0` | 2nd copy of `static TerminateCallback` (ui/UI). | `src/system/ui/UI.cpp:130-143` |
+| `fn_825CCF20` | 2nd copy of `DebugModal` (os/Debug). Audited **40/40 instructions equal**. | `src/system/os/Debug.cpp:161-176` |
+| `merged_ObjPtrListRemove` | ICF alias of a function that is already tested under its real mangled name. | — |
+
+All five rows are `unicorn_verdict IS NULL` in `decomp.db`, i.e. never tested
+rather than tested-and-stale. `batch_to_db.py --symbols` now prints them as
+`NOT RUN` and names them, so a targeted refresh cannot return a clean summary
+while quietly skipping the rows it could not test.
+
+## Written into decomp.db
+
+`python3 scripts/unicorn/batch_to_db.py --symbols <223> -j 4` wrote 218 rows
+through the same `classify_divergence` + `write_results_to_db` path a full
+sweep uses, so the table holds one definition of each class rather than a
+second implementation living beside it. `unicorn_tested_at` = 2026-11-09 on all
+218; confidence 115 `high` / 52 `stable_divergent` / 51 `input_sensitive`.
+
+**The two classifiers agree row-for-row.** This document's region test (built
+from `memory_map` constants independently of the classifier) and the canonical
+`classify_divergence` give the same class on **68 of 71** rows directly; the
+remaining 3 are `memory_mismatch` rows, whose canonical rule is the same
+harness-address test applied to stored object words (`comparator.py:650-667`),
+and they agree once that branch is included. The 71 canonical rows:
+
+| class | rows |
+|---|---|
+| `data_layout` | 45 |
+| `cap_exhausted` | 10 |
+| `stack_layout` | 8 |
+| `wild_jump_match` | 6 |
+| `scratch_return_reg` | 2 |
+
+**Zero rows fall in any real-defect class** — no `call_arg`, `call_count`,
+`return_value`, `logic`, `object_memory` or `error`.
+
+The 51 `input_sensitive` rows deserve their own caveat: they are rows whose
+verdict changed between the zero-fill and 0xCD-fill fixtures, so a single
+fixture's verdict on those is not stable. They are recorded, not adjudicated.
 
 ## Bottom line
 
