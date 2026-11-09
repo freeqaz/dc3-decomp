@@ -150,12 +150,25 @@ def find_notes(path, short=None, window=250, after=600):
         for i, ln in enumerate(lines):
             if not pat.search(ln):
                 continue
-            # the signature may wrap over several lines before its `{`
+            # The signature may wrap over several lines before its `{`:
             #   void Foo::Bar(
             #       const T &x
             #   ) const {
-            lookahead = [ln] + lines[i + 1 : i + 5]
-            body_like = any(l.rstrip().endswith("{") for l in lookahead)
+            # But only scan forward until the first terminator -- a `;` means
+            # this was a CALL, and stopping there is what keeps
+            #   return GetSweepAmount() > 0.0f;      <- call, ends in ';'
+            #   void Foo::Bar(...) {                 <- NEXT function
+            # from anchoring on the call. (It did exactly that to
+            # ArcDetector::GetSwipeAmount, landing on line 373 inside
+            # IsPathAcceptable instead of the definition.)
+            body_like = False
+            for l in [ln] + lines[i + 1 : i + 5]:
+                t = l.rstrip()
+                if t.endswith("{"):
+                    body_like = True
+                    break
+                if t.endswith(";"):
+                    break
             if body_like and re.match(
                 r"^[\w:*&<>\s]*\b" + name + r"\s*\(", ln.lstrip()
             ):

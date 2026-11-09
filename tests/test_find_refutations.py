@@ -124,3 +124,25 @@ def test_short_name_from_mangled_and_demangled():
         mod._short_name("public: void __cdecl RndScaleObject(class Hmx::Object *, float)")
         == "RndScaleObject"
     )
+
+
+def test_anchor_prefers_the_definition_over_a_call_three_lines_earlier(tmp_path):
+    """Regression: a call that ends in `;` must NOT be treated as a definition
+    just because the NEXT function's `{` is a few lines below. That bug anchored
+    ArcDetector::GetSwipeAmount at line 373 (inside IsPathAcceptable) instead of
+    263, and the window then covered an unrelated function."""
+    body = """bool ArcDetector::IsPathAcceptable() const {
+    return GetSwipeAmount() > 0.0f;
+}
+
+float ArcDetector::GetSwipeAmount() const {
+    // w21-n: this is the note that matters
+    return mSwipeExtentX;
+}
+"""
+    f = write(tmp_path, body)
+    rc, out = run("?GetSwipeAmount@ArcDetector@@QBAMXZ", "--file", f)
+    assert rc == 0, out
+    def_line = body.splitlines().index("float ArcDetector::GetSwipeAmount() const {") + 1
+    assert f"function at line {def_line}" in out, out
+    assert "w21-n" in out
