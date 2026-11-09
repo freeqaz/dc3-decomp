@@ -38,15 +38,24 @@ denominators and they will never agree.
 |---|---|---|
 | Source | `build/373307D9/report.json` (objdiff) | `decomp.db` (`functions` table) |
 | Question it answers | *Does our build produce the target's bytes?* | *Has a human or agent adjudicated this function?* |
-| Denominator | 32,213 authorable functions | 31,425 non-excluded rows |
-| Headline | **91.36 %** functions (29,430 / 32,213) | **COMPLETE 28,722 + AT_LIMIT 1,618** |
-| Byte headline | **78.19 %** code bytes (4,959,996 / 6,343,156) | — (the DB's byte sums are not a build measurement) |
-| Units | 420 / 967 authorable units complete (43.43 %) | — |
-| Remaining | 2,783 fns / 1,233,052 bytes | 1,085 rows with no verdict |
+| Denominator | 32,419 authorable functions | 31,458 non-excluded rows |
+| Headline | **98.30 %** functions (31,869 / 32,419) | **COMPLETE 30,252 + AT_LIMIT 905 = 99.04 %** |
+| Byte headline | **92.85 %** code bytes (5,964,136 / 6,423,164) | — (the DB's byte sums are not a build measurement) |
+| Units | 798 / 1,000 authorable units complete (79.80 %) | — |
+| Remaining | 645 fns / 459,028 bytes | 301 rows with no verdict |
 
-**Always state the denominator.** "91.36 %" and "COMPLETE + AT_LIMIT = 96.55 %"
+> Figures in this table re-measured **2026-11-09** on `c89fa469d`. "Authorable"
+> here means *everything outside `default/xdk/**`* — the same filter the
+> 2026-08 version of this table used — so it still counts the 185 RAD Bink
+> functions in `default/lib/binkxenon/**`, which will never be written (the
+> native port uses FFmpeg). The 2026-08 row read 91.36 % / 78.19 % / 2,783 fns
+> and is superseded; the denominators grew slightly (32,213 → 32,419,
+> 31,425 → 31,458) because functions kept being written, so this is progress on
+> the same filter, not a redefinition.
+
+**Always state the denominator.** "98.30 %" and "COMPLETE + AT_LIMIT = 99.04 %"
 are both true and describe different facts: the first is a build measurement,
-the second is a bookkeeping measurement that includes 1,618 rows certified
+the second is a bookkeeping measurement that includes 905 rows certified
 *unfixable*.
 
 The DONE-WITH-CERTS denominator fell **33,560 → 31,425** on 2026-08-17/18, when
@@ -57,11 +66,14 @@ spellings and unreferenced inline COMDATs. They were excluded, not deleted
 before that date is on the old denominator and is not comparable to this one.
 
 A third number floats around and should be labelled when used: the **XEX-total**
-(XDK-diluted) headline of **60.91 % functions / 43.62 % bytes**. It divides by
-the whole 11.37 MB image including 5.03 MB (44.2 %) of Microsoft XDK and RAD
-Bink code that has no source in this repo and never will. It is permanently
-capped near 56 % and is only useful for "how much of the shipped image do we
-reproduce".
+(XDK-diluted) headline of **65.98 % functions / 52.48 % bytes** (31,909 / 48,365
+and 5,969,932 / 11,374,864 bytes). It divides by the whole 11.37 MB image
+including **5.02 MB (44.2 %) of Microsoft XDK and RAD Bink code** that has no
+source in this repo and never will — 15,894 of the 16,163 unwritten functions
+are `default/xdk/**` (the D3DXShader compiler, XGRAPHICS, ST) and 185 are
+`default/lib/binkxenon/**`. It is capped near 56 % by construction and is only
+useful for "how much of the shipped image do we reproduce". **Never quote it as
+game work.**
 
 ### Regenerating them
 
@@ -179,80 +191,124 @@ not. The audit split those 272 into:
 
 ---
 
-## What the remaining 1.25 MB is made of
+## What the remaining 449 KB is made of
 
-2,783 authorable functions / 1,233,052 bytes are below 100 % normalized. Joining
-the fresh report against `decomp.db` by symbol (2,779 fns / 1,233,008 B resolve;
-the residue is name-shape mismatch):
+> Re-measured **2026-11-09** on `c89fa469d`, same authorable filter as above
+> (everything outside `default/xdk/**`). The previous version of this section
+> said 2,783 authorable functions / 1,233,052 bytes; that is superseded, and the
+> drop is real work rather than a changed definition.
+
+**645 authorable functions / 459,028 bytes** are below 100 % *fuzzy*. Joining
+the fresh report against `decomp.db` by symbol:
 
 | Shape | fns | bytes | share of gap |
 |---|--:|--:|--:|
-| Certified **AT_LIMIT** | 1,618 | 924,696 | 75 % |
-| **Unverdicted** (no adjudication at all) | 1,050 | 274,576 | 22 % |
-| In the report, absent from the DB | 111 | 33,736 | 3 % |
+| Certified **AT_LIMIT** | — | 337,736 | 73.6 % |
+| DB says COMPLETE, report says fuzzy < 100 | 95 | 82,192 | 17.9 % |
+| **Unverdicted** (no adjudication at all) | — | 38,240 | 8.3 % |
+| COMPLETE by verdict but still short | — | 860 | 0.2 % |
 
-Cross-cutting (these overlap the rows above, they are not extra): **452 fns /
-112,260 bytes** are flagged `is_stub` and still non-zero, and **813 functions /
-116,956 bytes sit at literally 0 %** — 9.5 % of the gap in bytes but **29 % of
-the gap in functions**, which is usually a missing implementation rather than a
-codegen fight.
+**Most of the gap is no longer "missing code", but 18 % of it still is.**
+**269 authorable functions / 82,088 bytes** have no base-side body at all:
+
+- **185 fns / 78,568 B — `default/lib/binkxenon/**`.** RAD Game Tools'
+  closed-source Bink video decoder. There is no reference to port from and the
+  native port does not want it (it uses FFmpeg), so these are **permanently
+  unwritten by design**. They are 17.1 % of the gap in bytes and 28.7 % of it in
+  functions, and they are the single biggest reason the byte headline reads 92.85 %
+  rather than 98 %.
+- **76 fns — `default/link_glue`**, the pseudo-unit of symbols the decomp emits
+  purely to make the Xbox link succeed.
+- 8 stragglers in `system`.
+
+Everything else below 100 is a *partial match*, and **zero** authorable functions
+sit at literally 0 %.
+
+The rest of the missing-function mass is entirely outside the game: **16,163
+functions / 5,023,916 bytes** have no base-side counterpart tree-wide, and
+15,894 of those are `default/xdk/**` (the Xbox SDK — the D3DXShader compiler,
+XGRAPHICS, ST). Neither XDK nor Bink is on the native critical path, which is
+why the XEX-total headline looks far worse than the game code does.
+
+### Two pots, and they need different tools
+
+| pot | fns | bytes | what closes it |
+|---|--:|--:|---|
+| below 100 % **normalized** | 550 | 376,836 | real codegen/semantic work |
+| at 100 % normalized, below 100 % **fuzzy** | 95 | 82,192 | **register permutation only** |
+
+The second pot is the one that is easy to misread. `match_percent_normalized`
+forgives register permutation, so these rows score a clean 100 and still bank
+**nothing**: `matched_code` only banks at fuzzy == 100. Whole-binary that gap is
+`complete_code − matched_code` = **374,640 bytes**. On the 95 authorable rows
+the residue is callee-saved **rotations** (`r14←15←16`, `r22←23←24`) — one
+allocation decision, not one wrong value — so they cannot be closed by fixing an
+offset or a constant, and they do not move `match_percent_normalized` at all.
+The sharpest example: `SongSequence::OnSongLoaded` is 3,440 B, 860 instructions,
+**71 diff_arg rows and 0 other mismatches**, all six of them a rotation. Quote
+whichever axis you mean.
 
 **Cert rot is gone.** The 875-row "DB says COMPLETE, report says otherwise"
 slice was closed by task #101: `verdict = 'COMPLETE' AND
 match_percent_normalized < 100` now returns **zero** rows. Do **not** re-derive
-this check from `current_percent` — that column holds the *fuzzy* percent, and
-374 COMPLETE rows are below 100 fuzzy while sitting at exactly 100 normalized.
-Quoting it would resurrect a phantom 374-row rot population that does not exist.
+this check from `current_percent` — that column holds the *fuzzy* percent, so
+the 95 COMPLETE rows in the table above are below 100 fuzzy while sitting at
+exactly 100 normalized. Quoting `current_percent` would present them as rot.
+They are the register-permutation pot.
 
 ### By subsystem
 
-Top authorable subsystems by remaining bytes:
+Top authorable subsystems by remaining bytes (2026-11-09):
 
-| Subsystem | remaining bytes |
-|---|--:|
-| `rndobj` | 241,800 |
-| `hamobj` | 199,480 |
-| `char` | 115,940 |
-| `synth_xbox` | 69,952 |
-| `meta_ham` | 65,872 |
-| `world` | 64,496 |
-| `os` | 60,212 |
-| `gesture` | 59,276 |
-| `utl` | 53,988 |
+| Subsystem | remaining bytes | share of its own code |
+|---|--:|--:|
+| `rndobj` | 84,876 | 8.7 % |
+| `binkxenon` | 78,568 | **100 %** (by design, see above) |
+| `hamobj` | 58,876 | 7.1 % |
+| `char` | 34,376 | 5.5 % |
+| `world` | 30,196 | 9.0 % |
+| `synth_xbox` | 24,512 | 17.1 % |
+| `os` | 20,956 | 9.3 % |
+| `gesture` | 20,508 | 10.0 % |
+| `rnddx9` | 16,836 | 19.6 % |
+| `net` | 12,648 | 5.4 % |
+| `obj` | 11,308 | 5.4 % |
+| `utl` | 10,532 | 5.0 % |
 
-Absolute bytes flatter the big subsystems. As a *fraction of its own code*, the
-two worst are the reference-less deserts:
-
-- **`synth_xbox` — 48.9 % unmatched** (69,952 of 142,928 bytes)
-- **`rnddx9` — 43.8 % unmatched** (37,680 of 86,020 bytes)
-
-Together they hold **271 stubs / 76,236 bytes**. These are Xbox-specific audio
-and Direct3D 9 back-ends with no counterpart in the RB3 tree, so there is no
+As a *fraction of its own code*, the two worst are still the reference-less
+deserts: **`rnddx9` — 19.6 % unmatched** (16,836 of 86,020 bytes) and
+**`synth_xbox` — 17.1 %** (24,512 of 142,928). These are Xbox-specific audio and
+Direct3D 9 back-ends with no counterpart in the RB3 tree, so there is no
 reference implementation to port from — they have to be reconstructed from the
 target assembly. That work is largely *metric-invisible* in the sense that it
 fixes real behaviour long before it moves a percentage.
+
+`binkxenon` is at 100 % unmatched and is **not** work: it is the closed Bink
+decoder described above. Exclude it when ranking by fraction, or it dominates a
+list it cannot appear on.
 
 ---
 
 ## Stubs
 
-`is_stub = 1`, non-excluded: **455 functions / 113,688 bytes**. These are bodies
-we never wrote — the target has code, our source has `{}` or `return 0`.
-
-By subsystem: `synth_xbox` 216, `os` 92, `rnddx9` 51. The largest single files:
+`is_stub = 1`, non-excluded: **10 functions / 5,736 bytes** as of 2026-11-09
+(it was 455 / 113,688 in the 2026-08 measurement — stub reconstruction has
+essentially finished). These are bodies we never wrote — the target has code,
+our source has `{}` or `return 0`.
 
 | Unit | stubs | bytes |
 |---|--:|--:|
-| `default/system/os/PlatformMgr_Xbox` | 67 | 12,420 |
-| `default/system/synth_xbox/ExternalMic` | 43 | 6,312 |
-| `default/system/synth_xbox/Synth` | 41 | 9,280 |
-| `default/system/synth_xbox/GranularSynth` | 15 | 3,872 |
-| `default/system/rnddx9/ShaderMgr` | 13 | 1,304 |
-| `default/system/synth_xbox/Mic` | 12 | 4,972 |
-| `default/system/rnddx9/Tex` | 11 | 6,532 |
-| `default/system/os/NetworkSocket_Win` | 10 | 1,436 |
-| `default/system/synth_xbox/PitchDetector` | 9 | 2,168 |
-| `default/system/rnddx9/Mesh` | 9 | 4,040 |
+| `default/system/synth_xbox/FFT` | 2 | 5,176 |
+| `default/system/synth_xbox/Synth` | 4 | 224 |
+| `default/system/synth_xbox/HeadsetPlaybackEffect` | 1 | 100 |
+| `default/system/synth_xbox/GainEffect` | 1 | 100 |
+| `default/system/hamobj/MoveDir` | 1 | 96 |
+| `default/system/utl/Locale` | 1 | 40 |
+
+The tail are trivial; `FFT` is the whole remaining stub story and it is the
+Xbox-only synth FFT cluster (`fft_altivec`, `fft_recursive`), which also owns
+three of the worst partial matches below 90 %.
+
 
 A stub's `current_percent` is the least trustworthy number in the table:
 `scripts/sync_match_percent.py` drops any report entry with no
@@ -283,8 +339,15 @@ holds 3,796 AT_LIMIT rows, but **2,178 of them are now `excluded = 1`** — 1,91
 `merged_*` ICF fold survivors (synthetic names for addresses where the linker
 folded identical machine code), the rest `fn_*` MSVC EH funclets and stale split
 spellings. They are bookkeeping, not work, and `report.json` emits no entry for
-them. Report-visible AT_LIMIT is **1,618 functions / 924,696 bytes**, of which
-only 34 are still `merged_*`.
+them. Report-visible AT_LIMIT is **1,103 functions / 680,540 bytes** (re-measured
+2026-11-09), of which only 34 are still `merged_*`.
+
+⚠ **Forward cert rot: 617 of those 1,103 rows (304,716 bytes) now score 100 %
+fuzzy** — 56 % of the certs by count, 45 % by bytes. The function was finished
+after it was certified and nobody retired the cert. So when someone says "the
+remaining work is all certified AT_LIMIT", the number behind that is **486
+functions / 375,824 bytes**, not 1,103 / 680,540. Re-measure before quoting the
+larger one.
 
 **2. Unicorn says 136 of them still behave differently from the target.**
 Filtering AT_LIMIT rows to divergence classes that indicate *real* behavioural
@@ -302,10 +365,12 @@ pre-fix figure was 640 fns / 466,036 bytes and was ~87 % harness artefact:
 | `call_arg` | 1 | 328 |
 | **total** | **136** | **92,676** |
 
-92,676 bytes is **10.0 % of all report-visible AT_LIMIT bytes** (924,696) — down
-from the 41 % the pre-fix oracle claimed. A tenth of what is filed as "certified
-unfixable" still carries a live signal that it is not merely unmatched but
-*wrong*.
+92,676 bytes is **13.6 % of all report-visible AT_LIMIT bytes** (680,540) — and
+**24.7 % of the 375,824 bytes that are still below 100 %** — down from the 41 %
+the pre-fix oracle claimed. A tenth of what is filed as "certified unfixable"
+still carries a live signal that it is not merely unmatched but *wrong*. (The
+denominator changed on 2026-11-09: the 2026-08 figure of 10.0 % divided by
+924,696 before forward cert rot was accounted for.)
 
 Across the whole non-excluded DB, real-class DIVERGENT is **2,205 functions /
 479,528 bytes**.
@@ -431,20 +496,23 @@ either.
 
 ## The open frontier, by shape
 
-Ordered by how tractable the shape is, not by size:
+Ordered by how tractable the shape is, not by size. **Every row re-measured
+2026-11-09 unless marked otherwise.**
 
 | Shape | size | where to start |
 |---|---|---|
-| **1,085 unverdicted rows** | 280,788 B | Nobody has looked. Cheapest possible triage; 1,050 of them are below 100 % in the report. |
-| **455 stubs** | 113,688 B | Missing implementations; `synth_xbox`/`os`/`rnddx9` dominate. Reconstruction from target asm. |
-| **813 functions at literally 0 %** | 116,956 B | 29 % of the gap by function count but only 9.5 % by bytes. Usually a missing implementation, not a codegen fight. |
-| **272 name_check-only residuals** | 66,828 B | *Figures as of the 2026-08-12 audit; not re-measured since.* 96 adjudicated real bugs, 8 alias gaps, 115 unadjudicated. Symbol spelling, not codegen. |
-| **2,205 real-class unicorn DIVERGENT** | 479,528 B | Overlaps AT_LIMIT heavily; still the best post-plateau bug oracle, but read the EQUIVALENT caveat above before trusting a class label. |
+| **310 unverdicted rows** | 94,116 B | Nobody has looked. Cheapest possible triage; 108 of them (43,904 B) are below 100 % in the report, the rest already score 100 and just need the verdict written. |
+| **10 stubs** | 5,736 B | Down from 455 / 113,688. `synth_xbox/FFT` is 5,176 B of it — Xbox-only. |
+| **0 authorable functions at literally 0 %** | 0 B | The 813-row / 116,956 B population is gone; what remains at 0 % is XDK and Bink only. |
+| **95 rows at 100 % normalized but < 100 % fuzzy** | 82,192 B | **Register permutation only** — callee-saved rotations. Closing these banks 82 KB of `matched_code` and moves `match_percent_normalized` by exactly 0. Do not look for a wrong offset here. |
+| **281 partial rows below 100 % normalized** | 294,748 B | The real codegen/semantic frontier. 73 % of it carries an AT_LIMIT cert, and 45 % of the cert population is already stale (see above), so re-measure before believing a cert. |
+| ~~272 name_check-only residuals~~ | **0 B nameable** | *Re-run 2026-11-09 with `scripts/analysis/reloc_name_gate.py`: 62 rows / 78,524 B carry a name charge, 42 rows / 42,512 B survive the exemption buckets, and the slice whose charge is attributable to a **name fix** is **0 rows / 0 B**. The class is closed — the survivors are register-save-helper mismatches and `__real@` address pairs, both of which normalize away. Do not re-open it as a worklist.* |
+| **2,205 real-class unicorn DIVERGENT** | 479,528 B | *2026-08-19 figure; not re-measured.* Overlaps AT_LIMIT heavily; still the best post-plateau bug oracle, but read the EQUIVALENT caveat above before trusting a class label. |
 
 The "540 rotted COMPLETE certs" row that used to sit here has been removed: that
 population is now zero (see [Cert rot](#cert-rot--closed)).
 
-Queries for all five are in
+Queries for all of these are in
 [`decomp/REMAINING_WORK.md`](decomp/REMAINING_WORK.md). That document ships
 **queries only** — deliberately no worklists, because every hardcoded worklist
 this project has ever written rotted within weeks.
