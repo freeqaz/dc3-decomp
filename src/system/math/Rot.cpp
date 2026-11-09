@@ -350,6 +350,22 @@ void RotateAboutZ(const Hmx::Matrix3 &min, float f, Hmx::Matrix3 &mout) {
 // 93.50000 canonical (up from 90.30645) while equal rows collapse 52 -> 24 and
 // the body grows to 256 B.  That is the XTEABlockEncrypter trap measured on
 // this row; it is exactly why the row classes are read alongside the headline.
+//
+// SECOND INSTANCE OF THE SAME TRAP, found by the permuter (2026-11-09) and NOT
+// banked.  Its `commutative_swap` move parenthesised the length sum as
+//     float lenSq1 = (v1.x * v1.x + (v1.z * v1.z + v1.y * v1.y));
+// which reports canonical 90.30645 -> 96.741936 and fuzzy 89.41936 -> 93.758064
+// (+6.44 / +4.34, the largest delta that search has produced on this tree).
+// It is a FALSE GAIN: equal rows fall 52 -> 39 (equal_percent 80.0 -> 61.9),
+// diff_arg rises 7 -> 22, and the body is unchanged at 248 B.  Alignment moved
+// -- inserts+deletes 6 -> 2 -- and paired-orphan rows are scored far more
+// generously than register-mismatched ones, so the headline rises while the
+// function reproduces strictly less.  Measured in one worktree, both states,
+// via `objdiff-cli diff --include-instructions --summary`.
+// So: a permuter delta on this row is not evidence of progress unless the
+// equal-row count also rises.  The same caveat applies in reverse to the
+// `const Vector3 &b = v2;` handle above, which is canonical-neutral and was
+// left unbanked for the same reason.
 void MakeRotQuat(const Vector3 &v1, const Vector3 &v2, Hmx::Quat &q) {
     Vector3 vec;
     Cross(v1, v2, vec);
