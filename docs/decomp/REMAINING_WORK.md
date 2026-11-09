@@ -47,6 +47,35 @@ patcher left our `?A0xf41ae7e0` against the target's `?A0x831dd776`. A
 single-object build is fine for "did it compile"; **always take the number from
 a full `ninja`**, and never conclude a fix regressed from one.
 
+### And before you *choose*: check whether a previous lane already adjudicated it
+
+```
+scripts/find_refutations.py '?PixelOffset@RndBitmap@@ABAHHHAA_N@Z'
+```
+
+Measured 2026-11-09: of five rows picked cold from a sweep, **three had a
+multi-hundred-line refutation already written directly above the function**, and
+two more had one inside the body. `PixelOffset` carries "all 8 combinations of
+multiply operand order … measured inert", `BoxMapLighting::ApplyLight` carries
+eleven spellings including "flipping the three colour products (22, inert —
+MSVC canonicalises them)", and `ObjPtrVec::erase<FlowNode>` carries the note that
+definition order is inert and the real open question is which reference keeps
+the two division results live. Rediscovering any of those costs the whole
+investigation; the tool prints them in one second.
+
+Give it a mangled symbol (it resolves unit → file through `decomp.db`) or
+`--unit` / `--file` directly. It reports the note blocks **near the definition**
+— adjacent-above first, then inside the body, then further above (which is
+usually the *previous* function's note) — rather than the whole file, because
+`src/system/rndobj/Utl.cpp` alone has 27 note blocks and 782 lines of them.
+
+Exit codes are the point: **0** notes found, **1** looked and found none,
+**2** could not look (symbol not in the DB, or the unit maps to no file). A
+template implementation's notes usually live in a shared header
+(`src/system/obj/ObjPtr_p.h` for `ObjPtrVec<T>::erase`), so a `1` on a template
+is worth re-running with `--file` on the header. **`1` is not proof a row is
+unexplored** — only that this file, in this window, has no note.
+
 ### Columns you cannot trust
 
 | Column | Problem |
