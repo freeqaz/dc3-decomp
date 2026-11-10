@@ -297,8 +297,9 @@ void *MemTruncate(void *mem, int size, const char *file, int line, const char *n
         MemFree(mem);
         return nullptr;
     } else {
+        int sizeBytes = size + 3;
+        int allocSize = sizeBytes >> 2;
         int i60;
-        int allocSize = (size + 3) >> 2;
         void *truncated = nullptr;
         int i;
         for (i = 0; i < gNumHeaps; i++) {
