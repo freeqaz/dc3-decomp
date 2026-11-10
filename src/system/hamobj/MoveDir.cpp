@@ -2087,8 +2087,7 @@ float MoveDir::DetectFrac(int player, int beat) {
 float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     if (!mFiltersEnabled)
         return y;
-    auto &_ref0 = mMovePlayerData;
-    HamMove *move = _ref0[0].mCurMove;
+    HamMove *move = mMovePlayerData[0].mCurMove;
     if (!move)
         return y;
 
@@ -2139,6 +2138,28 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     // hoists to the block top becomes a callee-saved candidate and displaces
     // another.  There is no source-level handle for "do not hoist constant 0" --
     // replacing nullptr with 0 at all 21 sites leaves the tap byte-identical.
+    //
+    // w-md-overlay (2026-11-10): 89.592 / fuzzy 88.38171, 723 equal of 1318, target
+    // 5072 B vs base 5032 B (was 88.185 / 86.715, 681 equal of 1326).  Landed:
+    // the `while (it != endFrame)` scan (the image compares the lower_bound
+    // iterator with `beq`/`bne` cr6, which c2 only emits for an equality loop),
+    // dropping the `_ref0` alias and the `playClip` local, folding `idx++` into
+    // the for-increment, `yBase` declared before `height`, and `minHeight` as the
+    // literal `(0.2f < 1.0f - y) ? ... : 0.2f` (exactly Max(0.2f, 1.0f - y) for
+    // every input including NaN, but it is what moves 14 rows).
+    //
+    // Refuted since, each measured alone against the state above:
+    //  - `(&frame - closest) != 0` for `&frame == closest` (to steer the image's
+    //    `subf r11,r16,r28` + `cntlzw`/`extrwi.` + `beq`): 88.14, equal 702.
+    //  - `(0.2f - (1.0f - y) >= 0.0f) ? 0.2f : (1.0f - y)`: this DOES reproduce
+    //    the image's lone `fsel f30,f12,f0,f13` (idx 826, closes 4 rows there)
+    //    but loses 15 elsewhere -- 88.93, equal 696.  The branch form scores
+    //    better than the image's own local shape, so keep it.
+    //  - swapping the multiply operands of `frameF` (and hoisting `beatOffset *
+    //    0.25f` into its own local) to pull it ahead of `bl GetDancerFrames`
+    //    like the image: byte-identical output -- c2 canonicalises commutative
+    //    operands for CSE, so there is no source handle for the ordering.
+    //  - `fv`/`handle` declaration swap: equal 693 vs 695.
     MoveFrame *closest = ClosestMoveFrame();
     int mirrored = (move->Mirror() != nullptr);
 
@@ -2151,9 +2172,8 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     }
 
     // Draw play clip overlay if present
-    SkeletonClip *playClip = mPlayClip;
-    if (playClip) {
-        y = DrawPlayClip(y, playClip, TheTaskMgr.CurrentMeasure());
+    if (mPlayClip) {
+        y = DrawPlayClip(y, mPlayClip, TheTaskMgr.CurrentMeasure());
     }
 
     // Draw filter version name
@@ -2226,8 +2246,8 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         );
     }
 
-    float height = sLineHeight;
     float yBase = sLineHeight * 2.0f + xRight;
+    float height = sLineHeight;
 
     // Node-count background rect
     if (fv->mType == kFilterVersionHam1) {
@@ -2339,7 +2359,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     // Draw detect frames in range
     std::pair<DetectFrame *, DetectFrame *> detectRange(nullptr, nullptr);
     DetectRange(
-        _ref0[0].mDetectFrames,
+        mMovePlayerData[0].mDetectFrames,
         detectRange,
         TheTaskMgr.CurrentMeasure(),
         TheTaskMgr.CurrentMeasure()
@@ -2405,16 +2425,16 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         float startSeconds = BeatToSeconds(beatOffset - gBeatLineData.rangeOffset);
         float endSeconds =
             BeatToSeconds((float)(measureStart + 4) + gBeatLineData.rangeScale);
-        const DetectFrame *endFrame = &_ref0[0].mDetectFrames.back() + 1;
+        const DetectFrame *endFrame = &mMovePlayerData[0].mDetectFrames.back() + 1;
         const DetectFrame *it = std::lower_bound(
-            (const DetectFrame *)&_ref0[0].mDetectFrames.front(),
+            (const DetectFrame *)&mMovePlayerData[0].mDetectFrames.front(),
             endFrame,
             startSeconds,
             DetectFrameSecondsCmp()
         );
         float vizY = height + yBase;
         if (it != endFrame) {
-            while (it < endFrame) {
+            while (it != endFrame) {
                 if (it->Seconds() >= endSeconds)
                     break;
                 Hmx::Color lineColor;
@@ -2519,7 +2539,10 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     }
 
     // Clamp min height
-    float minHeight = Max(0.2f, 1.0f - y);
+    // Same value as Max(0.2f, 1.0f - y) for every input, NaN included
+    // (both spellings answer 0.2f when the compare is false); the literal
+    // conditional is what makes c2 materialise the image's fsel form.
+    float minHeight = (0.2f < 1.0f - y) ? 1.0f - y : 0.2f;
 
     // Draw skeleton visualization area
     float vizWidth = TheRnd.YRatio() * minHeight;
@@ -2569,7 +2592,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                 int idx = 0;
                 for (std::set<DetectFrame *>::iterator sit = unkf88.begin();
                      sit != unkf88.end();
-                     ++sit) {
+                     ++sit, idx++) {
                     int row = idx / gridSize;
                     int col = idx % gridSize;
                     Hmx::Rect cellRect(
@@ -2588,7 +2611,6 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                     callbacks.push_back(this);
                     unk414 = (DancerSkeleton *)skel;
                     mDancerViz->Visualize(camInput, *skel, &callbacks, false);
-                    idx++;
                 }
             }
         }
