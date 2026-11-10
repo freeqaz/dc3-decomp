@@ -249,6 +249,46 @@ void MemFree(void *mem, const char *file, int line, const char *name) {
 
 void MemForceNewOperatorAlign(int align) { gNewOperatorAlign = align; }
 
+// w-memtrunc (2026-11-10): 97.26667 canonical (name_check, objdiff 4.2.9), 76
+// rows, equal 73 / diff_arg 1 / insert 1 / delete 1 -- and REFUTED at the
+// source level.  The three rows are ONE scheduler slot, not a missing or extra
+// statement: the image's preheader is `srawi r26, r10, 2` (allocSize) BEFORE
+// the `li r29, 0` / `li r28, 0` pair (truncated = nullptr, i = 0), while MSVC
+// sinks our srawi one slot later, between the two `li`s.  The DAG is identical
+// on both sides; nothing is dropped or added.
+//
+// Mechanism: the `nullptr` init is always hoisted to the top of the block, so
+// no declaration order or init spelling moves it -- measured inert (all still
+// 97.26667, 73/1/1/1): i60 moved last; allocSize declared first; `int i = 0;`
+// at its declaration with `for (; i < gNumHeaps; i++)`; truncated's zero as a
+// statement instead of a declaration initializer.
+//
+// Spellings with measured counts (equal / diff_arg / replace / insert / delete):
+//   baseline                                             97.26667  73/1/0/1/1
+//   (size + 3) / 4                                       98.60000  74/1/0/1/0
+//       -- srawi lands in the image's slot, but MSVC emits it as
+//          `srawi r11 + addze r26` (round toward zero).  The image has a bare
+//          srawi, so the original is `>> 2`; also a real semantic change for
+//          negative size.  Rejected.
+//   (size + 3) >> 2 inlined at both use sites (no local)  88.53333  60/11/1/5/3
+//       -- LICM puts addi+srawi inside the loop; 80 instrs vs 300 bytes.
+//   int sizeBytes = size + 3; int allocSize = sizeBytes >> 2;
+//                                                       100.00000  71/4/0/0/0
+//       -- the insert/delete pair is GONE: all 75 of the image's instructions
+//          align, in order, same opcodes.  Residual is a pure r10<->r11
+//          recolour of the four address-materialization instructions
+//          (lis r11, addi r10 r25+3, addi r30 r11+gHeaps@l, srawi r26 r10 2).
+//          NOT LANDED: `equal` falls 73 -> 71, which is the false-gain shape
+//          even though every other count improves.  Invariant under 8 further
+//          orderings/types of the same two-temp form (truncated first, i60
+//          last, temps last, `long`, scoped block, `3 + size`, comma decl,
+//          split decl) -- all exactly 100.00000 / 71/4/0/0/0.
+//   dead-init probe `int allocSize = 0; allocSize = (size+3) >> 2;`  folded back
+//                                                        97.26667  73/1/0/1/1
+//
+// So: the image's preheader order is reachable, but only by spending one extra
+// live vreg, and that vreg flips the r10/r11 parity.  Both halves are colouring
+// ties; the source cannot have the ordering without the recolour.  Reverted.
 void *MemTruncate(void *mem, int size, const char *file, int line, const char *name) {
     CritSecTracker tracker(gMemLock);
     if (!mem)
@@ -257,8 +297,9 @@ void *MemTruncate(void *mem, int size, const char *file, int line, const char *n
         MemFree(mem);
         return nullptr;
     } else {
+        int sizeBytes = size + 3;
+        int allocSize = sizeBytes >> 2;
         int i60;
-        int allocSize = (size + 3) >> 2;
         void *truncated = nullptr;
         int i;
         for (i = 0; i < gNumHeaps; i++) {
