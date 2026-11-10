@@ -46,11 +46,38 @@ void ProcCounter::SetEvenOddDisabled(bool eod) {
 // Configure frame rate emulation by calculating frame skip pattern
 // For 24fps on 60Hz: 120/24=5 -> switch every 2-3 frames (alternating via mOdd)
 // For 30fps on 60Hz: 120/30=4 -> switch every 2 frames (mOdd=0)
-// RESIDUAL (w13-a, 96.55 canonical, 2 rows): the image copies the return value
-// (`mr r3, r4`) right after the fdivs setup, BEFORE Round()'s branch; we place
-// it after the mCount compare.  Inert: `return mFPS` at both tail returns, and
-// Round(120.0f / mFPS).  Worse (91.0): a single tail `if (mCount >= mSwitch)
-// mCount = 0; return fps/mFPS;` -- it loses the conditional `beqlr`/`bltlr`.
+// RESIDUAL (96.55173 canonical = fuzzy = raw; 59 instr, equal 57, insert 1,
+// delete 1): the whole residual is ONE instruction, `mr r3, r4`, the int->unsigned
+// return conversion of `fps`.  The image issues it at index 34 -- in the block that
+// computes 120.0f/fps, between the `lis @3f000000` constant setup and `fdivs` --
+// and we issue it at index 54, in the tail block after the `cmpw` against mSwitch.
+// Everything before and between (0-33 and 35-53) is instruction-for-instruction
+// equal, so the copy's PLACEMENT is the only divergence.
+//
+// CLOSED 2026-11-10 as a c2 copy-placement tie, not a source gap.  The copy is
+// mandatory (r3 holds mFPS for the `fps == mFPS` guard at idx 20-21, so fps must
+// stay in r4 and cannot coalesce into the return register), so c2 must materialise
+// it somewhere; it hoists it into the predecessor block in the image and sinks it
+// into the block containing both tail returns here.  Both placements are legal and
+// behaviourally identical.  Six spellings that reach the copy all compiled
+// BYTE-IDENTICAL to the baseline (equal 57 / ins 1 / del 1 / 96.55173), i.e. the
+// front end coalesces the variation away before c2 ever places the copy:
+//   (1) `unsigned int ret = fps;` after the guard, `return ret;` at both tails
+//   (2) `unsigned int ret = fps;` before the Clamp, `ret = fps;` after it
+//   (3) drop the redundant `auto _tmp0` (Clamp is `inline T Clamp(T,T,T)`, T=int)
+//   (4) `float ratio = 120.0f / (f32)fps; int round = Round(ratio);`
+//   (5) `return (unsigned int)fps;` at the first tail only (two distinct conversion
+//       pseudos -- still merged into one copy, still in the tail block)
+//   (6) `mFPS = (unsigned int)fps;` (puts a conversion pseudo in the target's block)
+// `decomp-synth` beam search over the 17 patterns its scan selected for this
+// function (signed_unsigned, temp_elimination, declaration_movement,
+// statement_reorder, variable_inline, slot_pad, ...) ran 5 rounds / ~52 variants a
+// depth for 613 s: 0 improved, source left untouched.
+// Earlier lanes, same shape: w13-a's `return mFPS` at both tails and
+// Round(120.0f/mFPS) were inert, and a single tail `if (mCount >= mSwitch)
+// mCount = 0; return fps;` drops to 91.0 by losing the conditional `bltlr`.
+// Not worth re-deriving: perturbing anything that DOES reach the schedule breaks
+// the 57 equal rows while the copy stays at 54.
 unsigned int ProcCounter::SetEmulateFPS(int fps) {
     // Disable emulation
     if (fps <= 0) {
