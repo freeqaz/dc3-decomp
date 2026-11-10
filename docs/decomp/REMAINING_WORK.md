@@ -106,15 +106,44 @@ expect zero, **2** could not measure. **`1` is a heuristic priced from these
 four rows, not a law** — it says "be surprised if you gain anything", not
 "forbidden". Use `--diff-json` to classify a saved diff without rebuilding.
 
-The discriminator is row **kind**, not row count. A size threshold was the
-first version and it priced away exactly the rows worth briefing:
-`HolmesClientCacheFile` (7 rows: 3 `diff_arg` + 2 insert + 2 delete, 96.4 %)
-and `ArcDetector::Update` (18 rows: 16 `diff_arg` + 1 insert + 1 delete,
-98.7 %) both came back UNCLEAR, because only ≥20 rows counted as structural.
-Both need a lane; neither is a tie. So: ≤2 rows *all* `diff_arg`, or an
-insert/delete pair of the *same* instruction, means no leverage; **any**
-insert/delete/replace row means a real code-shape difference and is worth
-running.
+**The discriminator is "are the inserted instructions also the deleted ones?",
+not row count and not row kind.** Both of the obvious rules were wrong and were
+falsified within an hour of each other:
+
+* **By count** (only ≥20 rows = structural) priced away exactly the rows worth
+  briefing: `HolmesClientCacheFile` (7 rows), `MemTruncate` (3) and
+  `ArcDetector::Update` (18) all came back UNCLEAR.
+* **By kind** (any insert/delete row = real code-shape difference) then claimed
+  all three were structural — and a lane measured `ArcDetector::Update` and
+  found the insert + delete are **the same instruction at two positions**:
+  target runs `fsubs dz` *before* `fmuls dy*dy`, we run it after. Same six
+  instruction multiset, same operands, one scheduler tie-break. Five spellings,
+  0 gains.
+
+So the rule is now a **displacement test**: if every inserted instruction is
+also a deleted one, expect zero no matter how many `diff_arg` rows ride along.
+That check is what catches all four ties measured today:
+
+| row | the "insert + delete" is really |
+|---|---|
+| `ProcCounter::SetEmulateFPS` | `mr r3, r4` at idx 34 → idx 54 |
+| `ArcDetector::Update` | `fsubs` moved one slot in a scheduler window |
+| `MemTruncate` | `li r29,0x0` → `li r28,0x0`: a **recolour**, not a missing `li` |
+| `HolmesClientCacheFile` | `ld`/`std` at idx 47/53 → idx 89/90, `r10` → `r11` |
+
+The comparison is register-blind but **not** immediate-blind: `li r3,0` must
+not compare equal to `li r3,1`, and a test asserts exactly that. Registers are
+stripped because a displaced instruction usually gets a different colour, which
+is why `MemTruncate` and `Holmes` look like two rows each and are one each.
+
+A genuine count threshold no longer exists. Small non-displacement sets are
+`worth_it` (`MemTruncate`-shaped but with *different* instructions), large
+all-`diff_arg` sets are `worth_it` but with the note that the permuter is not
+the tool — fix the liveness cause instead.
+
+**Validated 6/6 against ground truth**, not fixtures: the four ties above and
+the two wins (`TransformNormal` improved by hand; `MoveDir::UpdateOverlay` won
+under the permuter) classify correctly on live objdiff output.
 
 **`1` and `2` are deliberately different.** A failed read that returned `1`
 would read as "skip this row", which is exactly the class of silent-failure

@@ -105,6 +105,27 @@ def _rows_from_objdiff_json(doc):
     return rows
 
 
+_REG_RE = None
+
+
+def _norm_args(args):
+    """Strip register names so a displaced instruction still compares equal.
+
+    A moved instruction usually also gets a *different colour*: ArcDetector's
+    one insert is ``fsubs f13, f29, f13`` and its delete ``fsubs f11, f29, f11``
+    -- same operation, same shape, different destination register. Requiring a
+    literal text match misses it.
+
+    Immediates, displacements and symbols are KEPT, because those are the part
+    that distinguishes "one instruction moved" from "two different
+    instructions": ``li r3, 0`` and ``li r4, 1`` must not compare equal.
+    """
+    return " ".join(
+        tok for tok in args.replace(",", " ").split()
+        if not (tok[:1] in "rfcv" and tok[1:].isdigit())
+    )
+
+
 def classify(rows):
     """Classify a normalised row table. Pure, so it is directly testable.
 
@@ -118,19 +139,30 @@ def classify(rows):
     diff_args = [r for r in rows if r[1] == _DIFF_ARG]
     others = [r for r in rows if r[1] not in (_INSERT, _DELETE, _DIFF_ARG)]
 
-    # 1. The same instruction at two positions: c2 copy placement.
-    #    Measured on ProcCounter::SetEmulateFPS (2026-11-10): DELETE `mr r3, r4`
-    #    at idx 34, INSERT `mr r3, r4` at idx 54 -- the whole 3.4-point gap.
-    if len(inserts) == 1 and len(deletes) == 1 and n == 2:
-        i_op, i_args = inserts[0][2], inserts[0][3]
-        d_op, d_args = deletes[0][2], deletes[0][3]
-        if (i_op, i_args) == (d_op, d_args):
+    # 1. Displaced instructions: the inserted and deleted multisets are the SAME
+    #    instructions, just at different positions. c2 placed them differently;
+    #    the DAG is identical, so no source spelling can move them.
+    #    Measured twice:
+    #      * ProcCounter::SetEmulateFPS -- DELETE `mr r3, r4` idx 34, INSERT
+    #        `mr r3, r4` idx 54, nothing else (the whole 3.4-point gap);
+    #      * ArcDetector::Update -- 1 ins + 1 del buried under 16 diff_arg.
+    #        Target runs `fsubs dz` BEFORE `fmuls dy*dy`; we run it after, so
+    #        the whole difference is one instruction's position inside a
+    #        scheduler window. Permuter: 0 gains.
+    #    The diff_arg count must NOT gate this: ArcDetector has 16, and a
+    #    count-based version of this rule would have sent a lane at it.
+    if inserts and deletes and len(inserts) == len(deletes):
+        i_set = sorted((r[2], _norm_args(r[3])) for r in inserts)
+        d_set = sorted((r[2], _norm_args(r[3])) for r in deletes)
+        if i_set == d_set:
+            moved = ", ".join(f"`{op} {a}`" for op, a in i_set)
             return (
                 "no_leverage",
-                "MOVED_INSTRUCTION_TIE: the one insert and the one delete are the "
-                "SAME instruction at two positions",
-                f"`{i_op} {i_args}` deleted at idx {deletes[0][0]}, "
-                f"inserted at idx {inserts[0][0]}",
+                "MOVED_INSTRUCTION_TIE: every inserted instruction is also a "
+                "deleted one -- the SAME instructions at different positions",
+                f"{len(i_set)} instance(s) of {moved}, moved between idx "
+                f"{deletes[0][0]} and {inserts[0][0]}"
+                + (f"; {len(diff_args)} diff_arg rows ride along" if diff_args else ""),
             )
 
     # 2. A couple of pure register swaps and nothing else.
