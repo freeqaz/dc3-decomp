@@ -2224,8 +2224,8 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         );
     }
 
-    float height = sLineHeight;
     float yBase = sLineHeight * 2.0f + xRight;
+    float height = sLineHeight;
 
     // Node-count background rect
     if (fv->mType == kFilterVersionHam1) {
@@ -2517,7 +2517,10 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     }
 
     // Clamp min height
-    float minHeight = Max(0.2f, 1.0f - y);
+    // Same value as Max(0.2f, 1.0f - y) for every input, NaN included
+    // (both spellings answer 0.2f when the compare is false); the literal
+    // conditional is what makes c2 materialise the image's fsel form.
+    float minHeight = (0.2f < 1.0f - y) ? 1.0f - y : 0.2f;
 
     // Draw skeleton visualization area
     float vizWidth = TheRnd.YRatio() * minHeight;
