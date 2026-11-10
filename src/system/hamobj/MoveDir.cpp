@@ -2138,6 +2138,28 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     // hoists to the block top becomes a callee-saved candidate and displaces
     // another.  There is no source-level handle for "do not hoist constant 0" --
     // replacing nullptr with 0 at all 21 sites leaves the tap byte-identical.
+    //
+    // w-md-overlay (2026-11-10): 89.592 / fuzzy 88.335, 723 equal of 1318, target
+    // 5072 B vs base 5032 B (was 88.185 / 86.715, 681 equal of 1326).  Landed:
+    // the `while (it != endFrame)` scan (the image compares the lower_bound
+    // iterator with `beq`/`bne` cr6, which c2 only emits for an equality loop),
+    // dropping the `_ref0` alias and the `playClip` local, folding `idx++` into
+    // the for-increment, `yBase` declared before `height`, and `minHeight` as the
+    // literal `(0.2f < 1.0f - y) ? ... : 0.2f` (exactly Max(0.2f, 1.0f - y) for
+    // every input including NaN, but it is what moves 14 rows).
+    //
+    // Refuted since, each measured alone against the state above:
+    //  - `(&frame - closest) != 0` for `&frame == closest` (to steer the image's
+    //    `subf r11,r16,r28` + `cntlzw`/`extrwi.` + `beq`): 88.14, equal 702.
+    //  - `(0.2f - (1.0f - y) >= 0.0f) ? 0.2f : (1.0f - y)`: this DOES reproduce
+    //    the image's lone `fsel f30,f12,f0,f13` (idx 826, closes 4 rows there)
+    //    but loses 15 elsewhere -- 88.93, equal 696.  The branch form scores
+    //    better than the image's own local shape, so keep it.
+    //  - swapping the multiply operands of `frameF` (and hoisting `beatOffset *
+    //    0.25f` into its own local) to pull it ahead of `bl GetDancerFrames`
+    //    like the image: byte-identical output -- c2 canonicalises commutative
+    //    operands for CSE, so there is no source handle for the ordering.
+    //  - `fv`/`handle` declaration swap: equal 693 vs 695.
     MoveFrame *closest = ClosestMoveFrame();
     int mirrored = (move->Mirror() != nullptr);
 
