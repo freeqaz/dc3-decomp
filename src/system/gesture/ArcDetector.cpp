@@ -401,6 +401,46 @@ void ArcDetector::TryToStartSwipe(const Vector3 &pos, const Skeleton &skeleton) 
     }
 }
 
+// w-arc-update (2026-11-10, LOSE at 98.74779 fuzzy / 99.07964 canonical / 209
+// equal / 16 diff_arg / 1 insert / 1 delete, score 283): the insert+delete pair
+// is NOT an independent producer.  It is the alignment artifact of ONE scheduler
+// slot.  Target rows 143-149 emit `fsubs dy`, `fmuls dy*dy`, `fsubs dz`,
+// `fsubs dx`, fmadds, fmadds; ours emit `fsubs dy`, `fsubs dz`, `fmuls dy*dy`,
+// `fsubs dx`, fmadds, fmadds.  What objdiff charges as insert+delete is dz's
+// fsubs re-aligning past the sunk fmuls.  The dependency graph is provably
+// identical: same 6-instruction multiset, same operands (dy = f30 - *, dz = f29
+// - *, dx = f31 - *), and both accumulate dz^2 + dy^2 then dx^2 (verified by
+// reading the fmadds operands, not assumed).  All 15 register swaps live inside
+// rows 140-149, i.e. downstream of that phase (f11/f12/f13 are a 3-cycle); the
+// 4-word frontPt copy at rows 132-139 is the same cyclic phase in GPRs -- target
+// w,y,x,z vs ours z,x,w,y with identical r9/r8/r7/r11 and identical src->dst
+// pairs, only rotated.  Vector3 is 12 bytes, so the 4th word is MSVC's 16-byte
+// block-copy rounding: the copy order is a scheduler choice, not a type artifact.
+// Stack layout is NOT a lever -- 9/9 user slots MATCH, frame 0xe0 on both sides,
+// 5 callee-saved GPRs + 3 FPRs on both sides.
+// Measured this round (name_check, worktree w-arc-update; 227 insns / 904 B both
+// sides unless noted).  equal is 209 in every row but the first:
+//   statement order, frontPt before mArcOffset (legal -- GetCurveStart is const)
+//     fuzzy 85.24336 / score 3335 / equal 186, 17 diff_arg, 2 replace,
+//     10 insert, 21 delete, base 860 B  -- breaks the upstream schedule too
+//   float distSq = distY*distY; distSq += distZ*distZ; distSq += distX*distX;
+//     if (distSq > 0.0001f)
+//     fuzzy 98.71681 / 290 / 209 eq / 16 da / 1 ins / 1 del (adds a 0x74<->0x78
+//     lfs offset swap)
+//   Vector3 frontPt = mJointPath.front();   [INERT]
+//     fuzzy 98.74779 / 283 / 209 eq / 16 da / 1 ins / 1 del, 18-row list
+//     identical to baseline
+//   front() plus a named `float distYSq = distY*distY;` after the three dists
+//     fuzzy 98.71681 / 290 / 209 eq / 16 da / 1 ins / 1 del
+//   fold distX/distZ away, squares read frontPt directly in the condition
+//     fuzzy 98.69026 / 296 / 209 eq / 16 da / 1 ins / 1 del (+5 rows of extra
+//     register/offset noise)
+// Mechanism: both sides give MSVC an identical dependency graph for this block,
+// so the residual is a tie-break in the scheduler's ready list at the
+// dy*dy / dz-fsubs pair; no spelling that preserves the block's inputs moves it.
+// w21-n / w21-ao / w26-q already covered 84 copy spellings and 16 base-reference
+// variants on the same reading.  Give up unless MSVC's 16-byte copy order (or
+// this scheduler phase) becomes understood; do not re-spell the expression.
 void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
     if (!mInitialized) {
         MILO_ASSERT(false, 0x4A);
