@@ -145,15 +145,20 @@ def classify(rows):
             "; ".join(f"idx {r[0]}: `{r[2]} {r[3]}`" for r in diff_args),
         )
 
-    # 3. Enough structural material for a search to have something to move.
+    # 3. A real code-shape difference, however few rows.
     #    `MoveDir::UpdateOverlay` (595 rows, 50 ins + 60 del as ~48 clusters)
-    #    improved within 4 depths. TransformNormal (23 diff_arg) improved by
-    #    hand; the permuter was not needed, so this band is only "clear".
-    if n >= 20 and (inserts or deletes or others):
+    #    improved within 4 depths. But size is not the signal -- KIND is:
+    #    `HolmesClientCacheFile` (7 rows: 3 diff_arg + 2 ins + 2 del, 96.4 %)
+    #    and `ArcDetector::Update` (18 rows: 16 diff_arg + 1 ins + 1 del,
+    #    98.7 %) are small yet carry ins/del/replace, which means the two sides
+    #    differ in structure and a search has something to move. A band that
+    #    only admitted n >= 20 called both of those UNCLEAR, which prices away
+    #    exactly the kind of row worth briefing.
+    if n >= 3 and (inserts or deletes or others):
         return (
             "worth_it",
-            "STRUCTURAL: enough non-equal rows of mixed kinds that a beam search "
-            "has real rearrangement freedom",
+            "STRUCTURAL: the diff contains insert/delete/replace rows, so the "
+            "two sides differ in code shape, not just in colouring",
             f"{n} rows: {len(diff_args)} diff_arg, {len(inserts)} insert, "
             f"{len(deletes)} delete, {len(others)} other",
         )
