@@ -186,6 +186,66 @@ void HollaBackMinigame::Poll() {
     }
 }
 
+// AT_LIMIT candidate (lane w-hb-begin, 2026-11-10): 850/852 equal, 2 diff_arg,
+// fuzzy 99.97652, 3408 = 3408, canonical 100.00000, zero rows otherwise.
+// The two rows are the SAME defect: the operand order of one dead `lwzx`.
+//   idx 119 (tgt 0x1dc) src line 223  mWinCamCuts.clear()   [top level]
+//   idx 225 (tgt 0x384) src line 236  mWinShoutouts.clear() [inside if(a)]
+//     target `lwzx r10, r11, r9`  vs  ours `lwzx r10, r9, r11`
+//     (r9 = vector _M_start/induction pointer, r11 = _M_finish - _M_start)
+// The other two of the four inlined clear() copy loops already match, and they
+// bracket the two failures: idx 102 (tgt 0x198, line 222 mWinShoutouts.clear())
+// and idx 264 (tgt 0x420, line 245 mWinCamCuts.clear()) are BOTH emitted by us
+// exactly as the image has them. So the image itself is 3 diff-first / 1
+// ptr-first across four textually identical call sites -- site D is the image's
+// odd one out and site A is ours.
+//
+// Why no source handle exists (this is the argument, not a shrug):
+//  1. The loop is provably ZERO-TRIP on BOTH sides at all four sites:
+//     `subf rX,rY,rY` (=0), `stw`, `srawi. rX,rX,2`, `ble` -> always skips.
+//     That is correct: clear() == _M_erase(_M_start,_M_finish), so the copy
+//     count is _M_finish - _M_finish == 0. The `subf r11,<start>,<finish>`
+//     feeding the loop is a DEAD leftover, which is why we also match the
+//     image on it. Operand order on a dead value is c2's DAG/allocator
+//     coin-flip, not a property of the text -- which the image's own 3/1 split
+//     demonstrates.
+//  2. The two failing sites have IDENTICAL shape to each other AND to site D
+//     (same inline, same register roles r9=ptr / r11=diff, same 14 preceding
+//     rows), yet the image orders them oppositely to each other. Nothing in the
+//     source distinguishes them.
+//
+// Measured spellings (each one edit, rebuilt, name_check ruler; baseline
+// equal=850 diff_arg=2 total=852 fuzzy=99.97652). Nothing beat baseline:
+//   B+C -> erase(begin(),end())       830 eq / 24 rows, 852->854 (+2 ins +4 del), 99.12676
+//   B only -> erase(begin(),end())    840 eq / 13 rows, 853 (+1 ins +2 del), 99.55164
+//   C only -> erase(begin(),end())    840 eq / 13 rows, 853 (+1 ins +2 del), 99.54578
+//   swap the two top-level clears     826 eq / 26 rows, 99.85798
+//   mWinCamCuts.clear() first         826 eq / 26 rows, 99.85798
+//   braces { } around B, around C,    INERT: 850 eq / 2 rows, 99.97652 (both)
+//     and around both
+//   hoist shootoutArr/camCutArr       INERT: 850 eq / 2 rows, 99.97652
+//     out of if(a) to function scope
+//   this->mWinShoutouts at B/C        INERT: 850 eq / 2 rows, 99.97652
+//   (&mWinShoutouts)[0] at B/C        INERT: 850 eq / 2 rows, 99.97652
+//   `unsigned numShoutouts`           848 eq / 4 rows (2 replace), 99.83568
+//   swap the two static Symbol decls  842 eq / 10 rows, 99.92958
+//   move camcuts clear+push_back     749 eq / 123 rows, 872 (+20 ins +20 del), 94.48474
+//     below the static Symbol decls
+//   move both clears above the       731 eq / 131 rows, 862, 97.30282
+//     static Symbol decls
+//   local vector refs at B/C          837 eq / 15 rows (-1 ins), 99.78873
+// decomp-synth (permuter), --jobs 1, two runs, ledger checked: pass 1 with
+// declaration_reorder/declaration_movement/statement_reorder/scope_narrowing/
+// scope_widening/commutative_swap/member_ref_bind/value_address_caching/
+// temp_elimination/reference_elimination/assignment_reorder/copy_member_reorder/
+// loop_var_hoist/member_readback (313 viable variants), then the FULL 112-pattern
+// set (549 viable variants). 862 viable variants total, 0 improved on baseline
+// (0 in every depth of both runs). Source left untouched by both.
+//
+// The only remaining lever would be rewriting stlport's _M_erase to flip the
+// dead add's operand order in the header -- which would move every vector clear
+// in the binary, and would not reproduce the image's own 3/1 split anyway.
+// Behaviour is unaffected either way: both rows are in code that never runs.
 void HollaBackMinigame::BeginMinigame(DataArray *a) {
     if (!mActive) {
         unk484 = 0;
