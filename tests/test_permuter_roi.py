@@ -76,34 +76,60 @@ def test_three_register_swaps_leaves_the_tie_band():
 
 def test_a_large_structural_row_set_is_worth_running():
     """MoveDir::UpdateOverlay's shape: hundreds of rows, mixed kinds."""
-    rows = [row(i, "diff_arg", "lwz", "") for i in range(40)]
-    rows += [row(100 + i, "insert", "addi", "") for i in range(10)]
-    rows += [row(200 + i, "delete", "addi", "") for i in range(10)]
+    rows = [row(i, "diff_arg", "lwz", "r3, 0x10(r4)") for i in range(40)]
+    rows += [row(100 + i, "insert", "addi", f"r3, r3, 0x{i}") for i in range(10)]
+    rows += [row(200 + i, "delete", "addi", f"r5, r6, 0x{100 + i}") for i in range(20)]
     verdict, reason, _ = roi.classify(rows)
     assert verdict == "worth_it", reason
     assert "STRUCTURAL" in reason
 
 
 def test_a_SMALL_structural_set_is_worth_running():
-    """MemTruncate's shape: only 3 non-equal rows, but one of them is an insert
-    and one a delete of DIFFERENT instructions -- a real code-shape difference.
-    A size threshold would have called this unclear; kind is the signal."""
+    """A small set with genuinely DIFFERENT inserted and deleted instructions is
+    still a real code-shape difference -- the tie rule must not swallow it."""
     rows = [row(10, "diff_arg", "mr", "r3, r4"),
-            row(20, "insert", "li", "r3, 0"),
-            row(30, "delete", "li", "r4, 0")]
+            row(20, "insert", "addis", "r3, r0, 0x1"),
+            row(30, "delete", "li", "r4, 0x0")]
     verdict, reason, _ = roi.classify(rows)
     assert verdict == "worth_it", reason
     assert "STRUCTURAL" in reason
 
 
-def test_holmes_shape_is_structural():
-    """HolmesClientCacheFile: 7 rows = 3 diff_arg + 2 insert + 2 delete."""
-    rows = [row(i, "diff_arg", "lwz", "") for i in range(3)]
-    rows += [row(50 + i, "insert", "li", "") for i in range(2)]
-    rows += [row(60 + i, "delete", "li", "") for i in range(2)]
+def test_holmes_shape_is_a_DISPLACEMENT_not_a_structural_diff():
+    """HolmesClientCacheFile, real rows: the two inserts are `ld r11,0x94(r31)`
+    and `std r11,0x60(r31)` at idx 89/90; the two deletes are the SAME loads and
+    stores with `r10` at idx 47/53. Recoloured and displaced, not missing."""
+    rows = [
+        (47, "delete", "ld", "r10, 0x94(r31)"),
+        (48, "diff_arg", "mr", "r9, r3"),
+        (53, "delete", "std", "r10, 0x60(r31)"),
+        (89, "insert", "ld", "r11, 0x94(r31)"),
+        (90, "insert", "std", "r11, 0x60(r31)"),
+    ]
     verdict, reason, _ = roi.classify(rows)
-    assert verdict == "worth_it", reason
-    assert "STRUCTURAL" in reason
+    assert verdict == "no_leverage", reason
+    assert "MOVED_INSTRUCTION_TIE" in reason
+
+
+def test_a_register_recolour_alone_still_counts_as_a_displacement():
+    """MemTruncate, real rows: insert `li r29,0x0` idx 36, delete `li r28,0x0`
+    idx 39, plus a diff_arg `li r29,0x0`. Same operation, different destination
+    register -- a literal text match would miss it and send a lane at a tie."""
+    rows = [row(36, "insert", "li", "r29, 0x0"),
+            row(38, "diff_arg", "li", "r29, 0x0"),
+            row(39, "delete", "li", "r28, 0x0")]
+    verdict, reason, _ = roi.classify(rows)
+    assert verdict == "no_leverage", reason
+    assert "MOVED_INSTRUCTION_TIE" in reason
+
+
+def test_same_opcode_different_IMMEDIATE_is_not_a_displacement():
+    """The control for the register-normalisation: dropping registers must not
+    drop immediates too, or `li r3,0` would 'equal' `li r3,1`."""
+    rows = [row(36, "insert", "li", "r3, 0x1"),
+            row(39, "delete", "li", "r3, 0x0")]
+    verdict, _, _ = roi.classify(rows)
+    assert verdict != "no_leverage"
 
 
 def test_a_large_all_diff_arg_set_is_worth_but_says_permuter_is_wrong_tool():
