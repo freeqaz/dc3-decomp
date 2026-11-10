@@ -31,9 +31,9 @@ Vector3 TransformNormal(const Vector3 &normal, const Hmx::Matrix3 &mat) {
     Hmx::Matrix3 inv;
     FastInvert(mat, inv);
     Vector3 result;
-    float nx = normal.x;
-    float ny = normal.y;
     float nz = normal.z;
+    float ny = normal.y;
+    float nx = normal.x;
     // w8-h BEHAVIOURAL FIX: these were COLUMN dots (`result = normal * inv`), i.e.
     // the transpose was silently dropped, so every skinned/instanced normal was
     // rotated by inv instead of inv-transpose.  The image takes ROW dots -- for
@@ -61,8 +61,10 @@ Vector3 TransformNormal(const Vector3 &normal, const Hmx::Matrix3 &mat) {
     // lines below exactly.  The w8-h row-dot fix is right and the term order is
     // the image's.
     //
-    // RESIDUAL 99.68293 canonical / 94.31707 fuzzy, 23 rows, all register and
-    // stack-slot permutation: the image INTERLEAVES the three rows -- three
+    // RESIDUAL (w-mesh-tnorm 2026-11-10) 99.95 canonical / 95.07317 fuzzy,
+    // 19 equal / 22 rows, all register permutation + one offset swap.  Was
+    // 99.68293 / 94.31707 with 18 equal / 23 rows; see TNORM-RESOLVED below.
+    // The image INTERLEAVES the three rows -- three
     // fmuls, then three nx-fmadds sharing f7=nx as the multiplicand, then the
     // three closing fmadds -- and holds nx in one register across all of it.
     // w26-a correction: we emit the SAME 3+3+3 grouping (three fmuls, then
@@ -102,8 +104,41 @@ Vector3 TransformNormal(const Vector3 &normal, const Hmx::Matrix3 &mat) {
     // reproduces the same three keys and the same order.  Moving it needs a
     // leaf whose identity actually changes -- and the one that moves (nx) is
     // shared by all three rows, so a per-row change is not available either.
-    result.y = ny * inv.y.y + nx * inv.y.x + nz * inv.y.z;
-    result.x = nz * inv.x.z + nx * inv.x.x + ny * inv.x.y;
+    //
+    // TNORM-RESOLVED (w-mesh-tnorm 2026-11-10): 18 -> 19 equal, 99.68293 ->
+    // 99.95 canonical, 94.31707 -> 95.07317 fuzzy.  The hypothesis above is
+    // REFUTED as stated: the two later fusion positions are NOT pinned by a
+    // hash over the product leaves, because writing the two non-nx terms as
+    // [closer, nx, seed] -- instead of the image's [seed, nx, closer] -- plus
+    // declaring the locals nz, ny, nx makes c2 emit the image's grouping.
+    // Rows x and y now fuse seed, then nx, then closer, exactly as the image
+    // does, and the three stores come out in the image's y, x, z order instead
+    // of x, y, z.  c2 is applying a fixed rotation to the WRITTEN addend
+    // order; the original spelling was the image's own order and got rotated
+    // away from it, so the fix is to pre-rotate the source.
+    // ⚠ This is a ROUNDING change between the two spellings, and it moves
+    // TOWARD the image: the fused (unrounded) product is now the same one the
+    // image fuses.  It is not register-free -- the WRITTEN order is not the
+    // semantics, the emitted order is, and the emitted order is now the
+    // image's for rows x and y.
+    // Row z is still seeded from inv.z.z where the image seeds from inv.z.y.
+    // Pre-rotating row z too (`nz * inv.z.z + nx * inv.z.x + ny * inv.z.y`)
+    // is equal-count NEUTRAL (19/41) and regresses every secondary signal --
+    // canonical 99.95 -> 99.8, fuzzy 95.07317 -> 94.63415, stack slots
+    // 2 -> 6 permuted -- because it regenerates the whole load order.  Left
+    // alone deliberately.
+    //
+    // Measured INERT on this function (byte-identical, 18/41, so do not
+    // re-derive): swapping the multiply operands to matrix-first
+    // (`inv.y.y * ny`); reordering the three result statements x/y/z; and the
+    // declaration order nx,ny,nz on top of the new addend order (that one is
+    // 19/41 but scores worse: 99.7 canonical, 94.4 fuzzy, 8 stack slots
+    // permuted vs 2).  Declaration order ny,nz,nx is 18/41.  c2 canonicalises
+    // statement order and commutative operand order, so neither is a lever --
+    // consistent with the Mtx.h Multiply note, which refuted the operand-order
+    // swap the same way.
+    result.x = ny * inv.x.y + nx * inv.x.x + nz * inv.x.z;
+    result.y = nz * inv.y.z + nx * inv.y.x + ny * inv.y.y;
     result.z = ny * inv.z.y + nx * inv.z.x + nz * inv.z.z;
     return result;
 }
