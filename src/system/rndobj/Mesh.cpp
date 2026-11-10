@@ -31,9 +31,9 @@ Vector3 TransformNormal(const Vector3 &normal, const Hmx::Matrix3 &mat) {
     Hmx::Matrix3 inv;
     FastInvert(mat, inv);
     Vector3 result;
-    float nx = normal.x;
-    float ny = normal.y;
     float nz = normal.z;
+    float ny = normal.y;
+    float nx = normal.x;
     // w8-h BEHAVIOURAL FIX: these were COLUMN dots (`result = normal * inv`), i.e.
     // the transpose was silently dropped, so every skinned/instanced normal was
     // rotated by inv instead of inv-transpose.  The image takes ROW dots -- for
@@ -102,8 +102,8 @@ Vector3 TransformNormal(const Vector3 &normal, const Hmx::Matrix3 &mat) {
     // reproduces the same three keys and the same order.  Moving it needs a
     // leaf whose identity actually changes -- and the one that moves (nx) is
     // shared by all three rows, so a per-row change is not available either.
-    result.y = ny * inv.y.y + nx * inv.y.x + nz * inv.y.z;
-    result.x = nz * inv.x.z + nx * inv.x.x + ny * inv.x.y;
+    result.x = ny * inv.x.y + nx * inv.x.x + nz * inv.x.z;
+    result.y = nz * inv.y.z + nx * inv.y.x + ny * inv.y.y;
     result.z = ny * inv.z.y + nx * inv.z.x + nz * inv.z.z;
     return result;
 }
