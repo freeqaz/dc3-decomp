@@ -76,6 +76,41 @@ template implementation's notes usually live in a shared header
 is worth re-running with `--file` on the header. **`1` is not proof a row is
 unexplored** — only that this file, in this window, has no note.
 
+### And before you *spend 600 builds*: price the permuter run
+
+```
+scripts/permuter_roi.py '?SetEmulateFPS@ProcCounter@@AAAIH@Z'
+```
+
+The permuter's own verdict text says *"Do NOT accept before running the
+permuter — these patterns are typically permuter-class"* **unconditionally**,
+including on rows where the entire residual is one instruction's placement.
+Measured 2026-11-10, four lanes:
+
+| row | non-equal rows | permuter outcome |
+|---|---|---|
+| `MoveDir::UpdateOverlay` | 595 | **won** in 4 depths (`and_split → decl_reorder → decl_move`) |
+| `HollaBackMinigame::BeginMinigame` | 2 (both `diff_arg`) | **862 viable variants, 0 improved** |
+| `ProcCounter::SetEmulateFPS` | 1 insert + 1 delete | **5 rounds, 0 improved** |
+| `RndMesh::TransformNormal` | 22 `diff_arg` | improved — but by a **hand** lever, not the permuter |
+
+The two failures share a shape the permuter cannot use: **the residual is a
+placement tie**. `SetEmulateFPS`'s insert and delete are the *same instruction*
+(`mr r3, r4`) at two positions; `BeginMinigame`'s two rows are one register-swap
+pair on a **dead** operand, and the image itself orders four textually identical
+`clear()` call sites 3–1 the other way, so no source text can decide it.
+
+The tool reads the objdiff row table and answers in the same three-state
+contract as `find_refutations.py`: **0** worth running, **1** no leverage
+expect zero, **2** could not measure. **`1` is a heuristic priced from these
+four rows, not a law** — it says "be surprised if you gain anything", not
+"forbidden". Use `--diff-json` to classify a saved diff without rebuilding.
+
+**`1` and `2` are deliberately different.** A failed read that returned `1`
+would read as "skip this row", which is exactly the class of silent-failure
+this project keeps getting bitten by; the parser therefore hard-errors on an
+unknown schema instead of returning an empty row list.
+
 ### Columns you cannot trust
 
 | Column | Problem |
