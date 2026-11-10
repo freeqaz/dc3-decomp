@@ -2139,7 +2139,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     // another.  There is no source-level handle for "do not hoist constant 0" --
     // replacing nullptr with 0 at all 21 sites leaves the tap byte-identical.
     //
-    // w-md-overlay (2026-11-10): 89.592 / fuzzy 88.335, 723 equal of 1318, target
+    // w-md-overlay (2026-11-10): 89.592 / fuzzy 88.38171, 723 equal of 1318, target
     // 5072 B vs base 5032 B (was 88.185 / 86.715, 681 equal of 1326).  Landed:
     // the `while (it != endFrame)` scan (the image compares the lower_bound
     // iterator with `beq`/`bne` cr6, which c2 only emits for an equality loop),
