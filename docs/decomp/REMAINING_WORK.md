@@ -106,6 +106,16 @@ expect zero, **2** could not measure. **`1` is a heuristic priced from these
 four rows, not a law** — it says "be surprised if you gain anything", not
 "forbidden". Use `--diff-json` to classify a saved diff without rebuilding.
 
+The discriminator is row **kind**, not row count. A size threshold was the
+first version and it priced away exactly the rows worth briefing:
+`HolmesClientCacheFile` (7 rows: 3 `diff_arg` + 2 insert + 2 delete, 96.4 %)
+and `ArcDetector::Update` (18 rows: 16 `diff_arg` + 1 insert + 1 delete,
+98.7 %) both came back UNCLEAR, because only ≥20 rows counted as structural.
+Both need a lane; neither is a tie. So: ≤2 rows *all* `diff_arg`, or an
+insert/delete pair of the *same* instruction, means no leverage; **any**
+insert/delete/replace row means a real code-shape difference and is worth
+running.
+
 **`1` and `2` are deliberately different.** A failed read that returned `1`
 would read as "skip this row", which is exactly the class of silent-failure
 this project keeps getting bitten by; the parser therefore hard-errors on an

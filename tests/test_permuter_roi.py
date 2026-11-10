@@ -84,6 +84,28 @@ def test_a_large_structural_row_set_is_worth_running():
     assert "STRUCTURAL" in reason
 
 
+def test_a_SMALL_structural_set_is_worth_running():
+    """MemTruncate's shape: only 3 non-equal rows, but one of them is an insert
+    and one a delete of DIFFERENT instructions -- a real code-shape difference.
+    A size threshold would have called this unclear; kind is the signal."""
+    rows = [row(10, "diff_arg", "mr", "r3, r4"),
+            row(20, "insert", "li", "r3, 0"),
+            row(30, "delete", "li", "r4, 0")]
+    verdict, reason, _ = roi.classify(rows)
+    assert verdict == "worth_it", reason
+    assert "STRUCTURAL" in reason
+
+
+def test_holmes_shape_is_structural():
+    """HolmesClientCacheFile: 7 rows = 3 diff_arg + 2 insert + 2 delete."""
+    rows = [row(i, "diff_arg", "lwz", "") for i in range(3)]
+    rows += [row(50 + i, "insert", "li", "") for i in range(2)]
+    rows += [row(60 + i, "delete", "li", "") for i in range(2)]
+    verdict, reason, _ = roi.classify(rows)
+    assert verdict == "worth_it", reason
+    assert "STRUCTURAL" in reason
+
+
 def test_a_large_all_diff_arg_set_is_worth_but_says_permuter_is_wrong_tool():
     """TransformNormal/regasm shapes: big swap set, no structural rows. The
     verdict is still worth_it (runs are cheap) but the reason must say the
