@@ -191,6 +191,11 @@ void ShellInput::Poll() {
     // gameplay panel (pause, endgame, back to the shell). No-op otherwise.
     if (TheUI->FocusPanel() != TheGamePanel)
         NativeForcedHelpbarRestoreAfterGameplay();
+    // Controller mode policy (auto): follow the pose provider -- faithful
+    // while a camera feeds the sensor, forced while only the dummy does.
+    // Before the idle-timeout check below, so a handover starts its timer
+    // this frame.  docs/debugging/native.md "Controller mode policy".
+    NativeControllerModePolicyTick(this);
 #endif
 
     if (TheGestureMgr->InControllerMode() && unk_0x68.SplitMs() >= unk_0x98) {

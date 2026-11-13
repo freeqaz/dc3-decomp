@@ -73,10 +73,23 @@ static void ResetSlotMap() {
         sSlotTrackId[s] = -1;
 }
 
+// Is a real pose provider feeding the sensor (ncnn, the external pose server
+// or the web page's pushes) rather than the dummy skeleton?  The same test
+// BuildSensorFrame makes; read by the `auto` controller-mode policy
+// (System_Native.cpp, NativeControllerModePolicyTick in HelpBarPanel.cpp).
+// A query only -- provider selection lives in GestureMgr_NativeInit.
+bool NativePoseProviderRunning() {
+#ifdef ENABLE_NCNN
+    if (sInternalPose && sInternalPose->IsRunning())
+        return true;
+#endif
+    return TheSkeletonProvider && TheSkeletonProvider->IsRunning();
+}
+
 // The scripted-input `wake` directive's question: would pressing the
 // controller-mode wake button change anything? Only outside controller mode
-// (never under DC3_CONTROLLER_MODE=forced, where controller mode is pinned on),
-// which keeps `wake` a no-op for the native default.
+// (never while the policy is forced, where controller mode is pinned on), so
+// `wake` is a no-op without a pose provider and wakes the shell with one.
 static bool NativeWakeNeeded() {
     return !TheGestureMgr || !TheGestureMgr->InControllerMode();
 }
@@ -176,7 +189,15 @@ void GestureMgr_NativeInit() {
 #endif
 
     // Controller-mode policy (DC3_CONTROLLER_MODE, docs/debugging/native.md):
-    // only `forced` pins controller mode here.
+    // `auto` latches from the provider just chosen -- a running one boots the
+    // shell out of controller mode, the image's GestureMgr ctor value (the ctor
+    // ran before any provider existed, so it read forced).  Then only a forced
+    // policy pins controller mode here.  The web provider is idle until the
+    // page's first dc3_pose_push, so the web boots forced and
+    // NativeControllerModePolicyTick hands over when the camera starts.
+    if (Dc3ControllerModeLatchAuto(NativePoseProviderRunning()) && TheGestureMgr) {
+        TheGestureMgr->SetInControllerMode(false);
+    }
     if (TheGestureMgr && Dc3ControllerModeForced()) {
         TheGestureMgr->SetInControllerMode(true);
     }

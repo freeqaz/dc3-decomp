@@ -95,4 +95,9 @@ void NativeForcedHelpbarExitForGameplay(bool immediate);
 void NativeForcedHelpbarRestoreAfterGameplay();
 // What HelpBarPanel::Draw reads in place of TheGestureMgr->InControllerMode().
 bool NativeHelpbarInControllerMode();
+// DC3_CONTROLLER_MODE=auto: re-latch the policy from NativePoseProviderRunning()
+// and perform the forced<->faithful transition.  Called once per frame from
+// ShellInput::Poll.
+class ShellInput;
+void NativeControllerModePolicyTick(ShellInput *shellInput);
 #endif

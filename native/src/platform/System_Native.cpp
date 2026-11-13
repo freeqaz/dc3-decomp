@@ -34,48 +34,95 @@ bool Dc3EnvFlag(const char *name, bool defaultOn) {
              strcasecmp(v, "off") == 0 || strcasecmp(v, "no") == 0);
 }
 
-// Dc3ControllerModeForced — the native controller-mode policy, DC3_CONTROLLER_MODE.
+// The native controller-mode policy, DC3_CONTROLLER_MODE.
 //
-//   unset / empty / "forced"  -> true  (the default; native stays in controller
-//                                       mode permanently, as it always has)
-//   "faithful"                -> false (run the image's Enter/ExitControllerMode
-//                                       bodies and the helpbar's
-//                                       controller_mode_timeout idle exit)
-//   anything else             -> true, with a warning
+//   unset / empty / "auto"  -> auto (the default): faithful while a real pose
+//                              provider runs (a camera feeds the sensor),
+//                              forced while only the dummy skeleton does
+//   "forced"                -> native stays in controller mode permanently
+//   "faithful"              -> the image's Enter/ExitControllerMode bodies and
+//                              the helpbar's controller_mode_timeout idle exit
+//   anything else           -> auto, with a warning
 //
-// Read once, on first call, and logged once. On the 360 (and under Xenia) a
-// pad press outside controller mode only ENTERS controller mode and is
-// otherwise swallowed (ShellInput::OnMsg(ButtonDownMsg)), and controller mode
-// exits after controller_mode_timeout (5000 ms) without pad input
-// (ShellInput::Poll), handing the UI back to the Kinect hand cursor. Without a
-// Kinect that is not playable, so `forced` is the default. Every site that
-// consults this names it; see docs/debugging/native.md "Controller mode
-// policy". PPC units declare it with a local `extern bool
-// Dc3ControllerModeForced();` inside their #ifdef HX_NATIVE blocks, like
-// Dc3EnvFlag.
-bool Dc3ControllerModeForced() {
-    static int sForced = -1;
-    if (sForced < 0) {
+// Why auto, from the image: on the 360 a Kinect is always attached, so the
+// shell boots OUT of controller mode (GestureMgr::GestureMgr mInControllerMode
+// = 0) and HamNavList::UpdateGestures runs the hand cursor whenever
+// !InControllerMode().  A pad press outside controller mode ENTERS controller
+// mode and is swallowed, B excepted (ShellInput::OnMsg(ButtonDownMsg)); every
+// press restarts the idle timer (HamUI::OnMsg(ButtonDownMsg) exports
+// reset_controller_mode_timeout); ShellInput::Poll hands the UI back to the
+// hand cursor after controller_mode_timeout (5000 ms) without one.  That is
+// the right behaviour exactly when something can move the hand cursor -- a
+// running provider.  With only the dummy skeleton nothing can, the 5 s
+// handover would strand a pad player in a UI no one can drive, so the policy
+// pins controller mode (`forced`).
+//
+// Under auto the decision is LATCHED, not read live: GestureMgr_NativeInit
+// latches it after the provider is chosen, and NativeControllerModePolicyTick
+// (HelpBarPanel.cpp, called from ShellInput::Poll) re-latches it once per
+// frame from NativePoseProviderRunning() and performs the transition.  Every
+// consumer below reads the latched value through Dc3ControllerModeForced(), so
+// one frame always sees one policy.
+//
+// PPC units declare these with a local `extern` inside their #ifdef HX_NATIVE
+// blocks, like Dc3EnvFlag.  Every site that consults the policy names it; see
+// docs/debugging/native.md "Controller mode policy".
+enum Dc3ControllerModeSetting { kCMAuto = 0, kCMForced = 1, kCMFaithful = 2 };
+
+static int ControllerModeSetting() {
+    static int sSetting = -1;
+    if (sSetting < 0) {
         const char *v = getenv("DC3_CONTROLLER_MODE");
-        if (!v || !*v || strcasecmp(v, "forced") == 0) {
-            sForced = 1;
+        if (!v || !*v || strcasecmp(v, "auto") == 0) {
+            sSetting = kCMAuto;
+        } else if (strcasecmp(v, "forced") == 0) {
+            sSetting = kCMForced;
         } else if (strcasecmp(v, "faithful") == 0) {
-            sForced = 0;
+            sSetting = kCMFaithful;
         } else {
             fprintf(stderr,
-                    "DC3 Native: DC3_CONTROLLER_MODE='%s' is not 'forced' or "
-                    "'faithful'; using forced\n", v);
-            sForced = 1;
+                    "DC3 Native: DC3_CONTROLLER_MODE='%s' is not 'auto', 'forced' "
+                    "or 'faithful'; using auto\n", v);
+            sSetting = kCMAuto;
         }
         fprintf(stderr, "DC3 Native: controller mode policy = %s\n",
-                sForced ? "forced" : "faithful");
+                sSetting == kCMAuto ? "auto (forced until a pose provider runs)"
+                : sSetting == kCMForced ? "forced" : "faithful");
     }
-    return sForced != 0;
+    return sSetting;
+}
+
+// auto's latched decision: true = faithful (a provider runs).
+static bool sAutoFaithful = false;
+
+bool Dc3ControllerModeIsAuto() { return ControllerModeSetting() == kCMAuto; }
+
+bool Dc3ControllerModeForced() {
+    switch (ControllerModeSetting()) {
+    case kCMForced:
+        return true;
+    case kCMFaithful:
+        return false;
+    default:
+        return !sAutoFaithful;
+    }
+}
+
+bool Dc3ControllerModeLatchAuto(bool providerRunning) {
+    if (ControllerModeSetting() != kCMAuto || sAutoFaithful == providerRunning)
+        return false;
+    sAutoFaithful = providerRunning;
+    fprintf(stderr, "DC3 Native: controller mode policy auto -> %s (%s)\n",
+            providerRunning ? "faithful" : "forced",
+            providerRunning ? "a pose provider is running"
+                            : "no pose provider is running");
+    return true;
 }
 
 // Dc3ControllerModeTimeoutMs — DC3_CONTROLLER_MODE_TIMEOUT_MS, a positive
 // override of the helpbar's controller_mode_timeout (ShellInput::unk_0x98,
-// default 5000) for DC3_CONTROLLER_MODE=faithful. Returns -1 when unset or not
+// default 5000) whenever the policy is faithful (explicit, or auto with a
+// provider). Returns -1 when unset or not
 // a positive integer (the helpbar value stands). Read once.
 int Dc3ControllerModeTimeoutMs() {
     static int sTimeoutMs = -2;
