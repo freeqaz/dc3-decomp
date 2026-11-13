@@ -25,6 +25,7 @@
 #   scripts/web/build.sh --reconfigure  # force a fresh cmake configure
 #   scripts/web/build.sh --opt O2       # release -O level (default O3)
 #   scripts/web/build.sh --no-sfx       # skip the kXMA SFX sidecars (below)
+#   MILO_ENGINE_PATH=/path/to/engine scripts/web/build.sh   # build against that engine checkout
 #
 # kXMA SFX sidecars: scripts/web/gen_sfx_sidecars.sh fills
 # native/web/build/sfx_sidecars/ with an .ogg for every key in
@@ -102,6 +103,16 @@ ENGINE_PATH_CANDIDATES=(
     "$REPO_ROOT/../milo-native-engine"
     "/home/free/code/milohax/milo-native-engine"
 )
+# An explicit MILO_ENGINE_PATH in the environment wins (e.g. a candidate engine
+# series checked out elsewhere), as -DMILO_ENGINE_PATH does for the desktop
+# configure (scripts/native_configure.sh).
+if [ -n "${MILO_ENGINE_PATH:-}" ]; then
+    if [ ! -d "$MILO_ENGINE_PATH/src" ]; then
+        echo "ERROR: MILO_ENGINE_PATH=$MILO_ENGINE_PATH is not a milo-native-engine checkout." >&2
+        exit 1
+    fi
+    ENGINE_PATH_CANDIDATES=("$MILO_ENGINE_PATH")
+fi
 MILO_ENGINE_PATH=""
 for candidate in "${ENGINE_PATH_CANDIDATES[@]}"; do
     if [ -d "$candidate/.git" ]; then
