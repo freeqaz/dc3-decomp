@@ -2237,6 +2237,15 @@ if(BUILD_TESTS)
             COMMAND ${MILO_PYTHON3_LINK} -B ${CMAKE_SOURCE_DIR}/../tests/test_pose_server.py)
         set_tests_properties(PoseServer.Python PROPERTIES
             LABELS PoseServer TIMEOUT 120 ENVIRONMENT "${MILO_TEST_ENV}")
+        # PoseFixture.Python: the keypoint-replay fixture that
+        # scripts/pose_scoring_gate.sh replays (native/tests/data/pose/) --
+        # a plausible, DANCING skeleton; song-time keyed replay; --replay-still
+        # holds frame 0 (tests/test_pose_fixture.py; no GPU). Re-recording
+        # determinism runs when the gitignored source video is present.
+        add_test(NAME PoseFixture.Python
+            COMMAND ${MILO_PYTHON3_LINK} -B ${CMAKE_SOURCE_DIR}/../tests/test_pose_fixture.py)
+        set_tests_properties(PoseFixture.Python PROPERTIES
+            LABELS PoseServer TIMEOUT 300 ENVIRONMENT "${MILO_TEST_ENV}")
     endif()
 
     # XeniaGolden.*: the native port against state recorded from the ORIGINAL
