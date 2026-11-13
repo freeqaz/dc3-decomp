@@ -21,16 +21,20 @@
 // every pixel against the overlay above for some t in the texture's range, and
 // that stationary noise does not change between frames.
 //
-// Needs a GPU (skips without one) and the game data (camera.milo). Compiled
-// only against an engine that carries the noise-map seam
-// (MILO_POSTPROC_NOISE_MAP, ~/tmp/np-postproc-engine.patch): against an older
-// engine the composite cannot see the map and the test would fail by design.
+// Needs a GPU (skips without one) and the game data (camera.milo), and an
+// engine that carries the noise-map seam (milo-native-engine "PostProcPass:
+// the noise is the post-process's noise MAP", which defines
+// MILO_POSTPROC_NOISE_MAP). The pinned engine has it, so the test is always
+// compiled: an engine without the seam is a build error here, not a test that
+// silently disappears.
 
 #include "test_helpers.h"
 
 #include "gfx/PostProcPass.h"
 
-#ifdef MILO_POSTPROC_NOISE_MAP
+#ifndef MILO_POSTPROC_NOISE_MAP
+#error "milo-native-engine lacks the post-process noise-map seam (MILO_POSTPROC_NOISE_MAP); MILO_ENGINE_PATH/MILO_ENGINE_PIN predate it"
+#endif
 
 #include "gfx/GpuDevice.h"
 #include "platform/rndshape/RndShape.h"
@@ -217,5 +221,3 @@ TEST_F(PostProcNoiseTest, AwesomeNoiseIsTheImagesStationaryTextureOverlay) {
     EXPECT_EQ(outside, 0) << "noise is not the image's texture overlay";
     EXPECT_EQ(moved, 0) << "stationary noise changed between frames";
 }
-
-#endif // MILO_POSTPROC_NOISE_MAP
