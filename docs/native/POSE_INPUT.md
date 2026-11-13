@@ -15,8 +15,9 @@ Work items: [PLAN.md](PLAN.md) track P.
 |---|---|---|
 | Camera frame | `native/scripts/pose_server.py` (`cv2.VideoCapture`: 640×480 @ 30 fps, 1-frame driver buffer), a Python child spawned by `NativeSkeletonProvider::Start` in `native/src/platform/Skeleton_Native.cpp`. Packet timestamp = capture time (the device's `CAP_PROP_POS_MSEC` when it is on our monotonic clock, as V4L2's is; else when `read()` returned). | `DC3_POSE_CAMERA` (index) |
 | 2D + 3D pose | `native/scripts/pose_mediapipe.py` `MediaPipeBackend`: BlazePose world landmarks (metres), absolute root by PnP, one-euro filter on root depth, centroid tracker. Emits DC3's 20 Kinect joints in camera-space metres. | `DC3_POSE_MODEL` (default `native/models/pose_landmarker_full.task` of the executable's tree, gitignored), `DC3_POSE_HFOV` |
-| Wire | Unix socket, protocol v2, layout 1 (20 DC3 joints). Layout 0 = COCO, remapped by `MapCOCOToDC3`. | `DC3_POSE_SOCKET`, `DC3_POSE_NO_SPAWN=1` (connect to a server you started) |
+| Wire | Unix socket, protocol v2, layout 1 (20 DC3 joints). The header's u16 after the layout byte is `flags`; bit 0 `FLAG_UNLEVELLED` = "this camera does not know its gravity, estimate it" (`pose_server.py` always sets it). Layout 0 = COCO, remapped by `MapCOCOToDC3`. | `DC3_POSE_SOCKET`, `DC3_POSE_NO_SPAWN=1` (connect to a server you started) |
 | Socket → slots | `GestureMgr_Native.cpp`: `BuildSensorFrame` → `FillPersonSlots` / `AssignSlots` / `NativeAutoAssignPlayers`. `FillSkeletonData` holds the last good position of joints under 0.3 confidence. No provider → a jittered standing dummy (two in two-player modes, `DC3_DUMMY_PLAYERS`). Every valid person fills its own slot: two people on the socket or in one `dc3_pose_push` frame are two players. | `DC3_POSE` (`off`, `external`, …), `DC3_NATIVE_SCORING` (default on), `DC3_POSE_SELFTEST` |
+| Gravity (np-pose-tilt) | `PoseLevel_Native.cpp` `NativeSensorLevel`, called by `BuildSensorFrame`: for a camera that does not know its gravity (socket packets with header flag bit 0, web pushes, performer `replay:`) it estimates `vNormalToGravity` from the player's standing posture, then runs `SkeletonFrame::Create`'s own gravity step (`sUpVectorSmoother` → `mFloorNormal` → `NuiTransformMatrixLevel` on every joint; `mRawPositions` stays raw). A Kinect-like source (synthetic modes) is levelled by (0,1,0). [Camera tilt](#camera-tilt-np-pose-tilt-2026-11-13) | `DC3_POSE_LEVEL` (default `auto`; `0` off; degrees = fixed), `DC3_POSE_LEVEL_LOG` |
 | Scoring | Decompiled code: SkeletonUpdate → `Skeleton::Poll` → FilterQueue / MoveDir / async MoveDetectors → `move_passed` | `DC3_REAL_MOVE_PASSED` (default on) |
 | Feedback | Ratings and score through the normal HUD. **Player view (P-4):** the camera picture and a per-person mask become the Kinect's colour and depth\|player streams, so the decompiled `StreamRenderer` draws the player's silhouette in the menu and gameplay boxes ([Player on screen](#player-on-screen-p-4)). | `DC3_CAMERA_FRAMES` (`WxH`, default `320x240`; `off`) · web `?pose_frames=` |
 
@@ -532,7 +533,8 @@ no filter.
 - **The perfect/awesome gap is open.** After alignment and pitch, 0.61 vs
   0.79 perfect remains. Candidates, untested: arm-length proportion, arm
   depth (the arms carry most of the limb error), and the stream crop's
-  perspective.
+  perspective. (Followed up by `np-pose-tilt`, below: the pitch is now
+  estimated and levelled automatically, and the arm candidates were tested.)
 
 #### Reproducing
 
@@ -561,6 +563,172 @@ Cost: MediaPipe on CPU is ~1–2× real time per song. A 16-song config runs
 in ~5–8 min at 4 jobs, unpaced and without a GPU. The `everybody` replay
 stalls on main_screen (the replayed dancer moves the menus), so it is not in
 the grid.
+
+### Camera tilt (`np-pose-tilt`, 2026-11-13)
+
+**What the original does (MEASURED from the code).** The game levels every
+skeleton with the Kinect's gravity reading. `SkeletonFrame::Create`
+(`src/system/gesture/Skeleton.cpp`) smooths `NUI_SKELETON_FRAME::vNormalToGravity`
+with `sUpVectorSmoother` (`default.dta` `kinect up_vector_smoothing`: alpha
+10/s, trend 0), stores it as `mFloorNormal` and multiplies every joint and
+the hip centre by `NuiTransformMatrixLevel(mFloorNormal)`. `mRawPositions`
+keeps the raw camera-space joints. `vFloorClipPlane` is read only for its `w`
+(`unkac4`). `mFloorNormal` is also "up" for `BaseSkeleton::MakeCameraToPlayerXfm`.
+The native sensor built `SkeletonFrame`s directly and skipped this step, and
+`NuiTransformMatrixLevel` was an identity stub. It is now ported from the
+target listing (`nuiskeleton.s`, `0x829C3568`: normalise, axis =
+`n × (0,1,0)`, identity when the axis is zero, else `XMMatrixRotationAxis(axis,
+acos(n.y))`), in `native/src/xbox_link_stubs.cpp`. So the correction lives in
+the sensor stand-in, the NUI analog, and **not** in `pose_mediapipe.py` /
+`pose_geometry.js`. The game does its own levelling, exactly as on a 360. One
+C++ path serves desktop and web: `PoseLevel_Native.cpp` is in both source
+lists, and the JS geometry is unchanged (`pose_parity.mjs geometry`: max
+joint error 2.2e-15 m, 14/14 detections).
+
+**The estimate** (`NativeGravityEstimator`, `PoseLevel_Native.h`). A webcam
+has no accelerometer, so `vNormalToGravity` comes from the player's posture.
+Each tracked person in each new frame offers one sample: the lean of the
+ankles → HipCenter axis, as pitch (toward the camera) and roll. The sample
+is kept only when:
+- HipCenter, ShoulderCenter, both shoulders, hips, knees and ankles are
+  `kConfidenceTracked`;
+- the axis is ≥ 0.3 m long and within 25° of camera +y;
+- the trunk (HipCenter → ShoulderCenter) is within 20° of the axis;
+- each knee bends ≤ 25° in the image plane;
+- the player faces the camera (|shoulder line x| ≥ 0.8 × its length).
+
+The last 600 kept samples (~20 s) form the window. Once a second, after 150
+samples (~5 s), the estimate is the window's median pitch minus
+`kPriorPitchDeg` and its median roll. The first estimate is taken directly,
+later ones are blended in at 0.25 per update (~4 s time constant), and the
+estimate is held between updates and through frames that fail the gates.
+`kPriorPitchDeg` = **2.9°** is the Kinect reference choreography's own
+ankles → HipCenter lean: the median over the story-mode songs' reference
+skeletons (per-song +0.5..+5.2°, sd 1.3). A levelled Kinect dancer shows it,
+so the estimate keeps it rather than forcing the player to 0. The estimate is
+clamped to ±30°. Before the first estimate the frame is levelled by (0,1,0),
+the identity.
+
+Why the axis and not the whole body: MediaPipe's z is noisy and its knees read
+~35° bent while standing, so a "near-still" gate found almost no frames. A
+gated median over upright frames is stable. On the pre-song footage, the legs
+out of frame produced ~15° outliers until the confidence, spine and facing
+gates were added (MEASURED, `pre/*.dc3pose`).
+
+**Results** (MEASURED, the np-video-calib grid: 16 songs, 1162 moves, Medium,
+per-song lead, `run_grid.sh` configs `auto`, `none` = `DC3_POSE_LEVEL=0`,
+`p10` = `DC3_POSE_LEVEL=10`). `none` reproduces np-video-calib's unrotated run
+exactly: every song's counts and the 0.739 ratio. `p10`, levelled in the
+engine, reproduces np-video-calib's fixture rotated by `--pitch 10`: 0.781,
+per-song counts identical. The two independent paths agree.
+
+| song | original P/A of N | none P/A/ok/bad | p10 | auto | score/orig none · p10 · auto | auto pitch, in-song median [range] | limb-optimal pitch |
+|---|---|---|---|---|---|---|---|
+| dabutt | 49/15 of 65 | 34/27/4/0 | 36/21/8/0 | 36/21/8/0 | 0.74 · 0.66 · **0.67** | 8.5 [7.4, 8.8] | 7 |
+| supersonic | 62/16 of 83 | 53/23/6/1 | 58/17/6/2 | 59/17/5/2 | 0.84 · 0.84 · 0.85 | 9.2 [7.1, 9.9] | 10 |
+| yougotittherightstuff | 55/15 of 77 | 33/38/2/4 | 54/18/1/4 | 54/18/1/4 | 0.83 · 1.01 · 0.99 | 8.8 [7.7, 10.1] | 8 |
+| letthemusicplay | 56/20 of 81 | 37/35/3/6 | 44/28/7/2 | 41/30/8/2 | 0.71 · 0.74 · 0.74 | 9.0 [6.7, 9.4] | 9 |
+| electricboogie | 50/14 of 69 | 32/26/8/3 | 25/31/9/4 | 29/27/10/3 | 0.54 · 0.43 · **0.49** | 7.6 [6.9, 8.5] | 7 |
+| iceicebaby | 59/7 of 69 | 33/30/2/4 | 43/21/1/4 | 43/21/1/4 | 0.62 · 0.70 · 0.70 | 8.8 [8.1, 9.8] | 13 |
+| aint2proud2beg | 63/9 of 74 | 30/40/4/0 | 34/36/4/0 | 36/34/4/0 | 0.72 · 0.75 · 0.75 | 8.3 [6.8, 10.2] | 10 |
+| macarena | 54/6 of 61 | 42/18/1/0 | 49/11/1/0 | 49/11/1/0 | 0.85 · 0.92 · 0.92 | 7.3 [5.7, 9.1] | 8 |
+| getlow | 61/10 of 73 | 52/19/1/1 | 57/14/1/1 | 57/14/1/1 | 0.91 · 0.94 · 0.94 | 8.5 [7.2, 10.2] | 8 |
+| 12step | 54/7 of 62 | 38/16/5/3 | 41/17/3/1 | 40/18/3/1 | 0.65 · 0.74 · 0.73 | 9.4 [8.3, 10.0] | 10 |
+| indaclub | 50/6 of 57 | 37/18/2/0 | 41/14/2/0 | 41/14/2/0 | 0.81 · 0.82 · 0.84 | 7.2 [6.3, 8.1] | 7 |
+| cupidshuffle | 72/13 of 85 | 47/28/5/5 | 50/23/6/6 | 52/22/5/6 | 0.61 · 0.60 · 0.63 | 8.1 [6.3, 9.0] | 6 |
+| boyfriend | 49/11 of 65 | 25/36/2/2 | 33/30/1/1 | 36/27/1/1 | 0.78 · 0.94 · 0.95 | 9.0 [7.9, 10.1] | 6 |
+| mrsaxobeat | 70/11 of 86 | 44/27/13/2 | 52/23/7/4 | 51/24/7/4 | 0.62 · 0.76 · 0.76 | 9.4 [7.9, 10.3] | 9 |
+| starships | 54/22 of 81 | 40/31/7/3 | 42/33/5/1 | 44/31/5/1 | 0.89 · 0.87 · 0.92 | 8.7 [7.3, 10.6] | 6 |
+| scream | 63/8 of 74 | 50/17/6/1 | 51/18/5/0 | 52/16/6/0 | 0.77 · 0.83 · 0.81 | 8.4 [6.5, 9.4] | 6 |
+| **total** | **P 0.793 · A 0.164** | **0.540 · 0.369** | **0.611 · 0.306** | **0.620 · 0.297** | **0.739 · 0.781 · 0.789** | 7.2–9.4 (song medians) | median 8 |
+
+- **Auto beats no correction**: score up on 14 of 16 songs, perfect count
+  up on 15 of 16, total 0.739 → **0.789**, perfect rate 0.540 → 0.620. It
+  matches or beats the fixed 10° on 10 of 16 (total 0.781).
+- **The two songs that lose, dabutt and electricboogie, lose under the
+  fixed 10° too** (0.74 → 0.66 / 0.67, 0.54 → 0.43 / 0.49). On dabutt the
+  perfect count rises (34 → 36) and four awesomes drop to ok. Auto loses less
+  than p10 on both. The runs are deterministic (`none` reproduces
+  np-video-calib exactly), so these are effects of the rotation, not noise.
+  INFERRED: on those two, the dancer's own stance differs from the
+  choreography's. The scorer rewards matching the choreography, not standing
+  straight.
+- **The limb error, independent of the scorer** (MEASURED, the estimator
+  prototype offline on the same fixtures against `dump_target.py`'s
+  reference): auto lowers it on **16 of 16** songs vs none, median 25.67° →
+  24.41°, and matches or beats p10 on 10 of 16 (median 24.41°). The engine's
+  in-song estimates (table) agree with the prototype's (7.1–9.5°).
+- **Stable.** Per song the in-song estimate's sd is 0.4–1.0°. On every song
+  the first estimate exists before the first rated move.
+- **A replay artifact after the song, not in it.** When a fixture ends, the
+  replay holds its last frame. That single repeated pose fills the window
+  and the estimate drifts to its lean: −1.1° (electricboogie), 19° (scream),
+  21° (supersonic). Every excursion begins after the song's last rated move,
+  so no score is affected. A live camera sends new frames.
+- `tilt_survey.py` (MEASURED): the prior is +2.85° (sd 1.34 over songs). The
+  player's lean is +11.2° (sd 0.8). The limb-error-optimal pitch has median
+  8.0° (sd 1.9). Estimate − optimum = +0.11° ± 1.76° per song. The per-song
+  optimum is noisy (iceicebaby 13, starships 6), and no per-song estimate
+  from posture can recover it. The prior is the one free parameter, and it
+  comes from the reference, not the scores.
+
+**Default: on** (`DC3_POSE_LEVEL` unset = `auto`). The original levels every
+frame by gravity. The estimate brings the geometry closer on all 16 songs
+and the score on 14. The two losses are shared with any fixed correction.
+`DC3_POSE_LEVEL=0` restores the pre-np-pose-tilt frames bit-exactly.
+INFERRED: a live webcam at a different height reads a different tilt, and
+that is the case this exists for. Needs P-2's live session before anyone tunes
+`kPriorPitchDeg`.
+
+#### The arm error (MEASURED geometry, INFERRED conclusion)
+
+The arms carry most of the residual limb error. Each candidate cause was
+tested against the reference skeletons (`ana/arm_probe.py` in the lane
+scratch):
+
+- **Direction, not length or depth.** The upper-arm error is 25–27° in the
+  image plane (xy) and ~20° in elevation; the forearm is 39° in xy. Scaling
+  depth gains nothing. Arm-length normalisation cannot change a direction.
+- **Timing is not it.** The arms' best lead is 0, the same as the legs'.
+- **Proportions.** Ours / reference / a real Kinect v1 (UTD-MHAD):
+
+  | ratio to torso | ours | reference | Kinect v1 |
+  |---|---|---|---|
+  | shoulder width | 0.846 | 0.685 | 0.78 |
+  | head − ShoulderCenter | 0.435 | 0.22 | 0.466 |
+  | upper arm | 0.62 | 0.57 | 0.64 |
+
+  Ours is closer to a real Kinect than the reference is. Moving our shoulders
+  medially by 0.2–0.4 of their width gains only 1.3–2.3° on the upper arms,
+  and it would make the skeleton less Kinect-like. Not changed.
+- **The COCO → Kinect mapping is unused** on this path: MediaPipe sends
+  layout 1, its own 20 joints.
+- **Conclusion (INFERRED):** no mapping fix in our code is justified. The arm
+  error is mostly the dancer versus the choreography, which the Xbox saw too:
+  the original also rated 0.164 awesome. What separates the perfect rate
+  (0.62 vs 0.79) stays open.
+
+#### Tests
+
+- `native/tests/test_pose_level.cpp`:
+  - `NuiLevelMatrixTest` (3 tests): the port against the decoded matrix.
+  - `GravityEstimatorTest` (5 tests): a synthetic dancer seen by a camera
+    at pitch 8°, roll −3° comes out upright within 0.3° and 1.5 cm. Also:
+    nothing before 5 s, held through gate failures, updated once a second and
+    slowly under a ramping camera, and a jump in the window median blended
+    in.
+  - `PoseLevelPolicyTest`, `PoseLevelFrameTest`: Create's gravity step,
+    raw positions kept.
+- `native/tests/test_native_pose_socket.cpp` `PoseSensorLevelTest`
+  (4 tests): end to end over the fake socket. A flagged 8° camera is
+  levelled to the prior, an unflagged packet is untouched, `DC3_POSE_LEVEL=0`
+  is off, and a fixed pitch levels by exactly that.
+- `tests/test_pose_server.py`: every packet carries `FLAG_UNLEVELLED`.
+- **Sabotage, 15 of 15 caught**: identity level matrix, per-frame updates,
+  no prior, no confidence gate, the reader ignoring the flag, raw positions
+  levelled, every source estimated, `=0` ignored, no spine gate,
+  `mFloorNormal` not stored, roll ignored, fixed pitch ignored, first
+  estimate blended, a 1 s window, blend = 1. Plus the Python flag sabotage.
 
 ## Player on screen (P-4)
 
