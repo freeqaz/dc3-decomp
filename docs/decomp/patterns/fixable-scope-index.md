@@ -272,9 +272,9 @@ seconds-long neutrality check. Re-confirmed with `run_objdiff(name_check)`.
 
 | spelling change | count | instruction-neutral? |
 |---|---:|---|
-| `if (a && b) { X }` -> `if (a) { if (b) { X } }` | +3 | yes (3 sites) |
+| `if (a && b) { X }` -> `if (a) { if (b) { X } }` | +3 | yes (4 sites) |
 | `} else if (c) { X } else { Y }` -> `} else { if (c) { X } else { Y } }` | +1 | yes (3 sites) |
-| `if (p) { stmt; }` -> `if (p) stmt;` | -1 | yes (15 sites) |
+| `if (p) { stmt; }` -> `if (p) stmt;` | -1 | yes (20 sites) |
 | redundant bare block wrapping a whole `else` arm, removed | -1 | yes |
 | wrapping `if (x != -1) { body }` -> `if (x == -1) return; body` | -1 | yes (`RhythmBattlePlayer::UpdateAnimations`) |
 | a `MILO_ASSERT_IF(p)` whose `p` was null-checked-and-returned above | +3 | **yes -- the optimizer deletes it** |
