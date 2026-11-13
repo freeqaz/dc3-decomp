@@ -42,6 +42,7 @@
 #include <unistd.h>
 #include "platform/ExecutablePath.h"
 #include "engine_http_port.h"
+#include "shell_timeout.h"
 
 namespace {
 
@@ -151,7 +152,7 @@ BattleRun RunBattle(int people, const char *stopScreens, int waitSeconds) {
     std::string log = R + "/engine.log";
 
     std::ostringstream sh;
-    sh << "cd " << dir << " || exit 1; ";
+    sh << kShellTimeoutLookup << "cd " << dir << " || exit 1; ";
     if (people >= 0) {
         sh << "python3 " << sensor << " --socket " << sock << " --people " << people
            << " --perform-port-file " << EngineHttpPortFile(R) << " --record " << R << "/kinect.json"
@@ -165,7 +166,7 @@ BattleRun RunBattle(int people, const char *stopScreens, int waitSeconds) {
        << " MILO_INPUT_SCRIPT=" << script;
     if (people >= 0)
         sh << " DC3_POSE=external DC3_POSE_NO_SPAWN=1 DC3_POSE_SOCKET=" << sock;
-    sh << " exec timeout " << (waitSeconds + 60) << " ./dc3-native > " << log << " 2>&1 ) & epid=$!; "
+    sh << " exec ${t:+$t " << (waitSeconds + 60) << "} ./dc3-native > " << log << " 2>&1 ) & epid=$!; "
        << EngineHttpApiShell(R, "epid", 120)
        << "end=$((SECONDS+" << waitSeconds << ")); "
        << "until grep -aqE \"Screen '(" << stopScreens << ")' Enter\" " << log

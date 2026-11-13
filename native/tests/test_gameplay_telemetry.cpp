@@ -25,6 +25,7 @@
 
 #include "telemetry_parser.h"
 #include "platform/ExecutablePath.h"
+#include "shell_timeout.h"
 
 // ---------------------------------------------------------------------------
 // Helpers (shared with test_headless_boot.cpp — duplicated to keep standalone)
@@ -83,13 +84,14 @@ static TelRunResult RunWithTelemetry(
     if (!Dc3NativeIsPresent()) return TelRunResult{-1, 0, "", false};
     std::string binary = GetDc3NativePath();
     std::ostringstream cmd;
-    cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_TEL=1 DC3_FAST_BOOT=1"
+    cmd << kShellTimeoutLookup
+        << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_TEL=1 DC3_FAST_BOOT=1"
         << " MILO_MAX_FRAMES=" << maxFrames;
     if (extraEnv && extraEnv[0])
         cmd << " " << extraEnv;
     if (script)
         cmd << " MILO_INPUT_SCRIPT=" << script;
-    cmd << " timeout " << timeout << " " << binary << " 2>&1";
+    cmd << " ${t:+$t " << timeout << "} " << binary << " 2>&1";
 
     FILE *pipe = popen(cmd.str().c_str(), "r");
     TelRunResult result = {-1, 0, "", false};

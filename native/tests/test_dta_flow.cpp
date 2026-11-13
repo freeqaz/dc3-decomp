@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include "platform/ExecutablePath.h"
+#include "shell_timeout.h"
 
 // ---------------------------------------------------------------------------
 // Helpers (duplicated from test_headless_boot.cpp to keep standalone)
@@ -216,7 +217,7 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeco
     std::ostringstream cmd;
     // DC3_TEL at interval 1: GameplayReachesPlayingState reads the real
     // hamprovider game_stage off the per-frame telemetry line.
-    cmd << extraEnv << (extraEnv[0] ? " " : "")
+    cmd << kShellTimeoutLookup << extraEnv << (extraEnv[0] ? " " : "")
         << (fastBoot ? "" : "env -u DC3_FAST_BOOT ")
         << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0"
         << (fastBoot ? " DC3_FAST_BOOT=1" : "")
@@ -225,7 +226,7 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeco
         << " DC3_SAVE_DIR=" << persistence << "/saves"
         << " MILO_INPUT_SCRIPT=" << script
         << " MILO_MAX_FRAMES=" << maxFrames
-        << " timeout " << timeout << " " << binary << " 2>&1";
+        << " ${t:+$t " << timeout << "} " << binary << " 2>&1";
 
     FILE *pipe = popen(cmd.str().c_str(), "r");
     DtaRunResult result = {-1, 0, "", false, ""};

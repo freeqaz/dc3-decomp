@@ -24,13 +24,8 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include "shell_timeout.h"
 
-// GNU `timeout` bounds each child run. macOS has none; Homebrew's coreutils
-// installs it as `gtimeout`. With neither, the child runs unbounded and
-// ctest's per-test TIMEOUT is the bound. Prefix a shell command with this,
-// then write `${t:+$t <seconds>}` where `timeout <seconds>` was.
-static const char *const kShellTimeoutLookup =
-    "t=$(command -v timeout || command -v gtimeout); ";
 
 static std::string GetBinaryDir() {
     char buf[4096];
