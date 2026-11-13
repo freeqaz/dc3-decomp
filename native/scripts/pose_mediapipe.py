@@ -35,6 +35,7 @@ metres directly bypasses the C++ NormalizedToMeters helper whose hardcoded
 """
 
 import math
+import time
 
 import numpy as np
 
@@ -308,6 +309,10 @@ class MediaPipeBackend:
         # array in [0,1] per returned person (None when segmentation is off or
         # MediaPipe gave no mask for that pose).
         self.last_masks = []
+        # process()'s own stage times in ms, for pose_server.py --profile and
+        # scripts/pose_bench/ (PLAN L-3): BGR->RGB, MediaPipe, geometry
+        # (root + remap + mask copy), tracker + root-depth filter.
+        self.last_timing = {}
         self._landmarker = vision.PoseLandmarker.create_from_options(opts)
         self._tracker = CentroidTracker()
         self._root_z_filters = {}  # track id -> OneEuroFilter on root depth
@@ -446,14 +451,24 @@ class MediaPipeBackend:
         """Returns list of (track_id, [(x,y,z,conf)] * 20) in camera-space metres."""
         import cv2
 
+        clock = time.perf_counter
+        t0 = clock()
         height, width = frame_bgr.shape[:2]
         rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         mp_img = self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=rgb)
+        t1, c1 = clock(), time.process_time()
         res = self._landmarker.detect_for_video(mp_img, int(timestamp_ms))
+        t2 = clock()
+        # infer_cpu: CPU time of every thread in the process meanwhile, i.e.
+        # MediaPipe's (XNNPACK) threads plus anything else running then.
+        timing = self.last_timing = {"cvt": (t1 - t0) * 1e3, "infer": (t2 - t1) * 1e3,
+                                     "infer_cpu": (time.process_time() - c1) * 1e3,
+                                     "geom": 0.0, "track": 0.0}
 
         self.last_masks = []
         if not res.pose_world_landmarks:
             self._tracker.update([])
+            timing["track"] = (clock() - t2) * 1e3
             return []
         seg = getattr(res, "segmentation_masks", None) or []
 
@@ -482,6 +497,8 @@ class MediaPipeBackend:
             hip_c = (image_xy[L_HIP] + image_xy[R_HIP]) * 0.5
             centroids.append((float(hip_c[0]), float(hip_c[1])))
 
+        t3 = clock()
+        timing["geom"] = (t3 - t2) * 1e3
         ids = self._tracker.update(centroids)
         self._frame_count += 1
         t_s = timestamp_ms / 1000.0
@@ -507,6 +524,7 @@ class MediaPipeBackend:
         for t in stale:
             self._filter_last_seen.pop(t, None)
             self._root_z_filters.pop(t, None)
+        timing["track"] = (clock() - t3) * 1e3
         return out
 
     def _remap(self, world, vis, root):
