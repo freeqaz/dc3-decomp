@@ -69,6 +69,8 @@ FILE_RE = re.compile(r"(could not (open|find|load|cache)|couldn't (open|find|loa
                      r"can't (open|find)|not found|missing|no such file|failed to (open|load))",
                      re.I)
 ENDGAME_SCREENS = ("perform_endgame_screen",)
+# multiuser_screen's difficulty list opens on beginner
+DIFFICULTY_DOWNS = {"beginner": 0, "easy": 1, "medium": 2, "expert": 3}
 
 
 def seed_root(root):
@@ -302,12 +304,16 @@ def selected_song(log_path):
 def play_song(a, song, downs, port, venue):
     tag = song + (f"_{venue}" if venue else "")
     out = os.path.join(os.path.abspath(a.out), tag)
-    extra = {"DC3_POSE": "external", "DC3_POSE_PERFORM": a.performer,
+    extra = {"DC3_POSE": "external", "DC3_POSE_PERFORM": a.performer.replace("{song}", song),
              "DC3_MOVE_RATING_LOG": "1", "DC3_FAST_TIME": "1",
              "DC3_CONTROLLER_MODE": "forced"}
     if a.real_time:
         del extra["DC3_FAST_TIME"]
-    e = Engine(a.binary, port, out, route_script(downs), gpu=not a.no_gpu, extra_env=extra)
+    for kv in a.env:
+        k, _, v = kv.partition("=")
+        extra[k] = v
+    e = Engine(a.binary, port, out, route_script(downs, DIFFICULTY_DOWNS[a.difficulty]),
+               gpu=not a.no_gpu, extra_env=extra)
     res = {"song": song, "venue_asked": venue, "downs": downs, "port": port,
            "out": out, "gameplay": False, "results": False, "bounced_to_title": False,
            "hang": None, "selected": None}
@@ -371,6 +377,17 @@ def play_song(a, song, downs, port, venue):
         res["song_secs_at_stop"] = song_secs
         res["state_at_stop"] = state
         if res["results"] and e.alive():
+            # The results card's own numbers (perform_endgame.dta): gems =
+            # num_perfect, green = num_awesome, both counted by perform.dta's
+            # move handler only from start_score_move_index on -- so they are
+            # NOT the counts of DC3 MOVE_RATING lines -- and the percentage
+            # is meta_performer get_moves_passed.
+            card = {}
+            for key, expr in (("num_perfect", "{{gamedata getp 0 provider} get num_perfect}"),
+                              ("num_awesome", "{{gamedata getp 0 provider} get num_awesome}"),
+                              ("moves_passed_pct", "{meta_performer get_moves_passed 0}")):
+                card[key] = (e.eval(expr) or {}).get("data", {}).get("value")
+            res["card"] = card
             # let the results tally run (UI time is 1/30 s per frame headless)
             try:
                 fr = e.jget("/frame")["data"]["frame"]
@@ -458,7 +475,12 @@ def main():
                     "comma list runs each song in each")
     ap.add_argument("--jobs", type=int, default=1)
     ap.add_argument("--port-base", type=int, default=9220)
-    ap.add_argument("--performer", default="choreo", help="DC3_POSE_PERFORM mode")
+    ap.add_argument("--performer", default="choreo",
+                    help="DC3_POSE_PERFORM mode; '{song}' is replaced by the song id "
+                         "(replay:DIR/{song}.dc3pose)")
+    ap.add_argument("--difficulty", default="easy", choices=sorted(DIFFICULTY_DOWNS))
+    ap.add_argument("--env", action="append", default=[], metavar="K=V",
+                    help="extra engine environment, repeatable (e.g. DC3_POSE_LATENCY_MS=250)")
     ap.add_argument("--song-seconds", type=float, default=0,
                     help="stop this many song-seconds into gameplay (0 = whole song)")
     ap.add_argument("--timeout", type=int, default=1800, help="wall cap per song")
