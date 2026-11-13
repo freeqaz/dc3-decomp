@@ -288,12 +288,25 @@ def analyse_log(path):
     }
 
 
+def selected_song(log_path):
+    """The row confirmed on song_select_screen, from the game's own select line."""
+    with open(log_path, "rb") as f:
+        data = f.read()
+    at = data.find(b"Screen 'song_select_screen' Enter")
+    if at < 0:
+        return None
+    m = re.search(rb"select name='right_hand.hnl' selected=(\d+) first=\d+ sym='(\w+)'", data[at:])
+    return m.group(2).decode() if m else None
+
+
 def play_song(a, song, downs, port, venue):
     tag = song + (f"_{venue}" if venue else "")
     out = os.path.join(os.path.abspath(a.out), tag)
     extra = {"DC3_POSE": "external", "DC3_POSE_PERFORM": a.performer,
              "DC3_MOVE_RATING_LOG": "1", "DC3_FAST_TIME": "1",
              "DC3_CONTROLLER_MODE": "forced"}
+    if a.real_time:
+        del extra["DC3_FAST_TIME"]
     e = Engine(a.binary, port, out, route_script(downs), gpu=not a.no_gpu, extra_env=extra)
     res = {"song": song, "venue_asked": venue, "downs": downs, "port": port,
            "out": out, "gameplay": False, "results": False, "bounced_to_title": False,
@@ -339,7 +352,10 @@ def play_song(a, song, downs, port, venue):
                 if not shot_game and beat is not None and beat > 48:
                     res["gameplay_png"] = e.screenshot("gameplay.png")
                     shot_game = True
-                if a.song_seconds and song_secs is not None and song_secs >= a.song_seconds:
+                # realSecs is TaskMgr's kRealTime: it still holds the menu's
+                # clock until the song starts, so count it only while playing.
+                if (a.song_seconds and state == "playing" and song_secs is not None
+                        and song_secs >= a.song_seconds):
                     if not shot_game:
                         res["gameplay_png"] = e.screenshot("gameplay.png")
                     break
@@ -377,11 +393,7 @@ def play_song(a, song, downs, port, venue):
     res["wall_s"] = round(time.time() - t_start, 1)
     res["screens"] = e.screens
     res.update(analyse_log(e.log_path))
-    with open(e.log_path, "rb") as f:
-        m = re.search(rb"select name='right_hand.hnl' selected=(\d+) first=\d+ sym='(\w+)'",
-                      f.read().split(b"choose_mode_screen", 1)[-1])
-        if m:
-            res["selected"] = m.group(2).decode()
+    res["selected"] = selected_song(e.log_path)
     with open(os.path.join(out, "result.json"), "w") as f:
         json.dump(res, f, indent=1)
     return res
@@ -450,6 +462,8 @@ def main():
     ap.add_argument("--timeout", type=int, default=1800, help="wall cap per song")
     ap.add_argument("--stall", type=int, default=180, help="beat-not-moving cap")
     ap.add_argument("--no-gpu", action="store_true", help="MILO_NORENDER=1 (no screenshots)")
+    ap.add_argument("--real-time", action="store_true",
+                    help="no DC3_FAST_TIME: song time on the real clock (pair with DC3_HTTP_PACE_FPS)")
     a = ap.parse_args()
     a.out = os.path.abspath(a.out)
     os.makedirs(a.out, exist_ok=True)

@@ -75,7 +75,9 @@ async function playOne(index, song) {
         const mm = e.text.match(/will enter '([^']+)'/);
         if (mm) screens.push({ t: e.t, screen: mm[1] });
         const sel = e.text.match(/HamNavList: select name='right_hand.hnl' selected=(\d+) first=\d+ sym='(\w+)'/);
-        if (sel) selects.push({ index: +sel[1], sym: sel[2] });
+        // Only song_select_screen's picks: the same list widget carries the
+        // tutorial and multiuser menus ('continue', 'ok', ...) afterwards.
+        if (sel && cur() === 'song_select_screen') selects.push({ index: +sel[1], sym: sel[2] });
     });
     page.on('response', (r) => { if (r.status() === 404) http404.push(r.url().replace(/^https?:\/\/[^/]+/, '')); });
     page.on('pageerror', (err) => errors.push({ t: el(), msg: String(err.message || err) }));
