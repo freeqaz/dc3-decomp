@@ -569,6 +569,8 @@ int NativeSlotForTrackId(int trackId) {
 // GetLiveCameraInput() consumer keeps its null path.
 static LiveCameraInput *sCameraStandIn = nullptr;
 
+bool NativeCameraStandInAttached() { return sCameraStandIn != nullptr; }
+
 static void NativeCameraPoll(GestureMgr *mgr) {
     if (!sCameraStandIn) {
         if (!NativeCamera::Active())

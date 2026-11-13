@@ -2,9 +2,12 @@
 
 #include "StreamCompose_Native.h"
 #include "CameraStream_Native.h"
+#include "rndobj/Tex.h"
 
+#include <cstdio>
 #include <cstring>
 #include <map>
+#include <string>
 #include <vector>
 
 namespace {
@@ -87,6 +90,8 @@ void BlurPass(std::vector<uint8_t> &img, std::vector<uint8_t> &tmp, int w, int h
 struct Uploaded {
     std::vector<uint8_t> pixels;
     int w = 0, h = 0;
+    std::string name; // taken at upload: the texture may be gone by the time it is read
+    unsigned uploads = 0;
 };
 std::map<RndTex *, Uploaded> sUploaded;
 unsigned sUploadCount = 0;
@@ -180,6 +185,8 @@ void NativeStreamUpload(RndTex *tex, const uint8_t *rgba, int w, int h) {
     u.pixels.assign(rgba, rgba + (size_t)w * h * 4);
     u.w = w;
     u.h = h;
+    u.name = tex->Name() ? tex->Name() : "";
+    u.uploads++;
     sUploadCount++;
     UploadRGBAToRndTex(tex, rgba, w, h);
 }
@@ -196,5 +203,49 @@ const uint8_t *NativeStreamLastPixels(RndTex *tex, int *w, int *h) {
 }
 
 unsigned NativeStreamUploadCount() { return sUploadCount; }
+
+// GestureMgr_Native.cpp
+bool NativeCameraStandInAttached();
+
+// GET /api/camera (HttpServer.cpp).
+std::string Dc3CameraJson(int gridW, int gridH) {
+    if (gridW > 640)
+        gridW = 640;
+    if (gridH > 480)
+        gridH = 480;
+    std::string j = "{\"active\":";
+    j += NativeCamera::Active() ? "true" : "false";
+    j += ",\"standIn\":";
+    j += NativeCameraStandInAttached() ? "true" : "false";
+    j += ",\"latched\":" + std::to_string(NativeCamera::LatchedSequence());
+    j += ",\"uploads\":" + std::to_string(sUploadCount);
+    j += ",\"grid\":[" + std::to_string(gridW) + "," + std::to_string(gridH) + "]";
+    j += ",\"textures\":[";
+    bool first = true;
+    for (auto &kv : sUploaded) {
+        const Uploaded &u = kv.second;
+        if (!first)
+            j += ",";
+        first = false;
+        j += "{\"name\":\"" + u.name + "\",\"w\":" + std::to_string(u.w)
+            + ",\"h\":" + std::to_string(u.h) + ",\"uploads\":" + std::to_string(u.uploads)
+            + ",\"rows\":[";
+        for (int gy = 0; gy < gridH; gy++) {
+            j += gy ? ",\"" : "\"";
+            int y = (int)(((long)gy * 2 + 1) * u.h / (2L * gridH));
+            for (int gx = 0; gx < gridW; gx++) {
+                int x = (int)(((long)gx * 2 + 1) * u.w / (2L * gridW));
+                const uint8_t *px = &u.pixels[((size_t)y * u.w + x) * 4];
+                char hex[9];
+                snprintf(hex, sizeof hex, "%02x%02x%02x%02x", px[0], px[1], px[2], px[3]);
+                j += hex;
+            }
+            j += "\"";
+        }
+        j += "]}";
+    }
+    j += "]}";
+    return j;
+}
 
 #endif

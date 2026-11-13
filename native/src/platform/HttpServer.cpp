@@ -283,6 +283,7 @@ void HttpServer::ProcessCommands() {
             case kCmdGetChildren:  HandleGetChildren(*cmd); break;
             case kCmdSceneTree:    HandleSceneTree(*cmd); break;
             case kCmdPoseTarget:   HandlePoseTarget(*cmd); break;
+            case kCmdCamera:       HandleCamera(*cmd); break;
             default: cmd->result.error = "Unknown command type"; break;
         }
         {
@@ -898,6 +899,15 @@ void HttpServer::HandlePoseTarget(Command& cmd) {
     cmd.result.ok = true;
 }
 
+// StreamCompose_Native.cpp.  Read-only.
+std::string Dc3CameraJson(int gridW, int gridH);
+
+void HttpServer::HandleCamera(Command& cmd) {
+    int gw = atoi(cmd.param1.c_str()), gh = atoi(cmd.param2.c_str());
+    cmd.result.jsonData = Dc3CameraJson(gw > 0 ? gw : 32, gh > 0 ? gh : 24);
+    cmd.result.ok = true;
+}
+
 void HttpServer::HandleSceneTree(Command& cmd) {
     ObjectDir* dir = ObjectDir::Main();
     if (!dir) {
@@ -1404,6 +1414,30 @@ void HttpServer::RegisterEndpoints() {
     svr->Get("/api/pose/target", [this](const httplib::Request& req, httplib::Response& res) {
         std::string lead = req.has_param("lead_ms") ? req.get_param_value("lead_ms") : "0";
         auto result = QueueAndWait(kCmdPoseTarget, lead);
+        if (result.ok) {
+            res.set_content(JsonOk(result.jsonData), "application/json");
+        } else {
+            res.status = 500;
+            res.set_content(JsonError(result.error), "application/json");
+        }
+    });
+
+    // GET /api/camera[?grid=WxH] — the native camera stream (PLAN P-4): is a
+    // stream live, how many frames were latched, and for every texture the
+    // native StreamRenderer has drawn, its size and a WxH nearest-sampled grid
+    // of its last picture ("rrggbbaa" per cell, top row first).  The CPU copy
+    // of what was uploaded, so it answers headless too.  Read-only.
+    svr->Get("/api/camera", [this](const httplib::Request& req, httplib::Response& res) {
+        std::string gw = "32", gh = "24";
+        if (req.has_param("grid")) {
+            std::string g = req.get_param_value("grid");
+            size_t x = g.find('x');
+            if (x != std::string::npos) {
+                gw = g.substr(0, x);
+                gh = g.substr(x + 1);
+            }
+        }
+        auto result = QueueAndWait(kCmdCamera, gw, gh);
         if (result.ok) {
             res.set_content(JsonOk(result.jsonData), "application/json");
         } else {

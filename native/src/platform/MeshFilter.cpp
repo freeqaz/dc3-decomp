@@ -2,6 +2,7 @@
 #include "rndobj/Mat.h"
 #include "rndobj/Tex.h"
 #include "rndobj/BaseMaterial.h"
+#include "platform/CameraStream_Native.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -14,7 +15,10 @@ static const char *SkipRule(const char* name) {
     // rb3-xenon link the same engine and the LOD one is actively wrong for RB3
     // content — its crowd characters are authored *as* their LOD-2 asset).
 
-    // Kinect depth-sensor visualisation (80x60 sensor grid) — no data on native.
+    // grid_80by60_cube: the voxel template DepthBuffer3D instances once per
+    // depth sample (cursor.milo, the bustamove visualiser, boxyman, ...).
+    // DepthBuffer3D's draw is still a native stub, so the template would draw
+    // as one bare cube; it stays hidden with or without a camera (PLAN P-4).
     if (strstr(name, "grid_80by60")) return "kinect-depth-grid";
 
     // No `_lod` name test. dc3-native used to drop every mesh whose name holds
@@ -59,15 +63,20 @@ static const char *SkipRule(const char* name) {
     //    were buffer_*_crown, which the depth-image rule below covers.
 
     // The player's depth image in the cursor box (buffer_left/right and their
-    // leader-crown variants, mats depth_buffer_*): a render target the Kinect
-    // depth stream fills.  LiveCameraInput is null natively, so the quad draws
-    // as a flat magenta/blue square -- what the original draws under Xenia
-    // with no Kinect (archive/screenshots/xenia-gameplay/04_main_menu.png).
-    // P-4 (player on screen) owns filling it.  With it hidden the box shows
-    // its container/glass backdrop, a flat purple (P1) or blue square -- the
-    // same thing the original draws under Xenia, with no depth stream at all.
-    if (!strncmp(name, "buffer_left", 11) ||
-        !strncmp(name, "buffer_right", 12)) {
+    // leader-crown variants, mats depth_buffer_*): depth_buffer_left/right.tex,
+    // the render targets cursor.milo's two StreamRenderers draw from the Kinect
+    // depth|player stream (mode 4, blur 1, srcAlphaAdd).  With a camera stream
+    // (NativeCamera::Active: the webcam via the pose server's protocol v3 or
+    // the page's dc3_camera_push) the LiveCameraInput stand-in feeds the native
+    // StreamRenderer and the quads draw the player as the image draws them
+    // (PLAN P-4; CursorPanel::Poll parks an uncrowned crown off its clamped
+    // texture).  Without one the targets are never drawn: the quad would be a
+    // flat magenta/blue square -- what the original draws under Xenia with no
+    // Kinect (archive/screenshots/xenia-gameplay/04_main_menu.png) -- so it
+    // stays hidden and the box shows its container/glass backdrop.
+    if (!NativeCamera::Active() &&
+        (!strncmp(name, "buffer_left", 11) ||
+         !strncmp(name, "buffer_right", 12))) {
         return "depth-image";
     }
     // Voice control (mic_*, geo_mic*, the letterbox mic shield's
@@ -79,11 +88,17 @@ static const char *SkipRule(const char* name) {
         !strcmp(name, "grey_alpha.mesh")) {
         return "microphone";
     }
-    // Photo-moment flash and camera preview: render targets fed by the camera
-    // (projection.tex, preview) -- never filled natively.  P-4.
+    // pose_flash_p0/p1: NOT a camera path (PLAN P-4 survey, 2026-11-13).  Their
+    // projection.tex / projectionp2.tex are TexRenderer targets that render the
+    // AVATAR (projection.rndtex), not the Kinect depth buffer; a live camera
+    // stream does not fill them.  Why they draw white natively is a
+    // TexRenderer question, still open.
     if (!strncmp(name, "pose_flash", 10)) {
         return "pose_flash";
     }
+    // preview.mesh: NOT a camera path either -- it shows the song-preview movie
+    // (preview.tmov), not a Kinect view.  Still hidden; the movie texture path
+    // is the open cause.
     if (!strcmp(name, "preview.mesh")) {
         return "preview";
     }

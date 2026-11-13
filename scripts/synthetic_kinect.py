@@ -81,6 +81,7 @@ import time
 import urllib.parse
 
 MAGIC = 0x44503302          # Skeleton_Native.cpp kProtocolMagic
+MAGIC_V3 = 0x44503303       # v2 + a camera picture block (pose_server.py --frames)
 LAYOUT_DC3_20 = 1           # kLayoutDC3_20: camera-space metres
 NUM_JOINTS = 20
 
@@ -213,6 +214,11 @@ class SyntheticKinect:
         self.follow_stop = threading.Event()
         self.engine_frame = None
         self.engine_t = None
+        # (w, h): every packet is protocol v3 and carries a camera picture
+        # rendered from the joints it sends (scripts/camera_fixture.py), the way
+        # pose_server.py --frames sends the webcam's.  None: v2, no picture.
+        self.frames = None
+        self.camera_height = 0.9
 
     # ---- pose control -------------------------------------------------------
     def set_pose(self, person, pose):
@@ -517,14 +523,31 @@ class SyntheticKinect:
         # "absent": the person has stepped out of view -- not in the frame at
         # all, as a Kinect reports a person it no longer sees.
         present = [i for i, pose in enumerate(poses) if pose != "absent"]
-        body = struct.pack("<IIIdHHBBH", MAGIC, frame_id, len(present), stamp,
-                           640, 480, NUM_JOINTS, LAYOUT_DC3_20, 0)
+        body = struct.pack("<IIIdHHBBH", MAGIC_V3 if self.frames else MAGIC, frame_id,
+                           len(present), stamp, 640, 480, NUM_JOINTS, LAYOUT_DC3_20, 0)
+        persons, heights = [], []
         for i in present:
             pose = poses[i]
             body += struct.pack("<i", 5 + 4 * i)      # Kinect tracking ids are > 0
-            for x, y, z, c in self._joints(i, pose):
+            with self.lock:
+                performing = i < len(self.targets) and self.targets[i] is not None
+            joints = self._joints(i, pose)
+            persons.append(joints)
+            # the engine's targets are sensor-relative (hips ~ y 0); the
+            # built-in poses stand on y = 0 (camera_fixture.py)
+            heights.append(0.0 if performing else self.camera_height)
+            for x, y, z, c in joints:
                 body += struct.pack("<ffff", x, y, z, c)
+        if self.frames:
+            body += self._camera_block(persons, heights)
         return struct.pack("<I", len(body)) + body
+
+    def _camera_block(self, persons, heights):
+        """The v3 picture block: mask ordinal k = the k-th person above."""
+        import camera_fixture     # numpy; only needed with frames on
+        w, h = self.frames
+        rgb, mask, w, h = camera_fixture.camera_block(persons, w, h, heights)
+        return struct.pack("<HHBBH", w, h, 1, 1, 0) + rgb + mask
 
     # ---- server -------------------------------------------------------------
     def start(self):
@@ -654,10 +677,16 @@ def main():
                     help="person 0 performs this keypoint fixture keyed on song time")
     ap.add_argument("--replay-still", action="store_true",
                     help="with --replay: hold the fixture's first frame all song")
+    ap.add_argument("--frames", default=None, metavar="WxH",
+                    help="send protocol v3 with a WxH camera picture + person mask "
+                         "rendered from the joints (needs numpy)")
     a = ap.parse_args()
     if not a.socket and not a.perform:
         ap.error("--socket is required unless --perform only records")
     k = SyntheticKinect(a.socket, people=a.people)
+    if a.frames:
+        fw, fh = (int(v) for v in a.frames.lower().split("x"))
+        k.frames = (fw, fh)
     if a.replay:
         k.replay(a.replay, still=a.replay_still)
     if a.socket:
