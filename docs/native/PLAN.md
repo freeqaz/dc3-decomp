@@ -25,7 +25,7 @@ Size: S < half a day · M ≈ 1–2 days · L = several days.
 
 | # | Item | Size | Done when |
 |---|---|---|---|
-| P-1 | Motionless-skeleton SIGSEGV (`RhythmDetector` zero variance → NaN → `SymbolKeys::SetFrame`). **In progress: `np-fix-still`.** | S–M | Still-skeleton run completes the song; a regression test fails without the fix |
+| P-1 | ~~Motionless-skeleton SIGSEGV~~ **DONE 2026-11-13 (`np-fix-still`)**: zero variance in `RhythmDetector::AnalyzeData` → NaN → `SymbolKeys::SetFrame` past the end. The image has the same hazard; a Kinect never repeats a joint bit for bit, so the native sensor now adds a 1 µm noise floor to every delivered joint (`Skeleton_Native.cpp` `SensorNoiseFloor`), covering the confidence hold and the 2D providers' constant z. Test: `NativeSensorNoiseFloorTest`. | S–M | Still-skeleton run completes the song; a regression test fails without the fix |
 | P-2 | Live webcam on Linux: camera mode of `pose_server.py`, wall-clock timestamps, HFOV, a visible "no camera" message instead of a silent 5 s stall | S–M | Owner plays a song on a webcam; no-camera boot shows a message |
 | P-3 | Gesture menus: `DC3_CONTROLLER_MODE=faithful` path, hand meshes unhidden in `native/src/platform/MeshFilter.cpp`, swipe poses in `scripts/synthetic_kinect.py` | M–L | A synthetic performer navigates main menu → song select → song with no button presses |
 | P-4 | Player on screen: native `LiveCameraInput` stand-in fed webcam RGB + segmentation mask; `StreamRenderer`, `DepthBuffer3D`, `MeshFilter` | L | Silhouette/preview visible in gameplay screenshots |

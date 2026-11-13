@@ -37,7 +37,7 @@ not exist on web. macOS last ran in March and would not build today.
 |---|---|---|
 | Synthetic performer | All-perfect ratings, ~1.68 M at 100 s; still all perfect with webcam-like noise and 150 ms lateness | ran |
 | MediaPipe on a video file | Scored (wrong-dance clip → mostly bad/ok) | ran |
-| Motionless skeleton | **SIGSEGV at ~130 s** (zero variance in `RhythmDetector`) | ran |
+| Motionless skeleton | SIGSEGV at ~130 s (zero variance in `RhythmDetector`) — **fixed** by the sensor noise floor (PLAN P-1); 45k-frame still run exits 0 | ran |
 | Live webcam | Never tried (no camera on the measurement box) | — |
 | Gesture menus, player silhouette/preview | Absent | read |
 | `scripts/pose_scoring_gate.sh` | Passes (~11 min); compares maximums only and stops before the song ends | ran |
