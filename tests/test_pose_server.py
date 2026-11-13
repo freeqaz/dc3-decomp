@@ -356,6 +356,15 @@ class CameraFramesTest(unittest.TestCase):
         self.assertEqual(struct.unpack_from("<I", v2, 4)[0], ps.PROTOCOL_MAGIC)
         self.assertEqual(len(v2), 4 + 28 + 4 + 20 * 16)
 
+    def test_every_packet_says_the_camera_does_not_know_its_gravity(self):
+        # Header flags bit 0: the game estimates a webcam's tilt and levels
+        # it (PoseLevel_Native.h); a 0 there reads as a level Kinect.
+        persons = [(7, [(0.1, 0.2, 2.5, 0.9)] * 20)]
+        for image in (None, (), (bytes(12), bytes(4), 2, 2)):
+            body = ps.pack_frame(3, 1.5, 640, 480, 20, 1, persons, image)[4:]
+            flags = struct.unpack_from("<IIIdHHBBH", body)[-1]
+            self.assertEqual(flags & ps.FLAG_UNLEVELLED, 1)
+
     def test_v3_appends_the_block_and_an_empty_block_means_no_picture(self):
         persons = [(7, [(0.1, 0.2, 2.5, 0.9)] * 20)]
         rgb, mask = bytes(range(6)) * 2, bytes([0, 1, 1, 0])

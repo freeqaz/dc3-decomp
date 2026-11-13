@@ -12,6 +12,11 @@
 //   PoseSensorSlotTest     GestureMgr_Native.cpp's AssignSlots contract, read
 //                          where the image reads it: the SkeletonFrame the
 //                          native sensor hands SkeletonUpdate (PollNewFrame).
+//   PoseSensorLevelTest    the camera-tilt step on that frame: a packet
+//                          flagged "camera does not know its gravity" is
+//                          levelled by the game (mJointPositions), the raw
+//                          joints kept (mRawPositions); an unflagged packet,
+//                          or DC3_POSE_LEVEL=0, is untouched.
 //   PoseServerStartTest    Start()'s no-camera path: the spawned server's exit
 //                          is noticed at once and becomes a player notice.
 //
@@ -22,6 +27,7 @@
 #include "test_helpers.h" // EnsureSymbolInit
 #include "platform/NativeNotice.h"
 #include "platform/Skeleton_Native.h"
+#include "platform/PoseLevel_Native.h"
 #include "gesture/CameraInput.h"
 #include "gesture/GestureMgr.h" // NUM_SKELETONS
 #include "gesture/SkeletonUpdate.h"
@@ -66,7 +72,7 @@ struct WirePerson {
 std::vector<uint8_t> PacketV2(uint32_t frameId, double ts, uint16_t w, uint16_t h,
                               uint8_t landmarks, uint8_t layout,
                               const std::vector<WirePerson> &persons,
-                              int declaredPersons = -1) {
+                              int declaredPersons = -1, uint16_t flags = 0) {
     Bytes body;
     body.put<uint32_t>(kMagic);
     body.put<uint32_t>(frameId);
@@ -76,7 +82,7 @@ std::vector<uint8_t> PacketV2(uint32_t frameId, double ts, uint16_t w, uint16_t 
     body.put<uint16_t>(h);
     body.put<uint8_t>(landmarks);
     body.put<uint8_t>(layout);
-    body.put<uint16_t>(0);
+    body.put<uint16_t>(flags); // bit 0: a camera that does not know its gravity
     for (const WirePerson &p : persons) {
         body.put<int32_t>(p.trackId);
         for (float v : p.values)
@@ -574,6 +580,137 @@ TEST_F(PoseSensorSlotTest, ARepeatedFrameIdIsNotANewSensorFrame) {
 // ===========================================================================
 // PoseServerStartTest -- no camera: fail fast, tell the player
 // ===========================================================================
+// ===========================================================================
+// PoseSensorLevelTest -- SkeletonFrame::Create's gravity step on the sensor
+// frame (PoseLevel_Native.h), read where the image reads it
+// ===========================================================================
+class PoseSensorLevelTest : public PoseSensorSlotTest {
+protected:
+    void SetUp() override {
+        PoseSensorSlotTest::SetUp();
+        // config/default.dta kinect/up_vector_smoothing (SkeletonFrame::Init
+        // reads it in a booted game).
+        SkeletonFrame::sUpVectorSmoother.SetSmoothParameters(10.0f, 0.0f);
+        SkeletonFrame::sUpVectorSmoother.ForceValue(Vector3(0, 1, 0));
+        NativeSensorLevelSetPolicy(NativePoseLevelPolicy()); // auto, fresh estimate
+    }
+    void TearDown() override {
+        NativeSensorLevelSetPolicy(NativePoseLevelPolicy());
+        SkeletonFrame::sUpVectorSmoother.ForceValue(Vector3(0, 1, 0));
+        PoseSensorSlotTest::TearDown();
+    }
+
+    // Dc3Person seen by a camera pitched `deg` down: the scene rotated about
+    // the camera's x axis, +y onto the camera's up (0, cos, -sin).
+    static WirePerson Tilted(int trackId, float deg) {
+        WirePerson p = Dc3Person(trackId, 0.0f, 0.9f);
+        float c = std::cos(deg * 3.14159265f / 180.0f), s = std::sin(deg * 3.14159265f / 180.0f);
+        for (int j = 0; j < kNumJoints; j++) {
+            float y = p.values[j * 4 + 1], z = p.values[j * 4 + 2];
+            p.values[j * 4 + 1] = y * c + z * s;
+            p.values[j * 4 + 2] = -y * s + z * c;
+        }
+        return p;
+    }
+
+    const SkeletonFrame *Send(const WirePerson &person, uint16_t flags) {
+        uint32_t id = ++sFrameId;
+        if (!mServer.Send(PacketV2(id, id / 30.0, 640, 480, kNumJoints, 1, { person }, -1, flags)))
+            return nullptr;
+        if (!WaitForFrame(mProvider, id))
+            return nullptr;
+        return mSensor->PollNewFrame();
+    }
+
+    static float Pitch(const PaddedJointPos *j) {
+        float y = j[kJointHipCenter].y - 0.5f * (j[kJointAnkleLeft].y + j[kJointAnkleRight].y);
+        float z = j[kJointHipCenter].z - 0.5f * (j[kJointAnkleLeft].z + j[kJointAnkleRight].z);
+        return std::atan2(-z, y) * 180.0f / 3.14159265f;
+    }
+};
+
+TEST_F(PoseSensorLevelTest, AFlaggedCameraIsLevelledByTheGame) {
+    const float tilt = 8.0f;
+    const WirePerson person = Tilted(51, tilt);
+    const SkeletonFrame *f = nullptr;
+    for (int k = 0; k < 240; k++) { // 8 s at 30 Hz
+        f = Send(person, 1);
+        ASSERT_NE(f, nullptr) << k;
+    }
+    const NativeGravityEstimator &e = NativeSensorGravityEstimator();
+    ASSERT_TRUE(e.HasEstimate());
+    // Dc3Person stands dead straight (lean 0), so the estimate is the camera's
+    // tilt less the reference's own lean.
+    EXPECT_NEAR(e.PitchDeg(), tilt - NativeGravityEstimator::kPriorPitchDeg, 0.1f);
+    int slot = SlotOf(f, 51);
+    ASSERT_GE(slot, 0);
+    const SkeletonData &d = f->mSkeletonDatas[slot];
+    // What the scorer reads (mJointPositions, camera space) stands as the
+    // Kinect reference does; mRawPositions is what the camera saw.
+    EXPECT_NEAR(Pitch(d.mJointPositions), NativeGravityEstimator::kPriorPitchDeg, 0.1f);
+    EXPECT_NEAR(Pitch(d.mRawPositions), tilt, 0.1f);
+    for (int j = 0; j < kNumJoints; j++) {
+        EXPECT_NEAR(d.mRawPositions[j].y, person.values[j * 4 + 1], 1e-5f) << j;
+        EXPECT_NEAR(d.mRawPositions[j].z, person.values[j * 4 + 2], 1e-5f) << j;
+    }
+    Vector3 n = e.NormalToGravity();
+    EXPECT_NEAR(f->mFloorNormal.y, n.y, 1e-4f);
+    EXPECT_NEAR(f->mFloorNormal.z, n.z, 1e-4f);
+    EXPECT_NEAR(d.mHipCenter.z, d.mJointPositions[kJointHipCenter].z, 1e-6f);
+}
+
+TEST_F(PoseSensorLevelTest, AnUnflaggedPacketIsUntouched) {
+    // synthetic_kinect.py's packets (flags 0) play a Kinect: already level.
+    const WirePerson person = Tilted(52, 8.0f);
+    const SkeletonFrame *f = nullptr;
+    for (int k = 0; k < 240; k++) {
+        f = Send(person, 0);
+        ASSERT_NE(f, nullptr) << k;
+    }
+    EXPECT_FALSE(NativeSensorGravityEstimator().HasEstimate());
+    EXPECT_EQ(NativeSensorGravityEstimator().NumSamples(), 0);
+    int slot = SlotOf(f, 52);
+    ASSERT_GE(slot, 0);
+    for (int j = 0; j < kNumJoints; j++) {
+        EXPECT_NEAR(f->mSkeletonDatas[slot].mJointPositions[j].y, person.values[j * 4 + 1], 1e-5f) << j;
+        EXPECT_NEAR(f->mSkeletonDatas[slot].mJointPositions[j].z, person.values[j * 4 + 2], 1e-5f) << j;
+    }
+    EXPECT_EQ(f->mFloorNormal.y, 1.0f);
+}
+
+TEST_F(PoseSensorLevelTest, LevelOffLeavesAFlaggedCameraAsItWas) {
+    NativePoseLevelPolicy off;
+    off.mode = NativePoseLevelPolicy::kOff;
+    NativeSensorLevelSetPolicy(off);
+    const WirePerson person = Tilted(53, 8.0f);
+    const SkeletonFrame *f = nullptr;
+    for (int k = 0; k < 240; k++) {
+        f = Send(person, 1);
+        ASSERT_NE(f, nullptr) << k;
+    }
+    EXPECT_FALSE(NativeSensorGravityEstimator().HasEstimate());
+    int slot = SlotOf(f, 53);
+    ASSERT_GE(slot, 0);
+    EXPECT_NEAR(Pitch(f->mSkeletonDatas[slot].mJointPositions), 8.0f, 0.1f);
+}
+
+TEST_F(PoseSensorLevelTest, AFixedPitchLevelsByExactlyThat) {
+    NativePoseLevelPolicy fixed;
+    fixed.mode = NativePoseLevelPolicy::kFixed;
+    fixed.fixedPitchDeg = 8.0f;
+    NativeSensorLevelSetPolicy(fixed);
+    const WirePerson person = Tilted(54, 8.0f);
+    const SkeletonFrame *f = nullptr;
+    for (int k = 0; k < 60; k++) { // the smoother converges in ~1 s
+        f = Send(person, 1);
+        ASSERT_NE(f, nullptr) << k;
+    }
+    int slot = SlotOf(f, 54);
+    ASSERT_GE(slot, 0);
+    EXPECT_NEAR(Pitch(f->mSkeletonDatas[slot].mJointPositions), 0.0f, 0.05f);
+    EXPECT_FALSE(NativeSensorGravityEstimator().HasEstimate());
+}
+
 TEST(PoseServerExitTest, EachServerExitCodeHasItsOwnMessage) {
     using P = NativeSkeletonProvider;
     auto brief = [](int code) { return P::DescribeServerExit(code << 8, 2).brief; };

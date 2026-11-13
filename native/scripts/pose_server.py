@@ -16,8 +16,16 @@ bench_detection.py for the ground-truth evidence behind the retirement.)
 Protocol v2 (little-endian):
   [uint32 packet_len]
   [uint32 magic 0x44503302] [uint32 frame_id] [uint32 num_persons] [f64 timestamp]
-  [uint16 frame_w] [uint16 frame_h] [uint8 num_landmarks] [uint8 layout] [uint16 pad]
+  [uint16 frame_w] [uint16 frame_h] [uint8 num_landmarks] [uint8 layout] [uint16 flags]
   Per person: [int32 track_id] [num_landmarks × (f32 x, f32 y, f32 z, f32 conf)]
+
+  flags bit 0 (FLAG_UNLEVELLED) = this camera does not know its gravity: a
+             webcam has no accelerometer, so the game estimates the camera's
+             tilt from the player's posture and levels the skeleton itself,
+             as SkeletonFrame::Create does with a Kinect's vNormalToGravity
+             (native/src/platform/PoseLevel_Native.h, DC3_POSE_LEVEL). This
+             server always sets it. Older servers sent 0 (pad), which reads
+             as a level sensor, as synthetic_kinect.py's Kinect is.
 
   layout 0 = COCO-17, normalised [0,1] image coords, z unused. Not emitted by
              this server any more, but the C++ reader keeps the path for any
@@ -81,6 +89,7 @@ import time
 # first field is a small incrementing frame_id.
 PROTOCOL_MAGIC = 0x44503302
 PROTOCOL_MAGIC_V3 = 0x44503303   # v2 + camera block (--frames)
+FLAG_UNLEVELLED = 1 << 0         # header flags: camera gravity unknown (see above)
 WIRE_RGB888 = 1
 WIRE_MASK_ORDINAL = 1
 MASK_THRESHOLD = 0.5
@@ -227,7 +236,7 @@ def pack_frame(frame_id, timestamp, frame_w, frame_h, num_landmarks, layout, per
         "<IIIdHHBBH",
         PROTOCOL_MAGIC if image is None else PROTOCOL_MAGIC_V3,
         frame_id, len(persons), timestamp,
-        int(frame_w), int(frame_h), num_landmarks, layout, 0,
+        int(frame_w), int(frame_h), num_landmarks, layout, FLAG_UNLEVELLED,
     )
     for tid, kpts in persons:
         packet += struct.pack("<i", tid)
