@@ -70,13 +70,16 @@ static RunResult RunHeadless(
     int maxFrames,
     const char *inputScriptPath = nullptr,
     int timeoutSeconds = 30,
-    std::vector<EnvVar> extraEnv = {}
+    std::vector<EnvVar> extraEnv = {},
+    const char *cwd = nullptr
 ) {
     std::string binary = GetDc3NativePath();
 
     // Build command with env vars piped through
     std::string persist = MakePersistenceRoot();
     std::ostringstream cmd;
+    if (cwd)
+        cmd << "cd '" << cwd << "' && ";
     cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 MILO_MAX_FRAMES=" << maxFrames;
     if (!persist.empty())
         cmd << " DC3_CACHE_DIR=" << persist << "/cache DC3_SAVE_DIR=" << persist << "/saves";
@@ -204,21 +207,11 @@ static std::string WriteInputScript(const std::vector<std::pair<int, std::string
 // Tests
 // ---------------------------------------------------------------------------
 
-// Where dc3-native will look for gen/main_xbox.hdr: the same probe as
-// NativeDetectDataDir() (native/src/platform/System_Native.cpp) -- $DC3_DATA,
-// then orig-assets / ../orig-assets / ../../orig-assets / . relative to the
-// cwd, which RunHeadless passes through unchanged.  Empty = no game data.
-static std::string FindGameDataDir() {
-    struct stat st;
-    const char *env = getenv("DC3_DATA");
-    if (env && stat((std::string(env) + "/gen/main_xbox.hdr").c_str(), &st) == 0)
-        return env;
-    for (const char *dir : {"orig-assets", "../orig-assets", "../../orig-assets", "."}) {
-        if (stat((std::string(dir) + "/gen/main_xbox.hdr").c_str(), &st) == 0)
-            return dir;
-    }
-    return std::string();
-}
+// Where dc3-native will look for gen/main_xbox.hdr -- the boot path's own probe
+// (System_Native.cpp; $DC3_DATA, then orig-assets / ../orig-assets /
+// ../../orig-assets / . relative to the cwd, which RunHeadless passes through
+// unchanged). nullptr = no game data.
+extern const char *NativeFindDataDir();
 
 class HeadlessBootTest : public ::testing::Test {
 protected:
@@ -229,14 +222,39 @@ protected:
         // Booting with no archive is not a boot test: it dies straight after
         // "could not find game data" (SIGFPE on the asset-less CI runner),
         // which says nothing about the main loop.
-        if (FindGameDataDir().empty()) {
+        if (!NativeFindDataDir()) {
             char cwd[4096];
-            GTEST_SKIP() << "no game data: gen/main_xbox.hdr not under $DC3_DATA "
+            GTEST_SKIP() << "[no-game-data] gen/main_xbox.hdr not under $DC3_DATA "
                             "or orig-assets/../orig-assets/../../orig-assets/. from cwd "
                          << (getcwd(cwd, sizeof(cwd)) ? cwd : "?");
         }
     }
 };
+
+// A boot with no game data must END WITH AN ERROR, not a signal. Asset-free on
+// purpose (an empty temp dir as both cwd and DC3_DATA), so it runs everywhere,
+// the data-less CI runner included. Before the System_Native.cpp check, the
+// header-less Archive had an empty hash table and the first file lookup
+// divided by zero: dc3-native exited 136 (SIGFPE via its handler) after
+// "could not find game data", and so did every engine-backed test.
+TEST(HeadlessBootNoGameData, ExitsWithAnErrorNotASignal) {
+    std::string binary = GetDc3NativePath();
+    if (access(binary.c_str(), X_OK) != 0)
+        GTEST_SKIP() << "dc3-native binary not found at " << binary;
+    char tmpl[] = "/tmp/dc3-no-game-data-XXXXXX";
+    char *empty = mkdtemp(tmpl);
+    ASSERT_NE(empty, nullptr);
+    auto result = RunHeadless(100, nullptr, 60, {{"DC3_DATA", empty}}, empty);
+    PrintOutputTail(result.output);
+    rmdir(empty);
+    EXPECT_FALSE(result.timedOut);
+    EXPECT_EQ(result.signal, 0) << CrashSummary(result);
+    EXPECT_EQ(result.exitCode, 1);
+    EXPECT_NE(result.output.find("FATAL - no game data"), std::string::npos)
+        << "the player gets no explanation";
+    EXPECT_NE(result.output.find(std::string("DC3_DATA is '") + empty + "'"), std::string::npos)
+        << "the error should name the DC3_DATA it rejected";
+}
 
 // Boot and run enough frames to see the frame counter tick
 TEST_F(HeadlessBootTest, SurvivesMainLoop) {

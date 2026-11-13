@@ -74,6 +74,7 @@ protected:
 
     static void SetUpTestSuite() {
         EngineTestFixture::SetUpTestSuite();
+        if (IsSkipped()) return; // no game data: the engine did not boot
 
         const char *envPath = std::getenv("MILO_TEST_CHAR");
         if (envPath) {

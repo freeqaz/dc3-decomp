@@ -27,6 +27,7 @@ measures a stale binary, and checks the system toolchain by content hash
 | `scripts/native_test.sh --no-build` | Test whatever is already built |
 | `scripts/native_test.sh --no-configure` | Do not auto-configure a missing build dir |
 | `SKIP_BUDGET_UPDATE=1 scripts/native_test.sh` | Rewrite `native/tests/skip_budget.txt` from this run. Loosening it (more skips) also needs `ALLOW_BUDGET_LOOSEN=1` |
+| `scripts/native_test.sh --no-assets` | **Machines with no game data only** (the GitHub job). Enforces an executed-test floor instead of the skip budget; refuses to run where there is game data. See [No game data (CI)](#no-game-data-ci) |
 
 `--all-gates` is slow because CTest runs each gtest case in its own process, so every
 `GameplayTelemetryTest` case rebuilds the suite's shared engine fixture. To exercise
@@ -54,6 +55,8 @@ Each failure mode has its own number (source of truth: the header of
 | 8 | **Reserved: ctest's own "tests failed" status**, passed through unchanged |
 | 9 | No configured build, and it could not be configured — **zero tests ran; not a pass** |
 | 10 | The system toolchain moved under the build dir and it could not be refreshed |
+| 11 | Another gate holds this build dir's lock |
+| 12 | `--no-assets` refused: the build's ctest working dir or `$DC3_DATA` has game data, or `--all-gates` was also given |
 | other | ctest's own exit status |
 
 ### Skip-budget ratchet
@@ -81,6 +84,67 @@ in `native/CMakeLists.txt` (currently `milo-tests dc3-native milo-viewer`) is th
 single list; CMake writes it to `milo_test_required_targets.txt` for the wrapper,
 and `TestGates.BuildMatchesSources` asks ninja whether those targets are current
 (`MILO_TEST_ALLOW_STALE_BUILD=1` skips that check).
+
+## No game data (CI)
+
+The GitHub `native-build` job has no `orig-assets`. It runs
+`scripts/native_test.sh --no-assets`, and three pieces make that run honest:
+
+- **An explicit absence check, not a crash.** `EnsureEngineInit()`
+  (`native/tests/test_helpers.cpp`), which every engine-backed test goes
+  through, first asks `NativeFindDataDir()`. This is the boot path's own probe:
+  `gen/main_xbox.hdr` under `$DC3_DATA`, then `orig-assets`, `../orig-assets`,
+  `../../orig-assets` or `.` from the cwd. If none has it, the function does
+  not boot. It records a `GTEST_SKIP` tagged `[no-game-data]` and returns
+  `false`. From `SetUpTestSuite` that skips the whole suite. A caller that
+  touches the engine after it must return on `false` (or on `IsSkipped()`).
+  The function is `[[nodiscard]]` so that new direct callers notice.
+- **The engine reports missing data instead of crashing.** `dc3-native`, the
+  viewer and the tools exit 1 with
+  `DC3 Native: FATAL - no game data: <path> does not exist.` naming
+  `DC3_DATA`. `NativeArchiveInit`, `native/src/platform/System_Native.cpp`,
+  checks the header before reading it and checks the read afterwards. Before
+  this check, the header-less `Archive` had an empty hash table, and the first
+  file lookup computed `HashString(name, 0)`, a modulo by zero (SIGFPE). That
+  killed about 320 tests in 58 suites on the runner, and it killed the game for
+  any player with a bad `DC3_DATA`. `HeadlessBootNoGameData.ExitsWithAnErrorNotASignal`
+  pins this behaviour. It is asset-free and runs everywhere.
+- **A floor, not a budget.** With no data the skip budget means nothing.
+  `--no-assets` enforces a minimum number of **verified** passes, recorded on the
+  first line of `native/tests/no_assets_floor.txt`. A verified pass is a gtest
+  case that printed its own `[       OK ]` line in ctest's `LastTest.log`. ctest
+  counts a skip as a pass, so without the floor a run where everything skipped
+  would be green. ctest also scores a `milo-tests` run that ran nothing as a
+  pass, which is what happens when a global gtest `Environment` skips.
+  - Fewer verified than the floor: exit 2, because asset-free coverage shrank.
+  - Any **ghost**, meaning a gtest run scored PASSED that printed no
+    `OK`/`SKIPPED`/`FAILED` line: exit 2.
+  - Sabotage checks (container replay of the workflow at `9d24ed458`):
+    - A global `Environment` that skips everything: 0 verified, 668 ghosts,
+      exit 2, job FAILURE. ctest itself scored 670 of 672 "executed", so a floor
+      on ctest's own count would have passed this.
+    - `SymbolTestFixture` skipping: 167 verified against a floor of 262, exit 2,
+      job FAILURE. The workflow's "nothing passed" check alone misses this one.
+  - More verified: exit 0, with a notice to raise the floor. This is not a
+    failure, because lanes add asset-free tests and cannot measure this number
+    on a box that has the data.
+  - Raise the floor with `NO_ASSETS_FLOOR_UPDATE=1`. Lowering it also needs
+    `ALLOW_FLOOR_LOWER=1`. A missing or zero floor is exit 5.
+  - The mode refuses to run (exit 12) where game data exists, so it cannot be
+    used to dodge the budget.
+  - Each run writes `native_test_summary.txt` (`NT_VERIFIED`, `NT_GHOSTS`,
+    `NT_EXECUTED`, `NT_SKIPPED`, `NT_NO_DATA_SKIPS`, …) to the build dir. The workflow copies it into the job
+    summary.
+
+The workflow gates on the wrapper's exit status. It also runs its own
+`LastTest.log` checks: no log, any `[  FAILED  ]`, and nothing passed.
+
+**Measuring the floor** needs a build with no game data. On this box,
+`native/build` always has the data. Use the CI log's `EXECUTED` line, or replay
+the workflow in an `ubuntu:26.04` container. The H-3 lane did the replay by
+turning each step of `native-build.yml` into a bash step run under
+`bash -eo pipefail` with `$GITHUB_ENV` emulated, with `git archive`s of dc3 and
+milo-native-engine as the checkouts.
 
 ## Test gates
 
@@ -140,7 +204,10 @@ Both live in `native/tests/test_helpers.h`.
 ## Writing Tests
 
 - **Prefer `EngineTestFixture`** for anything touching engine subsystems
-- **Use `GTEST_SKIP()`** when game data or hardware is unavailable (keeps CI green)
+- **Use `GTEST_SKIP()`** when game data or hardware is unavailable (keeps CI green). For
+  the engine boot, `EnsureEngineInit()` / `EngineTestFixture` already does this; if your
+  `SetUpTestSuite` override or `TEST` body uses the engine after calling it, return when
+  it reports the skip (`if (IsSkipped()) return;` / `if (!EnsureEngineInit()) return;`)
 - **Use `MemBinStream`** for serialization tests (no file I/O needed)
 - **Use `WriteSyntheticMilo()`** for format tests needing .milo files
 - Keep tests focused — one subsystem behavior per test

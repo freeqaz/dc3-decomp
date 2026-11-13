@@ -1,0 +1,11 @@
+262
+# ^ The minimum number of tests that must EXECUTE (not skip) in
+#   `scripts/native_test.sh --no-assets` -- the GitHub native-build job, which
+#   has no game data. Fewer executed = exit 2: asset-free coverage shrank.
+#   More = a notice to raise this number (not a failure).
+#
+# Only the first line is read: a bare integer > 0. This is NOT the skip budget
+# (skip_budget.txt describes a box WITH the data, and is untouched by this
+# mode). Measure it in a data-less build -- the replay of the workflow in an
+# ubuntu container, or the CI log's "EXECUTED" line -- and say why in the
+# commit when it moves. Lowering it needs ALLOW_FLOOR_LOWER=1.

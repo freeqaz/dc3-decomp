@@ -325,7 +325,7 @@ TEST_F(NativeAudioSeekTest, ReceiverPlaysEveryByteTheImageCycleAdmits) {
 // stack overflow, RndTexRenderer::DrawToTexture -> player0 ->
 // projection_trans_draw.td -> player0 -> ...
 TEST(NativeAudioSeekRender, OffscreenWhileACameraRendersToATexture) {
-    EnsureEngineInit();
+    if (!EnsureEngineInit()) return; // skipped: no game data
     RndCam *prev = RndCam::Current();
     RndCam *cam = Hmx::Object::New<RndCam>();
     RndTex *tex = Hmx::Object::New<RndTex>();

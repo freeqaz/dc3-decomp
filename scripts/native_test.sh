@@ -41,6 +41,29 @@
 #   scripts/native_test.sh --no-build       # test what is already built (see below)
 #   scripts/native_test.sh --no-configure   # do NOT auto-configure a missing build dir
 #   SKIP_BUDGET_UPDATE=1 scripts/native_test.sh   # rewrite the budget file
+#   scripts/native_test.sh --no-assets      # data-less machine (GitHub CI); see below
+#
+# --no-assets: THE MODE FOR A MACHINE WITH NO GAME DATA
+# -----------------------------------------------------
+# The skip budget describes this box, which has orig-assets. The GitHub runner
+# has none, so every engine-backed suite skips there (EnsureEngineInit's
+# explicit "[no-game-data]" check, test_helpers.cpp) and the budget is
+# meaningless. --no-assets swaps the budget for a FLOOR on the number of gtest
+# cases VERIFIED to have run and passed (each printed its own "[       OK ]"
+# line in ctest's LastTest.log), recorded in native/tests/no_assets_floor.txt:
+#   * fewer verified than the floor -> exit 2 (coverage shrank). This is what
+#     stops "everything skipped" from passing: ctest scores skips as passes.
+#   * any GHOST -> exit 2: a milo-tests run ctest scored PASSED that printed no
+#     OK/SKIPPED/FAILED line, i.e. ran nothing (a skip in a global gtest
+#     Environment does this, and ctest cannot tell it from a pass).
+#   * more verified than the floor  -> exit 0 plus a notice to raise it. Not a
+#     failure: lanes add asset-free tests all the time, and none of them can
+#     measure this number without a data-less build.
+#   * NO_ASSETS_FLOOR_UPDATE=1 rewrites the floor; lowering it also needs
+#     ALLOW_FLOOR_LOWER=1.
+# It REFUSES (exit 12) if the build's ctest working directory or $DC3_DATA has
+# game data: the floor is a far weaker check than the budget and must not be a
+# way around it. It also refuses --all-gates (those gates all need the data).
 #
 # EXIT CODES — each failure mode is its own number, deliberately.
 #   0  all executed tests passed and the skip count equals the budget
@@ -72,6 +95,9 @@
 #  10  THE SYSTEM TOOLCHAIN MOVED under this build dir and it could not be
 #      refreshed (--no-configure, or the reconfigure itself failed). See
 #      scripts/native_toolchain_check.py; the WHY is below.
+#  11  another gate holds this build dir (see the lock below)
+#  12  --no-assets refused: this build has game data, or --all-gates was given
+#      too. (Exit 2/5 keep their meanings in that mode, against the FLOOR.)
 #   *  anything else is ctest's own exit status
 #
 # WHY THIS SCRIPT CHECKS THE SYSTEM TOOLCHAIN
@@ -127,6 +153,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${MILO_TEST_BUILD_DIR:-$REPO_ROOT/native/build}"
 BUDGET_FILE="$REPO_ROOT/native/tests/skip_budget.txt"
+FLOOR_FILE="$REPO_ROOT/native/tests/no_assets_floor.txt"
 
 # ---------------------------------------------------------------------------
 # Exit 11: another gate already holds this build directory.
@@ -170,6 +197,7 @@ fi
 
 CTEST_ARGS=()
 ALL_GATES=0
+NO_ASSETS=0
 DO_BUILD=1
 DO_CONFIGURE=1
 for arg in "$@"; do
@@ -180,6 +208,7 @@ for arg in "$@"; do
             export MILO_LONG_TEST=1
             ALL_GATES=1
             ;;
+        --no-assets) NO_ASSETS=1 ;;
         --no-build) DO_BUILD=0 ;;
         --no-configure) DO_CONFIGURE=0 ;;
         *) CTEST_ARGS+=("$arg") ;;
@@ -358,6 +387,37 @@ else
     echo "    (TestGates.BuildMatchesSources will fail if it is stale)"
 fi
 
+# Where ctest runs the tests (CMake's MILO_TEST_ASSET_DIR), and whether game
+# data is there -- the same file the engine's NativeFindDataDir() probes for.
+ASSET_DIR_FILE="$BUILD_DIR/milo_test_asset_dir.txt"
+ASSET_DIR="$(head -1 "$ASSET_DIR_FILE" 2>/dev/null || true)"
+has_game_data() { [ -n "${1:-}" ] && [ -f "$1/gen/main_xbox.hdr" ]; }
+
+if [ "$NO_ASSETS" = "1" ]; then
+    if [ -z "$ASSET_DIR" ]; then
+        echo "error: $ASSET_DIR_FILE is missing or empty; --no-assets cannot" >&2
+        echo "       check that this build really has no game data. Reconfigure." >&2
+        exit 7
+    fi
+    refuse=""
+    [ "$ALL_GATES" = "1" ] && refuse="--all-gates enables gates that all need game data."
+    has_game_data "$ASSET_DIR" && refuse="the ctest working dir HAS game data: $ASSET_DIR/gen/main_xbox.hdr"
+    has_game_data "${DC3_DATA:-}" && refuse="DC3_DATA HAS game data: $DC3_DATA/gen/main_xbox.hdr"
+    if [ -n "$refuse" ]; then
+        echo "==============================================================" >&2
+        echo " NATIVE GATE DID NOT RUN -- --no-assets refused" >&2
+        echo "--------------------------------------------------------------" >&2
+        echo " $refuse" >&2
+        echo " --no-assets is for machines with no game data (GitHub CI). Its" >&2
+        echo " floor is a much weaker check than the skip budget; on a box with" >&2
+        echo " the data, run the default gate:  scripts/native_test.sh" >&2
+        echo "==============================================================" >&2
+        exit 12
+    fi
+    echo "==> --no-assets: no game data under $ASSET_DIR; enforcing the executed"
+    echo "    floor in $FLOOR_FILE instead of the skip budget"
+fi
+
 LOG="$(mktemp -t native_test.XXXXXX.log)"
 # shellcheck disable=SC2086
 ( cd "$BUILD_DIR" && ctest "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}" ) 2>&1 | tee "$LOG"
@@ -381,6 +441,98 @@ if [ -z "${total:-}" ] || [ "$total" -eq 0 ]; then
 fi
 executed=$(( total - skipped ))
 passed=$(( executed - failed ))
+
+# Per-test evidence from ctest's LastTest.log, which holds every test's output.
+#   no_data_skips -- tests that skipped at the explicit game-data check
+#                    (EnsureEngineInit, HeadlessBootTest): blocks carrying the
+#                    [no-game-data] tag. Informational: WHY the skips are skips.
+#   verified      -- gtest cases that printed their own "[       OK ]" line:
+#                    passes with evidence that the body ran.
+#   ghosts        -- gtest processes ctest scored PASSED that printed no
+#                    OK / SKIPPED / FAILED line at all: nothing ran. A skip in a
+#                    global gtest Environment does exactly this, and ctest has
+#                    no way to tell it from a pass.
+LAST_TEST_LOG="$BUILD_DIR/Testing/Temporary/LastTest.log"
+read -r no_data_skips verified ghosts < <(awk '
+    /^[0-9]+\/[0-9]+ Test: /   { t = $3; gt = 0; mark = 0; next }
+    /^\[==========\] Running / { gt = 1 }
+    /\[no-game-data\]/        { if (t != "" && !(t in nd)) { nd[t] = 1; n++ } }
+    /^\[       OK \] /        { if (!($4 in ok)) { ok[$4] = 1; v++ }; mark = 1 }
+    /^\[  (SKIPPED|FAILED) \] / { mark = 1 }
+    /^Test Passed\./           { if (gt && !mark) g++ ; t = "" }
+    END { print n + 0, v + 0, g + 0 }' "$LAST_TEST_LOG" 2>/dev/null || echo "? ? ?")
+
+if [ "$NO_ASSETS" = "1" ]; then
+    # The FLOOR replaces the budget in this mode. Same precondition discipline:
+    # a missing or unparseable floor is a disarmed gate, not a pass.
+    if [ ! -f "$FLOOR_FILE" ]; then
+        echo "error: no-assets floor file missing: $FLOOR_FILE" >&2
+        echo "       Without it an all-skipped run would pass. Refusing." >&2
+        exit 5
+    fi
+    floor=$(grep -oE '^[0-9]+' "$FLOOR_FILE" | head -1)
+    if [ -z "$floor" ] || [ "$floor" -le 0 ]; then
+        echo "error: could not parse a positive executed floor from $FLOOR_FILE" >&2
+        echo "       (wanted a bare integer > 0 at the start of a line)." >&2
+        exit 5
+    fi
+    echo
+    echo "=============================================================="
+    echo " milo-tests summary, NO GAME DATA mode   (ctest exit $CTEST_RC)"
+    echo "--------------------------------------------------------------"
+    printf "   registered : %d\n" "$total"
+    printf "   EXECUTED   : %d\n" "$executed"
+    printf "     passed   : %d\n" "$passed"
+    printf "     FAILED   : %d\n" "$failed"
+    printf "   SKIPPED    : %d   (%s at the [no-game-data] check)\n" "$skipped" "$no_data_skips"
+    printf "   VERIFIED   : %s   gtest cases that printed [ OK ]; floor: %s\n" "$verified" "$floor"
+    printf "   ghosts     : %s   gtest runs scored PASSED that ran nothing\n" "$ghosts"
+    echo "=============================================================="
+    printf 'NT_MODE=no-assets\nNT_REGISTERED=%s\nNT_EXECUTED=%s\nNT_PASSED=%s\nNT_FAILED=%s\nNT_SKIPPED=%s\nNT_NO_DATA_SKIPS=%s\nNT_VERIFIED=%s\nNT_GHOSTS=%s\nNT_FLOOR=%s\n' \
+        "$total" "$executed" "$passed" "$failed" "$skipped" "$no_data_skips" "$verified" "$ghosts" "$floor" \
+        > "$BUILD_DIR/native_test_summary.txt"
+    case "$verified$ghosts" in
+        *[!0-9]*|"")
+            echo "error: could not read per-test evidence from $LAST_TEST_LOG;" >&2
+            echo "       refusing to report the floor as met." >&2
+            exit 4 ;;
+    esac
+    if [ "${NO_ASSETS_FLOOR_UPDATE:-0}" = "1" ]; then
+        if [ "$verified" -lt "$floor" ] && [ "${ALLOW_FLOOR_LOWER:-0}" != "1" ]; then
+            echo "REFUSING to lower the no-assets floor: $floor -> $verified."
+            echo "      That records lost coverage as the new normal. If intended,"
+            echo "      re-run with ALLOW_FLOOR_LOWER=1 and say why in the commit."
+            exit 5
+        fi
+        sed -i -E "0,/^[0-9]+/s//$verified/" "$FLOOR_FILE"
+        echo "no-assets floor updated: $floor -> $verified"
+        rm -f "$LOG"
+        exit "$CTEST_RC"
+    fi
+    rc=$CTEST_RC
+    if [ "$ghosts" -gt 0 ]; then
+        echo
+        echo "FAIL: $ghosts gtest run(s) were scored PASSED by ctest but printed no"
+        echo "      [ OK ] / [ SKIPPED ] / [ FAILED ] line: their test never ran."
+        [ -n "${GITHUB_ACTIONS:-}" ] && echo "::error::$ghosts milo-tests runs passed without running a test"
+        rc=2
+    fi
+    if [ "$verified" -lt "$floor" ]; then
+        echo
+        echo "FAIL: $verified gtest cases passed with no game data; the floor is $floor."
+        echo "      Coverage shrank: asset-free tests now skip, never run, or no"
+        echo "      longer exist. Find what stopped; do not lower the floor to hide it."
+        [ -n "${GITHUB_ACTIONS:-}" ] && echo "::error::no-assets coverage shrank: $verified verified < floor $floor"
+        rc=2
+    elif [ "$verified" -gt "$floor" ]; then
+        echo
+        echo "NOTE: $verified verified, floor is $floor. Raise the floor to lock it in:"
+        echo "      set the first line of native/tests/no_assets_floor.txt to $verified"
+        [ -n "${GITHUB_ACTIONS:-}" ] && echo "::notice::no-assets floor can rise: $floor -> $verified"
+    fi
+    rm -f "$LOG"
+    exit "$rc"
+fi
 
 # The budget file is a PRECONDITION, not an optional decoration.
 #
@@ -524,6 +676,13 @@ if [ -n "$budget" ]; then
             echo "      tree. Raising the budget would make an environmental"
             echo "      outage the permanent new normal. Fix the box (reboot),"
             echo "      or report the gate red with this as the reason."
+        fi
+        if [ -n "$ASSET_DIR" ] && ! has_game_data "$ASSET_DIR"; then
+            echo
+            echo "      NOTE: this build has NO GAME DATA (ctest runs in $ASSET_DIR,"
+            echo "      no gen/main_xbox.hdr), so every engine-backed suite skips."
+            echo "      The budget describes a box with the data. On a data-less"
+            echo "      machine use:  scripts/native_test.sh --no-assets"
         fi
         # Check the environment before believing the number. The budget was
         # recorded in the main checkout; archive/ is in .gitignore, so it exists
