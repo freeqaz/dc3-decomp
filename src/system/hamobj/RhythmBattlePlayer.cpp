@@ -562,116 +562,116 @@ void RhythmBattlePlayer::UpdateAnimations(Hmx::Object *handler) {
     if (TheGestureMgr->GetSkeletonIndexByTrackingID(
             TheGameData->Player(mPlayer)->GetSkeletonTrackingID()
         )
-        != -1) {
-        MILO_ASSERT(handler, 0x378);
-        static Symbol rhythmbattle_nogroove("rhythmbattle_nogroove");
-        static Symbol rhythmbattle_groovelost("rhythmbattle_groovelost");
-        static Symbol rhythmbattle_fresh("rhythmbattle_fresh");
-        static Symbol rhythmbattle_switchup("rhythmbattle_switchup");
-        static Symbol rhythmbattle_stale("rhythmbattle_stale");
-        static Symbol rhythmbattle_unison("rhythmbattle_unison");
-        static Symbol rhythmbattle_jacked("rhythmbattle_jacked");
-        static Symbol rhythmbattle_jacked_bonus("rhythmbattle_jacked_bonus");
-        static Symbol rhythmbattle_samegroove("rhythmbattle_samegroove");
-        static Symbol rhythmbattle_inthezone("rhythmbattle_inthezone");
-        static Symbol move_perfect("move_perfect");
-        static Symbol move_awesome("move_awesome");
-        static Symbol move_ok("move_ok");
-        static Symbol move_bad("move_bad");
-        static Symbol none("none");
-        static Message groove_passed("groove_passed", 0, 0, 0, none, none);
-        groove_passed[0] = mPlayer;
-        int player = mSwapped ? !mPlayer : mPlayer;
-        player += 3;
-        groove_passed[player] = none;
-        Symbol playerNodeValue;
-        if (mTrickSymbol != none) {
+        == -1)
+        return;
+    MILO_ASSERT_IF(handler, 0x378)
+    static Symbol rhythmbattle_nogroove("rhythmbattle_nogroove");
+    static Symbol rhythmbattle_groovelost("rhythmbattle_groovelost");
+    static Symbol rhythmbattle_fresh("rhythmbattle_fresh");
+    static Symbol rhythmbattle_switchup("rhythmbattle_switchup");
+    static Symbol rhythmbattle_stale("rhythmbattle_stale");
+    static Symbol rhythmbattle_unison("rhythmbattle_unison");
+    static Symbol rhythmbattle_jacked("rhythmbattle_jacked");
+    static Symbol rhythmbattle_jacked_bonus("rhythmbattle_jacked_bonus");
+    static Symbol rhythmbattle_samegroove("rhythmbattle_samegroove");
+    static Symbol rhythmbattle_inthezone("rhythmbattle_inthezone");
+    static Symbol move_perfect("move_perfect");
+    static Symbol move_awesome("move_awesome");
+    static Symbol move_ok("move_ok");
+    static Symbol move_bad("move_bad");
+    static Symbol none("none");
+    static Message groove_passed("groove_passed", 0, 0, 0, none, none);
+    groove_passed[0] = mPlayer;
+    int player = mSwapped ? !mPlayer : mPlayer;
+    player += 3;
+    groove_passed[player] = none;
+    Symbol playerNodeValue;
+    if (mTrickSymbol != none) {
+        groove_passed[1] = move_perfect;
+        playerNodeValue = mTrickSymbol;
+    } else if (mNormalizedRhythmScore < 0.5f) {
+        groove_passed[1] = move_bad;
+        if (mPrevZoneLevel) {
+            playerNodeValue = rhythmbattle_groovelost;
+        } else {
+            playerNodeValue = rhythmbattle_nogroove;
+        }
+    } else {
+        groove_passed[1] = move_awesome;
+        if (InTheZone() && mPrevInTheZone != 1) {
             groove_passed[1] = move_perfect;
-            playerNodeValue = mTrickSymbol;
-        } else if (mNormalizedRhythmScore < 0.5f) {
-            groove_passed[1] = move_bad;
+            playerNodeValue = rhythmbattle_inthezone;
+        } else {
             if (mPrevZoneLevel) {
-                playerNodeValue = rhythmbattle_groovelost;
+                playerNodeValue = rhythmbattle_samegroove;
             } else {
-                playerNodeValue = rhythmbattle_nogroove;
+                playerNodeValue = rhythmbattle_fresh;
             }
+        }
+    }
+    // d13 is cleared in each arm of the cooldown update (the image merges
+    // the two copies into one after allocation); the per-arm definitions
+    // put d13 above the static-guard address, so d13 takes r26 and the
+    // guard r25 as in the image.
+    bool d13;
+    if (groove_passed[1] != move_ok && groove_passed[1] != move_awesome) {
+        mGrooveCooldown = 0;
+        d13 = false;
+    } else {
+        if (mGrooveCooldown > 0) {
+            mGrooveCooldown--;
+        }
+        d13 = false;
+    }
+    if (gDebugGroove) {
+        mDebugScoreValue = mNormalizedRhythmScore * 100.0f;
+    } else if (gDebugFresh) {
+        mDebugScoreValue = mNormalizedFreshnessScore * 100.0f;
+    }
+    if (mDebugScoreValue != -1) {
+        MILO_LOG("measure score: %d\n", mDebugScoreValue);
+        mDebugScoreValue = -1;
+    } else if (mSwagJackedState != none) {
+        d13 = true;
+        static Symbol rhythmbattle_swagjackeddd1("rhythmbattle_swagjackeddd1");
+        static Symbol rhythmbattle_swagjackeddd2("rhythmbattle_swagjackeddd2");
+        if (mSwagJackedState == rhythmbattle_swagjackeddd1) {
+            groove_passed[1] = move_bad;
+            playerNodeValue = rhythmbattle_jacked;
+        } else if (mSwagJackedState == rhythmbattle_swagjackeddd2) {
+            groove_passed[1] = move_perfect;
+            playerNodeValue = rhythmbattle_jacked_bonus;
         } else {
-            groove_passed[1] = move_awesome;
-            if (InTheZone() && mPrevInTheZone != 1) {
-                groove_passed[1] = move_perfect;
-                playerNodeValue = rhythmbattle_inthezone;
-            } else {
-                if (mPrevZoneLevel) {
-                    playerNodeValue = rhythmbattle_samegroove;
-                } else {
-                    playerNodeValue = rhythmbattle_fresh;
-                }
-            }
+            MILO_LOG("unknown token %s\n", playerNodeValue);
         }
-        // d13 is cleared in each arm of the cooldown update (the image merges
-        // the two copies into one after allocation); the per-arm definitions
-        // put d13 above the static-guard address, so d13 takes r26 and the
-        // guard r25 as in the image.
-        bool d13;
-        if (groove_passed[1] != move_ok && groove_passed[1] != move_awesome) {
-            mGrooveCooldown = 0;
-            d13 = false;
-        } else {
-            if (mGrooveCooldown > 0) {
-                mGrooveCooldown--;
-            }
-            d13 = false;
+        mSwagJackedState = none;
+    }
+    groove_passed[player] = playerNodeValue;
+    groove_passed[2] = d13;
+    static UIPanel *sLoadingPanel =
+        ObjectDir::Main()->Find<UIPanel>("loading_panel", false);
+    if (sLoadingPanel && sLoadingPanel->LoadedDir() && sLoadingPanel->IsLoaded()) {
+        mMoveFeedback->Find<Flow>("flow.flow")->Activate();
+        mTextFeedback->Find<Flow>("flow.flow")->Activate();
+        sLoadingPanel->HandleType(groove_passed);
+    } else {
+        handler->HandleType(groove_passed);
+    }
+    RndAnimatable *anim = nullptr;
+    if (mInTheZone == 1U) {
+        anim = m4xMultAnim;
+    }
+    if (anim != mBattleMeterAnim) {
+        if (anim) {
+            static Symbol loop("loop");
+            static Symbol dest("dest");
+            anim->EndFrame();
+            anim->EndFrame();
         }
-        if (gDebugGroove) {
-            mDebugScoreValue = mNormalizedRhythmScore * 100.0f;
-        } else if (gDebugFresh) {
-            mDebugScoreValue = mNormalizedFreshnessScore * 100.0f;
-        }
-        if (mDebugScoreValue != -1) {
-            MILO_LOG("measure score: %d\n", mDebugScoreValue);
-            mDebugScoreValue = -1;
-        } else if (mSwagJackedState != none) {
-            d13 = true;
-            static Symbol rhythmbattle_swagjackeddd1("rhythmbattle_swagjackeddd1");
-            static Symbol rhythmbattle_swagjackeddd2("rhythmbattle_swagjackeddd2");
-            if (mSwagJackedState == rhythmbattle_swagjackeddd1) {
-                groove_passed[1] = move_bad;
-                playerNodeValue = rhythmbattle_jacked;
-            } else if (mSwagJackedState == rhythmbattle_swagjackeddd2) {
-                groove_passed[1] = move_perfect;
-                playerNodeValue = rhythmbattle_jacked_bonus;
-            } else {
-                MILO_LOG("unknown token %s\n", playerNodeValue);
-            }
-            mSwagJackedState = none;
-        }
-        groove_passed[player] = playerNodeValue;
-        groove_passed[2] = d13;
-        static UIPanel *sLoadingPanel =
-            ObjectDir::Main()->Find<UIPanel>("loading_panel", false);
-        if (sLoadingPanel && sLoadingPanel->LoadedDir() && sLoadingPanel->IsLoaded()) {
-            mMoveFeedback->Find<Flow>("flow.flow")->Activate();
-            mTextFeedback->Find<Flow>("flow.flow")->Activate();
-            sLoadingPanel->HandleType(groove_passed);
-        } else {
-            handler->HandleType(groove_passed);
-        }
-        RndAnimatable *anim = nullptr;
-        if (mInTheZone == 1U) {
-            anim = m4xMultAnim;
-        }
-        if (anim != mBattleMeterAnim) {
-            if (anim) {
-                static Symbol loop("loop");
-                static Symbol dest("dest");
-                anim->EndFrame();
-                anim->EndFrame();
-            }
-            mBattleMeterAnim = anim;
-        }
-        if (mComboPosAnim) {
-            mComboPosAnim->Animate(mComboMeter, mComboMeter, mComboPosAnim->Units());
-        }
+        mBattleMeterAnim = anim;
+    }
+    if (mComboPosAnim) {
+        mComboPosAnim->Animate(mComboMeter, mComboMeter, mComboPosAnim->Units());
     }
 }
 
