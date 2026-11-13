@@ -182,14 +182,23 @@ protected:
 // ============================================================================
 // Call EnsureEngineInit() once per test suite. Sets MILO_HEADLESS=1 and runs
 // the same init sequence as milo-viewer.
-
-void EnsureEngineInit();
+//
+// GAME DATA GATE: when gen/main_xbox.hdr cannot be found (the boot path's own
+// probe, NativeFindDataDir), it does NOT boot: it records a GTEST_SKIP tagged
+// kNoGameDataSkipTag and returns false. From SetUpTestSuite that skips the
+// whole suite. A caller that goes on to touch the engine afterwards -- a TEST
+// body, or a SetUpTestSuite override that loads assets after calling
+// EngineTestFixture::SetUpTestSuite() -- must return when it gets false (or
+// when IsSkipped() is true), or it will run against an engine that never booted.
+// The asset-less CI mode (scripts/native_test.sh --no-assets) counts this tag.
+inline constexpr const char *kNoGameDataSkipTag = "[no-game-data]";
+[[nodiscard]] bool EnsureEngineInit();
 
 // GTest fixture that calls EnsureEngineInit() in SetUpTestSuite
 class EngineTestFixture : public ::testing::Test {
 protected:
     static void SetUpTestSuite() {
-        EnsureEngineInit();
+        (void)EnsureEngineInit(); // a false return has already skipped the suite
     }
 };
 

@@ -80,6 +80,7 @@ protected:
 
     static void SetUpTestSuite() {
         EngineTestFixture::SetUpTestSuite();
+        if (IsSkipped()) return; // no game data: the engine did not boot
 
         std::string root = GetMiloLibRoot();
         if (root.empty()) {

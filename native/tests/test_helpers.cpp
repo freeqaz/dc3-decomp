@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <csignal>
+#include <unistd.h>
 
 // Engine headers
 #include "os/Debug.h"
@@ -62,6 +63,7 @@
 // Forward declarations from engine
 extern Rnd &TheRnd;
 extern void NativeDetectDataDir();
+extern const char *NativeFindDataDir();
 void SetFileChecksumData();
 
 static bool sSymbolInitialized = false;
@@ -97,9 +99,32 @@ void EngineTeardown() {
     _exit(exitCode);
 }
 
-void EnsureEngineInit() {
+// The explicit "game data absent" gate. GTEST_SKIP() returns from THIS
+// function only, so it lives in a void helper and EnsureEngineInit() reports
+// the outcome; the skip itself is recorded on the current test (or, from
+// SetUpTestSuite, on the suite, which gtest then skips whole).
+static void SkipNoGameData() {
+    char cwd[4096];
+    const char *env = getenv("DC3_DATA");
+    GTEST_SKIP() << kNoGameDataSkipTag << " gen/main_xbox.hdr not under $DC3_DATA ("
+                 << (env ? env : "unset")
+                 << ") or orig-assets, ../orig-assets, ../../orig-assets, . from cwd "
+                 << (getcwd(cwd, sizeof(cwd)) ? cwd : "?")
+                 << " -- the engine cannot boot without the DC3 archive";
+}
+
+bool EnsureEngineInit() {
     if (sEngineInitialized)
-        return;
+        return true;
+    // Checked BEFORE booting, with the boot path's own probe
+    // (NativeFindDataDir, System_Native.cpp). Without the archive the boot
+    // cannot succeed -- it now exits with "FATAL - no game data", and used to
+    // die of SIGFPE -- so on a machine with no game data (the GitHub runner)
+    // every engine-backed test skips here instead of taking the process down.
+    if (!NativeFindDataDir()) {
+        SkipNoGameData();
+        return false;
+    }
     sEngineInitialized = true;
     sSymbolInitialized = true; // engine init includes symbol init
 
