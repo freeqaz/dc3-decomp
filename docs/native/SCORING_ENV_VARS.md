@@ -87,6 +87,16 @@ Xbox does from `NUI_SKELETON_FRAME`), so `DC3_FAST_TIME` replays at the
 choreography's own speed.  `--stand-and-watch` is the negative control: the same
 sensor and the same per-move record (`<out>/kinect.json`), people standing.
 
+`--replay FIXTURE` (2026-11-13, PLAN P-5) swaps the target for a RECORDED
+human: player 0 gets the fixture frame at `int(song * fps) mod n` instead of
+the choreography whenever a move is on (`moveDir` set), so the stream is
+deterministic under `DC3_FAST_TIME` -- no inference and no wall clock in the
+loop. `--replay-still` holds the fixture's frame 0 all song (the same body,
+standing). The fixture format and recorder are in
+[POSE_INPUT.md](POSE_INPUT.md#testing-without-a-webcam). With `--perform` and
+no `--socket`, the script is a pure score recorder (no sensor), which
+`scripts/pose_scoring_gate.sh` uses for the `selftest` and `dummy` configs.
+
 The async detectors that perform and battle rate from (`last_detector_result`)
 used to be switched off natively (two `HX_NATIVE` guards); they run as on the
 360 since this branch.
