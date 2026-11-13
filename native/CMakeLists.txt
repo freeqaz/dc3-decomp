@@ -1177,7 +1177,6 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Memory_Native.cpp
     src/platform/PlatformMgr_Native.cpp
     src/platform/DingoSvr_Native.cpp
-    src/platform/SongSortMgr_Native.cpp
     src/platform/System_Native.cpp
     src/platform/File_Native.cpp
     src/platform/AsyncFile_Native.cpp
@@ -1373,7 +1372,6 @@ set(DC3_WEB_CORE_SOURCES
     # compiled via DC3_WEB_LIFTED_ENGINE_SOURCES below.
     src/platform/PlatformMgr_Native.cpp
     src/platform/DingoSvr_Native.cpp
-    src/platform/SongSortMgr_Native.cpp
     src/platform/System_Native.cpp
     # File_Web.cpp / CDReader_Web.cpp / WebAssets.cpp lifted to milo-engine
     # (MILO_BUILD_WEB platform layer, W0).
@@ -2201,6 +2199,27 @@ if(BUILD_TESTS)
         PROPERTIES
             ENVIRONMENT "${MILO_TEST_ENV}"
     )
+
+    # LinkHygiene.*: dc3-native must link without --allow-multiple-definition
+    # (Apple ld has no equivalent; on Linux the flag silently keeps whichever
+    # duplicate links first). The check relinks dc3-native from ninja's own
+    # link command with the flag removed, into a temp file, and compares the
+    # duplicate set with native/tests/link_duplicates_allow.txt. SelfTest is
+    # its negative control: it injects a duplicate and requires it be seen.
+    # GNU ld / lld diagnostics only, so Linux only.
+    find_program(MILO_PYTHON3_LINK python3)
+    if(MILO_PYTHON3_LINK AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND _ninja_exe)
+        add_test(NAME LinkHygiene.DuplicateDefinitions
+            COMMAND ${MILO_PYTHON3_LINK} ${CMAKE_SOURCE_DIR}/../scripts/native/check_link_duplicates.py
+                --build-dir ${CMAKE_CURRENT_BINARY_DIR} --target dc3-native --ninja ${_ninja_exe}
+                --allow ${CMAKE_SOURCE_DIR}/tests/link_duplicates_allow.txt)
+        add_test(NAME LinkHygiene.DuplicateCheckSelfTest
+            COMMAND ${MILO_PYTHON3_LINK} ${CMAKE_SOURCE_DIR}/../scripts/native/check_link_duplicates.py
+                --build-dir ${CMAKE_CURRENT_BINARY_DIR} --target dc3-native --ninja ${_ninja_exe}
+                --selftest)
+        set_tests_properties(LinkHygiene.DuplicateDefinitions LinkHygiene.DuplicateCheckSelfTest
+            PROPERTIES LABELS LinkHygiene TIMEOUT 300)
+    endif()
 
     # XeniaGolden.*: the native port against state recorded from the ORIGINAL
     # debug.xex under Xenia (docs/plans/XENIA_ORACLE.md, Tier A). Each test

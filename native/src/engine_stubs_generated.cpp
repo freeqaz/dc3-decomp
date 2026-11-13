@@ -43,22 +43,11 @@ complex expj(double) { HX_STUB_TRACE("expj"); return {0, 0}; }
 __attribute__((weak)) int FileRecursePattern() { HX_STUB_TRACE("FileRecursePattern"); return 0; }
 int FileTimeToSystemTime() { HX_STUB_TRACE("FileTimeToSystemTime"); return 0; }
 #endif // !__EMSCRIPTEN__
-// gCharHighlightY: char/Char.h declares `extern float gCharHighlightY;`, and the
-// symbol table agrees -- ?gCharHighlightY@@3MA is .data:0x82F08480, size 0x4,
-// data:float -- with the split asm giving its initialiser as `.float -1`.
-// This was `void* gCharHighlightY = 0`, which is the wrong type (8 bytes on
-// LP64, so the extra 4 are simply wasted) and, more importantly, the wrong
-// initial value: -1.0f is the "no highlight pending" sentinel that
-// CharDriver::Highlight() tests (`if (gCharHighlightY == -1.0f)
-// CharDeferHighlight(this);`) and that CharDebug::UpdateOverlay restores on the
-// way out. Starting at 0.0f made the very first Highlight() take the else
-// branch and highlight at y = 0 instead of deferring. Debug-overlay only, but
-// it costs nothing to be right.
-//
-// The other typed data stubs in this file were checked against the same split
-// asm at the same time and are correct: lbl_82F0BE80 `.float 2`, lbl_82F0E8A4
-// `.4byte 4`, lbl_830A4100 / lbl_830A4104 `.4byte 0`, lbl_8316EB70 `.double 0`.
-float gCharHighlightY = -1.0f;
+// gCharHighlightY: defined (float, -1.0f) by src/system/char/Char.cpp. The
+// placeholder that lived here was a second STRONG definition -- Linux's
+// --allow-multiple-definition kept Char.cpp's because it links first, Apple ld
+// refuses the pair. Removed 2026-11-13 (M-4) with the other duplicates below;
+// scripts/native/check_link_duplicates.py fails if one comes back.
 // void* gCheatsManager = 0; // now defined in Cheats.cpp
 // void* gDataThisPtr = 0; // now defined in DataFunc.cpp
 // void* gDebugDepth = 0; // now defined in LiveCameraInput.cpp
@@ -67,7 +56,7 @@ int GetLastError() { HX_STUB_TRACE("GetLastError"); return 0; }
 int GetOverlappedResult() { HX_STUB_TRACE("GetOverlappedResult"); return 0; }
 int GetTimeZoneInformation() { HX_STUB_TRACE("GetTimeZoneInformation"); return 0; }
 #endif
-void* gMemStackLock = 0;
+// gMemStackLock: defined by src/system/utl/MemMgr.cpp.
 #ifndef __EMSCRIPTEN__
 int JoypadSetActuatorsImp() { HX_STUB_TRACE("JoypadSetActuatorsImp"); return 0; }
 // json_object_* / json_tokener_parse are now provided by the real json-c sources
@@ -75,8 +64,8 @@ int JoypadSetActuatorsImp() { HX_STUB_TRACE("JoypadSetActuatorsImp"); return 0; 
 // return-0 stubs here silently made every online JSON parse empty (RockCentral,
 // leaderboards, MOTD, store). Keeping them would duplicate-define the real symbols.
 #endif
-extern "C" float lbl_82F0BE80 = 2.0f;
-int lbl_82F14008 = 0;
+// lbl_82F0BE80 (2.0f): defined by src/system/gesture/SkeletonUpdate.cpp.
+// lbl_82F14008 (-1): defined by src/system/rndobj/Draw.cpp.
 int lbl_82F0E8A4 = 4;  // RhythmDetectorGroup .data:0xF8 (0x82F0E8A4); HollaBackMinigame OnBeat compares subMeasure against it
 DataArray *lbl_830A4100 = nullptr;
 int lbl_830A4104 = 0;
@@ -142,12 +131,7 @@ double __real_3fe0000000000000 = 0.5;
 double __real_4000000000000000 = 2.0;
 double __real_400921fb60000000 = 3.14159274101257324;   // pi (float precision)
 double __real_401921fb60000000 = 6.28318548202514648;   // 2*pi (float precision)
-#ifndef __EMSCRIPTEN__
-#ifdef __APPLE__
-__attribute__((weak))
-#endif
-int register_cipher() { HX_STUB_TRACE("register_cipher"); return 0; }
-#endif
+// register_cipher: provided by tomcrypt/crypt.c on every target.
 // rijndael_desc, rijndael_setup, rijndael_ecb_decrypt now provided by tomcrypt/aes.c
 #ifndef __EMSCRIPTEN__
 int SetUnhandledExceptionFilter() { HX_STUB_TRACE("SetUnhandledExceptionFilter"); return 0; }
@@ -155,36 +139,34 @@ int SetUnhandledExceptionFilter() { HX_STUB_TRACE("SetUnhandledExceptionFilter")
 // The* global pointer stubs - must be void* (not functions!) since C++ code
 // declares them as extern ClassName* and dereferences them as pointers.
 // Function stubs at these symbols would be read as non-null garbage pointers.
-void* TheChallengeSortMgr = 0;
+// TheChallengeSortMgr: defined in ChallengeSortMgr.cpp
 // TheContentMgr: provided by ContentMgr_Stub.cpp
 void* TheDebugNotifyOncePrinter = 0;
 // TheDxRnd: DxRnd is Xbox-only (D3D9 renderer), provide zero storage for native
 __attribute__((weak, used)) char TheDxRnd[8192] = {};
 // D3DDevice_SetDepthStencilSurface: Xbox D3D9 API stub
 extern "C" __attribute__((weak)) void D3DDevice_SetDepthStencilSurface(void*, int) { HX_STUB_TRACE("D3DDevice_SetDepthStencilSurface"); }
-// MemHeapStack::sDefaultHeap: static member definition
-#include "utl/MemHeap.h"
-int MemHeapStack::sDefaultHeap = 0;
-void* TheFitnessGoalMgr = 0;
+// MemHeapStack::sDefaultHeap (-1): defined in MemMgr.cpp
+// TheFitnessGoalMgr: defined in FitnessGoalMgr.cpp
 // TheGameMode: now defined properly in GameMode.cpp
 // TheHamUI: now defined in HamUI.cpp
-void* TheHAQMgr = 0;
-void* TheLeaderboards = 0;
+// TheHAQMgr: defined in HAQManager.cpp
+// TheLeaderboards: defined in Leaderboards.cpp
 // TheLocale: now defined in Locale.cpp
-void* TheMaster = 0;
+// TheMaster: defined in HamMaster.cpp
 // TheMC: now defined in Memcard_Stub.cpp
 // TheMoveMgr: now defined in MoveMgr.cpp
 // TheMovieSys: removed - provided by MovieSys.cpp
-// TheMQSongSortMgr: removed - provided by SongSortMgr_Native.cpp
+// TheMQSongSortMgr: defined in MQSongSortMgr.cpp
 // TheNgRnd: removed - provided by Rnd_Stub.cpp
 // TheRenderState: removed - provided by RenderState_Native.cpp
 // TheRnd: removed - provided by Rnd_Stub.cpp
 // TheServer: removed - provided by DingoSvr_Native.cpp
 // TheShaderMgr: removed - provided by Rnd_Stub.cpp
-void* TheSkeletonIdentifier = 0;
-void* TheSkeletonViz = 0;
-// TheSongSortMgr: removed - provided by SongSortMgr_Native.cpp
-// TheUI: removed - provided as proper UIManager* in Rnd_Stub.cpp
+// TheSkeletonIdentifier: defined in SkeletonIdentifier.cpp
+// TheSkeletonViz: defined in DrawUtl.cpp
+// TheSongSortMgr: defined in SongSortMgr.cpp
+// TheUI: defined in HamUI.cpp
 
 // vorbis_synthesis_poll was Harmonix's incremental decoder for Xbox.
 // On native/web, delegate to standard vorbis_synthesis which does full decode at once.
