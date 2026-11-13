@@ -112,8 +112,7 @@ FileMerger's `load_tempo` handler (`orig-assets/extracted/char/char_objects.dta`
   character once into a cached texture drawn with an additive blend that the transparent queue
   then drew with the restored alpha-cut material, so no crowd reached the screen at all.
   `CrowdTest` (`native/tests/test_native_crowd.cpp`, `DC3_CROWD_STATS`) guards it. Colours need
-  the engine change in PLAN H-6 (render-target alpha write, `MatColorMod`, no fringe fade on
-  colour-mod band texels); without it the crowd draws with untinted clothes and black skin.
+  the engine change in PLAN H-6 (`MatColorMod`, no fringe fade on colour-mod band texels); without it the crowd draws with untinted clothes and black skin.
 - **`could not find group _00s_cameraperson_ok` (and `_70s_dj_skills_ok`,
   `_70s_arcademachine_skills_ok`)** is the shipped data, not a native gap.
   `HamWardrobe::PlayCrowdAnimation` plays `<stance>_<anim>`, then falls back to `<stance>_ok`
