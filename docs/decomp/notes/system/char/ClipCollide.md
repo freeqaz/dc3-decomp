@@ -53,3 +53,13 @@ Inside the body (was lines 88-124):
         // relocation-symbol multiset is identical.  Probe: naming the bool
         // (`bool fail = true;`) is inert at 94.44444 -- it folds to the same li.
 ```
+
+lane C / w-low-gesture-char (2026-11-13):
+
+```text
+// Behaviour re-check (94.444 canonical): NOT A BUG.  The image has NO
+// `TypeDef() != da` guard (rb3 has one; ours correctly omits it): it calls
+// Hmx::Object::SetTypeDef unconditionally, then FindArray("modes", true),
+// Node(1).Array(), Sym(0) -> mMode (0x90).  The only rows are `li r5, 1`
+// scheduled one slot apart.
+```
