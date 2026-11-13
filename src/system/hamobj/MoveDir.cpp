@@ -2140,15 +2140,19 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
             while (it != endFrame) {
                 if (it->Seconds() >= endSeconds)
                     break;
+                // The image only ever writes r/g/b (3-arg Set); alpha is stack garbage there.
                 Hmx::Color lineColor;
+#ifdef HX_NATIVE
+                lineColor.alpha = 1.0f;
+#endif
                 if (it >= detectRange.first && it < detectRange.second) {
-                    lineColor.Set(1, 1, 1, 1);
+                    lineColor.Set(1, 1, 1);
                     if (it->GetMoveFrame() == closest) {
                         mShowErrorFrames = it;
                         vizSkeleton = (BaseSkeleton *)&it->GetDancerFrame()->mSkeleton;
                     }
                 } else {
-                    lineColor.Set(0.6, 0.6, 0.6, 1);
+                    lineColor.Set(0.6, 0.6, 0.6);
                 }
                 const Ham2FrameWeight &fw =
                     it->GetMoveFrame()->FrameWeight((MoveMirrored)mirrored);
@@ -2279,7 +2283,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         // signed -- it is compared with cmpwi and sign-extended with extsw
         // below. Passing size() straight through reproduces both: one load of
         // the size, spilled once as the const-unsigned& temp.
-        TheRnd.DrawStringScreen(
+        textPos = TheRnd.DrawStringScreen(
             MakeString("asyc: %d", unkf88.size()), textPos, sLightGray, true
         );
         if (asyncCount != 0) {
