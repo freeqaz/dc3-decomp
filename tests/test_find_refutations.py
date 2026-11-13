@@ -146,3 +146,99 @@ float ArcDetector::GetSwipeAmount() const {
     def_line = body.splitlines().index("float ArcDetector::GetSwipeAmount() const {") + 1
     assert f"function at line {def_line}" in out, out
     assert "w21-n" in out
+
+
+# --- sidecar notes (docs/decomp/notes/<unit>.md) -----------------------------
+#
+# Lane history can move out of the source into a per-unit sidecar keyed by
+# mangled symbol.  The property that matters: a function whose notes MOVED
+# answers exactly as before -- exit 0, the same note text -- while 1 and 2 stay
+# distinct.  Each test builds its own <tmp>/src/... and <tmp>/docs/decomp/notes/...
+
+SYM = "?Bar@Foo@@QAAXXZ"
+ABOVE = """// w21-bh: flipping both operands is byte-identical (measured)
+// w26-r: all 8 multiply orders REFUTED, same rows"""
+INSIDE = """    // w28-c: hoisting the load is inert -- do not retry"""
+
+
+def tu(tmp_path, body, rel="system/x/Tu"):
+    f = tmp_path / "src" / (rel + ".cpp")
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(body)
+    return f
+
+
+def sidecar(tmp_path, sections, rel="system/x/Tu"):
+    """sections: {mangled: [block_text, ...]} -> the pilot's sidecar format."""
+    f = tmp_path / "docs" / "decomp" / "notes" / (rel + ".md")
+    f.parent.mkdir(parents=True, exist_ok=True)
+    out = ["# Lane notes", ""]
+    for sym, blocks in sections.items():
+        out += [f"## `{sym}`", "", "moved verbatim", ""]
+        for b in blocks:
+            out += ["```text", b, "```", ""]
+    f.write_text("\n".join(out))
+    return f
+
+
+def test_notes_moved_to_the_sidecar_answer_exactly_as_before(tmp_path):
+    before = tu(tmp_path, f"\n{ABOVE}\nvoid Foo::Bar() {{\n{INSIDE}\n    y = 2;\n}}\n")
+    rc0, out0 = run(SYM, "--file", str(before), "--max-chars", "0")
+    assert rc0 == 0, out0
+    assert ABOVE in out0 and INSIDE in out0
+
+    # the move: source keeps a plain comment that matches no note keyword
+    after = tu(tmp_path, "\n// see docs/decomp/notes\nvoid Foo::Bar() {\n    y = 2;\n}\n")
+    sc = sidecar(tmp_path, {SYM: [ABOVE, INSIDE]})
+    rc1, out1 = run(SYM, "--file", str(after), "--max-chars", "0")
+    assert rc1 == 0, out1
+    assert ABOVE in out1 and INSIDE in out1, out1
+    assert str(sc) in out1
+    assert "2 sidecar" in out1
+
+    # control: the same source WITHOUT the sidecar is genuinely note-free
+    sc.unlink()
+    rc2, out2 = run(SYM, "--file", str(after))
+    assert rc2 == 1, out2
+
+
+def test_sidecar_notes_print_before_source_notes(tmp_path):
+    f = tu(tmp_path, "void Foo::Bar() {\n    // w7-at: in the body\n    y = 2;\n}\n")
+    sidecar(tmp_path, {SYM: ["// w99-sc: from the sidecar"]})
+    rc, out = run(SYM, "--file", str(f))
+    assert rc == 0, out
+    assert out.index("w99-sc") < out.index("w7-at")
+
+
+def test_another_functions_sidecar_section_is_not_this_ones(tmp_path):
+    """A sidecar that only holds a DIFFERENT function's notes must leave this
+    function at exit 1 -- otherwise the sidecar manufactures a refutation."""
+    f = tu(tmp_path, "void Foo::Bar() {\n    y = 2;\n}\n")
+    sidecar(tmp_path, {"?Other@Foo@@QAAXXZ": ["// w5-zz: Other's note"]})
+    rc, out = run(SYM, "--file", str(f))
+    assert rc == 1, out
+    assert "w5-zz" not in out
+
+
+def test_exact_symbol_beats_short_name_overloads(tmp_path):
+    f = tu(tmp_path, "void Foo::Bar() {\n    y = 2;\n}\nvoid Baz::Bar() {}\n")
+    sidecar(tmp_path, {SYM: ["// w1-foo: Foo's"], "?Bar@Baz@@QAAXXZ": ["// w1-baz: Baz's"]})
+    rc, out = run(SYM, "--file", str(f))
+    assert rc == 0 and "w1-foo" in out and "w1-baz" not in out, out
+
+
+def test_unresolvable_target_is_still_2_even_with_a_sidecar(tmp_path):
+    sidecar(tmp_path, {SYM: ["// w3-a: orphaned note"]})
+    rc, out = run(SYM, "--file", str(tmp_path / "src" / "system" / "x" / "Absent.cpp"))
+    assert rc == 2, out
+    assert "CANNOT LOOK" in out
+
+
+def test_explicit_notes_root(tmp_path):
+    f = tu(tmp_path, "void Foo::Bar() {\n    y = 2;\n}\n")
+    elsewhere = tmp_path / "elsewhere"
+    sc = elsewhere / "system" / "x" / "Tu.md"
+    sc.parent.mkdir(parents=True)
+    sc.write_text(f"## `{SYM}`\n\n```text\n// w4-root: via --notes-root\n```\n")
+    rc, out = run(SYM, "--file", str(f), "--notes-root", str(elsewhere))
+    assert rc == 0 and "w4-root" in out, out
