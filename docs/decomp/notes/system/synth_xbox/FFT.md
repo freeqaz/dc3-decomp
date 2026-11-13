@@ -201,6 +201,10 @@ Above the definition (was lines 252-264):
 
 ## `?fft_recursive@@YAHPAMKJ0@Z`
 
+### Lane F (w-low-xbox), 2026-11-13 -- NOT A BUG (behaviour checked)
+
+Whole FFTComplex run in a Python PPC interpreter over the TARGET listing vs our source built on the host (VMX intrinsics emulated), same input, same N-sized sin/cos table: N=65536 (sign -1 and +1, matrix path) and N=131072 (sign -1, recursive path) agree exactly (max rel err 0.0). Swap test (target function swapped into our build) also OK for fft_matrix_forward_columnwise. Neither side is a DFT with an N-sized table at these sizes (rel err ~1.5 on both) because the sub-FFTs want a sqrt(N) table -- that is the image's behaviour, reproduced. Residual is codegen (scheduling/regalloc), not logic. Harness: /home/free/tmp/fftharness (tbig.py, swap.py).
+
 `fft_recursive` -- moved verbatim from `src/system/synth_xbox/FFT.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of 89d252553)
 
 Above the definition (was lines 348-418):
@@ -281,6 +285,31 @@ Above the definition (was lines 348-418):
 
 
 ## `?fft_altivec@@YAHPAM0KJ0@Z`
+
+### Lane F (w-low-xbox), 2026-11-13 -- BEHAVIOUR FIX
+
+The w8-f reconstruction below was **not a correct FFT**.  Measured with a
+target-listing PPC/VMX128 interpreter (it runs the image's own `FFT.s` and
+reproduces a correct DFT for N = 2..2^17: forward e^-i, inverse e^+i scaled
+1/N) and an x86 build of our source with emulated intrinsics: every complex
+transform with N >= 16 (all of `fft_pingpong`'s AltiVec path, hence every
+`FFTComplex` / `FFTRealForward` of 32+ real samples) returned garbage
+(rel. error 0.9 - 1e3) and wrote past the ping-pong scratch.  Three defects
+in the stage loop, all read off the listing (0x82E4F058-0x82E4F740):
+  * butterfly sign: the image computes `x0 - x2` / `x1 - x3`
+    (`vsubfp128 v11, v63, v62`), we had `x2 - x0` / `x3 - x1`; the last
+    radix-4 stage also paired x0 with x1 instead of x0 with x2;
+  * every inner loop is unrolled TWO vectors per iteration with trip count
+    `blk / 4`; ours did one vector, so half of each group was never computed;
+  * group twiddles start at `twiddle + blk*4` (final) and `twiddle + blk*2`
+    (inner) -- `add r21, r27, r7` / `add r22, r26, r7` at 0x82E4F23C -- not
+    `blk*2` / `blk`; and the last stage writes f1 to `+blk*2`, twiddled e0 to
+    `+blk*4`, which we had swapped.
+The first pass and both radix-2 tails were already right.  After the fix our
+MSVC object, run in the same interpreter with only this function swapped in,
+equals the image bit-for-bit-close (rel. err < 1e-5) on N = 16..4096, both
+signs.  46.93 -> 62.5 canonical.
+
 
 `fft_altivec` -- moved verbatim from `src/system/synth_xbox/FFT.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of 89d252553)
 
@@ -379,6 +408,10 @@ Above the definition (was lines 1347-1360):
 
 ## `?fft_matrix_forward_columnwise@@YAHPAMJ0@Z`
 
+### Lane F (w-low-xbox), 2026-11-13 -- NOT A BUG (behaviour checked)
+
+Whole FFTComplex run in a Python PPC interpreter over the TARGET listing vs our source built on the host (VMX intrinsics emulated), same input, same N-sized sin/cos table: N=65536 (sign -1 and +1, matrix path) and N=131072 (sign -1, recursive path) agree exactly (max rel err 0.0). Swap test (target function swapped into our build) also OK for fft_matrix_forward_columnwise. Neither side is a DFT with an N-sized table at these sizes (rel err ~1.5 on both) because the sub-FFTs want a sqrt(N) table -- that is the image's behaviour, reproduced. Residual is codegen (scheduling/regalloc), not logic. Harness: /home/free/tmp/fftharness (tbig.py, swap.py).
+
 `fft_matrix_forward_columnwise` -- moved verbatim from `src/system/synth_xbox/FFT.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of 89d252553)
 
 Inside the body (was lines 1694-1731):
@@ -426,6 +459,10 @@ Inside the body (was lines 1694-1731):
 
 
 ## `?fft_matrix_inverse_columnwise@@YAHPAMJ0@Z`
+
+### Lane F (w-low-xbox), 2026-11-13 -- NOT A BUG (behaviour checked)
+
+Whole FFTComplex run in a Python PPC interpreter over the TARGET listing vs our source built on the host (VMX intrinsics emulated), same input, same N-sized sin/cos table: N=65536 (sign -1 and +1, matrix path) and N=131072 (sign -1, recursive path) agree exactly (max rel err 0.0). Swap test (target function swapped into our build) also OK for fft_matrix_forward_columnwise. Neither side is a DFT with an N-sized table at these sizes (rel err ~1.5 on both) because the sub-FFTs want a sqrt(N) table -- that is the image's behaviour, reproduced. Residual is codegen (scheduling/regalloc), not logic. Harness: /home/free/tmp/fftharness (tbig.py, swap.py).
 
 `fft_matrix_inverse_columnwise` -- moved verbatim from `src/system/synth_xbox/FFT.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of 89d252553)
 
