@@ -84,6 +84,9 @@ bool FFmpegMovieImpl::BeginFromFile(
         return false;
     }
 
+    printf("FFmpegMovieImpl: opened %s (%dx%d, %d frames at %.2f fps)\n", path,
+           mVideoWidth, mVideoHeight, mNumFrames, mFrameRate);
+
     mReady = true;
     mOpen = true;
     mCurrentFrame = 0;

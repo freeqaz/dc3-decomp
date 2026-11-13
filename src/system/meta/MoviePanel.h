@@ -64,10 +64,11 @@ protected:
     float mTimeShowHintStarted; // 0x7c
     bool mShowMenu; // 0x80
 
-#ifdef __EMSCRIPTEN__
-    // Engine-side video texture for web (replaces DOM <video> overlay).
-    // Video frames are decoded by WebMovieImpl, uploaded to mVideoTex,
-    // and drawn fullscreen via DrawRectScreen each frame.
+#ifdef HX_NATIVE
+    // Engine-side video texture (the image's BinkDraw writes the backbuffer
+    // directly; the native impls only decode).  Frames decoded by
+    // WebMovieImpl (web) or FFmpegMovieImpl (desktop) are uploaded to
+    // mVideoTex and drawn fullscreen via DrawRectScreen each frame.
     class RndTex* mVideoTex = nullptr;
     class RndMat* mVideoMat = nullptr;
 #endif

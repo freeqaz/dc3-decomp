@@ -203,9 +203,11 @@ static bool FileExistsRaw(const char *path) {
 
 // Where the game data is: the directory containing gen/main_xbox.hdr, probed
 // as $DC3_DATA first, then orig-assets / ../orig-assets / ../../orig-assets / .
-// relative to the CWD, then orig-assets beside the executable's own tree
-// (<repo>/native/build/<exe> -> <repo>/orig-assets), so a launch from any
-// other directory still finds it. nullptr = no game data. Pure query (no side effects), so
+// relative to the CWD (../../orig-assets is the native/build launch). There is
+// deliberately no executable-relative fallback: HeadlessBootNoGameData runs
+// from an empty cwd with an empty DC3_DATA and requires the "no game data"
+// error, which a fallback to the tree's orig-assets would bypass.
+// nullptr = no game data. Pure query (no side effects), so
 // the test harness asks exactly the question the boot path asks: see
 // EnsureEngineInit() in native/tests/test_helpers.cpp and HeadlessBootTest.
 const char *NativeFindDataDir() {
@@ -224,15 +226,6 @@ const char *NativeFindDataDir() {
         snprintf(buf, sizeof(buf), "%s/gen/main_xbox.hdr", *p);
         if (FileExistsRaw(buf))
             return *p;
-    }
-    static std::string sTreeData;
-    std::string treeDir = NativeTreeDir();
-    if (!treeDir.empty()) {
-        std::string candidate = treeDir + "/../orig-assets";
-        if (FileExistsRaw((candidate + "/gen/main_xbox.hdr").c_str())) {
-            sTreeData = candidate;
-            return sTreeData.c_str();
-        }
     }
     return nullptr;
 }

@@ -1,7 +1,7 @@
 # Boot to main_screen
 #
 # Boot screens auto-advance via the boot flow table in UI.cpp:
-#   attract (movie_done: no .bik) → autosave_warning (90 frames)
+#   attract (skipped: wake + confirm) → autosave_warning (90 frames)
 #   → title (60 frames) → wait_main_after_saveload (120 frames) → main_screen
 #
 # The rest auto-advance because their subsystems (save, Kinect) aren't available.
@@ -11,7 +11,14 @@
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/boot-to-main.txt \
 #     timeout 60 native/build/dc3-native
 
-# attract_screen advances by itself: its .bik does not open, so MoviePanel::Poll
-# sends movie_done (as the image does for a movie that failed to open).
+# attract_screen plays videos/intro.bik (83 s) since desktop movies open out
+# of the archive (PLAN G-15; before, the open failed and the screen advanced on
+# its first poll).  Skip it as a player does: wake (movie_overlay_panel's enter
+# exits controller mode), then confirm on the overlay's SKIP item.  Under
+# DC3_FAST_BOOT both presses land on autosave_warning_screen, which advances by
+# itself either way.
+wait_screen attract_screen
++28 wake
++30 confirm
 
 # Boot screens auto-advance from here. No input needed.

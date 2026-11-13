@@ -21,8 +21,14 @@
 #include "utl\MakeString.h"
 #include "utl\Symbol.h"
 #include <cstdio>
+#ifdef HX_NATIVE
 #ifdef __EMSCRIPTEN__
 #include "platform\WebMovieImpl.h"
+typedef WebMovieImpl NativeMovieImpl;
+#else
+#include "platform\FFmpegMovieImpl.h"
+typedef FFmpegMovieImpl NativeMovieImpl;
+#endif
 #include "platform\TexGpu.h"
 #include "rndobj\Mat.h"
 #include "rndobj\Tex.h"
@@ -122,11 +128,13 @@ void MoviePanel::Load() {
 
 void MoviePanel::Draw() {
     if (GetState() != kUnloaded && mFinalDrawPassFlag == GetFinalDrawPass()) {
-#ifdef __EMSCRIPTEN__
-        // Web: upload decoded video frame to GPU texture, then draw fullscreen.
-        // On Xbox, BinkDraw renders directly to the backbuffer; we replicate
-        // that by drawing a fullscreen rect over everything.
-        WebMovieImpl* impl = dynamic_cast<WebMovieImpl*>(mMovie.GetImpl());
+#ifdef HX_NATIVE
+        // Native (web and desktop): upload the decoded video frame to a GPU
+        // texture, then draw fullscreen.  On Xbox, BinkDraw renders directly
+        // to the backbuffer; we replicate that by drawing a fullscreen rect
+        // over everything.  (Desktop used to call only mMovie.Draw(), which
+        // puts nothing on screen: every panel movie was invisible.)
+        NativeMovieImpl* impl = dynamic_cast<NativeMovieImpl*>(mMovie.GetImpl());
         if (impl && impl->HasDecodedFrame()) {
             int vw = impl->GetDecodedWidth();
             int vh = impl->GetDecodedHeight();
@@ -142,7 +150,12 @@ void MoviePanel::Draw() {
         // Flush post-processing (bloom etc.) before drawing the video rect.
         // The video should appear clean, not bloomed — same as Xbox where
         // BinkDraw writes directly to the backbuffer after post-proc.
+        // Web only: on desktop the flush, with no RndPostProc current (the
+        // attract screen), dropped the whole frame -- measured fully black,
+        // overlay panel included.  The engine side is reported with PLAN G-15.
+#ifdef __EMSCRIPTEN__
         FlushPostProcessingForOverlay();
+#endif
         // Always draw: video frame if available, black fallback otherwise.
         Hmx::Rect r(0, 0, 1, 1);
         if (mVideoTex) {
@@ -169,7 +182,7 @@ void MoviePanel::Exit() {
         mMovie.End();
     }
     mShowMenu = false;
-#ifdef __EMSCRIPTEN__
+#ifdef HX_NATIVE
     if (mVideoMat) { delete mVideoMat; mVideoMat = nullptr; }
     if (mVideoTex) { delete mVideoTex; mVideoTex = nullptr; }
 #endif

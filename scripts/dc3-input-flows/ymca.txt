@@ -37,10 +37,17 @@
 # longest is ~120 frames), so no other press needs one.  See
 # docs/debugging/native.md "Controller Mode Policy".
 
-# attract_screen needs no input: its movie (no .bik ships in the extracted
-# tree) fails to open, so MoviePanel::Poll sends movie_done on the first poll
-# and attract_movie_panel's handler goes to next_screen -- what the image does
-# with a movie that did not open (BinkMovieImpl::Poll returns false).
+# attract_screen plays videos/intro.bik (83 s) since the desktop movie path
+# opens movies out of the archive (PLAN G-15; until then it failed to open and
+# the screen advanced on the first poll).  Skip it the way a player does: the
+# overlay's SKIP item (movie_overlay_panel NAV_SELECT_MSG -> skip_selected ->
+# autosave_warning_screen).  movie_overlay_panel's enter exits controller
+# mode, so the confirm needs its wake.  Under DC3_FAST_BOOT the screen is gone
+# after 10 frames and both presses land on autosave_warning_screen, which
+# advances by itself either way.
+wait_screen attract_screen
++28 wake
++30 confirm
 
 # Press spacing is set for BOTH the native port and the original game under
 # Xenia (xenia tools/fork-regress/flows/dc3-ymca.txt is this file). On the

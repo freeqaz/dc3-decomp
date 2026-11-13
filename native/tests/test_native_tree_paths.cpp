@@ -26,8 +26,6 @@
 //       -> IntroMovieOpensFromAnyCwd, SongPreviewOpensFromAnyCwd FAIL
 //   * NativeDetectOverlayDir without the tree-first probe
 //       -> OverlayIsThisTreesNativeDta FAIL
-//   * NativeFindDataDir without the tree probe
-//       -> DataDirFoundFromAnyCwd FAIL
 
 #include <gtest/gtest.h>
 
@@ -46,7 +44,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-extern const char *NativeFindDataDir();
 const char *NativeGetOverlayDir();
 
 namespace {
@@ -247,22 +244,8 @@ TEST(NativeTreePaths, PoseServerFindsTheDefaultModel) {
 }
 
 // ---------------------------------------------------------------------------
-// Data dir and DTA overlay
+// DTA overlay
 // ---------------------------------------------------------------------------
-
-// From a cwd with no orig-assets anywhere above it, the game data is still
-// found: orig-assets beside the executable's tree.
-TEST(NativeTreePaths, DataDirFoundFromAnyCwd) {
-    std::string expected = NativeTreeDir() + "/../orig-assets";
-    if (!IsFile(expected + "/gen/main_xbox.hdr"))
-        GTEST_SKIP() << kNoGameDataSkipTag << " no orig-assets beside this tree";
-    ScopedEnvVar data("DC3_DATA", nullptr);
-    ScopedEmptyCwd cwd("dc3_data_cwd");
-    ASSERT_TRUE(cwd.ok());
-    const char *dir = NativeFindDataDir();
-    ASSERT_NE(dir, nullptr) << "no game data found from " << cwd.dir();
-    EXPECT_TRUE(IsFile(std::string(dir) + "/gen/main_xbox.hdr")) << dir;
-}
 
 class NativeTreeEnginePaths : public EngineTestFixture {};
 
