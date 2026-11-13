@@ -202,6 +202,53 @@ void NativeForcedHelpbarRestoreAfterGameplay() {
 bool NativeHelpbarInControllerMode() {
     return TheGestureMgr->InControllerMode() && !sForcedHelpbarExitedForGameplay;
 }
+
+extern bool Dc3ControllerModeIsAuto();
+extern bool Dc3ControllerModeLatchAuto(bool providerRunning);
+extern bool NativePoseProviderRunning();
+
+void NativeControllerModePolicyTick(ShellInput *shellInput) {
+    // DC3_CONTROLLER_MODE=auto (docs/debugging/native.md "Controller mode
+    // policy"): faithful while a pose provider runs, forced while only the
+    // dummy skeleton does.  Re-latched here, once per ShellInput::Poll, so a
+    // camera that starts (the web page's first dc3_pose_push) or stops (the
+    // pose server exits, the page's camera track ends) changes the policy
+    // between frames and never inside one.
+    if (!Dc3ControllerModeIsAuto() || !TheGestureMgr || !shellInput)
+        return;
+    bool running = NativePoseProviderRunning();
+    if (Dc3ControllerModeForced() != running)
+        return; // already latched this way
+    if (!running) {
+        // faithful -> forced: the camera went away and nothing can move the
+        // hand cursor.  Enter controller mode the way a pad press does on the
+        // 360 -- the image's EnterControllerMode body, run while the policy
+        // still reads faithful (helpbar controller_mode.flow,
+        // controller_mode_entered, in_controller_mode) -- then pin it.
+        if (!TheGestureMgr->InControllerMode())
+            shellInput->EnterControllerMode(true);
+        Dc3ControllerModeLatchAuto(false);
+        return;
+    }
+    // forced -> faithful: a camera came up.  Controller mode is pinned on.
+    Dc3ControllerModeLatchAuto(true);
+    if (sForcedHelpbarExitedForGameplay) {
+        // Mid-song: forced had taken only the helpbar out for gameplay; the
+        // image takes the whole of controller mode out there (ShellInput::Poll's
+        // TheGamePanel arm).  Finish that exit instead of restoring the helpbar
+        // when the song ends.
+        sForcedHelpbarExitedForGameplay = false;
+        TheGestureMgr->SetInControllerMode(false);
+        return;
+    }
+    // In the shell: hand over exactly as the 360 does after the last pad
+    // press -- start the idle timer now (the message HamUI exports on every
+    // ButtonDownMsg) and let ShellInput::Poll run the image's
+    // ExitControllerMode after controller_mode_timeout.  A pad press before
+    // then keeps controller mode, as on the 360.
+    static ResetControllerModeTimeoutMsg resetMsg;
+    shellInput->Handle(resetMsg, false);
+}
 #endif
 
 void HelpBarPanel::EnterControllerMode() {

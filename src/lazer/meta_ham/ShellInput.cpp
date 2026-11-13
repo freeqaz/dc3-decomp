@@ -191,6 +191,11 @@ void ShellInput::Poll() {
     // gameplay panel (pause, endgame, back to the shell). No-op otherwise.
     if (TheUI->FocusPanel() != TheGamePanel)
         NativeForcedHelpbarRestoreAfterGameplay();
+    // Controller mode policy (auto): follow the pose provider -- faithful
+    // while a camera feeds the sensor, forced while only the dummy does.
+    // Before the idle-timeout check below, so a handover starts its timer
+    // this frame.  docs/debugging/native.md "Controller mode policy".
+    NativeControllerModePolicyTick(this);
 #endif
 
     if (TheGestureMgr->InControllerMode() && unk_0x68.SplitMs() >= unk_0x98) {
@@ -347,7 +352,7 @@ void ShellInput::EnterControllerMode(bool b) {
     // "Controller mode policy").
     extern bool Dc3ControllerModeForced();
     if (Dc3ControllerModeForced()) {
-        // forced (default): native stays permanently in controller mode — skip
+        // forced (or `auto` without a pose provider): native stays permanently in controller mode — skip
         // the RockCentral/profile/skeleton-chooser Xbox body. Route helpbar
         // controller_mode.flow activation through the shared one-shot guard so
         // the boot hook, HamScreen::Enter's sControllerModeForced path, and
@@ -395,7 +400,7 @@ void ShellInput::ExitControllerMode(bool b) {
     // "Controller mode policy").
     extern bool Dc3ControllerModeForced();
     if (Dc3ControllerModeForced()) {
-        // forced (default): no Kinect — never exit controller mode. DTA scripts
+        // forced (or `auto` without a pose provider): no Kinect — never exit controller mode. DTA scripts
         // fire exit_controller_mode during screen transitions, and Poll's idle
         // timeout fires every frame, but without gesture input there's no way
         // to re-enter.

@@ -241,6 +241,12 @@ class Harvest:
             self.kinect = SyntheticKinect(sock, people=people)
             self.kinect.start()
             env.update(SyntheticKinect.engine_env(sock))
+            # The route below presses buttons with no `wake` directives; with
+            # a pose provider running the default controller-mode policy
+            # (auto) is faithful, where a press that only wakes controller
+            # mode is swallowed.  Keep the pad route unless the caller chose
+            # (docs/debugging/native.md "Controller Mode Policy").
+            env.setdefault("DC3_CONTROLLER_MODE", "forced")
         # A HamNavList ignores every button while its enter animation runs
         # (~20 UI frames; the image's HamNavList::OnMsg(ButtonDownMsg) checks
         # IsAnimating(), and native now does too), so the first press on each

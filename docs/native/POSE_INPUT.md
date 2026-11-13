@@ -478,7 +478,7 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
 |---|---|---|---|
 | P-1 | **Crash on a motionless skeleton.** `RhythmDetector::AnalyzeData` divides by a variance that becomes zero → NaN → `SymbolKeys::SetFrame` segfault (`RhythmBattlePlayer::Poll`). A webcam trips it whenever joints are held (legs out of frame are held all song). | S–M | all |
 | P-2 | Never run against a live webcam. **No-camera part done** (`np-pose-desk`): fast failure + on-screen notice (above); camera request, capture timestamps, HFOV and the lost-camera exit unit-tested against a fake capture (`tests/test_pose_server.py`). Left: a real webcam session. | S | all |
-| P-3 | Gesture menus: `DC3_CONTROLLER_MODE` defaults to `forced`; `faithful` runs the original nav code but the hand meshes are hidden by `native/src/platform/MeshFilter.cpp` and nothing tests swipe nav. | M–L | all |
+| P-3 | ~~Gesture menus~~ **Done (`np-gesture-menus`)**, see [Gesture menus](#gesture-menus). Left: a real person on a real webcam has not driven them; the depth image in the player box is P-4. | — | all |
 | P-4 | Player on screen: silhouette, camera preview, photo moments. `LiveCameraInput` is null natively; `StreamRenderer::DrawToTexture` and `DepthBuffer3D` are stubbed; `MeshFilter` hides `silhouette_guy*`, `preview.mesh`, `pose_flash*`. Needs webcam RGB + a segmentation mask. | L | all |
 | P-5 | ~~Tests~~ **Done** (`np-pose-desk`): ctests `PoseSocketReaderTest`, `PoseCocoMappingTest`, `PoseSensorSlotTest` (no GPU, no game data); keypoint fixture + `PoseFixture.Python`; the gate runs the whole song and judges means, final scores and per-move distances (above). Open: standing still out-scores a different dance (P-7). | — | all |
 | P-6 | ~~Remove the dead ncnn/YOLO path~~ **Done** (`np-pose-desk`). | — | all |
@@ -486,10 +486,65 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
 | P-8 | macOS: `/proc/self/exe` → `_NSGetExecutablePath`; camera permission goes to the Python child. See [MACOS.md](MACOS.md). | S–M | mac |
 | P-9 | ~~Web pose~~ **Done in `np-web-pose`** (see [Web](#web)). Left: never run on a real webcam/permission prompt; GPU delegate and the lite model unmeasured on an idle box; no camera preview inside the game (P-4). | — | web |
 
+## Gesture menus
+
+DC3's shell is driven the way a 360 with a Kinect and no pad is (PLAN P-3,
+branch `np-gesture-menus`). The controller-mode policy decides whether the
+hands are listened to: the default `auto` is faithful while a pose provider
+runs and forced while only the dummy skeleton does
+([debugging/native.md](../debugging/native.md#controller-mode-policy)).
+
+What the image's detectors need (read from `src/`, encoded in
+`scripts/synthetic_kinect.py`):
+
+| Gesture | Detector | Threshold |
+|---|---|---|
+| Engage a list | `DirectionGestureFilterSingleUser::IsValidSwipePosition` | hand outside an ellipse round the spine in the horizontal plane, hip frame: lateral 1.3 shoulder widths (1.1 once engaged), depth 0.9 (0.8). With 0.40 m shoulders, more than 0.52 m out to the side |
+| Highlight | `HandHeightGestureFilter`, `HamNavList::DetermineHighlightedItem` | height = (shoulder.y − hand.y)/(shoulder.y − hip.y) + 0.15; item round(height·(n−1)), hysteresis 0.1 + half an item; scrolling lists (> 6 items) have 5 rows plus scroll zones |
+| Select | `ArcDetector` (wrist round elbow) | amount = (path^1.5 − error/0.9)/threshold ≥ 1; threshold 0.1 m, 0.03 after 600 ms hover; capped at 0.5 for a ≤ 2-node path, 0.9 off-axis; 0.5 UI-s cooldown per skeleton |
+| Back | the helpbar's `left_hand.hnl` with the left arm | lower item (index 1) |
+
+Measured working: hover ≥ 0.6 s, forearm 0.24 m swept 110° in 0.3 s.
+
+- **Desktop**: `scripts/gesture_menu_flow.py --engine native/build/dc3-native
+  --workdir DIR --report DIR/report.json --all-tutorials-seen [--gpu --shots
+  DIR/shots]` runs title → main → perform → YMCA → easy → start → the song →
+  final results (continue) → complete (new song) → song select → back → back
+  → main, reading only the screen and the highlighted item. It counts every
+  select by source (`DC3 HamNavList: select ... selecting=0` is a gesture,
+  `=1` a button). Measured: 10 gesture selects, 0 button selects, no
+  controller-mode enter. `GestureMenusTest` runs it;
+  `GestureMenusForcedTest` runs it under `DC3_CONTROLLER_MODE=forced` and
+  requires it to fail (it stays on the title).
+- **Timing**: a headless engine advances UI time 1/30 s per frame however
+  fast it runs. The performer follows the engine's frame clock
+  (`follow_engine`, `/api/frame/wait`) and the engine is paced
+  (`DC3_HTTP_PACE_FPS=120`, `PUT /api/pace`) so it answers every frame; the
+  song itself runs unpaced. Unpaced, a GPU-less engine ran ~3700 fps and the
+  swipe peaked at 0.88.
+- **Web**: `python3 native/web/server.py --port 8435 &` then
+  `node scripts/web/gesture-menus.mjs --port 8435 --out DIR`. A fake camera
+  cannot swipe and the web has no DTA eval, so the performer's joints go
+  straight into `Module.dc3PosePush` (the camera pipeline's seam) from
+  title_screen on. Measured: boot `auto` (forced), first push → faithful,
+  `ControllerMode: exit (idle_ms=5015)`, then title, gameplay, perform and the
+  helpbar back by gesture, 0 buttons. With `--env DC3_CONTROLLER_MODE=forced`:
+  no handover, no select, exit 1.
+- **What the player sees**: the highlighted item swells with an arrow; a
+  swipe plays the item's select animation; the helpbar's LEFT HAND item fills
+  with arrows when swiped. The player boxes at the top corners
+  (`ui/gen/cursor.milo`: frame, empty-slot silhouette, edge-of-frame warnings,
+  identification ring) now draw; the depth image inside the box is still
+  hidden (P-4), so it shows the flat colour the original shows under Xenia.
+- Not covered: a fresh console's tutorial screens (OKAY by gesture works the
+  same way; the flow seeds tutorials-seen), scrolling to items below the 5th
+  row of a long list.
+
 ## Testing without a webcam
 
 - `scripts/synthetic_kinect.py --perform` — same wire protocol, replays the
-  target. Wrap it to inject noise, latency, dropout.
+  target. As a library, `point(i, side, h)` / `swipe(i, side, h)` navigate the
+  menus (see [Gesture menus](#gesture-menus)). Wrap it to inject noise, latency, dropout.
   `--people 2` puts two performers on the sensor; as a library,
   `set_pose(i, "absent")` takes a person out of view and `"stand"` brings them
   back (`native/tests/test_native_twoplayer.cpp` drives Battle with 2, 1, 0).

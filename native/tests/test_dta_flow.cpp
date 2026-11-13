@@ -795,13 +795,17 @@ TEST_F(ControllerModeFaithfulTest, WakeReentersControllerMode) {
     EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }
 
-// The native default: `wake` never presses, controller mode never runs the
-// image's bodies (they are the only source of "DC3 ControllerMode:" lines),
-// and the same script still navigates.
+// The native default with no camera: the default policy is `auto`, and with
+// no pose provider (headless, no DC3_POSE: the dummy skeleton) auto stays
+// forced -- `wake` never presses, controller mode never runs the image's
+// bodies (they are the only source of "DC3 ControllerMode:" lines), and the
+// same script still navigates.
 TEST_F(ControllerModeForcedTest, WakeIsANoOpUnderForcedDefault) {
     const std::string &out = sResult.output;
-    ASSERT_NE(out.find("DC3 Native: controller mode policy = forced"), std::string::npos)
-        << "the default policy is not `forced`";
+    ASSERT_NE(out.find("DC3 Native: controller mode policy = auto"), std::string::npos)
+        << "the default policy is not `auto`";
+    EXPECT_EQ(out.find("controller mode policy auto -> faithful"), std::string::npos)
+        << "auto went faithful with no pose provider running";
     int wakes = 0, noOps = 0;
     for (const std::string &line : LinesFrom(out, "DC3 Native: controller mode policy")) {
         if (!StartsWith(line, kWakeLine)) continue;

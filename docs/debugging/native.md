@@ -300,8 +300,10 @@ The engine also keeps a classified registry of its own flags in
 |----------|---------|--------|---------|
 | `MILO_INPUT_SCRIPT` | unset | Scripted button presses, used when there is no window (see [Scripted Input System](#scripted-input-system)) | `../milo-native-engine/src/platform/Joypad_Native.cpp` |
 | `MILO_INPUT_WAKE_BUTTON` | `l3` | Button a script `wake` presses | `../milo-native-engine/src/platform/Joypad_Native.cpp` |
-| `DC3_CONTROLLER_MODE` | `forced` | `forced` or `faithful` (see [Controller Mode Policy](#controller-mode-policy)) | `native/src/platform/System_Native.cpp` |
-| `DC3_CONTROLLER_MODE_TIMEOUT_MS` | helpbar value | `faithful` only: overrides the helpbar's `controller_mode_timeout` | `native/src/platform/System_Native.cpp` |
+| `DC3_CONTROLLER_MODE` | `auto` | `auto`, `forced` or `faithful` (see [Controller Mode Policy](#controller-mode-policy)) | `native/src/platform/System_Native.cpp` |
+| `DC3_CONTROLLER_MODE_TIMEOUT_MS` | helpbar value | faithful policy only: overrides the helpbar's `controller_mode_timeout` | `native/src/platform/System_Native.cpp` |
+| `DC3_HTTP_PACE_FPS` | unset (unpaced) | Cap the frame rate of a debug-server run, so a client answering every frame (the synthetic performer on `/api/frame/wait`) keeps up; `PUT /api/pace?fps=N` changes it at run time | `native/src/platform/HttpServer.cpp` |
+| `DC3_MESHFILTER_LOG` / `DC3_MESHFILTER_ALLOW` | unset | Log each mesh `MeshFilter` refuses (once, with its rule) / draw what the named rules (or `all`) would refuse | `native/src/platform/MeshFilter.cpp` |
 
 ### Scoring and pose
 
@@ -457,7 +459,7 @@ Note: Milo uses PlayStation-style internal names (`kPad_X` = confirm, `kPad_Circ
 
 Directives run **in file order — the file is not sorted**. A `wait_screen` blocks until that screen is current and not transitioning; after 30×60 frames it logs `DC3 Input: TIMEOUT waiting for '<screen>'` and continues as if satisfied. A `+N` frame counts from the last satisfied `wait_screen`. A directive whose frame has already passed when the cursor reaches it is **skipped silently**, so keep absolute frames increasing. The frame counter is the input system's own monotonic counter, not `TheRnd`'s frame ID.
 
-**Wake** (`N wake` / `+N wake`) means "the player presses the controller-mode wake button". If the game is already in controller mode it does nothing; otherwise it presses the wake button for one frame (`l3`, or `MILO_INPUT_WAKE_BUTTON`). It exists so one flow can drive both the original game under Xenia -- where a screen's first press must be preceded by a wake, see [Controller Mode Policy](#controller-mode-policy) -- and the native port, where under the default `forced` policy every wake is a no-op. Each one logs `DC3 Input: wake at frame N: pressed button <enum value>` or `... no-op (already awake)`.
+**Wake** (`N wake` / `+N wake`) means "the player presses the controller-mode wake button". If the game is already in controller mode it does nothing; otherwise it presses the wake button for one frame (`l3`, or `MILO_INPUT_WAKE_BUTTON`). It exists so one flow can drive both the original game under Xenia -- where a screen's first press must be preceded by a wake, see [Controller Mode Policy](#controller-mode-policy) -- and the native port, where under a forced policy (the default without a camera) every wake is a no-op. Each one logs `DC3 Input: wake at frame N: pressed button <enum value>` or `... no-op (already awake)`.
 
 ### How It Works
 
@@ -478,23 +480,42 @@ Source: `../milo-native-engine/src/platform/Joypad_Native.cpp`, which every nati
 ## Controller Mode Policy
 
 On the 360 (and the original under Xenia) the UI has two input modes. Outside
-**controller mode** the Kinect hand cursor drives menus, and a pad press only
+**controller mode** the Kinect hand menus drive the UI (`HamNavList::UpdateGestures`
+runs whenever `!GestureMgr::InControllerMode()`), and a pad press only
 *enters* controller mode -- `ShellInput::OnMsg(ButtonDownMsg)` swallows it
-(B excepted). In controller mode, `ShellInput::Poll` exits back to the cursor
-once `controller_mode_timeout` ms (helpbar property, default 5000) pass with no
-pad input (every `ButtonDownMsg` restarts the timer via
-`reset_controller_mode_timeout`), and entering gameplay or pressing Start exits
-it too. Without a Kinect, that leaves menus stranded behind a cursor nobody can
-move, so the native port stays in controller mode permanently by default.
+(B excepted). In controller mode, `ShellInput::Poll` exits back to the hand
+menus once `controller_mode_timeout` ms (helpbar property, default 5000) pass
+with no pad input (every `ButtonDownMsg` restarts the timer via
+`reset_controller_mode_timeout`), and entering gameplay or pressing Start
+exits it too. A Kinect is always attached there, so the shell boots out of
+controller mode (`GestureMgr::GestureMgr`). That is right exactly when
+something can move the hand: with no camera, the timeout would strand a pad
+player in menus nobody can drive.
 
-`DC3_CONTROLLER_MODE` (read once at startup by `Dc3ControllerModeForced()`,
-`native/src/platform/System_Native.cpp`; logged as
-`DC3 Native: controller mode policy = ...`):
+`DC3_CONTROLLER_MODE` (`native/src/platform/System_Native.cpp`, read once and
+logged as `DC3 Native: controller mode policy = ...`):
 
 | Value | Behaviour |
 |-------|-----------|
-| `forced` (default; also unset/empty/unknown) | Today's native behaviour, unchanged: `GestureMgr` boots in controller mode and ignores `SetInControllerMode(false)`; `ShellInput::ExitControllerMode` returns at once; `EnterControllerMode` only re-asserts the mode and activates the helpbar's `controller_mode.flow` once (`NativeBootControllerModeOnce`); the first `HamScreen::Enter` forces it on. Controller mode never times out, so no pad press is swallowed to re-enter it. |
+| `auto` (default; also unset/empty/unknown) | `faithful` while a real pose provider runs (`NativePoseProviderRunning()`: ncnn, the external pose server, or the web page's pushes), `forced` while only the dummy skeleton feeds the sensor. Latched by `GestureMgr_NativeInit` after the provider is chosen, then re-latched once per frame by `NativeControllerModePolicyTick` (`HelpBarPanel.cpp`, called from `ShellInput::Poll`), logged as `controller mode policy auto -> faithful/forced (...)`. forced→faithful (the web page's first `dc3_pose_push`, or a pose server that connects late) restarts the idle timer, so the image's own timeout hands the UI to the hand menus 5 s later; mid-song it completes the gameplay-panel exit instead. faithful→forced (the camera goes away) runs the image's `EnterControllerMode` body once, then pins. |
+| `forced` | No hand menus: `GestureMgr` boots in controller mode and ignores `SetInControllerMode(false)`; `ShellInput::ExitControllerMode` returns at once (except the helpbar's gameplay exit, `NativeForcedHelpbarExitForGameplay`); `EnterControllerMode` only re-asserts the mode and activates the helpbar's `controller_mode.flow` once (`NativeBootControllerModeOnce`); the first `HamScreen::Enter` forces it on. Controller mode never times out, so no pad press is swallowed. |
 | `faithful` | The image's logic: boot out of controller mode; `ShellInput::Enter/ExitControllerMode` run their image bodies (helpbar flows, `controller_mode_entered/exited`, `in_controller_mode`, RockCentral counters, active player); the idle timeout and the gameplay-panel exit in `ShellInput::Poll` fire. Each enter/exit logs `DC3 ControllerMode: enter/exit (...)` with the idle time and timeout. `DC3_CONTROLLER_MODE_TIMEOUT_MS` overrides the timeout (the tests use 750). |
+
+With a camera, the keyboard and pad still work as on a 360: the first press
+wakes controller mode (and is swallowed unless it is B), the rest navigate,
+and 5 s without a press hands the UI back to the hands. A button-driven tool
+that runs with a synthetic camera and has no `wake` directives pins
+`DC3_CONTROLLER_MODE=forced` (`scripts/pose_scoring_gate.sh`,
+`scripts/native_assert_harvest.py`).
+
+Gesture menus themselves (PLAN P-3): an arm held out to the side (more than
+1.3 shoulder widths from the spine, `DirectionGestureFilterSingleUser::
+IsValidSwipePosition`) engages that side's list; hand height
+(`HandHeightGestureFilter`) highlights an item; a forearm sweep across the
+body (`ArcDetector`) selects; the left arm does the helpbar (back is its lower
+item). `scripts/synthetic_kinect.py` performs these (`point`, `swipe`; the
+thresholds are in its header) and `scripts/gesture_menu_flow.py` drives a
+whole route with them -- see [POSE_INPUT.md](../native/POSE_INPUT.md#gesture-menus).
 
 What `faithful` leaves out: the rest of the image's gameplay-panel arm of
 `ShellInput::Poll` (practice-options hand invoke, wrong-hand-position anim,
@@ -506,14 +527,17 @@ loaded by `UIManager::Init` before the first screen, and `TheRockCentral`,
 
 Sites that consult the policy, each with a pointer comment:
 `src/lazer/meta_ham/ShellInput.cpp` (Enter/ExitControllerMode, the native
-`Poll` arm, `SyncToCurrentScreen`'s timeout override),
+`Poll` arm and its `NativeControllerModePolicyTick` call,
+`SyncToCurrentScreen`'s timeout override),
 `src/system/gesture/GestureMgr.cpp` (constructor, `SetInControllerMode`),
 `src/lazer/meta_ham/HamScreen.cpp` (first-enter force),
-`src/lazer/meta_ham/HelpBarPanel.cpp` (`NativeBootControllerModeOnce`),
-`native/src/platform/GestureMgr_Native.cpp` (boot `SetInControllerMode(true)`).
+`src/lazer/meta_ham/HelpBarPanel.cpp` (`NativeBootControllerModeOnce`, the
+forced helpbar gameplay pair, `NativeControllerModePolicyTick`),
+`native/src/platform/GestureMgr_Native.cpp` (boot latch and
+`SetInControllerMode(true)`, `NativePoseProviderRunning`).
 All of them are inside `#ifdef HX_NATIVE` or `native/`; the PPC build is untouched.
 
-The script **`wake`** directive is the input-side half: under `forced` it is
+The script **`wake`** directive is the input-side half: under a forced policy it is
 always a no-op; under `faithful` (and on the original under Xenia, where the
 flow's author must place one before each screen's first press) it presses the
 wake button whenever controller mode has been left. A no-op wake presses
@@ -525,7 +549,11 @@ milo-native-engine); DC3 registers `NativeWakeNeeded` (= not
 
 Tests: `ControllerModeFaithfulTest.*` (timeout after the configured timeout;
 a wake re-enters) and `ControllerModeForcedTest.WakeIsANoOpUnderForcedDefault`
-in `native/tests/test_dta_flow.cpp`, gated by `DC3_DTA_FLOW_TESTS`.
+(default `auto` with no provider stays forced) in
+`native/tests/test_dta_flow.cpp`; `GestureMenusTest` / `GestureMenusForcedTest`
+(the whole route by gesture, and the same performer under `forced` stuck on
+the title) in `native/tests/test_native_gesture_menus.cpp`. All gated by
+`DC3_DTA_FLOW_TESTS`.
 
 ## Unit Tests
 

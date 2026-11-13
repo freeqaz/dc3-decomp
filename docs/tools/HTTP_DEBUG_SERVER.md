@@ -303,6 +303,20 @@ curl localhost:9090/api/frame/wait/5000
 
 Screen wait replaces the polling loop pattern — instead of repeatedly querying the screen, a single request blocks until the target screen is active.
 
+### Frame pacing
+
+A headless engine runs as fast as it can (1500–3700 frames/s without a GPU)
+while advancing UI time a fixed 1/30 s per frame, so a client that must
+answer every frame (the synthetic performer following `/api/frame/wait`)
+falls behind. `DC3_HTTP_PACE_FPS=<n>` caps the frame rate (the sleep runs
+right after each frame is announced, giving the client that window); unset is
+unpaced.
+
+```bash
+curl localhost:9090/api/pace                    # {"ok":true,"data":{"fps":120.000}}
+curl -X PUT 'localhost:9090/api/pace?fps=0'     # unpaced (e.g. for a song nobody gestures in)
+```
+
 ## Example Workflows
 
 ### Wait for engine ready, then screenshot

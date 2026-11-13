@@ -8,11 +8,18 @@
 //   can disable them (plain getenv() truthiness treats DC3_FOO=0 as "set" = on).
 bool Dc3EnvFlag(const char *name, bool defaultOn);
 
-// Dc3ControllerModeForced — DC3_CONTROLLER_MODE=forced (default) | faithful
-// (defined in System_Native.cpp; see docs/debugging/native.md "Controller mode
-// policy"). True: native stays in controller mode permanently. False: the
-// image's controller-mode enter/exit logic and idle timeout run as on the 360.
+// Controller-mode policy, DC3_CONTROLLER_MODE=auto (default) | forced |
+// faithful (defined in System_Native.cpp; see docs/debugging/native.md
+// "Controller mode policy").
+// Dc3ControllerModeForced: true = native stays in controller mode permanently;
+// false = the image's controller-mode enter/exit logic and idle timeout run as
+// on the 360.  Under auto it is the latched decision (faithful while a real
+// pose provider runs).
 bool Dc3ControllerModeForced();
+bool Dc3ControllerModeIsAuto();
+// Re-latch auto's decision; returns true when it changed (the caller performs
+// the transition).  No-op under an explicit forced/faithful.
+bool Dc3ControllerModeLatchAuto(bool providerRunning);
 // DC3_CONTROLLER_MODE_TIMEOUT_MS: faithful-mode override of the helpbar's
 // controller_mode_timeout; -1 when unset.
 int Dc3ControllerModeTimeoutMs();

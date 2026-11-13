@@ -38,6 +38,8 @@ static const size_t kMaxHttpBodyBytes = 1024 * 1024; // hard transport ceiling
 #include <cstdlib>
 #include <cstring>
 #include <chrono>
+#include <thread>
+#include <atomic>
 #include <algorithm>
 #include <signal.h>
 #include <setjmp.h>
@@ -380,6 +382,58 @@ void HttpServer::ProcessScreenshots() {
 // Phase 4: Frame notification + input injection
 // ---------------------------------------------------------------------------
 
+// DC3_HTTP_PACE_FPS=<n>: cap the frame rate of a debug-server-driven run.
+//
+// A headless engine runs 1500-3700 frames/s (MILO_HEADLESS advances UI and
+// task time by a fixed 1/30 s per frame), so an external client that has to
+// answer every frame -- scripts/synthetic_kinect.py following the engine
+// clock with /api/frame/wait -- falls behind by several frames per packet.
+// The gesture detectors then see one pose repeated across frames and a swipe
+// path with too few nodes (ArcDetector caps a <=2-node path at 0.5 and an
+// off-axis one at 0.9; detection needs 1.0).  Pacing here, once per frame
+// right after the frame is announced, gives the client a bounded real-time window
+// per engine frame without touching the engine's own timing.  Unset or <= 0:
+// no pacing (the default; every existing caller is unaffected).
+//
+// The rate can be changed at run time: PUT /api/pace?fps=<n> (0 = unpaced),
+// GET /api/pace reads it -- a driver can run its menus paced and a song
+// faster.
+static std::atomic<double> sPacePeriod{-1.0}; // -1 = env not read yet
+
+static double PacePeriod() {
+    double p = sPacePeriod.load();
+    if (p < 0.0) {
+        const char *e = getenv("DC3_HTTP_PACE_FPS");
+        double fps = e ? atof(e) : 0.0;
+        if (fps > 0.0)
+            printf("DC3 HTTP: pacing frames at %.1f fps (DC3_HTTP_PACE_FPS)\n", fps);
+        p = fps > 0.0 ? 1.0 / fps : 0.0;
+        double unread = -1.0;
+        if (!sPacePeriod.compare_exchange_strong(unread, p))
+            p = sPacePeriod.load(); // PUT /api/pace won the race
+    }
+    return p;
+}
+
+static void PaceFrame() {
+    using clock = std::chrono::steady_clock;
+    static clock::time_point sNext = clock::now();
+    const double periodS = PacePeriod();
+    if (periodS <= 0.0) {
+        sNext = clock::now();
+        return;
+    }
+    const auto period = std::chrono::duration_cast<clock::duration>(
+        std::chrono::duration<double>(periodS)
+    );
+    sNext += period;
+    const auto now = clock::now();
+    if (sNext > now)
+        std::this_thread::sleep_until(sNext);
+    else if (now - sNext > period * 4)
+        sNext = now; // a long frame (load) does not buy a burst afterwards
+}
+
 void HttpServer::NotifyFrame(const char* screenName, int frame) {
     {
         std::lock_guard<std::mutex> lk(mWaitMutex);
@@ -387,6 +441,9 @@ void HttpServer::NotifyFrame(const char* screenName, int frame) {
         mCurrentFrame = frame;
     }
     mWaitCv.notify_all();
+    // After the announcement: a client woken by /api/frame/wait gets the
+    // paced window to answer before the next frame's poll reads its input.
+    PaceFrame();
 }
 
 unsigned int HttpServer::ConsumeHttpButtons() {
@@ -973,6 +1030,27 @@ void HttpServer::RegisterEndpoints() {
             res.status = 500;
             res.set_content(JsonError(result.error), "application/json");
         }
+    });
+
+    // GET/PUT /api/pace -- DC3_HTTP_PACE_FPS at run time (PaceFrame above).
+    svr->Get("/api/pace", [](const httplib::Request&, httplib::Response& res) {
+        double p = PacePeriod();
+        char buf[64];
+        snprintf(buf, sizeof(buf), "{\"fps\":%.3f}", p > 0.0 ? 1.0 / p : 0.0);
+        res.set_content(JsonOk(buf), "application/json");
+    });
+    svr->Put("/api/pace", [](const httplib::Request& req, httplib::Response& res) {
+        if (!req.has_param("fps")) {
+            res.status = 400;
+            res.set_content(JsonError("fps=<frames per second, 0 = unpaced> required"),
+                            "application/json");
+            return;
+        }
+        double fps = atof(req.get_param_value("fps").c_str());
+        sPacePeriod.store(fps > 0.0 ? 1.0 / fps : 0.0);
+        char buf[64];
+        snprintf(buf, sizeof(buf), "{\"fps\":%.3f}", fps > 0.0 ? fps : 0.0);
+        res.set_content(JsonOk(buf), "application/json");
     });
 
     // GET /api/settings

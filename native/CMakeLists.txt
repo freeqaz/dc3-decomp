@@ -2005,6 +2005,7 @@ if(BUILD_TESTS)
         tests/test_pose_scoring.cpp
         tests/test_native_twoplayer.cpp
         tests/test_native_pose_socket.cpp
+        tests/test_native_gesture_menus.cpp
         tests/test_native_audioseek.cpp
         tests/test_native_notables.cpp
         tests/test_lp64_literals.cpp

@@ -106,6 +106,72 @@ STAND = {
 RAISE_RIGHT = {ELBOW_R: (0.28, 1.55), WRIST_R: (0.26, 1.80), HAND_R: (0.26, 1.88)}
 RAISE_LEFT = {ELBOW_L: (-0.28, 1.55), WRIST_L: (-0.26, 1.80), HAND_L: (-0.26, 1.88)}
 
+# ---- menu gestures ----------------------------------------------------------
+# DC3's shell lists are HamNavLists driven by one hand each (right_hand.hnl:
+# the screen's list; the helpbar's left_hand.hnl: tertiary + back).  What the
+# decompiled detectors need, read from src/:
+#
+#  ENGAGE  DirectionGestureFilterSingleUser::IsValidSwipePosition: the hand is
+#          outside an ellipse round the spine in the HORIZONTAL plane -- in
+#          the hip frame, lateral half-axis 1.3 shoulder widths (1.1 once the
+#          list is engaged), depth half-axis 0.9 (0.8).  With these people's
+#          0.40 m shoulders: the hand more than 0.52 m out to the side.
+#  POINT   HandHeightGestureFilter: height = (shoulder.y - hand.y) /
+#          (shoulder.y - hip.y) + 0.15, same side.  HamNavList::
+#          DetermineHighlightedItem highlights round(height * (n - 1)) of an
+#          n-item (non-scrolling) list, with hysteresis 0.1 + half an item.
+#  SWIPE   ArcDetector (primary wrist, secondary elbow): the forearm vector
+#          wrist - elbow sweeps round the elbow in the horizontal plane, from
+#          pointing out to the side, through pointing at the camera, towards
+#          the other side, at constant height.  Swipe amount = (path length^1.5
+#          - error / 0.9) / threshold, threshold 0.1 m (sNavGestureThreshold)
+#          falling to 0.03 after 600 ms of hovering (ArcDetector mHoverTimer);
+#          >= 1 selects (DirectionGestureFilterSingleUser::Update), then a
+#          0.5 s cooldown per skeleton.  A 0.24 m forearm swept a quarter turn
+#          has path length 0.38 m -> amount 2.3 unhovered.
+#  BACK    the same on the helpbar's left_hand.hnl with the left arm (2 items:
+#          tertiary on top, back below; 'select_left_list_item 1' is back).
+#
+# Kinect camera space, as these people stand in it: +x is the person's right
+# (the sensor's left), +y up, +z away from the sensor.
+ARM_SHOULDER_Y = 1.40           # STAND shoulders
+ARM_HIP_Y = 0.85                # STAND hips (HandHeightGestureFilter's span)
+ARM_ELBOW_X = 0.42              # elbow out to the side
+ARM_FOREARM = 0.24              # elbow -> wrist
+ARM_HAND = 0.06                 # wrist -> hand
+SWIPE_HOLD_S = 0.10             # end of a swipe held this long, then the arm drops
+
+
+def hand_y_for_height(height):
+    """The hand y that HandHeightGestureFilter reads as `height`."""
+    return ARM_SHOULDER_Y - (height - 0.15) * (ARM_SHOULDER_Y - ARM_HIP_Y)
+
+
+def height_for_item(index, count):
+    """Hand height that highlights item `index` of a non-scrolling `count`-item
+    list (HamNavList::DetermineHighlightedItem: round(height * (count - 1)))."""
+    return 0.5 if count <= 1 else index / float(count - 1)
+
+
+def menu_arm(side, height, angle_deg=0.0):
+    """Joint overrides (x, y offsets from the person's spot) for an arm held
+    out to `side` ('right'/'left') with the hand at menu `height`, the forearm
+    rotated `angle_deg` round the elbow in the horizontal plane: 0 = pointing
+    straight out to that side, 90 = at the camera, 180 = across the body.
+    Returns {joint: (x, y, dz)} -- dz is added to the person's depth."""
+    import math
+    sgn = 1.0 if side == "right" else -1.0
+    elbow, wrist, hand = (ELBOW_R, WRIST_R, HAND_R) if side == "right" else \
+        (ELBOW_L, WRIST_L, HAND_L)
+    y = hand_y_for_height(height)
+    a = math.radians(angle_deg)
+    ex = sgn * ARM_ELBOW_X
+    # out to the side = +sgn x; at the camera = -z
+    fx, fz = sgn * math.cos(a), -math.sin(a)
+    return {elbow: (ex, y, 0.0),
+            wrist: (ex + ARM_FOREARM * fx, y, ARM_FOREARM * fz),
+            hand: (ex + (ARM_FOREARM + ARM_HAND) * fx, y, (ARM_FOREARM + ARM_HAND) * fz)}
+
 
 class SyntheticKinect:
     def __init__(self, path, people=2, fps=30.0, spacing=0.40, depth=2.5):
@@ -142,6 +208,11 @@ class SyntheticKinect:
         self.replay_fps = 30.0
         self.replay_still = False
         self.replay_shown = 0         # packets that carried a fixture frame
+        # following the engine clock (follow_engine): engine frame -> seconds
+        self.follow_thread = None
+        self.follow_stop = threading.Event()
+        self.engine_frame = None
+        self.engine_t = None
 
     # ---- pose control -------------------------------------------------------
     def set_pose(self, person, pose):
@@ -149,6 +220,92 @@ class SyntheticKinect:
             if self.poses[person] != pose:
                 self.poses[person] = pose
                 self.log.append((time.time(), f"person{person}={pose}"))
+
+    def point(self, person, side, height):
+        """Hold an arm out to `side` with the hand at menu `height` (0 = the
+        top item's height, 1 = the bottom's): engages that side's HamNavList
+        and hovers over an item.  See the menu-gesture notes at the top."""
+        self.set_pose(person, ("point", side, float(height)))
+
+    def swipe(self, person, side, height, duration=0.4, sweep=120.0):
+        """From the pointing pose, sweep the forearm `sweep` degrees round the
+        elbow towards the body over `duration` seconds, hold the end for
+        SWIPE_HOLD_S, then drop the arm to the side (the "stand" arm).
+        ArcDetector reads the sweep as a swipe: the highlighted item is
+        selected.  Seconds are sensor seconds (now()).  Measured working:
+        duration 0.3 s, sweep 110 degrees after a >= 0.6 s hover (the hover
+        drops ArcDetector's threshold from 0.1 to 0.03), the engine paced so
+        the sweep spans ~9 sensor frames (scripts/gesture_menu_flow.py).  A
+        sweep that arrives as <= 2 path nodes caps at 0.5 and never selects."""
+        with self.lock:
+            self.poses[person] = ("swipe", side, float(height), self.now(),
+                                  float(duration), float(sweep))
+            self.log.append((time.time(), f"person{person}=swipe {side} {height:.2f}"))
+
+    # ---- clock ----------------------------------------------------------------
+    def now(self):
+        """Sensor time: the engine's (follow_engine) or wall time."""
+        t = self.engine_t
+        return t if t is not None else time.monotonic()
+
+    def follow_engine(self, http_base, frame_seconds=1.0 / 30.0):
+        """Live in the engine's clock instead of the wall clock.  A headless
+        engine (MILO_HEADLESS) advances UI time by a fixed 1/30 s per frame
+        (UIManager::Poll, TaskMgr::Poll) however fast it runs, so against a
+        wall-clock sensor a GPU-less run sees every gesture thousands of times
+        slower than it was made -- and the game's UI-time windows (the 0.5 s
+        swipe cooldown, DirectionGestureFilter::Update) expire mid-gesture.
+        Here a thread long-polls GET /api/frame/wait/<n+1>; each new engine
+        frame sets now() = frame * frame_seconds and sends one packet stamped
+        with it, so the skeleton's elapsed ms, the gesture animations and the
+        engine's UI clock are one time base.  The engine never waits for the
+        sensor: it reads the newest packet, like a camera slower than the
+        game loop -- so pace it (DC3_HTTP_PACE_FPS / PUT /api/pace, e.g. 120)
+        whenever a gesture has to be seen frame by frame; unpaced, a GPU-less
+        engine runs ~3000 fps and one packet covers several frames."""
+        if self.follow_thread:
+            return
+        self.follow_stop.clear()
+        self.follow_thread = threading.Thread(target=self._follow_loop,
+                                              args=(http_base, frame_seconds), daemon=True)
+        self.follow_thread.start()
+
+    def _follow_loop(self, http_base, frame_seconds):
+        u = urllib.parse.urlparse(http_base)
+        root = u.path.rstrip("/")
+        conn = None
+        last = 0
+        while not self.follow_stop.is_set():
+            try:
+                if conn is None:
+                    conn = http.client.HTTPConnection(u.hostname, u.port, timeout=15)
+                conn.request("GET", f"{root}/frame/wait/{last + 1}?timeout=5")
+                r = conn.getresponse()
+                body = r.read()
+                if r.status != 200:
+                    continue
+                f = int(json.loads(body)["data"]["frame"])
+            except Exception:
+                if conn is not None:
+                    conn.close()
+                conn = None
+                time.sleep(0.05)
+                continue
+            if f <= last:
+                continue
+            last = f
+            with self.lock:
+                self.engine_frame = f
+                self.engine_t = f * frame_seconds
+            self.send_evt.set()
+        if conn is not None:
+            conn.close()
+
+    def wait(self, seconds):
+        """Let `seconds` of sensor time pass (engine time when following)."""
+        end = self.now() + seconds
+        while self.now() < end and not self.stop_evt.is_set():
+            time.sleep(0.001 if self.engine_t is not None else 0.01)
 
     def high_five(self):
         """Persons 0 and 1 raise their inner hands to meet between them
@@ -308,7 +465,24 @@ class SyntheticKinect:
             return [(p[0], p[1], p[2], p[3] if len(p) > 3 else 1.0) for p in target]
         ox = self.offsets[i]
         pts = dict(STAND)
-        if pose == "raise_right":
+        dz = {}
+        if isinstance(pose, tuple) and pose[0] in ("point", "swipe"):
+            angle = 0.0
+            if pose[0] == "swipe":
+                _, side, height, t0, dur, sweep = pose
+                el = self.now() - t0
+                frac = min(1.0, max(0.0, el / dur)) if dur > 0 else 1.0
+                angle = sweep * frac
+                # then the arm drops back to the side, as a person's does
+                if el > dur + SWIPE_HOLD_S:
+                    side = None
+            else:
+                _, side, height = pose
+            if side is not None:
+                for j, (x, y, z) in menu_arm(side, height, angle).items():
+                    pts[j] = (x, y)
+                    dz[j] = z
+        elif pose == "raise_right":
             pts.update(RAISE_RIGHT)
         elif pose == "raise_left":
             pts.update(RAISE_LEFT)
@@ -324,13 +498,16 @@ class SyntheticKinect:
         out = []
         for j in range(NUM_JOINTS):
             x, y = pts[j]
-            out.append((x + ox, y, self.depth, 1.0))
+            out.append((x + ox, y, self.depth + dz.get(j, 0.0), 1.0))
         return out
 
     def _packet(self, frame_id):
         with self.lock:
             poses = list(self.poses)
-            if not self.perf_thread or time.monotonic() - self.last_perf_packet > 0.25:
+            if self.engine_t is not None:
+                # following the engine: its frame clock is the sensor clock
+                self.clock = self.engine_t
+            elif not self.perf_thread or time.monotonic() - self.last_perf_packet > 0.25:
                 # not performing (or the engine is not answering, e.g. mid-load):
                 # the sensor clock runs on wall time
                 now = time.monotonic()
@@ -387,6 +564,13 @@ class SyntheticKinect:
             while not self.stop_evt.is_set():
                 got = self.send_evt.wait(period)
                 self.send_evt.clear()
+                if self.follow_thread:
+                    # one packet per new engine frame; a stalled engine (a
+                    # long load) gets none, as a camera's frames would be
+                    # dropped, not queued
+                    if got:
+                        break
+                    continue
                 if got or not self.perf_thread \
                         or time.monotonic() - self.last_perf_packet > 0.25:
                     break
@@ -398,6 +582,9 @@ class SyntheticKinect:
     def stop(self):
         if self.perf_thread:
             self.stop_performing()
+        self.follow_stop.set()
+        if self.follow_thread:
+            self.follow_thread.join(6)
         self.stop_evt.set()
         self.send_evt.set()
         server = getattr(self, "server", None)   # absent when only recording

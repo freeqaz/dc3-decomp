@@ -93,6 +93,13 @@ COMMON_ENV=(
     "MILO_RENDER=1"
     "MILO_MAX_FRAMES=$FRAMES"
     "MILO_INPUT_SCRIPT=$FLOW"
+    # The flow drives the menus with button presses and has no `wake`
+    # directives.  With the sensor configs' pose provider running, the default
+    # controller-mode policy (auto) is faithful, where the 360 swallows a press
+    # that only wakes controller mode; this gate measures scoring, not the
+    # input mode, so pin the pad route (docs/debugging/native.md "Controller
+    # Mode Policy").
+    "DC3_CONTROLLER_MODE=forced"
     "DC3_DETECTFRAC_PROBE=1"
     "DC3_SCORING_DEBUG=1"
     "DC3_HTTP=1"
