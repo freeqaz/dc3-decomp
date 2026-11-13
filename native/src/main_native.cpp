@@ -5,6 +5,7 @@
 #include "os/Debug.h"
 #include "StubTrace.h"
 #include "NativeQuit.h"
+#include "platform/JoypadKeyMap.h"
 #include <cstdio>
 #include <cstdlib>
 #include <csignal>
@@ -313,6 +314,10 @@ int main(int argc, char **argv) {
     // A closed or destroyed X window ends the loop instead of the process.
     extern void Dc3WindowWatchInstall();
     Dc3WindowWatchInstall();
+    // G-5: Ctrl+Q in the window quits the same way a SIGTERM does -- at the
+    // next frame boundary, through the loop's return -- but as a natural end
+    // (rc 0, detail=quit_key). Esc cannot be the quit key: it is B.
+    JoypadSetQuitKeyHandler([] { Dc3RequestQuit("quit_key", 0); });
 
     printf("DC3 Native Port - App constructed, calling Run()...\n");
     app.Run();

@@ -1181,9 +1181,14 @@ void App::RunWithoutDebugging() {
     HttpServerInit();
 #endif
 
-    if (windowed)
-        MILO_LOG("DC3 Native: Windowed mode - close window or press ESC to exit\n");
-    else if (unlimitedFrames)
+    if (windowed) {
+        // G-5: Esc is the B button, not quit. Quitting is Ctrl+Q (installed by
+        // main_native.cpp) or closing the window.
+        MILO_LOG("DC3 Native: Windowed mode - quit with Ctrl+Q or by closing the window "
+                 "(Esc is B)\n");
+        extern void JoypadPrintKeyMap(const char *prefix);
+        JoypadPrintKeyMap("DC3 Native: keys: ");
+    } else if (unlimitedFrames)
         MILO_LOG("DC3 Native: Headless mode — no frame cap (MILO_MAX_FRAMES<=0)\n");
     else
         MILO_LOG(

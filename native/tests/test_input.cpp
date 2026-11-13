@@ -261,3 +261,101 @@ TEST(JoypadHelpers, MovedLeftStick) {
     EXPECT_FALSE(MovedLeftStick(kPad_DUp));
     EXPECT_FALSE(MovedLeftStick(kPad_X));
 }
+
+// ============================================================================
+// G-5: the windowed keyboard map (engine platform/JoypadKeyMap.h)
+// ============================================================================
+
+#ifndef __EMSCRIPTEN__
+#include "platform/JoypadKeyMap.h"
+#include <GLFW/glfw3.h>
+#include <set>
+#include <string>
+
+namespace {
+bool HeldIn(int key, void *ctx) { return ((std::set<int> *)ctx)->count(key) != 0; }
+
+unsigned int ButtonsFor(std::set<int> held) { return JoypadKeyboardButtons(HeldIn, &held); }
+} // namespace
+
+// Each key presses exactly its button. The last four rows are G-5's: before it
+// the keyboard had no X, Y, LT or RT at all.
+TEST(JoypadKeyMap, KeysPressTheirButtons) {
+    struct { int key; JoypadButton button; const char *what; } expect[] = {
+        {GLFW_KEY_UP, kPad_DUp, "Up"},           {GLFW_KEY_DOWN, kPad_DDown, "Down"},
+        {GLFW_KEY_LEFT, kPad_DLeft, "Left"},     {GLFW_KEY_RIGHT, kPad_DRight, "Right"},
+        {GLFW_KEY_ENTER, kPad_X, "Enter = A"},   {GLFW_KEY_ESCAPE, kPad_Circle, "Esc = B"},
+        {GLFW_KEY_BACKSPACE, kPad_Circle, "Backspace = B"},
+        {GLFW_KEY_SPACE, kPad_Start, "Space = Start"}, {GLFW_KEY_TAB, kPad_Select, "Tab = Back"},
+        {GLFW_KEY_Q, kPad_L1, "Q = LB"},         {GLFW_KEY_E, kPad_R1, "E = RB"},
+        {GLFW_KEY_X, kPad_Square, "X = X"},      {GLFW_KEY_Y, kPad_Tri, "Y = Y"},
+        {GLFW_KEY_Z, kPad_L2, "Z = LT"},         {GLFW_KEY_C, kPad_R2, "C = RT"},
+    };
+    for (const auto &e : expect)
+        EXPECT_EQ(ButtonsFor({e.key}), 1u << e.button) << e.what;
+    EXPECT_EQ(ButtonsFor({}), 0u);
+    EXPECT_EQ(ButtonsFor({GLFW_KEY_X, GLFW_KEY_Z}), (1u << kPad_Square) | (1u << kPad_L2));
+}
+
+// Every button a DC3 help bar names ("(Y) Options", "(B) Main Menu", ...) has a
+// key, read off the table itself rather than the list above.
+TEST(JoypadKeyMap, EveryHelpBarButtonHasAKey) {
+    int count = 0;
+    const JoypadKeyBinding *table = JoypadKeyBindings(&count);
+    ASSERT_GT(count, 0);
+    unsigned int bound = 0;
+    for (int i = 0; i < count; i++) bound |= 1u << table[i].button;
+    const JoypadButton needed[] = {kPad_X,  kPad_Circle, kPad_Square, kPad_Tri,    kPad_L1,
+                                   kPad_R1, kPad_L2,     kPad_R2,     kPad_Start,  kPad_Select,
+                                   kPad_DUp, kPad_DDown, kPad_DLeft,  kPad_DRight};
+    for (JoypadButton b : needed)
+        EXPECT_TRUE(bound & (1u << b)) << JoypadXboxButtonName(b) << " has no keyboard key";
+}
+
+TEST(JoypadKeyMap, NoKeyIsBoundTwice) {
+    int count = 0;
+    const JoypadKeyBinding *table = JoypadKeyBindings(&count);
+    std::set<int> keys;
+    for (int i = 0; i < count; i++)
+        EXPECT_TRUE(keys.insert(table[i].key).second) << table[i].keyName << " bound twice";
+}
+
+// Ctrl/Alt/Super chords belong to the host: Ctrl+Q must not also press LB,
+// nor Alt+Tab press Back.
+TEST(JoypadKeyMap, ModifierChordsAreNotPadPresses) {
+    EXPECT_EQ(ButtonsFor({GLFW_KEY_LEFT_CONTROL, GLFW_KEY_Q}), 0u);
+    EXPECT_EQ(ButtonsFor({GLFW_KEY_RIGHT_CONTROL, GLFW_KEY_X}), 0u);
+    EXPECT_EQ(ButtonsFor({GLFW_KEY_LEFT_ALT, GLFW_KEY_TAB}), 0u);
+    EXPECT_EQ(ButtonsFor({GLFW_KEY_LEFT_SUPER, GLFW_KEY_ENTER}), 0u);
+    EXPECT_EQ(ButtonsFor({GLFW_KEY_LEFT_SHIFT, GLFW_KEY_ENTER}), 1u << kPad_X) << "Shift is not a host chord";
+}
+
+TEST(JoypadKeyMap, QuitChordIsCtrlQ) {
+    auto quit = [](std::set<int> held) { return JoypadKeyboardQuitChordHeld(HeldIn, &held); };
+    EXPECT_TRUE(quit({GLFW_KEY_LEFT_CONTROL, GLFW_KEY_Q}));
+    EXPECT_TRUE(quit({GLFW_KEY_RIGHT_CONTROL, GLFW_KEY_Q}));
+    EXPECT_FALSE(quit({GLFW_KEY_Q}));
+    EXPECT_FALSE(quit({GLFW_KEY_LEFT_CONTROL}));
+    EXPECT_FALSE(quit({GLFW_KEY_ESCAPE})) << "Esc is B, not quit";
+    EXPECT_FALSE(quit({GLFW_KEY_LEFT_ALT, GLFW_KEY_Q}));
+}
+
+// The startup line is generated from the table, and names the quit key only
+// once a game has said what quitting means.
+TEST(JoypadKeyMap, PrintedMapNamesEveryKey) {
+    JoypadSetQuitKeyHandler(nullptr);
+    testing::internal::CaptureStdout();
+    JoypadPrintKeyMap("keys: ");
+    std::string without = testing::internal::GetCapturedStdout();
+    JoypadSetQuitKeyHandler([] {});
+    testing::internal::CaptureStdout();
+    JoypadPrintKeyMap("keys: ");
+    std::string with = testing::internal::GetCapturedStdout();
+    JoypadSetQuitKeyHandler(nullptr);
+
+    EXPECT_EQ(with,
+              "keys: Up/Down/Left/Right = D-pad, Enter = A, Esc/Backspace = B, X = X, Y = Y, "
+              "Space = Start, Tab = Back, Q = LB, E = RB, Z = LT, C = RT, Ctrl+Q = quit\n");
+    EXPECT_EQ(without.find("Ctrl+Q"), std::string::npos) << without;
+}
+#endif
