@@ -1105,3 +1105,67 @@ TEST_F(OptionsGameplayFlowTest, KinectTunerGivesFeedback) {
            "show_controller_required never answered controller_req_op_complete, "
            "or XShowNuiTroubleshooterUI is silent";
 }
+
+// ===========================================================================
+// The largest song preloads and reaches gameplay (song preload budget)
+// ===========================================================================
+//
+// Every other flow here plays ymca or Better Off Alone, whose preload sets
+// (barks + song milo + midi) are the smallest.  omg has the LARGEST set:
+// 25.20 MiB as the web build reads it (the inflated extraction), which is why
+// loading.dta's 16 MiB `max_cache_size` sent it -- and 33 other songs -- back
+// to the title screen on web until PreloadPanel::SetTypeDef scaled it
+// (185b6f50e).  omg.txt picks it (51 downs: the last row of song select) on a
+// console that has seen the move tutorial, so the run goes straight from
+// multiuser_screen to loading.
+//
+// This is the end-to-end half; native/tests/test_preload_budget.cpp is the
+// per-song half.  What it can and cannot catch, measured 2026-11-13: desktop
+// reads the ark, where omg's set is ~10 MiB (compressed, the 360's own bytes),
+// so with the x4 removed this flow still PASSES on desktop -- the bounce is
+// web-only, and PreloadBudgetTest.WebReadsInflatedFiles is the guard that
+// fails for it.  This flow guards the rest of the chain on the biggest song:
+// it is selected, preloads, loads the biggest world+song set, and plays.
+
+class LargestSongFlowTest : public ControllerModeFlowTest {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+    static void SetUpTestSuite() {
+        if (!getenv("DC3_DTA_FLOW_TESTS") || sRanEngine) return;
+        // game_screen at ~frame 1700, gameStage=playing by ~2100 (headless,
+        // no GPU); 3000 leaves margin and keeps the run to a few seconds.
+        sResult = RunDtaFlow(3000, 180, "omg.txt", "", true, kTutorialGeneral);
+        sRanEngine = true;
+    }
+    void SetUp() override { CheckRan(sResult, sRanEngine); }
+    void TearDown() override {
+        if (HasFailure() && sRanEngine) Dump(sResult);
+    }
+};
+DtaRunResult LargestSongFlowTest::sResult = {};
+bool LargestSongFlowTest::sRanEngine = false;
+
+TEST_F(LargestSongFlowTest, OmgPreloadsAndReachesGameplay) {
+    const std::string &out = sResult.output;
+    ASSERT_NE(out.find("DC3 Input: wait_screen 'song_select_screen' satisfied"),
+              std::string::npos)
+        << "precondition: omg.txt never reached song_select_screen";
+    ASSERT_NE(out.find("sym='omg'"), std::string::npos)
+        << "the confirm on song select did not pick omg -- the song list changed; "
+           "recount the downs in scripts/dc3-input-flows/omg.txt";
+    EXPECT_EQ(out.find("Could not cache"), std::string::npos)
+        << "PreloadPanel::CheckFileCached failed: the preload cache evicted part of "
+           "omg's set (loading.dta max_cache_size vs the bytes this build reads)";
+    EXPECT_NE(out.find("Screen 'real_loading_screen' Enter (from 'preloading_screen')"),
+              std::string::npos)
+        << "preloading_screen did not go on to real_loading_screen (on_preload_ok)";
+    EXPECT_EQ(out.find("Screen 'title_screen' Enter (from 'meta_loading"), std::string::npos)
+        << "the preload failed and data_error sent the game back to the title screen";
+    EXPECT_NE(out.find("Screen 'game_screen' Enter (from 'real_loading_screen')"),
+              std::string::npos)
+        << "omg never reached game_screen";
+    EXPECT_NE(out.find("gameStage=playing"), std::string::npos)
+        << "omg reached game_screen but never started playing";
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
+}
