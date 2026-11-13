@@ -1,7 +1,22 @@
 # Native save persistence — implementing the image's chain
 
-Status: **phases 1-5 landed** (2026-11-06). Written after a read-only survey of the whole save/load
-surface, so the next lane does not have to re-derive it.
+Status: **phases 1-5 landed** (2026-11-05/06): `717e56182` (native cache backend), `c8570515d`
+(MemcardMgr exports the image's `MCResultMsg`), `6e7e4e726` (wiring), `f1410b057` (pad 0 signed in
+but unloaded), `3126df522` (`MetaPanel::Init` stops forcing `sUnlockAll`), `eb9ab6140` (test fixtures
+own the cache/save state). The section "Before the landing" below is the gap map the work started
+from, kept as the record of why each phase exists — it no longer describes the tree.
+
+## Where the native pieces live now
+
+| piece | file | notes |
+|---|---|---|
+| `CacheMgr`/`Cache`/`CacheID` native backend | `native/src/platform/Cache_Stub.cpp` (`CacheMgrCreateNativeBackend`) | root `$DC3_CACHE_DIR`, else `$HOME/.local/share/dc3/cache`; layout `<root>/<cache name>/<relative file path>` |
+| native `MemcardMgr` | `native/src/platform/MemcardMgr_Stub.cpp` | save dir `$DC3_SAVE_DIR`, else `$HOME/.local/share/dc3/saves`; the profile file is `profile_0_save.dat` |
+| real `SaveLoadManager` | `src/lazer/meta_ham/SaveLoadManager.cpp` | registered as `saveload_mgr`; the old `NativeSaveLoadStub` is gone |
+| `sUnlockAll` | `src/lazer/meta_ham/MetaPanel.cpp` | not assigned on native; the image's static default (`false`) applies |
+
+Both files keep their `_Stub` names for history; they are the real native backends (both are in the
+desktop and web source lists in `native/CMakeLists.txt`).
 
 Goal: profile progress, song cache and global options survive a restart on the native port, with
 `sUnlockAll` finally false. The approach is the image's own `SaveLoadManager` state machine running
@@ -24,7 +39,10 @@ dirty) → `0x54` `GetAutosavableProfile` + `IsStorageDeviceValid` → `0x46` `n
 `TheMemcardMgr.OnSaveGame` → `PreAction` serializes into `mSaveDataBuffer` → completion message →
 `SaveLoadProfileComplete` → `0x66` `SaveLoadAllComplete`.
 
-## What is missing on native today
+## Before the landing — the gap map (history, not current state)
+
+Everything in this section was true before phases 1-5 and is now fixed; line numbers are from then.
+
 
 - **`TheCacheMgr` is null.** `CacheMgrInit()` is inside `#ifndef HX_NATIVE`
   (`src/system/os/System.cpp:502-516`), `CacheMgr::CreateCacheMgr()` returns `new CacheMgrXbox()`
@@ -212,8 +230,8 @@ profile (55 with blackandtan unlocked, 54 without).  Note it was never mask-depe
 anyway: `TheHamSongMgr.Init()` (App.cpp, both call sites) runs before `MetaPanel::Init()`, so
 `sUnlockAll` was still false when the first playlist build ran.
 
-No test encoded the mask.  `scripts/native_test.sh` reads 654 registered / 584 executed / 584
-passed / 0 failed / 70 skipped with the flag off, DTA flows included — `DtaFlowTest.SongSelectPicksYmca`
+No test encoded the mask.  `scripts/native_test.sh` passed with the flag off, DTA flows included
+(as recorded on 2026-11-06: 654 registered / 584 executed / 0 failed / 70 skipped) — `DtaFlowTest.SongSelectPicksYmca`
 still selects ymca at index 3 because the one lockable song, blackandtan, has rank 432 against
 ymca's 13 and so sits far below it in the ranked list.
 

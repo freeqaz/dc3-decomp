@@ -10,7 +10,8 @@ scripts/dc3-agent-test.sh --headless
 
 # Standard headless run (logic only, fastest)
 # Good for boot/flow smoke tests. This is NOT long enough to verify post-intro gameplay animation.
-MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 \
+# (Fails are non-fatal by default; MILO_FATAL_FAILS=1 makes them abort.)
+MILO_HEADLESS=1 MILO_NORENDER=1 \
   MILO_MAX_FRAMES=3000 MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
   native/build/dc3-native
 
@@ -26,7 +27,7 @@ ninja -C native/build-asan dc3-native milo-tests
 # Run with ASan (suppress the benign strcpy overlap in FileGetPath)
 echo "interceptor_via_fun:FileGetPath" > /tmp/asan_suppress.txt
 ASAN_OPTIONS="detect_leaks=0:halt_on_error=1:suppressions=/tmp/asan_suppress.txt" \
-  MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 \
+  MILO_HEADLESS=1 MILO_NORENDER=1 \
   MILO_MAX_FRAMES=3000 MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
   native/build-asan/dc3-native
 
@@ -45,7 +46,7 @@ For character animation bugs, use a rendered headless run and capture screenshot
 ```bash
 mkdir -p /tmp/dc3_song_probe/shots
 
-env DC3_DATA=orig-assets MILO_RENDER=1 MILO_HEADLESS=1 MILO_FATAL_FAILS=0 \
+env DC3_DATA=orig-assets MILO_HEADLESS=1 \
   DC3_SHOW_SPLASH=0 DC3_TEL=1 DC3_TEL_INTERVAL=25 \
   MILO_MAX_FRAMES=9050 MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
   MILO_SCREENSHOT_DIR=/tmp/dc3_song_probe/shots \
@@ -112,8 +113,7 @@ initialises -- because retail code always assigns it later, and a native arm
 skips that assignment -- reads as null under glibc and as `0xbebebebe...`
 under ASan, so the first dereference is a SIGSEGV with `si_addr = 0`
 (non-canonical address), caught by the engine's own handler rather than
-reported by ASan. `ShellInput::Init`'s gesture filters were this
-(`NativeAsanTest`). Raise `max_malloc_fill_size` to widen the net.
+reported by ASan. Raise `max_malloc_fill_size` to widen the net.
 
 ### ASan vs Normal Allocator Behavior
 
@@ -207,14 +207,14 @@ Use GDB hardware watchpoints to catch the moment a ring pointer is corrupted:
 
 The native port adds infrastructure around the Xbox ring to handle behavioral differences:
 
-| Component | Purpose | Files |
+| Component | Purpose | Files (under `src/system/`) |
 |-----------|---------|-------|
-| `SuppressEraseScope` | Prevents `ObjPtrVec::erase` during ring walks (would shift vector elements, invalidating prev/next pointers) | `Object.h`, `Object.cpp` |
-| `gDeferredPurges` | Queues null-entry cleanup for after the walk | `Object.h`, `Object.cpp`, `ObjPtr_p.h` |
-| `DirPtrRefCounts` | O(1) `HasDirPtrs()` check (replaces O(n) ring walk) | `Dir.h`, `Dir.cpp` |
-| Vtable null-check in `ReplaceList` | Defense-in-depth against freed refs with zeroed vtable | `Object.cpp` |
+| `gInReplaceList` | Set for the duration of `ObjRef::ReplaceList` and `Hmx::Object::ReplaceRefs`. While it is set, `ObjPtrVec::ReplaceNode` and `CharClip`'s `Transitions` do not erase (an erase shifts the following nodes via `CopyRef` and rewrites ring `prev`/`next` under the walk) | `obj/Object.h`, `obj/Object.cpp`, `obj/ObjPtr_p.h`, `char/CharClip.cpp` |
+| `gInRefSnapshot` + `DeferVecCompact` | `ReplaceRefs` walks a snapshot of the ring (`SnapshotRing`). In that walk an `ObjPtrList` erases as the image does; a `kObjListNoNull` `ObjPtrVec` (or `Transitions`) that loses a node *defers* its erase until the outermost walk returns (`FlushPendingVecCompacts`), so it ends in the image's state | `obj/Object.h`, `obj/Object.cpp`, `obj/ObjPtr_p.h` |
+| `DirPtrRefCounts` | O(1) `HasDirPtrs()` check (replaces an O(n) ring walk) | `obj/Dir.h`, `obj/Dir.cpp` |
+| Force-unlink in `ObjRef::ReplaceList` | Keeps the image's `ReplaceList stuck in infinite loop` assert, then unlinks the non-advancing ref so a native (non-fatal) build does not spin | `obj/Object.cpp` |
 
-**Do not remove these** — they solve real problems independent of any specific bug fix. The `SuppressEraseScope` in particular prevents vector element shifting from corrupting ring pointers during `ReplaceList` walks.
+**Do not remove these** — they solve real problems independent of any specific bug fix. Two opt-in diagnostics sit next to them: `DC3_REFRING_AUDIT=1` (shadow index of every ref; logs `REFAUDIT` when a ref is left pointing at a freed object) and `DC3_POISON_FREED_OBJECTS=1` (cascade-freed object blocks are filled with `0xDD` and never reused; memory grows without bound).
 
 ## Object Lifecycle & Destruction Order
 
@@ -257,29 +257,145 @@ The delete triggers a full destructor cascade. If the deleted ObjectDir has memb
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `MILO_HEADLESS=1` | No GLFW window, GPU renders to offscreen target |
-| `MILO_RENDER=1` | Force GPU init (headless still renders, just no window) |
-| `MILO_NORENDER=1` | Skip GPU entirely (logic-only, fastest) |
-| `MILO_FATAL_FAILS=0` | Don't abort on non-critical failures |
-| `MILO_MAX_FRAMES=N` | Exit after N frames |
-| `MILO_INPUT_SCRIPT=path` | Scripted button presses (see below) |
-| `MILO_SCREENSHOT_DIR=dir` | Directory for auto-captured PNGs |
-| `MILO_SCREENSHOT_FRAMES=f1,f2,...` | Which frames to capture (default: `100,600,900,1500`) |
-| `MILO_CLEAR_COLOR=R,G,B,A` | Override clear color (debugging) |
-| `MILO_SIMPLE_RENDER` | Simplified material rendering |
-| `MILO_DEBUG_PIPELINES` | Log pipeline creation |
-| `MILO_NO_TRANSPARENT_DEFER` | Disable transparent draw queue |
-| `MILO_PERF` | Enable frame timing |
-| `MILO_VIDEO=path.mp4` | Record frames to video |
-| `MILO_CAPTURE_FRAME=N` | GFXReconstruct capture at frame N |
-| `MILO_TRACE_DELETE_OBJECTS=1` | Log each object deletion in `DeleteObjects()` |
-| `MILO_DEBUG_MERGE=1` | Log merge operations (MergeObject source/target/action) |
-| `DC3_FAST_TIME=1` | Advance song time at frame rate instead of wall-clock (see below) |
-| `DC3_CONTROLLER_MODE=forced\|faithful` | Controller-mode policy, default `forced` (see [Controller Mode Policy](#controller-mode-policy)) |
-| `DC3_CONTROLLER_MODE_TIMEOUT_MS=N` | `faithful` only: override the helpbar's `controller_mode_timeout` (5000 ms) |
-| `MILO_INPUT_WAKE_BUTTON=name` | Button a script `wake` presses (default `l3`) |
+This is the master table for the native port's runtime switches. Each row was
+checked against its read site on 2026-11-13. "Presence" means the variable is
+tested with `getenv(...) != nullptr`, so **any value, including `0`, turns it
+on** — unset it to turn it off. Paths starting `../milo-native-engine/` are the
+shared engine, which is what every native target links (dc3's own copies of
+`Rnd_Wgpu.cpp`, `AudioDevice.cpp`, `Joypad_Native.cpp` etc. under
+`native/src/` are not compiled into any buildable target).
+
+To re-derive the full set, including the one-off probes this table leaves out:
+
+```bash
+grep -rhoE '(getenv|Dc3EnvFlag)\s*\(\s*"[A-Z0-9_]+"' native/src src ../milo-native-engine/src \
+  | grep -oE '"[A-Z0-9_]+"' | tr -d '"' | sort -u
+```
+
+The engine also keeps a classified registry of its own flags in
+`../milo-native-engine/src/platform/NativeCompatFlags.classification.json`.
+
+### Run control
+
+| Variable | Default | Effect | Read in |
+|----------|---------|--------|---------|
+| `MILO_HEADLESS` | unset | Presence. No GLFW window; the GPU renders offscreen. Also skips audio output (see `MILO_AUDIO`) and, unless `DC3_POSE` is set, the pose provider (a dummy skeleton is used) | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp`, `../milo-native-engine/src/audio/AudioDevice.cpp`, `native/src/platform/GestureMgr_Native.cpp` |
+| `MILO_NORENDER` | unset | Presence. No GPU at all (logic only, fastest). GPU rendering is **on by default** | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
+| `MILO_RENDER` | unset | Legacy. Presence forces GPU init even over `MILO_NORENDER` — note `MILO_RENDER=0` also forces it on | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
+| `MILO_WIDTH` / `MILO_HEIGHT` | `1280` / `720` | Render target size | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
+| `MILO_MAX_FRAMES` | `10000` | Exit after N frames. `0` or negative = unlimited | `src/App.cpp` |
+| `MILO_FATAL_FAILS` | `0` (non-fatal) | `MILO_FAIL`/`MILO_ASSERT` print `FAIL:` and continue, like the 360's "Continue" dialog. Non-zero = `abort()`. A fail inside `MILO_TRY` throws to the `MILO_CATCH` regardless, as in the image (this includes `MILO_FAIL_DTA`) | `src/system/os/Debug.cpp` |
+| `DC3_DATA` | search | Game data root (must contain `gen/main_xbox.hdr`). Unset: tries `orig-assets`, `../orig-assets`, `../../orig-assets`, `.` | `native/src/platform/System_Native.cpp` |
+| `DC3_DLC_DIR` | unset | Extra content directory queued as HDD content | `native/src/platform/ContentMgr_Stub.cpp` |
+| `DC3_CACHE_DIR` | `$HOME/.local/share/dc3/cache` | Native cache backend root (song cache etc.) | `native/src/platform/Cache_Stub.cpp` |
+| `DC3_SAVE_DIR` | `$HOME/.local/share/dc3/saves` | Memory-card / save directory | `native/src/platform/MemcardMgr_Stub.cpp` |
+| `DC3_FAST_BOOT` | `0` | Non-zero: the boot screens (attract → autosave warning → title → main) are force-advanced after 10 frames each. Off: no forced advance; the screens progress as the image's flow drives them. Web: `?fast_boot=1` | `src/system/ui/UI.cpp` |
+| `DC3_SHOW_SPLASH` | shown | `0` skips the splash. Never shown on web | `src/App.cpp` |
+| `DC3_FAST_TIME` | unset | Presence. Song time advances per frame instead of on the wall clock (see [Fast Time Mode](#fast-time-mode)) | `src/lazer/game/LiveInput.cpp` |
+| `DC3_HEARTBEAT_S` | `60` | Seconds between `DC3_HEARTBEAT: uptime_s=… rss_kb=…` lines on stderr; `0` disables | `native/src/main_native.cpp` |
+
+### Input
+
+| Variable | Default | Effect | Read in |
+|----------|---------|--------|---------|
+| `MILO_INPUT_SCRIPT` | unset | Scripted button presses, used when there is no window (see [Scripted Input System](#scripted-input-system)) | `../milo-native-engine/src/platform/Joypad_Native.cpp` |
+| `MILO_INPUT_WAKE_BUTTON` | `l3` | Button a script `wake` presses | `../milo-native-engine/src/platform/Joypad_Native.cpp` |
+| `DC3_CONTROLLER_MODE` | `forced` | `forced` or `faithful` (see [Controller Mode Policy](#controller-mode-policy)) | `native/src/platform/System_Native.cpp` |
+| `DC3_CONTROLLER_MODE_TIMEOUT_MS` | helpbar value | `faithful` only: overrides the helpbar's `controller_mode_timeout` | `native/src/platform/System_Native.cpp` |
+
+### Scoring and pose
+
+Full semantics (value parsing, provider selection, expected scores) are in
+[native/SCORING_ENV_VARS.md](../native/SCORING_ENV_VARS.md). `Dc3EnvFlag`
+variables are value-parsed: `0`/`false`/`off`/`no` disable.
+
+| Variable | Default | Effect | Read in |
+|----------|---------|--------|---------|
+| `DC3_NATIVE_SCORING` | on | `Dc3EnvFlag`. Per-frame gesture poll and the sensor feed | `native/src/platform/GestureMgr_Native.cpp`, `src/App.cpp` |
+| `DC3_REAL_MOVE_PASSED` | on | `Dc3EnvFlag`. The image's `move_passed` path | `src/lazer/game/Game.cpp` |
+| `DC3_POSE_SELFTEST` | off | `Dc3EnvFlag`. Feed the choreography's own reference pose as the player | `native/src/platform/GestureMgr_Native.cpp`, `src/App.cpp`, `src/system/hamobj/FilterQueue.cpp` |
+| `DC3_SCORING_DEBUG` | off | `Dc3EnvFlag`. Once-per-second scoring liveness counters | `native/src/platform/GestureMgr_Native.cpp`, `src/lazer/game/Game.cpp` |
+| `DC3_POSE` | unset | Provider select. `external`: skip the ncnn provider, use the Python pose server. `off`: no external server. In headless runs the pose provider is skipped unless this is set | `native/src/platform/GestureMgr_Native.cpp` |
+| `DC3_POSE_CAMERA` | `0` | Camera index | `native/src/platform/GestureMgr_Native.cpp` |
+| `DC3_POSE_MODEL` | `native/models/pose_landmarker_full.task` | MediaPipe model passed to the spawned server | `native/src/platform/GestureMgr_Native.cpp` |
+| `DC3_POSE_SOCKET` | `/tmp/dc3_pose.sock` | Unix socket shared with the pose server | `native/src/platform/GestureMgr_Native.cpp` |
+| `DC3_POSE_NO_SPAWN` | unset | Presence. Connect to an already-running pose server instead of forking `pose_server.py` | `native/src/platform/Skeleton_Native.cpp` |
+| `DC3_POSE_HFOV` | unset | Horizontal camera FOV passed to the spawned server | `native/src/platform/Skeleton_Native.cpp` |
+| `DC3_POSE_MODELS` | `native/models` | `ENABLE_NCNN` builds only: model directory for the internal provider | `native/src/platform/GestureMgr_Native.cpp` |
+| `DC3_POSE_GPU` | unset | `ENABLE_NCNN` builds only, presence: run the internal provider on the GPU | `native/src/platform/GestureMgr_Native.cpp` |
+
+### Capture and output
+
+| Variable | Default | Effect | Read in |
+|----------|---------|--------|---------|
+| `MILO_SCREENSHOT_DIR` | unset | Auto-capture PNGs into this directory (create it first — a missing directory fails with only a stderr write error) | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
+| `MILO_SCREENSHOT_FRAMES` | `100,600,900,1500` | Comma-separated frames to capture | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
+| `MILO_VIDEO` | unset | Record frames to this video file | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
+| `MILO_VIDEO_FPS` | `30` | Frame rate for `MILO_VIDEO` | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
+| `MILO_CAPTURE_FRAME` | unset | Arm a GPU frame capture at frame N (see [native/TOOLS.md](../native/TOOLS.md)) | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
+| `MILO_FRAME_TIMES` | unset | Write a per-frame timing CSV to this path | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
+| `MILO_PERF` | unset | Presence. Frame timing | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
+| `DC3_TEL` | `0` | Non-zero: gameplay telemetry lines on stderr | `native/src/telemetry/GameplayTelemetry.cpp` |
+| `DC3_TEL_INTERVAL` | `10` | Frames between telemetry lines | `native/src/telemetry/GameplayTelemetry.cpp` |
+| `DC3_HTTP` | `0` | Non-zero: start the HTTP debug server ([tools/HTTP_DEBUG_SERVER.md](../tools/HTTP_DEBUG_SERVER.md)). Only `dc3-native` is built with `DC3_HTTP_SERVER` | `native/src/platform/HttpServer.cpp` (DC3 glue; the engine copy is not compiled) |
+| `DC3_HTTP_PORT` | `9090` | HTTP debug server port. `0` or `auto`: kernel-assigned port, printed on stdout as `DC3_HTTP_PORT=<n>` | `native/src/platform/HttpServer.cpp` |
+
+### Audio
+
+| Variable | Default | Effect | Read in |
+|----------|---------|--------|---------|
+| `DC3_NO_AUDIO` | unset | Presence. No audio output device | `../milo-native-engine/src/audio/AudioDevice.cpp` |
+| `MILO_AUDIO` | unset | `1` opens the audio device even when `MILO_HEADLESS` or `DC3_NO_AUDIO` is set | `../milo-native-engine/src/audio/AudioDevice.cpp` |
+| `MILO_AUDIO_BACKEND` | ALSA | `pulseaudio`, `alsa`, `null` (dummy device on a real clock), or `default` (miniaudio's own choice) | `../milo-native-engine/src/audio/AudioDevice.cpp` |
+| `DC3_AUDIO_GAIN` | `1.0` | Pre-limiter gain | `../milo-native-engine/src/audio/AudioDevice.cpp` |
+| `DC3_DUMP_AUDIO` / `DC3_DUMP_SECONDS` | unset | Capture the mixed PCM to a file | `../milo-native-engine/src/audio/AudioDevice.cpp` |
+
+### Rendering and UI diagnostics
+
+| Variable | Default | Effect | Read in |
+|----------|---------|--------|---------|
+| `MILO_CLEAR_COLOR` | unset | `R,G,B,A` clear colour override | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp`, `src/App.cpp` |
+| `MILO_SIMPLE_RENDER` | unset | Presence. Simplified material rendering | `../milo-native-engine/src/platform/MaterialSetup.cpp` |
+| `MILO_DEBUG_PIPELINES` | unset | Presence. Log pipeline creation | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp`, `../milo-native-engine/src/gfx/PipelineManager.cpp` |
+| `MILO_NO_TRANSPARENT_DEFER` | unset | Presence. Disable the transparent draw queue | `../milo-native-engine/src/platform/TransparentQueue.cpp` |
+| `MILO_NO_SPOT_BEAMS` | unset | Presence. Drop spotlight beams | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
+| `MILO_NO_POINT_TESTS` | unset | Presence. Register no point tester | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
+| `MILO_DUMP_RT` | unset | Presence. Debug dump of render targets | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
+| `MILO_UI_CAM_MODE` | `original` | `original`, `widened`, `z_hack`, `rotate_hack` (native UI-camera experiments) | `src/system/ui/UI.cpp` |
+| `MILO_NATIVE_FLOW_FILTER` | `none` | Escape hatch for the retired native flow filter: `curated`, `all`, `menu_only` | `src/system/ui/PanelDir.cpp` |
+| `MILO_DEBUG_UI_FLOW` | unset | Presence. Log UI screen/panel flow | `src/system/ui/UI.cpp`, `UIPanel.cpp`, `UIScreen.cpp` |
+| `MILO_DEBUG_MERGE` | `0` | Non-zero: log `MergeObject` source/target/action | `src/system/obj/Utl.cpp`, `src/system/rndobj/PropAnim.cpp` |
+| `DC3_NO_UI` / `DC3_HUD_ONLY` | unset | Presence. Skip `TheUI->Draw()` | `src/App.cpp` |
+| `DC3_DRAW_CRASH_GUARD` | off | `Dc3EnvFlag`. Run UI draw under a `sigsetjmp` guard | `src/App.cpp` |
+
+### Object-lifetime and stub diagnostics
+
+| Variable | Default | Effect | Read in |
+|----------|---------|--------|---------|
+| `DC3_REFRING_AUDIT` | unset | Non-empty, not `0`: shadow index of every `ObjRef`, logs `REFAUDIT` on a ref left pointing at freed memory | `src/system/obj/Object.cpp` |
+| `DC3_POISON_FREED_OBJECTS` | unset | Non-empty, not `0`: poison cascade-freed object blocks with `0xDD` and never reuse them (memory grows without bound) | `src/system/obj/Dir.cpp` |
+| `DC3_STUB_TRACE` | unset | Non-empty, not `0`: record every native stub hit | `native/src/StubTrace.cpp` |
+| `DC3_STUB_TRACE_DUMP` | unset | Path to write the stub-trace table at exit | `native/src/main_native.cpp` |
+
+### Test-only variables
+
+Read by `milo-tests`, not by `dc3-native`. See [native/TESTING.md](../native/TESTING.md).
+
+| Variable | Effect |
+|----------|--------|
+| `MILO_LIB`, `DC3_DTA_FLOW_TESTS`, `DC3_GAMEPLAY_TESTS`, `DC3_AUDIO_TESTS`, `MILO_LONG_TEST` | Test gates |
+| `MILO_TEST_BIK`, `MILO_DIAG_FILE`, `MILO_DIAG_OBJECT`, `MILO_POSE_GOLDEN_DIR` | Fixture overrides |
+| `MILO_BULK_CATEGORY`, `MILO_BULK_LIMIT`, `MILO_BULK_ALL` | `BulkLoad` sweep scope |
+| `MILO_TEST_ALLOW_STALE_BUILD` | Skip the `TestGates.BuildMatchesSources` currency check |
+
+### `scripts/dc3-agent-test.sh` defaults
+
+The agent launcher sets these unless the caller already has them:
+`DC3_HTTP=1`, `DC3_HTTP_PORT=9090`, `DC3_FAST_BOOT=1`, `DC3_TEL=1`,
+`DC3_SHOW_SPLASH=0`, `MILO_MAX_FRAMES=0` (unlimited; bound the run yourself or
+pass `--frames N`). `--headless` additionally exports `MILO_HEADLESS=1` and
+`DC3_FAST_TIME=1`. (The script's own `--help` text still says
+`MILO_MAX_FRAMES=100000`; the code sets `0`.)
 
 ## Fast Time Mode
 
@@ -287,12 +403,12 @@ By default, song time advances on the wall clock — a 3:30 song takes 3:30 of r
 
 ```bash
 # Full song playthrough in ~35 seconds instead of ~5 minutes
-DC3_FAST_TIME=1 MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 \
+DC3_FAST_TIME=1 MILO_HEADLESS=1 MILO_NORENDER=1 \
   MILO_MAX_FRAMES=60000 MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
   native/build/dc3-native
 ```
 
-`scripts/dc3-agent-test.sh --headless` enables this by default. Override with `DC3_FAST_TIME=0` if you need real-time progression in headless mode.
+`scripts/dc3-agent-test.sh --headless` enables this by default. `DC3_FAST_TIME` is a **presence** test, so `DC3_FAST_TIME=0` does *not* turn it off. For real-time progression in a headless agent run, leave out `--headless` and set the headless flag yourself: `MILO_HEADLESS=1 scripts/dc3-agent-test.sh`.
 
 **Implementation**: `LiveInput::CurrentMs()` increments a synthetic counter per call instead of reading `mTimer.Ms()` or `mAudio.GetTime()`. Source: `src/lazer/game/LiveInput.cpp`.
 
@@ -338,15 +454,17 @@ wait_screen song_select_screen
 | `l3`, `ls` | `kPad_L3` | LS (left stick click) |
 | `r3`, `rs` | `kPad_R3` | RS (right stick click) |
 
-Note: Milo uses PlayStation-style internal names (`kPad_X` = confirm, `kPad_Circle` = cancel) but the Xbox 360 layout maps A to confirm and B to cancel. Buttons are pressed for exactly 1 frame (press on N, auto-release on N+1). Events don't need to be in order — the file is sorted by frame at load time.
+Note: Milo uses PlayStation-style internal names (`kPad_X` = confirm, `kPad_Circle` = cancel) but the Xbox 360 layout maps A to confirm and B to cancel. Buttons are pressed for exactly 1 frame (press on N, auto-release on N+1). `#` starts a comment.
 
-**Wake** (`N wake` / `+N wake`) means "the player presses the controller-mode wake button". If the game is already in controller mode it does nothing; otherwise it presses the wake button for one frame (`l3`, or `MILO_INPUT_WAKE_BUTTON`). It exists so one flow can drive both the original game under Xenia -- where a screen's first press must be preceded by a wake, see [Controller Mode Policy](#controller-mode-policy) -- and the native port, where under the default `forced` policy every wake is a no-op. Each one logs `DC3 Input: wake at frame N: pressed button B` or `... no-op (already awake)`.
+Directives run **in file order — the file is not sorted**. A `wait_screen` blocks until that screen is current and not transitioning; after 30×60 frames it logs `DC3 Input: TIMEOUT waiting for '<screen>'` and continues as if satisfied. A `+N` frame counts from the last satisfied `wait_screen`. A directive whose frame has already passed when the cursor reaches it is **skipped silently**, so keep absolute frames increasing. The frame counter is the input system's own monotonic counter, not `TheRnd`'s frame ID.
+
+**Wake** (`N wake` / `+N wake`) means "the player presses the controller-mode wake button". If the game is already in controller mode it does nothing; otherwise it presses the wake button for one frame (`l3`, or `MILO_INPUT_WAKE_BUTTON`). It exists so one flow can drive both the original game under Xenia -- where a screen's first press must be preceded by a wake, see [Controller Mode Policy](#controller-mode-policy) -- and the native port, where under the default `forced` policy every wake is a no-op. Each one logs `DC3 Input: wake at frame N: pressed button <enum value>` or `... no-op (already awake)`.
 
 ### How It Works
 
 In headless mode (`gNativeWindow == NULL`), `JoypadPoll()` reads from the script instead of GLFW. On first poll, `LoadInputScript()` reads and parses the `MILO_INPUT_SCRIPT` file. Each frame, `GetScriptedButtons()` returns a bitmask of buttons active on that frame. The existing delta computation (`mNewPressed`, `mNewReleased`) handles press/release edges. Windowed mode is unaffected — GLFW gamepad + keyboard fallback works as before.
 
-Source: `Joypad_Native.cpp` in milo-native-engine (`src/platform/`), which is what `dc3-native` links; `native/src/platform/Joypad_Native.cpp` is a byte-identical copy that only `dc3-web` compiles -- edit both. Screenshot capture: `native/src/platform/Rnd_Wgpu.cpp`.
+Source: `../milo-native-engine/src/platform/Joypad_Native.cpp`, which every native target links, `dc3-web` included (it has linked `libmilo-engine.a` since `2a51acd7e`). `native/src/platform/Joypad_Native.cpp` is a byte-identical copy that no buildable target compiles — edit the engine's. Screenshot capture: `../milo-native-engine/src/platform/Rnd_Wgpu.cpp`.
 
 **Troubleshooting**: Create `MILO_SCREENSHOT_DIR` before launch (capture fails silently if missing). If scripted input doesn't work, verify frame numbers align with where the game actually is — the attract screen runs for a while before accepting input. In windowed mode, scripted input is disabled; use keyboard instead: arrow keys, Enter (confirm), Escape (cancel), Space (start), Tab (back).
 
@@ -421,7 +539,7 @@ Object lifetime tests live in `native/tests/test_object_lifetime.cpp`. Key tests
 | `ObjDirPtrCascadeDeleteDoesNotDoubleFree` | Nested subdir cascade with cross-references |
 | `RemoveSubDirReleasesDirPtrRef` | Subdir removal + owner deletion |
 | `ReplaceRefsWithSelfDeletingObjDirPtr` | ObjDirPtr that triggers self-delete during Replace |
-| `DeletingFlowChildRemovesFromParent` | Flow child deletion updates parent's ObjPtrVec |
+| `DeletingFlowChildRemovesEntryFromParent` | Flow child deletion updates parent's ObjPtrVec |
 | `MergeDirsNameCollisionLeavesOnlyLivePointers` | Name collision during merge redirects refs |
 
 Run individual tests with timeout (some may hang if ring bugs are present):
@@ -459,7 +577,7 @@ Full writeup: `docs/sessions/2026-03-18-venue-merge-crash-ring-corruption.md`
 
 **Diagnosis**: ASan freed-by stack showed `FlowIf::operator delete` called from `FlowNode::~FlowNode` (parent deleting child). The crash-site stack showed the same `FlowNode::~FlowNode` at a different level trying to access the freed child.
 
-Full writeup: passed to investigating agent (see analysis in conversation history).
+Related regression tests: `ObjectLifetimeTest.FlowAnimateDoubleDeleteRingCorruption` and `ObjectLifetimeTest.DeletingFlowChildRemovesEntryFromParent` in `native/tests/test_object_lifetime.cpp`.
 
 ## Sandbox Notes
 

@@ -1,6 +1,6 @@
 # Xenia DC3 — Async-Completion Stall (all-black render)
 
-**Status:** OPEN. Game boots and runs but renders nothing (zero GPU draws).
+**Status:** SOLVED (2026-06-09) — see "2026-06-09 — REFRAME: the async stall is SOLVED; the dance ANIMATES; live Xbox bone telemetry achieved" at the end of this doc, which supersedes everything above it. (Original status line: OPEN. Game boots and runs but renders nothing (zero GPU draws).)
 
 > **2026-06-01 UPDATE — the original APC hypothesis below was tested and DISPROVEN for
 > this stall.** A runtime-confirmed diagnosis (see "2026-06-01 findings" section) shows the

@@ -26,7 +26,7 @@ To add a new overlay file:
 
 | Overlay File | What It Does |
 |---|---|
-| `native/dta/ui/options/options_gameplay.dta` | Adds "Camera Blend" toggle to Gameplay Settings menu |
+| `native/dta/ui/options/options_gameplay.dta` | Adds two checkboxes to the Gameplay Settings menu: "Camera Blend" (`option_camera_blend` → `{native_settings get_camera_blend}` / `toggle_camera_blend`) and the debug panel (`option_debug_panel` → `{native_settings get_debug_panel}` / `toggle_debug_panel`; answers 0 and does nothing in builds without `HX_IMGUI`) |
 
 ## Adding a Settings Toggle (Walkthrough)
 
@@ -95,7 +95,7 @@ In `native/dta/ui/options/options_gameplay.dta`, add to these four sections:
 **`NAV_SELECT_MSG`** — handle selection:
 ```dta
 (option_my_setting
-   {profile_mgr toggle_my_setting}
+   {native_settings toggle_my_setting}
    {$this update_all}
    skip_select_anim)
 ```
@@ -105,7 +105,7 @@ In `native/dta/ui/options/options_gameplay.dta`, add to these four sections:
 {[provider]
    set_checked
    option_my_setting
-   {profile_mgr get_my_setting}}
+   {native_settings get_my_setting}}
 ```
 
 **`update_description`** — show description on highlight:

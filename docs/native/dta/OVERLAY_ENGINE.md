@@ -21,7 +21,12 @@ Engine requests: "ui/options/options_gameplay.dta"
 
 ### File Loading Path
 
-The intercept happens in two functions in `native/src/platform/File_Native.cpp`:
+The intercept happens in two functions in the shared engine's
+`../milo-native-engine/src/platform/File_Native.cpp` — that is the copy every native target links;
+DC3's own `native/src/platform/File_Native.cpp` is removed from the engine-linking source list in
+`native/CMakeLists.txt` and is not built. The overlay directory itself is found at startup by
+`NativeDetectOverlayDir()` in `native/src/platform/System_Native.cpp`, which passes it to the
+engine's `NativeSetOverlayDir()`.
 
 **`FileIsLocal(filename)`** — determines whether a file is on disk or in the archive.
 
@@ -32,7 +37,7 @@ FileIsLocal("ui/options/options_gameplay.dta")
   → file missing → return false (engine reads from .ark)
 ```
 
-When `FileIsLocal` returns `true`, `NewFile()` sets the local flag (`mode |= 0x10000`) and creates an `AsyncFile` (disk read) instead of an `ArkFile` (archive read).
+When `FileIsLocal` returns `true`, `NewFile()` (`src/system/os/File.cpp`) sets the local flag (`mode |= 0x10000`) and creates an `AsyncFile` (disk read) instead of an `ArkFile` (archive read).
 
 **`FileQualifiedFilename(filename)`** — resolves relative paths to absolute paths.
 
@@ -61,7 +66,7 @@ native/dta/
     options/
       options_gameplay.dta    ← overrides archive's ui/options/options_gameplay.dta
   config/
-    some_config.dta           ← overrides archive's config/some_config.dta
+    some_config.dta           ← (hypothetical example) would override config/some_config.dta
 ```
 
 Paths mirror the archive structure exactly. Only files that need modification are present — everything else falls through to the archive.

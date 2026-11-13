@@ -1,6 +1,13 @@
 # Xenia as an oracle for the native port
 
-**Status:** proposal, 2026-09-30. Nothing here is built yet. The inventory in
+**Status:** written as a proposal on 2026-09-30; Tier A is now **partly built**
+— see §8-10. Built: the guest DTA channel (`--dc3_dta_channel`, §8; client
+`tools/console/dc3_eval.py -T xenia`), the golden recorder/checker
+`tools/state_diff/golden.py` with its boot scripts in `tools/state_diff/golden/`,
+and the `XeniaGolden.*` ctest tests (label `XeniaGolden`, defined in
+`native/CMakeLists.txt`; bundles live in the gitignored
+`archive/state_diff/goldens/xenia/`, and a missing bundle is a skip, exit 77).
+Sections 1-7 are the original proposal and are kept as written. The inventory in
 §1 was taken read-only from `xenia` @ `frag-alloc-trace` `aa337a177` and this
 repo @ `64f20a202`, and every claim in it carries a file reference in the survey
 it came from.
