@@ -64,6 +64,7 @@ struct Image {
     int trackIds[kMaxPersons] = {};
     float depthM[kMaxPersons] = {}; // the person's root depth (camera z), metres
     double timestamp = 0.0;
+    double publishedAt = 0.0; // set by Publish (NowSeconds)
 };
 
 // Any thread.  The newest image wins; an unlatched older one is dropped.
@@ -81,6 +82,12 @@ bool Active();
 bool Latch(int (*slotForTrackId)(int));
 // Count of latched frames (0 = none yet).
 uint32_t LatchedSequence();
+// Timing (steady clock, seconds): when the newest latched frame was published
+// (its arrival from the transport), and the mean / last cost of Latch's
+// conversions, in milliseconds.  For GET /api/camera's latency figures.
+double LatchedPublishTime();
+double LatchMsMean();
+double NowSeconds();
 
 // Test seam: forget every frame and the active flag.
 void ResetForTest();

@@ -92,7 +92,10 @@ struct Uploaded {
     int w = 0, h = 0;
     std::string name; // taken at upload: the texture may be gone by the time it is read
     unsigned uploads = 0;
+    double ageMsSum = 0.0; // camera frame's age (publish -> upload), summed
+    double composeMsSum = 0.0;
 };
+double sComposeStart = 0.0; // NativeStreamCompose's start, for the upload that follows
 std::map<RndTex *, Uploaded> sUploaded;
 unsigned sUploadCount = 0;
 
@@ -102,6 +105,7 @@ void NativeStreamCompose(const uint16_t *depth, int depthPitchTexels, const uint
                          int colorPitchWords, const NativeStreamComposeParams &prm,
                          int outW, int outH, uint8_t *rgba) {
     using namespace NativeCamera;
+    sComposeStart = NowSeconds();
     const uint8_t nobody[4] = { To8(prm.nobody[0]), To8(prm.nobody[1]), To8(prm.nobody[2]),
                                 To8(prm.nobody[3]) };
     uint8_t colors[6][4];
@@ -187,6 +191,11 @@ void NativeStreamUpload(RndTex *tex, const uint8_t *rgba, int w, int h) {
     u.h = h;
     u.name = tex->Name() ? tex->Name() : "";
     u.uploads++;
+    double now = NativeCamera::NowSeconds();
+    if (NativeCamera::LatchedPublishTime() > 0.0)
+        u.ageMsSum += (now - NativeCamera::LatchedPublishTime()) * 1000.0;
+    if (sComposeStart > 0.0)
+        u.composeMsSum += (now - sComposeStart) * 1000.0;
     sUploadCount++;
     UploadRGBAToRndTex(tex, rgba, w, h);
 }
@@ -219,6 +228,9 @@ std::string Dc3CameraJson(int gridW, int gridH) {
     j += NativeCameraStandInAttached() ? "true" : "false";
     j += ",\"latched\":" + std::to_string(NativeCamera::LatchedSequence());
     j += ",\"uploads\":" + std::to_string(sUploadCount);
+    char ms[64];
+    snprintf(ms, sizeof ms, "%.3f", NativeCamera::LatchMsMean());
+    j += std::string(",\"latchMsMean\":") + ms;
     j += ",\"grid\":[" + std::to_string(gridW) + "," + std::to_string(gridH) + "]";
     j += ",\"textures\":[";
     bool first = true;
@@ -228,8 +240,14 @@ std::string Dc3CameraJson(int gridW, int gridH) {
             j += ",";
         first = false;
         j += "{\"name\":\"" + u.name + "\",\"w\":" + std::to_string(u.w)
-            + ",\"h\":" + std::to_string(u.h) + ",\"uploads\":" + std::to_string(u.uploads)
-            + ",\"rows\":[";
+            + ",\"h\":" + std::to_string(u.h) + ",\"uploads\":" + std::to_string(u.uploads);
+        // composeMsMean: compose + blur + upload; frameAgeMsMean: from the
+        // frame's arrival (Publish) to this upload -- the engine's share of
+        // the camera-to-screen latency, up to the frame's draw
+        snprintf(ms, sizeof ms, "%.3f", u.uploads ? u.composeMsSum / u.uploads : 0.0);
+        j += std::string(",\"composeMsMean\":") + ms;
+        snprintf(ms, sizeof ms, "%.3f", u.uploads ? u.ageMsSum / u.uploads : 0.0);
+        j += std::string(",\"frameAgeMsMean\":") + ms + ",\"rows\":[";
         for (int gy = 0; gy < gridH; gy++) {
             j += gy ? ",\"" : "\"";
             int y = (int)(((long)gy * 2 + 1) * u.h / (2L * gridH));

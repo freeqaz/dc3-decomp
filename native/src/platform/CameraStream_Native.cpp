@@ -8,6 +8,7 @@
 #include "xdk/nui/nuidetroit.h"
 #include "xdk/xapilibi/winerror.h"
 
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <mutex>
@@ -62,6 +63,8 @@ const int kColorStream = 0;
 const int kDepthStream = 1;
 
 uint32_t sLatchSeq = 0;
+double sLatchedPublishTime = 0.0;
+double sLatchMsSum = 0.0;
 
 // A slot the game does not hold and that is not the newest frame.
 Slot *FreeSlot(Stream &s, int *outIdx) {
@@ -92,7 +95,17 @@ uint8_t Clamp8(int v) { return (uint8_t)(v < 0 ? 0 : (v > 255 ? 255 : v)); }
 
 } // namespace
 
+double NowSeconds() {
+    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
+double LatchedPublishTime() { return sLatchedPublishTime; }
+
+double LatchMsMean() { return sLatchSeq ? sLatchMsSum / sLatchSeq : 0.0; }
+
 void Publish(Image &&image) {
+    image.publishedAt = NowSeconds();
     std::lock_guard<std::mutex> lock(sPublishMutex);
     sPending = std::move(image);
     sHavePending = true;
@@ -114,6 +127,8 @@ void ResetForTest() {
     sHavePending = false;
     sActive = false;
     sLatchSeq = 0;
+    sLatchedPublishTime = 0.0;
+    sLatchMsSum = 0.0;
     for (Stream &s : sStreams) {
         s.newest = -1;
         s.delivered = 0;
@@ -152,6 +167,7 @@ bool Latch(int (*slotForTrackId)(int)) {
         depthMm[k] = (uint16_t)mm;
     }
 
+    double t0 = NowSeconds();
     uint32_t seq = ++sLatchSeq;
     int idx;
     Stream &color = sStreams[kColorStream];
@@ -170,6 +186,8 @@ bool Latch(int (*slotForTrackId)(int)) {
         }
         depth.newest = idx;
     }
+    sLatchedPublishTime = img.publishedAt;
+    sLatchMsSum += (NowSeconds() - t0) * 1000.0;
     return true;
 }
 
