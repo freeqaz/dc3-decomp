@@ -26,6 +26,8 @@
 #include <cfloat>
 #ifdef HX_NATIVE
 inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
+#include <cstdio>
+#include <cstdlib>
 #else
 #include "xdk\LIBCMT\ppcintrinsics.h"
 #endif
@@ -35,6 +37,83 @@ static RndCam *gImpostorCamera = nullptr;
 static RndMat *gImpostorMat = nullptr;
 static int gNumCrowd = 0;
 static WorldCrowd *gParent = nullptr;
+
+#ifdef HX_NATIVE
+// Native-only crowd draw counters (PLAN H-6), off unless DC3_CROWD_STATS is
+// set. Value N > 0 prints one line every N render frames:
+//   DC3_CROWD: frame=F draws3d=D impostors=I pose=P
+// draws3d counts Draw3DChars' curChar->Draw() calls (one per 3D crowd member),
+// impostors counts DrawShowing's renders of a character into gImpostorTex, and
+// pose is a checksum of the local transforms of every transformable inside
+// each Character drawn that frame, so it moves when the crowd animates. Read by
+// native/tests/test_native_crowd.cpp; draws nothing and changes nothing.
+namespace {
+    struct NativeCrowdStats {
+        int every = -1; // -1 unread, 0 off
+        unsigned int frame = 0;
+        int draws3d = 0;
+        int impostors = 0;
+        double pose = 0;
+        bool any = false;
+
+        bool On() {
+            if (every < 0) {
+                const char *env = getenv("DC3_CROWD_STATS");
+                every = env ? atoi(env) : 0;
+                if (env && every <= 0)
+                    every = 1;
+            }
+            return every > 0;
+        }
+        void Roll() {
+            unsigned int now = TheRnd.GetFrameID();
+            if (any && now != frame) {
+                if (frame % (unsigned int)every == 0) {
+                    fprintf(
+                        stderr,
+                        "DC3_CROWD: frame=%u draws3d=%d impostors=%d pose=%.6f\n",
+                        frame,
+                        draws3d,
+                        impostors,
+                        pose
+                    );
+                }
+                draws3d = impostors = 0;
+                pose = 0;
+            }
+            frame = now;
+            any = true;
+        }
+        void AddPose(Character *c) {
+            // Weighted by position in the walk so a swap of two bones moves it.
+            int n = 1;
+            for (ObjDirItr<RndTransformable> it(c, true); it; ++it, ++n) {
+                RndTransformable *t = it;
+                if (t == c)
+                    continue;
+                const Transform &x = t->LocalXfm();
+                pose += n
+                    * (x.v.x + x.v.y + x.v.z + x.m.x.x + x.m.x.y + x.m.x.z + x.m.y.x
+                       + x.m.y.y + x.m.y.z + x.m.z.x + x.m.z.y + x.m.z.z);
+            }
+        }
+        void On3DDraw(Character *c) {
+            if (!On())
+                return;
+            Roll();
+            draws3d++;
+            AddPose(c);
+        }
+        void OnImpostor(Character *c) {
+            if (!On())
+                return;
+            Roll();
+            impostors++;
+            AddPose(c);
+        }
+    } sNativeCrowdStats;
+}
+#endif
 
 namespace {
     void GetMeshShaderFlags(RndMat *mat, std::list<unsigned int> &flags) {
@@ -664,6 +743,9 @@ void WorldCrowd::Draw3DChars() {
                         curChar->SetLodType(mCharForceLod);
                     }
                     curChar->Draw();
+#ifdef HX_NATIVE
+                    sNativeCrowdStats.On3DDraw(curChar);
+#endif
                     if (mCharForceLod != kLODPerFrame) {
                         curChar->SetLodType(kLODPerFrame);
                     }
@@ -1281,6 +1363,9 @@ void WorldCrowd::DrawShowing() {
                             curChar->SetLodType(mCharForceLod);
                         }
                         curChar->DrawShowing();
+#ifdef HX_NATIVE
+                        sNativeCrowdStats.OnImpostor(curChar);
+#endif
                         if (mCharForceLod != kLODPerFrame) {
                             curChar->SetLodType(kLODPerFrame);
                         }
