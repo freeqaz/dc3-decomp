@@ -362,6 +362,17 @@ void Dc3PoseSessionReplayPumpAt(NativeSkeletonProvider *provider, double clock) 
         }
         due = gReplay.armed ? Dc3PoseSession::DueIndex(fr, clock) : -1;
     }
+    // The game accepts one sensor frame per render frame, and so did the live
+    // session: every recorded frame was accepted on a frame of its own.  When
+    // the replay's render frames fall further apart than the live ones did
+    // (a hitch), two recorded frames come due at once; publishing only the
+    // later one would drop the other, so catch up one frame per call instead
+    // -- unless the replay is a second or more behind (a seek), which jumps.
+    if (due >= 0 && gReplay.lastIndex >= -1) {
+        int next = gReplay.lastIndex + 1;
+        if (due > next && fr[due].song - fr[next].song < 1.0 && fr[due].wall - fr[next].wall < 1.0)
+            due = next;
+    }
     if (due < 0) {
         Publish(provider, 0, true); // before the first frame: hold it
         gReplay.lastIndex = -1;

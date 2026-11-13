@@ -1020,6 +1020,8 @@ TEST_F(PoseSessionTest, AReplayedSessionReachesTheScorerAsItDidLive) {
 // first frame there, not play the dance into the menus (where a moving player
 // stole the pad's presses and stranded replay_proof.py on choose_mode_screen),
 // and start when the song clock comes down to the count-in -- every time.
+// Every frame goes out, one per render frame, even when several come due at
+// once (a hitch), as the live session accepted them.
 TEST_F(PoseSessionTest, ASongReplayWaitsForTheCountInNotTheMenuClock) {
     std::vector<Dc3PoseSession::Frame> frames(300);
     for (size_t k = 0; k < frames.size(); k++) {
@@ -1068,9 +1070,24 @@ TEST_F(PoseSessionTest, ASongReplayWaitsForTheCountInNotTheMenuClock) {
     Dc3PoseSessionReplayPumpAt(&mProvider, 1.0);
     mSensor->PollNewFrame();
     EXPECT_GE(mProvider.FrameId(), 0x80000000u);
-    Dc3PoseSessionReplayPumpAt(&mProvider, frames[3].song + 0.001);
+    // Re-armed by a clock that is already 0.1 s in: it starts from the first
+    // frame and catches up, one frame per call.
+    for (int k = 0; k <= 3; k++) {
+        Dc3PoseSessionReplayPumpAt(&mProvider, frames[3].song + 0.001);
+        mSensor->PollNewFrame();
+        EXPECT_EQ(mProvider.FrameId(), frames[k].frameId) << k;
+    }
+    // A hitch: three frames come due on one render frame.  None is dropped;
+    // they go out one per call, in order (the game accepts one per frame).
+    for (int k = 4; k <= 6; k++) {
+        Dc3PoseSessionReplayPumpAt(&mProvider, frames[6].song + 0.001);
+        mSensor->PollNewFrame();
+        EXPECT_EQ(mProvider.FrameId(), frames[k].frameId) << k;
+    }
+    // Two seconds behind is a seek, not a hitch: it jumps.
+    Dc3PoseSessionReplayPumpAt(&mProvider, frames[66].song + 0.001);
     mSensor->PollNewFrame();
-    EXPECT_EQ(mProvider.FrameId(), frames[3].frameId);
+    EXPECT_EQ(mProvider.FrameId(), frames[66].frameId);
     Dc3PoseSessionReplayLoad("/nonexistent/none.dc3session");
 }
 
