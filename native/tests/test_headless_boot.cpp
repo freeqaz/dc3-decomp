@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include "platform/ExecutablePath.h"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -21,7 +22,7 @@
 static std::string GetBinaryDir() {
     // The test binary (milo-tests) lives next to dc3-native in the build dir
     char buf[4096];
-    ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    ssize_t len = ReadExecutablePath(buf, sizeof(buf) - 1);
     if (len <= 0)
         return ".";
     buf[len] = '\0';

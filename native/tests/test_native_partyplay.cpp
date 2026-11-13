@@ -28,12 +28,13 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include "platform/ExecutablePath.h"
 
 namespace {
 
 std::string BinaryDir() {
     char buf[4096];
-    ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    ssize_t len = ReadExecutablePath(buf, sizeof(buf) - 1);
     if (len <= 0)
         return ".";
     buf[len] = '\0';

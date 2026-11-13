@@ -24,6 +24,7 @@
 #include <sys/wait.h>
 
 #include "telemetry_parser.h"
+#include "platform/ExecutablePath.h"
 
 // ---------------------------------------------------------------------------
 // Helpers (shared with test_headless_boot.cpp — duplicated to keep standalone)
@@ -31,7 +32,7 @@
 
 static std::string GetBinaryDir() {
     char buf[4096];
-    ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    ssize_t len = ReadExecutablePath(buf, sizeof(buf) - 1);
     if (len <= 0) return ".";
     buf[len] = '\0';
     std::string path(buf);
