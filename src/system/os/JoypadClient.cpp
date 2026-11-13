@@ -186,6 +186,13 @@ int JoypadClient::OnMsg(const ButtonUpMsg &msg) {
 // w18-d (94.45, 5 rows): the plain indexed `for (i) mRepeats[i]...` loop makes
 // &mRepeats[i].mRepeatTimer the IV (`subi r3, r31, 0x30` / `subi r3, r31, 0x40`,
 // 94.2), with or without a `Timer &` local -- reverted.
+// w-this-adjust (2026-11-13): POINTER AUDIT, NOT A BUG.  `subi r3, r28, 0x30`
+// is not a this-adjustment: r28 = &mRepeats[i].mRepeatTimer and the result is
+// &mHoldTimer (Timer is 0x30 B), the same address we form as r31+0x10.  The
+// image's JoypadRepeat::Start keeps its first timer address in a callee-saved
+// GPR the same way.  JoypadRepeat::Reset(JoypadButton) has no out-of-line copy
+// in the image, so it is inlined; `pRepeat->Reset(pRepeat->mLastBtn)` (self-
+// compare folds) is byte-identical at 94.45 -- inert, not shipped.
 void JoypadClient::Poll() {
     int i = 0;
     JoypadRepeat *pRepeat = mRepeats;
