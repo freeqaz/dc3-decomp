@@ -15,7 +15,7 @@ Size: S < half a day · M ≈ 1–2 days · L = several days.
 
 1. **M1 — Dance on Linux.** P-1, P-2, P-5, P-6, G-5 done: a real webcam plays a
    whole Perform song with no crash, and a deterministic replay test guards it.
-2. **M2 — Dance in the browser.** P-9, W-2, W-3 done: the page asks for the
+2. **M2 — Dance in the browser.** P-9, W-2, W-3 done (all three closed 2026-11-13): the page asks for the
    camera, tracks the player, and the score responds.
 3. **M3 — Whole game by dancing.** P-3, P-4, P-7, G-1..G-4 done: gesture menus,
    the player on screen, calibrated scoring, and every mode reachable.
@@ -56,12 +56,12 @@ Size: S < half a day · M ≈ 1–2 days · L = several days.
 |---|---|---|---|
 | W-1 | Pose input = P-9 | — | — |
 | W-2 | ~~Playwright version~~ **DONE (`np-web-pose`)**: `scripts/web/package.json` pins Playwright 1.60.0 (headless shell 1223); `npm ci --prefix scripts/web`. `smoke-test.mjs` PASSES from a worktree. | S | `smoke-test.mjs` runs from a worktree |
-| W-3 | Swap the release/debug optimisation levels back: the default page is `-O0` | S | `flags.make` shows `-O3` for release |
-| W-4 | Configure clones imgui with full history per build dir and can hang; `index.html` not copied if the debug half fails | S | Offline/shallow fetch; `index.html` always deployed |
+| W-3 | ~~Swap the release/debug optimisation levels back~~ **DONE (`np-web-build`, `e9143a7fa`)**: both dirs were configured `CMAKE_BUILD_TYPE=Release` (-O3) and release appended the old `-O0` default. Now explicit: release `-O3 -g0 --profiling-funcs` (wasm 16.9 → 9.3 MB), debug `CMAKE_BUILD_TYPE=Debug`, `-O0 -g2`. The `-O0` default (`6298c017c`) had no dc3 failure behind it; rb3's inline-discard does not reproduce (163 imports at -O3 vs 166 at -O0) and the stand-in scores 7,581 at both levels. [WEB.md](WEB.md#optimisation-level-w-3-decided-2026-11-13) | S | `flags.make` shows `-O3` for release |
+| W-4 | ~~imgui clone; `index.html` not copied if the debug half fails~~ **DONE (`np-web-build`, `17c0de317`)**: the page is deployed before either build; each variant builds in its own errexit subshell and a failure ends the script with `BUILD FAILED: <variant>`, exit 1. Sabotaged debug build: page deployed, exit 1 (the old script: exit 2, no index.html). imgui reuse (np-web-pose) confirmed from a fresh worktree | S | Offline/shallow fetch; `index.html` always deployed |
 | W-5 | Public deployment: stale build and unauthenticated asset API. **Owner decision.** | — | Owner's call |
-| W-6 | Heap headroom: ~460 MB of 512 MB in one venue; measure all venues, then raise the cap or trim | M | Max heap over every venue recorded |
-| W-7 | ~20 missing SFX sidecars under `sfx/gen/xma_pcm/` | S | No 404s in a full-song run |
-| W-8 | Player-facing page: hide the dev console, pause/step buttons and status bar behind `?dev` | S | Default page shows only the game |
+| W-6 | ~~Heap headroom~~ **DONE (`np-web-build`, `ebbce94f0` + `185b6f50e`)**: true peak (8 MB linear growth) 399–472 MB per song over 5 of 6 venues, worst omg in dci; geometric growth had the 512 MB release AT the cap after one dci song, and the release reaches 522.6 MB on omg. dc3-web now links `-sMAXIMUM_MEMORY=1024MB` (dc3-side override, engine untouched). Measuring it found the native preload budget bug: 34 of 57 songs went back to the title (inflated milos over loading.dta's 16 MiB), fixed for web and desktop. throneroom not measured (locked venue; smallest world). [WEB.md](WEB.md#heap-per-venue-w-6) | M | Max heap over every venue recorded |
+| W-7 | ~~20 missing SFX sidecars~~ **DONE (`np-web-build`, `09b1727c0`)**: derived from every `.milo_xbox` (`native/tools/xma_sidecars`, `scripts/web/gen_sfx_sidecars.sh`, run by `build.sh`): 4760 English keys (was 1035), byte-identical to desktop-decoded ones where both exist; `.ogg` (109 MB) in the deploy dir, key list committed; boot bundle unchanged (27.9 MB). 0 sidecar 404s in a full song. [WEB.md](WEB.md#sfx-sidecars-w-7) | S | No 404s in a full-song run |
+| W-8 | ~~Player-facing page~~ **DONE (`np-web-build`, `5b35708ca`)**: default page = canvas filling the window + pose panel + loading/error card; harness behind `?dev` (or `?debug=true`), console capped at 500 lines; splash double-dismiss page error fixed. `scripts/web/page-states.mjs` checks both (fails on the old page) | S | Default page shows only the game |
 
 ## Track M — macOS ([MACOS.md](MACOS.md))
 
