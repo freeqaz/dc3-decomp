@@ -216,6 +216,7 @@ bool EnsureEngineInit() {
     REGISTER_OBJ_FACTORY(AudioDuckerTrigger)
 
     printf("=== Test Engine Init Complete ===\n");
+    return true;
 }
 
 // ============================================================================
