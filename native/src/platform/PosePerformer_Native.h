@@ -43,7 +43,11 @@ void Dc3PosePerformerPump(NativeSkeletonProvider *provider);
 namespace Dc3PosePerformer {
 // The sensor clock: given the song time of this game frame, whether a new
 // frame is due at `rateHz`.  `nextDue` is the clock's state (start at -1e30).
-bool FrameDue(double songSecs, double rateHz, double &nextDue);
+// kResync: due, and the clock restarted (first frame, a new song -- the clock
+// went back -- or a jump of more than 1 s); the performer restarts its noise
+// stream there, so a song's noise does not depend on what came before it.
+enum FrameTick { kNotDue = 0, kDue, kResync };
+FrameTick FrameDue(double songSecs, double rateHz, double &nextDue);
 // Half tempo: beat `b` of a measure shows beat measureStart + (b - start) / 2.
 float HalfTempoBeat(float beat);
 // Deterministic standard normal stream.

@@ -17,17 +17,17 @@ const char *Dc3PoseChoreoTarget(int p, float refSecs, Vector3 *out, const char *
 
 namespace Dc3PosePerformer {
 
-bool FrameDue(double songSecs, double rateHz, double &nextDue) {
+FrameTick FrameDue(double songSecs, double rateHz, double &nextDue) {
     double period = 1.0 / rateHz;
     // First frame, a new song (the clock went back) or a jump forward: resync.
     if (nextDue < -1e29 || songSecs < nextDue - 2 * period || songSecs > nextDue + 1.0) {
         nextDue = songSecs + period;
-        return true;
+        return kResync;
     }
     if (songSecs + 1e-9 < nextDue)
-        return false;
+        return kNotDue;
     nextDue += period;
-    return true;
+    return kDue;
 }
 
 float HalfTempoBeat(float beat) {
@@ -65,6 +65,7 @@ struct State {
     float shiftBeats = 8.0f;
     bool noise = false;
     double sxy = 0, sz = 0, rho = 0;
+    uint64_t seed = 1;
     Rng rng{1};
     double err[kNumJoints][3] = {};
     double nextDue = -1e30;
@@ -183,7 +184,8 @@ void Init() {
         int n = sscanf(v, "%lf,%lf,%lf,%lf", &gState.sxy, &gState.sz, &gState.rho, &seed);
         if (n >= 3) {
             gState.noise = true;
-            gState.rng = Rng((uint64_t)seed);
+            gState.seed = (uint64_t)seed;
+            gState.rng = Rng(gState.seed);
         }
     }
     fprintf(stderr,
@@ -248,8 +250,18 @@ void Dc3PosePerformerPump(NativeSkeletonProvider *provider) {
     if (gState.mode == kNone)
         return;
     double song = MoveDir::SongSeconds();
-    if (!FrameDue(song, gState.rateHz, gState.nextDue))
+    FrameTick tick = FrameDue(song, gState.rateHz, gState.nextDue);
+    if (tick == kNotDue)
         return;
+    if (tick == kResync) {
+        // The clock resynced (first frame, a new song, a seek): restart the
+        // noise stream, so the error a song sees depends only on the seed and
+        // the song's own frames -- not on how many frames the menus and the
+        // load before it happened to take (measured: two runs of one noisy
+        // cell scored 2,391,589 and 2,412,351 before this reset).
+        gState.rng = Rng(gState.seed);
+        memset(gState.err, 0, sizeof(gState.err));
+    }
 
     float refSecs = (float)song - MoveDir::NativeLatencySeconds() + gState.leadSecs;
     Vector3 joints[kNumJoints];

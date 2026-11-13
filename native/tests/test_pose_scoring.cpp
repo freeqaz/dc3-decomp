@@ -37,7 +37,7 @@ int FramesOver(double seconds, double gameHz, double rateHz, double start = 0.0)
     int n = 0;
     int steps = (int)llround(seconds * gameHz);
     for (int i = 0; i < steps; i++) {
-        if (Dc3PosePerformer::FrameDue(start + i / gameHz, rateHz, next))
+        if (Dc3PosePerformer::FrameDue(start + i / gameHz, rateHz, next) != Dc3PosePerformer::kNotDue)
             n++;
     }
     return n;
@@ -54,18 +54,31 @@ TEST(PosePerformerClockTest, ThirtyFramesPerSongSecondAtAnyGameRate) {
     EXPECT_NEAR(FramesOver(10.0, 120.0, 15.0), 150, 1);
 }
 
+// The performer restarts its noise stream on kResync, which is what makes a
+// noisy cell repeat run to run (measured before: 2,391,589 vs 2,412,351 for
+// one cell, because the menus' frame count shifted the stream).
 TEST(PosePerformerClockTest, ANewSongRestartsTheClock) {
+    using namespace Dc3PosePerformer;
     double next = -1e30;
-    int n = 0;
-    for (int i = 0; i < 1200; i++) // 10 s of song A
-        n += Dc3PosePerformer::FrameDue(100.0 + i / 120.0, 30.0, next);
+    int n = 0, resyncs = 0;
+    EXPECT_EQ(FrameDue(100.0, 30.0, next), kResync); // first frame
+    for (int i = 1; i < 1200; i++) { // 10 s of song A
+        FrameTick t = FrameDue(100.0 + i / 120.0, 30.0, next);
+        n += t != kNotDue;
+        resyncs += t == kResync;
+    }
     // song B starts at -5 s (the count-in): the clock goes back
-    EXPECT_TRUE(Dc3PosePerformer::FrameDue(-5.0, 30.0, next));
+    EXPECT_EQ(FrameDue(-5.0, 30.0, next), kResync);
     int m = 0;
-    for (int i = 1; i < 1200; i++)
-        m += Dc3PosePerformer::FrameDue(-5.0 + i / 120.0, 30.0, next);
-    EXPECT_NEAR(n, 300, 1);
+    for (int i = 1; i < 1200; i++) {
+        FrameTick t = FrameDue(-5.0 + i / 120.0, 30.0, next);
+        m += t != kNotDue;
+        resyncs += t == kResync;
+    }
+    EXPECT_NEAR(n, 299, 1);
     EXPECT_NEAR(m, 299, 1);
+    EXPECT_EQ(resyncs, 0); // a steady clock never resyncs
+    EXPECT_EQ(FrameDue(-5.0 + 1200 / 120.0 + 3.0, 30.0, next), kResync); // a seek
 }
 
 TEST(PosePerformerClockTest, HalfTempoPlaysEachMeasureFromItsDownbeat) {
