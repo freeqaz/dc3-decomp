@@ -302,6 +302,7 @@ Every exit path writes one `DC3_EXIT: how=… detail=… code=…` line.
 | What | Result |
 |---|---|
 | Window close (window manager's close button, `WM_DELETE_WINDOW`) | loop ends: `how=main_loop_returned detail=window_closed`, rc 0 |
+| **Ctrl+Q** in the window (G-5) | a quit request, like a signal but a natural end: the loop ends at the next frame boundary, `detail=quit_key`, rc 0. Registered by `main_native.cpp` through the engine's `JoypadSetQuitKeyHandler`. Esc is the B button, not quit |
 | Window destroyed by another client (`xdotool windowclose`), or a `BadWindow` on it | loop ends before drawing: `detail=window_lost`, rc 0 (`native/src/platform/WindowLoss_X11.cpp`) |
 | `SIGTERM` / `SIGINT` / `SIGHUP` | a quit request: the loop ends at the next frame boundary, so a save being written in that frame completes; `detail=SIGTERM` (etc.), rc 128+sig. A second signal, or 5 s without reaching the boundary, stops at once (`how=terminating_signal`) |
 | `SIGQUIT`, a fatal signal | immediate, rc 128+sig |
@@ -316,6 +317,7 @@ Tests: `NativeExitTest.*` (runs its own Xvfb; no window manager needed).
 |----------|---------|--------|---------|
 | `MILO_INPUT_SCRIPT` | unset | Scripted button presses, used when there is no window (see [Scripted Input System](#scripted-input-system)) | `../milo-native-engine/src/platform/Joypad_Native.cpp` |
 | `MILO_INPUT_WAKE_BUTTON` | `l3` | Button a script `wake` presses | `../milo-native-engine/src/platform/Joypad_Native.cpp` |
+| `MILO_INPUT_LOG` | unset | Non-zero: one `Joypad: down pad=0 button=7 (X) action=14` / `Joypad: up ...` line per button message, any source (keyboard, gamepad, script, HTTP) | `../milo-native-engine/src/platform/Joypad_Native.cpp` |
 | `DC3_CONTROLLER_MODE` | `auto` | `auto`, `forced` or `faithful` (see [Controller Mode Policy](#controller-mode-policy)) | `native/src/platform/System_Native.cpp` |
 | `DC3_CONTROLLER_MODE_TIMEOUT_MS` | helpbar value | faithful policy only: overrides the helpbar's `controller_mode_timeout` | `native/src/platform/System_Native.cpp` |
 | `DC3_HTTP_PACE_FPS` | unset (unpaced) | Cap the frame rate of a debug-server run, so a client answering every frame (the synthetic performer on `/api/frame/wait`) keeps up; `PUT /api/pace?fps=N` changes it at run time | `native/src/platform/HttpServer.cpp` |
