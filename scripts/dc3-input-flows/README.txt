@@ -9,11 +9,13 @@
 #   Relative offset:   +N button_name       (N frames after last wait satisfied)
 #   Wake:              N wake / +N wake     "the player presses the wake button"
 #
-# `wake` is for flows shared with the original game under Xenia, where a pad
-# press outside controller mode only enters controller mode and controller mode
-# times out after ~5 s without pad input: put one before each screen's first
-# press there.  It does nothing when the game is already in controller mode
-# (always, under the native default DC3_CONTROLLER_MODE=forced); otherwise it
+# `wake` is for flows shared with the original game under Xenia, and for
+# native runs with a pose provider (the default policy auto is then faithful),
+# where a pad press outside controller mode only enters controller mode and
+# controller mode times out after ~5 s without pad input: put one before each
+# screen's first press there.  It does nothing when the game is already in
+# controller mode (always under a forced policy -- the native default with no
+# camera); otherwise it
 # presses the wake button for one frame (l3, or MILO_INPUT_WAKE_BUTTON).  See
 # docs/debugging/native.md "Controller Mode Policy".
 #
