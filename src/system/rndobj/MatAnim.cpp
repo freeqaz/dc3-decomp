@@ -116,6 +116,10 @@ END_SAVES
 // That form reproduces more of the image and scores lower (insert/delete
 // costs more than diff_arg); kept `self` for the score.  Also inert at 97.9:
 // `mKeysOwner = (sOwner = this, this);`.
+// w-five-clean (2026-11-13): READABILITY OVER SCORE -- the `self` local is
+// gone; `sOwner = this; mKeysOwner = this;` is the RB3/rb3-xenon spelling, is
+// exactly the image's 380 B and reproduces more of it (equal 94 vs 90).  The
+// 98.87 `self` form is a score trick that banks nothing below 100.
 BEGIN_COPYS(RndMatAnim)
     CREATE_COPY_AS(RndMatAnim, m)
     MILO_ASSERT(m, 0xF2);
@@ -125,10 +129,8 @@ BEGIN_COPYS(RndMatAnim)
     if (ty == kCopyShallow || (ty == kCopyFromMax && m->mKeysOwner != m))
         COPY_MEMBER_FROM(m, mKeysOwner)
     else {
-        // w21-y: one named `self` for both stores (97.89 -> 98.87).
-        RndMatAnim *self = this;
-        sOwner = self;
-        mKeysOwner = self;
+        sOwner = this;
+        mKeysOwner = this;
         mColorKeys = m->mKeysOwner->mColorKeys;
         mAlphaKeys = m->mKeysOwner->mAlphaKeys;
         mTransKeys = m->mKeysOwner->mTransKeys;
