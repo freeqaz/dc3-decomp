@@ -244,14 +244,14 @@ export class PoseGeometry {
         }
         const people = [];
         const centroids = [];
-        for (const p of poses) {
+        for (const [poseIndex, p] of poses.entries()) {
             const world = p.world;
             const imageXY = p.image || world.map(() => [0, 0]);
             const vis = p.vis || world.map(() => 1.0);
             const root = this.absoluteRoot(world, imageXY, vis, width, height);
             if (!root) continue;
             const { joints, conf } = this.remap(world, vis, root);
-            people.push({ joints, conf, rootZ: root[2] });
+            people.push({ joints, conf, rootZ: root[2], poseIndex });
             centroids.push([(imageXY[L_HIP][0] + imageXY[R_HIP][0]) * 0.5,
                 (imageXY[L_HIP][1] + imageXY[R_HIP][1]) * 0.5]);
         }
@@ -269,7 +269,10 @@ export class PoseGeometry {
             this._filterLastSeen.set(tid, this._frameCount);
             const dz = filt.filter(person.rootZ, tS) - person.rootZ;
             const joints = person.joints.map((j) => [j[0], j[1], j[2] + dz]);
-            out.push({ trackId: tid, joints, conf: person.conf });
+            // poseIndex: which of the result's poses this is (a pose with no
+            // usable root is dropped above), so its segmentation mask can be
+            // matched to it (pose_worker.js cameraBlock).
+            out.push({ trackId: tid, joints, conf: person.conf, poseIndex: person.poseIndex });
         });
         for (const [t, seen] of [...this._filterLastSeen]) {
             if (this._frameCount - seen > 60) {
