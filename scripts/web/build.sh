@@ -118,7 +118,7 @@ if [ -n "${MILO_ENGINE_PATH:-}" ]; then
 fi
 MILO_ENGINE_PATH=""
 for candidate in "${ENGINE_PATH_CANDIDATES[@]}"; do
-    if [ -d "$candidate/.git" ]; then
+    if [ -e "$candidate/.git" ]; then
         MILO_ENGINE_PATH="$(cd "$candidate" && pwd)"
         break
     fi
@@ -256,6 +256,16 @@ build_one() {
         cached_release="$(grep -E '^DC3_WEB_RELEASE:BOOL=' "$bdir/CMakeCache.txt" 2>/dev/null | cut -d= -f2 || echo OFF)"
         cached_opt="$(grep -E '^DC3_WEB_OPT_LEVEL:STRING=' "$bdir/CMakeCache.txt" 2>/dev/null | cut -d= -f2 || echo O0)"
         cached_type="$(grep -E '^CMAKE_BUILD_TYPE:STRING=' "$bdir/CMakeCache.txt" 2>/dev/null | cut -d= -f2 || true)"
+        # The engine checkout too: MILO_ENGINE_PATH has no FORCE in CMake, so
+        # without this an explicit MILO_ENGINE_PATH=... was silently ignored
+        # by an existing build dir, which kept linking the engine it was first
+        # configured with (np-web3: a "sabotage" build that was the fixed one).
+        local cached_engine
+        cached_engine="$(grep -E '^MILO_ENGINE_PATH:[A-Z]+=' "$bdir/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
+        if [ "$cached_engine" != "$MILO_ENGINE_PATH" ]; then
+            echo "==> [$mode] engine checkout changed (${cached_engine:-unset} -> $MILO_ENGINE_PATH); reconfiguring"
+            need_configure=1
+        fi
         if [ "$cached_release" != "$release_flag" ] || [ "$cached_type" != "$build_type" ] \
            || { [ "$mode" = "release" ] && [ "$cached_opt" != "$OPT_LEVEL" ]; }; then
             echo "==> [$mode] build flags changed; reconfiguring + relinking"
