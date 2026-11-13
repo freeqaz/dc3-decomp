@@ -7,7 +7,7 @@
 //       and compare DC3-20 joints. Tests the port of the geometry alone; should
 //       agree to float rounding.
 //   node scripts/web/pose_parity.mjs browser ref.json --port 8432 [--frames DIR]
-//       [--delegate CPU|GPU] [--model full]
+//       [--delegate CPU|GPU] [--model full] [--no-gpu]
 //       Run the shipped web pipeline (pose_worker.js: tasks-vision in a worker +
 //       pose_geometry.js) in Chromium over the same PNG frames at the same
 //       timestamps, and compare. Tests inference + geometry end to end; the
@@ -75,10 +75,13 @@ if (mode === 'geometry') {
     const port = +arg('port', 8432);
     const framesDir = resolve(arg('frames', dirname(resolve(refPath))));
     const origin = `http://127.0.0.1:${port}`;
+    // --no-gpu: software rendering only (no GPU process work, so no GPU lock
+    // needed); fine for the CPU delegate, whose inference never touches the GPU.
+    const gpuArgs = flag('no-gpu') ? ['--disable-gpu'] :
+        ['--enable-unsafe-webgpu', '--use-angle=vulkan', '--enable-features=Vulkan,VulkanFromANGLE'];
     const browser = await chromium.launch({
         headless: true,
-        args: ['--no-sandbox', '--enable-unsafe-webgpu', '--use-angle=vulkan', '--ozone-platform=x11',
-            '--enable-features=Vulkan,VulkanFromANGLE', '--disable-extensions'],
+        args: ['--no-sandbox', '--ozone-platform=x11', '--disable-extensions', ...gpuArgs],
     });
     const page = await browser.newPage();
     page.on('console', (m) => { if (m.type() === 'error' || /dc3-pose/.test(m.text())) console.log('[page] ' + m.text()); });
