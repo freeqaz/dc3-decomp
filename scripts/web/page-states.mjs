@@ -140,6 +140,33 @@ try {
         await page.screenshot({ path: `${opts.out}/dev.png` });
         await ctx.close();
     }
+    // Pose files never come from a CDN on their own (W-13). Needs a camera:
+    // the model is resolved after getUserMedia, so this browser has Chromium's
+    // synthetic one. `full` is vendored by build.sh and must load locally;
+    // `heavy` is not, and must fail on the page instead of fetching
+    // storage.googleapis.com (the old page tracked on it, source "mixed").
+    const camBrowser = await chromium.launch({
+        headless: !process.env.DISPLAY,
+        args: ['--no-sandbox', '--enable-unsafe-webgpu', '--use-angle=vulkan', '--ozone-platform=x11',
+            '--enable-features=Vulkan,VulkanFromANGLE,WebAssemblyJSPromiseIntegration', '--mute-audio',
+            '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
+    });
+    try {
+        for (const [model, want] of [['full', 'local'], ['heavy', 'missing']]) {
+            const page = await (await camBrowser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
+            const foreign = [];
+            page.on('request', (r) => { if (!/^(https?:\/\/127\.0\.0\.1[:/]|data:|blob:)/.test(r.url())) foreign.push(r.url()); });
+            await page.goto(`http://127.0.0.1:${opts.port}/?fast_boot=1&pose_model=${model}`, { waitUntil: 'domcontentloaded' });
+            const settled = () => page.evaluate(() => { const p = window.dc3PoseSummary && window.dc3PoseSummary(); return p && p.source ? p : null; });
+            await until(settled, 30000);
+            const p = (await settled()) || {};
+            check(p.source === want && foreign.length === 0,
+                `pose_model=${model}: source ${p.source} (want ${want}), state ${p.state}, ${foreign.length} cross-origin requests${foreign.length ? ' e.g. ' + foreign[0] : ''}`);
+            await page.context().close();
+        }
+    } finally {
+        await camBrowser.close();
+    }
 } finally {
     await browser.close();
 }
