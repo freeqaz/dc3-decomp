@@ -138,6 +138,14 @@ Above the definition (was lines 292-368):
 // left unbanked for the same reason.
 ```
 
+w-low-ham-math (2026-11-13), lane D:
+
+```text
+NOT A BUG, independently re-derived against 0x82533978: the cross product
+components (v1.y*v2.z - v1.z*v2.y, ...), |v1|^2*|v2|^2 under one sqrt, the dot,
+sq2 = sqrt((dot/sq + 1)*0.5), the 1e-7 threshold (33d6bf95), xyz *=
+0.5/(sq*sq2), w = sq2, and the fallback (0, 0, 1, 0) all match.
+```
 
 ## `?Multiply@@YAXABVVector3@@ABVQuat@Hmx@@AAV1@@Z`
 
@@ -184,4 +192,13 @@ Above the definition (was lines 393-430):
 // declarations is the one spelling that reaches it and it makes the REGISTERS
 // match the image (f3 = vinx, f5 = viny) without moving the loads: fuzzy fell
 // 85.73 -> 85.52. Emission order with no source handle; left as-is.
+```
+
+w-low-ham-math (2026-11-13), lane D:
+
+```text
+NOT A BUG, independently re-derived against 0x82533AF0: all nine rotation-matrix
+coefficients (-(yy+zz), xy-zw, xz+yw / xy+zw, -(xx+zz), yz-xw / xz-yw, yz+xw,
+-(xx+yy)), the *2 and the +v term match per component, including the store
+order z, x, y.
 ```

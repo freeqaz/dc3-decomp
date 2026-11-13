@@ -212,6 +212,16 @@ Inside the body (was lines 740-744):
     // rounding. Native (left-to-right) already had this association.
 ```
 
+w-low-ham-math (2026-11-13), lane D:
+
+```text
+NOT A BUG, independently re-derived against 0x82534E68: normal = frame.z (0x30..0x38);
+|n.d| < 1e-4 or (b && n.d > 0) rejects; t = -(n.(start - origin))/(n.d) is
+stored to out and must lie in [0, 1]; the hit point minus origin is projected
+onto frame.x/frame.y (0x10/0x20) with the Gram terms dotXX/dotYY/dotXY; then
+k = (dY*XY - dX*YY)*inv and j = (dX*XY - dY*XX)*inv with k in [0, 1], j >= 0
+and j + k <= 1. Every operand matches.
+```
 
 ## `?GrowToContain@Sphere@@QAAXABV1@@Z`
 

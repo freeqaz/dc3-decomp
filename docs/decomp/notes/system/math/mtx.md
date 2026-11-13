@@ -185,3 +185,22 @@ Inside the body (was lines 286-298):
     // `x + -y` / `x - y` spellings were then hill-climbed for match with the
     // association held exact: 70.68 -> see the function comment.
 ```
+
+w-low-ham-math (2026-11-13), lane D: **latent aliasing divergence, not fixed.**
+
+```text
+The image is ALIAS-SAFE and ours is not. Target (0x825390C0): every one of
+the 16 output stores (stfs ..(r27), 0x82539B4C..0x82539B9C) comes AFTER the
+last ??AVector4@@QBAABMH@Z read of m. Ours stores out.y/out.z/out.w (12 stfs,
+base idx 192-243) BEFORE the 64 operator[] reads that compute column 0, so
+Invert(m, m) would compute out.x from an already-overwritten m.y/m.z/m.w.
+Today it is unexercised: the only Matrix4 caller in the image is RndCam
+(0x826287D4, out = this+0x340, in = this+0x300), and no source caller passes
+the same Matrix4 twice. Alias-safe spellings measured, name_check:
+  - column-0 operator[] block moved above the three Sets:  29.5 (from 71.25)
+  - (prior lane) twelve y/z/w cofactors as locals, Sets last: 31.2
+  - (prior lane) local Matrix4, copied to out at the end:      62.7
+None was landed. A fix needs a spelling that keeps the twelve cofactors
+live in FPRs across the operator[] calls (the image's 14 saved FPRs) AND
+defers the stores; if one is ever found, it is a behaviour fix.
+```

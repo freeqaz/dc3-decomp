@@ -139,6 +139,16 @@ Inside the body (was lines 301-422):
     // image's stack home for a value whose live range spans the loop's calls.
 ```
 
+w-low-ham-math (2026-11-13), lane D:
+
+```text
+NOT A BUG. Against 0x82510D98: the assert lines 0xFB/0xFC/0xFF/0x10C/0x11B/0x11F;
+4 difficulties; frame * 1/30 (3d088889); the beat >= 0 and beat == cur + 1
+checks; Set(minX 0x60, maxX 0x64, startXfm, WorldXfm); the memcpy of WorldXfm
+into startXfm then min/max = 0; bones_min_max_x(&minX, &maxX, bones, startXfm);
+the tail push vs Notify(TheGameData+0x30); and size/0x18*0x48 then /1024 with
+addze all match. The residual is register rotation.
+```
 
 ## `?CheckCollision@SongCollision@@ABAXHQBW4Difficulty@@QBVTransform@@AAUSongCollisionOutput@@@Z`
 

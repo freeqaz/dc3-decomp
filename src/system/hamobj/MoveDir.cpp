@@ -2006,7 +2006,8 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                    / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset + beatScale4))
             + gBeatLineData.minValue;
         TheRnd.DrawStringScreen(MakeString("%i", i), Vector2(beatX, yBase), sGray, true);
-        DrawBeatLine(yBase, height, (float)i, sLightGray);
+        // Image passes the same register (sGray) to both calls (0x8250167C, 0x82501690).
+        DrawBeatLine(yBase, height, (float)i, sGray);
     }
 
     // Draw move frames
@@ -2043,13 +2044,14 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
         // Draw node-by-node rects for Ham1
         if (fv->mType == kFilterVersionHam1) {
-            float colY = sLineHeight + yBase;
-            float bx1 = frameBeatX - halfWidth;
+            // Corners are (x0, top) and (x1, top + line): image v1 = 0xf0(r31),
+            // v2 = 0x120(r31), with v1.y advanced in place each row.
+            Vector2 topLeft(frameBeatX - halfWidth, sLineHeight + yBase);
             float bx2 = frameBeatX + halfWidth;
             for (int n = 0; n < numNodes; n++) {
-                float cellH = colY + sLineHeight;
-                UtilDrawRect2D(Vector2(bx1, bx2), Vector2(cellH, colY), markerColor);
-                colY += sLineHeight;
+                Vector2 bottomRight(bx2, topLeft.y + sLineHeight);
+                UtilDrawRect2D(topLeft, bottomRight, markerColor);
+                topLeft.y += sLineHeight;
             }
         }
     }
@@ -2120,7 +2122,10 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         }
     } else {
         // Non-merged: iterate detect frames by seconds
-        float startSeconds = BeatToSeconds(beatOffset - gBeatLineData.rangeOffset);
+        // Absolute beats: the window opens rangeOffset beats before the measure
+        // (image: fsubs f1, f19, f0 -- f19 = (float)measureStart).
+        float startSeconds =
+            BeatToSeconds((float)measureStart - gBeatLineData.rangeOffset);
         float endSeconds =
             BeatToSeconds((float)(measureStart + 4) + gBeatLineData.rangeScale);
         const DetectFrame *endFrame = &mMovePlayerData[0].mDetectFrames.back() + 1;
@@ -2135,15 +2140,19 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
             while (it != endFrame) {
                 if (it->Seconds() >= endSeconds)
                     break;
+                // The image only ever writes r/g/b (3-arg Set); alpha is stack garbage there.
                 Hmx::Color lineColor;
+#ifdef HX_NATIVE
+                lineColor.alpha = 1.0f;
+#endif
                 if (it >= detectRange.first && it < detectRange.second) {
-                    lineColor.Set(1, 1, 1, 1);
+                    lineColor.Set(1, 1, 1);
                     if (it->GetMoveFrame() == closest) {
                         mShowErrorFrames = it;
                         vizSkeleton = (BaseSkeleton *)&it->GetDancerFrame()->mSkeleton;
                     }
                 } else {
-                    lineColor.Set(0.6, 0.6, 0.6, 1);
+                    lineColor.Set(0.6, 0.6, 0.6);
                 }
                 const Ham2FrameWeight &fw =
                     it->GetMoveFrame()->FrameWeight((MoveMirrored)mirrored);
@@ -2219,7 +2228,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                    / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset + beatScale4))
             + gBeatLineData.minValue;
         TheRnd.DrawStringScreen(
-            MakeString("%.2f", totalBeatF), Vector2(beatPosX, yBase), yellowColor, true
+            MakeString("%.2f", beatOffset), Vector2(beatPosX, yBase), yellowColor, true
         );
     }
 
@@ -2248,7 +2257,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
     Hmx::Rect vizRect(gBeatLineData.minValue, y, vizWidth, vizHeight);
     Vector2 textPos(gBeatLineData.minValue, y);
-    TheRnd.DrawRectScreen(vizRect, sLightGray, nullptr, nullptr, nullptr);
+    TheRnd.DrawRectScreen(vizRect, sDarkGray, nullptr, nullptr, nullptr);
 
     if (closest) {
         // Draw closest frame beat
@@ -2274,7 +2283,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         // signed -- it is compared with cmpwi and sign-extended with extsw
         // below. Passing size() straight through reproduces both: one load of
         // the size, spilled once as the const-unsigned& temp.
-        TheRnd.DrawStringScreen(
+        textPos = TheRnd.DrawStringScreen(
             MakeString("asyc: %d", unkf88.size()), textPos, sLightGray, true
         );
         if (asyncCount != 0) {
@@ -2320,7 +2329,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         callbacks.push_back(this);
         Hmx::Rect debugRect = vizRect;
         debugRect.x = vizRect.x + vizRect.w + 0.01f;
-        TheRnd.DrawRectScreen(debugRect, sLightGray, nullptr, nullptr, nullptr);
+        TheRnd.DrawRectScreen(debugRect, sDarkGray, nullptr, nullptr, nullptr);
         mDancerViz->SetUsePhysicalCam(true);
         mDancerViz->SetPhysicalCamScreenRect(debugRect);
         CameraInput *camInput = handle.GetCameraInput();
