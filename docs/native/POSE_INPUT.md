@@ -170,7 +170,33 @@ python3 scripts/synthetic_kinect.py --perform    # reads GET /api/pose/target
 
 # Gate (GPU, ~13 min): five configs, each the whole song under DC3_FAST_TIME
 scripts/pose_scoring_gate.sh                      # --only replay,still  --out DIR
+
+# A player's session (docs/native/PLAYTEST.md): camera, gesture menus, session folder
+scripts/play.sh                                   # --video clip.mp4 for footage in step with the song
 ```
+
+### Recording a live session and replaying it (PLAN L-1)
+
+`DC3_POSE_RECORD=FILE` (set by `scripts/play.sh` to `<session>/pose.dc3session`)
+writes every sensor frame the game **accepts**, at the point the scorer gets it
+(`BuildSensorFrame`, after the frame-id gate, before levelling): each person's
+20 joints, confidences and tracking id, the frame id, the sensor timestamp, the
+song time, and the floor normal the gravity estimator had reached. Format
+`dc3-pose-session v1`, one `F` line per frame and one `P` line per person,
+flushed per frame (`native/src/platform/PoseSession_Native.cpp`).
+
+`DC3_POSE=external DC3_POSE_PERFORM=session:FILE` replays it through the same
+`PublishFrame` seam the socket reader uses. With `DC3_POSE_SESSION_SYNC=song`
+(the default) a frame is published when the song clock reaches its recorded
+song time, with its recorded timestamp, and the sensor levels it with its
+recorded floor normal instead of re-estimating one (the estimator is session
+state, so a replay that starts fresh would level differently). A whole session
+holds many songs, each with its own clock; `scripts/playtest/pose_session.py`
+lists the song segments and cuts one out. Tests: `PoseSessionFileTest`,
+`PoseSessionTest.AReplayedSessionReachesTheScorerAsItDidLive`
+(`native/tests/test_pose_session.cpp`, `test_native_pose_socket.cpp`).
+End to end with the real tracker and footage: `scripts/playtest/replay_proof.py`
+(numbers in STATUS).
 
 Run from the repo root: the server script and the model are found relative to the
 working directory when `/proc/self/exe` resolution fails.

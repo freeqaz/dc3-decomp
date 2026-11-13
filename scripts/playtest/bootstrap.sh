@@ -288,7 +288,15 @@ fi
 # ---- 7. preflight -----------------------------------------------------------
 step "Preflight (scripts/play.sh --check, without looking for a person)"
 "$REPO_ROOT/scripts/play.sh" --check --no-person 2>&1 | tee "$LOG_DIR/preflight.txt"
+pre=${PIPESTATUS[0]}
 say
-say "Ready to set up the camera and play: docs/native/PLAYTEST.md, then  scripts/play.sh"
+if [ "$pre" = 0 ]; then
+    say "Installed and built. Next: docs/native/PLAYTEST.md (where to stand), then  scripts/play.sh"
+else
+    say "Installed and built, but the check above is not happy yet. Over ssh, 'display' and"
+    say "'sound' fail because ssh has no desktop session: run scripts/play.sh --check from a"
+    say "terminal on the machine's own desktop (or export DISPLAY / WAYLAND_DISPLAY /"
+    say "XDG_RUNTIME_DIR from it). Anything else it lists needs fixing before a session."
+fi
 say "Logs: $LOG_DIR"
 exit 0

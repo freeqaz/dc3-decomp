@@ -2405,6 +2405,14 @@ if(BUILD_TESTS)
             COMMAND ${MILO_PYTHON3_LINK} -B ${CMAKE_SOURCE_DIR}/../tests/test_pose_tracker.py)
         set_tests_properties(PoseTracker.Python PROPERTIES
             LABELS PoseServer TIMEOUT 120 ENVIRONMENT "${MILO_TEST_ENV}")
+        # PlaytestKit.Python: the playtest kit's own tools (scripts/playtest/:
+        # pose-session cutting, the session summary, the player-box asset check,
+        # the kit driver's null-screen guard) on synthetic files
+        # (tests/test_playtest_kit.py; stdlib only, no game data, no GPU).
+        add_test(NAME PlaytestKit.Python
+            COMMAND ${MILO_PYTHON3_LINK} -B ${CMAKE_SOURCE_DIR}/../tests/test_playtest_kit.py)
+        set_tests_properties(PlaytestKit.Python PROPERTIES
+            LABELS PoseServer TIMEOUT 120 ENVIRONMENT "${MILO_TEST_ENV}")
     endif()
 
     # XeniaGolden.*: the native port against state recorded from the ORIGINAL

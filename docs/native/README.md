@@ -8,6 +8,7 @@ in `../milo-native-engine` (rendering, audio, input, file I/O).
 |---|---|
 | [PLAN.md](PLAN.md) | Roadmap to a playable game, by track (pose, gameplay, web, macOS, hygiene) |
 | [STATUS.md](STATUS.md) | What was measured to work, dated |
+| [PLAYTEST.md](PLAYTEST.md) | Playtest runbook: set a box up, `scripts/play.sh`, where to stand, what to send back |
 | [POSE_INPUT.md](POSE_INPUT.md) | Webcam → Kinect skeleton → scoring |
 | [WEB.md](WEB.md) | Web build, runtime, test scripts, deployment |
 | [MACOS.md](MACOS.md) | macOS state and bring-up |
@@ -27,6 +28,9 @@ scripts/native_test.sh                       # builds first, then the gate; read
 scripts/dc3-agent-test.sh --windowed         # play: HTTP debug server on 127.0.0.1:9090, fast boot, telemetry
 scripts/dc3-agent-test.sh --headless         # agent/CI runs; drive with /api/input/press
 ```
+
+A playtest (a person dancing in front of a webcam, Linux): `scripts/play.sh`;
+setup and the runbook are in [PLAYTEST.md](PLAYTEST.md).
 
 macOS: `scripts/mac/bootstrap.sh --fix` checks and installs the prerequisites,
 builds and launches; see [MACOS.md](MACOS.md).
