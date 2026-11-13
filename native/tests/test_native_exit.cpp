@@ -21,10 +21,17 @@
 
 #include <gtest/gtest.h>
 
-#if defined(__linux__) // Xlib, /proc/self/exe, glibc on_exit in the engine
+// The process-exit tests run on every POSIX desktop host. Only the window
+// tests further down are X11-only (they drive a private Xvfb with Xlib); on
+// macOS the exit hook is the atexit + Dc3Exit path (main_native.cpp), which
+// these tests are what check.
+#if defined(__linux__) || defined(__APPLE__)
 
+#if defined(__linux__)
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#endif
+#include "platform/ExecutablePath.h"
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -52,7 +59,7 @@ namespace {
 
 std::string BinaryDir() {
     char buf[PATH_MAX];
-    ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    ssize_t n = ReadExecutablePath(buf, sizeof(buf) - 1);
     if (n <= 0) return ".";
     buf[n] = 0;
     std::string p(buf);
@@ -332,6 +339,7 @@ TEST_F(NativeExitTest, SecondEngineOnAPortExitsInsteadOfSharing) {
     EXPECT_FALSE(first.Poll()) << "the first engine died\n" << Tail(first.Output());
 }
 
+#if defined(__linux__)
 namespace {
 
 // A private X server. Skips (via `available`) when Xvfb is not installed.
@@ -472,4 +480,5 @@ TEST_F(NativeExitTest, WmDeleteWindowEndsTheLoop) {
         << Tail(out);
 }
 
-#endif // __linux__
+#endif // __linux__ (window tests)
+#endif // __linux__ || __APPLE__

@@ -179,19 +179,37 @@ unset(ncnn_DIR CACHE)
 # Platform-specific linker flags and libraries (Linux vs macOS)
 if(NOT EMSCRIPTEN)
     if(APPLE)
-        # macOS: Apple ld uses -undefined dynamic_lookup for unresolved symbols.
-        # -ld_classic: use classic linker which supports -multiply_defined suppress
-        # (the decomp has intentional duplicate symbols from stub/real pairs).
-        set(DC3_PLATFORM_LINK_OPTIONS
-            -Wl,-ld_classic
-            -Wl,-undefined,dynamic_lookup
-            -Wl,-multiply_defined,suppress
-        )
+        # macOS: Apple's default linker (ld-prime, Xcode 15+), with no flags
+        # that relax it.
+        #
+        # Until 2026-11-13 this was `-ld_classic -multiply_defined,suppress
+        # -undefined,dynamic_lookup`. The first two existed only to tolerate
+        # duplicate strong definitions; there are none now (PLAN M-4: dc3 and
+        # engine 4e738fe, gated on Linux by ctest LinkHygiene.*), and
+        # -ld_classic is deprecated and slated for removal from Xcode. The
+        # third turned every undefined symbol into a runtime crash on first
+        # call, which is exactly what Linux's --no-undefined was added to stop
+        # (see the Linux branch below); the libc++ proxy build links with zero
+        # undefined symbols. DC3_MAC_DYNAMIC_LOOKUP=ON brings it back as a
+        # stopgap if a Mac link lists symbols nobody has defined yet.
+        option(DC3_MAC_DYNAMIC_LOOKUP
+            "macOS: link with -undefined dynamic_lookup (missing symbols crash at first call)" OFF)
+        set(DC3_PLATFORM_LINK_OPTIONS "")
+        if(DC3_MAC_DYNAMIC_LOOKUP)
+            message(WARNING "DC3_MAC_DYNAMIC_LOOKUP=ON: undefined symbols will link and crash on first call")
+            list(APPEND DC3_PLATFORM_LINK_OPTIONS -Wl,-undefined,dynamic_lookup)
+        endif()
         # macOS needs ObjC++ for MetalSurface.mm
         enable_language(OBJCXX)
-        # Homebrew library/include paths (Apple Silicon default prefix)
-        include_directories(SYSTEM /opt/homebrew/include)
-        link_directories(/opt/homebrew/lib)
+        # Homebrew library/include paths: $HOMEBREW_PREFIX (set by `brew
+        # shellenv`), else the Apple Silicon default.
+        if(DEFINED ENV{HOMEBREW_PREFIX})
+            set(DC3_HOMEBREW_PREFIX "$ENV{HOMEBREW_PREFIX}")
+        else()
+            set(DC3_HOMEBREW_PREFIX /opt/homebrew)
+        endif()
+        include_directories(SYSTEM ${DC3_HOMEBREW_PREFIX}/include)
+        link_directories(${DC3_HOMEBREW_PREFIX}/lib)
         set(DC3_PLATFORM_LIBS
             Threads::Threads
             dawn::webgpu_dawn
@@ -1688,24 +1706,30 @@ set_source_files_properties(
     PROPERTIES LANGUAGE C
 )
 
-# macOS: files that include macOS SDK/framework headers (ObjC++, GLFW native,
-# miniaudio) break under -fms-compatibility because the SDK's ConditionalMacros.h
-# can't identify the compiler. Disable MSVC compat for these specific files.
+# macOS-only settings for the targets above. (Files that include macOS SDK /
+# framework headers break under -fms-compatibility: the SDK's ConditionalMacros.h
+# cannot identify the compiler.)
 if(APPLE)
-    # The TUs that include macOS SDK / framework headers cannot take the MSVC
-    # compat flags or the decomp PCH (the SDK's ConditionalMacros.h cannot
-    # identify the compiler). They live in the ENGINE (moved 2026-05-26), so the
-    # property has to be set in the engine target's directory: until 2026-11-13
-    # this named dc3's dead copies under native/src/{gfx,audio}/ and the live
-    # engine files got the flags. Remove once the engine sets this itself.
-    set_source_files_properties(
-        ${MILO_ENGINE_PATH}/src/gfx/MetalSurface.mm
-        ${MILO_ENGINE_PATH}/src/gfx/GpuDevice.cpp
-        ${MILO_ENGINE_PATH}/src/audio/AudioDevice.cpp
-        TARGET_DIRECTORY milo-engine
-        PROPERTIES SKIP_PRECOMPILE_HEADERS ON
-                   COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility;-fno-delayed-template-parsing"
-    )
+    # The TUs that include macOS SDK / framework headers (MetalSurface.mm,
+    # GpuDevice.cpp, AudioDevice.cpp) cannot take the MSVC compat flags or the
+    # decomp PCH. They live in the engine, and since engine 4e738fe (PLAN M-2)
+    # the engine's own CMakeLists exempts them, so dc3 no longer does.
+
+    # dc3-native carries an Info.plist in its __TEXT,__info_plist section, the
+    # standard way to give a bare (non-.app) executable a bundle identity. It
+    # names why the camera is wanted (NSCameraUsageDescription), which macOS
+    # shows if dc3-native is ever the process TCC asks on behalf of. Launched
+    # from a terminal, the TERMINAL is that process and its own description is
+    # shown instead (docs/native/MACOS.md, "First run"). Not a .app on purpose:
+    # a bundle moves the executable to dc3-native.app/Contents/MacOS/, and
+    # every test, script and NativeTreeDir() expects native/build/dc3-native.
+    set(DC3_MAC_INFO_PLIST "${CMAKE_BINARY_DIR}/dc3-native-Info.plist")
+    configure_file(${CMAKE_SOURCE_DIR}/cmake/dc3-native-Info.plist.in
+        ${DC3_MAC_INFO_PLIST} @ONLY)
+    target_link_options(dc3-native PRIVATE
+        "LINKER:-sectcreate,__TEXT,__info_plist,${DC3_MAC_INFO_PLIST}")
+    set_property(TARGET dc3-native APPEND PROPERTY LINK_DEPENDS ${DC3_MAC_INFO_PLIST})
+
     # tomcrypt C files: -fms-compatibility causes __sigbits from <signal.h> to
     # emit as a non-inline global, producing duplicate symbols across TUs.
     set_source_files_properties(

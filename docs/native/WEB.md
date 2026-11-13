@@ -42,7 +42,10 @@ python3 native/web/server.py --port 8420
 - There is no `.data` package: assets stream from `server.py` at runtime
   (`/api/file/...`, ~132 MB and ~240 requests for boot plus one song).
 - Requires crossOriginIsolated (COOP/COEP, for the audio worklet's
-  SharedArrayBuffer) and JSPI (Chrome 137+). Safari is not supported.
+  SharedArrayBuffer) and JSPI (Chrome/Edge 137+, also on macOS). Safari is not
+  supported: Safari 26 has WebGPU but no JSPI, and the page refuses it with an
+  error card naming JSPI (`08814d5b1`) instead of failing inside the WASM
+  instantiate.
 - Symbols unresolved at link become runtime warnings via `missing_stubs.js`
   (163 env imports at `-O3`, 166 at `-O0`, emscripten's own JS functions
   included); `AudioDevice::Suspend`/`Resume` have no web implementation and

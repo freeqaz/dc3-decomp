@@ -24,6 +24,8 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include "shell_timeout.h"
+
 
 static std::string GetBinaryDir() {
     char buf[4096];
@@ -254,8 +256,9 @@ TEST(MiloViewerScreenshot, ScreenshotModeExitsCleanlyAndWritesPng) {
 
     std::ostringstream cmd;
     cmd
+        << kShellTimeoutLookup
         << "ASAN_OPTIONS='alloc_dealloc_mismatch=0:halt_on_error=0:detect_odr_violation=0' "
-        << "timeout 120 "
+        << "${t:+$t 120} "
         << "\"" << viewer << "\" "
         << "\"" << charPath << "\" "
         << "--screenshot \"" << pngPath.str() << "\" "
@@ -313,8 +316,9 @@ TEST(MiloViewerScreenshot, ScreenshotModeWritesPoseDumpJson) {
 
     std::ostringstream cmd;
     cmd
+        << kShellTimeoutLookup
         << "ASAN_OPTIONS='alloc_dealloc_mismatch=0:halt_on_error=0:detect_odr_violation=0' "
-        << "timeout 120 "
+        << "${t:+$t 120} "
         << "\"" << viewer << "\" "
         << "\"" << charPath << "\" "
         << "--screenshot \"" << pngPath.str() << "\" "
@@ -395,8 +399,9 @@ TEST(MiloViewerScreenshot, PoseDumpCanMatchGoldenWithTolerance) {
 
     std::ostringstream runViewer;
     runViewer
+        << kShellTimeoutLookup
         << "ASAN_OPTIONS='alloc_dealloc_mismatch=0:halt_on_error=0:detect_odr_violation=0' "
-        << "timeout 120 "
+        << "${t:+$t 120} "
         << "\"" << viewer << "\" "
         << "\"" << charPath << "\" "
         << "--screenshot \"" << capturePng.str() << "\" "
@@ -556,8 +561,9 @@ TEST_F(MiloViewerPosePipeline, ViewerPoseDumpMatchesInProcessPoseMeshes) {
 
     std::ostringstream runViewer;
     runViewer
+        << kShellTimeoutLookup
         << "ASAN_OPTIONS='alloc_dealloc_mismatch=0:halt_on_error=0:detect_odr_violation=0' "
-        << "timeout 120 "
+        << "${t:+$t 120} "
         << "\"" << viewer << "\" "
         << "\"" << charPath << "\" "
         << "--screenshot \"" << capturePng.str() << "\" "
@@ -643,8 +649,9 @@ TEST_F(MiloViewerPosePipeline, DriverStartBeatUsesClipRelativeSeconds) {
 
     std::ostringstream runDriver;
     runDriver
+        << kShellTimeoutLookup
         << "ASAN_OPTIONS='alloc_dealloc_mismatch=0:halt_on_error=0:detect_odr_violation=0' "
-        << "timeout 120 "
+        << "${t:+$t 120} "
         << "\"" << viewer << "\" "
         << "\"" << charPath << "\" "
         << "--screenshot \"" << pngPath.str() << "\" "

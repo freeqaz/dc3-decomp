@@ -39,6 +39,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include "platform/ExecutablePath.h"
+#include "shell_timeout.h"
 
 namespace {
 
@@ -114,8 +115,9 @@ FlowRun RunFlow(const char *extraEnv, int timeoutSeconds) {
     r.workdir = root;
     std::string reportPath = r.workdir + "/report.json";
     std::ostringstream sh;
-    sh << "cd " << dir << " || exit 2; "
-       << "timeout -k 10 " << timeoutSeconds << " python3 " << driver
+    sh << kShellTimeoutLookup
+       << "cd " << dir << " || exit 2; "
+       << "${t:+$t -k 10 " << timeoutSeconds << "} python3 " << driver
        << " --engine " << bin << " --workdir " << r.workdir << " --report " << reportPath
        << " --all-tutorials-seen";
     if (extraEnv && *extraEnv)

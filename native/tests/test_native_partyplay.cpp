@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include "platform/ExecutablePath.h"
 #include "engine_http_port.h"
+#include "shell_timeout.h"
 
 namespace {
 
@@ -109,13 +110,13 @@ HttpRun RunHttpPressOnMain(int tries) {
         return r;
     }
     std::ostringstream sh;
-    sh << "cd " << BinaryDir() << " && "
+    sh << kShellTimeoutLookup << "cd " << BinaryDir() << " && "
        << "( MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1"
        << EngineHttpPortShellEnv(persist) << " MILO_MAX_FRAMES=0"
        << " DC3_CACHE_DIR=" << persist << "/cache"
        << " DC3_SAVE_DIR=" << persist << "/saves"
        << " MILO_INPUT_SCRIPT=" << script
-       << " timeout 240 ./dc3-native > " << log << " 2>&1 & echo $! > " << log << ".pid ); "
+       << " ${t:+$t 240} ./dc3-native > " << log << " 2>&1 & echo $! > " << log << ".pid ); "
        << "pid=$(cat " << log << ".pid); " << EngineHttpApiShell(persist, "pid", 120)
        << "scr() { curl -s -m 5 $api/screen | sed -n 's/.*\"screen\":\"\\([^\"]*\\)\".*/\\1/p'; }; "
        << "end=$((SECONDS+150)); "

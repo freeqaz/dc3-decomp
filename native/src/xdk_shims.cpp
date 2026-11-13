@@ -6,6 +6,7 @@
 #include "xdk/XGRAPHICS.h"
 #include "os/Debug.h"
 #include "platform/NativeNotice.h"
+#include "NativeQuit.h" // Dc3Exit
 #include "xdk/nui/nuidiagnostics.h"
 
 #include <pthread.h>
@@ -690,7 +691,7 @@ DWORD XBackgroundDownloadSetMode(unsigned int) { return 0; }
 DWORD XEnableScreenSaver(BOOL) { return 0; }
 DWORD XGetLocale() { return 0x0409; } // en-US
 DWORD XTLGetLanguage() { return 1; }  // English
-VOID XLaunchNewImage(LPCSTR, DWORD) { exit(0); }
+VOID XLaunchNewImage(LPCSTR, DWORD) { Dc3Exit(0); }
 
 LPVOID XPhysicalAlloc(SIZE_T dwSize, ULONG_PTR, ULONG_PTR ulAlignment, DWORD) {
     void *ptr = nullptr;
@@ -822,8 +823,8 @@ DWORD XShowMarketplaceUI(DWORD, DWORD, QWORD, DWORD) { return 0; }
 DWORD XShowNuiDeviceSelectorUI(DWORD, DWORD, DWORD, DWORD, ULARGE_INTEGER, DWORD *, XOVERLAPPED *) { return 0; }
 DWORD XShowDeviceSelectorUI(DWORD, DWORD, DWORD, ULARGE_INTEGER, DWORD *, XOVERLAPPED *) { return 0; }
 DWORD XGetGameRegion() { return 0x00FF; } // All regions
-DWORD XShowNuiDirtyDiscErrorUI(DWORD, DWORD) { exit(1); }
-DWORD XShowDirtyDiscErrorUI(DWORD) { exit(1); }
+DWORD XShowNuiDirtyDiscErrorUI(DWORD, DWORD) { Dc3Exit(1); }
+DWORD XShowDirtyDiscErrorUI(DWORD) { Dc3Exit(1); }
 DWORD XMarketplaceCreateOfferEnumerator(DWORD, DWORD, ULONGLONG, DWORD, DWORD *, HANDLE *) { return 1; }
 DWORD XMarketplaceCreateOfferEnumeratorByOffering(DWORD, DWORD, ULONGLONG *, WORD, DWORD *, HANDLE *) { return 1; }
 // NOTE: the parameter is QWORD, not DWORD. xbox.h declares

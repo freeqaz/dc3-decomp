@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include "platform/ExecutablePath.h"
+#include "shell_timeout.h"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -78,6 +79,7 @@ static RunResult RunHeadless(
     // Build command with env vars piped through
     std::string persist = MakePersistenceRoot();
     std::ostringstream cmd;
+    cmd << kShellTimeoutLookup;
     if (cwd)
         cmd << "cd '" << cwd << "' && ";
     cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 MILO_MAX_FRAMES=" << maxFrames;
@@ -87,7 +89,7 @@ static RunResult RunHeadless(
         cmd << " MILO_INPUT_SCRIPT=" << inputScriptPath;
     for (auto &ev : extraEnv)
         cmd << " " << ev.key << "=" << ev.value;
-    cmd << " timeout " << timeoutSeconds << " " << binary << " 2>&1";
+    cmd << " ${t:+$t " << timeoutSeconds << "} " << binary << " 2>&1";
 
     FILE *pipe = popen(cmd.str().c_str(), "r");
     RunResult result = {-1, 0, "", false};

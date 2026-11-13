@@ -50,6 +50,7 @@
 #include <vector>
 #include "platform/ExecutablePath.h"
 #include "engine_http_port.h"
+#include "shell_timeout.h"
 
 namespace {
 
@@ -131,7 +132,7 @@ ViewRun RunToMainScreen(bool frames) {
     std::string sock = R + "/kinect.sock";
     std::string log = R + "/engine.log";
     std::ostringstream sh;
-    sh << "cd " << dir << " || exit 1; "
+    sh << kShellTimeoutLookup << "cd " << dir << " || exit 1; "
        << "python3 " << sensor << " --socket " << sock << " --people 1 --offset " << kOffset
        << (frames ? " --frames 320x240" : "") << " > " << R << "/kinect.log 2>&1 & kpid=$!; "
        << "end=$((SECONDS+20)); until [ -S " << sock << " ] || [ $SECONDS -ge $end ]; do sleep 0.2; done; "
@@ -145,7 +146,7 @@ ViewRun RunToMainScreen(bool frames) {
        // controller mode (`auto`) would want a gesture -- this test is about
        // the picture, not navigation
        << " DC3_CONTROLLER_MODE=forced"
-       << " exec timeout 180 ./dc3-native > " << log << " 2>&1 ) & epid=$!; "
+       << " exec ${t:+$t 180} ./dc3-native > " << log << " 2>&1 ) & epid=$!; "
        << EngineHttpApiShell(R, "epid", 120)
        << "end=$((SECONDS+120)); "
        << "until grep -aq \"Screen 'main_screen' Enter\" " << log
