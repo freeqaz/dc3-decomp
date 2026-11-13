@@ -8,7 +8,7 @@ DC3 already contains a complete skeleton recorder — `SkeletonClip`
 (`src/system/gesture/SkeletonClip.cpp`). It serializes every polled `SkeletonFrame` to a
 `.clp` file: 20 joints × (position + tracking state), floor plane, quality flags, tracking ID
 and the song time of each frame. We recovered the exact on-disk format; the parser is
-[`tools/pose_corpus/parse_skeleton_clip.py`](../../tools/pose_corpus/parse_skeleton_clip.py)
+[`tools/pose_corpus/parse_skeleton_clip.py`](../../../tools/pose_corpus/parse_skeleton_clip.py)
 (run `--selftest` to verify it).
 
 > **Read this first:** the recorder is **not reachable on a retail disc build**. See
@@ -487,9 +487,10 @@ puts you back at Option 1 or 2.
 
 ### Option 4 — remote trigger over the network (not practical here)
 
-* **xbdm is a dead end.** `debug.xex` imports exactly five xbdm APIs —
+* **xbdm is a dead end.** `debug.xex` imports 7 xbdm symbols: five debug-monitor APIs —
   `DmMapDevkitDrive`, `DmGetXboxName`, `DmCaptureStackBackTrace`, `DmGetSystemInfo`,
-  `DmIsDebuggerPresent` (`config/373307D9/symbols.txt:161-165`). There is **no**
+  `DmIsDebuggerPresent` — plus the two callcap profiler hooks `__CAP_Enter_Function` /
+  `__CAP_Exit_Function` (`config/373307D9/symbols.txt:161-167`). There is **no**
   `DmRegisterCommandProcessor` anywhere in the binary, so the title registers no remote command
   surface.
 * **Holmes (TCP 4544)** is Harmonix's PC link and *does* inject remote keystrokes:

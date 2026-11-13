@@ -36,7 +36,7 @@ Transports (`-T/--transport`):
 Every transport exposes `eval(script) -> str` and `eval_batch(scripts) -> [str]`,
 so the differ can swap transports without caring about the wire.
 
-See docs/native/CONSOLE_DTA_EVAL.md for activation steps and the honest list of
+See docs/tools/console/CONSOLE_DTA_EVAL.md for activation steps and the honest list of
 hardware unknowns.
 """
 
@@ -774,7 +774,7 @@ class FtpBackend:
     with its FTP server.  Since this transport has to push the probe **while DC3
     is running**, FTP is unavailable in exactly the situation it is needed for.
     Verified on hardware 2026-08-02: port 21 closed with a title running, XBDM
-    still up.  Prefer XbdmBackend; see docs/native/CONSOLE_HW_FINDINGS.md.
+    still up.  Prefer XbdmBackend; see docs/tools/console/CONSOLE_DTA_EVAL.md §10.
     """
 
     name = "ftp"
@@ -1494,7 +1494,7 @@ def build_parser():
         description="Evaluate a DTA script on a Dance Central 3 engine "
                     "(real console or native port).",
         epilog="CLI shape mirrors RB3Enhanced tools/rb3e_dta.py. "
-               "See docs/native/CONSOLE_DTA_EVAL.md.",
+               "See docs/tools/console/CONSOLE_DTA_EVAL.md.",
     )
     # A single greedy positional list rather than two `nargs="?"` positionals:
     # argparse cannot place the second one when a flag separates them, so
@@ -1548,7 +1548,7 @@ def build_parser():
                         "(Aurora/FSD) to be running, and launching a title "
                         "unloads it -- so FTP is generally unavailable exactly "
                         "when this transport needs it. See "
-                        "docs/native/CONSOLE_HW_FINDINGS.md")
+                        "docs/tools/console/CONSOLE_DTA_EVAL.md section 10")
     g.add_argument("--xbdm-port", type=int, default=730)
     g.add_argument("--ftp-host", default=os.environ.get("DC3_XBOX"),
                    help="console IP (defaults to $DC3_XBOX, then the host "
@@ -1563,7 +1563,7 @@ def build_parser():
                    help="the SAME folder as the title sees it, with a "
                         "multi-character drive, e.g. 'Hdd1:\\Games\\DanceCentral3'. "
                         "Single-character drives and 'game:' do not work -- see "
-                        "docs/native/CONSOLE_DTA_EVAL.md")
+                        "docs/tools/console/CONSOLE_DTA_EVAL.md")
     g.add_argument("--subdir", default="dc3",
                    help="subfolder for the probe script (default 'dc3')")
     g.add_argument("--hid-cmd",
