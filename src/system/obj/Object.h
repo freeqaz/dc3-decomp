@@ -1191,13 +1191,10 @@ extern DataArray *SystemConfig(Symbol, Symbol, Symbol);
 #define END_COPYS }
 // END COPY MACROS -----------------------------------------------------------------------
 
-// BEGIN LOAD MACROS  --------------------------------------------------------------------
-// INIT_REVS is right as spelled (w15-r, 2026-10-02).  Which of the pair MSVC uses as
-// the ASSERT_REVS lis/addi anchor is decided by the TU's .rdata, not by this macro:
-// gRev when gRev is at offset 0 of the TU's non-COMDAT .rdata, gAltRev (and gRev
-// reached as `subi rX, rA, 0x4`) when any file-scope const is defined before it.
-// A residual of that shape means the TU's own consts ahead of INIT_REVS differ from
-// the image -- restore those.  A gRevs_[4] array spelling went UP 0 / DOWN 247.
+// Lane history (7 lines moved): docs/decomp/notes/system/obj/Object.md
+// > BEGIN LOAD MACROS
+// > -------------------------------------------------------------------- INIT_REVS is
+// > right as spelled (w15-r, 2026-10-02).
 #define INIT_REVS(rev, alt)                                                              \
     static const __declspec(align(4)) unsigned short gRev = rev;                         \
     static const __declspec(align(4)) unsigned short gAltRev = alt;

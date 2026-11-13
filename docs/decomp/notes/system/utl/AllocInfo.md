@@ -28,3 +28,22 @@ Inside the body (was lines 35-46):
     // build -- found no order reaching 100.  The source order is not the lever:
     // MSVC re-sorts the first four stores (written 0,4,8,c it emits c,8,0,4).
 ```
+
+## `AllocInfoVec::AllocInfoVec()`
+
+`AllocInfoVec::AllocInfoVec` -- moved verbatim from `src/system/utl/AllocInfo.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+Attribution: no function named `AllocInfoVec::AllocInfoVec` in report.json (whole report (header)); filed under the source name
+
+Above the definition (was lines 67-74):
+
+```text
+    // STLport-shaped: `allocate(size, size)` hands the byte count back as an
+    // element count through the reference (see Allocate). In the shipped
+    // MemTracker::MemTracker that write-back is visible as `clrlwi r5, r27, 2`
+    // (y & 0x3fffffff = (y*4)/4 unsigned, 827DB768) spilled to a frame temp
+    // (`stw r5, 0x54(r31)`, 827DB788) that nothing reads; the plain
+    // `DebugHeapAlloc(size * sizeof(AllocInfo *))` init could not produce
+    // either. Must stay __forceinline: without it MSVC emits an out-of-line
+    // ??0AllocInfoVec call (measured, w7-bu).
+```

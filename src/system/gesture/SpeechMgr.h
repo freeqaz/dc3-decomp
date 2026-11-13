@@ -40,12 +40,7 @@ public:
     void SetVoiceDirection(int dir) { mVoiceDirection = dir; }
 
 private:
-    // VoiceInputPanel reads mOverlay as an LVALUE (`TheSpeechMgr->mOverlay->
-    // Print(MakeString(...))`): MSVC re-derives `this` from the global after
-    // the argument call and keeps only the vptr across it (0x82957BCC), which
-    // the rvalue `Overlay()` accessor cannot produce (it homes the pointer in
-    // a callee-saved register).  Byte-identical with the member, 93.4 with the
-    // accessor.  -- w7-bv
+    // Lane history (6 lines moved): docs/decomp/notes/system/gesture/SpeechMgr.md
     friend class VoiceInputPanel;
     struct Grammar {
         bool FinishLoad(SpeechMgr *);

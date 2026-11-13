@@ -107,3 +107,59 @@ Inside the body (was lines 604-613):
         // mCrucibleApp)`; and `mCrucibleApp ? DataNode(..) : DataNode(..)`
         // is far worse (92.6, frame +0x20).
 ```
+
+## `(file-level)`
+
+Not attributed to one function -- moved verbatim from `src/system/os/Debug.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+File-level (was lines 162-172; nearest following definition: `DebugWarner::operator<<`):
+
+```text
+// DTA runtime errors (DataNode "Data %s is not Int" etc.). The image routes
+// them through TheDebugFailer: inside MILO_TRY that throws the message to the
+// MILO_CATCH (FlowMathOp::Apply keeps result = val, Cheats/Console/Watcher
+// report the bad script); outside it is the fatal modal.
+// Native: the same failer. Debug::Fail throws under the image's conditions
+// inside MILO_TRY, and outside it native fails are non-fatal (platform choice,
+// see Debug::Fail) and print `FAIL:`. Native used to downgrade the outside-TRY
+// case to a warning because boot hit platform absences there (net_cache_mgr,
+// skeleton_identifier); both objects exist natively now, and a probe of every
+// MILO_FAIL_DTA reached outside MILO_TRY over the --all-gates suite and a
+// 1500-frame headless boot found none but DtaTypeErrorTest's own (w25-pch2).
+```
+
+
+## `?AddToStrings@?A0xc9fefd64@@YA_NPBDAAV?$list@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z`
+
+`AddToStrings` -- moved verbatim from `src/system/os/Debug.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+Above the definition (was lines 247-272):
+
+```text
+    // RESIDUAL (w9-c 2026-09-30): this function has exactly ONE instantiation in
+    // the whole binary (`default/system/char/CharFaceServo`, via
+    // DebugNotifyOncer::operator<<), and it is that unit's only sub-100 row:
+    // 96.552 canonical / 96.552 fuzzy, 2 of 59 instructions, 232 B both sides.
+    // The two rows are the SAME store moved: the image writes `it`'s home slot
+    // with begin() BEFORE the emptiness branch (`stw r11, 0x50(r31)` between the
+    // `cmplw` and the `beq`), MSVC SINKS it past the `count > 0x10` early return
+    // and emits it immediately before the second loop instead.  Both count loops,
+    // both compare loops, the String ctor, the insert and the dtor are all equal.
+    // Refuted, one full ninja each (this is a PCH-reached header, so each probe
+    // rebuilds 574 TUs):
+    //   96.552 (inert)  declaring `it` ahead of `count`
+    //   93.103 (WORSE)  giving the counting loop its own iterator and declaring
+    //                   `it` once at the top
+    //   94.828 (WORSE)  replacing the counting loop with `strings.size() > 0x10`
+    //                   -- stlport's size() is an O(n) distance loop, but it does
+    //                   not inline to the image's four instructions
+    // Declaration order does not move the store, which is consistent with
+    // docs/decomp/patterns/lexical-scope-controls-msvc-stack-slots: the slot SET
+    // is already right (objdiff reports 1 PERMUTED slot, not a missing one) and
+    // only the initialising store's placement differs.
+    // CLOSED (w17-c): 96.552 -> 100.  The count is `strings.size()` AND the
+    // compare loop owns its own for-scoped iterator.  The 0x50 store the image
+    // makes before the emptiness branch appears to be the begin() temporary of size()'s
+    // inlined distance(); the 94.828 probe above still shared one `it` between
+    // the size() test and the loop, which rotated the loop's pre-test away.
+```

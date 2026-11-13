@@ -98,3 +98,18 @@ Inside the body (was lines 593-603):
         // We converted c3 and then never used it, handing the recognizer an
         // uninitialised pcwszValue.
 ```
+
+## `(file-level)`
+
+Not attributed to one function -- moved verbatim from `src/system/gesture/SpeechMgr.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+File-level (was lines 43-48; nearest following definition: `SpeechMgr::Grammar::operator==`):
+
+```text
+    // VoiceInputPanel reads mOverlay as an LVALUE (`TheSpeechMgr->mOverlay->
+    // Print(MakeString(...))`): MSVC re-derives `this` from the global after
+    // the argument call and keeps only the vptr across it (0x82957BCC), which
+    // the rvalue `Overlay()` accessor cannot produce (it homes the pointer in
+    // a callee-saved register).  Byte-identical with the member, 93.4 with the
+    // accessor.  -- w7-bv
+```

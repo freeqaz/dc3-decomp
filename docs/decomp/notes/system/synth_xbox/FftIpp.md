@@ -39,3 +39,43 @@ Inside the body (was lines 22-44):
     // cr6, after an identical compare/branch/call prefix.  Nothing in the source
     // names a condition register.  CR-allocation floor.
 ```
+
+## `XboxAllocator::XboxAllocator()`
+
+`XboxAllocator::XboxAllocator` -- moved verbatim from `src/system/synth_xbox/FftIpp.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+Attribution: no function named `XboxAllocator::XboxAllocator` in report.json (whole report (header)); filed under the source name
+
+Above the definition (was lines 22-29):
+
+```text
+    // No user-provided copy ctor or dtor (w16-e).  With both gone the class is
+    // trivially copyable, so vector<float,XboxAllocator<float> >::get_allocator()
+    // inlines to nothing in _M_fill_assign, as in the image: it passes an
+    // uninitialised r1+0x50 straight to _Vector_base(n, const alloc&)
+    // (82E4D760 `addi r5, r1, 0x50` / `bl _Vector_base`).  w7-as found removing
+    // the copy ctor ALONE inert -- the empty user dtor also has to go.
+    // _M_fill_assign 94.4 -> 100, no other row moves.  Behaviour is unchanged:
+    // all three were empty.
+```
+
+
+## `XboxAllocator::allocate()`
+
+`XboxAllocator::allocate` -- moved verbatim from `src/system/synth_xbox/FftIpp.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+Attribution: no function named `XboxAllocator::allocate` in report.json (whole report (header)); filed under the source name
+
+Above the definition (was lines 46-54):
+
+```text
+    // BUG FIX (w7-as, 2026-09-14): three things wrong here, all visible at the
+    // inlined call site in vector<float,XboxAllocator<float> >::
+    // _M_insert_overflow (0x828C6C5C..0x828C6C7C):
+    //   * a zero-count guard -- `add. r26, r10, r11` / `beq` / `li r28, 0x0`;
+    //     we called MemAlloc(0, ...) instead of returning NULL,
+    //   * the ALIGNMENT argument is 0x10, not 0 (`li r7, 0x10`).  A float vector
+    //     handed to the VMX/IPP spectral code was being 4-byte aligned,
+    //   * the line number is 0x2f = 47 (`li r5, 0x2f`), which is where this call
+    //     sits in the real common_vector.h; __LINE__ here is this file's line.
+```

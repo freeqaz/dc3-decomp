@@ -66,3 +66,19 @@ Inside the body (was lines 1228-1238):
 // (li r28,1), and the Size()<=3 arm is the inlined Object::AddSink wrapper
 // (two by-value Symbol spills to 0x58).
 ```
+
+## `(file-level)`
+
+Not attributed to one function -- moved verbatim from `src/system/obj/Object.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+File-level (was lines 1194-1200; nearest following definition: `TypeProps::TypeProps`):
+
+```text
+// BEGIN LOAD MACROS  --------------------------------------------------------------------
+// INIT_REVS is right as spelled (w15-r, 2026-10-02).  Which of the pair MSVC uses as
+// the ASSERT_REVS lis/addi anchor is decided by the TU's .rdata, not by this macro:
+// gRev when gRev is at offset 0 of the TU's non-COMDAT .rdata, gAltRev (and gRev
+// reached as `subi rX, rA, 0x4`) when any file-scope const is defined before it.
+// A residual of that shape means the TU's own consts ahead of INIT_REVS differ from
+// the image -- restore those.  A gRevs_[4] array spelling went UP 0 / DOWN 247.
+```

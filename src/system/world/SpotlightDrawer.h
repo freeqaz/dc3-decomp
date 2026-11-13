@@ -39,12 +39,7 @@ public:
     class SpotMeshEntry { // from RB3 decomp
     public:
         SpotMeshEntry() : mCanMesh(0), mEnvMesh(0), mSpotlight(0) {}
-        // w14-b: no user operator= (RB3's had `memcpy(this, &o, sizeof(*this))`).
-        // The compiler-generated copy is still one memcpy of 0x50 bytes, but
-        // it materialises the SOURCE address first, as the image's
-        // __adjust_heap<SpotMeshEntry*, ByEnvMesh> does at both hole moves
-        // (mulli r10, r31 / add r4 before the dest); the hand-written memcpy
-        // computed the dest first. __adjust_heap 94.67 -> 100.
+        // Lane history (6 lines moved): docs/decomp/notes/system/world/SpotlightDrawer.md
         RndMesh *mCanMesh;
         // w17-b: the ENVIRONMENT the can was queued under (DrawLight stores
         // RndEnviron::sCurrent here), not a mesh -- RB3's `RndMesh *mEnvMesh`

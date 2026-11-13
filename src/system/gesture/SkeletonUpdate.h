@@ -103,11 +103,7 @@ private:
     SkeletonFrame mSkeletonFrame; // 0xa0
     Skeleton mSkeletons[6]; // 0x1268
     Skeleton *mSkeletonsLeft[2]; // 0x5360
-    // w21-w: SIX slots, not two plus four pad ints.  UpdateCallbacks writes
-    // all six (`stwu r9, 0x4(r8)` x6 from 0x5368 up to 0x537c) and every
-    // SkeletonUpdateData consumer indexes it as a 6-entry slot array.  The old
-    // [2]+pad shape had the same PPC size but under LP64 the six 8-byte writes
-    // ran over mSkeletonTrackingIDs/unk5388/unk538c.
+    // Lane history (5 lines moved): docs/decomp/notes/system/gesture/SkeletonUpdate.md
     Skeleton *mSkeletonsRight[6]; // 0x5368
     int mSkeletonTrackingIDs[2]; // 0x5380
     int unk5388; // 0x5388

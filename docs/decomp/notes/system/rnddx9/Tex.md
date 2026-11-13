@@ -119,3 +119,18 @@ Above the definition (was lines 661-690):
 // the mip loop, `if (nextMip()) do {} while`, dropping the zero assignments
 // after the memset (95.8), and w7-g's in-branch hoist of the tile math.
 ```
+
+## `(file-level)`
+
+Not attributed to one function -- moved verbatim from `src/system/rnddx9/Tex.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+File-level (was lines 62-67; nearest following definition: `DxTex::LockedRect::LockedRect`):
+
+```text
+    // A D3DLOCKED_RECT that clears itself as two pointer-sized words in a
+    // 2-iteration loop: both the ctor (at mLockedRect's init-list position) and
+    // UnlockBitmap leave that loop's dead `addi rN, this, 0x9c` base pointer in
+    // the image (0x82613844, and UnlockBitmap's tail), which no field-by-field
+    // or memset spelling produces (w12-c).  Pointer-sized so the two words
+    // still cover {Pitch, pBits} on an LP64 native build.
+```

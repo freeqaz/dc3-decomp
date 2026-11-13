@@ -184,3 +184,17 @@ Inside the body (was lines 564-569):
     // order.  (UpdateCallbacks above keeps its own 2-row transposition of the
     // 0x8c/0x90 pair either way.)
 ```
+
+## `(file-level)`
+
+Not attributed to one function -- moved verbatim from `src/system/gesture/SkeletonUpdate.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+File-level (was lines 106-110; no definition follows it):
+
+```text
+    // w21-w: SIX slots, not two plus four pad ints.  UpdateCallbacks writes
+    // all six (`stwu r9, 0x4(r8)` x6 from 0x5368 up to 0x537c) and every
+    // SkeletonUpdateData consumer indexes it as a 6-entry slot array.  The old
+    // [2]+pad shape had the same PPC size but under LP64 the six 8-byte writes
+    // ran over mSkeletonTrackingIDs/unk5388/unk538c.
+```

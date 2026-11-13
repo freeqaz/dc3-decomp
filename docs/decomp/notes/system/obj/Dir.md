@@ -114,3 +114,33 @@ Inside the body (was lines 1487-1494):
                 // w16-d (99.897): the r9/r10 swap on the end/begin loads at
                 // [532-538] survives `intVec.end() - intVec.begin()` (inert).
 ```
+
+## `operator<<()`
+
+`operator<<` -- moved verbatim from `src/system/obj/Dir.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+Attribution: ambiguous: 183 overloads of `operator<<` fit equally (e.g. `??$?6V?$ObjDirPtr@VObjectDir@@@@V?$StlNodeAlloc@V?$ObjDirPtr@VObjectDir@@@@@stlpmtx_std@@@@YAAAVBinStream@@AAV0@ABV?$vector@V?$ObjDirPtr@VObjectDir@@@@V?$StlNodeAlloc@V?$ObjDirPtr@VObjectDir@@@@@stlpmtx_std@@@stlpmtx_std@@@Z`, `??$?6VUILabelDir@@@@YAAAVBinStream@@AAV0@ABV?$ObjDirPtr@VUILabelDir@@@@@Z`, `??$?6VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@@YAAAVBinStream@@AAV0@ABV?$vector@VString@@V?$StlNodeAlloc@VString@@@stlpmtx_std@@@stlpmtx_std@@@Z`, `??$?6EV?$StlNodeAlloc@E@stlpmtx_std@@@@YAAAVBinStream@@AAV0@ABV?$vector@EV?$StlNodeAlloc@E@stlpmtx_std@@@stlpmtx_std@@@Z`); filed under the source name
+
+Above the definition (was lines 266-284):
+
+```text
+// w8-j 2026-09-15: this used to be a DECLARATION with no definition anywhere in a
+// header, so no TU ever emitted the COMDAT and every ObjDirPtr<T> stream-out was
+// an undefined external resolved from link_glue.cpp.  The body link_glue carries
+// is already byte-exact -- all 36 instructions equal the target at 0x82793CA8 --
+// but it is in the WRONG TRANSLATION UNIT: ham_xbox_r.map contributes that COMDAT
+// from ui:UILabel.obj, and objdiff scores link_glue's copy as 36 `delete`s
+// against a 0-byte target while UILabel's row reads 0.0% with a 144-byte target
+// and a 0-byte base.  Defining the primary template here lets each using TU emit
+// its own COMDAT, which is what the image does.
+//
+// A saved ObjDirPtr is a PATH the loader can reopen, not a name; GetFile() above
+// is the mObject->Loader()->LoaderFile() / mLoader->LoaderFile() /
+// mObject->StoredFile() / FilePath::sNull chain the target inlines here, and
+// FilePath's own BinStream operator<< (utl/FilePath.h:32) supplies the
+// FileRelativePath(FilePath::Root().c_str(), ...) the listing ends with.
+//
+// This body is now compiled natively too. The native build used to write
+// dir->Name() instead, so a native save/load round trip handed the reader
+// (operator>> below: FilePath, then LoadFile) a bare object name.
+```

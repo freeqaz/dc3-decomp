@@ -170,3 +170,25 @@ Inside the body (was lines 345-352):
             // (w7-bn) so is an explicit `scan_top: if (..) { ..; goto scan_top; }`.
             // The rotation was never reachable by loop syntax -- see the macro.
 ```
+
+## `?inc_count@Trie@@QAAXI@Z`
+
+`Trie::inc_count` -- moved verbatim from `src/system/utl/trie.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+Above the definition (was lines 137-149):
+
+```text
+// w8-g 2026-09-15: all four counters were stuck one instruction short -- the
+// target carries a DEAD `addi r11, r31, 0xc` (the address of the count field)
+// that r11 being volatile makes useless across the second check_index call, and
+// which MSVC then re-derives as a `0xc(r31)` displacement.  We did not emit it
+// because every read went through `node`, so `cf` was never needed in a register
+// at all and was folded away before it could be spilled.  Routing BOTH reads
+// through `cf` -- `GetDupCount(*cf)` and `SiblingCountVia(cf)` instead of
+// `CountField(node)` / `SiblingCount(node)` -- gives the pointer a use ahead of
+// the call and reproduces the addi at the exact target index (10, 10, 9, 9).
+// Same addresses, same loads (`lbz 0xf(r31)`), no behaviour change.
+//   inc_count 95.00 -> 100, dec_count 95.00 -> 100,
+//   inc_dup_count 95.24 -> 100, dec_dup_count 95.24 -> 100  (+328 B)
+// Measured by full ninja; store and remove did not move.
+```

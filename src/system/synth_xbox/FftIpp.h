@@ -19,14 +19,7 @@ public:
         typedef XboxAllocator<T2> other;
     };
 
-    // No user-provided copy ctor or dtor (w16-e).  With both gone the class is
-    // trivially copyable, so vector<float,XboxAllocator<float> >::get_allocator()
-    // inlines to nothing in _M_fill_assign, as in the image: it passes an
-    // uninitialised r1+0x50 straight to _Vector_base(n, const alloc&)
-    // (82E4D760 `addi r5, r1, 0x50` / `bl _Vector_base`).  w7-as found removing
-    // the copy ctor ALONE inert -- the empty user dtor also has to go.
-    // _M_fill_assign 94.4 -> 100, no other row moves.  Behaviour is unchanged:
-    // all three were empty.
+    // Lane history (8 lines moved): docs/decomp/notes/system/synth_xbox/FftIpp.md
     XboxAllocator() {}
     template <class T2>
     XboxAllocator(const XboxAllocator<T2> &) {}
@@ -43,15 +36,7 @@ public:
     const_pointer address(const_reference value) const { return &value; }
     size_type max_size() const { return size_type(-1) / sizeof(T); }
 
-    // BUG FIX (w7-as, 2026-09-14): three things wrong here, all visible at the
-    // inlined call site in vector<float,XboxAllocator<float> >::
-    // _M_insert_overflow (0x828C6C5C..0x828C6C7C):
-    //   * a zero-count guard -- `add. r26, r10, r11` / `beq` / `li r28, 0x0`;
-    //     we called MemAlloc(0, ...) instead of returning NULL,
-    //   * the ALIGNMENT argument is 0x10, not 0 (`li r7, 0x10`).  A float vector
-    //     handed to the VMX/IPP spectral code was being 4-byte aligned,
-    //   * the line number is 0x2f = 47 (`li r5, 0x2f`), which is where this call
-    //     sits in the real common_vector.h; __LINE__ here is this file's line.
+    // Lane history (9 lines moved): docs/decomp/notes/system/synth_xbox/FftIpp.md
     pointer allocate(size_type count, const void *hint = 0) {
         if (count != 0)
             return (pointer)MemAlloc(count * sizeof(T), "e:\\lazer_build_gmc1\\system\\src\\synth360\\synapse_apo\\common_vector.h", 47, "synapse", 0x10);

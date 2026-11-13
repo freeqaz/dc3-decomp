@@ -394,3 +394,25 @@ Inside the body (was lines 1643-1661):
     // facingDir) is byte-inert, and open-coding the sum (image association
     // fy*ty + (fx*tx + fz*tz), or x-swapped) reorders the six loads instead.
 ```
+
+## `CharEyes::CharInterestState::CharInterestState()`
+
+`CharEyes::CharInterestState::CharInterestState` -- moved verbatim from `src/system/char/CharEyes.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+Attribution: no function named `CharEyes::CharInterestState::CharInterestState` in report.json (whole report (header)); filed under the source name
+
+Above the definition (was lines 49-59):
+
+```text
+        // w8-c: the image's copy ctor RESETS mRefractoryTime rather than
+        // copying it. Proof is the folded stlport helper at
+        // CharEyes.s:9856-9880 (`merged_8237A7E8`, the ICF fold of
+        // _Copy_Construct/_Param_Construct<CharInterestState>): after
+        // `bl "??0?$ObjOwnerPtr@VCharInterest@@@@QAA@ABV0@@Z"` at 0x8237A814
+        // it does `lfs f0, "__real@bf800000"@l(r11)` / `stfs f0, 0x14(r30)`
+        // at 0x8237A81C-0x8237A820 -- a -1.0f STORE into mRefractoryTime
+        // (offset 0x14), not a `lfs 0x14(r4)` / `stfs 0x14(r30)` copy. The
+        // implicit copy ctor we relied on before copied the source's value,
+        // so a std::vector growth of CharEyes::mInterests preserved every
+        // interest's refractory countdown where the image clears it.
+```

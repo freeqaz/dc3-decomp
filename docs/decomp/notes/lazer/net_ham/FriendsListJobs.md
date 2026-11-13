@@ -21,3 +21,18 @@ Inside the body (was lines 77-81):
             // colour candidate taking r27 and shifting r17-r27 (w25-gm, c2rs
             // cands: CDEMOTE 26 -> 27).
 ```
+
+## `(file-level)`
+
+Not attributed to one function -- moved verbatim from `src/lazer/net_ham/FriendsListJobs.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+File-level (was lines 11-16; nearest following definition: `PlatformMgrOpCompleteMsg`):
+
+```text
+// w8-g: the message name has no `_msg` suffix in the image.  The string COMDAT
+// PlatformMgrOpCompleteMsg::Type() references is `??_C@_0BJ@...` -- 0x19 = 25
+// bytes with the NUL, i.e. 24 characters, which is exactly
+// "platform_mgr_op_complete"; ours was `??_C@_0BN@...` (0x1D = 28 characters).
+// Proving site: os/PlatformMgr_Xbox, ?Type@PlatformMgrOpCompleteMsg@@SA?AVSymbol@@XZ
+// indices 13 and 15 (`lis`/`addi` of the literal).
+```

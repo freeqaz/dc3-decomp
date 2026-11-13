@@ -148,3 +148,20 @@ Above the definition (was lines 682-767):
 // w26-f (every lever already listed above was negative); re-open it if a
 // disp-driven leaf key is ever measured.
 ```
+
+## `RndTransformable::ComputeLocalXfmFromWorld()`
+
+`RndTransformable::ComputeLocalXfmFromWorld` -- moved verbatim from `src/system/rndobj/Trans.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+Attribution: no function named `RndTransformable::ComputeLocalXfmFromWorld` in report.json (whole report (header)); filed under the source name
+
+Above the definition (was lines 171-176):
+
+```text
+    // w17-a: the world_xfm property's modify step.  An inline member, not
+    // `ComputeLocalXfm(mWorldXfm)` written at the sync site: the image forms the
+    // argument as `addi r4, r3, 0x48` off the `this` it materialised for the
+    // call (subi r3, r28, 0xc4), i.e. this-relative through an inlined callee's
+    // own `this`.  Written at the sync site, MSVC folds &mWorldXfm to
+    // r28-0x7c and CSEs it with PropSync's member argument (3 rows).
+```

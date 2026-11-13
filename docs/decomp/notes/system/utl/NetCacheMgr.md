@@ -27,3 +27,33 @@ Inside the body (was lines 396-406):
         // (3) the "Found loader" MakeString takes `type` itself (its param home
         //     0x184 is the int& the image passes), not an `(int)type` temp.
 ```
+
+## `(file-level)`
+
+Not attributed to one function -- moved verbatim from `src/system/utl/NetCacheMgr.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+File-level (was lines 43-63; nearest following definition: `NetLoaderRef::NetLoaderRef`):
+
+```text
+// w8-g 2026-09-15 -- BEHAVIOURAL LEAD, not closed.  The two NetCacheMgr EH
+// funclets fn_827F1C80 and fn_827F1CF8 (40 B each, 99.80% normalized) each carry
+// one charged row, and it names a destructor we never call:
+//   image:  bl ??1?$pair@VString@@P6APAVLoader@@ABVFilePath@@W4LoaderPos@@@Z@stlpmtx_std@@QAA@XZ
+//           i.e. ~pair<String, Loader *(*)(const FilePath &, LoaderPos)>,
+//           at r31+0x80 (fn_827F1C80) and r31+0xa0 (fn_827F1CF8)
+//   ours:   bl ??1NetLoaderRef@@QAA@XZ  at r31+0x90
+// The parent frame also disagrees: 0x160 in the image, 0x150 in ours.  That is
+// consistent with a container whose ELEMENT TYPE is wrong -- the image's is a
+// std::pair of a String and a Loader-factory function pointer, ours is
+// `std::list<NetLoaderRef> mNetLoaderRefs` (below).
+//
+// Both funclets are flagged UNVERIFIABLE_PAIRING (paired by byte signature, not
+// by name), so the rows are not falsifiable in isolation, and the one question
+// that IS falsifiable comes back NEGATIVE: our tree does emit that pair
+// destructor -- `strings -a` finds it in build/373307D9/src/system/utl/Loader.obj
+// (it is the Loader factory registry's map element), and the target has it in
+// dozens of objects.  So this is most likely objdiff pairing our NetLoaderRef
+// funclet against an unrelated Loader-registry funclet that happens to have the
+// same masked bytes, NOT a missing symbol.  Left as a lead; do not spend a row
+// budget on it without first matching the parent function.
+```

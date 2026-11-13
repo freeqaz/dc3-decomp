@@ -229,3 +229,18 @@ Inside the body (was lines 687-719):
                     // green*I->0x64, 1.0->0x6c.  The ours-only `stw r31,0x54`
                     // homes the same `it` (e1).  Codegen-only.
 ```
+
+## `(file-level)`
+
+Not attributed to one function -- moved verbatim from `src/system/world/SpotlightDrawer.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+File-level (was lines 42-47; nearest following definition: `SpotlightDrawer::SpotlightEntry::SpotlightEntry`):
+
+```text
+        // w14-b: no user operator= (RB3's had `memcpy(this, &o, sizeof(*this))`).
+        // The compiler-generated copy is still one memcpy of 0x50 bytes, but
+        // it materialises the SOURCE address first, as the image's
+        // __adjust_heap<SpotMeshEntry*, ByEnvMesh> does at both hole moves
+        // (mulli r10, r31 / add r4 before the dest); the hand-written memcpy
+        // computed the dest first. __adjust_heap 94.67 -> 100.
+```
