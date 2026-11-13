@@ -208,6 +208,16 @@ Above the definition (was lines 849-870):
 ```
 
 
+w-low-world (lane B, 2026-11-13): value-audited end to end against the listing
+again (corners, both eye-edge crosses, plane constants, bisector, both inverse
+cosines, apex/half-angle/fade, the three SetPConstant ids): NOT A BUG.  Codegen:
+decomp-synth hill_climb found `toCam.y` subtracted before `toCam.x` plus
+`rightD = eye.z*rz + eye.y*ry + eye.x*rx` (the image's fmuls is the z product,
+then two fmadds).  79.25 -> 81.4 canonical, fuzzy 76.45 -> 78.58; equal 219 ->
+186 (register renumbering, diff_arg 236 -> 274) BUT insert/delete 46/48 -> 40/41,
+our length 524 -> 525 vs the image's 526, frame delta -0x20 -> -0x10, save point
+r20 -> r19.  Same spelling applied to leftD as well is WORSE (79.8): keep leftD as is.
+
 ## `?_M_fill_insert_aux@?$vector@VSpotMeshEntry@SpotlightDrawer@@V?$StlNodeAlloc@VSpotMeshEntry@SpotlightDrawer@@@stlpmtx_std@@@stlpmtx_std@@AAAXPAVSpotMeshEntry@SpotlightDrawer@@IABV34@ABU__false_type@2@@Z`
 
 `stlpmtx_std::vector<SpotMeshEntry,StlNodeAlloc<SpotMeshEntry>>::_M_fill_insert_aux` -- moved verbatim from `src/system/world/SpotlightDrawer_NG.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of 3b37567dd)
