@@ -9,40 +9,10 @@
 
 Hmx::Object *RndMatAnim::sOwner;
 
-// RESIDUAL 89.500 canonical / 88.750 fuzzy (w8-h).  The 13 instructions of
-// the inlined
-// ObjPtr<RndTex>(DeferOwner(), tex) are identical; the residual is a 2-instruction
-// permutation of the join block with the SAME multiset on both sides.  The image
-// anchors sOwner first and starts its load BEFORE the compiler-generated vtable
-// store (`lis r11, sOwner@h` / `lis r10, ??_7TexPtr@h` / addi / lwz / stw r10,
-// 0(r3) / stw r11, 0x10(r3)); we anchor the vtable first and sink the load after
-// the store.  The r10<->r11 swap is downstream -- whichever anchor is emitted
-// first takes r11 on both sides.  Same values, same offsets, no behavioural
-// divergence.  MEASURED NEGATIVE (w8-h): a named temp for the global,
-// `Hmx::Object *owner = sOwner; mOwner = owner;`, is byte-inert (89.500,
-// identical instruction table) -- the same folding w7-ac recorded for this TU.
-// w21-y (stopped at 89.50, same 4 rows idx 15-18): behaviour re-checked -- both
-// sides store the same 5 words (ObjRefConcrete vptr, mObject, ring links, TexPtr
-// vptr, mOwner=sOwner).  MEASURED NEGATIVE: (1) the RB3/rb3-xenon spelling
-// `ObjPtr<RndTex>(sOwner, tex)` = 74.0 (sOwner loaded at function entry, before
-// the AddRef block; the image loads it in the join); (2) a DeferOwner overload
-// taking the owner by `Hmx::Object *const &` (load deferred into the base
-// mem-init) = 85.0 -- the load then sits between the ObjPtr and TexPtr vptr
-// stores, so the dead ObjPtr vptr store survives (image has none).  The image
-// needs the load AFTER the AddRef block yet with sOwner's address taking r11
-// before the TexPtr vptr; no tried spelling gives both.
-// w34-a (2026-11-04, behaviour verdict): AGREES. Both sides store the same five
-// words at the same offsets with the same values -- ObjRefConcrete vptr 0x0,
-// mObject 0xc, ring links 0x4/0x8, TexPtr vptr 0x0, mOwner 0x10 = sOwner -- and
-// the four charged rows are the two address halves exchanging r10/r11 around a
-// load that moves by one slot, not a value or offset difference, so there is no
-// behavioural divergence here.  MEASURED NEGATIVE this lane: binding the global
-// to a pointer reference (`Hmx::Object *&owner = sOwner; mOwner = owner;`) is
-// byte-inert at 89.50000 / 88.75000.  (Initialising it in the mem-init list is
-// not available: mOwner is ObjPtr's member, not TexPtr's, which is why the
-// DeferOwner() form exists.)  Mechanism hypothesis: c2's scheduler places an
-// independent leaf load across the compiler-inserted derived-vptr store, and no
-// source operand participates in that decision.
+// Lane history (34 lines moved): docs/decomp/notes/system/rndobj/MatAnim.md
+// > The 13 instructions of the inlined ObjPtr<RndTex>(DeferOwner(), tex) are identical;
+// > the residual is a 2-instruction permutation of the join block with the SAME multiset
+// > on both sides. (w8-h)
 RndMatAnim::TexPtr::TexPtr(RndTex *tex) : ObjPtr<RndTex>(DeferOwner(), tex) {
     mOwner = sOwner;
 }
@@ -145,27 +115,7 @@ BEGIN_LOADS(RndMatAnim)
         }
     }
     if (d.rev > 6) {
-        // The cast to the Keys base is load-bearing: without it, BinStreamRev's member
-        // template operator>>(T&) is an exact match for TexKeys and wins over the free
-        // operator>>(BinStreamRev&, Keys<T1,T2>&) (which needs a derived-to-base
-        // binding), routing the read through the BinStream vector reader instead. That
-        // picks the generic operator>>(BinStream&, Key<TexPtr>&) rather than the
-        // BinStreamRev specialization below, which is the one that does the deferred
-        // TexPtr::Load(s, true, nullptr). Same spelling as LoadStage().
-        // w16-a (closes the 6-row residual w7-ac/earlier lanes recorded here,
-        // 97.90 -> 100): the image calls the std::vector BinStreamRev reader
-        // DIRECTLY for every operand, and a nested free-function call chain
-        // evaluates its arguments right to left -- hence all four member
-        // addresses formed before the first call (0x826EC53C-0x826EC544:
-        // `subi r29, r30, 0x14` / `subi r28, r30, 0x20` / `subi r30, r30,
-        // 0x2c`).  Going through math/Key.h's inline Keys wrapper sequences
-        // each call before the next operand is formed; the named-reference and
-        // named-pointer operand spellings earlier lanes refuted were inert
-        // because they still went through that wrapper.  Binding the vector
-        // base is exactly what the wrapper does, so behaviour is unchanged (the
-        // free vector reader is more specialized than the member template, and
-        // its per-element `bs >> *it` still picks the BinStreamRev Key<TexPtr>
-        // reader below).
+        // Lane history (21 lines moved): docs/decomp/notes/system/rndobj/MatAnim.md
         typedef std::vector<Key<Vector3> > Vector3Keys;
         typedef std::vector<Key<TexPtr> > TexPtrKeys;
         d >> (Vector3Keys &)mTransKeys >> (Vector3Keys &)mScaleKeys
@@ -312,25 +262,9 @@ void RndMatAnim::LoadStage(BinStreamRev &d) {
         MILO_NOTIFY("Can't convert old MatAnim stages");
     }
     if (d.rev > 0) {
-        // BEHAVIOURAL FIX (w7-av): these three read into THIS object's keys, not
-        // the keys OWNER's.  The image computes all three operand addresses off
-        // `this` in r30 -- `addi r4, r30, 0x50` (0x826EBFD8), `addi r29, r30,
-        // 0x68` (0x826EBFE0), `addi r28, r30, 0x5c` (0x826EBFE4) -- and never
-        // loads the mKeysOwner pointer
-        // at 0x30(this), which the TransKeys()/ScaleKeys()/RotKeys() accessors
-        // this used to call would have needed.  It cannot: RndMatAnim::Load runs
-        // LoadStages(d) BEFORE `d >> mKeysOwner`, so mKeysOwner is still whatever
-        // the freshly-constructed object holds when LoadStage runs.
-        //
-        // Residual, 73.30 canonical (was 92.79 with the accessor bug): the image
-        // computes this+0x5c and this+0x68 BEFORE the first call and parks them
-        // in r28/r29, so its prologue is __savegprlr_28; we rematerialise
-        // `addi r4, r30, N` at each call and save only r30/r31.  Three spellings
-        // are byte-for-byte inert against that -- named `Keys<Vector3,Vector3>&`
-        // references, named pointers, and a mix -- which is the same refutation
-        // already recorded above for RndMatAnim::Load's four-operand chain.
-        // w16-a: same cause and fix as RndMatAnim::Load -- bind the vector base
-        // so the image's direct std::vector reader calls evaluate right to left.
+        // Lane history (19 lines moved): docs/decomp/notes/system/rndobj/MatAnim.md
+        // > BEHAVIOURAL FIX (w7-av): these three read into THIS object's keys, not the
+        // > keys OWNER's.
         typedef std::vector<Key<Vector3> > Vector3Keys;
         d >> (Vector3Keys &)mTransKeys >> (Vector3Keys &)mScaleKeys
           >> (Vector3Keys &)mRotKeys;

@@ -1,0 +1,190 @@
+# Lane notes: `src/system/rndobj/ShaderProgram.cpp`
+
+Sidecar for lane history that used to sit as comment walls in the source.
+Each `## \`<mangled symbol>\`` section holds that function's notes VERBATIM,
+one fenced block per original comment block.  `scripts/find_refutations.py`
+reads this file (exact mangled-symbol match, then short-name fallback) and
+prints these blocks first.  The source keeps only a short mechanism comment.
+
+Add new lane notes to the function's section here, not to the source.
+
+## `?CopyErrorShader@RndShaderProgram@@IAAXW4ShaderType@@ABUShaderOptions@@@Z`
+
+`RndShaderProgram::CopyErrorShader` -- moved verbatim from `src/system/rndobj/ShaderProgram.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of dc4924045)
+
+Inside the body (was lines 78-82):
+
+```text
+    // Build options mask for error shader, preserving specific flags
+    // w13-a (97.3 -> 100): the options are built in place.  The image homes
+    // each value of `flags` straight into the ShaderOptions slot (`std r11,
+    // 0x58(r1)`) and writes the display bit with an and/rldimi pair -- the
+    // mDisplayError bitfield store, bit 35.
+```
+
+Inside the body (was lines 102-106):
+
+```text
+        // BUG FIX (w18-a): the error PROGRAM is the one that gets cached --
+        // `mr r3, r30` (r30 = FindShader's result) before `bl Cache` at
+        // 0x827327D8.  This used to call Cache on `this`, which marked the
+        // missing shader itself as cached and left the error program uncached
+        // for the Copy below.
+```
+
+
+## `?Cache@RndShaderProgram@@QAA_NW4ShaderType@@ABUShaderOptions@@PAVRndShaderBuffer@@2@Z`
+
+`RndShaderProgram::Cache` -- moved verbatim from `src/system/rndobj/ShaderProgram.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of dc4924045)
+
+Inside the body (was lines 128-134):
+
+```text
+            // w7-al: an EXPLICIT return, not a fall-through into the shared
+            // `return true` at the bottom. The image tail-merges this exit with
+            // the two `return false` exits into one destructor block
+            // (0x82732054: addi r3,r31,0x70 / bl ~PhysMemTypeTracker /
+            // mr r3, r30), while the function's own fall-off gets a SECOND,
+            // unmerged copy at 0x82732574 ending in `li r3, 1`. A fall-through
+            // here would give this path the second block, not the first.
+```
+
+Inside the body (was lines 141-179):
+
+```text
+                // w7-al: `matPath` used to be hoisted into a named local here.
+                // MSVC evaluates these arguments RIGHT-TO-LEFT, and the image
+                // does exactly that: optsStr.c_str() (0x82732?A4), then the
+                // RndEnviron ternary + PathName (0x827320D0), then
+                // PathName(NgMat::Current()) (0x827320E0), then
+                // ShaderTypeName (0x827320EC).  A local forced NgMat's PathName
+                // to run FIRST.  Inlined back into the argument list.
+                // BEHAVIOURAL GAP, not closable from this file (w7-ab).  The
+                // image builds this message with TWO MakeString calls back to
+                // back -- `bl ??$MakeString@PBD_KPBDPBDPBD@@...` at 0x82732110
+                // immediately followed by `bl ?MakeString@@YAPBDPBD@Z` at
+                // 0x82732114, r3 flowing straight through -- i.e. the notify
+                // argument is itself a MakeString and MILO_NOTIFY wraps it a
+                // second time.  Spelling that faithfully as
+                // `MILO_NOTIFY(MakeString(fmt, ...))` REGRESSES this function
+                // 86.9 -> 85.9 because utl/MakeString.h declares the
+                // single-argument overload `inline`, so MSVC expands
+                // FormatString's 4 KB buffer into our frame (frame delta
+                // +0x1010) where the image keeps it out of line as a COMDAT in
+                // App.obj (`.fn "?MakeString@@YAPBDPBD@Z"` in asm/App.s, 30
+                // call sites binary-wide).  Closing it needs MakeString.h to
+                // stop inlining that overload -- a shared-header change with a
+                // binary-wide blast radius, not a change this call site can
+                // make.  Left unfaithful deliberately; the missing call is a
+                // logged-message-only path, so no gameplay behaviour differs.
+                // w-field-call (2026-11-13), re-measured: the faithful wrapper
+                // still reads 99.14 -> 98.0 (frame +0x1010, inlined FormatString
+                // ctor).  And the header fix is REFUTED: marking that overload
+                // `__declspec(noinline)` drops 536 functions binary-wide (e.g.
+                // XboxContentMgr::ContentPath 100 -> 20.7) -- the image DOES
+                // inline it into small callers and only calls it out of line
+                // from large ones like this.  So the difference is MSVC's
+                // per-caller inline budget, not the declaration.  Also checked:
+                // the "type"/"mat" string rows below are scheduling only --
+                // SendDebugDataPoint receives identical r4..r10 + stack args.
+                // Kept unfaithful on purpose: the image re-runs the formatted
+                // text through FormatString as a FORMAT string, so a '%' in a
+                // material/environ path would be reinterpreted (and read
+                // garbage varargs on native).
+```
+
+Inside the body (was lines 185-194):
+
+```text
+                    // BEHAVIOURAL FIX (w7-al): this was
+                    // `Current() ? PathName(Current()) : nullptr`, which skips
+                    // the call entirely when there is no environ. The image
+                    // calls PathName UNCONDITIONALLY -- the null test at
+                    // 0x827320B0 selects between `li r3, 0` and the vbtable
+                    // adjustment and then falls into the single
+                    // `bl PathName` at 0x827320D0, i.e. the test IS the
+                    // virtual-base conversion of RndEnviron* to Hmx::Object*,
+                    // not a user ternary. PathName(nullptr) does not return
+                    // nullptr, so the notify text differed.
+```
+
+Inside the body (was lines 199-206):
+
+```text
+                    // w7-al: the virtual-base conversion of RndEnviron::Current()
+                    // to Hmx::Object* (the null test + vbtable load + addi 4) is
+                    // the FIRST thing the image does in this block -- 0x82732134,
+                    // immediately after the UsingCD branch and before
+                    // ShaderTypeName -- and it keeps the converted pointer in a
+                    // callee-saved register across SystemConfig/Node/Str. Writing
+                    // the conversion at the point of `envPath` sank it below
+                    // Str(), which is nine rows out of place.
+```
+
+Inside the body (was lines 210-217):
+
+```text
+                    // BEHAVIOURAL FIX (w7-al): the image passes the array itself
+                    // as DataNode::Str's parent, not null -- `mr r4, r26` at
+                    // 0x827321A0, where r26 is SystemConfig's return value saved
+                    // by `mr r26, r3` at 0x82732198. We passed nullptr, which
+                    // changes how a variable/property node resolves.
+                    // w18-a: const char *, not char * -- the image instantiates
+                    // MakeString<const char *> (??$MakeString@PBD@@) for the
+                    // report path; a char * local picked MakeString<char *>.
+```
+
+Inside the body (was lines 242-268):
+
+```text
+            // w7-al: one 64-bit local, not four re-reads of opts.flags. The
+            // image loads it ONCE into a callee-saved register and homes it in
+            // a stack temp immediately after the AutoSlowFrame ctor
+            // (`ld r30, 0x0(r27)` / `std r30, 0x90(r31)` at 0x82732280), passes
+            // the REGISTER to both ShaderCachedPath calls (`mr r4, r30`) and
+            // the SLOT's address to both MILO_LOG MakeStrings
+            // (`addi r5, r31, 0x90`). It is s64, not u64: MakeString is
+            // instantiated as `AB_J` (const __int64 &), and the s64 -> u64
+            // conversion into ShaderCachedPath's `_K` parameter is free, so one
+            // signed local serves both without a second temp.
+            // RESIDUAL (w7-al, 98.72 canonical): slots 0x88 and 0x90 are
+            // swapped against the image in BOTH scopes that share them -- the
+            // image homes shaderFlags at 0x90 and the MILO_NOTIFY's
+            // optsStr.c_str() temp at 0x88, we do the reverse -- 7 rows. Moving
+            // this declaration below the three char buffers is byte-for-byte
+            // inert (measured: identical 29-row mismatch list), so the pair is
+            // not being ordered by declaration.
+            // w26-q (98.9646 fuzzy / 99.14141 canonical, 22 rows): the 0x88/0x90
+            // pair accounts for 7 of the 22, and every one of those is a +/-8
+            // displacement on that single home, so it is one slot decision, not
+            // seven. 15 more variants this round -- `const s64 &shaderFlags` bound to
+            // opts.flags, a cast form, the two cached*Path declarations swapped,
+            // the two ShaderCachedPath results named, and the FileGetStat return
+            // named -- are all byte-inert at 99.1414, so neither the type nor
+            // the reference form moves it. Open handle: which of the two
+            // same-size homes MSVC places lower, given that declaration order
+            // and binding form are both measured inert.
+```
+
+Inside the body (was lines 300-306):
+
+```text
+                // w7-al: a REFERENCE-typed function-local static, not a pointer
+                // with a hand-rolled null check. The image tests MSVC's own
+                // one-bit init guard (`lwz lbl_830E1CDC; clrlwi. r9, r11, 31;
+                // bne; ori r11, r11, 1; stw` at 0x82732?--) and, on the
+                // freshly-initialised path, skips the reload of the slot because
+                // DataVariable's return is already in r3. A pointer + `if (!p)`
+                // compiles to a null test and no guard word.
+```
+
+Inside the body (was lines 338-343):
+
+```text
+            // BEHAVIOURAL FIX (w7-al): `delete`, not an explicit destructor
+            // call. Both sites dispatch through vtable slot 0 -- the scalar
+            // DELETING destructor ??_E -- and the image passes 1 in r4
+            // (0x8273253C and 0x8273255C), the flag that makes it call
+            // operator delete. We were passing 0, so every compiled shader
+            // ran the destructor and leaked the RndShaderBuffer allocation.
+```

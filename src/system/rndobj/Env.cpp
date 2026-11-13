@@ -232,11 +232,7 @@ BEGIN_COPYS(RndEnviron)
             COPY_MEMBER(mFadeRef)
             COPY_MEMBER(mLRFade)
             COPY_MEMBER(mUseColorAdjust)
-            // w8-l: naming the source of this 0x94-byte struct copy is what
-            // orders memcpy's two address setups the way the image does
-            // (addi r4 source before subi r3 dest).  Plain
-            // COPY_MEMBER(mColorXfm) emits them the other way round and is
-            // the only thing that kept this unit off 100%.
+            // Lane history (5 lines moved): docs/decomp/notes/system/rndobj/Env.md
             const RndColorXfm &srcColorXfm = c->mColorXfm;
             mColorXfm = srcColorXfm;
             COPY_MEMBER(mAnimateFromPreset)

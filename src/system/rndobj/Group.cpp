@@ -397,22 +397,10 @@ int RndGroup::CollidePlane(const Plane &p) {
     return ret;
 }
 
-// w18-a: 100 normalized, 1 fuzzy row (idx 31).  The delta == 0 edge (`beq cr6`
-// off the delta compare) lands on the shared `cmplw r29, r31` in the image; we
-// jump-thread it straight to Update() because target == node is known on that
-// path.  Inert: the negative walk as a pre-tested `while (remaining != 0)`, and
-// `else if (delta < 0)` (becomes bge, still threaded).
-// w25-gc: not a behaviour difference (on the delta == 0 edge target == node,
-// so both sides reach Update() with no relink), and not a register decision:
-// every register and instruction matches, only that one branch target moves.
-// Mechanism hypothesis: MSVC's jump threading proves `node != target` false
-// on that edge from the `target = node` copy; the image either threads before
-// that copy is propagated or never sees a copy. Open question: which source
-// shape hides the equality. Inert (or worse) as well: `target` assigned in
-// each arm, `target != node`, `it.mNode != target`, the negative walk as a for
-// loop, `remaining != 0` as its guard, an empty `delta == 0` arm, the positive
-// walk as a while loop, an extra `remaining == delta` test, and Update() +
-// return duplicated into a `node == target` arm.
+// Lane history (16 lines moved): docs/decomp/notes/system/rndobj/Group.md
+// > The delta == 0 edge (`beq cr6` off the delta compare) lands on the shared `cmplw r29,
+// > r31` in the image; we jump-thread it straight to Update() because target == node is
+// > known on that path. (w18-a)
 int RndGroup::MoveObject(Hmx::Object *obj, int delta) {
     typedef ObjPtrList<Hmx::Object>::Node Node;
     // The image's search is ObjPtrList::find(), not a hand-rolled walk: the

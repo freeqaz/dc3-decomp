@@ -611,31 +611,17 @@ void Rnd::TestPoint(const Vector3 &pos, RndFlare *flare) {
             back.x = (int)((float)mWidth * screen.x);
             back.y = (int)((float)mHeight * screen.y);
             back.z = cam->ProjectZ(depth);
-            // BEHAVIOURAL FIX (w12-a): a queued point test is NOT marked
-            // occlusion-ready here -- the image's success path branches
-            // `b .L_826688FC` (0x826688E8) straight to the epilogue, past the
-            // `stb r11, 0x148(r27)` at 0x826688F8 that only the two
-            // SetVisible(false) arms reach.  Readiness comes later, from the
-            // point-test results.
+            // Lane history (6 lines moved): docs/decomp/notes/system/rndobj/Rnd.md
             return;
 #endif
         } else {
             flare->SetVisible(false);
         }
     }
-    // w26-f13 stop note (fuzzy 99.92063, canonical 100.0).  The two charged
-    // rows are the epilogue's `li r10, 0x0` / `stb r10, 0x102` pair: the image
-    // puts the false in r10, we put it in r11 (the true that follows is r11 on
-    // both sides).  Both constants are regasg temps, so the register is first
-    // fit (r11, r10, ...) over sched3 order: ours reaches the false's def
-    // first, so it takes r11 and the later true reuses it.  The image's false
-    // in r10 means r11 was blocked when it was assigned -- either the true's
-    // def precedes it in sched3 and sched0 then reorders the pair, or the
-    // false is a colour candidate rather than a regasg temp.  Measured inert
-    // (9 spellings): literal 0/1, named bool/const bool at the use site, a
-    // named bool at the merge point, a function-scope bool, a raw `RndFlare *`
-    // local for the store base.  Open question: which IL shape orders the
-    // true's def ahead of the false's in sched3.
+    // Lane history (13 lines moved): docs/decomp/notes/system/rndobj/Rnd.md
+    // > The two charged rows are the epilogue's `li r10, 0x0` / `stb r10, 0x102` pair:
+    // > the image puts the false in r10, we put it in r11 (the true that follows is r11
+    // > on both sides). (w26-f13)
     flare->SetOcclusionReady(true);
 }
 
@@ -1176,11 +1162,7 @@ float Rnd::DrawTimers(float f) {
             DrawRectScreen(rect, worstExcessColor, nullptr, nullptr, nullptr);
         }
 
-        // w25-ma: the row cursor is rect.y itself, not a separate `float y =
-        // f` (MSVC keeps rect.y in f24 across the calls, as it does rect.x in
-        // f27). That one change gives the image's f23/f24/f25 colouring (f,
-        // cursor, totalHeight), its `fmr f24, f23` placement and its rect.x
-        // before rect.y store order here.
+        // Lane history (5 lines moved): docs/decomp/notes/system/rndobj/Rnd.md
         rect.x = bgLeft;
         rect.y += rowSpacing;
     }
@@ -1323,18 +1305,8 @@ void Rnd::DrawPreClear() {
     }
 }
 
-// BEHAVIOUR FIX (w14-a): the timer is restarted on BOTH arms. The image's
-// off-arm (target Rnd.obj +0x5ff0: li r9,-1; stb r31,0x8(r11); stw r9,gCurHeap; b +0x6008)
-// branches to the shared `addi r3,r11,0x40; bl Timer::Restart` at +0x6008; the
-// old SetShowingOnly(false) arm skipped Restart. Same as RB3's SetShowing on
-// both arms; spelled with the store split from one shared Restart, 100 modulo
-// register permutation.
-// w18-a: 100 normalized / 96.77 fuzzy -- 14 volatile-register rows only (the
-// image keeps the overlay in r11, we in r9).  Tried: the RB3 shape
-// (`if (!Showing()) SetShowing(true); else { ++; if (>=) ... }`, with and
-// without an overlay local) -- moves this/sret onto r31/r29 (worse); an
-// uninitialised overlay local assigned after MemNumHeaps (inert);
-// mHeapOverlay read directly at every use (reloads it, worse).
+// Lane history (12 lines moved): docs/decomp/notes/system/rndobj/Rnd.md
+// > BEHAVIOUR FIX (w14-a): the timer is restarted on BOTH arms.
 DataNode Rnd::OnToggleHeap(const DataArray *) {
     int numHeaps = MemNumHeaps() + 1;
     RndOverlay *overlay = mHeapOverlay;
@@ -1493,19 +1465,7 @@ void Rnd::Modal(Debug::ModalType &type, FixedString &str, bool bb) {
                 // path (0x82662280), which only survives if the test is not
                 // dominated by the else branch.
                 //
-                // w26-f11 (2026-11-02): the last 6 fuzzy rows are ONE
-                // two-register swap between this loop's `type` load and its
-                // `gNotifyKeepGoing` load -- image `lwz r11, 0x0(r28)` +
-                // `cmpwi cr6, r11, 2` for the type and `lbz r10, -0x2(r30)` +
-                // `cmplwi r10, 0` for the bool, ours the mirror (r10 for the
-                // type, r11 for the bool). Both are volatile scratch
-                // registers, no named leaf on either side, and every branch
-                // target and the
-                // redundant cmpwi already agree. Binding the bool
-                // (`bool &`, `const bool &`, a named bool) is byte-inert --
-                // measured -- so the swap sits in regasg's schedule of the two
-                // scratch values. Reordering the two tests is not a spelling:
-                // it is a different branch structure (and a different program).
+                // Lane history (13 lines moved): docs/decomp/notes/system/rndobj/Rnd.md
                 if (type != Debug::kModalFail) continue;
                 if (gFailRestartConsole) {
                     XLaunchNewImage(TheSystemArgs.front(), 0);

@@ -69,11 +69,7 @@ void RndScreenMask::DrawShowing() {
     float height = (float)TheRnd.Height();
     RndCam *cam = RndCam::Current();
     RndTex *targetTex = cam->TargetTex();
-    // w13-a (97.8 -> 100 modulo register permutation): inside the branch
-    // the image re-reads the texture through cam->TargetTex() for each
-    // dimension (82712A68 `clrrwi r10, r11, 0` is that re-read pointer); with
-    // both reads off the accessor, both ints are stored before either is
-    // converted (slots 0x60 and 0x50), which is the image's 0xd0 frame.
+    // Lane history (5 lines moved): docs/decomp/notes/system/rndobj/ScreenMask.md
     if ((int)targetTex) {
         width = (float)cam->TargetTex()->Width();
         height = (float)cam->TargetTex()->Height();
