@@ -859,6 +859,7 @@ void App::RunOneFrame() {
             ImGuiBackend::NewFrame();
             if (DebugPanel::IsVisible())
                 DebugPanel::Draw();
+            DebugPanel::DrawNotices(); // NativeNotice (no camera, sensor lost)
             ImGui::Render();
         }
     }
@@ -1237,6 +1238,7 @@ void App::RunWithoutDebugging() {
             ImGuiBackend::NewFrame();
             if (DebugPanel::IsVisible())
                 DebugPanel::Draw();
+            DebugPanel::DrawNotices(); // NativeNotice (no camera, sensor lost)
             ImGui::Render();
         }
 #endif

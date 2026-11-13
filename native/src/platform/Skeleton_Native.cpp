@@ -1,17 +1,18 @@
 #include "Skeleton_Native.h"
 #include "gesture/GestureMgr.h" // NUM_SKELETONS
+#include "platform/NativeNotice.h"
 #include <cstdint>
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
+#include <sys/wait.h> // WIFEXITED & co. for DescribeServerExit (also on web)
 #ifndef __EMSCRIPTEN__
 #include "platform/ExecutablePath.h"
 #include <unistd.h>
 #include <signal.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <sys/wait.h>
 #include <poll.h>
 #ifdef __linux__
 #include <linux/limits.h>
@@ -74,6 +75,95 @@ static Vector3 WithSensorNoiseFloor(const Vector3 &pos, uint32_t frame, int join
         pos.y + SensorNoiseFloor(frame, joint, 1),
         pos.z + SensorNoiseFloor(frame, joint, 2)
     );
+}
+
+// ---- Player-facing failure reporting ---------------------------------------
+// Before 2026-11-13 a missing camera cost a silent 5 s stall at boot and one
+// stdout line ("pose tracking unavailable"); the game then scored a stand-in
+// skeleton and the player was never told why nothing they did counted.  The
+// server now exits with a code that says what failed (pose_server.py EXIT_*),
+// Start() notices the exit as soon as it happens, and the problem goes on
+// screen through NativeNotice.
+static const char *kPoseNoticeKey = "pose";
+static const char *kStandIn =
+    " The game is using a stand-in skeleton, so your dancing is not scored.";
+
+NativeSkeletonProvider::Problem NativeSkeletonProvider::DescribeServerExit(
+    int waitStatus, int cameraIndex
+) {
+    Problem p;
+    char buf[512];
+    if (WIFSIGNALED(waitStatus)) {
+        snprintf(buf, sizeof(buf),
+            "The pose server crashed (signal %d) - pose tracking is off.%s",
+            WTERMSIG(waitStatus), kStandIn);
+        p.text = buf;
+        p.brief = "Pose server crashed: pose tracking off";
+        return p;
+    }
+    int code = WIFEXITED(waitStatus) ? WEXITSTATUS(waitStatus) : -1;
+    switch (code) {
+    case kExitNoCamera:
+        snprintf(buf, sizeof(buf),
+            "No camera found (camera %d) - pose tracking is off.%s Connect a webcam"
+            " and restart, or pick another camera with DC3_POSE_CAMERA.",
+            cameraIndex, kStandIn);
+        p.brief = "No camera: pose tracking off";
+        break;
+    case kExitCameraLost:
+        snprintf(buf, sizeof(buf),
+            "The camera stopped sending pictures - pose tracking is off.%s",
+            kStandIn);
+        p.brief = "Camera lost: pose tracking off";
+        break;
+    case kExitNoVideo:
+        snprintf(buf, sizeof(buf),
+            "The pose server could not open its video file - pose tracking is off.%s",
+            kStandIn);
+        p.brief = "Pose video unreadable: pose tracking off";
+        break;
+    case kExitNoModel:
+        snprintf(buf, sizeof(buf),
+            "The pose model file is missing (see DC3_POSE_MODEL, default"
+            " native/models/pose_landmarker_full.task) - pose tracking is off.%s",
+            kStandIn);
+        p.brief = "Pose model missing: pose tracking off";
+        break;
+    case kExitNoDeps:
+        snprintf(buf, sizeof(buf),
+            "Python pose packages (mediapipe, opencv-python, numpy) are not"
+            " installed for python3 - pose tracking is off.%s",
+            kStandIn);
+        p.brief = "Pose packages missing: pose tracking off";
+        break;
+    case kExitExecFailed:
+        snprintf(buf, sizeof(buf),
+            "python3 could not be started, so there is no pose server - pose"
+            " tracking is off.%s", kStandIn);
+        p.brief = "No python3: pose tracking off";
+        break;
+    default:
+        snprintf(buf, sizeof(buf),
+            "The pose server exited (code %d) - pose tracking is off.%s"
+            " Its messages are in the console log.", code, kStandIn);
+        p.brief = "Pose server exited: pose tracking off";
+        break;
+    }
+    p.text = buf;
+    return p;
+}
+
+NativeSkeletonProvider::Problem NativeSkeletonProvider::LastProblem() {
+    std::lock_guard<std::mutex> lock(mSwapMutex);
+    return mProblem;
+}
+
+void NativeSkeletonProvider::ReportProblem(const Problem &p) {
+    {
+        std::lock_guard<std::mutex> lock(mSwapMutex);
+        mProblem = p;
+    }
+    NativeNotice::Post(kPoseNoticeKey, p.text, p.brief, 20.0f);
 }
 
 #ifdef __EMSCRIPTEN__
@@ -139,6 +229,11 @@ bool NativeSkeletonProvider::Start(
     if (mRunning) return true;
 
     mSocketPath = socketPath;
+    mCameraIndex = cameraIndex;
+    {
+        std::lock_guard<std::mutex> lock(mSwapMutex);
+        mProblem = Problem();
+    }
 
     // DC3_POSE_NO_SPAWN=1: connect-only mode — attach to an already-running
     // pose server (e.g. a synthetic one in CI) instead of forking pose_server.py.
@@ -192,7 +287,7 @@ bool NativeSkeletonProvider::Start(
             execvp("python3", const_cast<char *const *>(argv.data()));
             // If exec fails
             perror("Failed to launch pose_server.py");
-            _exit(1);
+            _exit(kExitExecFailed);
         } else if (mServerPid < 0) {
             perror("fork failed");
             return false;
@@ -201,9 +296,28 @@ bool NativeSkeletonProvider::Start(
         printf("Launched pose_server.py (pid %d)\n", mServerPid);
     }
 
-    // Wait for socket to appear, then connect
-    for (int attempt = 0; attempt < 50; attempt++) {
-        usleep(100000); // 100ms
+    // Wait for the socket to appear, then connect.  pose_server.py binds it
+    // once the camera has delivered a frame (before loading the model), and
+    // exits with an EXIT_* code if the camera, model or packages are missing;
+    // that exit is noticed on the next 50 ms tick instead of after the whole
+    // timeout.
+    static const int kPollMs = 50;
+    static const int kTimeoutMs = 5000;
+    for (int waited = 0; waited < kTimeoutMs; waited += kPollMs) {
+        usleep(kPollMs * 1000);
+
+        if (mServerPid > 0) {
+            int status = 0;
+            if (waitpid(mServerPid, &status, WNOHANG) == mServerPid) {
+                mServerPid = -1;
+                Problem p = DescribeServerExit(status, cameraIndex);
+                fprintf(stderr, "pose_server.py exited after %d ms (status 0x%x)\n",
+                    waited + kPollMs, status);
+                ReportProblem(p);
+                Stop();
+                return false;
+            }
+        }
 
         mSocketFd = socket(AF_UNIX, SOCK_STREAM, 0);
         if (mSocketFd < 0) continue;
@@ -215,6 +329,7 @@ bool NativeSkeletonProvider::Start(
 
         if (connect(mSocketFd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
             printf("Connected to pose server\n");
+            NativeNotice::Clear(kPoseNoticeKey);
             mRunning = true;
             mReaderThread = std::thread(&NativeSkeletonProvider::ReaderThread, this);
             return true;
@@ -224,7 +339,12 @@ bool NativeSkeletonProvider::Start(
         mSocketFd = -1;
     }
 
-    fprintf(stderr, "Failed to connect to pose server after 5s\n");
+    fprintf(stderr, "Failed to connect to pose server after %d ms\n", kTimeoutMs);
+    Problem p;
+    p.text = std::string("The pose server did not start within 5 seconds - pose tracking is off.")
+        + kStandIn + " Its messages are in the console log.";
+    p.brief = "Pose server did not start: pose tracking off";
+    ReportProblem(p);
     Stop();
     return false;
 }
@@ -247,6 +367,28 @@ void NativeSkeletonProvider::Stop() {
         waitpid(mServerPid, &status, WNOHANG);
         mServerPid = -1;
     }
+}
+
+// The socket closed under the reader.  If we spawned the server, give it a
+// moment to finish exiting so its code can say why (a lost camera exits
+// EXIT_CAMERA_LOST); otherwise -- a connect-only server, or one still running
+// -- say that the stream stopped.
+void NativeSkeletonProvider::ReportServerGone() {
+    if (mServerPid > 0) {
+        for (int i = 0; i < 20; i++) {
+            int status = 0;
+            if (waitpid(mServerPid, &status, WNOHANG) == mServerPid) {
+                mServerPid = -1;
+                ReportProblem(DescribeServerExit(status, mCameraIndex));
+                return;
+            }
+            usleep(25000);
+        }
+    }
+    Problem p;
+    p.text = std::string("The pose stream stopped - pose tracking is off.") + kStandIn;
+    p.brief = "Pose stream stopped: pose tracking off";
+    ReportProblem(p);
 }
 
 static bool readExact(int fd, void *buf, size_t len) {
@@ -274,6 +416,7 @@ void NativeSkeletonProvider::ReaderThread() {
         uint32_t packetLen;
         if (!readExact(mSocketFd, &packetLen, 4)) {
             fprintf(stderr, "Pose server disconnected\n");
+            ReportServerGone();
             mRunning = false;
             break;
         }
@@ -282,6 +425,7 @@ void NativeSkeletonProvider::ReaderThread() {
         std::vector<uint8_t> packet(packetLen);
         if (!readExact(mSocketFd, packet.data(), packetLen)) {
             fprintf(stderr, "Pose server read error\n");
+            ReportServerGone();
             mRunning = false;
             break;
         }

@@ -1193,6 +1193,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Keyboard_Native.cpp
     src/platform/Synth_Stub.cpp
     src/platform/Skeleton_Native.cpp
+    src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
     src/platform/NuiImageSurface_Native.cpp
     src/platform/StreamReceiver_Native.cpp
@@ -1378,6 +1379,7 @@ set(DC3_WEB_CORE_SOURCES
     # File_Web.cpp / CDReader_Web.cpp / WebAssets.cpp lifted to milo-engine
     # (MILO_BUILD_WEB platform layer, W0).
     src/platform/Skeleton_Native.cpp
+    src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
     src/platform/NuiImageSurface_Native.cpp
     # ThreadCall_Native.cpp lifted to milo-engine (engine 0.2b drop-xdk POSIX
@@ -1961,6 +1963,7 @@ if(BUILD_TESTS)
         tests/test_cascade_guards.cpp
         tests/test_native_posesynth.cpp
         tests/test_native_twoplayer.cpp
+        tests/test_native_pose_socket.cpp
         tests/test_native_audioseek.cpp
         tests/test_native_notables.cpp
         tests/test_lp64_literals.cpp
@@ -2222,6 +2225,18 @@ if(BUILD_TESTS)
                 --selftest)
         set_tests_properties(LinkHygiene.DuplicateDefinitions LinkHygiene.DuplicateCheckSelfTest
             PROPERTIES LABELS LinkHygiene TIMEOUT 300)
+    endif()
+
+    # PoseServer.Python: native/scripts/pose_server.py's camera mode -- capture
+    # request, no-camera / lost-camera exit codes, capture timestamps, HFOV --
+    # against a fake capture object (tests/test_pose_server.py, stdlib
+    # unittest; no camera, no GPU). Its real-script cases need cv2 and skip
+    # inside the file, not here, without it.
+    if(MILO_PYTHON3_LINK)
+        add_test(NAME PoseServer.Python
+            COMMAND ${MILO_PYTHON3_LINK} -B ${CMAKE_SOURCE_DIR}/../tests/test_pose_server.py)
+        set_tests_properties(PoseServer.Python PROPERTIES
+            LABELS PoseServer TIMEOUT 120 ENVIRONMENT "${MILO_TEST_ENV}")
     endif()
 
     # XeniaGolden.*: the native port against state recorded from the ORIGINAL

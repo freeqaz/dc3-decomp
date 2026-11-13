@@ -12,7 +12,7 @@ Work items: [PLAN.md](PLAN.md) track P.
 
 | Stage | Code | Gate |
 |---|---|---|
-| Camera frame | `native/scripts/pose_server.py` (`cv2.VideoCapture`), a Python child spawned by `NativeSkeletonProvider::Start` in `native/src/platform/Skeleton_Native.cpp` | `DC3_POSE_CAMERA` (index) |
+| Camera frame | `native/scripts/pose_server.py` (`cv2.VideoCapture`: 640×480 @ 30 fps, 1-frame driver buffer), a Python child spawned by `NativeSkeletonProvider::Start` in `native/src/platform/Skeleton_Native.cpp`. Packet timestamp = capture time (the device's `CAP_PROP_POS_MSEC` when it is on our monotonic clock, as V4L2's is; else when `read()` returned). | `DC3_POSE_CAMERA` (index) |
 | 2D + 3D pose | `native/scripts/pose_mediapipe.py` `MediaPipeBackend`: BlazePose world landmarks (metres), absolute root by PnP, one-euro filter on root depth, centroid tracker. Emits DC3's 20 Kinect joints in camera-space metres. | `DC3_POSE_MODEL` (default `native/models/pose_landmarker_full.task`, gitignored), `DC3_POSE_HFOV` |
 | Wire | Unix socket, protocol v2, layout 1 (20 DC3 joints). Layout 0 = COCO, remapped by `MapCOCOToDC3`. | `DC3_POSE_SOCKET`, `DC3_POSE_NO_SPAWN=1` (connect to a server you started) |
 | Socket → slots | `GestureMgr_Native.cpp`: `BuildSensorFrame` → `FillPersonSlots` / `AssignSlots` / `NativeAutoAssignPlayers`. `FillSkeletonData` holds the last good position of joints under 0.3 confidence. No provider → a jittered standing dummy (two in two-player modes, `DC3_DUMMY_PLAYERS`). Every valid person fills its own slot: two people on the socket or in one `dc3_pose_push` frame are two players. | `DC3_POSE` (`off`, `external`, …), `DC3_NATIVE_SCORING` (default on), `DC3_POSE_SELFTEST` |
@@ -33,6 +33,37 @@ removed on 2026-11-13 (P-6) together with the tracked AGPL weights
 `native/yolo11n-pose.pt`. It was tried first on every windowed boot and always
 failed, because its model had been retired in `23f92cb78`; a windowed boot now
 goes straight to the MediaPipe server.
+
+### When there is no camera (desktop)
+
+`pose_server.py` checks the cheap things first and exits with a code that says
+what failed: model file missing **5**, `cv2`/`mediapipe` not importable **6**,
+camera will not open or opens and sends no frame within 3 s **3**, `--video`
+unreadable **4**. Only then does it bind the socket (before loading the model,
+so the game is not blocked on the ~1 s load). Mid-run, a camera that delivers
+nothing for 2 s exits **7**. `Start()` polls the child every 50 ms while it
+waits for the socket, so a failure is noticed when it happens, not after the
+5 s timeout: on this box (no `/dev/video*`) a windowed boot now gives up after
+**200–350 ms** instead of 5 s.
+
+The game then tells the player, through `NativeNotice`
+(`native/src/platform/NativeNotice.{h,cpp}`, drawn by `DebugPanel::DrawNotices`
+from App.cpp's ImGui overlay pass whether or not the debug panel is open): a
+banner across the top for 20 s from the first frame that can draw it — *"No
+camera found (camera 0) - pose tracking is off. The game is using a stand-in
+skeleton, so your dancing is not scored. Connect a webcam and restart, or pick
+another camera with DC3_POSE_CAMERA."* — then a one-line reminder in the
+bottom-right corner (*"No camera: pose tracking off"*) for the rest of the
+session. Each exit code, a crash, a lost stream and the 5 s timeout have their
+own text. Every notice is also printed as `DC3 NOTICE [pose]: …` on stderr.
+
+Why an ImGui overlay: the decompiled game has no "no sensor" screen (on the 360
+the dashboard owned that), and the game's own *stand in front of the Kinect*
+pause never fires because the stand-in skeleton is tracked; the overlay is the
+one layer that draws on every screen, in every state, without touching game UI
+data. Caveat: ImGui has no display size in headless runs, so the overlay — like
+the debug panel — is not in `/api/screenshot` captures; it was verified on a
+windowed boot under Xvfb (screen grab).
 
 Env-var reference: [SCORING_ENV_VARS.md](SCORING_ENV_VARS.md) and the master
 table in [../debugging/native.md](../debugging/native.md).
@@ -205,7 +236,7 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
 | # | Gap | Size | Platform |
 |---|---|---|---|
 | P-1 | **Crash on a motionless skeleton.** `RhythmDetector::AnalyzeData` divides by a variance that becomes zero → NaN → `SymbolKeys::SetFrame` segfault (`RhythmBattlePlayer::Poll`). A webcam trips it whenever joints are held (legs out of frame are held all song). | S–M | all |
-| P-2 | Never run against a live webcam: camera mode, wall-clock timestamps, 640×480 request, HFOV. No "no camera" message to the player; a 5 s silent stall then the dummy. | S–M | all |
+| P-2 | Never run against a live webcam. **No-camera part done** (`np-pose-desk`): fast failure + on-screen notice (above); camera request, capture timestamps, HFOV and the lost-camera exit unit-tested against a fake capture (`tests/test_pose_server.py`). Left: a real webcam session. | S | all |
 | P-3 | Gesture menus: `DC3_CONTROLLER_MODE` defaults to `forced`; `faithful` runs the original nav code but the hand meshes are hidden by `native/src/platform/MeshFilter.cpp` and nothing tests swipe nav. | M–L | all |
 | P-4 | Player on screen: silhouette, camera preview, photo moments. `LiveCameraInput` is null natively; `StreamRenderer::DrawToTexture` and `DepthBuffer3D` are stubbed; `MeshFilter` hides `silhouette_guy*`, `preview.mesh`, `pose_flash*`. Needs webcam RGB + a segmentation mask. | L | all |
 | P-5 | Tests: no ctest for the socket reader, COCO mapping or `AssignSlots`; gate is max-only and short; no deterministic human-video fixture. | S–M | all |
