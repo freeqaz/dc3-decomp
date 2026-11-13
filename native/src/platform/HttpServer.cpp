@@ -236,14 +236,16 @@ bool HttpServer::Start(int port) {
     // injects input and reads the framebuffer, and it is on by default in the
     // dev profile (DC3_PROFILE), so it must never answer another machine: it
     // listened on 0.0.0.0 until 2026-11-13.  To drive an engine on another box
-    // (the GPD), tunnel: `ssh -L 9090:127.0.0.1:9090 <box>`.
+    // (the GPD), tunnel: `ssh -L 9090:127.0.0.1:9090 <box>`.  DC3_HTTP_HOST
+    // is the explicit way to widen it (e.g. 0.0.0.0); unset is loopback.
     //
     // A negative port means "this one if it is free, else any": the default
     // when DC3_HTTP_PORT is unset in a window (HttpServerInit), so a second
     // engine, or one started while the owner's game holds 9090, gets a
     // kernel-assigned port and says so instead of exiting 98.  An EXPLICIT
     // port keeps the strict exit-98 contract.
-    static const char *kHttpBindAddress = "127.0.0.1";
+    const char *hostEnv = getenv("DC3_HTTP_HOST");
+    const char *kHttpBindAddress = (hostEnv && *hostEnv) ? hostEnv : "127.0.0.1";
     errno = 0;
     if (port < 0) {
         const int preferred = -port;
@@ -286,8 +288,9 @@ bool HttpServer::Start(int port) {
     // Machine-readable line on stdout for scripts to parse
     fprintf(stdout, "DC3_HTTP_PORT=%d\n", port);
     fflush(stdout);
-    fprintf(stderr, "[HttpServer] Listening on %s:%d (loopback only)\n", kHttpBindAddress,
-            port);
+    fprintf(stderr, "[HttpServer] Listening on %s:%d (%s)\n", kHttpBindAddress, port,
+            strcmp(kHttpBindAddress, "127.0.0.1") == 0 ? "loopback only"
+                                                       : "DC3_HTTP_HOST: NOT loopback only");
     return true;
 }
 

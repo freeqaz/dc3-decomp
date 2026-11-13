@@ -753,6 +753,32 @@ static int NativeDummyPlayerCount() {
 // scoring to the errors=1.0 short-circuit.  A transient 0-person dropout from a
 // running provider stays on the provider branch (every slot reads untracked)
 // and never reaches the dummy.
+// DC3_PERF_LOG=1 (the playtest kit sets it): every 5 s of wall time, the
+// game loop's rate and how many NEW pose frames the sensor accepted per
+// second -- the two numbers PLAN L-3 asks for, measured where they meet.
+// BuildSensorFrame runs once per game frame (SkeletonUpdate's PostUpdate).
+static void PerfTick(bool providerRunning, bool accepted, int persons) {
+    static const bool sOn = Dc3EnvFlag("DC3_PERF_LOG", false);
+    if (!sOn)
+        return;
+    static std::chrono::steady_clock::time_point sStart = std::chrono::steady_clock::now();
+    static unsigned sFrames = 0, sPose = 0, sPersons = 0;
+    sFrames++;
+    if (providerRunning && accepted) {
+        sPose++;
+        sPersons += persons;
+    }
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    double secs = std::chrono::duration<double>(now - sStart).count();
+    if (secs >= 5.0) {
+        fprintf(stderr, "DC3 PERF: fps=%.1f pose_fps=%.1f persons=%.2f window_s=%.1f provider=%d\n",
+                sFrames / secs, sPose / secs, sPose ? (double)sPersons / sPose : 0.0, secs,
+                providerRunning ? 1 : 0);
+        sStart = now;
+        sFrames = sPose = sPersons = 0;
+    }
+}
+
 static const SkeletonFrame *BuildSensorFrame() {
     bool providerRunning = false;
     bool newFrame = false;
@@ -808,6 +834,8 @@ static const SkeletonFrame *BuildSensorFrame() {
         newFrame = true;
     }
 
+    PerfTick(providerRunning, newFrame,
+             providerRunning && TheSkeletonProvider ? TheSkeletonProvider->NumPersons() : 0);
     if (!newFrame)
         return nullptr;
     NativeAutoAssignPlayers();
