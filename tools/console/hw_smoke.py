@@ -26,8 +26,8 @@ Every failure is reported as one of:
 
 Exit status: 0 = every applicable stage passed, 1 = something failed.
 
-See docs/native/CONSOLE_HW_FINDINGS.md for the hardware ground truth this
-encodes, and docs/native/CONSOLE_DTA_EVAL.md for the protocol design.
+See docs/tools/console/CONSOLE_DTA_EVAL.md section 10 for the hardware ground
+truth this encodes, and the rest of that page for the protocol design.
 """
 
 import argparse

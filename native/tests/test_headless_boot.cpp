@@ -261,7 +261,7 @@ TEST_F(HeadlessBootTest, InputReplayStartButton) {
     if (result.signal != 0) {
         // Known issue: button input triggers DTA script handlers that
         // crash on null when required config entries are missing.
-        // Track via: docs/native/DECOMP_GAPS.md (Flow::Enter blocker)
+        // History: docs/archive/2026-11-13-native-doc-audit/native/DECOMP_GAPS.md (Flow::Enter blocker)
         printf("InputReplay: crash signal=%d — expected until DTA handler path is complete\n",
                result.signal);
         GTEST_SKIP() << "Input replay crashes in DTA handler path (known limitation)";

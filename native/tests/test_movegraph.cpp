@@ -1,7 +1,8 @@
 // test_movegraph.cpp — MoveGraph/MoveVariant/MoveCandidate deserialization tests
 //
 // Exercises the binary Load → CacheLinks pipeline to reproduce and investigate
-// the SIGSEGV at 0x3f800000 reported in LOADING_ARCHITECTURE.md. Tests cover:
+// the SIGSEGV at 0x3f800000 reported in
+// docs/archive/2026-11-13-native-doc-audit/native/LOADING_ARCHITECTURE.md. Tests cover:
 //   - MoveCandidate binary format and adjacency flag bit 0 handling
 //   - MoveVariant Load + CacheLinks with linked/unlinked variants
 //   - MoveParent Load with multiple variants

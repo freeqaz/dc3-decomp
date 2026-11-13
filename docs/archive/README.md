@@ -28,6 +28,7 @@ loses.
 | Archive | Date | What it holds |
 |---|---|---|
 | [`2026-08-17-doc-audit/`](2026-08-17-doc-audit/MANIFEST.md) | 2026-08-17 | 42 files: five 2026-02 status snapshots, nine decomp planning/burndown worklists, and the 2026-02/03 tooling experiments (codex coordination, context-enrichment A/B, meta-strategy scoring, unicorn Phase-1 design, native-test audits). |
+| [`2026-11-13-native-doc-audit/`](2026-11-13-native-doc-audit/MANIFEST.md) | 2026-11-13 | 58 files: the native port's 2026-03 → 2026-09 status docs, plans and session-by-session logs (`docs/native/PLAN.md`, `TODO.md`, `NATIVE_PORT_STATUS.md`, the convergence/FileMerger/DTA-blocker plans, hack and stub audits), and the whole `plans/dc3-native/`, `plans/web-port/` and `plans/custom-graphics-engine/` trees. Layout mirrors `docs/`. |
 
 ## Related history that is *not* archived
 

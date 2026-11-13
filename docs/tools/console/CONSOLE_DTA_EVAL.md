@@ -2,10 +2,16 @@
 
 **Goal:** run arbitrary DTA against the *hardware* engine and read the result on a PC, so live
 console state can be diffed against the native port (which already answers the same scripts on
-`POST /api/dta/eval` — [HTTP_DEBUG_SERVER.md](../tools/HTTP_DEBUG_SERVER.md)).
+`POST /api/dta/eval` — [HTTP_DEBUG_SERVER.md](../HTTP_DEBUG_SERVER.md)).
 
-Client: [`tools/console/dc3_eval.py`](../../tools/console/dc3_eval.py) (stdlib only, `--self-test`
-runs offline).
+Client: [`tools/console/dc3_eval.py`](../../../tools/console/dc3_eval.py) (stdlib only, `--self-test`
+runs offline). Hardware smoke test: [`tools/console/hw_smoke.py`](../../../tools/console/hw_smoke.py).
+
+This page also carries the hardware ground truth for the console file channel
+([§10](#10-hardware-ground-truth-xbdm-file-channel)). That material used to live in a separate
+scratch checkpoint, `CONSOLE_HW_FINDINGS.md`, which was merged here and archived byte-for-byte at
+[`docs/archive/2026-11-13-native-doc-audit/native/CONSOLE_HW_FINDINGS.md`](../../archive/2026-11-13-native-doc-audit/native/CONSOLE_HW_FINDINGS.md)
+(its incident log lives only there).
 
 Its CLI and importable API are deliberately **the same shape as RB3Enhanced's
 `tools/rb3e_dta.py`** (`feature/dta-eval-channel`), so the state-differ can drive an RB3 console and
@@ -30,7 +36,7 @@ a DC3 console with the same code — see [§8](#8-interface-parity-with-rb3enhan
 > walks you through the zero-cost `.clp` drive probe — checking from the PC that
 > the file really landed, so a wrong drive spelling costs seconds instead of a
 > whole take. Hardware ground truth it encodes:
-> [CONSOLE_HW_FINDINGS.md](CONSOLE_HW_FINDINGS.md).
+> [§10](#10-hardware-ground-truth-xbdm-file-channel).
 
 | # | Surface | Reachable **today**? | Result comes back? | Verdict |
 | --- | --- | --- | --- | --- |
@@ -40,6 +46,10 @@ a DC3 console with the same code — see [§8](#8-interface-parity-with-rb3enhan
 | 4 | Holmes, TCP 4544 | debug XEX only, needs a PC-side server nobody has written | partially (`MILO_LOG` tee) | Not worth it on its own; only interesting as the thing that unlocks #3 without patches. |
 | 5 | OSC, UDP 12346 | no | n/a | Confirmed dead end. |
 | 6 | xbdm **as a title-side command channel** | no | n/a | Confirmed dead end (no `DmRegisterCommandProcessor` import). **But xbdm as a *file transport* is very much alive and is now how route 1 moves files** — that needs nothing from the title. See §3. |
+
+Off hardware, the same client runs the same scripts against the original `debug.xex` under the
+dc3-oracle Xenia fork (`-T xenia`, [§9](#9-the-xenia-transport--the-original-debugxex-under-emulation))
+and against the native port (`localhost -p 9090`, §3.4).
 
 The decisive constraint is §4: **an RGH console cannot pass launch arguments to a title.** That
 kills #3 and #4 outright unless you edit the executable, and once you are willing to edit the
@@ -264,7 +274,7 @@ So: **push the probe with a drive-qualified path, get the answer back on a relat
 >
 > `dc3_eval.py -T file` now defaults to `--file-channel xbdm`; `--file-channel
 > ftp` keeps the old path for a console sitting at the dashboard. Full evidence
-> and the wire details in [CONSOLE_HW_FINDINGS.md](CONSOLE_HW_FINDINGS.md).
+> and the wire details in [§10](#10-hardware-ground-truth-xbdm-file-channel).
 >
 > Note this does **not** contradict §1e. That says DC3's XEX imports no
 > `DmRegisterCommandProcessor`, so you cannot add a custom xbdm command *inside
@@ -281,10 +291,12 @@ So: **push the probe with a drive-qualified path, get the answer back on a relat
    `--file-channel ftp` path only:* the console must be sitting at a dashboard
    that serves FTP, which, per the correction above, it will not be once DC3 is
    running.
-3. Establish two names for **the same folder** (the one containing `default.xex`):
-   * `--ftp-dir` — as FTP sees it, e.g. `/Hdd1/Games/DanceCentral3`
-   * `--game-path` — as the *title* sees it, e.g. `Hdd1:\Games\DanceCentral3` (multi-character
-     drive, not `game:`). **This spelling is the #1 hardware unknown — see §7.**
+3. Establish the name of the folder containing `default.xex` **as the title sees it**:
+   `--game-path` (or `$DC3_GAME_PATH`), e.g. `Hdd1:\Games\DanceCentral3` (multi-character
+   drive, not `game:`). **This spelling is the #1 hardware unknown — see §7.** The default xbdm
+   file channel addresses files the same way the title does, so `--game-path` is also its root and
+   nothing else is needed. *Only for `--file-channel ftp`:* also give `--ftp-dir`, the same folder
+   as the FTP server sees it, e.g. `/Hdd1/Games/DanceCentral3`.
 4. Press `Esc`, then type once (`--print-bootstrap` emits it for you):
 
    ```
@@ -296,13 +308,17 @@ So: **push the probe with a drive-qualified path, get the answer back on a relat
 ### 3.2 Per-iteration loop
 
 ```
-PC:      dc3_eval.py -t file -e '<script>'
-           -> FTP: delete dc3_out.txt, dc3_done.txt
-           -> FTP: PUT <ftp-dir>/dc3/p.dta
+PC:      dc3_eval.py -T file -e '<script>'          (--file-channel xbdm is the default)
+           -> XBDM: mkdir <game-path>\dc3, delete dc3_out.txt, dc3_done.txt
+           -> XBDM: sendfile <game-path>\dc3\p.dta
 Console: Esc, Up, Enter          <- 3 keystrokes (or --hid-cmd)
-PC:      poll <ftp-dir>/dc3_done.txt for this run's token
-           -> GET <ftp-dir>/dc3_out.txt, print it
+PC:      poll <game-path>\dc3_done.txt (XBDM getfile) for this run's token
+           -> XBDM getfile <game-path>\dc3_out.txt, print it
 ```
+
+With `--file-channel ftp` the same steps run over FTP against `--ftp-dir` instead
+(`FileTransport._run` in `tools/console/dc3_eval.py` is channel-agnostic; `XbdmBackend` and
+`FtpBackend` supply `mkdir`/`delete`/`put`/`get`).
 
 ### 3.3 What the generated probe looks like
 
@@ -409,7 +425,7 @@ python3 tools/console/dc3_eval.py "$DC3_XBOX" --repl
 ```
 
 **Batch before you loop.** Per-round-trip cost dominates on every transport — an HTTP request on
-the DLL route, and an entire FTP push plus a human keypress on the file route. `-b` sends the whole
+the DLL route, and an entire file push plus a human keypress on the file route. `-b` sends the whole
 set at once and returns one result per command, so a 20-probe state dump is one keypress rather
 than twenty.
 
@@ -606,7 +622,7 @@ also accepts `"ip:port"`, though AppChild overrides the port to `0x11BF` anyway.
 Then:
 
 ```bash
-python3 tools/console/dc3_eval.py -t appchild -e '{print "hello from the console"}'
+python3 tools/console/dc3_eval.py -T appchild -e '{print "hello from the console"}'
 # listens on 0.0.0.0:4543, waits for the console to dial in,
 # sends the command, then {sync_app_child}, reads the u16 ack
 ```
@@ -614,9 +630,9 @@ python3 tools/console/dc3_eval.py -t appchild -e '{print "hello from the console
 Because there is no return path, pair it with the §3 file trick:
 
 ```bash
-python3 tools/console/dc3_eval.py -t appchild \
+python3 tools/console/dc3_eval.py -T appchild \
   -e '{write_string_to_file "dc3_out.txt" {sprint {ui current_screen}} 0}'
-# then fetch dc3_out.txt over FTP
+# then fetch dc3_out.txt over XBDM (getfile)
 ```
 
 ---
@@ -699,16 +715,16 @@ Ordered by how much they block.
    *Failure:* `{run "X:\..."}` pops `MILO_WARN("DataReadFile: Can't open %s")`
    (`DataFile.cpp:520-521`) — a loud on-screen notify. Try the next spelling.
    **Do not try `game:`/`GAME:` — it trips `MILO_ASSERT` in `FileIsLocal`.**
-   Discovery one-liner (type once, then fetch `dc3_drives.txt` over FTP from the game folder):
+   Discovery one-liner (type once, then fetch `dc3_drives.txt` over XBDM from the game folder):
 
    ```
    {write_string_to_file "dc3_drives.txt" {sprint {file_exists "Hdd1:\"} {file_exists "hdd:\"} {file_exists "Usb0:\"} {file_exists "Uda:\"} {file_exists "devkit:\"} {file_exists "cache:\"}} 0}/
    ```
 
 3. **Does a relative write land in the game folder?** `{write_string_to_file "dc3_out.txt" "x" 0}`
-   should produce `dc3_out.txt` next to `default.xex`, visible over FTP. This assumes the XDK CRT
-   sets the process working directory to the XEX's folder. *Failure:* the file never appears over
-   FTP (or `FileStream` fails silently — `TextFileStream` does not warn). Fallback: use the same
+   should produce `dc3_out.txt` next to `default.xex`, visible over XBDM (`dirlist`/`getfile`).
+   This assumes the XDK CRT sets the process working directory to the XEX's folder. *Failure:* the
+   file never appears (or `FileStream` fails silently — `TextFileStream` does not warn). Fallback: use the same
    drive-qualified path you found in step 2 for the write as well.
 
 4. **Does the RndConsole actually open, and does the keyboard reach it?** `Esc` should bring up the
@@ -721,10 +737,9 @@ Ordered by how much they block.
    (see [KINECT_CAPTURE.md §2b](KINECT_CAPTURE.md)), so that is also a keyboard-free way to *open*
    the console (you still need the keyboard to type into it).
 
-5. **FTP concurrency.** Some console FTP servers accept only one session at a time and some lock a
-   file that the title has open. `dc3_eval.py` opens a fresh connection per poll and tolerates
-   connect failures, but if pushes intermittently fail, raise `--timeout` and check whether the
-   FTP daemon is single-session.
+5. *(Legacy `--file-channel ftp` only.)* Some dashboard FTP servers are single-session.
+   `dc3_eval.py` opens a fresh session per poll and tolerates connect failures; with a title
+   running the FTP server is gone anyway (§3), so this only matters at the dashboard.
 
 6. **Only if you go down the AppChild road:** does the patched `debug.xex` still launch (§4b), and
    does `AppChild::Poll`'s blocking read behave when the PC is slow? Note the failure mode is
@@ -808,7 +823,125 @@ for exploratory probing: it runs through the game's own `RndConsole`, which wrap
 `MILO_TRY`/`MILO_CATCH` (`src/system/rndobj/Console.cpp:434-444,522-527`) and merely prints
 `Script error: …` — so on the chosen route a bad probe costs you a line of red text, not a reboot.
 
-## 9. References
+## 9. The `xenia` transport — the original `debug.xex` under emulation
+
+`-T xenia` evaluates DTA inside the **original** `debug.xex` running under the dc3-oracle Xenia fork
+(`../xenia`, `src/xenia/titles/dc3/dc3_dta_channel.cc`), which serves a unix socket when started with
+`--dc3_dta_channel=<path>` (off by default). The request is evaluated on the guest main thread with the
+game's own `DataReadString` + `DataArray::Execute`, so this is the image's parser and interpreter, not
+the native port's.
+
+```bash
+# socket path as the host positional ...
+python3 tools/console/dc3_eval.py -T xenia /path/to/dta.sock '{ui current_screen}'
+# ... or via --socket / $DC3_XENIA_SOCKET, in which case the lone positional is the script
+DC3_XENIA_SOCKET=/path/to/dta.sock python3 tools/console/dc3_eval.py -T xenia '{ui current_screen}'
+```
+
+* **Body contract:** the same as `--api eval` (§8) — one `=> ` line per top-level command,
+  `=> !! refused: script error: <msg>` for a command whose `MILO_FAIL` the channel trapped,
+  `!! parse error` for unparseable text. `XeniaTransport` subclasses `HttpTransport`, so batching,
+  result splitting and auto-paging are shared.
+* **Wire (little-endian):** request `u32 len | body`; response `u32 status | u32 len | body`.
+  Status 200 is a normal body; 413 too large, 503 the guest has not reached its main loop yet, 504
+  the main thread did not drain the request in time. Non-200 raises `ConsoleError`.
+* The state differ uses the same channel as its `xenia:<sock>` target
+  (`tools/state_diff/capture.py`, `tools/state_diff/transport.py`), and
+  `tools/state_diff/golden/boot_xenia.sh` boots the fork with `--dc3_dta_channel=<run-dir>/dta.sock`.
+  What the fork can and cannot be trusted for is in [`docs/plans/XENIA_ORACLE.md`](../../plans/XENIA_ORACLE.md).
+
+---
+
+## 10. Hardware ground truth (XBDM file channel)
+
+Measured on one RGH/JTAG console on 2026-08-02 with `hw_smoke.py` and the shipped `XbdmBackend`.
+Console addresses and USB drive numbering are **not** stable — re-check rather than reuse.
+
+### 10.1 Why FTP cannot carry the loop
+
+The FTP server on an RGH/JTAG console belongs to the **dashboard** (Aurora/FSD/DashLaunch).
+Launching a title unloads the dashboard and its FTP server with it, so FTP is gone exactly while
+DC3 is running — when the probe has to be pushed. With a title running, port 21 was closed and XBDM
+on 730 answered. XBDM survives a title launch; that is why `--file-channel xbdm` is the default.
+
+### 10.2 Drives and aliases
+
+`drivelist` on that console returned `HDD, USB0, USB1, USBMU0, DVD, CdRom0, GAME, D, …` plus
+plugin-created drives (e.g. RB3Enhanced's `RB3HDD`/`RB3USB0`/`RB3USB1`) and `cnt*` content mounts.
+Both `GAME` and `D` exist as drive names, and they alias the **same** directory — the running title's
+root. These four listed byte-identically for the running title:
+
+    D:\  ==  GAME:\  ==  Usb1:\Games\<title>  ==  \Device\Mass1\Games\<title>
+
+So DC3's `game:\` fatality is not a path-resolution failure; it is `FileIsLocal()`'s `MILO_ASSERT`
+rejecting the drive *string* `"game"` (§2). Use `d:\`. USB enumeration changed across a cold boot
+(`Usb0` → `Usb1`); re-run `drivelist` after any cold boot.
+
+**XBDM path spelling** (they are not interchangeable):
+
+| form | result |
+| --- | --- |
+| `dirlist name="Hdd:\"` | OK — one backslash, trailing slash |
+| `dirlist name="Hdd:\\"` | `414 access denied` |
+| `dirlist name="HDD:"` | `414 access denied` (needs the backslash) |
+| `dirlist name="\Device\Mass1\Games"` | OK (raw NT device path) |
+| `dirlist name="Mass1:\Games"` | `414 access denied` (not a drive alias) |
+
+XBDM path commands (`dirlist`/`getfile`/`sendfile`) take the **drive-letter** form
+(`Usb1:\Games\rb3`); `magicboot` takes the **NT device** form (`\Device\Mass1\Games\rb3`).
+
+### 10.3 Capability probe
+
+Send the command with no arguments and read the status: `400 missing name` means the command exists,
+`407 unknown command` means it does not. `sendfile`, `getfile`, `mkdir` and `delete` all answered
+`400` — XBDM is a working bidirectional file channel.
+
+### 10.4 Binary framing — the two directions are asymmetric
+
+    sendfile name="<p>" length=N   -> "204- send binary data", then N RAW bytes (no prefix),
+                                      then read the status line
+    getfile  name="<p>"            -> "203- binary response follows", then <u32 LE length><data>
+
+The download carries its **own** 4-byte little-endian length prefix on the wire; the upload does not.
+`getfileattributes` reports the file size (the value of that prefix), not the number of bytes on the
+wire (4 + size). Treating the directions symmetrically either corrupts the upload or truncates every
+download by 4 bytes. `XbdmBackend` in `tools/console/dc3_eval.py` implements both, and its
+`--self-test` drives `FileTransport` against an in-process fake XBDM *socket server* precisely so this
+framing is exercised.
+
+### 10.5 `delete` gotchas
+
+    delete name="Hdd:\_dc3probe"        -> 200- OK   but the directory REMAINS
+    delete name="Hdd:\_dc3probe" dir    -> 200- OK   actually removes it
+
+The plain form reports success on a directory and leaves it in place. Cleanup must pass `dir` and then
+re-list to confirm — `200- OK` is not evidence the thing is gone. Separately, a `getfile` of an absent
+path can return `414- access denied` rather than `404- file not found`, so do not detect absence by
+matching 404 alone.
+
+### 10.6 What hardware has and has not closed (as of 2026-08-02)
+
+Validated on hardware: console reachable and identified over XBDM/730; the XBDM file channel in
+**both** directions, byte-exact, including a 10240-byte payload through the shipped `XbdmBackend`;
+the delete semantics above; `hw_smoke.py` end to end.
+
+Validated offline only: `dc3_eval.py --self-test` (parser, validator, wire encoder, batch splitting,
+truncation vs count mismatch, FTP and XBDM round trips against fakes).
+
+Not yet validated on hardware (nothing offline substitutes):
+
+1. RB3Enhanced `/dta/eval` executing on a console (the installed DLL predated the endpoint).
+2. The DC3 RndConsole keypress leg — DC3 booted from `debug.xex`, a USB keyboard (or `--hid-cmd`),
+   and DC3 actually running `p.dta`.
+3. The `.clp` drive probe writing to `d:\` from a DC3 build; the `game:\` fatality is inferred from the
+   decompiled assert, not observed.
+4. The DC3 `--game-path` spelling (§7 item 2). The *form* `Usb1:\Games\<title>` was verified for
+   another title's install.
+5. An end-to-end console-vs-native state diff.
+
+---
+
+## 11. References
 
 * `src/system/os/AppChild.cpp` — the 4543 channel
 * `src/system/os/HolmesClient.cpp`, `HolmesClient_NetSocket.cpp`, `HolmesKeyboard.cpp` — Holmes
@@ -822,7 +955,8 @@ for exploratory probing: it runs through the game's own `RndConsole`, which wrap
 * `src/system/os/System.cpp:214-247,403-464,520-575` — `SystemPoll`, option parsing
 * `src/system/os/System_Xbox.cpp:282-284` — `GetCommandLineA` entry
 * `config/373307D9/symbols.txt`, `orig/373307D9/ham_xbox_r.map` — debug-XEX addresses
-* [`docs/tools/HTTP_DEBUG_SERVER.md`](../tools/HTTP_DEBUG_SERVER.md) — the native-port endpoint this
+* [`docs/tools/HTTP_DEBUG_SERVER.md`](../HTTP_DEBUG_SERVER.md) — the native-port endpoint this
   mirrors
-* [`docs/native/KINECT_CAPTURE.md`](KINECT_CAPTURE.md) — debug-XEX boot procedure, pad cheat menu
+* [`docs/tools/console/KINECT_CAPTURE.md`](KINECT_CAPTURE.md) — debug-XEX boot procedure, pad cheat menu
+* `tools/console/hw_smoke.py` — cheapest-first hardware smoke test (§0)
 * `/home/free/code/milohax/RB3Enhanced` — the DLL pattern for route 2

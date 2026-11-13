@@ -84,7 +84,7 @@ Where to read more
 - [`docs/INDEX.md`](docs/INDEX.md) — full docs sitemap.
 - [`docs/tools/INDEX.md`](docs/tools/INDEX.md) — agent tool selection guide and workflow.
 - [`docs/decomp/TECHNICAL_NOTES.md`](docs/decomp/TECHNICAL_NOTES.md) — compiler quirks and matching patterns.
-- [`docs/plans/dc3-native/STATUS.md`](docs/plans/dc3-native/STATUS.md) — native port status.
+- [`docs/INDEX.md#native-port`](docs/INDEX.md#native-port) — native port docs.
 
 Dependencies
 ============
@@ -186,11 +186,12 @@ Building
 --------
 
 ```sh
-cmake -S native -B native/build -G Ninja
+scripts/native_configure.sh                # finds Dawn (dc3-decomp-deps), ncnn, clang; exit 9 names what is missing
 cmake --build native/build --target dc3-native -- -j$(nproc)
+scripts/native_test.sh                     # the test gate: builds first, enforces the skip budget
 ```
 
-Requires extracted game assets in `orig-assets/` (see [native port status](docs/plans/dc3-native/STATUS.md)).
+Requires extracted game assets in `orig-assets/` (see [docs/native/TESTING.md](docs/native/TESTING.md) and [docs/debugging/native.md](docs/debugging/native.md)).
 
 Web build:
 

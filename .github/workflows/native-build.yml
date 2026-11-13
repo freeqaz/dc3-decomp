@@ -6,7 +6,7 @@
 #   - dc3-native       : main executable
 #   - milo-viewer      : standalone .milo viewer
 #   - render-test      : programmatic render checker
-#   - milo-tests       : the 371-test GTest suite (the gate)
+#   - milo-tests       : the native GTest suite (the gate)
 #
 # Scope: this is the NATIVE pipeline (Phase 0 of the RB3 native port — see
 #        rb3/docs/native/NATIVE_PORT_ROADMAP.md §0.4). The matched-fork MSVC-PPC
@@ -27,7 +27,8 @@
 # are ~6 GB and don't fit a free GitHub-hosted runner either. Asset-dependent
 # tests GTEST_SKIP() cleanly when DC3_DATA is unset (see
 # milo-native-engine/tests/CMakeLists.txt for the env-var contract that the
-# dc3 native tests share). The full 371-test gate is a separate manual /
+# dc3 native tests share). The full asset-backed gate (scripts/native_test.sh)
+# is a separate manual /
 # self-hosted-runner / release-asset check.
 # =============================================================================
 
@@ -190,7 +191,7 @@ jobs:
           ls -la build/dc3-native build/milo-viewer build/render-test build/milo-tests
           file build/dc3-native build/milo-viewer build/render-test build/milo-tests
 
-      - name: Run ctest (milo-tests 371-suite)
+      - name: Run ctest (milo-tests suite)
         working-directory: dc3-decomp/native/build
         run: |
           # -j1: see milo-native-engine/tests/CMakeLists.txt RESOURCE_LOCK note;

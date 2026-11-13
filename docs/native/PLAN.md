@@ -1,133 +1,95 @@
-# Native Port — Status & Plan
+# Native port — roadmap to playable
 
-**Last updated**: 2026-03-23
+**Goal:** a person stands in front of a webcam and plays Dance Central 3 —
+menus, a whole song, believable scoring, results, saves — on Linux, macOS and in
+the browser.
 
-The native port operates 1:1 with the Xbox version's DTA-driven pipeline. No bypass hacks remain. The full screen chain runs through the same DTA handlers, FileMerger loading chain, and panel hierarchy as the original game.
+Measured state: [STATUS.md](STATUS.md) (2026-11-13). Each item names its owning
+files and the check that proves it done. An item is done when its check passes,
+not when code lands. When an item closes, record the commit next to it; when the
+whole track closes, collapse it to one line.
 
----
+Size: S < half a day · M ≈ 1–2 days · L = several days.
 
-## Status: Song Audio Decryption Fixed
+## Milestones
 
-### What Works
+1. **M1 — Dance on Linux.** P-1, P-2, P-5, P-6, G-5 done: a real webcam plays a
+   whole Perform song with no crash, and a deterministic replay test guards it.
+2. **M2 — Dance in the browser.** P-9, W-2, W-3 done: the page asks for the
+   camera, tracks the player, and the score responds.
+3. **M3 — Whole game by dancing.** P-3, P-4, P-7, G-1..G-4 done: gesture menus,
+   the player on screen, calibrated scoring, and every mode reachable.
+4. **M4 — Mac.** Track M done, verified on the owner's Mac.
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| DTA screen flow | Working | boot → attract → title → main → choose_mode → song_select → multiuser → loading → game_screen |
-| Venue rendering | Working | Full 3D venues with PostProc (bloom, color grading), lights, meshes |
-| Character rendering | Working | Skinned meshes, outfit loading, proper lighting (RndEnvironTracker) |
-| Character animation | **Working** | LP64 fix in LayerArray::Eval (offset 8→mWeight); HamDriver bootstrap for zero-init heap (2026-03-23) |
-| Camera shot cycling | Working | PropKeys target matching via SameObject (vbase fix) |
-| Song audio (v0xE) | **Working** | Full AES-CTR decrypt pipeline: KeyChain + GrindArray + HMXA→OggS (2026-03-23) |
-| SFX audio (v0xB) | Working | Hardcoded gRB1Key, always worked |
-| Beat-driven timing | **Working** | Audio drives songMs → TheTaskMgr.Beat(); wall-clock fallback when audio fails |
-| Move cards | Working | Flashcard dock, choreography system |
-| Async loading | Working | FileMerger, FileMergerOrganizer, DirLoader — all through DTA flow |
-| Input scripting | Working | MILO_INPUT_SCRIPT drives menus via button presses |
-| Menu backgrounds | Rendering | turbo_shell scene visible, camera orientation needs alignment |
-| Menu text | Rendering | All items legible, positions offset ~15% from Xbox |
-| Gameplay HUD | Working | Flashcard panels, score, ribbons visible on desktop + web |
+## Track P — pose input ([POSE_INPUT.md](POSE_INPUT.md))
 
-### What Was Removed
+| # | Item | Size | Done when |
+|---|---|---|---|
+| P-1 | Motionless-skeleton SIGSEGV (`RhythmDetector` zero variance → NaN → `SymbolKeys::SetFrame`). **In progress: `np-fix-still`.** | S–M | Still-skeleton run completes the song; a regression test fails without the fix |
+| P-2 | Live webcam on Linux: camera mode of `pose_server.py`, wall-clock timestamps, HFOV, a visible "no camera" message instead of a silent 5 s stall | S–M | Owner plays a song on a webcam; no-camera boot shows a message |
+| P-3 | Gesture menus: `DC3_CONTROLLER_MODE=faithful` path, hand meshes unhidden in `native/src/platform/MeshFilter.cpp`, swipe poses in `scripts/synthetic_kinect.py` | M–L | A synthetic performer navigates main menu → song select → song with no button presses |
+| P-4 | Player on screen: native `LiveCameraInput` stand-in fed webcam RGB + segmentation mask; `StreamRenderer`, `DepthBuffer3D`, `MeshFilter` | L | Silhouette/preview visible in gameplay screenshots |
+| P-5 | Tests: ctest for the socket reader, COCO mapping and `AssignSlots`; deterministic keypoint-replay fixture keyed on song time; gate covers the whole song and more than maximums | S–M | New tests sabotage-checked |
+| P-6 | Remove the dead ncnn/YOLO path, its log line and the tracked `native/yolo11n-pose.pt` | S | Windowed boot tries the MediaPipe server first; weights gone from the tree |
+| P-7 | Scoring believability: calibrate on a recorded human; webcam latency knob vs Kinect-tuned `latency_offset` in `config/scoring.dta` | M | Standing still no longer earns "awesome"; a recorded human gets a plausible spread |
+| P-8 | macOS pose: `_NSGetExecutablePath`, camera permission for the Python child | S–M | Pose server starts on the owner's Mac |
+| P-9 | Web pose: provider seam + exported `dc3_pose_push`, MediaPipe tasks-vision + getUserMedia, geometry ported from `pose_mediapipe.py`. **In progress: `np-web-pose`.** | M–L | Fake-camera dance clip, still person and empty frame score differently in Chromium |
 
-All native scaffolding hacks have been removed or replaced by the engine's own DTA paths:
+## Track G — gameplay and modes (desktop findings, also apply to web)
 
-| Hack | Removed | Replacement |
-|------|---------|-------------|
-| `gNativeVenueDir` global | Yes | `HamDirector::mVenue` set by DTA on_file_loaded |
-| `NativeVenueInit()` | Yes | `HamDirector::Enter()` → `VenueEnter()` |
-| App.cpp venue poll/draw | Yes | `world_panel` draws through panel hierarchy |
-| `DC3_SCREEN` auto-nav | Yes | Full DTA menu flow via input script |
-| `SetShowing(true)` hack | Yes | DTA `WORLD_SETUP_CHARACTERS` in worldbase.dta |
-| `screen_image` MeshFilter | Yes | Render target root cause fix (256x256 default) |
-| `consoleScreens` MeshFilter | Yes | Same render target fix |
+| # | Item | Size | Done when |
+|---|---|---|---|
+| G-1 | Battle / Party / Crew need a second skeleton: dummy and providers feed only slot 0, so `pause_on_skeleton_loss` pauses at ~beat 4 | M | Battle with two synthetic performers reaches results |
+| G-2 | Story re-shows the Perform tutorial on a profile that has seen it | S–M | Story from a saved profile skips the tutorial |
+| G-3 | Story `campaign_perform_endgame_screen` never advances | S–M | Story song → endgame → next screen |
+| G-4 | Fitness: find how a playlist starts; fix if it is a bug | S | Fitness song starts, or documented as navigation |
+| G-5 | Windowed keys: Space to toggle pause, a quit key that matches the startup log; X/Y/LT/RT bindings (`milo-native-engine/src/platform/Joypad_Native.cpp`, shared with rb3) | S | Manual check in a window |
+| G-6 | Black box over the final-results header and empty centre panel | M | Final-results screenshot matches the Xbox layout |
+| G-7 | Controller-mode help bar stays on in gameplay; "raise both hands" bubble on most menus, doubled in party | S–M | Screenshots match Xbox behaviour |
+| G-8 | Title/main background purple vs blue (`archive/screenshots/references/dc3_main_menu.jpg`) | M | Side-by-side matches |
+| G-9 | Missing glyphs: `S` in Vibration-Medium (`results_cluster.milo` `score_fmt`), `%`/`f` in Eagle-Light | S | No missing-glyph NOTIFY lines |
+| G-10 | Audio verified by ear on Linux; Options and store screens reached | S | Owner confirms; screenshots of both |
 
-### Key Fixes Applied
+## Track W — web ([WEB.md](WEB.md))
 
-| Fix | File | Impact |
-|-----|------|--------|
-| **Mogg v0xE decrypt** (2026-03-23) | `ByteGrinder.cpp`, `VorbisReader.cpp` | Song audio decrypts: pure C++ GrindArray, native magicHash |
-| **Beat-freeze fix** (2026-03-23) | `Game.cpp` | `mRealTime=true` on audio fail → beats advance from wall clock |
-| `SameObject()` vbase comparison | `PropAnim.cpp` | Camera shots cycle (PropKeys target matching) |
-| Render target 0x0 default | `Tex_Wgpu.cpp` | No white rectangles from empty render targets |
-| `HamPanel::Exiting()` | `HamPanel.cpp` | Menu transitions work (gesture animations don't block) |
-| `RndEnvironTracker` for characters | `Character.cpp` | Characters lit correctly during gameplay |
-| `CharBones::Zero()` null guard | `CharBones.cpp` | No crash from uninitialized bone data |
-| `Flow::~Flow()` cascade guard | `Flow.cpp` | No use-after-free during panel unload |
-| `UIScreen::UnloadPanels` batch delete | `UIScreen.cpp` | Panels unload without cascade corruption |
-| `DirLoader::Find` path normalization | `DirLoader.cpp` | Shared subdirs (director.milo) resolve correctly |
-| `ReplaceRefsFrom` vbase fix | `Object.cpp` | ObjRef ring walks handle vbase offsets |
+| # | Item | Size | Done when |
+|---|---|---|---|
+| W-1 | Pose input = P-9 | — | — |
+| W-2 | `scripts/web/*.mjs` launch a WebGPU-capable browser on this box (Playwright vs headless-shell version). In `np-web-pose`. | S | `smoke-test.mjs` runs from a worktree |
+| W-3 | Swap the release/debug optimisation levels back: the default page is `-O0` | S | `flags.make` shows `-O3` for release |
+| W-4 | Configure clones imgui with full history per build dir and can hang; `index.html` not copied if the debug half fails | S | Offline/shallow fetch; `index.html` always deployed |
+| W-5 | Public deployment: stale build and unauthenticated asset API. **Owner decision.** | — | Owner's call |
+| W-6 | Heap headroom: ~460 MB of 512 MB in one venue; measure all venues, then raise the cap or trim | M | Max heap over every venue recorded |
+| W-7 | ~20 missing SFX sidecars under `sfx/gen/xma_pcm/` | S | No 404s in a full-song run |
+| W-8 | Player-facing page: hide the dev console, pause/step buttons and status bar behind `?dev` | S | Default page shows only the game |
 
----
+## Track M — macOS ([MACOS.md](MACOS.md))
 
-## Next Steps
+| # | Item | Size | From Linux? |
+|---|---|---|---|
+| M-1 | Generate the libc++ `wrap_iter.h` shim at configure time | M | yes, then confirm on Mac |
+| M-2 | Move the Apple `-fms-compatibility`/PCH exemption to the engine files; delete dc3's dead gfx/audio copies (H-1) | S | yes (engine change: heads-up first) |
+| M-3 | `malloc_usable_size` / `<malloc.h>` in `Dir.cpp` and a test | S | yes |
+| M-4 | Remove the 22 duplicate definitions; gate "links without `--allow-multiple-definition`" on Linux | M | yes |
+| M-5 | Darwin branch in `scripts/native_configure.sh` (Dawn prebuilt, `BUILD_TESTS=OFF`) | S | yes |
+| M-6 | `/proc/self/exe` and `/proc/self/statm` uses | S | yes |
+| M-7 | First build and windowed run on the owner's Mac; then a macOS CI job | M | no |
 
-### Priority 1: Character Dance Animation — FIXED (2026-03-23)
-**Root cause**: LP64 bug in `HamDriver::LayerArray::Eval()` — raw pointer access `*(float*)((char*)(*it) + 8)` reads `mBeat` on 64-bit (vtable=8 bytes) instead of `mWeight` (offset 12). Fixed to `(*it)->mWeight`. PPC codegen identical (100% match preserved). Also: `HamDriver::Poll()` bootstrap needed for zero-initialized heap (Xbox gets garbage non-zero mWeight from pool allocator). Diagnostic logging (`ANIM-DIAG`, `CLIP-DIAG`, `SHOT-DIAG`, `REMIXER-DIAG`) removed.
+## Track H — hygiene that unblocks the above
 
-### Priority 2: turbo_shell Camera Orientation
-The menu background renders but the gradient pattern is shifted/rotated vs Xbox.
+| # | Item | Size |
+|---|---|---|
+| H-1 | Delete dead dc3 copies `native/src/gfx/*`, `native/src/platform/{Rnd,Mesh,Tex,Part}_Wgpu.cpp`, the unused source lists, and the wrong CMake comment near the `dc3-web` target | S |
+| H-2 | Fix or delete `wgpu-window-test` | S |
+| H-3 | GitHub `native-build` red in 36 of 40 runs: find the cause | S–M |
+| H-4 | `milo_viewer.cpp` sets `MILO_RENDER=0`, which the engine reads as "set", so GPU is forced on | S |
+| H-5 | `FFmpegMovieImpl.cpp` compiled from both repos: possible duplicate | S |
+| H-6 | Crowd impostors cached once per character, so the crowd never animates | M |
+| H-7 | `native_assert_harvest.py` stalls on tutorial screens | S |
+| H-8 | CLAUDE.md and the CMake comment call the gameplay gate "one ~2 min run"; it is ~50 min | S |
 
-**Files**: `src/system/rndobj/Cam.cpp` (GetViewProjectXfms, sFlipYZ), `src/system/ui/PanelDir.cpp` (CamOverride)
+## Owner decisions pending
 
-### Priority 3: UI Text Positioning
-Menu text positions are offset ~15% vertically from Xbox.
-
-**Files**: `src/system/ui/UI.cpp` (Draw, camera selection), `native/src/platform/Rnd_Wgpu.cpp` (viewport)
-
-### Priority 4: PostProc Flush Timing — DONE (2026-03-24)
-PostProc flushed before UI overlay via `FlushPostProcessingForOverlay()` in `PanelDir::DrawShowing`.
-On web (Emscripten), the swapchain surface doesn't reliably support `LoadOp::Load` between render passes.
-Fixed by rendering to an owned "frame resolved" texture on web, then copying to swapchain at end-of-frame.
-Desktop and web HUD overlay now both functional.
-
-**Files**: `native/src/platform/Rnd_Wgpu.cpp`, `native/src/platform/Rnd_Wgpu.h`, `native/src/platform/GpuDevice_Web.cpp`
-
-### Priority 5: Cleanup diagnostic printfs — DONE (2026-03-24)
-All `ANIM-DIAG`, `CLIP-DIAG`, `SHOT-DIAG`, `REMIXER-DIAG`, `HamDirector::Enter`, `HUD-DIAG`, `HUD-MESH` debug printfs removed.
-
----
-
-## Test Commands
-
-```bash
-# Full DTA flow — boot to gameplay (no bypasses)
-MILO_HEADLESS=1 MILO_FATAL_FAILS=0 MILO_MAX_FRAMES=10000 \
-  MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
-  DC3_DATA=orig-assets native/build/dc3-native
-
-# Post-intro animation verification
-mkdir -p /tmp/screenshots
-DC3_TEL=1 DC3_TEL_INTERVAL=25 \
-MILO_SCREENSHOT_DIR=/tmp/screenshots \
-MILO_SCREENSHOT_FRAMES=7750,8000,8450,8975 \
-  # add to the command above
-
-# Frame capture (dumps all draw calls for a specific frame)
-MILO_CAPTURE_FRAME=8000 \
-  # add to above
-
-# UI flow debugging
-MILO_DEBUG_UI_FLOW=1 \
-  # add to above
-
-# ASan build
-cmake -S native -B native/build-asan -DENABLE_ASAN=ON && \
-  cmake --build native/build-asan --target dc3-native
-```
-
-## Reference Docs
-
-| Document | Content |
-|----------|---------|
-| `docs/sessions/convergence/01-hx-native-audit.md` | 865 HX_NATIVE blocks cataloged |
-| `docs/sessions/convergence/02-boot-to-gameplay-flow.md` | Xbox vs Native flow trace |
-| `docs/sessions/convergence/03-dependency-graph.md` | Hack dependency map |
-| `docs/sessions/convergence/04-background-panel-rendering.md` | turbo_shell rendering check |
-| `docs/sessions/convergence/05-filemerger-async-pipeline.md` | Async loading analysis |
-| `docs/sessions/convergence/06-synthesis-final.md` | Implementation guide |
-| `docs/sessions/convergence/07-vbase-comparison-audit.md` | Virtual base pointer audit |
-| `docs/sessions/2026-03-21-convergence-session.md` | Session 1 notes |
-| `docs/sessions/2026-03-22-vbase-propkeys-fix.md` | Virtual base fix details |
-| `docs/sessions/2026-03-22-convergence-final.md` | Session 2 final status |
-| `docs/debugging/native.md` | Debugging techniques (ASan, ObjRef rings) |
-| `archive/screenshots/references/` | Xbox target screenshots |
+- Public web deployment (W-5).
+- Which Mac / macOS / Xcode; Metal Dawn still installed or use Google's prebuilt; Python pose server acceptable on Mac (M-7, P-8).
+- Shared-engine changes (G-5, M-2, M-4) need a heads-up to the rb3 owner before landing.

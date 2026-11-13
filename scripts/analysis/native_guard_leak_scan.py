@@ -195,7 +195,9 @@ CONTENT_RE = re.compile(
 
 CONTENT_WINDOW = 3  # how many lines above a code line a native comment may sit
 
-# The idiom this bug class actually takes.  docs/native/HACK_AUDIT.md names it
+# The idiom this bug class actually takes.  HACK_AUDIT.md (now
+# docs/archive/2026-11-13-native-doc-audit/native/HACK_AUDIT.md; the live
+# write-up is docs/decomp/patterns/native-guard-leak-scan.md) names it
 # outright: "null checks that mask uninitialized data, early returns that skip
 # initialization, MILO_WARN downgrades that hide missing objects".  866ba1082's
 # leak was `if (!t2) return;` -- shape, not wording, is what identifies it.
