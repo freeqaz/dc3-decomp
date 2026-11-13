@@ -20,6 +20,7 @@
 #include "obj/Task.h"
 #include "os/Debug.h" // TheDebug.AddExitCallback
 #include <vector>
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -499,6 +500,46 @@ static void ScoringDebugTick(bool accepted, bool skipped, int reassigns) {
     }
 }
 
+// DC3_POSE_LATENCY_LOG=1: how old each pose frame is when the game takes it,
+// capture to SkeletonUpdate, every 5 s:
+//   DC3 POSE AGE: capture->game median 61 ms p10 48 p90 79 (n=150)
+// pose_server.py stamps a packet with its capture time on time.monotonic()
+// (a V4L2 camera's own buffer stamp, CLOCK_MONOTONIC), which is
+// steady_clock's clock here, so the difference is the pipeline's latency up
+// to the game loop: driver, MediaPipe, socket, poll.  It is most of what
+// DC3_POSE_LATENCY_MS declares; what it cannot see is the exposure itself and
+// the audio output delay (the player dances to what she hears).  A stamp that
+// is not on this clock (the in-process performer stamps song time; the web
+// stamps the page's clock) reads outside 0..2 s and is not counted.
+static void PoseAgeLog(double captureSecs) {
+#ifndef __EMSCRIPTEN__
+    static const bool sOn = Dc3EnvFlag("DC3_POSE_LATENCY_LOG", false);
+    if (!sOn || captureSecs < 0.0)
+        return;
+    static std::vector<float> sAges;
+    static std::chrono::steady_clock::time_point sLast = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    double nowSecs = std::chrono::duration<double>(now.time_since_epoch()).count();
+    double age = nowSecs - captureSecs;
+    if (age >= 0.0 && age < 2.0)
+        sAges.push_back((float)(age * 1000.0));
+    if (now - sLast < std::chrono::seconds(5))
+        return;
+    sLast = now;
+    if (sAges.empty()) {
+        fprintf(stderr, "DC3 POSE AGE: no frame stamped on this clock in 5 s\n");
+        return;
+    }
+    std::sort(sAges.begin(), sAges.end());
+    size_t n = sAges.size();
+    fprintf(stderr, "DC3 POSE AGE: capture->game median %.0f ms p10 %.0f p90 %.0f (n=%zu)\n",
+            sAges[n / 2], sAges[n / 10], sAges[(n * 9) / 10], n);
+    sAges.clear();
+#else
+    (void)captureSecs;
+#endif
+}
+
 // The in-process performer (PosePerformer_Native.h) publishes with the
 // default `unlevelled = false`: its synthetic modes play a Kinect.  A replay
 // is a recording from a real camera, so it needs the tilt estimate like the
@@ -655,6 +696,7 @@ static const SkeletonFrame *BuildSensorFrame() {
 
         if (newFrame) {
             BeginSensorFrame(AcceptedFrameElapsed(TheSkeletonProvider->Timestamp()));
+            PoseAgeLog(TheSkeletonProvider->Timestamp());
             static NativeSkeletonProvider::PersonData sPersons[NativeSkeletonProvider::kMaxPersons];
             int numPersons = TheSkeletonProvider->NumPersons();
             for (int i = 0; i < numPersons; i++)
