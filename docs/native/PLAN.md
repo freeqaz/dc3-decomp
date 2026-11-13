@@ -40,9 +40,9 @@ Size: S < half a day · M ≈ 1–2 days · L = several days.
 | # | Item | Size | Done when |
 |---|---|---|---|
 | G-1 | Battle / Party / Crew need a second skeleton: dummy and providers feed only slot 0, so `pause_on_skeleton_loss` pauses at ~beat 4 | M | Battle with two synthetic performers reaches results |
-| G-2 | Story re-shows the Perform tutorial on a profile that has seen it | S–M | Story from a saved profile skips the tutorial |
-| G-3 | Story `campaign_perform_endgame_screen` never advances | S–M | Story song → endgame → next screen |
-| G-4 | Fitness: find how a playlist starts; fix if it is a bug | S | Fitness song starts, or documented as navigation |
+| G-2 | ~~Story re-shows the Perform tutorial on a profile that has seen it~~ **Done, not a bug** (`np-modes`, `eb2b5542b`): tutorials-seen is per console, stored in the global options cache, and the surveyed run started from an empty cache dir. See [STATUS](STATUS.md#reaching-story-and-fitness) | S–M | Story from a saved profile skips the tutorial: `StoryTutorialGateSeenTest` / `FreshTest` |
+| G-3 | ~~Story `campaign_perform_endgame_screen` never advances~~ **Done, not a bug** (`np-modes`): the endgame waits for a 4000 ms wall-clock passive message ("High Solo Score!"). A no-GPU headless run does 5–9k frames per second, so the frame-counting driver gave up first. See [STATUS](STATUS.md#reaching-story-and-fitness) | S–M | Story song → endgame → next song → `campaign_intro_perform_continue_screen`, unattended (headless runs, 2026-11-13) |
+| G-4 | ~~Fitness: find how a playlist starts~~ **Done, navigation** (`np-modes`, `eb2b5542b`): row 0 only toggles fitness mode, and songs start from row 3 `playlists` → playlist → `playlist_play`. See [STATUS](STATUS.md#reaching-story-and-fitness) | S | Fitness playlist song reaches gameplay; `FitnessPlaylistFlowTest` |
 | G-5 | Windowed keys: Space to toggle pause, a quit key that matches the startup log; X/Y/LT/RT bindings (`milo-native-engine/src/platform/Joypad_Native.cpp`, shared with rb3) | S | Manual check in a window |
 | G-6 | Black box over the final-results header and empty centre panel | M | Final-results screenshot matches the Xbox layout |
 | G-7 | Controller-mode help bar stays on in gameplay; "raise both hands" bubble on most menus, doubled in party | S–M | Screenshots match Xbox behaviour |
