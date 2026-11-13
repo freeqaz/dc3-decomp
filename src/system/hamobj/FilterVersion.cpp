@@ -47,15 +47,7 @@ FilterVersion *FilterVersion::Create(const DataArray *cfg) {
 void Ham1FilterVersion::NodeInput(
     int x, const DetectFrame *detectFrame, MoveMode mode, ErrorNodeInput &input
 ) const {
-    // w21-f (85.0 -> 100): read the two DetectFrame members DIRECTLY (friend),
-    // one inline level fewer than the GetMoveFrame()/Mirror() accessors.  With
-    // the by-value accessors MSVC read the mirror off the still-live incoming r5
-    // (`lwz r11, 0xc(r5)` + `mr r6, r11`); the image sets mode first (`mr r5, r6`)
-    // and loads both members late off the saved copy (`lwz r6, 0xc(r30)`,
-    // `lwz r3, 0x4(r30)`), which is what the direct member reads give.  The
-    // nine spellings w8-i/w9-c refuted all kept the accessors.  (Making both
-    // accessors return `const &` also reaches 100; the friend read keeps the
-    // header's accessors, and every other caller, unchanged.)
+    // Lane history (9 lines moved): docs/decomp/notes/system/hamobj/FilterVersion.md
     const Ham1NodeWeight &ham1 =
         detectFrame->mMoveFrame->NodeWeightHam1(x, mode, detectFrame->mMirror);
     input.Set(detectFrame->NodeComponentWeight(x), &ham1);

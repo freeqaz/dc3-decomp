@@ -207,19 +207,7 @@ void HamIKSkeleton::SetBone(RndTransformable *t1, RndTransformable *t2) {
     if (!t2)
         return;
 #endif
-    // RESIDUAL (w13-b, 99.23): the image's guard for this NOTIFY_ONCE static
-    // tests bit 0x2 (`rlwinm. r9, r11, 0, 30, 30` / `ori r11, r11, 0x2`), ours
-    // bit 0x1: something in the original claimed the first bit of this
-    // function's guard word (lbl_82F60FE0, referenced only from here) and was
-    // optimised away.  Not reconstructed: no observable statement explains it.
-    // w21-t: mechanism CONFIRMED, not shipped.  A dead static lexically
-    // before _dw claims guard bit 0: `if (0) { MILO_NOTIFY_ONCE(...); }` as
-    // the first statement reads 100 normalized, but under name_check the
-    // atexit dtor becomes ??__F_dw@?N@ where the map has ?M@ (one scope too
-    // many); the same block placed AFTER keeps ?M@ but bit 0x1.  So the
-    // original had a dead static before _dw AND one scope fewer somewhere
-    // before it.  Shipping invented dead code would also emit an extra
-    // ??__F_dw dtor the map lacks, so the faithful code stays (99.23).
+    // Lane history (13 lines moved): docs/decomp/notes/system/hamobj/HamIKSkeleton.md
     if (t2->Dirty()) {
         if (!t1) {
             MILO_NOTIFY_ONCE("%s bone is NULL, neutral is %s", PathName(this), t2->Name());

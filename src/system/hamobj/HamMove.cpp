@@ -24,14 +24,7 @@
 float HamMove::sMinFrameDistBeats = 0.2;
 
 #ifndef HX_NATIVE
-// w8-b: orphan-instantiation anchor.  ham_xbox_r.map line 43563 puts
-// ??$MakeString@PBDPBDH@@YAPBDPBDABQBD1ABH@Z at 0x824AFEA8 in hamobj:HamMove.obj,
-// but no surviving call in HamMove reaches a MakeString("...%s...%s...%d..."):
-// the caller was /OPT:REF'd away and only the instantiation was linked.  An
-// unreferenced EXTERNAL function re-creates it.  `static` does NOT -- measured on
-// this exact probe: adding `static` costs exactly 1 function / 92 B binary-wide
-// (31246/5546312 -> 31245/5546220), i.e. MSVC discards a static before it
-// instantiates anything it mentions.  Deleting it likewise takes the row to 0%.
+// Lane history (8 lines moved): docs/decomp/notes/system/hamobj/HamMove.md
 const char *Dc3W8bHamMoveProbe(const char *a, const char *b, int c) {
     return MakeString("%s %s %d", a, b, c);
 }
@@ -490,12 +483,7 @@ BEGIN_COPYS(HamMove)
         COPY_MEMBER(mSmallTex)
         COPY_MEMBER(mScored)
         COPY_MEMBER(mFinalPose)
-        // w21-k (97.77 -> 100): iterate through a named reference to the
-        // list.  With FOREACH straight over the member, MSVC hoisted the list
-        // head load (`lwz r29, -0xf8(r31)`) between the two byte copies above;
-        // the image finishes both copies first (w7-w/w7-ag/w13-b had certified
-        // that 4-row scheduling residual as a floor).  FOREACH_CONST over the
-        // member, which binds a const reference the same way, also measures 100.
+        // Lane history (6 lines moved): docs/decomp/notes/system/hamobj/HamMove.md
         std::list<PropKeys *> &keys = mPropKeys;
         FOREACH (it, keys) {
             (*it)->SetTarget(this);

@@ -17,13 +17,7 @@ bool FilterQueue::GetResults(float &outValue, DetectFrame **frames, float unused
     outValue = mQueuedJob.songSeconds;
     std::vector<FilterOutputFrame> &oframes = mOutput.frames;
     MILO_ASSERT(qframes.size() == oframes.size(), 0x42);
-    // w21-at: 99.98 -> 100.  The two result slots are cleared by a loop (the
-    // caller's DetectFrame *resultFrames[2], one per player); MSVC unrolls it
-    // into the same two stores, but only the loop form gives the following
-    // size() guard the image's _M_start-then-_M_finish load order.  Two
-    // straight-line stores in either order, or a chained `=`, kept the swap
-    // (w13-b had called it the stlport size() order family; an unsigned
-    // index and w18-b's `size() > frameIdx` were inert / worse).
+    // Lane history (7 lines moved): docs/decomp/notes/system/hamobj/FilterQueue.md
     for (int i = 0; i < 2; i++) {
         frames[i] = nullptr;
     }
@@ -92,11 +86,7 @@ void FilterQueue::Poll(const SkeletonUpdateData &skelData) {
     std::vector<FilterOutputFrame> &oframes = mOutput.frames;
     for (std::vector<FilterOutputFrame>::iterator it = oframes.begin(); it != oframes.end(); ++it) {
         FilterInputFrame *inFrame = it->mInputFrame;
-        // w16-b: 98.41 -> 100. The image holds only inFrame (r30) and
-        // `&mErrorNodes[0]` (r25, taken right after the mFilterVersion load and
-        // bumped by 4 per node); NumNodes()/NodeInput() re-read
-        // inFrame->mFilterVersion. A named array pointer at the top does that;
-        // a named `filterVer` local (w7-y) pinned the FilterVersion instead.
+        // Lane history (5 lines moved): docs/decomp/notes/system/hamobj/FilterQueue.md
         ErrorNode *const *errorNodes = inFrame->mFilterVersion->mErrorNodes;
         BaseSkeleton *skel = skelData.mSkeletonsLeft[inFrame->mSlot];
 #ifdef HX_NATIVE

@@ -238,12 +238,7 @@ void HamNavProvider::SetLabel(int elementIndex, int i2, Symbol s) {
     curItem.mLabels.clear();
     curItem.mLabels.push_back(s);
     if (curItem.mSubListProvider) {
-        // w21-r (97.80 -> 100, 91/91 equal): the Size() test reads the member
-        // directly and the Clone goes through a provider pointer declared
-        // INSIDE the if -- that local is the image's `stw r11, 0x50(r31)`
-        // (its home store sits at the Clone site, after the re-read of
-        // Data()).  Earlier refutations (w11-a/w19-b) all declared the local
-        // before the test or used it at the Size() site.
+        // Lane history (6 lines moved): docs/decomp/notes/system/hamobj/HamNavProvider.md
         if (i2 < curItem.mSubListProvider->Data()->Size()) {
             DataProvider *prov = curItem.mSubListProvider;
             DataArray *cloned = prov->Data()->Clone(true, false, 0);

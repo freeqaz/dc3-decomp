@@ -886,25 +886,9 @@ void HamIKEffector::Poll() {
                         totalWeight += remaining;
                     }
 
-                    // w20-l: normalized 100 / fuzzy 99.94. Only rows: y/z `fmuls`
-                    // operand order (image f12*f0 / f11*f0, ours f0*f12 / f0*f11) --
-                    // commutative, value-identical. `q.v *= invWeight`, Scale(), and
-                    // `q.v /= totalWeight` all emit the same code. Values and branch
-                    // targets of the whole function checked against the image.
-                    // Open (w25-gv, c2 §8.7 commutative key): the image emits
-                    // (inv, x) but (y, inv) and (z, inv).  Here the scalar-replaced
-                    // q.v components are variable leaves x=V15 > y=V13 > z=V11 (sid
-                    // falls with first-def order) and invWeight is V282, so it leads
-                    // all three.  The image needs sid(x) < sid(inv) < sid(y), sid(z),
-                    // or y/z as memory leaves keyed above inv.  ~40 spellings tried
-                    // (z,y,x / Zero() / Set() / x=y=z inits, refs, pointers, /=, inline
-                    // reciprocal, decl placement): each either keeps x highest or
-                    // reorders the init stores.
-                    // w26-f14: re-measured inert (exact, per-object + patch chain) --
-                    // `const float &qy = q.v.y` / `&qz` / `&qx` scalar bindings
-                    // singly and paired, `Vector3 &qv = q.v` with the multiplies
-                    // through qv, and a const or step-divided invWeight: all
-                    // reproduce 99.93730 / 100.0 exactly.
+                    // Lane history (19 lines moved): docs/decomp/notes/system/hamobj/HamIKEffector.md
+                    // > Only rows: y/z `fmuls` operand order (image f12*f0 / f11*f0, ours
+                    // > f0*f12 / f0*f11) -- commutative, value-identical. (w20-l)
                     float invWeight = 1.0f / totalWeight;
                     q.v.x *= invWeight;
                     q.v.y *= invWeight;
@@ -1085,37 +1069,11 @@ void HamIKEffector::Poll() {
 done:;
 }
 
-// w21-am (98.31 -> 100.0, fuzzy 100): the rotation matrix is ONE
-//   `xfmOut.m.Set(c, s, 0, -s, c, 0, 0, 0, 1)` -- the same call IKElbow makes
-//   for its elbow matrix -- not nine member stores.  Through Set() MSVC
-//   issues m.y.x right after the fneg and reloads mEffector after the m.y.y
-//   store, which is the image's tail.  The separate early `m.x.z = 0` store
-//   and the `effLocalV` binding are gone (Set writes m.x.z; the Multiply
-//   reads mEffector->LocalXfm().v directly).  Same nine values.
-// w21-b: 98.3 canonical (was 94.14), 6 rows left, all in the xfmOut tail:
-//   the mEffector reload (`lwz r11, 0x50(r29)`) is scheduled one slot early
-//   (before the m.y.y store at 0x14 instead of after it), and MSVC sinks our
-//   `xfmOut.m.y.x = -sinAngle` store (0x10) below the three z-row stores
-//   where the image issues it right after the fneg.  Same instructions, same
-//   values.  The head rows the w7-y note below described (mEffector load
-//   order, dz register pair, distSq chain) are closed by building the pull
-//   in quatOut.v -- see the comment in the body.  Tail spellings measured
-//   with a standalone /FAs probe and all inert or worse: the effLocalV
-//   binding at each of the 10 statement positions or inline in the Multiply
-//   call, m.y.x as -sinAngle / -m.x.y / a positive sqrt local, and all 720
-//   orders of {binding, m.y.y, m.y.z, m.y.x, z-row} x z-row component order.
-//
-// Earlier history (w7-y, at 94.2): reassociating distSq and moving the
-// effLocalV binding below the m.y.y store were both refuted there.
+// Lane history (22 lines moved): docs/decomp/notes/system/hamobj/HamIKEffector.md
 void HamIKEffector::ComputeHandPullAndQuat(
     QuatXfm &quatOut, Transform &xfmOut, const Transform &parentXfm, const Vector3 &targetPos
 ) {
-    // w21-b: the pull is built IN quatOut.v (as in ComputeElbowPullAndQuat)
-    // and both lengths are read through mEffector directly; the squared
-    // distance is accumulated y, z, x.  This gives the image's load order
-    // (mEffector after the first lfs), the dz register pair, and its
-    // dz*dz / fmadds dy / fmadds dx chain with dx parked in f11.  Values are
-    // unchanged: (dy^2 + dz^2) + dx^2 is the image's own association.
+    // Lane history (6 lines moved): docs/decomp/notes/system/hamobj/HamIKEffector.md
     Subtract(targetPos, parentXfm.v, quatOut.v);
     float effectorLen = mEffector->LocalXfm().v.x;
     float parentLen = mEffector->TransParent()->LocalXfm().v.x;
@@ -1303,14 +1261,10 @@ void HamIKEffector::ComputeElbowPullAndQuat(
     MultiplyTranspose(v, xfm, v40);
     const Vector3 &effectorV = mEffector->TransParent()->LocalXfm().v;
     MakeRotQuat(effectorV, v40, q.q);
-    // w21-b: 96.43 -> closed.  The w7-bb/w14-b residual (the image RELOADS
-    // q.v.x after storing it, and squares in dy, x, dz order) is the pull
-    // being built IN q.v: Subtract() writes all three components, the length
-    // is summed from q.v, and q.v is scaled in place.  MSVC forwards y and z
-    // (and drops their first stores as dead) but reloads x.  effectorV.x is
-    // read before the Subtract: the image loads it (824BF900, lfs f10,0x0(r30))
-    // ahead of the q.v.x store.  Found with a standalone /FAs probe over 364
-    // spellings; same values as before on every component.
+    // Lane history (8 lines moved): docs/decomp/notes/system/hamobj/HamIKEffector.md
+    // > The w7-bb/w14-b residual (the image RELOADS q.v.x after storing it, and squares
+    // > in dy, x, dz order) is the pull being built IN q.v: Subtract() writes all three
+    // > components, the length is summed from q.v, and q.v is scaled in place.
     float effectorLen = effectorV.x;
     Subtract(v, xfm.v, q.v);
     float lenSq = q.v.x * q.v.x + q.v.y * q.v.y;
