@@ -1977,6 +1977,12 @@ void CamShot::UnHide() {
 // builds two `_dw` with the identical std/ld/std/stw/stw/atexit sequence and
 // has no frame pointer and no EH. Whatever owns the two null-action states is
 // something with an empty destructor whose lifetime spans no call.
+// w-this-adjust (2026-11-13): POINTER AUDIT, NOT A BUG -- `subi r31, r1, 0x90`
+// is the EH frame pointer, not a this-adjustment.  Every pointer argument
+// matches: the inlined GetCrowdDir (0x1b0 test, vbase hop to Dir() at +0x28,
+// __RTDynamicCast to WorldDir), Cam() at 0x210, and both PathName arguments
+// via the same Hmx::Object vbase conversion.  Re-measured 98.9 canonical,
+// equal 57 / diff_arg 34 / del 1; every diff_arg is the r31 frame shift.
 RndCam *CamShot::GetCam() {
     RndCam *ret = 0;
     WorldDir *crowdDir = GetCrowdDir();

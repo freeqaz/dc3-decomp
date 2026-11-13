@@ -104,6 +104,18 @@ END_SAVES
 // regasg first-fit, so the split follows from the conversion not being
 // copy-preferred to r4 -- the open question is which source makes the second
 // RHS a distinct value.
+// w-this-adjust (2026-11-13, objdiff 4.2.9 name_check): POINTER AUDIT, NOT A
+// BUG.  The `subi r11,r11,0x84` vs `addi r11,r11,0x4` row is the same
+// RndMatAnim* -> Hmx::Object* virtual-base conversion: r31 is this+0x88, the
+// image computes (r31 + vbtbl[1]) - 0x84, ours (r31-0x88) + vbtbl[1] + 4 --
+// equal.  mKeysOwner gets r31-0x88 on both sides.  Re-measured: shipped `self`
+// = 98.9 canonical, equal 90 / diff_arg 3 / diff_op 1 / del 1, 376 B (4 short);
+// the RB3/rb3-xenon spelling `sOwner = this; mKeysOwner = this;` = 97.9, equal
+// 94 / ins 1 / del 1, 380 B = target size, the ONLY residual being the
+// `stw sOwner` emitted one slot before `subi r4, r31, 0x88` instead of after.
+// That form reproduces more of the image and scores lower (insert/delete
+// costs more than diff_arg); kept `self` for the score.  Also inert at 97.9:
+// `mKeysOwner = (sOwner = this, this);`.
 BEGIN_COPYS(RndMatAnim)
     CREATE_COPY_AS(RndMatAnim, m)
     MILO_ASSERT(m, 0xF2);
