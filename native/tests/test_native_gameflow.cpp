@@ -77,11 +77,22 @@ TEST_F(NativeGameflowMovieTest, PanelFiresMovieDoneWhenTheVideoDidNotOpen) {
     for (int i = 0; i < 16 && (ui.InTransition() || ui.CurrentScreen() != scr); i++)
         ui.Poll();
 
+    // A videos.dta entry whose file is really missing.  This used to borrow
+    // `attract` on the grounds that no .bik could open natively; since movies
+    // open through the File layer (PLAN G-15) intro.bik opens out of the
+    // archive and plays, so `attract` no longer exercises "did not open".
+    DataArray *videosCfg = SystemConfig("videos");
+    DataArray *missingEntry =
+        DataReadString("(ngf_missing (files ngf_does_not_exist.bik))");
+    int missingIdx = videosCfg->Size();
+    videosCfg->Insert(missingIdx, missingEntry->Node(0));
+    missingEntry->Release();
+
     DataVariable("ngf_movie_done") = 0;
     MoviePanel *panel = new MoviePanel();
     panel->SetName("ngf_movie_panel", ObjectDir::Main());
     DataArray *def = DataReadString(
-        "(preload FALSE) (loop FALSE) (audio TRUE) (videos attract)"
+        "(preload FALSE) (loop FALSE) (audio TRUE) (videos ngf_missing)"
         " (movie_done {set $ngf_movie_done {+ $ngf_movie_done 1}})"
     );
     panel->SetTypeDef(def);
@@ -98,6 +109,7 @@ TEST_F(NativeGameflowMovieTest, PanelFiresMovieDoneWhenTheVideoDidNotOpen) {
 
     panel->CheckUnload();
     delete panel;
+    videosCfg->Remove(missingIdx);
     TheUI = savedUI;
     delete scr;
 }

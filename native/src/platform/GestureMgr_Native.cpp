@@ -127,6 +127,16 @@ void GestureMgr_NativePreInit() {
     TheDebug.AddExitCallback(GestureMgr_NativeSensorTerminate);
 }
 
+// The model GestureMgr_NativeInit hands the pose server: $DC3_POSE_MODEL, else
+// the model in the executable's own tree -- never a path relative to the
+// working directory, which is native/build for a windowed boot (PLAN P-10).
+std::string GestureMgr_NativePoseModelPath() {
+    const char *envModel = getenv("DC3_POSE_MODEL");
+    if (envModel && *envModel)
+        return envModel;
+    return NativeSkeletonProvider::DefaultModelPath();
+}
+
 // Native implementation of GestureMgr::Init's device half: the pose provider
 // (webcam + MediaPipe) that the sensor reads.
 void GestureMgr_NativeInit() {
@@ -178,8 +188,7 @@ void GestureMgr_NativeInit() {
             // The AGPL YOLO fallback was retired after ground-truth measurement
             // showed MediaPipe dominates it on depth AND detection robustness
             // (tools/pose_corpus/bench_model_z.py, bench_detection.py).
-            const char *modelPath = getenv("DC3_POSE_MODEL");
-            if (!modelPath) modelPath = "native/models/pose_landmarker_full.task";
+            std::string modelPath = GestureMgr_NativePoseModelPath();
 
             if (TheSkeletonProvider->Start(socketPath, modelPath, camIdx)) {
                 printf("Native: external pose server started\n");

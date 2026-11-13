@@ -9,6 +9,7 @@ We do NOT trust the docs for handedness. We measure it: on footage of a person
 facing the camera, the anatomical relationships are unambiguous, so the sign of
 each axis falls out.
 """
+import os
 import sys
 import numpy as np
 import cv2
@@ -16,7 +17,8 @@ import mediapipe as mp
 from mediapipe.tasks import python as mpp
 from mediapipe.tasks.python import vision
 
-MODEL = sys.argv[1] if len(sys.argv) > 1 else "native/models/pose_landmarker_full.task"
+MODEL = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), os.pardir, "models", "pose_landmarker_full.task")
 VIDEO = sys.argv[2] if len(sys.argv) > 2 else "/home/free/tmp/dc3-pose-footage/solo_dancer_sattriya.mp4"
 NFRAMES = int(sys.argv[3]) if len(sys.argv) > 3 else 120
 

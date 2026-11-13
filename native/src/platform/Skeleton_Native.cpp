@@ -127,8 +127,8 @@ NativeSkeletonProvider::Problem NativeSkeletonProvider::DescribeServerExit(
     case kExitNoModel:
         snprintf(buf, sizeof(buf),
             "The pose model file is missing (see DC3_POSE_MODEL, default"
-            " native/models/pose_landmarker_full.task) - pose tracking is off.%s",
-            kStandIn);
+            " %s) - pose tracking is off.%s",
+            DefaultModelPath().c_str(), kStandIn);
         p.brief = "Pose model missing: pose tracking off";
         break;
     case kExitNoDeps:
@@ -216,6 +216,7 @@ float Dc3SensorLatencySeconds(float scoringDtaSeconds) {
 // (native/web/pose/) through dc3_pose_push (PoseInput_Web.cpp) into
 // PublishFrame; the buffering, slot fill and joint hold below are shared.
 bool NativeSkeletonProvider::Start(const std::string&, const std::string&, int) { return false; }
+std::string NativeSkeletonProvider::DefaultModelPath() { return std::string(); }
 void NativeSkeletonProvider::Stop() {
     mRunning = false;
     NativeCamera::Stop(); // the camera picture goes with the pose stream
@@ -282,6 +283,10 @@ static std::string CameraFramesArg() {
 }
 
 
+std::string NativeSkeletonProvider::DefaultModelPath() {
+    return NativeTreePath("models/pose_landmarker_full.task");
+}
+
 bool NativeSkeletonProvider::Start(
     const std::string &socketPath, const std::string &modelPath, int cameraIndex
 ) {
@@ -308,27 +313,10 @@ bool NativeSkeletonProvider::Start(
         printf("DC3_POSE_NO_SPAWN: connecting to existing pose server at %s\n",
             socketPath.c_str());
     } else {
-        // Launch pose_server.py as child process
-        // Resolve script path relative to the executable location
-        std::string scriptPath;
-        {
-            char exePath[PATH_MAX] = {};
-            ssize_t len = ReadExecutablePath(exePath, sizeof(exePath) - 1);
-            if (len > 0) {
-                exePath[len] = '\0';
-                // Walk up from executable (native/build/milo-viewer) to project root
-                std::string dir(exePath);
-                // Strip executable name
-                size_t slash = dir.rfind('/');
-                if (slash != std::string::npos) dir = dir.substr(0, slash);
-                // Strip "build" directory
-                slash = dir.rfind('/');
-                if (slash != std::string::npos) dir = dir.substr(0, slash);
-                scriptPath = dir + "/scripts/pose_server.py";
-            } else {
-                scriptPath = "native/scripts/pose_server.py";
-            }
-        }
+        // Launch pose_server.py as child process, found next to the
+        // executable's tree (native/build/<exe> -> native/scripts), never the
+        // working directory.
+        std::string scriptPath = NativeTreePath("scripts/pose_server.py");
 
         mServerPid = fork();
         if (mServerPid == 0) {

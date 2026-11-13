@@ -61,8 +61,15 @@ public:
     // posts it when the socket closes).  Thread-safe copy.
     Problem LastProblem();
 
+    // The MediaPipe model the spawned server loads when DC3_POSE_MODEL is
+    // unset: native/models/pose_landmarker_full.task of the tree the
+    // executable was built in, as an absolute path -- the working directory
+    // is native/build for a windowed boot and orig-assets under ctest, so a
+    // cwd-relative default only ever worked from the repo root (PLAN P-10).
+    static std::string DefaultModelPath();
+
     bool Start(const std::string &socketPath = "/tmp/dc3_pose.sock",
-               const std::string &modelPath = "native/models/pose_landmarker_full.task",
+               const std::string &modelPath = DefaultModelPath(),
                int cameraIndex = 0);
     void Stop();
     bool IsRunning() const { return mRunning; }
@@ -196,3 +203,7 @@ private:
 };
 
 extern NativeSkeletonProvider *TheSkeletonProvider;
+
+// The model GestureMgr_NativeInit passes to Start(): $DC3_POSE_MODEL, else
+// NativeSkeletonProvider::DefaultModelPath() (GestureMgr_Native.cpp).
+std::string GestureMgr_NativePoseModelPath();

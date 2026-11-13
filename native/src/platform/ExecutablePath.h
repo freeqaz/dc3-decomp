@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstring>
+#include <string>
 #include <sys/types.h>
 
 #if defined(__APPLE__)
@@ -43,4 +44,41 @@ inline ssize_t ReadExecutablePath(char *buf, size_t size) {
     (void)size;
     return -1;
 #endif
+}
+
+// The `native/` directory of the tree the running executable was built in:
+// every native binary lives directly in the CMake build dir (native/build/
+// dc3-native, native/build/milo-tests, ...), so it is the executable's
+// grandparent directory.  "" when the executable path is unknown (Emscripten).
+//
+// This is what a file the TREE ships (native/models/*, native/scripts/*,
+// native/dta/*) must be found against -- never the working directory, which
+// is the repo root for one launcher, native/build for another and
+// orig-assets for ctest (PLAN P-10).
+inline std::string NativeTreeDir() {
+    char exePath[4096] = {};
+    ssize_t len = ReadExecutablePath(exePath, sizeof(exePath) - 1);
+    if (len <= 0)
+        return std::string();
+    exePath[len] = '\0';
+    std::string dir(exePath);
+    for (int strip = 0; strip < 2; strip++) { // the executable, then build/
+        size_t slash = dir.rfind('/');
+        if (slash == std::string::npos || slash == 0)
+            return std::string();
+        dir.resize(slash);
+    }
+    return dir;
+}
+
+// `rel` (a path under native/, e.g. "models/pose_landmarker_full.task")
+// resolved against NativeTreeDir() -- an absolute path, whether or not the
+// file exists, so a "not found" message names the real place looked.  Falls
+// back to the cwd-relative "native/<rel>" only when the executable path is
+// unknown.
+inline std::string NativeTreePath(const char *rel) {
+    std::string dir = NativeTreeDir();
+    if (dir.empty())
+        return std::string("native/") + rel;
+    return dir + "/" + rel;
 }
