@@ -374,6 +374,21 @@ void StandardStream::RemapChannel(int i1, int i2) {
 }
 
 float StandardStream::GetRawTime() {
+#ifdef HX_WEB
+    // The image reads the voice's hardware play cursor: what the speaker is
+    // playing. On web the receiver's GetBytesPlayed() is what it has rendered
+    // into the AudioWorklet's queue, a queue depth (140-500 ms) early, and
+    // refilled once a frame: across a main-thread stall the song clock read it
+    // a whole stall behind before the refill and as far ahead after, so
+    // UpdateTime logged "timer error is large" in -S/+S pairs and moved song
+    // time both ways (W-12). Read the played position instead.
+    if (AudioDevice::GetInstance().IsInitialized()) {
+        if (StreamReceiverNative *rcvr = dynamic_cast<StreamReceiverNative *>(mChannels[0])) {
+            float heard = rcvr->HeardBytes() / 2;
+            return (heard / (float)mSampleRate) * 1000.0f + mStartMs;
+        }
+    }
+#endif
     float bytes = mChannels[0]->GetBytesPlayed() / 2;
     return (bytes / (float)mSampleRate) * 1000.0f + mStartMs;
 }

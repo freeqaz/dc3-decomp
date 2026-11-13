@@ -900,7 +900,7 @@ StreamRenderer::DrawToTexture, HX_NATIVE body: compose on the CPU
 
 | Stage | Code |
 |---|---|
-| Camera | `native/web/pose/pose_input.js`: `getUserMedia` (640×480 ideal, 30 fps) on page load; states shown in a panel at the canvas's bottom-left: asking → loading model → looking for you / tracking, or blocked / no camera / error with a retry button. Mirrored preview with the BlazePose skeleton drawn (green tracked, amber inferred; joints under 0.3 are not drawn because the engine holds them). |
+| Camera | `native/web/pose/pose_input.js`: `getUserMedia` (640×480 ideal, 30 fps) on page load; states shown in a panel in the canvas's bottom band, centred between the two help bars (W-13): asking → loading model → looking for you / tracking, or blocked / no camera / error with a retry button. Mirrored preview with the BlazePose skeleton drawn (green tracked, amber inferred; joints under 0.3 are not drawn because the engine holds them). |
 | Frames → worker | `MediaStreamTrackProcessor` (max buffer 1, stale frames dropped) transfers the camera stream to the worker; no per-frame main-thread work. Fallback `?pose_transport=bitmap`: `requestVideoFrameCallback` + `createImageBitmap`. |
 | Inference | `native/web/pose/pose_worker.js`, a module worker: `@mediapipe/tasks-vision` 1.0.0 (the Python mediapipe version) `PoseLandmarker`, VIDEO mode, the same `pose_landmarker_full.task` and options as `pose_server.py`. CPU (XNNPACK) delegate by default. |
 | Geometry | `native/web/pose/pose_geometry.js`: line-for-line port of `pose_mediapipe.py` (root DLT/torso fallback, axis flips, centre joints, hands, feet, one-euro on root depth, centroid tracker). Timestamps are the `VideoFrame` capture time. |
@@ -915,10 +915,15 @@ URL knobs: `?pose=off|manual`, `pose_model=lite|full|heavy`,
 Assets: `scripts/web/build.sh` vendors tasks-vision (bundle + module wasm, from
 `scripts/web/node_modules`, `npm ci --prefix scripts/web`) and the `lite`/`full`
 `.task` models (from `native/models`) into `native/web/build/pose/`, so the page
-loads nothing cross-origin and needs no CDN inside its COOP/COEP isolation. If
-either is missing the page falls back to jsdelivr / storage.googleapis.com
-(the survey found jsdelivr's headers compatible; storage.googleapis.com is
-unverified).
+loads nothing cross-origin and needs no CDN inside its COOP/COEP isolation.
+Since W-13 a missing piece is a **build failure** (`build.sh` runs `npm ci` when
+tasks-vision is absent and fails `pose-vendor` if it is still missing, or if a
+model is), and the page never falls back on its own: it logs
+`[dc3-pose] pose model not deployed on this server: …` as an error, shows "Pose
+model is not installed on this server — playing without camera", and the game
+plays on the stand-in. `?pose_cdn=1` is the explicit opt-in to jsdelivr /
+storage.googleapis.com (the survey found jsdelivr's headers compatible;
+storage.googleapis.com is unverified).
 
 Tests (no webcam needed):
 

@@ -32,6 +32,10 @@ import subprocess
 import sys
 import urllib.parse
 
+# sha256 of this file as it was when the process started (see _serve_health).
+with open(os.path.abspath(__file__), "rb") as _f:
+    SERVER_SHA256 = hashlib.sha256(_f.read()).hexdigest()
+
 PORT = 8420
 BUILD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "build")
 # Per-screen bundle manifests live next to this script as
@@ -437,7 +441,11 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
             self._json_error(404, "Unknown API endpoint")
 
     def _serve_health(self):
-        body = json.dumps({"status": "ok"}).encode()
+        # server_sha256: the source this process is running, so a deploy can tell
+        # whether the server must be restarted to pick up a server.py change
+        # (scripts/web/deploy.sh; the build dir is read per request, the code is not).
+        body = json.dumps({"status": "ok", "server_sha256": SERVER_SHA256,
+                           "build_dir": BUILD_DIR}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))

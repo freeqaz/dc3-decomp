@@ -34,7 +34,11 @@ python3 native/web/server.py --port 8420
   `pose/`), then the SFX sidecars, then each variant in its own errexit
   subshell. A failed variant does not stop the other; the script ends with
   `BUILD FAILED: <variant>` and exit 1, and says whether that variant's deploy
-  dir still holds a previous build (W-4).
+  dir still holds a previous build (W-4). Pose input files are part of the
+  page: if tasks-vision is not in `scripts/web/node_modules` the script runs
+  `npm ci --prefix scripts/web`, and if it or a `.task` model is still missing
+  it ends `FAILED: pose input files` with exit 1 (W-13; it used to warn and
+  the page used the jsdelivr CDN). `--page-only` deploys just the page.
 - imgui is a `FetchContent` clone; `build.sh` reuses `$DC3_IMGUI_SOURCE_DIR` or
   the main checkout's `native/build/_deps/imgui-src` at the pinned commit
   (checked from a fresh worktree: no clone).
@@ -99,6 +103,82 @@ two `-O0` runs alone differ by 2x. At similar load the two builds agree: `-O3`
 fps is pinned by `requestAnimationFrame`, so it says nothing about headroom on a
 slower machine. Video plays from `.webm` transcodes (all 142 `.bik` have one;
 see [`native/web/VIDEO_ASSETS.md`](../../native/web/VIDEO_ASSETS.md)).
+
+### Intro movie (W-11)
+
+Until np-web3 the attract screen's intro movie was never on the web canvas: the
+`<video>` played (`currentTime` 2.5 → 25 s) and the canvas stayed black at
+8/14/20/30 s, so a gesture player looked at a black screen for ~83 s.
+`MoviePanel::Draw` draws the movie after the post-processing flush
+(`WgpuRnd::FlushPostProcessingForOverlay`, which opens a 1× depthless overlay
+pass on the frame target). Something later in the frame called
+`BeginFramePass(false)` (SavePreBuffer, ComposeTexBlend, a point test or
+`MakeDrawTarget` resumes the frame pass); that reopened the **MSAA** main pass,
+whose resolve at the end of the frame overwrote the frame target, overlay
+draws included. Engine fix (np-web3 branch `e030a36`): a resume after the
+flush reopens the overlay pass instead. With it the movie and its help bar /
+SKIP overlay show, `attract-movie.mjs` passes (mean luma 22 and 31, 29% of
+sampled pixels change in 2 s), and `gesture-menus.mjs --skip-attract` leaves
+attract 11.7 s after the performer starts (gesture 5, button 0). Song-select
+preview movies open and load (256×256); whether they look right is the same
+question as on desktop (np-media).
+
+### Song clock (W-12)
+
+`StandardStream::UpdateTime` logs `timer error is large: <ms>` when the song
+clock and its own timer disagree by more than 50 ms. On web the clock
+(`GetRawTime`) read `StreamReceiverNative::GetBytesPlayed()`, the bytes
+handed to the mixer. The mixer fills the AudioWorklet's queue (adaptive,
+140–500 ms) once a frame, so the clock ran a queue depth ahead of the
+speaker in pump-sized steps. Across a main-thread stall it read a whole stall
+behind before the refill and as far ahead after: errors came in −S/+S pairs
+within 10 ms, each logged once per stream (3–4×), and song time moved both
+ways. On web it now reads `StreamReceiverNative::HeardBytes()`: every
+`RenderAudio` call records which mix frames it filled and the cursor before
+and after, and `HeardBytes` interpolates at the frames the worklet has
+consumed (`AudioDevice::MixFramesConsumed`; engine np-web3 `7404fb3`,
+`0a283f5`). `GetRawTime` keeps its match (100%, 26/26, `name_check`); the
+block is `HX_WEB` only.
+
+thehustle, Easy, no camera, release, `pose-gameplay.mjs`:
+
+| | timer errors in game | per game second | median | max |
+|---|---|---|---|---|
+| unmuted (real output, 44.1 kHz, outputLatency 32 ms), before | 154 | 0.93 | 72.5 ms | 182 ms |
+| unmuted, after | 4 | 0.02 | 81 ms | 121 ms |
+| `--mute-audio`, before | 43 | 0.26 | 70.3 ms | 260 ms |
+| `--mute-audio`, after | 7 | 0.04 | 61 ms | 103 ms |
+
+The remaining few are at song start and section changes. The dogfood's ~9/s
+was not reproduced here (that box was also running other lanes and the camera
+pipeline). The score is 52,805 either way: the stand-in skeleton scores the
+same, so a score says nothing about the clock. If the engine lacks
+`HeardBytes` it links as a missing stub that returns 0, the clock stands still
+and every song scores 0 (measured); dc3 needs the engine branch first.
+`pose-gameplay.mjs --unmute` fails (exit 1) above 0.25 errors a game second
+(`--max-timer-errors-per-s`).
+
+### Pose frame rate (W-13, L-3)
+
+The page tracked at ~16.6 fps in the dogfood. The cause is serial work in the
+one pose worker: BlazePose `full` on the CPU (XNNPACK) delegate takes 41–47 ms
+a frame, and the P-4 camera picture (segmentation masks, RGB scale) adds
+5–10 ms. 30 fps needs ≤33 ms. Measured on the attract screen with the game
+running, macarena fake camera at 30 fps, RTX 3090 box, 20 s windows:
+
+| config | frames/s | inference p50 / p95 | picture p50 |
+|---|---|---|---|
+| default (`full`, CPU, picture 320×240) | 17.4 | 46.7 / 69.8 ms | 5.1 ms |
+| `pose_frames=off` | 23.6 | 40.7 / 51.0 ms | — |
+| `pose_model=lite` | 24.6 | 34.8 / 46.1 ms | 3.6 ms |
+| `pose_delegate=GPU` | 25.4 | 31.1 / 87.1 ms | 9.7 ms |
+| `pose_delegate=GPU&pose_frames=off` | 28.4 | 33.9 / 46.2 ms | — |
+
+None reaches 30 fps on its own. INFERRED: 30 needs the GPU delegate and the
+picture work moved out of the inference worker, or two frames in flight. The
+GPU delegate also shares the GPU with the game, and its p95 is worse. The
+defaults are unchanged: CPU `full` is what the desktop `pose_server.py` runs,
+and the tracker is np-tracking's. This is an owner decision (PLAN L-3).
 
 ### Heap per venue (W-6)
 
@@ -188,7 +268,8 @@ build's own `DecodeXMAToPCM`; `gen_sfx_ogg.py` encodes the `.ogg`.
 ## Page (W-8)
 
 The default page is for players: the game canvas fills the window at 16:9 on
-black, the pose panel sits bottom-left on it, and a loading card ("Loading… /
+black, the pose panel sits in the bottom band between the two help bars
+(below), and a loading card ("Loading… /
 Downloading game data… / Starting…") covers it until the first screen. Errors
 (no WebGPU, a device/adapter failure, no build on the server) replace the
 card's text and stay up. Double-click the game for fullscreen.
@@ -200,6 +281,28 @@ the browser console in both layouts, so every `scripts/web/*.mjs` works on
 either (they use only `#dc3-canvas`, the console, `window.dc3FrameCount` and
 the pose globals). `scripts/web/page-states.mjs` checks both layouts and the
 error card (exit 1 if the player page shows any harness element).
+
+Pose panel (W-13): it used to sit bottom-left, over the left help bar, and
+its status text ran out of its box at small sizes. It is now centred in the
+bottom 14% of the canvas, no wider than 48% of it (the help bars hold the
+outer quarters), and sized in container units so it scales with the canvas;
+the status wraps inside its box. `page-states.mjs` checks the band and the
+containment at 1280×720 and 800×450 with the real status, "Tracking you ✓"
+with the preview on, and a long unbreakable status (the old panel failed 6
+position and 2 containment checks, overflowing 141 px).
+
+Engine stderr (W-13): every `printErr` line used to reach devtools as
+`console.error` (986 on one boot to the title). The page now picks the level
+from the text (`window.dc3StderrLevel`): `FAIL`/`MILO_FAIL`/assert/abort/
+`error`/`failed`/`exception`/`crash` lines stay errors, `WARN`/`warning` and
+`timer error is large` are warnings, everything else is `console.log` (12
+errors on the same boot, all real). `page-states.mjs` checks the table and the
+boot count (< 20).
+
+The loading-card check in `page-states.mjs` waited a fixed time after the
+first screen and could read the card mid-fade; it now waits for the `hidden`
+class and then for the fade to finish (10 s deadline). Not reproduced locally,
+even at a 6× CDP CPU throttle (`--cpu-throttle 6`); the fix is in the test.
 
 `MILO_NOTIFY` / `MILO_WARN` go to the browser devtools console only, as
 `console.warn` lines `MILO_<KIND>: <msg>` (W-9; on by default,
@@ -218,8 +321,11 @@ Scripts live in `scripts/web/` and share `scripts/web/lib/core.mjs`:
 `screenshot.mjs`, `scroll.mjs`, `gameplay.mjs`, `smoke-test.mjs`,
 `audio-probe.mjs`, `cdp-break.mjs`, `netperf-lite.mjs`, `pose-gameplay.mjs`
 (one song with a fake camera or none, per-second heap/pose/score samples),
-`page-states.mjs` (W-8), `song-order.mjs` (prints which song each
-`--song-index` selects). Menus advance with Enter (not Space).
+`page-states.mjs` (W-8, W-13), `song-order.mjs` (prints which song each
+`--song-index` selects), `attract-movie.mjs` (W-11: the intro movie's pixels
+are on the canvas), `gesture-menus.mjs --skip-attract` (a gesture skips the
+intro movie). `pose-gameplay.mjs --unmute` runs the audio on the real output
+device and checks the song clock (W-12, below). Menus advance with Enter (not Space).
 
 Song-select index → song (sorted by skill level; a category header repeats the
 song above it): 1 ymca, 2 betteroffalone, 3 thehustle, 5 starships,
@@ -246,11 +352,47 @@ before.
 
 ## Deployment
 
-`dc3-web.service` serves the **main checkout's** `native/web/build` behind
-nginx at `/dc3/` on the home server. As of 2026-11-13 that build dates from
-2026-07-27 and predates the 2026-10-08 relink. The asset API in that nginx
-block has no authentication. Redeploying or changing exposure is the owner's
-call (PLAN W-5).
+`dc3-web.service` (a user unit) serves the **main checkout's**
+`native/web/build` behind nginx at `/dc3/` on the home server. The asset API in
+that nginx block has no authentication; changing exposure is the owner's call
+(PLAN W-5).
+
+**Deploy with `scripts/web/deploy.sh`, from the checkout the unit serves (W-13):**
+
+```bash
+scripts/web/deploy.sh                    # build both variants, restart if needed, smoke test
+scripts/web/deploy.sh --browser          # + boot the page in Chromium (smoke-test.mjs; GPU, no sandbox)
+scripts/web/deploy.sh --no-build         # restart check + smoke test only
+scripts/web/deploy.sh -- --release       # anything after -- goes to build.sh
+scripts/web/deploy.sh --unit U --port P  # another user unit / port (default dc3-web.service, 8420)
+```
+
+`build.sh` writes `native/web/build/`, which `server.py` reads per request, so
+a rebuild is live without a restart. `server.py`'s own code is not: on
+2026-11-13 the unit was still running a `server.py` from before W-7's sidecar
+routes, and 106 SFX sidecars 404'd. `/api/health` now reports
+`server_sha256`, the hash of the `server.py` the process started from;
+`deploy.sh` restarts the unit (`systemctl --user restart`) when that differs
+from the tree's file, when the field is missing (a server older than this
+change) or when the server does not answer, then waits up to 30 s for the new
+hash. The smoke test fetches the page, the worklet, each built variant's
+wasm/js, the vendored tasks-vision bundle and the `full` model (no CDN), the
+intro movie through the asset API, and one SFX sidecar named in
+`native/web/sfx_sidecars.manifest`.
+
+| exit | meaning |
+|---|---|
+| 0 | deployed, smoke test passed |
+| 1 | build failed; nothing restarted (the server keeps serving what is on disk) |
+| 2 | restart failed, or the server did not come back with this tree's `server.py` in 30 s |
+| 3 | refused: the unit does not exist, or its `WorkingDirectory` is not this checkout (deploying from a worktree cannot restart another tree's server) |
+| 4 | smoke test failed |
+
+Tested against a throwaway transient unit (`systemd-run --user`, port 8449,
+`WorkingDirectory` = the np-web3 worktree): matching hash → no restart, PASS;
+`server.py` edited → restart, PASS; a server without the field → restart,
+PASS; model removed from the deploy dir → exit 4; `--unit dc3-web.service` from
+the worktree → exit 3. It has not been run against `dc3-web.service`.
 
 ## Debugging
 

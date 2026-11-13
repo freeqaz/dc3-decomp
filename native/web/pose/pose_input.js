@@ -13,6 +13,8 @@
 //   pose_delegate=CPU|GPU        (default CPU, as the desktop server runs)
 //   pose_transport=stream|bitmap (default stream when MediaStreamTrackProcessor exists)
 //   pose_cdn=1          load tasks-vision + model from the CDN instead of this server
+//                       (the only way the page uses a CDN: a server without them
+//                       is an error, not a silent fallback)
 //   pose_hfov=<deg>     camera horizontal FOV (default 58.51, DC3's Kinect)
 //   pose_frames=WxH|off the camera picture + person mask the game draws the
 //                       player view from (PLAN P-4; default 320x240, the
@@ -69,19 +71,26 @@ window.dc3PoseSummary = summary;
 
 // ---------------------------------------------------------------- UI panel
 const css = `
-#pose-panel { position:absolute; left:10px; bottom:10px; width:200px; z-index:10;
-  font:12px/1.3 'Segoe UI',system-ui,sans-serif; color:#eee; pointer-events:auto; }
-#pose-view { position:relative; width:200px; height:150px; background:#000c;
+/* Bottom centre, inside the game's bottom helpbar band (the lowest ~12% of
+   the 16:9 frame), whose left and right ends carry the hand menus' back and
+   help items; sized from the game frame (cq units), not the window (W-13). */
+#canvas-container { container-type:size; }
+#pose-panel { position:absolute; left:50%; bottom:1.2cqh; transform:translateX(-50%);
+  display:flex; align-items:flex-end; gap:0.8cqh; max-width:48cqw; z-index:10;
+  font:clamp(10px, 1.65cqh, 15px)/1.3 'Segoe UI',system-ui,sans-serif; color:#eee;
+  pointer-events:auto; }
+#pose-view { position:relative; flex:none; height:10cqh; aspect-ratio:4/3; background:#000c;
   border:1px solid #444; border-radius:6px; overflow:hidden; display:none; }
 #pose-view video, #pose-view canvas { position:absolute; inset:0; width:100%; height:100%;
   object-fit:cover; transform:scaleX(-1); }
 #pose-view video { opacity:0.55; }
-#pose-status { margin-top:4px; padding:3px 7px; border-radius:4px; background:#000b;
-  border:1px solid #444; }
+#pose-side { display:flex; flex-direction:column; align-items:flex-start; gap:0.5cqh; min-width:0; }
+#pose-status { box-sizing:border-box; max-width:38cqw; padding:3px 7px; border-radius:4px;
+  background:#000b; border:1px solid #444; overflow-wrap:anywhere; }
 #pose-status.ok { border-color:#3c6; color:#9f9; }
 #pose-status.warn { border-color:#c93; color:#fc6; }
 #pose-status.err { border-color:#c44; color:#f99; }
-#pose-btn { margin-top:4px; display:none; background:#1a1a1a; color:#ccc; border:1px solid #555;
+#pose-btn { display:none; background:#1a1a1a; color:#ccc; border:1px solid #555;
   border-radius:4px; padding:3px 10px; cursor:pointer; font:inherit; }
 `;
 let ui = null;
@@ -93,7 +102,7 @@ function buildUi() {
     const panel = document.createElement('div');
     panel.id = 'pose-panel';
     panel.innerHTML = '<div id="pose-view"><video muted playsinline></video><canvas width="320" height="240"></canvas></div>' +
-        '<div id="pose-status">Camera: starting…</div><button id="pose-btn">Use camera</button>';
+        '<div id="pose-side"><div id="pose-status">Camera: starting…</div><button id="pose-btn">Use camera</button></div>';
     host.appendChild(panel);
     ui = {
         view: panel.querySelector('#pose-view'), video: panel.querySelector('video'),
@@ -183,8 +192,12 @@ export async function resolveSources() {
     const exists = async (u) => { try { return (await fetch(u, { method: 'HEAD' })).ok; } catch (e) { return false; } };
     const [b, m] = await Promise.all([exists(local.bundleUrl), exists(local.modelUrl)]);
     if (b && m) return local;
-    console.warn('[dc3-pose] local tasks-vision/model not deployed (bundle=' + b + ' model=' + m + '); using CDN');
-    return { ...cdn, bundleUrl: b ? local.bundleUrl : cdn.bundleUrl, wasmBase: b ? local.wasmBase : cdn.wasmBase, modelUrl: m ? local.modelUrl : cdn.modelUrl, source: 'mixed' };
+    // Never fall back to a CDN silently (W-13): the page would quietly depend
+    // on jsdelivr / storage.googleapis.com from inside its COOP/COEP origin.
+    // A deploy without them is a broken deploy (scripts/web/build.sh fails on
+    // it); ?pose_cdn=1 is the explicit opt-in.
+    const missing = [b ? null : 'tasks-vision', m ? null : `pose_landmarker_${opt.model}.task`].filter(Boolean).join(' + ');
+    throw new Error(`not deployed on this server: ${missing} (scripts/web/build.sh vendors them; ?pose_cdn=1 loads them from the CDN)`);
 }
 
 function onWorkerMessage(ev) {
@@ -272,7 +285,15 @@ async function start() {
     });
 
     setState('loading', 'Loading pose model…', 'warn');
-    const sources = await resolveSources();
+    let sources;
+    try {
+        sources = await resolveSources();
+    } catch (e) {
+        console.error('[dc3-pose] pose model ' + e.message);
+        stats.source = 'missing';
+        setState('error', 'Pose model is not installed on this server — playing without camera', 'err', false);
+        return;
+    }
     stats.source = sources.source;
     let created;
     try {
