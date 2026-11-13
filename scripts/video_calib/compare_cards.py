@@ -10,9 +10,10 @@ results screen, the same provider fields the card draws), so both sides
 count exactly the same moves.
 
 Per run dir it prints one row per song and a summary line:
-  P / A       ours vs the original's perfect / awesome counts
-  rest        moves counted but neither (ok + bad), derived from the
-              per-move log over the card's window
+  orig        the card's perfect / awesome, and rest = N - P - A where N is
+              solved from the card's percent (get_moves_passed); the card
+              does not split ok from bad
+  ours        perfect / awesome / ok / bad over every DC3 MOVE_RATING line
   score       ours / original
 and the summary: total perfect and awesome over all songs, mean |dP|, and
 the score ratio.  `--json` writes the same numbers.
@@ -38,6 +39,16 @@ def per_move(log):
     return out
 
 
+def orig_moves(card):
+    """N such that the card's percent = (perfect + awesome) * 100 // N
+    (MetaPerformer::GetMovesPassed); the smallest that fits."""
+    pa = card["perfect"] + card["awesome"]
+    for n in range(pa, 3 * pa + 1):
+        if pa * 100 // n == card["pct"]:
+            return n
+    return None
+
+
 def run_table(manifest, run_dir):
     rows = []
     for s in manifest["songs"]:
@@ -59,9 +70,14 @@ def run_table(manifest, run_dir):
                 return int(float(v))
             except (TypeError, ValueError):
                 return None
+        orig = dict(s["card"])
+        orig["moves"] = orig_moves(orig)
+        orig["rest"] = orig["moves"] - orig["perfect"] - orig["awesome"] if orig["moves"] else None
         rows.append({
             "song": s["song"],
-            "orig": s["card"],
+            "orig": orig,
+            "log": {"perfect": hist.get("move_perfect", 0), "awesome": hist.get("move_awesome", 0),
+                    "ok": hist.get("move_ok", 0), "bad": hist.get("move_bad", 0), "moves": len(moves)},
             "ours": {"perfect": num(card.get("num_perfect")), "awesome": num(card.get("num_awesome")),
                      "pct": num(card.get("moves_passed_pct")), "score": r.get("final_score")},
             "log_hist": hist, "mean_lastfrac": mean_frac,
@@ -71,21 +87,34 @@ def run_table(manifest, run_dir):
 
 
 def summary(rows):
-    ok = [r for r in rows if r["ours"]["perfect"] is not None and r["ours"]["score"]]
+    """Totals over songs, on both sides counted over every rated move (the
+    story-mode card counts every move: SongSequence sets
+    start_score_move_index -1).  Rates are per rated move, so a run that
+    rates a different number of moves (freestyle on: 8 fewer) still
+    compares."""
+    ok = [r for r in rows if r["log"]["moves"] and r["orig"]["moves"]]
     if not ok:
         return {}
-    P = sum(r["ours"]["perfect"] for r in ok)
-    A = sum(r["ours"]["awesome"] for r in ok)
-    oP = sum(r["orig"]["perfect"] for r in ok)
-    oA = sum(r["orig"]["awesome"] for r in ok)
-    return {
-        "songs": len(ok), "ours_P": P, "ours_A": A, "orig_P": oP, "orig_A": oA,
-        "mean_abs_dP": round(sum(abs(r["ours"]["perfect"] - r["orig"]["perfect"]) for r in ok) / len(ok), 2),
-        "mean_abs_dPA": round(sum(abs(r["ours"]["perfect"] + r["ours"]["awesome"]
-                                      - r["orig"]["perfect"] - r["orig"]["awesome"]) for r in ok) / len(ok), 2),
-        "score_ratio": round(sum(r["ours"]["score"] for r in ok) / sum(r["orig"]["score"] for r in ok), 4),
-        "mean_lastfrac": round(sum(r["mean_lastfrac"] or 0 for r in ok) / len(ok), 4),
-    }
+    def tot(side, k):
+        return sum(r[side][k] for r in ok)
+    n_o, n_u = tot("orig", "moves"), tot("log", "moves")
+    out = {"songs": len(ok), "orig_moves": n_o, "ours_moves": n_u,
+           "orig_P": tot("orig", "perfect"), "orig_A": tot("orig", "awesome"), "orig_rest": tot("orig", "rest"),
+           "ours_P": tot("log", "perfect"), "ours_A": tot("log", "awesome"),
+           "ours_O": tot("log", "ok"), "ours_B": tot("log", "bad")}
+    out["orig_rates"] = [round(out["orig_P"] / n_o, 3), round(out["orig_A"] / n_o, 3),
+                         round(out["orig_rest"] / n_o, 3)]
+    out["ours_rates"] = [round(out["ours_P"] / n_u, 3), round(out["ours_A"] / n_u, 3),
+                         round((out["ours_O"] + out["ours_B"]) / n_u, 3)]
+    # per-song absolute error of the perfect rate, averaged
+    out["mean_abs_dPrate"] = round(sum(abs(r["log"]["perfect"] / r["log"]["moves"]
+                                           - r["orig"]["perfect"] / r["orig"]["moves"]) for r in ok) / len(ok), 3)
+    out["mean_abs_dPArate"] = round(sum(abs((r["log"]["perfect"] + r["log"]["awesome"]) / r["log"]["moves"]
+                                            - (r["orig"]["perfect"] + r["orig"]["awesome"]) / r["orig"]["moves"])
+                                        for r in ok) / len(ok), 3)
+    out["score_ratio"] = round(sum(r["ours"]["score"] or 0 for r in ok) / sum(r["orig"]["score"] for r in ok), 4)
+    out["mean_lastfrac"] = round(sum(r["mean_lastfrac"] or 0 for r in ok) / len(ok), 4)
+    return out
 
 
 def main():
@@ -103,12 +132,12 @@ def main():
         allres[run] = {"rows": rows, "summary": sm}
         if not a.quiet:
             print(f"== {run}")
-            print(f"{'song':22s} {'P ours/orig':>12s} {'A ours/orig':>12s} {'%':>8s} {'score ours/orig':>22s} frac")
+            print(f"{'song':22s} {'orig P/A/rest of N':>20s}   {'ours P/A/O/B of N':>20s}  {'score ours/orig':>21s}  frac")
             for r in rows:
-                o, g = r["ours"], r["orig"]
-                print(f"{r['song']:22s} {o['perfect']!s:>5}/{g['perfect']:<5d} {o['awesome']!s:>5}/{g['awesome']:<5d} "
-                      f"{o['pct']!s:>3}/{g['pct']:<3d} {o['score']!s:>10}/{g['score']:<10d} "
-                      f"{(r['mean_lastfrac'] or 0):.3f}")
+                o, g = r["log"], r["orig"]
+                print(f"{r['song']:22s} {g['perfect']:>4d}/{g['awesome']:<3d}/{g['rest']!s:<3} of {g['moves']!s:<4}"
+                      f"   {o['perfect']:>3d}/{o['awesome']:<3d}/{o['ok']:<3d}/{o['bad']:<3d} of {o['moves']:<4d}"
+                      f" {r['ours']['score']!s:>10}/{g['score']:<10d} {(r['mean_lastfrac'] or 0):.3f}")
         print(f"{os.path.basename(run.rstrip('/')):28s} {json.dumps(sm)}")
     if a.json:
         with open(a.json, "w") as f:

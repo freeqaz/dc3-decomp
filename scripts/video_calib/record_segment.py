@@ -43,6 +43,9 @@ def main():
     ap.add_argument("--hfov", type=float, default=MediaPipeBackend.DEFAULT_HFOV_DEG)
     ap.add_argument("--model", default=os.path.join(REPO, "native/models/pose_landmarker_full.task"))
     ap.add_argument("--out", required=True)
+    ap.add_argument("--image-mode", action="store_true",
+                    help="MediaPipe IMAGE running mode: every frame on its own, no temporal "
+                         "landmark filter (to measure the lag VIDEO mode's filter adds)")
     a = ap.parse_args()
 
     cw, ch = (int(v) for v in a.crop.split(":")[:2])
@@ -58,12 +61,30 @@ def main():
            "-t", f"{a.dur:.3f}", "-vf", vf, "-an", "-f", "rawvideo", "-pix_fmt", "bgr24", "-"]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     backend = MediaPipeBackend(a.model, num_poses=1, hfov_deg=a.hfov, min_conf=0.5)
+    if a.image_mode:
+        from mediapipe.tasks import python as mpp
+        from mediapipe.tasks.python import vision
+        backend._landmarker.close()
+        lm = vision.PoseLandmarker.create_from_options(vision.PoseLandmarkerOptions(
+            base_options=mpp.BaseOptions(model_asset_path=a.model),
+            running_mode=vision.RunningMode.IMAGE, num_poses=1,
+            min_pose_detection_confidence=0.5, min_pose_presence_confidence=0.5,
+            min_tracking_confidence=0.5))
+
+        class _ImageMode:  # detect_for_video -> detect, same result type
+            def detect_for_video(self, img, _ts):
+                return lm.detect(img)
+
+            def close(self):
+                lm.close()
+        backend._landmarker = _ImageMode()
     n = seen = 0
     size = w * h * 3
     with open(a.out, "w") as out:
         out.write("# dc3-pose-fixture v1\n")
         out.write(f"# record_segment.py t0={a.t0} start={a.start} dur={a.dur} crop={a.crop} "
-                  f"width={a.width} fps={a.fps} hfov={a.hfov} model={os.path.basename(a.model)}\n")
+                  f"width={a.width} fps={a.fps} hfov={a.hfov} model={os.path.basename(a.model)} "
+                  f"mode={'image' if a.image_mode else 'video'}\n")
         while True:
             buf = proc.stdout.read(size)
             if len(buf) < size:

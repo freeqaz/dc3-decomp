@@ -6,7 +6,9 @@
 #
 # Each NAME:ENV list becomes OUT_ROOT/NAME, run with
 #   DC3_POSE_PERFORM=replay:FIXTURE_DIR/{song}.dc3pose DC3_POSE_PERFORM_REPLAY_SYNC=song
-# plus the listed K=V pairs (comma-separated; '-' for none).  Configs run one
+# plus the listed K=V pairs (comma-separated; '-' for none), and --eval
+# "$GRID_EVAL" when that is set (e.g. '{profile_mgr toggle_disable_freestyle}',
+# which the story-mode footage needs: its routines have no freestyle).  Configs run one
 # after another; run two of these on different PORT_BASEs to use more cores.
 set -u
 out=$1 port=$2 jobs=$3 songs=$4 fx=$5
@@ -20,6 +22,7 @@ for cfg in "$@"; do
         IFS=, read -ra kv <<< "$envs"
         for p in "${kv[@]}"; do args+=(--env "$p"); done
     fi
+    [ -n "${GRID_EVAL:-}" ] && args+=(--eval "$GRID_EVAL")
     [ -f "$out/$name/summary.json" ] && { echo "[grid] $name: done already"; continue; }
     timeout 1500 python3 "$here/scripts/native_song_sweep.py" --out "$out/$name" --songs "$songs" \
         --no-gpu --jobs "$jobs" --port-base "$port" --difficulty medium \
