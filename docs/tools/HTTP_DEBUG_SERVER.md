@@ -46,7 +46,7 @@ curl localhost:9090/api/health
 # {"ok":true,"data":{"status":"ok","frame":1234,"uptime_s":5.2,"pid":4321}}
 ```
 
-Poll this to know when the engine is ready. `pid` is the engine's process id,
+Poll this to know when the engine is ready. `uptime_s` is wall-clock seconds since the server started (`steady_clock`; it used to read `TaskMgr kRealTime`, which the game sets to song time). `pid` is the engine's process id,
 so a driver can check that the engine answering is the one it launched. Scripts can wait for a successful response before interacting.
 
 ### Telemetry
@@ -66,6 +66,8 @@ curl -o frame.png localhost:9090/api/screenshot
 ```
 
 Captures the current framebuffer as PNG. The capture happens after `EndDrawing()` on the main thread, so the image reflects the fully rendered frame — and the request blocks until one is presented, which makes it usable as an "advance one frame" primitive.
+
+**Windowed too** (PLAN H-13): the frame is read from the swapchain between the submit and the present, through the engine's `WgpuRnd::SetFrameReadyCallback` / `GpuDevice::ReadbackFrame` (BGRA swizzled to RGBA); before that a windowed engine answered 500. With no GPU device the request is answered after `EndDrawing` as before.
 
 **Works headless with no display and no GPU.** Verified live under `MILO_HEADLESS=1` on a box with no framebuffer: 1280x720 RGBA PNG, ~750 KB per request. No window, X display or GPU device is required, so sandboxed agents can verify rendering changes visually (see `docs/tools/STATE_DIFF.md`, sweep mode).
 
