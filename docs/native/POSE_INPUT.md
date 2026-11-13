@@ -15,7 +15,7 @@ Work items: [PLAN.md](PLAN.md) track P.
 | Camera frame | `native/scripts/pose_server.py` (`cv2.VideoCapture`), a Python child spawned by `NativeSkeletonProvider::Start` in `native/src/platform/Skeleton_Native.cpp` | `DC3_POSE_CAMERA` (index) |
 | 2D + 3D pose | `native/scripts/pose_mediapipe.py` `MediaPipeBackend`: BlazePose world landmarks (metres), absolute root by PnP, one-euro filter on root depth, centroid tracker. Emits DC3's 20 Kinect joints in camera-space metres. | `DC3_POSE_MODEL` (default `native/models/pose_landmarker_full.task`, gitignored), `DC3_POSE_HFOV` |
 | Wire | Unix socket, protocol v2, layout 1 (20 DC3 joints). Layout 0 = COCO, remapped by `MapCOCOToDC3`. | `DC3_POSE_SOCKET`, `DC3_POSE_NO_SPAWN=1` (connect to a server you started) |
-| Socket → slots | `GestureMgr_Native.cpp`: `BuildSensorFrame` → `FillPersonSlots` / `AssignSlots` / `NativeAutoAssignPlayers`. `FillSkeletonData` holds the last good position of joints under 0.3 confidence. No provider → a jittered standing dummy. | `DC3_POSE` (`off`, `external`, …), `DC3_NATIVE_SCORING` (default on), `DC3_POSE_SELFTEST` |
+| Socket → slots | `GestureMgr_Native.cpp`: `BuildSensorFrame` → `FillPersonSlots` / `AssignSlots` / `NativeAutoAssignPlayers`. `FillSkeletonData` holds the last good position of joints under 0.3 confidence. No provider → a jittered standing dummy (two in two-player modes, `DC3_DUMMY_PLAYERS`). Every valid person fills its own slot: two people on the socket or in one `dc3_pose_push` frame are two players. | `DC3_POSE` (`off`, `external`, …), `DC3_NATIVE_SCORING` (default on), `DC3_POSE_SELFTEST` |
 | Scoring | Decompiled code: SkeletonUpdate → `Skeleton::Poll` → FilterQueue / MoveDir / async MoveDetectors → `move_passed` | `DC3_REAL_MOVE_PASSED` (default on) |
 | Feedback | Ratings and score through the normal HUD. **No** player silhouette or camera preview (see Gaps). | — |
 
@@ -217,6 +217,9 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
 
 - `scripts/synthetic_kinect.py --perform` — same wire protocol, replays the
   target. Wrap it to inject noise, latency, dropout.
+  `--people 2` puts two performers on the sensor; as a library,
+  `set_pose(i, "absent")` takes a person out of view and `"stand"` brings them
+  back (`native/tests/test_native_twoplayer.cpp` drives Battle with 2, 1, 0).
 - `pose_server.py --video` — real MediaPipe on a file; runs end to end but is not
   deterministic (wall-clock paced).
 - Planned deterministic fixture (P-5): run MediaPipe offline over a video once,
