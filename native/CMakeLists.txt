@@ -360,22 +360,18 @@ if(EMSCRIPTEN)
         AudioDevice_Web.cpp
         ImGuiBackend_Web.cpp)
 endif()
-# FFmpegMovieImpl.cpp exists in both trees (H-5), and both define every
-# FFmpegMovieImpl symbol. DC3's copy carries two image-faithful fixes the
-# engine's lacks (Ready() is true with no pending load; Poll() of a movie that
-# never opened reports DONE, so a missing .bik no longer "plays" forever). It
-# only won because the engine's archive member was never pulled -- link-order
-# luck, invisible to --allow-multiple-definition and to the LinkHygiene gate.
-# Keep the engine copy out of DC3's libmilo-engine.a so there is exactly one
-# definition. Drop this (and native/src/platform/FFmpegMovieImpl.*) once the
-# engine carries the fixes. (FFmpegAudioReader was byte-identical in both
-# trees; DC3's copy is deleted and the engine's links.)
-list(APPEND MILO_ENGINE_DECOMP_PLATFORM_EXCLUDE FFmpegMovieImpl.cpp)
+# FFmpegMovieImpl.cpp (H-5): the engine's copy links. DC3 used to compile its
+# own and exclude the engine's, because only DC3's carried the image-faithful
+# fixes (Ready() is true with no pending load; Poll() of a movie that never
+# opened reports DONE, so a missing .bik no longer "plays" forever) and G-15's
+# File-layer AVIO. The engine carries them now (engine-stack "FFmpegMovieImpl:
+# dc3's movie fixes (H-5 + G-15)"), so DC3's copy is deleted and there is
+# exactly one definition.
 add_subdirectory(${MILO_ENGINE_PATH} ${CMAKE_BINARY_DIR}/milo-engine)
-# The engine prepends its own checked-in STL shim (include/) with BEFORE PUBLIC,
-# which would win over the directory-level generated shim for the engine's own
-# TUs. Prepend the generated one again so the engine and dc3 compile against
-# the same, toolchain-matched header. (Consumers already get it first from the
+# The engine generates its own copy of the same shim (cmake/MiloHostStlShim.cmake,
+# BEFORE PUBLIC) from the same toolchain header, so the two are identical.
+# Prepending dc3's again keeps the engine's TUs on exactly the header dc3's own
+# TUs see, whichever generator runs first. (Consumers already get it first from the
 # directory property; this is PRIVATE so it does not duplicate there.)
 target_include_directories(milo-engine BEFORE PRIVATE ${DC3_HOST_STL_SHIM_DIR})
 if(EMSCRIPTEN)
@@ -1216,7 +1212,6 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Achievements_Stub.cpp
     src/platform/MemcardMgr_Stub.cpp
     src/platform/BinkMovie_Stub.cpp
-    $<$<BOOL:${ENABLE_FFMPEG}>:src/platform/FFmpegMovieImpl.cpp>
     $<$<BOOL:${ENABLE_FFMPEG}>:src/platform/XmaSampleDecoder.cpp>
     src/platform/NetXbox_Stub.cpp
     src/platform/KinectShare_Stub.cpp
@@ -1253,8 +1248,6 @@ set(DC3_NATIVE_CORE_SOURCES
 # native/src/audio/ -- were deleted outright on 2026-11-13, H-1: no target
 # compiled them, and their stale HEADERS were shadowing the engine's for every
 # dc3 TU, because -I native/src precedes -I <engine>/src.)
-# (FFmpegMovieImpl.cpp is the exception the other way round: DC3's copy links
-#  and the engine's is excluded -- see MILO_ENGINE_DECOMP_PLATFORM_EXCLUDE.)
 set(DC3_NATIVE_CORE_SOURCES_ENGINE ${DC3_NATIVE_CORE_SOURCES})
 # src/platform/Cache_Stub.cpp is deliberately NOT in this removal list (it used
 # to be, because it was an empty placeholder whose engine twin was the real
