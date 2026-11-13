@@ -112,8 +112,8 @@ def advance(kit, targets, timeout, prefer=("continue", "done", "play_again_no", 
             say(f"{label} on {s}")
             time.sleep(2.0)
             continue
-        rows = kit.rows(kit.focus_list(), limit=12)
-        pick = next((p for p in prefer if p in rows), None)
+        lst = kit.focus_list()
+        pick = next((p for p in prefer if kit.has_row(lst, p)), None)
         if pick:
             kit.choose(pick)
         else:
@@ -205,7 +205,7 @@ class Soak:
         return rec
 
     def song(self, mode, song, difficulty, end_screens, song_timeout=420, sides=1, clip=None,
-             back_to=("song_select_screen",)):
+             back_to=("song_select_screen", "main_screen")):
         k = self.kit
         self.clip(clip or footage(self.a.footage, song) or self.default_clip)
         if k.screen() != "song_select_screen":
@@ -239,10 +239,10 @@ class Soak:
                     got = s
                     break
                 if self.watch.paused_since and time.time() - self.watch.paused_since > 4:
-                    rows = k.rows(k.focus_list(), limit=12)
-                    say(f"paused; pause menu rows {rows}: pressing Continue")
-                    pick = next((p for p in ("resume", "continue", "keep_dancing") if p in rows),
-                                None)
+                    lst = k.focus_list()
+                    pick = next((p for p in ("resume", "continue", "keep_dancing")
+                                 if k.has_row(lst, p)), None)
+                    say(f"paused on {k.screen()}: pressing {pick or 'confirm'}")
                     k.choose(pick) if pick else k.press("confirm")
                     self.watch.paused_since = time.time()
                 time.sleep(2)

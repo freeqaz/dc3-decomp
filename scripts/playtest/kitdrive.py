@@ -213,7 +213,21 @@ class Kit:
     def focus_list(self, name="right_hand.hnl"):
         return f"{{{{{{ui current_screen}} focus_panel}} find {name}}}"
 
+    def has_row(self, lst, sym):
+        """Whether the list has a row `sym` (data_index; safe on every
+        provider, where data_symbol past the end can raise a MILO_FAIL)."""
+        i = self.eval(f"{{{lst} data_index {sym}}}", timeout=3)
+        return isinstance(i, int) and i >= 0
+
     def rows(self, lst, limit=60):
+        """The list's row symbols, for logs and for lists that are discovered
+        (fitness, playlists).  Reads no further than the rows on display:
+        some providers raise a MILO_FAIL for an index past their end
+        (MainMenuProvider measured 14 in one soak when this read 12 rows of
+        a 5-row menu), others return garbage."""
+        shown = self.eval(f"{{{lst} get_num_display}}", timeout=3)
+        if isinstance(shown, int) and shown > 0:
+            limit = min(limit, shown)
         out = []
         for n in range(limit):
             sym = self.eval(f"{{{lst} data_symbol {n}}}", timeout=3)
@@ -284,7 +298,7 @@ class Kit:
             time.sleep(2.5)
             self.log(f"multiuser p{side + 1} rows after difficulty: {self.rows(lst)}")
             for sym in ("play", "skip_waiting"):
-                if sym in self.rows(lst):
+                if self.has_row(lst, sym):
                     self.choose(sym, lst)
                     time.sleep(2.5)
                 if self.screen() != "multiuser_screen":
