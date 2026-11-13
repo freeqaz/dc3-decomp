@@ -6,19 +6,16 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-static const char *kTestDir = "/tmp/claude-1000/milo_tests";
-
 class ChunkStreamTest : public SymbolTestFixture {
 protected:
     static void SetUpTestSuite() {
         SymbolTestFixture::SetUpTestSuite();
-        // Create test output directory
-        mkdir("/tmp/claude-1000", 0755);
-        mkdir(kTestDir, 0755);
     }
 
     std::string TestPath(const char *name) {
-        return std::string(kTestDir) + "/" + name;
+        // private to this process: a shared fixed dir was written and read by
+        // concurrent gate runs at once (np-harness)
+        return TestScratchDir() + "/" + name;
     }
 };
 

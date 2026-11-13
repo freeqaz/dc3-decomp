@@ -246,13 +246,16 @@ class DtaIncludeTest : public SymbolTestFixture {
 protected:
     void SetUp() override {
         // Create temp directory for test files
-        mTestDir = "/tmp/claude-1000/dta_test";
-        mkdir("/tmp/claude-1000", 0755);
+        // inside this process's private dir: TearDown deletes it, and with a
+        // fixed /tmp/claude-1000/dta_test it deleted concurrent runs' files
+        ASSERT_FALSE(TestScratchDir().empty()) << "no private scratch dir";
+        mTestDir = TestScratchDir() + "/dta_test";
         mkdir(mTestDir.c_str(), 0755);
     }
 
     void TearDown() override {
         // Clean up test files
+        if (mTestDir.empty()) return;
         std::string cmd = "rm -rf " + mTestDir;
         system(cmd.c_str());
     }

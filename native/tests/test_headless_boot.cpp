@@ -192,10 +192,15 @@ static void PrintOutputTail(const std::string &output, size_t maxBytes = 2000) {
     printf("--- end output ---\n");
 }
 
-// Write a temporary input script file, returns path
+// Write a temporary input script file, returns path.  The name is unique to
+// this process and call: the fixed dc3_test_input.txt was shared by every
+// concurrent gate run, so one run's engine could replay another test's script
+// (np-harness).
 static std::string WriteInputScript(const std::vector<std::pair<int, std::string>> &inputs) {
+    static int sCount = 0;
     std::string path = std::string(getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp/claude-1000")
-                       + "/dc3_test_input.txt";
+                       + "/dc3_test_input_" + std::to_string((int)getpid()) + "_" +
+                       std::to_string(sCount++) + ".txt";
     std::ofstream f(path);
     for (auto &entry : inputs)
         f << entry.first << " " << entry.second << "\n";

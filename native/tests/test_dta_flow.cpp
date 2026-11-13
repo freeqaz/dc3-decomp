@@ -293,7 +293,7 @@ protected:
             std::string path = "/tmp/claude-1000/dta_flow_";
             auto *info = ::testing::UnitTest::GetInstance()->current_test_info();
             if (info) path += info->name();
-            path += ".log";
+            path += "_" + std::to_string((int)getpid()) + ".log"; // per run: shared by concurrent gates
             std::ofstream f(path);
             if (f.is_open()) {
                 f << sResult.output;
@@ -668,7 +668,7 @@ protected:
         auto *info = ::testing::UnitTest::GetInstance()->current_test_info();
         std::string path = "/tmp/claude-1000/dta_flow_";
         if (info) path += info->name();
-        path += ".log";
+        path += "_" + std::to_string((int)getpid()) + ".log"; // per run: shared by concurrent gates
         std::ofstream f(path);
         if (f.is_open()) {
             f << result.output;

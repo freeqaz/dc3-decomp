@@ -53,7 +53,7 @@ TEST_F(MiloDiagnostic, WalkFile) {
         PutDeadMarker(chunk);
         PutBE32(chunk, 0xCAFEBABE);
 
-        diagFileOwned = "/tmp/claude-1000/milo_tests/milo_diagnostic_fixture.milo_xbox";
+        diagFileOwned = TestScratchDir() + "/milo_diagnostic_fixture.milo_xbox";
         ASSERT_TRUE(WriteSyntheticMilo(diagFileOwned.c_str(), {chunk}));
         diagFile = diagFileOwned.c_str();
         usingSyntheticFallback = true;
@@ -193,7 +193,7 @@ TEST_F(MiloDiagnostic, UnrereadBoundarySafety) {
     PutBE32(chunk1, 0x77777777);
     PutBE32(chunk1, 0x88888888);
 
-    std::string path = "/tmp/claude-1000/milo_tests/unreread_boundary_diag.milo_xbox";
+    std::string path = TestScratchDir() + "/unreread_boundary_diag.milo_xbox";
     ASSERT_TRUE(WriteSyntheticMilo(path.c_str(), {chunk0, chunk1}));
 
     ChunkStream cs(path.c_str(), ChunkStream::kRead, 0x8000, false, kPlatformNone, false);

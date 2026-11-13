@@ -4,6 +4,10 @@
 #include <cstring>
 #include <csignal>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <filesystem>
+#include <string>
+#include <vector>
 
 // Engine headers
 #include "os/Debug.h"
@@ -77,6 +81,8 @@ void EnsureSymbolInit() {
     InitMakeString();
 }
 
+static void RemoveTestScratchDir();
+
 void EngineTeardown() {
     // Rnd::Terminate must run BEFORE SystemTerminate because it uses Symbols,
     // DataArrays, and the object system (e.g. SetName, RELEASE of ObjectDirs).
@@ -96,6 +102,7 @@ void EngineTeardown() {
     // have already been reported to stdout, _exit() is safe here. We query
     // GTest for the correct exit code to preserve pass/fail signaling.
     int exitCode = testing::UnitTest::GetInstance()->Failed() ? 1 : 0;
+    RemoveTestScratchDir(); // _exit skips the atexit that would
     _exit(exitCode);
 }
 
@@ -300,4 +307,42 @@ const char *GetTestBikPath() {
     }
 
     return nullptr;
+}
+
+static void RemoveTestScratchDir();
+static bool sScratchUsed = false;
+static int sScratchOwner = 0; // a forked death-test child inherits the atexit; it must not delete
+
+const std::string &TestScratchDir() {
+    // Lower-case only: the engine's file layer case-folds paths (an mkdtemp
+    // suffix with capitals is not found again).  mkdir is the atomic claim; a
+    // leftover dir of a dead process with this pid moves on to the next n.
+    // Under /tmp/claude-1000 as the fixed paths it replaces were, so anything
+    // a killed run leaves behind is on the box's scratch expiry.
+    static std::string dir = [] {
+        std::string base = "/tmp/claude-1000";
+        mkdir(base.c_str(), 0755);
+        for (int n = 0; n < 1000; n++) {
+            std::string d = base + "/milo-tests-" + std::to_string((int)getpid()) + "-" +
+                std::to_string(n);
+            if (mkdir(d.c_str(), 0700) == 0) {
+                sScratchUsed = true;
+                sScratchOwner = (int)getpid();
+                atexit(RemoveTestScratchDir);
+                return d;
+            }
+        }
+        return std::string();
+    }();
+    return dir;
+}
+
+// The dir is this process's alone (it created it), so it goes when the process
+// does: at exit, and in EngineTeardown, which _exit()s past atexit.
+// MILO_TEST_KEEP_SCRATCH=1 keeps it.
+static void RemoveTestScratchDir() {
+    if (!sScratchUsed || sScratchOwner != (int)getpid() || getenv("MILO_TEST_KEEP_SCRATCH"))
+        return;
+    std::error_code ec;
+    std::filesystem::remove_all(TestScratchDir(), ec);
 }

@@ -21,6 +21,7 @@
 #include <string>
 #include <algorithm>
 #include <sys/stat.h>
+#include <unistd.h>
 
 extern Archive *TheArchive;
 extern bool NativeArkRead(int arkFile, long long byteOffset, void *buffer, int bytes);
@@ -165,12 +166,17 @@ TEST_F(ExtractBik, ExtractSmallest) {
                    (buf[2] >= 32 ? buf[2] : '.'), (buf[3] >= 32 ? buf[3] : '.'));
         }
 
-        // Write to disk
-        FILE *fp = fopen(outPath, "wb");
-        ASSERT_NE(fp, nullptr) << "Failed to create " << outPath;
+        // Write to disk.  The fixture dir is shared by every gate run on the
+        // box (GetTestBikPath reads it), so write a private temporary file and
+        // rename it into place: rewriting in place truncated the file under a
+        // concurrent run's reader (np-harness).
+        std::string tmpPath = std::string(outPath) + ".tmp." + std::to_string((int)getpid());
+        FILE *fp = fopen(tmpPath.c_str(), "wb");
+        ASSERT_NE(fp, nullptr) << "Failed to create " << tmpPath;
         size_t written = fwrite(buf.data(), 1, buf.size(), fp);
         fclose(fp);
         ASSERT_EQ((int)written, f.size);
+        ASSERT_EQ(rename(tmpPath.c_str(), outPath), 0) << "rename to " << outPath << " failed";
 
         printf("  Written %d bytes to %s\n", f.size, outPath);
         extracted++;
