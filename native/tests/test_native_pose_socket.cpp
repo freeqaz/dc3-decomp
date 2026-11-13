@@ -1015,6 +1015,65 @@ TEST_F(PoseSessionTest, AReplayedSessionReachesTheScorerAsItDidLive) {
     Dc3PoseSessionReplayLoad("/nonexistent/none.dc3session"); // clears the replay
 }
 
+// A song cut starts in the count-in (song clock below zero).  The menus' clock
+// runs up from zero, through the song's own times: the replay must hold the
+// first frame there, not play the dance into the menus (where a moving player
+// stole the pad's presses and stranded replay_proof.py on choose_mode_screen),
+// and start when the song clock comes down to the count-in -- every time.
+TEST_F(PoseSessionTest, ASongReplayWaitsForTheCountInNotTheMenuClock) {
+    std::vector<Dc3PoseSession::Frame> frames(300);
+    for (size_t k = 0; k < frames.size(); k++) {
+        Dc3PoseSession::Frame &f = frames[k];
+        f.seq = f.frameId = 7000 + (uint32_t)k;
+        f.wall = k / 30.0;
+        f.song = -5.0 + k / 30.0; // -5 .. +5
+        f.timestamp = 200.0 + k / 30.0;
+        WirePerson w = Tilted(71, 0.0f);
+        NativeSkeletonProvider::PersonData p;
+        p.trackId = 71;
+        p.valid = true;
+        for (int j = 0; j < kNumJoints; j++) {
+            p.joints[j].Set(w.values[j * 4 + 0], w.values[j * 4 + 1], w.values[j * 4 + 2]);
+            p.confidence[j] = kConfidenceTracked;
+        }
+        f.persons.push_back(p);
+    }
+    const std::string path = TempPath("countin.dc3session");
+    {
+        FILE *fp = fopen(path.c_str(), "w");
+        ASSERT_NE(fp, nullptr);
+        fputs("# dc3-pose-session v1\n", fp);
+        for (const Dc3PoseSession::Frame &f : frames)
+            fputs(Dc3PoseSession::Format(f).c_str(), fp);
+        fclose(fp);
+    }
+    ASSERT_TRUE(Dc3PoseSessionReplayLoad(path.c_str()));
+    // Menus: 0 .. 4 s, inside the session's song times, held every call.
+    for (double t = 0.0; t < 4.0; t += 1.0 / 30) {
+        Dc3PoseSessionReplayPumpAt(&mProvider, t);
+        ASSERT_NE(mSensor->PollNewFrame(), nullptr);
+        EXPECT_GE(mProvider.FrameId(), 0x80000000u) << "menu clock " << t << " played a frame";
+    }
+    // The song: count-in, then each frame on time.
+    for (size_t k = 0; k < frames.size(); k++) {
+        Dc3PoseSessionReplayPumpAt(&mProvider, frames[k].song + 0.001);
+        ASSERT_NE(mSensor->PollNewFrame(), nullptr) << k;
+        ASSERT_EQ(mProvider.FrameId(), frames[k].frameId) << k;
+    }
+    // Back to the menus (the clock jumps back to zero): held again, and the
+    // next song's count-in starts the replay again.
+    Dc3PoseSessionReplayPumpAt(&mProvider, 0.5);
+    mSensor->PollNewFrame();
+    EXPECT_GE(mProvider.FrameId(), 0x80000000u);
+    Dc3PoseSessionReplayPumpAt(&mProvider, 1.0);
+    mSensor->PollNewFrame();
+    EXPECT_GE(mProvider.FrameId(), 0x80000000u);
+    Dc3PoseSessionReplayPumpAt(&mProvider, frames[3].song + 0.001);
+    mSensor->PollNewFrame();
+    EXPECT_EQ(mProvider.FrameId(), frames[3].frameId);
+    Dc3PoseSessionReplayLoad("/nonexistent/none.dc3session");
+}
+
 
 TEST(PoseServerExitTest, EachServerExitCodeHasItsOwnMessage) {
     using P = NativeSkeletonProvider;

@@ -259,6 +259,13 @@ struct Replay {
     bool wallSync = false;
     bool started = false;
     double wallT0 = 0.0;
+    // Song sync: the replay runs only once the song clock has come down to the
+    // session's first frame (a song starts in its count-in, below zero).  Until
+    // then -- the menus, whose shell-music clock runs up from zero -- the first
+    // frame is held, so the recorded dance is not played into the menus.
+    bool armed = false;
+    bool haveClock = false;
+    double lastClock = 0.0;
     int lastIndex = -2;        // frame index last published (-1 = holding the first)
     uint32_t holdId = 0;       // ids of held frames: high bit set, never a recorded id
     uint32_t publishedId = 0;  // frame id of the last publish
@@ -343,7 +350,17 @@ void Dc3PoseSessionReplayPumpAt(NativeSkeletonProvider *provider, double clock) 
         }
         due = (int)lo;
     } else {
-        due = Dc3PoseSession::DueIndex(fr, clock);
+        // The clock going back is a new song, or the menus again: wait for
+        // the count-in once more.
+        if (gReplay.haveClock && clock < gReplay.lastClock - 0.5)
+            gReplay.armed = false;
+        gReplay.haveClock = true;
+        gReplay.lastClock = clock;
+        if (!gReplay.armed && clock <= fr.front().song + 1.0) {
+            gReplay.armed = true;
+            fprintf(stderr, "DC3 PERFORM: session replay starts at song clock %.2f\n", clock);
+        }
+        due = gReplay.armed ? Dc3PoseSession::DueIndex(fr, clock) : -1;
     }
     if (due < 0) {
         Publish(provider, 0, true); // before the first frame: hold it
