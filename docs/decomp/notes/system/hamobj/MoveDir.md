@@ -498,3 +498,26 @@ Inside the body (was lines 2639-2644):
         // (`stfs f0, 0x194(r31)`, 0x82502334); x is debugRect.x (0x110(r31)).
         // There is no 0.02f constant in the image's body.
 ```
+
+w-low-ham-math (2026-11-13), lane D:
+
+```text
+BEHAVIOUR FIX, five values (read off 0x82500FC8):
+  - Ham1 per-node boxes: UtilDrawRect2D(v1 = (x - halfWidth, top), v2 =
+    (x + halfWidth, top + line)), v1 at 0xf0(r31) with v1.y advanced per row.
+    We passed (bx1, bx2) / (colY + line, colY), mixing x and y.
+  - Beat lines 0..4 are sGray (r26, the same register as the "%i" label).
+  - startSeconds = BeatToSeconds((float)measureStart - rangeOffset)
+    (fsubs f1, f19, f0), not beatOffset - rangeOffset.
+  - Yellow beat label prints beatOffset (0x80(r31) = f17), not totalBeat.
+  - Viz rect and debug rect backgrounds are sDarkGray (r24 <- 0x60(r31) =
+    lbl_82F0EB18), not sLightGray.
+Unicorn's EQUIVALENT verdict never saw any of these: they are all draw-call
+arguments. Then codegen-only: 3-arg lineColor.Set (the image never writes
+alpha; native pins it to 1) and textPos = DrawStringScreen("asyc") (dead
+store in the image). Net 89.640 -> 90.0 canonical, equal 723 -> 746.
+Checked and matching: asserts, mirrored, sLineHeight init, play clip,
+version label, threshold lines, detected bar args, timer bar, Ham1 headers,
+marker colours, detect-range cells and errColor, merge-branch frame index,
+error curve, node index text, grid layout, latency/rotation text, return.
+```
