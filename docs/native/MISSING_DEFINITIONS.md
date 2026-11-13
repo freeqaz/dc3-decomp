@@ -152,9 +152,9 @@ print(a['measures'] == b['measures'],
 
 Run it against a worktree built from the branch point. `fuzzy_match_percent` is relocation-sensitive, which is what lets this comparison see a symbol-name fix that normalized mode cannot. The `createFilter` `extern "C"` mangling fix in `src/system/dsp/EQEffect.cpp` was found that way. Give the comparator a negative control (a deliberately perturbed copy of one report) before trusting a "0 differences" result.
 
-## Known issue: `cmake --build` with no target fails
+## `cmake --build` with no target
 
-`wgpu-window-test` does not compile: `native/src/main.cpp` and `native/src/gfx/GpuDevice.cpp` include `gfx/GpuDevice.h`, which moved into the engine in `5cfbcba9b`, and that target deliberately does not link the engine. This is why `MILO_TEST_REQUIRED_TARGETS` in `native/CMakeLists.txt` is an explicit target list. Always qualify "the native build is green" with the target.
+Builds again since `wgpu-window-test` was deleted (2026-11-13, H-2); it had not compiled since `gfx/GpuDevice.h` moved into the engine in `5cfbcba9b`. `MILO_TEST_REQUIRED_TARGETS` in `native/CMakeLists.txt` stays an explicit target list. Still qualify "the native build is green" with the target.
 
 ## Detection recipes
 

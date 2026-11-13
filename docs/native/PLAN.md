@@ -67,23 +67,23 @@ Size: S < half a day · M ≈ 1–2 days · L = several days.
 
 | # | Item | Size | From Linux? |
 |---|---|---|---|
-| M-1 | Generate the libc++ `wrap_iter.h` shim at configure time | M | yes, then confirm on Mac |
-| M-2 | Move the Apple `-fms-compatibility`/PCH exemption to the engine files; delete dc3's dead gfx/audio copies (H-1) | S | yes (engine change: heads-up first) |
-| M-3 | `malloc_usable_size` / `<malloc.h>` in `Dir.cpp` and a test | S | yes |
-| M-4 | Remove the 22 duplicate definitions; gate "links without `--allow-multiple-definition`" on Linux | M | yes |
-| M-5 | Darwin branch in `scripts/native_configure.sh` (Dawn prebuilt, `BUILD_TESTS=OFF`) | S | yes |
-| M-6 | `/proc/self/exe` and `/proc/self/statm` uses | S | yes |
+| M-1 | Generate the libc++ `wrap_iter.h` shim at configure time. **Linux side done** (`0bed35b3e` generator, `CharEyes.cpp` `::pow` guard `5502e9e56`): Linux libc++ 23 proxy build compiles, links, reaches `game_screen`; emsdk web build uses the generated shim. Engine copy: scratch patch `engine-cmake-shim-apple.patch`, not landed | M | yes, then confirm on Mac |
+| M-2 | Move the Apple `-fms-compatibility`/PCH exemption to the engine files; delete dc3's dead gfx/audio copies (H-1). **dc3 side done** (`6d7f2c7fa`: the `if(APPLE)` block names the engine's `MetalSurface.mm`/`GpuDevice.cpp`/`AudioDevice.cpp` via `TARGET_DIRECTORY milo-engine`). Engine-side copy of the exemption: scratch patch, not landed | S | yes (engine change: heads-up first) |
+| M-3 | `malloc_usable_size` / `<malloc.h>` in `Dir.cpp` and a test. **Done** (`1edf01e06`; PPC `Dir.obj` byte-identical) | S | yes |
+| M-4 | Remove the duplicate definitions (23, not 22); gate "links without `--allow-multiple-definition`" on Linux. **dc3 side done** (`ecfd3e581`): 17 removed; the 6 left are engine fallbacks, allowlisted in `native/tests/link_duplicates_allow.txt` and gated by ctest `LinkHygiene.*` (`scripts/native/check_link_duplicates.py`, fails on a new duplicate AND on a stale allowlist line). With scratch patch `engine-weaken-duplicates.patch` applied: 0 duplicates | M | yes |
+| M-5 | Darwin branch in `scripts/native_configure.sh` (Dawn prebuilt, `BUILD_TESTS=OFF`). **Done** (`8db01cdd7`), checked by `MILO_CONFIGURE_PLATFORM=Darwin MILO_CONFIGURE_DRY_RUN=1`; not run on a Mac | S | yes |
+| M-6 | `/proc/self/exe` and `/proc/self/statm` uses. **`/proc/self/exe` done** (`c84d7ddae`, `native/src/platform/ExecutablePath.h`, 6 sites); `/proc/self/statm` left (fails soft) | S | yes |
 | M-7 | First build and windowed run on the owner's Mac; then a macOS CI job | M | no |
 
 ## Track H — hygiene that unblocks the above
 
 | # | Item | Size |
 |---|---|---|
-| H-1 | Delete dead dc3 copies `native/src/gfx/*`, `native/src/platform/{Rnd,Mesh,Tex,Part}_Wgpu.cpp`, the unused source lists, and the wrong CMake comment near the `dc3-web` target | S |
-| H-2 | Fix or delete `wgpu-window-test` | S |
-| H-3 | GitHub `native-build` red in 36 of 40 runs: find the cause | S–M |
-| H-4 | `milo_viewer.cpp` sets `MILO_RENDER=0`, which the engine reads as "set", so GPU is forced on | S |
-| H-5 | `FFmpegMovieImpl.cpp` compiled from both repos: possible duplicate | S |
+| H-1 | Delete dead dc3 copies `native/src/gfx/*`, `native/src/platform/{Rnd,Mesh,Tex,Part}_Wgpu.cpp`, the unused source lists, and the wrong CMake comment near the `dc3-web` target. **Done** (`6d7f2c7fa`; defined-symbol sets of all four linked binaries unchanged). Still dead, not in scope: the `list(REMOVE_ITEM DC3_NATIVE_CORE_SOURCES_ENGINE ...)` files | S |
+| H-2 | Fix or delete `wgpu-window-test`. **Deleted** (`6d7f2c7fa`): a GLFW+WebGPU smoke window superseded by every engine target; `ninja all` builds again | S |
+| H-3 | GitHub `native-build` red in 36 of 40 runs: find the cause. **Build step fixed, not pushed; job still red at the test gate** (`0bed35b3e`, `4eb2a1525`, `6c32e1d97`): on pre-GCC-15 runners a checked-in GCC-15 `stl_iterator.h` (`redefinition of '__niter_base'`) and a date-keyed `random_shuffle` shim in `msvc_compat.h` (`redefinition of 'random_shuffle'`); on 26.04 a nonexistent gtest-discovery cwd, and behind it `HeadlessBootTest`, which booted with no game data (SIGFPE) and would have failed the test gate. Remaining (ubuntu:26.04 container replay of the workflow at `6c32e1d97`): all four targets build; ctest runs 658, 256 pass, ~82 skip, and **320 tests in 58 suites crash** (no gtest result, ctest exit 8) because with no `orig-assets` the archive load dies before any assertion — `AssetLoadingTest` 33, `ObjectLifetimeTest` 32, `MergeScopeParityTest` 22, … Next step: one asset gate where they all enter (`EnsureEngineInit()` in `native/tests/test_helpers.cpp`, which needs a skip path its callers honour) or stop the archive-less boot from crashing | S–M |
+| H-4 | `milo_viewer.cpp` sets `MILO_RENDER=0`, which the engine reads as "set", so GPU is forced on. **Done** (`d1f464c8c`; same bug in `milo-tex-export`, `milo-mat-export`, `milo2gltf`) | S |
+| H-5 | `FFmpegMovieImpl.cpp` compiled from both repos: possible duplicate. **Done** (`a2267dcf8`): a real duplicate hidden by archive pull order; engine copy excluded (dc3's has the fixes), dc3's byte-identical `FFmpegAudioReader` deleted. Fixes for the engine copy: scratch patch `engine-ffmpeg-movie-fixes.patch` | S |
 | H-6 | Crowd impostors cached once per character, so the crowd never animates | M |
 | H-7 | `native_assert_harvest.py` stalls on tutorial screens | S |
 | H-8 | CLAUDE.md and the CMake comment call the gameplay gate "one ~2 min run"; it is ~50 min | S |

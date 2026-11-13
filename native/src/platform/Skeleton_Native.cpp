@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <vector>
 #ifndef __EMSCRIPTEN__
+#include "platform/ExecutablePath.h"
 #include <unistd.h>
 #include <signal.h>
 #include <sys/socket.h>
@@ -152,7 +153,7 @@ bool NativeSkeletonProvider::Start(
         std::string scriptPath;
         {
             char exePath[PATH_MAX] = {};
-            ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+            ssize_t len = ReadExecutablePath(exePath, sizeof(exePath) - 1);
             if (len > 0) {
                 exePath[len] = '\0';
                 // Walk up from executable (native/build/milo-viewer) to project root

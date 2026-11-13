@@ -128,8 +128,10 @@ static void Dc3StartHeartbeat() {
 // When gDrawJmpBufSet is true and a SIGSEGV occurs, we longjmp back
 // to the draw call site instead of terminating. This lets the engine
 // survive renderer crashes during partially-loaded scenes.
-sigjmp_buf gDrawJmpBuf;
-bool gDrawJmpBufSet = false;
+// Defined in src/App.cpp (which sets them around the draw call); this used to be
+// a second strong definition of both (M-4).
+extern sigjmp_buf gDrawJmpBuf;
+extern bool gDrawJmpBufSet;
 
 static void SignalHandler(int sig, siginfo_t *info, void *) {
     // If we're inside a draw call, recover instead of crashing

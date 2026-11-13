@@ -45,8 +45,7 @@ if(ENABLE_ASAN)
     add_link_options(-fsanitize=address)
 endif()
 
-# MSVC compatibility flags — applied per-target (dc3-native only), not globally.
-# Standalone tools (wgpu-window-test, milo-viewer) use standard C++ compilation.
+# MSVC compatibility flags — applied per-target, not globally.
 set(DC3_MSVC_COMPAT_FLAGS
     -fms-extensions          # __declspec support (xdk headers)
     -fms-compatibility       # Full MSVC compat (dependent base class lookup)
@@ -108,11 +107,22 @@ else()
     list(APPEND DC3_DECOMP_FLAGS -w)
 endif()
 
-# MSVC STL compat: shadow libc++'s __wrap_iter with a patched version that
-# adds implicit conversion to the underlying pointer type. This makes
-# vector::begin()/end() results implicitly convertible to T*, matching
-# Xbox 360 MSVC's old STL behavior and fixing 600+ call sites.
+# Vendored single-header libraries (httplib, cgltf, stb).
 include_directories(BEFORE SYSTEM ${CMAKE_SOURCE_DIR}/include)
+
+# MSVC STL compat: shadow the host library's vector iterator header
+# (libstdc++ bits/stl_iterator.h or libc++ __iterator/wrap_iter.h) with a copy
+# that adds an implicit conversion to the underlying pointer, matching Xbox 360
+# MSVC's STL where vector::begin()/end() are T* (600+ call sites). The copy is
+# GENERATED from this toolchain's own header -- a checked-in copy of one
+# version's header is what broke CI on GCC 14 and libc++ 23; see
+# cmake/HostStlShim.cmake. Non-SYSTEM and BEFORE so it precedes every other
+# -I, including the engine's own include/ copy (re-prepended on milo-engine
+# below, after add_subdirectory).
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+include(HostStlShim)
+dc3_generate_host_stl_shim("${CMAKE_BINARY_DIR}/host_stl_shim" DC3_HOST_STL_SHIM_DIR)
+include_directories(BEFORE ${DC3_HOST_STL_SHIM_DIR})
 
 if(EMSCRIPTEN)
     # Emscripten provides its own threading, WebGPU (emdawnwebgpu), and GLFW shim
@@ -203,8 +213,6 @@ if(NOT EMSCRIPTEN)
             "-framework Metal"
             "-framework QuartzCore"
         )
-        # MetalSurface.mm — ObjC++ helper for CAMetalLayer creation
-        set(DC3_METAL_SURFACE_SOURCE src/gfx/MetalSurface.mm)
     else()
         # Linux: GNU ld flags
         #
@@ -254,7 +262,6 @@ if(NOT EMSCRIPTEN)
             ogg
             z
         )
-        set(DC3_METAL_SURFACE_SOURCE "")
     endif()
 endif()
 
@@ -357,7 +364,24 @@ if(EMSCRIPTEN)
         AudioDevice_Web.cpp
         ImGuiBackend_Web.cpp)
 endif()
+# FFmpegMovieImpl.cpp exists in both trees (H-5), and both define every
+# FFmpegMovieImpl symbol. DC3's copy carries two image-faithful fixes the
+# engine's lacks (Ready() is true with no pending load; Poll() of a movie that
+# never opened reports DONE, so a missing .bik no longer "plays" forever). It
+# only won because the engine's archive member was never pulled -- link-order
+# luck, invisible to --allow-multiple-definition and to the LinkHygiene gate.
+# Keep the engine copy out of DC3's libmilo-engine.a so there is exactly one
+# definition. Drop this (and native/src/platform/FFmpegMovieImpl.*) once the
+# engine carries the fixes. (FFmpegAudioReader was byte-identical in both
+# trees; DC3's copy is deleted and the engine's links.)
+list(APPEND MILO_ENGINE_DECOMP_PLATFORM_EXCLUDE FFmpegMovieImpl.cpp)
 add_subdirectory(${MILO_ENGINE_PATH} ${CMAKE_BINARY_DIR}/milo-engine)
+# The engine prepends its own checked-in STL shim (include/) with BEFORE PUBLIC,
+# which would win over the directory-level generated shim for the engine's own
+# TUs. Prepend the generated one again so the engine and dc3 compile against
+# the same, toolchain-matched header. (Consumers already get it first from the
+# directory property; this is PRIVATE so it does not duplicate there.)
+target_include_directories(milo-engine BEFORE PRIVATE ${DC3_HOST_STL_SHIM_DIR})
 if(EMSCRIPTEN)
     # dc3-web TUs compile with HX_WEB=1 and link libmilo-engine.a; the engine's
     # StreamReceiver_Native.h and audio/AudioDevice.h change class layout under
@@ -1164,7 +1188,6 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Memory_Native.cpp
     src/platform/PlatformMgr_Native.cpp
     src/platform/DingoSvr_Native.cpp
-    src/platform/SongSortMgr_Native.cpp
     src/platform/System_Native.cpp
     src/platform/File_Native.cpp
     src/platform/AsyncFile_Native.cpp
@@ -1180,20 +1203,15 @@ set(DC3_NATIVE_CORE_SOURCES
     $<$<BOOL:${ENABLE_NCNN}>:src/pose/PoseTracker.cpp>
     $<$<BOOL:${ENABLE_NCNN}>:src/pose/CameraCapture.cpp>
     $<$<BOOL:${ENABLE_NCNN}>:src/pose/InternalPoseProvider.cpp>
-    src/audio/AudioDevice.cpp
     src/platform/StreamReceiver_Native.cpp
     src/platform/SampleInst_Native.cpp
     src/platform/StbVorbisImpl.cpp
     src/platform/FxSendNative.cpp
-    src/platform/Rnd_Wgpu.cpp
     src/platform/MeshFilter.cpp
     src/platform/BoneSetup.cpp
     src/platform/MeshGpuCache.cpp
     src/platform/MaterialSetup.cpp
-    src/platform/Mesh_Wgpu.cpp
     src/platform/TransparentQueue.cpp
-    src/platform/Part_Wgpu.cpp
-    src/platform/Tex_Wgpu.cpp
     src/platform/Cam_Native.cpp
     src/platform/Net_Stub.cpp
     src/platform/Memcard_Stub.cpp
@@ -1203,7 +1221,6 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Achievements_Stub.cpp
     src/platform/MemcardMgr_Stub.cpp
     src/platform/BinkMovie_Stub.cpp
-    $<$<BOOL:${ENABLE_FFMPEG}>:src/platform/FFmpegAudioReader.cpp>
     $<$<BOOL:${ENABLE_FFMPEG}>:src/platform/FFmpegMovieImpl.cpp>
     $<$<BOOL:${ENABLE_FFMPEG}>:src/platform/XmaSampleDecoder.cpp>
     src/platform/NetXbox_Stub.cpp
@@ -1226,12 +1243,6 @@ set(DC3_NATIVE_CORE_SOURCES
     src/thunk_stubs.cpp
 )
 
-# Full native sources (core + entry point)
-set(DC3_NATIVE_SOURCES
-    src/main_native.cpp
-    ${DC3_NATIVE_CORE_SOURCES}
-)
-
 # Engine-clean core files now provided by libmilo-engine.a. Targets that LINK
 # the engine (dc3-native, milo-viewer, render-test, milo-tests) use this
 # filtered core list and additionally drop the moved gfx set + CharTwistSolver
@@ -1240,15 +1251,14 @@ set(DC3_NATIVE_SOURCES
 # (milo-tex-export, milo-mat-export, milo2gltf) link milo-engine too and use
 # this same filtered list via DC3_EXPORT_TOOL_SOURCES.
 #
-# Consequence worth knowing: several files in DC3_NATIVE_CORE_SOURCES are
-# removed again immediately below and so compile to NO OBJECT in any native
-# target. src/platform/Tex_Wgpu.cpp is one of them -- it is byte-identical to
-# ${MILO_ENGINE_PATH}/src/platform/Tex_Wgpu.cpp, which is what every native
-# target actually links. The DC3 copy is still live for dc3-web (see
-# DC3_WEB_CORE_SOURCES), so it cannot simply be deleted; if you edit either
-# copy, edit both or the web and native texture paths will diverge silently.
-# (FFmpeg*.cpp are genex list items and stay in both; allow-multiple-definition
-#  tolerates the duplicate.)
+# Consequence worth knowing: the files removed again immediately below compile
+# to NO OBJECT in any native target -- the engine's copy is what links. (The
+# renderer/gfx/audio copies -- Rnd/Mesh/Tex/Part_Wgpu.cpp, native/src/gfx/,
+# native/src/audio/ -- were deleted outright on 2026-11-13, H-1: no target
+# compiled them, and their stale HEADERS were shadowing the engine's for every
+# dc3 TU, because -I native/src precedes -I <engine>/src.)
+# (FFmpegMovieImpl.cpp is the exception the other way round: DC3's copy links
+#  and the engine's is excluded -- see MILO_ENGINE_DECOMP_PLATFORM_EXCLUDE.)
 set(DC3_NATIVE_CORE_SOURCES_ENGINE ${DC3_NATIVE_CORE_SOURCES})
 # src/platform/Cache_Stub.cpp is deliberately NOT in this removal list (it used
 # to be, because it was an empty placeholder whose engine twin was the real
@@ -1257,7 +1267,6 @@ set(DC3_NATIVE_CORE_SOURCES_ENGINE ${DC3_NATIVE_CORE_SOURCES})
 # src/system/utl/CacheMgr.cpp's HX_NATIVE branch references the factory that
 # lives in it, so every engine-linking target must compile it.
 list(REMOVE_ITEM DC3_NATIVE_CORE_SOURCES_ENGINE
-    src/audio/AudioDevice.cpp
     src/platform/AsyncFile_Native.cpp
     src/platform/BinkMovie_Stub.cpp
     src/platform/BoneSetup.cpp
@@ -1274,17 +1283,13 @@ list(REMOVE_ITEM DC3_NATIVE_CORE_SOURCES_ENGINE
     src/platform/MaterialSetup.cpp
     src/platform/Memory_Native.cpp
     src/platform/MeshGpuCache.cpp
-    src/platform/Mesh_Wgpu.cpp
     src/platform/Net_Stub.cpp
     src/platform/NetworkSocket_Stub.cpp
-    src/platform/Part_Wgpu.cpp
     src/platform/RndTex_Native.cpp
-    src/platform/Rnd_Wgpu.cpp  # Phase 0.2a: moved into milo-engine behind GameRenderHook
     src/platform/SampleInst_Native.cpp
     src/platform/StreamReceiver_Native.cpp
     src/platform/Synth_Stub.cpp
     src/platform/SynthCommon_Stub.cpp
-    src/platform/Tex_Wgpu.cpp
     src/platform/ThreadCall_Native.cpp
     src/platform/TransparentQueue.cpp
     src/platform/VirtualKeyboard_Stub.cpp
@@ -1302,35 +1307,6 @@ list(REMOVE_ITEM DC3_NATIVE_CORE_SOURCES_ENGINE
 # dc3-native, so for the other targets this pulls in no HTTP dependency.
 # (dc3-web keeps its own entry: it does not use this list.)
 list(APPEND DC3_NATIVE_CORE_SOURCES_ENGINE src/platform/DebugPanel.cpp)
-
-# ============================================================================
-# Graphics subsystem sources (WebGPU/Dawn)
-# ============================================================================
-
-# Core GPU utilities (no decomp dependencies — standalone tools can use these)
-set(DC3_GFX_CORE_SOURCES
-    src/gfx/GpuDevice.cpp
-    ${DC3_METAL_SURFACE_SOURCE}
-)
-
-# Full graphics sources (depend on decomp types like RndBitmap, RndMesh)
-set(DC3_GFX_SOURCES
-    ${DC3_GFX_CORE_SOURCES}
-    src/gfx/Screenshot.cpp
-    src/gfx/TextureConvert.cpp
-    src/gfx/VertexFormats.cpp
-    src/gfx/PipelineManager.cpp
-    src/gfx/FrameCapture.cpp
-    src/gfx/ShadowPass.cpp
-    src/gfx/BloomPass.cpp
-    src/gfx/DofPass.cpp
-    src/gfx/PostProcPass.cpp
-    src/gfx/DrawRect2D.cpp
-    src/gfx/GpuResourceRegistry.cpp
-    src/gfx/VideoEncoder.cpp
-    src/gfx/mikktspace.c
-)
-set_source_files_properties(src/gfx/mikktspace.c PROPERTIES LANGUAGE C)
 
 # ============================================================================
 # Export pipeline sources (CPU-only, no GPU dependency for decode)
@@ -1406,7 +1382,6 @@ set(DC3_WEB_CORE_SOURCES
     # compiled via DC3_WEB_LIFTED_ENGINE_SOURCES below.
     src/platform/PlatformMgr_Native.cpp
     src/platform/DingoSvr_Native.cpp
-    src/platform/SongSortMgr_Native.cpp
     src/platform/System_Native.cpp
     # File_Web.cpp / CDReader_Web.cpp / WebAssets.cpp lifted to milo-engine
     # (MILO_BUILD_WEB platform layer, W0).
@@ -1444,25 +1419,6 @@ set(DC3_WEB_CORE_SOURCES
     src/thunk_stubs.cpp
 )
 
-# Web GFX sources. GpuDevice_Web.cpp was lifted to milo-engine
-# (MILO_BUILD_WEB platform layer, W0); the remaining sources live on as
-# DC3-side gfx helpers.
-set(DC3_WEB_GFX_SOURCES
-    src/gfx/Screenshot.cpp
-    src/gfx/TextureConvert.cpp
-    src/gfx/VertexFormats.cpp
-    src/gfx/PipelineManager.cpp
-    src/gfx/FrameCapture.cpp
-    src/gfx/ShadowPass.cpp
-    src/gfx/BloomPass.cpp
-    src/gfx/DofPass.cpp
-    src/gfx/PostProcPass.cpp
-    src/gfx/DrawRect2D.cpp
-    src/gfx/GpuResourceRegistry.cpp
-    src/gfx/mikktspace.c
-)
-set_source_files_properties(src/gfx/mikktspace.c PROPERTIES LANGUAGE C)
-
 # Full engine + web platform layer
 # Filter out files that can't compile under Emscripten
 set(DC3_WEB_ENGINE_SOURCES ${DC3_ENGINE_SOURCES})
@@ -1474,9 +1430,10 @@ list(REMOVE_ITEM DC3_WEB_ENGINE_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/system/oggvorbis/framing.c
 )
 
-## dc3-web compiles the engine sources inline (no libmilo-engine.a link),
-## so the W0-lifted engine web TUs are pulled in directly from the engine
-## tree. These are kept aligned with milo-native-engine/CMakeLists.txt's
+## dc3-web links libmilo-engine.a like every desktop target, but the W0-lifted
+## engine *_Web.cpp TUs are excluded from that archive (see
+## MILO_ENGINE_DECOMP_PLATFORM_EXCLUDE above) and compiled here instead, with
+## dc3-web's flags. Keep this list aligned with milo-native-engine/CMakeLists.txt's
 ## MILO_ENGINE_WEB_PLATFORM_SOURCES / _WEB_GFX_SOURCES sets.
 set(DC3_WEB_LIFTED_ENGINE_SOURCES
     ${MILO_ENGINE_PATH}/src/platform/WebAssets.cpp
@@ -1497,7 +1454,7 @@ add_executable(dc3-web
     ${DC3_WEB_LIFTED_ENGINE_SOURCES}
     ${DC3_WEB_ENGINE_SOURCES}
     ${DC3_WEB_CORE_SOURCES}
-    # gfx set now provided by milo-engine (DC3_WEB_GFX_SOURCES is unused)
+    # renderer + gfx passes + audio device come from libmilo-engine.a
 )
 
 target_compile_options(dc3-web PRIVATE
@@ -1518,17 +1475,13 @@ target_compile_definitions(dc3-web PRIVATE
     _LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION
 )
 
-# Engine's src/ root wins FIRST (SYSTEM BEFORE). dc3-web doesn't link
-# libmilo-engine.a (it compiles the engine source set directly via
-# DC3_WEB_ENGINE_SOURCES), so the engine's PUBLIC src include is added here
-# manually. Putting it ahead of ${CMAKE_SOURCE_DIR}/src means any header shared
-# by both trees resolves to the engine's (superset) version — so a stale local
-# copy can never shadow the engine again (the AudioDevice.h break). The diverged
-# shared headers (AudioDevice.h / GpuDevice.h / MeshGpuCache.h / Rnd_Wgpu.h) are
-# additive supersets, so this reorder is behavior-neutral for the byte-identical
-# dups. NOTE: only the engine src/ root is moved to SYSTEM BEFORE (not its
-# include/ STL-shim dir) — dc3-web builds under Emscripten/libc++ and never had
-# the engine include/ on its path; the AudioDevice fix lives entirely in src/.
+# Engine's src/ root wins FIRST (SYSTEM BEFORE) for dc3-web. It also arrives via
+# milo-engine's PUBLIC include dirs, but those land AFTER ${CMAKE_SOURCE_DIR}/src,
+# where a stale local copy of a shared header used to shadow the engine's (the
+# AudioDevice.h break; the same shadowing hit every desktop target through
+# native/src/gfx/*.h until those copies were deleted, H-1). The STL iterator shim
+# reaches dc3-web like every target, through the directory-level generated
+# host_stl_shim include (emsdk's libc++ __wrap_iter).
 target_include_directories(dc3-web SYSTEM BEFORE PRIVATE
     ${MILO_ENGINE_PATH}/src
 )
@@ -1700,10 +1653,17 @@ set_source_files_properties(
 # miniaudio) break under -fms-compatibility because the SDK's ConditionalMacros.h
 # can't identify the compiler. Disable MSVC compat for these specific files.
 if(APPLE)
+    # The TUs that include macOS SDK / framework headers cannot take the MSVC
+    # compat flags or the decomp PCH (the SDK's ConditionalMacros.h cannot
+    # identify the compiler). They live in the ENGINE (moved 2026-05-26), so the
+    # property has to be set in the engine target's directory: until 2026-11-13
+    # this named dc3's dead copies under native/src/{gfx,audio}/ and the live
+    # engine files got the flags. Remove once the engine sets this itself.
     set_source_files_properties(
-        ${CMAKE_SOURCE_DIR}/src/gfx/MetalSurface.mm
-        ${CMAKE_SOURCE_DIR}/src/gfx/GpuDevice.cpp
-        ${CMAKE_SOURCE_DIR}/src/audio/AudioDevice.cpp
+        ${MILO_ENGINE_PATH}/src/gfx/MetalSurface.mm
+        ${MILO_ENGINE_PATH}/src/gfx/GpuDevice.cpp
+        ${MILO_ENGINE_PATH}/src/audio/AudioDevice.cpp
+        TARGET_DIRECTORY milo-engine
         PROPERTIES SKIP_PRECOMPILE_HEADERS ON
                    COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility;-fno-delayed-template-parsing"
     )
@@ -1735,20 +1695,6 @@ set_source_files_properties(
 # Symbol, STL containers). Applies to all engine targets.
 target_precompile_headers(dc3-native PRIVATE
     "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
-)
-
-# ============================================================================
-# Standalone WebGPU window test (does not link engine — just GLFW + Dawn)
-# ============================================================================
-add_executable(wgpu-window-test
-    src/main.cpp
-    ${DC3_GFX_CORE_SOURCES}
-)
-target_include_directories(wgpu-window-test PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-)
-target_link_libraries(wgpu-window-test PRIVATE
-    ${DC3_PLATFORM_LIBS}
 )
 
 # ============================================================================
@@ -2102,12 +2048,19 @@ if(BUILD_TESTS)
         endif()
     endforeach()
     if(MILO_TEST_ASSET_DIR STREQUAL "")
-        # No assets found; fall back to the source-relative dir so the path is
-        # at least stable. Asset-backed tests will SKIP/FAIL loudly, not silently.
-        get_filename_component(MILO_TEST_ASSET_DIR "${CMAKE_SOURCE_DIR}/../orig-assets" ABSOLUTE)
+        # No assets found. The working directory must still EXIST: it is also
+        # where gtest_discover_tests runs `milo-tests --gtest_list_tests` as a
+        # POST_BUILD step, and a missing directory fails that step ("Result: no
+        # such file or directory") and with it the whole milo-tests build. That
+        # is exactly how the GitHub native-build job died once the runner image
+        # could compile the tree (no orig-assets in CI). Use an empty dir in the
+        # build tree; asset-backed tests SKIP/FAIL loudly on their own.
+        set(MILO_TEST_ASSET_DIR "${CMAKE_CURRENT_BINARY_DIR}/no-orig-assets")
+        file(MAKE_DIRECTORY "${MILO_TEST_ASSET_DIR}")
         message(WARNING "milo-tests: orig-assets/gen/main_xbox.hdr not found; "
-                        "asset-backed tests will fail. Looked under "
-                        "${CMAKE_SOURCE_DIR}/../orig-assets and the main-repo path.")
+                        "asset-backed tests will fail or skip. Looked under "
+                        "${CMAKE_SOURCE_DIR}/../orig-assets and the main-repo path. "
+                        "Tests run in ${MILO_TEST_ASSET_DIR}.")
     else()
         message(STATUS "milo-tests asset dir (ctest WORKING_DIRECTORY): ${MILO_TEST_ASSET_DIR}")
     endif()
@@ -2223,11 +2176,10 @@ if(BUILD_TESTS)
 
     # Every binary the suite drives, in ONE place.
     #
-    # `all` would be the honest answer and is not available: wgpu-window-test
-    # has been broken since GpuDevice.h moved into the shared engine (it
-    # deliberately does not link the engine, so it cannot see the header). Its
-    # last successful build here was 2026-03-25. That is pre-existing and out of
-    # scope, but it means `cmake --build <dir>` fails, so a list is forced.
+    # (`all` used to be unbuildable because of wgpu-window-test, broken from
+    # 2026-03-25 until it was deleted on 2026-11-13. `all` now builds, but it
+    # also builds targets the suite never runs, and the point here is the exact
+    # set the suite drives, so the list stays.)
     #
     # A hand-maintained list is what let milo-viewer go unbuilt and cost 5 tests
     # to a skip, so the list is defined once here and BOTH consumers read it:
@@ -2257,6 +2209,27 @@ if(BUILD_TESTS)
         PROPERTIES
             ENVIRONMENT "${MILO_TEST_ENV}"
     )
+
+    # LinkHygiene.*: dc3-native must link without --allow-multiple-definition
+    # (Apple ld has no equivalent; on Linux the flag silently keeps whichever
+    # duplicate links first). The check relinks dc3-native from ninja's own
+    # link command with the flag removed, into a temp file, and compares the
+    # duplicate set with native/tests/link_duplicates_allow.txt. SelfTest is
+    # its negative control: it injects a duplicate and requires it be seen.
+    # GNU ld / lld diagnostics only, so Linux only.
+    find_program(MILO_PYTHON3_LINK python3)
+    if(MILO_PYTHON3_LINK AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND _ninja_exe)
+        add_test(NAME LinkHygiene.DuplicateDefinitions
+            COMMAND ${MILO_PYTHON3_LINK} ${CMAKE_SOURCE_DIR}/../scripts/native/check_link_duplicates.py
+                --build-dir ${CMAKE_CURRENT_BINARY_DIR} --target dc3-native --ninja ${_ninja_exe}
+                --allow ${CMAKE_SOURCE_DIR}/tests/link_duplicates_allow.txt)
+        add_test(NAME LinkHygiene.DuplicateCheckSelfTest
+            COMMAND ${MILO_PYTHON3_LINK} ${CMAKE_SOURCE_DIR}/../scripts/native/check_link_duplicates.py
+                --build-dir ${CMAKE_CURRENT_BINARY_DIR} --target dc3-native --ninja ${_ninja_exe}
+                --selftest)
+        set_tests_properties(LinkHygiene.DuplicateDefinitions LinkHygiene.DuplicateCheckSelfTest
+            PROPERTIES LABELS LinkHygiene TIMEOUT 300)
+    endif()
 
     # XeniaGolden.*: the native port against state recorded from the ORIGINAL
     # debug.xex under Xenia (docs/plans/XENIA_ORACLE.md, Tier A). Each test

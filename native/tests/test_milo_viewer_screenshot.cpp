@@ -1,4 +1,5 @@
 #include "test_helpers.h"
+#include "platform/ExecutablePath.h"
 #include "char/CharForeTwist.h"
 #include "char/CharTwistSolver.h"
 #include "obj/Dir.h"
@@ -26,7 +27,7 @@
 
 static std::string GetBinaryDir() {
     char buf[4096];
-    ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    ssize_t len = ReadExecutablePath(buf, sizeof(buf) - 1);
     if (len <= 0)
         return ".";
     buf[len] = '\0';

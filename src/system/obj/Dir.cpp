@@ -35,7 +35,11 @@
 #ifdef HX_NATIVE
 #include <cstdlib>
 #include <cstring>
-#include <malloc.h>
+#ifdef __APPLE__
+#include <malloc/malloc.h> // malloc_size
+#else
+#include <malloc.h> // malloc_usable_size
+#endif
 #endif
 #ifdef HX_NATIVE
 #include <cstdlib>
@@ -939,7 +943,11 @@ void ObjectDir::ReleaseCascadeBlock(void *block) {
         free(block);
         return;
     }
+#ifdef __APPLE__
+    size_t n = malloc_size(block);
+#else
     size_t n = malloc_usable_size(block);
+#endif
     memset(block, 0xDD, n);
     // Leak deliberately: reuse of the address is exactly what we are preventing.
     static size_t quarantined = 0;

@@ -43,10 +43,10 @@ macOS builds disable MSVC compatibility for the TUs that include SDK or framewor
 
 The decomp assumes that MSVC's old STL returns a raw `T*` from `begin()`/`end()`. Rather than editing every call site, the port shadows the host STL's iterator wrapper with a copy that adds an implicit conversion to the underlying pointer:
 
-- libstdc++: `native/include/bits/stl_iterator.h` adds `operator _Iterator() const` to `__normal_iterator`.
-- libc++: `native/include/__iterator/wrap_iter.h` adds `operator iterator_type() const` to `__wrap_iter`. This is the macOS case.
+- libstdc++: `bits/stl_iterator.h` gains `operator _Iterator() const` on `__normal_iterator`.
+- libc++: `__iterator/wrap_iter.h` gains `operator _Iter() const` on `__wrap_iter`. This is the macOS and web (emsdk) case.
 
-Both take priority because `native/CMakeLists.txt` adds `native/include` with `include_directories(BEFORE SYSTEM ${CMAKE_SOURCE_DIR}/include)`. Do not "fix" a call site that relies on the conversion; the shim exists so the decomp source can stay as MSVC wrote it.
+The copy is **generated at configure time** from the toolchain's own header by `native/cmake/HostStlShim.cmake` (a `-M` scan of `<vector>` with the build's `CMAKE_CXX_FLAGS` finds the header; one anchor, which must match exactly once, places the operator) into `<build>/host_stl_shim/`, and is put first on every target's include path with `include_directories(BEFORE ...)` plus a re-prepend on `milo-engine`. It used to be a checked-in copy of one version's header (GCC 15.2.1, Emscripten 5.0.2). That copy broke every TU on GCC 14 (the GitHub runner) and 867 of 874 against libc++ 23. Never check a copied STL header in again. Do not "fix" a call site that relies on the conversion; the shim exists so the decomp source can stay as MSVC wrote it.
 
 ## LP64 hazards
 

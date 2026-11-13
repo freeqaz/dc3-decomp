@@ -85,7 +85,11 @@ int main(int argc, char* argv[]) {
     }
 
     // Engine init (headless — no GPU)
-    setenv("MILO_RENDER", "0", 1);
+    // The engine reads MILO_RENDER / MILO_NORENDER by PRESENCE, not value
+    // (Rnd_Wgpu.cpp: MILO_RENDER set at all forces the GPU on), so
+    // MILO_RENDER=0 meant "GPU on". MILO_NORENDER is the off switch.
+    unsetenv("MILO_RENDER");
+    setenv("MILO_NORENDER", "1", 1);
 
     InitMakeString();
     SetFileChecksumData();

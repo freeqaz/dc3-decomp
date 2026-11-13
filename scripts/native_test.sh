@@ -316,9 +316,9 @@ if [ "$DO_BUILD" = "1" ]; then
     # build dir; TestGates.BuildMatchesSources verifies the currency of the same
     # list. One definition, two consumers, and if they drift the test fails.
     #
-    # Why not just `all`: wgpu-window-test has been broken since GpuDevice.h
-    # moved into the shared engine, so `cmake --build <dir>` with no target does
-    # not succeed in this repo. Pre-existing, unrelated, last built 2026-03-25.
+    # Why not just `all`: it builds targets the suite never runs. (It also used
+    # to fail outright on wgpu-window-test, broken 2026-03-25 .. deleted
+    # 2026-11-13.)
     #
     # Why a list at all is dangerous, measured 2026-08-23 during this very
     # investigation: the suite drives THREE binaries as subprocesses --
