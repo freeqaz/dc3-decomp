@@ -132,6 +132,17 @@ Inside the body (was lines 358-367):
             // itself still does not appear in ours.
 ```
 
+lane C / w-low-gesture-char (2026-11-13):
+
+```text
+// Behaviour re-check (91.318 canonical / 89.364 fuzzy): NOT A BUG.  All three
+// arms and the left-hand tail re-read from the listing: ry > 0.5 / < -0.5
+// polarity, rt (0x20) <= 0.5 || lt (0x1c) <= 0.5 into the rightPos arm,
+// x = elbow.x + (0.1 - rt*0.5) (fnmsubs), y = elbow.y + unk5398, z - 0.5,
+// left tail lt > 0 && rt == 0 with x = elbow.x + (lt*0.5 - 0.25) (fmsubs),
+// copies to wrist/hand at 0x1e4/0x1f4 and 0x1a4/0x1b4.  Agrees with w47-a.
+```
+
 
 ## `?UpdateCallbacks@SkeletonUpdate@@AAAXXZ`
 
