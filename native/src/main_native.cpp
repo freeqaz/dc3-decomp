@@ -17,6 +17,9 @@
 #include <thread>
 #include <chrono>
 #include <fcntl.h>
+#if defined(__APPLE__)
+#include <mach/mach.h> // task_info: RSS without /proc (M-6)
+#endif
 
 // ---------------------------------------------------------------------------
 // Exit diagnostics — make every way this process can die self-identifying.
@@ -53,9 +56,19 @@ extern const char *gDc3ExitReason;
 static time_t sStartTime = 0;
 static std::atomic<bool> sExitReported{false};
 
-// Current RSS in kB, or -1. Reads /proc/self/statm (a single small read) rather
-// than parsing /proc/self/status, so it is cheap enough to call every heartbeat.
+// Current RSS in kB, or -1. Linux reads /proc/self/statm (a single small read)
+// rather than parsing /proc/self/status, so it is cheap enough to call every
+// heartbeat. macOS has no /proc; task_info(MACH_TASK_BASIC_INFO) is the same
+// number (resident_size, bytes) from one Mach call.
 static long Dc3RssKb() {
+#if defined(__APPLE__)
+    mach_task_basic_info_data_t info;
+    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t)&info,
+                  &count) != KERN_SUCCESS)
+        return -1;
+    return (long)(info.resident_size / 1024);
+#else
     int fd = open("/proc/self/statm", O_RDONLY);
     if (fd < 0) return -1;
     char buf[128];
@@ -66,6 +79,7 @@ static long Dc3RssKb() {
     long totalPages = 0, rssPages = 0;
     if (sscanf(buf, "%ld %ld", &totalPages, &rssPages) != 2) return -1;
     return rssPages * (sysconf(_SC_PAGESIZE) / 1024);
+#endif
 }
 
 // Write the single terminal record. `how` names the mechanism, `detail` the
@@ -98,14 +112,22 @@ static void Dc3ReportExit(const char *how, const char *detail, int code, bool as
 // main loop's return already _exit()s for this reason, and the image never runs
 // static destructors at all (a 360 title is ended by the dashboard), so every
 // exit() route now does the same: report, flush stdio, _exit with exit()'s own
-// status. glibc's on_exit hands the hook that status; elsewhere atexit cannot
-// see it, so the hook only reports there.
+// status. glibc's on_exit hands the hook that status.
+//
+// macOS (no on_exit) uses atexit, which cannot see the status, so the native
+// exit() sites go through Dc3Exit (NativeQuit.h), which records it first. The
+// hook is registered at the top of main, after every global's destructor was
+// registered, so it runs BEFORE them and can _exit with the recorded status.
+// An exit() that did not record one (a library's) is reported with code=-1 and
+// left to finish normally: _exit with a guessed status would turn exit(1) into
+// a success. DC3_EXIT_HOOK_PORTABLE=1 at compile time selects this path on
+// Linux too, which is how it is exercised without a Mac.
 static void Dc3ExitHookReport(int code) {
     Dc3ReportExit("exit_runtime",
                   gDc3ExitReason ? gDc3ExitReason : "exit()_called_no_reason_recorded",
                   code, false);
 }
-#if defined(__GLIBC__)
+#if defined(__GLIBC__) && !defined(DC3_EXIT_HOOK_PORTABLE)
 static void Dc3OnExitHook(int status, void *) {
     Dc3ExitHookReport(status);
     fflush(nullptr);
@@ -113,7 +135,14 @@ static void Dc3OnExitHook(int status, void *) {
 }
 static void Dc3InstallExitHook() { on_exit(Dc3OnExitHook, nullptr); }
 #else
-static void Dc3AtExitHook() { Dc3ExitHookReport(-1); }
+static void Dc3AtExitHook() {
+    int status = gDc3ExitStatus.load();
+    Dc3ExitHookReport(status);
+    if (status >= 0) {
+        fflush(nullptr);
+        _exit(status);
+    }
+}
 static void Dc3InstallExitHook() { atexit(Dc3AtExitHook); }
 #endif
 

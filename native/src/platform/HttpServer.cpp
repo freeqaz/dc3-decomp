@@ -22,6 +22,7 @@
 #include "os/Joypad.h"
 #include "os/JoypadMsgs.h"
 #include "StubTrace.h"
+#include "NativeQuit.h" // Dc3Exit
 
 // cpp-httplib rejects any application/x-www-form-urlencoded body larger than
 // CPPHTTPLIB_FORM_URL_ENCODED_PAYLOAD_MAX_LENGTH (default 8192) with a bare,
@@ -157,7 +158,7 @@ extern const char *gDc3ExitReason; // src/App.cpp; read by the DC3_EXIT record
         gDc3ExitReason = "http_port_bind_failed";
     }
     fflush(stderr);
-    exit(kHttpBindExitCode);
+    Dc3Exit(kHttpBindExitCode);
 }
 
 // DC3_HTTP_PORT_FILE=<path>: once bound, write the port (decimal, newline) to
@@ -177,7 +178,7 @@ static void WritePortFile(int port) {
                         "DC3_HTTP_PORT_FILE=%s: %s\n", path, strerror(errno));
         gDc3ExitReason = "http_port_file_unwritable";
         fflush(stderr);
-        exit(kHttpBindExitCode);
+        Dc3Exit(kHttpBindExitCode);
     }
 }
 

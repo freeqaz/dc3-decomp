@@ -16,6 +16,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstdlib>
 
 // Why the loop should stop ("SIGTERM", "window_lost", ...), or nullptr.
 // The FIRST request wins; later ones are refused (Dc3RequestQuit returns
@@ -34,6 +35,16 @@ inline bool Dc3RequestQuit(const char *reason, int code) {
         return false;
     gDc3QuitCode.store(code);
     return true;
+}
+
+// exit() with the status recorded first. glibc's on_exit hands the exit hook
+// (main_native.cpp) the status; macOS has no on_exit and atexit cannot see it,
+// so every native exit() site calls this instead and the hook reads the
+// recorded value. -1 = exit() was called by someone else (status unknown).
+inline std::atomic<int> gDc3ExitStatus{-1};
+[[noreturn]] inline void Dc3Exit(int status) {
+    gDc3ExitStatus.store(status);
+    std::exit(status);
 }
 
 // Per-frame window check, installed by dc3-native when it has an X11 window
