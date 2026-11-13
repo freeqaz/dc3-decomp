@@ -185,6 +185,13 @@ void ShellInput::Poll() {
             }
         }
     }
+#ifdef HX_NATIVE
+    // Controller mode policy (forced): the gameplay-panel exit above only took
+    // the helpbar out of controller mode; restore it once focus has left the
+    // gameplay panel (pause, endgame, back to the shell). No-op otherwise.
+    if (TheUI->FocusPanel() != TheGamePanel)
+        NativeForcedHelpbarRestoreAfterGameplay();
+#endif
 
     if (TheGestureMgr->InControllerMode() && unk_0x68.SplitMs() >= unk_0x98) {
         ExitControllerMode(true);
@@ -392,6 +399,12 @@ void ShellInput::ExitControllerMode(bool b) {
         // fire exit_controller_mode during screen transitions, and Poll's idle
         // timeout fires every frame, but without gesture input there's no way
         // to re-enter.
+        // The one exit whose effect the player sees is Poll's gameplay-panel
+        // arm: on the 360 the helpbar is gone for the whole song. Take the
+        // helpbar (only) out of controller mode there; Poll puts it back when
+        // focus leaves the gameplay panel. HelpBarPanel.h has the details.
+        if (TheUI->FocusPanel() == TheGamePanel && !TheUIEventMgr->HasActiveDialogEvent())
+            NativeForcedHelpbarExitForGameplay(b);
         return;
     }
     // faithful: the image body below. The idle/timeout pair is logged so a
