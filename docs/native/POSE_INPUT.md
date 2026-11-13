@@ -507,8 +507,11 @@ of lag and changes the limb error by under 1° (macarena 25.3 → 24.8°,
 supersonic 21.4 → 20.9°, each at its own best lead). **Scored, it hurts.**
 Over the 16 per-song-aligned fixtures, with the lead moved by its lag
 (+66 ms), the rates went P 0.540 → 0.356, A 0.369 → 0.478, ok+bad 0.091 →
-0.165, and the score 0.739 → 0.543 of the original's. A 1 Hz cutoff rounds
-off the moves' own 2–4 Hz content, which the PSNR scorer rewards. Noise is
+0.165, and the score 0.739 → 0.543 of the original's. A lighter filter
+(`--one-euro 3,1`: 33 ms of lag, σ halved, lead +33 ms) still loses: P
+0.467, score 0.642. Both settings hurt, and the stronger one hurts more.
+INFERRED: the filter rounds off the moves' own fast content, which the
+PSNR scorer rewards. Noise is
 not what separates our ratings from the original's, so the default path gets
 no filter.
 
@@ -518,8 +521,8 @@ no filter.
   measure it (above). It needs one live session that reads `pose_server.py`'s
   capture stamps. The broad score curve says ±50 ms accuracy is enough.
 - **No smoothing by default.** VIDEO-mode MediaPipe is already filtered and
-  adds no measurable lag on the arms. An extra One Euro filter lost 26% of the
-  score. Do not switch the backend to IMAGE mode: that is 3–4× the noise.
+  adds no measurable lag on the arms. An extra One Euro filter lost 13% (light)
+  to 26% (1 Hz) of the score. Do not switch the backend to IMAGE mode: that is 3–4× the noise.
 - **Camera pitch is the systematic per-joint error worth fixing.** It is not
   depth noise. A follow-up: estimate the camera's pitch from the player's
   ankle → head lean (here +6.9° ± 1.4° over the reference, consistent per
@@ -842,7 +845,7 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
 | P-4 | Player on screen. **Silhouette done** (`np-player-view`): protocol v3 / `dc3_camera_push` carry the picture and a person mask, a `LiveCameraInput` stand-in feeds the decompiled `StreamRenderer`, and the cursor and gameplay boxes draw the player ([Player on screen](#player-on-screen-p-4)). Left: photo moments, `DepthBuffer3D`'s draw, the `pose_flash` / `preview.mesh` entries (not camera), a live webcam. | M | all |
 | P-5 | ~~Tests~~ **Done** (`np-pose-desk`): ctests `PoseSocketReaderTest`, `PoseCocoMappingTest`, `PoseSensorSlotTest` (no GPU, no game data); keypoint fixture + `PoseFixture.Python`; the gate runs the whole song and judges means, final scores and per-move distances (above). Open: standing still out-scores a different dance (P-7). | — | all |
 | P-6 | ~~Remove the dead ncnn/YOLO path~~ **Done** (`np-pose-desk`). | — | all |
-| P-7 | Scoring believability. **Answered** (`np-scoring`, [above](#scoring-believability-p-7-np-scoring)): the leniency is the original's. Real Kinect data (UTD-MHAD) scores like our inputs, and the scoring code is 100% matched. Added: the 30 Hz in-process performer + matrix, and the `DC3_POSE_LATENCY_MS` knob. **Video calibration** (`np-video-calib`, [above](#video-calibration-np-video-calib-2026-11-13)): 16 story-mode songs from a stream, replayed at Medium against the original's own results cards, 1162 = 1162 moves. Perfect+awesome 0.91 vs 0.96, but perfect 0.54 vs 0.79; score 74% of the original's (78% with a 10° camera-pitch correction). Still-body jitter ~1.7 mm (VIDEO mode). A One Euro filter costs 26% of the score, so there is no smoothing. Knob default stays unset: a recording cannot measure a live pipeline, and the score curve is flat over ±50 ms. Left: a live webcam's latency from `pose_server.py`'s capture stamps (P-2); camera-pitch auto-levelling (whole-body lean +6.9° ± 1.4° over the reference on this camera); the perfect/awesome gap (arms carry the limb error). | S | all |
+| P-7 | Scoring believability. **Answered** (`np-scoring`, [above](#scoring-believability-p-7-np-scoring)): the leniency is the original's. Real Kinect data (UTD-MHAD) scores like our inputs, and the scoring code is 100% matched. Added: the 30 Hz in-process performer + matrix, and the `DC3_POSE_LATENCY_MS` knob. **Video calibration** (`np-video-calib`, [above](#video-calibration-np-video-calib-2026-11-13)): 16 story-mode songs from a stream, replayed at Medium against the original's own results cards, 1162 = 1162 moves. Perfect+awesome 0.91 vs 0.96, but perfect 0.54 vs 0.79; score 74% of the original's (78% with a 10° camera-pitch correction). Still-body jitter ~1.7 mm (VIDEO mode). A causal One Euro filter costs 13–26% of the score, so there is no smoothing. Knob default stays unset: a recording cannot measure a live pipeline, and the score curve is flat over ±50 ms. Left: a live webcam's latency from `pose_server.py`'s capture stamps (P-2); camera-pitch auto-levelling (whole-body lean +6.9° ± 1.4° over the reference on this camera); the perfect/awesome gap (arms carry the limb error). | S | all |
 | P-8 | macOS: `/proc/self/exe` → `_NSGetExecutablePath`; camera permission goes to the Python child. See [MACOS.md](MACOS.md). | S–M | mac |
 | P-9 | ~~Web pose~~ **Done in `np-web-pose`** (see [Web](#web)). Left: never run on a real webcam/permission prompt; GPU delegate and the lite model unmeasured on an idle box; no camera preview inside the game (P-4). | — | web |
 
