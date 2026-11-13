@@ -89,6 +89,8 @@ def main(argv=None):
     ap.add_argument("--num-poses", type=int, default=2)
     ap.add_argument("--frames", default="320x240", help="v3 camera block WxH, or off")
     ap.add_argument("--delegate", default="cpu", choices=("cpu", "gpu"))
+    ap.add_argument("--probe", type=float, default=0.0,
+                    help="pose_server --probe-second-person S (num_poses 1 + a probe)")
     ap.add_argument("--n", type=int, default=300, help="frames measured (after --warmup)")
     ap.add_argument("--warmup", type=int, default=30)
     ap.add_argument("--start", type=float, default=0.0, help="seconds into the clip")
@@ -109,13 +111,14 @@ def main(argv=None):
 
     frames_size = None if args.frames in ("off", "0", "") else pose_server.parse_frames(args.frames)
     backend = MediaPipeBackend(model_path(args.model), num_poses=args.num_poses,
-                               delegate=args.delegate, segmentation=bool(frames_size))
+                               delegate=args.delegate, segmentation=bool(frames_size),
+                               probe_s=args.probe)
     if "infer" in slow:
         real = backend._landmarker.detect_for_video
 
-        def slowed(img, ts, _real=real):
+        def slowed(img, ts, *a, _real=real, **k):
             time.sleep(slow["infer"])
-            return _real(img, ts)
+            return _real(img, ts, *a, **k)
         backend._landmarker.detect_for_video = slowed
     if "cvt" in slow:
         real_img = backend._mp.Image
@@ -173,9 +176,11 @@ def main(argv=None):
     backend.close()
 
     res = {"label": args.label, "video": os.path.basename(args.video), "model": args.model,
-           "num_poses": args.num_poses, "frames": args.frames, "delegate": args.delegate,
+           "num_poses": args.num_poses, "probe": args.probe,
+           "probes": backend.probe.probes if backend.probe else None, "frames": args.frames, "delegate": args.delegate,
            "slow": args.slow, "loadavg": os.getloadavg()[0], **summarize(rows, wall, cpu)}
-    line = (f"{args.label or ''} model={args.model} poses={args.num_poses} frames={args.frames} "
+    line = (f"{args.label or ''} model={args.model} poses={args.num_poses}"
+            f"{f' probe={args.probe}' if args.probe else ''} frames={args.frames} "
             f"delegate={args.delegate}: {res['fps_unpaced']} fps unpaced, "
             f"cores {res['cores_busy']}, persons {res['persons_mean']}, load {res['loadavg']:.0f}\n  "
             + "  ".join(f"{st} {res[st]['p50']}/{res[st]['p95']}" for st in STAGES + ("total",) if st in res)
