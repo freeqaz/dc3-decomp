@@ -1537,6 +1537,13 @@ MoveFrame *MoveDir::ClosestMoveFrame() {
 // identically 0 out" investigation. Reports which branch of the beat-indexed
 // DetectFrac produced the score, so we can tell "no move key at this beat"
 // from "no detect frames enqueued" from "Ham2 ran and scored 0".
+//
+// diff= is the player's difficulty, because it decides the first of those:
+// ResetDetectFrames builds no move keys for kDifficultyBeginner (the image's
+// `cmpwi r15, 3; beq` at 0x82505714), so on Beginner every beat reads
+// branch=no-move-key keys=0 and the move is rated by the async detectors only.
+// That is the game's behaviour, not a pose-input bug -- the web pose lane read
+// it as one for a whole round because the log did not say which difficulty ran.
 static void Dc3DetectFracProbe(
     int player, int beat, int numKeys, const char *branch, int rangeLen, float frac
 ) {
@@ -1545,15 +1552,18 @@ static void Dc3DetectFracProbe(
         return;
     static int sCount = 0;
     if (++sCount <= 40 || sCount % 200 == 0) {
+        HamPlayerData *pd = TheGameData ? TheGameData->Player(player) : nullptr;
         MILO_LOG(
-            "DC3 DETECTFRAC[%d] p=%d beat=%d keys=%d branch=%s rangeLen=%d frac=%.4f\n",
+            "DC3 DETECTFRAC[%d] p=%d beat=%d keys=%d branch=%s rangeLen=%d frac=%.4f "
+            "diff=%s\n",
             sCount,
             player,
             beat,
             numKeys,
             branch,
             rangeLen,
-            frac
+            frac,
+            pd ? DifficultyToSym(pd->GetDifficulty()).Str() : "?"
         );
     }
 }

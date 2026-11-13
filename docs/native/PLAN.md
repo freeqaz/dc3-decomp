@@ -33,7 +33,7 @@ Size: S < half a day · M ≈ 1–2 days · L = several days.
 | P-6 | Remove the dead ncnn/YOLO path, its log line and the tracked `native/yolo11n-pose.pt` | S | Windowed boot tries the MediaPipe server first; weights gone from the tree |
 | P-7 | Scoring believability: calibrate on a recorded human; webcam latency knob vs Kinect-tuned `latency_offset` in `config/scoring.dta` | M | Standing still no longer earns "awesome"; a recorded human gets a plausible spread |
 | P-8 | macOS pose: `_NSGetExecutablePath`, camera permission for the Python child | S–M | Pose server starts on the owner's Mac |
-| P-9 | ~~Web pose~~ **DONE 2026-11-13 (`np-web-pose`)**: `PublishFrame` seam shared with the socket path, `dc3_pose_push`, tasks-vision in a worker, geometry ported (1.8e-15 m vs Python on identical landmarks; 0.71 mm max end to end). Fake camera: dance 29,859 · still 7,240 · stand-in 7,581 · empty frame pauses. Follow-ups: real webcam, `DetectFrac` `no-move-key` on the web flow. | M–L | Fake-camera dance clip, still person and empty frame score differently in Chromium |
+| P-9 | ~~Web pose~~ **DONE 2026-11-13 (`np-web-pose`)**: `PublishFrame` seam shared with the socket path, `dc3_pose_push`, tasks-vision in a worker, geometry ported (1.8e-15 m vs Python on identical landmarks; 0.71 mm max end to end). Fake camera: dance 29,859 · still 7,240 · stand-in 7,581 · empty frame pauses. Follow-ups: real webcam. (`DetectFrac` `no-move-key` on web was the Beginner difficulty the test driver picked, not a web gap — `np-web-movekey`; web and desktop now agree per measure.) | M–L | Fake-camera dance clip, still person and empty frame score differently in Chromium |
 
 ## Track G — gameplay and modes (desktop findings, also apply to web)
 
