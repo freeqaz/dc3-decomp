@@ -628,7 +628,11 @@ void NativeSkeletonProvider::FillSkeletonData(
     data.mHipCenter = data.mJointPositions[kJointHipCenter];
 }
 
-void NativeSkeletonProvider::FillDummySkeletonData(SkeletonData &data) {
+const int NativeSkeletonProvider::kDummyTrackingId[2] = { 1, 2 };
+
+void NativeSkeletonProvider::FillDummySkeletonData(SkeletonData &data, int dummy) {
+    if (dummy < 0 || dummy > 1)
+        dummy = 0;
     // Neutral standing pose — hands at sides, below hip height.
     // Passes quality filter (20 confident joints, not sitting/sideways)
     // but gesture filters see disengaged player (hands below hips).
@@ -659,18 +663,24 @@ void NativeSkeletonProvider::FillDummySkeletonData(SkeletonData &data) {
     // (SensorNoiseFloor at the top of this file) keeps it a camera's signal.
     // Same counter and hash the dummy has always used, so its output is
     // unchanged by the floor moving to a shared helper.
-    static uint32_t sDummyFrame = 0;
-    sDummyFrame++;
+    // Dummy 1 counts separately and from a distant start, so the two
+    // stand-ins never carry the same noise sample.
+    static uint32_t sDummyFrame[2] = { 0, 0x40000000u };
+    uint32_t noiseFrame = ++sDummyFrame[dummy];
+    // Dummy 1 stands where scripts/synthetic_kinect.py's second person does
+    // (+0.4 m): measured with that sensor, the image's SkeletonChooser then
+    // keeps player 0 on side 0 and player 1 on side 1 through a whole battle.
+    const float xOffset = dummy == 0 ? 0.0f : 0.40f;
 
     for (const auto &j : kPose) {
-        Vector3 pos = WithSensorNoiseFloor(Vector3(j.x, j.y, j.z), sDummyFrame, j.joint);
+        Vector3 pos = WithSensorNoiseFloor(Vector3(j.x + xOffset, j.y, j.z), noiseFrame, j.joint);
         data.mJointPositions[j.joint].Set(pos.x, pos.y, pos.z);
         data.mRawPositions[j.joint].Set(pos.x, pos.y, pos.z);
         data.mJointTrackingState[j.joint] = kConfidenceTracked;
     }
 
     data.mTracking = kSkeletonTracked;
-    data.mTrackingID = 1;
+    data.mTrackingID = kDummyTrackingId[dummy];
     data.mQualityFlags = 0;
     data.mHipCenter = data.mJointPositions[kJointHipCenter];
 }

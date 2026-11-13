@@ -51,6 +51,7 @@ USAGE (as a library; scripts/native_assert_harvest.py --route party uses it)
   k.start()                      # listens; the engine connects at boot
   k.set_pose(0, "raise_right")   # person 0 raises the right hand and holds it
   k.set_pose(0, "stand")
+  k.set_pose(1, "absent")        # person 1 steps out of view (and "stand" back in)
   k.high_five()                  # person 0 and 1 meet hands between them
   k.perform("http://127.0.0.1:9191/api")   # both people now dance what the game asks
   k.stop_performing()
@@ -293,9 +294,13 @@ class SyntheticKinect:
                 self.clock += now - self.last_tick
                 self.last_tick = now
             stamp = self.clock
-        body = struct.pack("<IIIdHHBBH", MAGIC, frame_id, len(poses), stamp,
+        # "absent": the person has stepped out of view -- not in the frame at
+        # all, as a Kinect reports a person it no longer sees.
+        present = [i for i, pose in enumerate(poses) if pose != "absent"]
+        body = struct.pack("<IIIdHHBBH", MAGIC, frame_id, len(present), stamp,
                            640, 480, NUM_JOINTS, LAYOUT_DC3_20, 0)
-        for i, pose in enumerate(poses):
+        for i in present:
+            pose = poses[i]
             body += struct.pack("<i", 5 + 4 * i)      # Kinect tracking ids are > 0
             for x, y, z, c in self._joints(i, pose):
                 body += struct.pack("<ffff", x, y, z, c)

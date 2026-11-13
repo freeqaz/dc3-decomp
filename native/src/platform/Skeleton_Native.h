@@ -9,6 +9,11 @@
 // <atomic> not usable with clang + GCC 15 headers; use volatile bool instead
 // #include <atomic>
 
+// GestureMgr_Native.cpp: how many stand-in dummies the sensor shows when no
+// pose provider runs (1, or 2 in a two-player mode; DC3_DUMMY_PLAYERS=1|2
+// overrides).  Pure, so the policy is testable without an engine.
+int NativeDummyPlayerCount(bool modeNeedsTwo, const char *policy);
+
 // Receives skeleton data from pose_server.py (MediaPipe BlazePose) over a
 // Unix socket. Protocol layout 1 carries DC3's own 20 joints in camera-space
 // metres; the layout-0 path maps COCO-17 2D keypoints for any external
@@ -82,9 +87,16 @@ public:
     // enrollment index) is left to the caller.
     static void FillSkeletonData(SkeletonData &data, const PersonData &person, int slot);
 
-    // The same for a neutral standing pose (hands at sides), tracking id 1.
-    // Used as the native sensor's frame when no pose provider is running.
-    static void FillDummySkeletonData(SkeletonData &data);
+    // The same for a neutral standing pose (hands at sides).  Used as the
+    // native sensor's frame when no pose provider is running.  `dummy` 0 is
+    // the solo stand-in: tracking id 1, centred.  `dummy` 1 is the second
+    // stand-in BuildSensorFrame adds in two-player modes: tracking id 2, at
+    // x = +0.4 m, where scripts/synthetic_kinect.py's second person stands,
+    // so SkeletonChooser keeps the two on opposite sides.  Each
+    // has its own noise-floor counter, so dummy 0's signal does not change
+    // with the number of dummies.
+    static void FillDummySkeletonData(SkeletonData &data, int dummy = 0);
+    static const int kDummyTrackingId[2];
 
     // Drop the low-confidence joint-hold cache for a slot. Must be called when a
     // slot changes occupants, or the incoming person inherits the previous

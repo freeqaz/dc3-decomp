@@ -10,6 +10,7 @@
 #include "gesture/SkeletonUpdate.h"
 #include "hamobj/HamGameData.h"   // TheGameData (player->skeleton binding)
 #include "hamobj/HamPlayerData.h" // GetSkeletonTrackingID
+#include "flow/PropertyEventProvider.h" // TheHamProvider (NativeDummyPlayerCount)
 #include "obj/Task.h"
 #include "os/Debug.h" // TheDebug.AddExitCallback
 #include <vector>
@@ -71,7 +72,7 @@ static InternalPoseProvider *sInternalPose = nullptr;
 // trackId, -1 = free). A new trackId claims the lowest free slot and keeps it
 // while it persists; when a trackId stops appearing the slot is released so a
 // later person cannot inherit the departed person's archive history. Reset when
-// no provider runs. Shared by both live branches (dummy always uses slot 0).
+// no provider runs. Shared by both live branches (the dummies use slots 0/1).
 static int sSlotTrackId[NUM_SKELETONS] = {-1, -1, -1, -1, -1, -1};
 
 static void ResetSlotMap() {
@@ -457,10 +458,49 @@ static int FillPersonSlots(const NativeSkeletonProvider::PersonData *persons, in
     return reassigns;
 }
 
+// How many standing stand-ins the NO-PROVIDER sensor shows.  NATIVE POLICY, not
+// image behaviour: the dummy exists so the game is playable with a controller
+// and no camera.  With one stand-in a two-player mode is a dead end -- the
+// image's Game::CheckForSkeletonLoss pauses the moment player 2 is not
+// playing (dance_battle.dta's pause_on_skeleton_loss lets it through from
+// beat 4) and the pause screen's Continue stays disabled until two players
+// are bound (pause.dta update_skeleton_status_internal).  On a 360 that pause
+// is right: it means a real person left.  Without a camera nobody can step
+// in, so in exactly the modes that test -- requires_2_players or
+// is_in_party_mode, the same two properties CheckForSkeletonLoss reads -- a
+// second stand-in appears in slot 1.
+//
+// Only this branch calls it: with a provider running (socket, web push), the
+// people in front of the camera are the truth and a missing player 2 must
+// pause, as on the 360.  DC3_DUMMY_PLAYERS=1 keeps the lone stand-in
+// regardless of mode (reproduces that pause without a camera);
+// DC3_DUMMY_PLAYERS=2 always shows two.  Anything else is the mode rule.
+int NativeDummyPlayerCount(bool modeNeedsTwo, const char *policy) {
+    if (policy && !strcmp(policy, "1"))
+        return 1;
+    if (policy && !strcmp(policy, "2"))
+        return 2;
+    return modeNeedsTwo ? 2 : 1;
+}
+
+static int NativeDummyPlayerCount() {
+    bool needsTwo = false;
+    if (TheHamProvider) {
+        static Symbol requires_2_players("requires_2_players");
+        static Symbol is_in_party_mode("is_in_party_mode");
+        const DataNode *two = TheHamProvider->Property(requires_2_players, false);
+        const DataNode *party = TheHamProvider->Property(is_in_party_mode, false);
+        needsTwo = (two && two->Int() != 0) || (party && party->Int() != 0);
+    }
+    static const char *sPolicy = getenv("DC3_DUMMY_PLAYERS");
+    return NativeDummyPlayerCount(needsTwo, sPolicy);
+}
+
 // A new frame when the provider produced one (it runs at camera rate, slower
 // than the game loop: re-integrating the same generation would dilute the
 // displacement lookback), null otherwise.  With no provider running, the static
-// tracked dummy in slot 0 is a new frame every game frame.  Since move scoring
+// tracked dummy in slot 0 (and, in two-player modes, a second one in slot 1:
+// NativeDummyPlayerCount) is a new frame every game frame.  Since move scoring
 // is DEFAULT-ON (App.cpp's DC3_NATIVE_SCORING gate) that dummy is the
 // default-run SCORING INPUT: it drives the whole pipeline (archive-before-poll
 // -> FilterQueue::Poll -> MoveDir) every frame and yields a deterministic
@@ -523,8 +563,11 @@ static const SkeletonFrame *BuildSensorFrame() {
     if (!providerRunning) {
         ResetSlotMap();
         BeginSensorFrame(AcceptedFrameElapsed());
-        NativeSkeletonProvider::FillDummySkeletonData(sFrame.mSkeletonDatas[0]);
-        FinishTrackedSlot(0);
+        int dummies = NativeDummyPlayerCount();
+        for (int d = 0; d < dummies; d++) {
+            NativeSkeletonProvider::FillDummySkeletonData(sFrame.mSkeletonDatas[d], d);
+            FinishTrackedSlot(d);
+        }
         newFrame = true;
     }
 
