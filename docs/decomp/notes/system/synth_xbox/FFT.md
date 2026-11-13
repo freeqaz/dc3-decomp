@@ -201,6 +201,10 @@ Above the definition (was lines 252-264):
 
 ## `?fft_recursive@@YAHPAMKJ0@Z`
 
+### Lane F (w-low-xbox), 2026-11-13 -- NOT A BUG (behaviour checked)
+
+Whole FFTComplex run in a Python PPC interpreter over the TARGET listing vs our source built on the host (VMX intrinsics emulated), same input, same N-sized sin/cos table: N=65536 (sign -1 and +1, matrix path) and N=131072 (sign -1, recursive path) agree exactly (max rel err 0.0). Swap test (target function swapped into our build) also OK for fft_matrix_forward_columnwise. Neither side is a DFT with an N-sized table at these sizes (rel err ~1.5 on both) because the sub-FFTs want a sqrt(N) table -- that is the image's behaviour, reproduced. Residual is codegen (scheduling/regalloc), not logic. Harness: /home/free/tmp/fftharness (tbig.py, swap.py).
+
 `fft_recursive` -- moved verbatim from `src/system/synth_xbox/FFT.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of 89d252553)
 
 Above the definition (was lines 348-418):
@@ -404,6 +408,10 @@ Above the definition (was lines 1347-1360):
 
 ## `?fft_matrix_forward_columnwise@@YAHPAMJ0@Z`
 
+### Lane F (w-low-xbox), 2026-11-13 -- NOT A BUG (behaviour checked)
+
+Whole FFTComplex run in a Python PPC interpreter over the TARGET listing vs our source built on the host (VMX intrinsics emulated), same input, same N-sized sin/cos table: N=65536 (sign -1 and +1, matrix path) and N=131072 (sign -1, recursive path) agree exactly (max rel err 0.0). Swap test (target function swapped into our build) also OK for fft_matrix_forward_columnwise. Neither side is a DFT with an N-sized table at these sizes (rel err ~1.5 on both) because the sub-FFTs want a sqrt(N) table -- that is the image's behaviour, reproduced. Residual is codegen (scheduling/regalloc), not logic. Harness: /home/free/tmp/fftharness (tbig.py, swap.py).
+
 `fft_matrix_forward_columnwise` -- moved verbatim from `src/system/synth_xbox/FFT.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of 89d252553)
 
 Inside the body (was lines 1694-1731):
@@ -451,6 +459,10 @@ Inside the body (was lines 1694-1731):
 
 
 ## `?fft_matrix_inverse_columnwise@@YAHPAMJ0@Z`
+
+### Lane F (w-low-xbox), 2026-11-13 -- NOT A BUG (behaviour checked)
+
+Whole FFTComplex run in a Python PPC interpreter over the TARGET listing vs our source built on the host (VMX intrinsics emulated), same input, same N-sized sin/cos table: N=65536 (sign -1 and +1, matrix path) and N=131072 (sign -1, recursive path) agree exactly (max rel err 0.0). Swap test (target function swapped into our build) also OK for fft_matrix_forward_columnwise. Neither side is a DFT with an N-sized table at these sizes (rel err ~1.5 on both) because the sub-FFTs want a sqrt(N) table -- that is the image's behaviour, reproduced. Residual is codegen (scheduling/regalloc), not logic. Harness: /home/free/tmp/fftharness (tbig.py, swap.py).
 
 `fft_matrix_inverse_columnwise` -- moved verbatim from `src/system/synth_xbox/FFT.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of 89d252553)
 
