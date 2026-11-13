@@ -90,6 +90,17 @@ Above the definition (was lines 741-749):
 // Fix the quat block first, then restore the plain ScaleKeys loop.
 ```
 
+Added by lane w-low-rndobj, 2026-11-13:
+
+```text
+BEHAVIOUR VERDICT: AGREES (94.91 / 90.80, unchanged).  m3c rows are tf.m rows
+times 1/scale (x,y,z each row); q58 = Quat(m3c).  The three loops walk the
+KEYS OWNER's (0x58) mTransKeys 0x34 (Multiply by tf), mScaleKeys 0x40
+(component-wise times the extracted scale) and mRotKeys 0x28 (q58 * key, all
+four components checked against the fmadds/fnmsubs chain).  Residual is the
+scale-loop end hoist and quat store order already recorded above.
+```
+
 
 ## `?XfmSort@@YA_NAAUInstance@RndMultiMesh@@0@Z`
 
@@ -389,6 +400,19 @@ Above the definition (was lines 1358-1459):
 //   - `if (!movieExt) { res = ...; return nullptr; }` first: 72.11, but only because
 //     it flips the INNER arm order away from the image (image: beq to the unknown
 //     arm at the very end), so it is an aligner artifact, not kept.
+```
+
+Added by lane w-low-rndobj, 2026-11-13:
+
+```text
+BEHAVIOUR VERDICT: AGREES (71.49 / 71.34, unchanged).  res=0 first; bmp/png
+stricmp pair; movie arm MovieExtension(ext, platform) -> MakeString('%s/%s.%s',
+path, base, movieExt) else res=kCacheUnknownExtension(1)/null; PS3 (4) _xbox ->
+_ps3 rewrite with the same offsets (idx, idx+4, xboxStr+5); gen path argument
+order path/base/ext/PlatformSymbol(thisPlatform); Holmes result stored to res,
+null when > 0 (signed).  Residual: block placement + the single String dtor.
+Side note: ps3File is block-scoped yet aliased by 'localized' after the block
+(UB in the source; only reachable on a PS3 platform, never on native).
 ```
 
 

@@ -195,6 +195,19 @@ Inside the body (was lines 2357-2366):
             // bottom test runs the body zero or more times exactly as before.
 ```
 
+Added by lane w-low-rndobj, 2026-11-13:
+
+```text
+BEHAVIOUR VERDICT: AGREES (94.66 / 94.06, unchanged).  mConstructScale 0xc8,
+mNumLinesRendered 0xc4 = size (stride 0x14), mBounds 0xb4..0xc0 word copy;
+AllocateMeshes (vtbl 0x28) with mFixedLength 0x2c; font test mStyles[0] +0x40;
+per line yPos 0x10 by value and xStart 0xc by reference; '<' tested before
+mMarkup 0x30; ParseMarkup(cur, state, ch&) and the conditional cur--;
+SetupCharacter (vtbl 0x30) args ch, &xPos, yPos, state, prevChar, mCircle
+0x18, mFitType 0x20, mIndentation 0x64 in the image's register order;
+CleanupSyncMeshes (vtbl 0x2c) over every font map.
+```
+
 
 ## `?ParseMarkup@RndText@@IAAPBGPBGAAVStyleState@1@AAG@Z`
 

@@ -61,6 +61,16 @@ Inside the body (was lines 111-154):
     // behaviour change without one.
 ```
 
+Added by lane w-low-rndobj, 2026-11-13:
+
+```text
+BEHAVIOUR VERDICT: AGREES (94.41 / 92.09, unchanged).  AtFrame(frame, prev,
+next, ref) slot mapping 0x58/0x50/0x54; null prev -> 0; mSpline 0x35; spline
+arm returns 0 when both values are 0, else ((f2*ref + (f2*-3)*0.5)*ref)*ref +
+prev with f2 = prev*2 - next*2; linear arm (next-prev)*ref + prev.  Re-measured
+the hoisted prevVal (90.74, as w-notes above say) and reverted.
+```
+
 
 ## `?SetFrame@RndMorph@@UAAXMM@Z`
 

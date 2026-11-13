@@ -108,6 +108,16 @@ Inside the body (was lines 111-186):
     // displacement) is identical.
 ```
 
+Added by lane w-low-rndobj, 2026-11-13:
+
+```text
+BEHAVIOUR VERDICT: AGREES (88.68 / 85.85, unchanged).  memcpy 0x60; pos, tex,
+color (4 comps), norm += v2; pos/tex/color *= 0.5; tangent.xyz += v2 into a
+stack copy; Normalize(norm); Normalize(tang); tangent.xyz stored (w kept from
+v1); color zeroed (all 4).  Offsets pos 0/norm 0x10/color 0x30/tex 0x40/
+tangent 0x50 all agree.  Residual is FPR renaming and load placement.
+```
+
 
 ## `?Load@RndAmbientOcclusion@@UAAXAAVBinStream@@@Z`
 
