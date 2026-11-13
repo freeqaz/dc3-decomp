@@ -158,7 +158,9 @@ Easy:
   `DataNode::Equal ... game_modes.dta`, where `$just_practiced_song` (never set
   before a practice) is compared with the song. That is the image's
   `MILO_NOTIFY_ONCE`, not a native fault. Per song, the only file lines not
-  shared by the venue are the loading-music `.mid` (PLAN H-11) and the
+  shared by the venue were the loading-music `.mid` (PLAN H-11: no loading
+  music; fixed by `np-loadmusic`, the `.mid` now comes from the persistent
+  cache and the music streams) and the
   song-select preview movies passed on the way (those were `np-paths`' G-15, fixed on main since).
 - **Desktop, GPU** (`--song-seconds 40`, gameplay screenshot at beat 48):
   45/45 reach gameplay with venue, dancers and HUD drawn; ratings all
@@ -175,7 +177,8 @@ Easy:
   GPU reached the results with the right card, stars and score (one run;
   the whole-song no-GPU runs reach the results for all 45). The single
   results shot predates the H-10 diagnosis: it read 62/0/0/5, the dropout,
-  because the GPU run passed ~3 min of wall clock.
+  because the GPU run passed ~3 min of wall clock (the song stream ran out
+  ahead of the FAST_TIME song clock; fixed by `np-loadmusic`, PLAN H-10).
 - **Web** (`scripts/web/song-sweep.mjs`, release build of this branch,
   Chromium, fresh page per song, gameplay + 30 s): 45/45 reach `game_screen`
   and stay 30 s. Every chain after song select is
@@ -183,7 +186,10 @@ Easy:
   bounce. That includes **Ice Ice Baby and In Da Club, which bounced
   to the title on `09586f7d9`**. 0 page errors. The same three 404s on every
   song: `watches.dta` (`Watcher`), `devkit:/dancers.dta` (`HamPlayerData`) and
-  `devkit:/locale/eng/locale_keep.dta`, all optional debug reads. Load
+  `devkit:/locale/eng/locale_keep.dta`, all optional debug reads. Since the
+  persistent cache (H-11) there is a fourth, once at boot:
+  `ui/image/dc_logo_keep.png`, keyed raw because no native renderer runs
+  `Rnd::Init`/`RndUtlInit` (PLAN H-11 *Left*). Load
   (`loading_screen` → `game_screen`) took 2.5–12.4 s. The wasm heap
   (byteLength, geometric growth, so a reservation) was 363–523 MB; omg and
   youmakemefeeldc reach 522.6 MB, past the old 512 MB cap and inside the
@@ -258,7 +264,7 @@ and differs between runs):
 
 | Area | State | How measured |
 |---|---|---|
-| Synthetic performer | All-perfect ratings, ~1.68 M at 100 s; still all perfect with webcam-like noise and 150 ms lateness. Over all 45 songs (whole song, `choreo`, `DC3_FAST_TIME`): all perfect on 43; macarena 49/4/0/0, the same on the real clock (`So_Fly_macarena` falls 0.97 → 0.92 → 0.88 → 0.79 across each 4-measure block: awesome in the 3rd and 4th, both blocks; PLAN P-11); chingaling 60/0/0/1 under FAST_TIME (`Whip_Step` right after a rest, frac 0, deterministic) but 61/0/0/0 on the real clock. **Under `DC3_FAST_TIME`, a run lasting more than ~3 min of wall clock with song time slower than wall (paced or GPU) stops scoring** — harness only, the real clock is clean (PLAN H-10) | ran; [Every song](#every-song) |
+| Synthetic performer | All-perfect ratings, ~1.68 M at 100 s; still all perfect with webcam-like noise and 150 ms lateness. Over all 45 songs (whole song, `choreo`, `DC3_FAST_TIME`): all perfect on 43; macarena 49/4/0/0, the same on the real clock (`So_Fly_macarena` falls 0.97 → 0.92 → 0.88 → 0.79 across each 4-measure block: awesome in the 3rd and 4th, both blocks; authored: the async detector scores every repetition against the move's first expert occurrence while the Easy dance drifts, PLAN P-11); chingaling 60/0/0/1 under FAST_TIME (`Whip_Step` right after a rest, frac 0, deterministic) but 61/0/0/0 on the real clock. Under `DC3_FAST_TIME`, a run lasting more than ~3 min of wall clock with song time slower than wall (paced or GPU) used to stop scoring when the song stream ran out; fixed 2026-11-13 (PLAN H-10): paced 30, ymca to 50 s, 24/0/0/0 | ran; [Every song](#every-song) |
 | MediaPipe on a video file | Scored (wrong-dance clip → mostly bad/ok) | ran |
 | Motionless skeleton | SIGSEGV at ~130 s (zero variance in `RhythmDetector`) — **fixed** by the sensor noise floor (PLAN P-1); 45k-frame still run exits 0 | ran |
 | Live webcam | Never tried (no camera on the measurement box) | — |
