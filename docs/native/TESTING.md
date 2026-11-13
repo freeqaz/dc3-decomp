@@ -296,6 +296,21 @@ MILO_BULK_LIMIT=50 ctest -R BulkLoadAllFiles --output-on-failure     # files per
 MILO_BULK_ALL=1 ctest -R BulkLoad --output-on-failure                # every file, every case
 ```
 
+### Assert harvest
+
+`scripts/native_assert_harvest.py` drives one route headless and lists every
+`MILO_ASSERT`/`FAIL`/`WARN`/`NOTIFY` site it hits (not part of the gate; GPU, so
+take the GPU lock). Routes: `--route perform|battle|practice|party`. Each run takes
+a free HTTP port and a private cache under `<out>/persist-*`, seeded as a console
+that has seen every tutorial, so runs can overlap and no first-run tutorial screen
+interrupts the route (PLAN H-7). `--tutorials unseen` starts from an empty cache;
+the route does not drive the tutorials and stalls on the first one.
+
+```bash
+flock -s -w 3600 /home/free/tmp/claude-1000/gpu1.lock \
+    python3 scripts/native_assert_harvest.py --route party --out /tmp/claude-1000/h-party
+```
+
 ### Bone ground truth and clip poses
 
 `native/tests/test_bone_ground_truth.cpp` (`BoneGroundTruth`, `ClipPoseFixture`,
