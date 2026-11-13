@@ -2192,6 +2192,13 @@ if(BUILD_TESTS)
     file(GENERATE
         OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/milo_test_required_targets.txt"
         CONTENT "${_req_targets_str}\n")
+    # The ctest WORKING_DIRECTORY, for scripts/native_test.sh: --no-assets
+    # refuses to run when this dir HAS game data (that mode's floor is a much
+    # weaker check than the default skip budget, so it must not be usable to
+    # dodge it), and the default run names a data-less dir when it exits 2.
+    file(GENERATE
+        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/milo_test_asset_dir.txt"
+        CONTENT "${MILO_TEST_ASSET_DIR}\n")
 
     target_compile_definitions(milo-tests PRIVATE
         "MILO_TEST_GATES_ON_STR=\"${_gates_on_str}\""

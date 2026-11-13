@@ -22,14 +22,17 @@
 #                              for the auth story. We checkout from
 #                              ${{ vars.MILO_ENGINE_REPO }} when defined.
 #
-# Assets: milo-tests needs DC3_DATA (orig-assets/, ~18 GB uncompressed) for the
-# majority of cases. The compressed assets in dc3-decomp-deps/orig-assets.tar.xz
-# are ~6 GB and don't fit a free GitHub-hosted runner either. Asset-dependent
-# tests GTEST_SKIP() cleanly when DC3_DATA is unset (see
-# milo-native-engine/tests/CMakeLists.txt for the env-var contract that the
-# dc3 native tests share). The full asset-backed gate (scripts/native_test.sh)
-# is a separate manual /
-# self-hosted-runner / release-asset check.
+# Assets: milo-tests needs the game data (orig-assets/, ~18 GB uncompressed) for
+# the majority of cases. The compressed assets in dc3-decomp-deps/orig-assets.tar.xz
+# are ~6 GB and don't fit a free GitHub-hosted runner either. So this job runs
+# the suite in NO-GAME-DATA mode, `scripts/native_test.sh --no-assets`:
+# engine-backed suites skip at an explicit check (EnsureEngineInit's
+# "[no-game-data]" probe, native/tests/test_helpers.cpp -- never by surviving
+# a crash), and instead of the skip budget the wrapper enforces a FLOOR on the
+# number of tests that EXECUTE (native/tests/no_assets_floor.txt). Fewer than
+# the floor fails the job, so "everything skipped" cannot pass. The full
+# asset-backed gate (`scripts/native_test.sh`, skip budget) is a separate
+# local / self-hosted check. See docs/native/TESTING.md.
 # =============================================================================
 
 name: native-build
@@ -105,6 +108,7 @@ jobs:
             cmake \
             ninja-build \
             pkg-config \
+            python3 \
             libavformat-dev \
             libavcodec-dev \
             libswscale-dev \
@@ -191,26 +195,34 @@ jobs:
           ls -la build/dc3-native build/milo-viewer build/render-test build/milo-tests
           file build/dc3-native build/milo-viewer build/render-test build/milo-tests
 
-      - name: Run ctest (milo-tests suite)
-        working-directory: dc3-decomp/native/build
+      - name: Run milo-tests (no-game-data mode)
+        working-directory: dc3-decomp
         run: |
+          # scripts/native_test.sh, not bare ctest: ctest scores a skip as a
+          # pass, so with no game data it would print "100% tests passed" over
+          # a suite that mostly skipped. --no-assets enforces the executed
+          # floor in native/tests/no_assets_floor.txt (exit 2 if fewer ran) and
+          # refuses to run at all (exit 12) if game data is somehow present.
+          # It re-runs the build first; after the step above that is a no-op.
+          #
           # -j1: see milo-native-engine/tests/CMakeLists.txt RESOURCE_LOCK note;
           # Dawn/WebGPU + audio init contend at the process level.
-          # Asset-dependent tests GTEST_SKIP() when DC3_DATA is unset; we don't
-          # set DC3_DATA here because the ~18 GB extracted assets aren't in CI.
-          # The full asset-aware gate is a separate manual/release check.
-          # `cmd || echo ...` is a compound whose exit status is ECHO'S, so this
-          # step exits 0 no matter what ctest did -- verified locally under
-          # `bash -e`, which is how Actions runs a `run:` block. The `|| echo`
-          # is kept deliberately (the summary and log-upload steps below must
-          # still run on failure) and the job is now failed by the explicit
-          # "Gate on test results" step at the end. Nothing used to read
-          # CTEST_FAILED except the artifact upload.
+          # --no-tests=error: a CMake edit that stops registering milo-tests
+          # must not produce a green job.
           #
-          # --no-tests=error, not =ignore: with =ignore, a CMake edit that stops
-          # registering milo-tests produces zero tests and a green job, which is
-          # indistinguishable from a passing suite.
-          ctest -j1 --output-on-failure --no-tests=error || echo "CTEST_FAILED=1" >> "$GITHUB_ENV"
+          # The exit status is recorded rather than failing this step, so the
+          # summary and log upload still run; "Gate on test results" fails the
+          # job on it. (A bare `cmd || echo` here once exited 0 whatever ctest
+          # did -- verified under `bash -e`, which is how Actions runs `run:`.)
+          set +e
+          scripts/native_test.sh --no-assets --no-configure \
+            -j1 --output-on-failure --no-tests=error
+          rc=$?
+          echo "NATIVE_TEST_RC=$rc" >> "$GITHUB_ENV"
+          if [ -f native/build/native_test_summary.txt ]; then
+            cat native/build/native_test_summary.txt >> "$GITHUB_ENV"
+          fi
+          if [ "$rc" != "0" ]; then echo "CTEST_FAILED=1" >> "$GITHUB_ENV"; fi
 
       - name: Compute test summary
         if: always()
@@ -256,11 +268,19 @@ jobs:
             echo "|--------|-------|"
             echo "| GTest cases PASSED   | ${TEST_PASSED:-?} |"
             echo "| GTest cases FAILED   | ${TEST_FAILED:-?} |"
-            echo "| GTest cases SKIPPED  | ${TEST_SKIPPED:-?} (asset-dependent tests skip when DC3_DATA is unset) |"
+            echo "| GTest cases SKIPPED  | ${TEST_SKIPPED:-?} (no game data on the runner) |"
             echo "| GTest cases DISABLED | ${TEST_DISABLED:-?} |"
             echo ""
+            echo "### scripts/native_test.sh --no-assets (exit ${NATIVE_TEST_RC:-did not run})"
+            echo "| metric | count |"
+            echo "|--------|-------|"
+            echo "| ctest registered | ${NT_REGISTERED:-n/a} |"
+            echo "| EXECUTED | ${NT_EXECUTED:-n/a} (floor ${NT_FLOOR:-n/a}) |"
+            echo "| failed | ${NT_FAILED:-n/a} |"
+            echo "| skipped | ${NT_SKIPPED:-n/a} (${NT_NO_DATA_SKIPS:-n/a} at the [no-game-data] check) |"
+            echo ""
             if [ "${CTEST_FAILED:-0}" = "1" ]; then
-              echo ":warning: ctest reported failures; see logs."
+              echo ":warning: the native test gate failed; see logs."
             fi
             echo ""
             echo "Roadmap: \`rb3/docs/native/NATIVE_PORT_ROADMAP.md\` §0.4."
@@ -282,8 +302,12 @@ jobs:
             echo "FAIL: no LastTest.log -- ctest produced no results at all."
             rc=1
           fi
-          if [ "${CTEST_FAILED:-0}" = "1" ]; then
-            echo "FAIL: ctest exited non-zero."
+          # scripts/native_test.sh's own verdict: 0 = every executed test
+          # passed AND at least the floor executed. 2 = fewer than the floor
+          # executed, 8 = ctest test failures, 12 = game data present (wrong
+          # mode); the full table is in the script's header.
+          if [ "${NATIVE_TEST_RC:-unset}" != "0" ]; then
+            echo "FAIL: scripts/native_test.sh --no-assets exited ${NATIVE_TEST_RC:-unset (did not run)}."
             rc=1
           fi
           if [ "${TEST_FAILED:-0}" != "0" ]; then
@@ -299,7 +323,7 @@ jobs:
             rc=1
           fi
           if [ "$rc" = "0" ]; then
-            echo "OK: ${TEST_PASSED:-?} passed, ${TEST_FAILED:-?} failed, ${TEST_SKIPPED:-?} skipped."
+            echo "OK: ${NT_EXECUTED:-?} executed (floor ${NT_FLOOR:-?}), ${TEST_PASSED:-?} gtest cases passed, ${TEST_FAILED:-?} failed, ${TEST_SKIPPED:-?} skipped."
           fi
           exit "$rc"
 
