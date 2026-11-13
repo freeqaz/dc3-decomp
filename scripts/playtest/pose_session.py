@@ -98,7 +98,9 @@ def describe(frames, segs):
                      "wall_from": fr[0].wall, "wall_s": wall, "song_s": span,
                      "fps": (b - a) / wall if wall > 0 else 0.0,
                      "with_person": seen / (b - a),
-                     "kind": "song" if span >= MIN_SONG_S and fr[-1].song > 0 else "menus/other"})
+                     # A song's clock starts in the count-in (negative); the menus
+                     # run the shell music's clock from 0.
+                     "kind": "song" if span >= MIN_SONG_S and fr[0].song < 0 else "menus/other"})
     return rows
 
 

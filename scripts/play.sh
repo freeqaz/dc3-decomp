@@ -16,9 +16,20 @@
 #   --check            run the checks and stop
 #   --no-person        (with --check) do not look for a person in the picture
 #   --camera N         camera index (default 0, or $DC3_POSE_CAMERA)
-#   --video FILE       footage instead of a camera (looped)
-#   --fullscreen       fullscreen on the main monitor (MILO_FULLSCREEN=1)
-#   --size WxH         window size (default 1280x720)
+#   --video FILE       footage instead of a camera: frame 0 (the dancer
+#                      standing) in the menus, then the clip in step with the
+#                      song clock (scripts/playtest/footage_camera.py)
+#   --video-pre S      seconds of clip before song time 0 (default 8, the
+#                      clips scripts/playtest/make_footage.py cuts)
+#   --video-loop       just loop the file instead (pose_server.py --video --loop)
+#   --fullscreen       NOT AVAILABLE YET: the game draws 1280x720 into the
+#                      top-left of any bigger window (PLAN H-17); says so and
+#                      plays windowed
+#   --size WxH         window size (default 1280x720; anything else shows
+#                      H-17's corner picture)
+#   --wayland          on a Wayland desktop, open a Wayland window (default:
+#                      an X11 window through Xwayland, which the compositor
+#                      scales as a whole; see H-17)
 #   --no-pose          no tracker: play with keyboard / pad only
 #   --fast-boot        skip the intro and title (straight to the main menu)
 #   --home DIR         saves, settings cache and sessions (default
@@ -47,13 +58,17 @@ MAIN_CHECKOUT="${COMMON:+$(dirname "$COMMON")}"
 CHECK=0; NO_PERSON=0; CAMERA="${DC3_POSE_CAMERA:-0}"; VIDEO=""; FULLSCREEN=0; SIZE=""
 NO_POSE=0; FAST_BOOT=0; HOME_DIR="${DC3_PLAYTEST_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/dc3/playtest}"
 SESSION=""; REPLAY=""; REPLAY_SYNC="song"; HEADLESS=0; PACK=1; ENGINE_ARGS=()
+VIDEO_PRE=8; VIDEO_LOOP=0; WAYLAND=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1 ;;
         --no-person) NO_PERSON=1 ;;
         --camera) CAMERA="$2"; shift ;;
         --video) VIDEO="$(realpath "$2")"; shift ;;
+        --video-pre) VIDEO_PRE="$2"; shift ;;
+        --video-loop) VIDEO_LOOP=1 ;;
         --fullscreen) FULLSCREEN=1 ;;
+        --wayland) WAYLAND=1 ;;
         --size) SIZE="$2"; shift ;;
         --no-pose) NO_POSE=1 ;;
         --fast-boot) FAST_BOOT=1 ;;
@@ -64,7 +79,7 @@ while [ $# -gt 0 ]; do
         --headless) HEADLESS=1 ;;
         --no-pack) PACK=0 ;;
         --) shift; ENGINE_ARGS=("$@"); break ;;
-        -h|--help) sed -n '2,42p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,53p' "$0"; exit 0 ;;
         *) echo "unknown option: $1 (see --help)" >&2; exit 1 ;;
     esac
     shift
@@ -129,7 +144,18 @@ export DC3_POSE_CAMERA="$CAMERA"
 export DC3_POSE_PYTHON="$POSE_PY"
 export DC3_POSE_MODEL="$MODEL"
 [ "$FAST_BOOT" = 1 ] && export DC3_FAST_BOOT=1
-[ "$FULLSCREEN" = 1 ] && export MILO_FULLSCREEN=1
+if [ "$FULLSCREEN" = 1 ]; then
+    echo "note: --fullscreen is not available yet (the game would sit in the top-left"
+    echo "      corner of the screen, PLAN H-17); playing in a 1280x720 window."
+fi
+# Wayland: GLFW would open a native Wayland window, which a scaled (HiDPI)
+# desktop hands a framebuffer twice the size, and the game draws into its
+# top-left corner (H-17).  Through Xwayland the window is 1280x720 pixels and
+# the compositor scales the whole picture.
+if [ "$HEADLESS" = 0 ] && [ "$WAYLAND" = 0 ] && [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${DISPLAY:-}" ]; then
+    echo "Wayland desktop: opening the window through Xwayland (DISPLAY=$DISPLAY); --wayland for native"
+    unset WAYLAND_DISPLAY
+fi
 if [ -n "$SIZE" ]; then export MILO_WIDTH="${SIZE%x*}" MILO_HEIGHT="${SIZE#*x}"; fi
 [ "$HEADLESS" = 1 ] && { export MILO_HEADLESS=1; setdef DC3_POSE external; }
 if [ "$NO_POSE" = 1 ]; then
@@ -137,7 +163,13 @@ if [ "$NO_POSE" = 1 ]; then
 elif [ -n "$REPLAY" ]; then
     export DC3_POSE=external DC3_POSE_PERFORM="session:$REPLAY" DC3_POSE_SESSION_SYNC="$REPLAY_SYNC"
 else
-    [ -n "$VIDEO" ] && export DC3_POSE_VIDEO="$VIDEO"
+    if [ -n "$VIDEO" ]; then
+        export DC3_POSE_VIDEO="$VIDEO"
+        if [ "$VIDEO_LOOP" = 0 ]; then
+            setdef DC3_POSE_SERVER "$REPO/scripts/playtest/footage_camera.py"
+            setdef DC3_FOOTAGE_PRE "$VIDEO_PRE"
+        fi
+    fi
     setdef DC3_POSE_RECORD "$SESSION/pose.dc3session"
 fi
 mkdir -p "$DC3_SFX_PCM_DIR"
