@@ -85,3 +85,7 @@ Inside the body (was lines 100-123):
         // that fed size()/empty() (`clrrwi r31, r10, 0`), so begin and size both
         // stay live across `bl find`.  Same family as CharClipGroup::HasClip.
 ```
+
+w-low-world (lane B, 2026-11-13): re-audited against the listing at 0x82358B0C:
+NOT A BUG (same loop, unconditional find(), push_back on a miss).  Re-measured,
+not new: `end() == find(obj)` is byte-inert, 83.74 unchanged -- do not retry.
