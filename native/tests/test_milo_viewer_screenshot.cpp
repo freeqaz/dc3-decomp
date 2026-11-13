@@ -25,6 +25,13 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
+// GNU `timeout` bounds each child run. macOS has none; Homebrew's coreutils
+// installs it as `gtimeout`. With neither, the child runs unbounded and
+// ctest's per-test TIMEOUT is the bound. Prefix a shell command with this,
+// then write `${t:+$t <seconds>}` where `timeout <seconds>` was.
+static const char *const kShellTimeoutLookup =
+    "t=$(command -v timeout || command -v gtimeout); ";
+
 static std::string GetBinaryDir() {
     char buf[4096];
     ssize_t len = ReadExecutablePath(buf, sizeof(buf) - 1);
@@ -254,8 +261,9 @@ TEST(MiloViewerScreenshot, ScreenshotModeExitsCleanlyAndWritesPng) {
 
     std::ostringstream cmd;
     cmd
+        << kShellTimeoutLookup
         << "ASAN_OPTIONS='alloc_dealloc_mismatch=0:halt_on_error=0:detect_odr_violation=0' "
-        << "timeout 120 "
+        << "${t:+$t 120} "
         << "\"" << viewer << "\" "
         << "\"" << charPath << "\" "
         << "--screenshot \"" << pngPath.str() << "\" "
@@ -313,8 +321,9 @@ TEST(MiloViewerScreenshot, ScreenshotModeWritesPoseDumpJson) {
 
     std::ostringstream cmd;
     cmd
+        << kShellTimeoutLookup
         << "ASAN_OPTIONS='alloc_dealloc_mismatch=0:halt_on_error=0:detect_odr_violation=0' "
-        << "timeout 120 "
+        << "${t:+$t 120} "
         << "\"" << viewer << "\" "
         << "\"" << charPath << "\" "
         << "--screenshot \"" << pngPath.str() << "\" "
@@ -395,8 +404,9 @@ TEST(MiloViewerScreenshot, PoseDumpCanMatchGoldenWithTolerance) {
 
     std::ostringstream runViewer;
     runViewer
+        << kShellTimeoutLookup
         << "ASAN_OPTIONS='alloc_dealloc_mismatch=0:halt_on_error=0:detect_odr_violation=0' "
-        << "timeout 120 "
+        << "${t:+$t 120} "
         << "\"" << viewer << "\" "
         << "\"" << charPath << "\" "
         << "--screenshot \"" << capturePng.str() << "\" "
@@ -556,8 +566,9 @@ TEST_F(MiloViewerPosePipeline, ViewerPoseDumpMatchesInProcessPoseMeshes) {
 
     std::ostringstream runViewer;
     runViewer
+        << kShellTimeoutLookup
         << "ASAN_OPTIONS='alloc_dealloc_mismatch=0:halt_on_error=0:detect_odr_violation=0' "
-        << "timeout 120 "
+        << "${t:+$t 120} "
         << "\"" << viewer << "\" "
         << "\"" << charPath << "\" "
         << "--screenshot \"" << capturePng.str() << "\" "
@@ -643,8 +654,9 @@ TEST_F(MiloViewerPosePipeline, DriverStartBeatUsesClipRelativeSeconds) {
 
     std::ostringstream runDriver;
     runDriver
+        << kShellTimeoutLookup
         << "ASAN_OPTIONS='alloc_dealloc_mismatch=0:halt_on_error=0:detect_odr_violation=0' "
-        << "timeout 120 "
+        << "${t:+$t 120} "
         << "\"" << viewer << "\" "
         << "\"" << charPath << "\" "
         << "--screenshot \"" << pngPath.str() << "\" "

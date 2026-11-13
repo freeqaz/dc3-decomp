@@ -105,7 +105,9 @@ MEDIAPIPE_VERSION="1.0.0"   # what the Linux pose server and the web worker use
 
 ENGINE="${MILO_ENGINE_PATH:-$REPOS_ROOT/milo-native-engine}"
 
-BREW_FORMULAE="cmake ninja pkgconf glfw jpeg-turbo libvorbis libogg ffmpeg"
+# coreutils: gtimeout, which the viewer and gesture-menu tests use when
+# there is no `timeout` (macOS has none).
+BREW_FORMULAE="cmake ninja pkgconf glfw jpeg-turbo libvorbis libogg ffmpeg coreutils"
 
 # ---------------------------------------------------------------------------
 missing=0
