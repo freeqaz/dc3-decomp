@@ -204,12 +204,37 @@ static std::string WriteInputScript(const std::vector<std::pair<int, std::string
 // Tests
 // ---------------------------------------------------------------------------
 
+// Where dc3-native will look for gen/main_xbox.hdr: the same probe as
+// NativeDetectDataDir() (native/src/platform/System_Native.cpp) -- $DC3_DATA,
+// then orig-assets / ../orig-assets / ../../orig-assets / . relative to the
+// cwd, which RunHeadless passes through unchanged.  Empty = no game data.
+static std::string FindGameDataDir() {
+    struct stat st;
+    const char *env = getenv("DC3_DATA");
+    if (env && stat((std::string(env) + "/gen/main_xbox.hdr").c_str(), &st) == 0)
+        return env;
+    for (const char *dir : {"orig-assets", "../orig-assets", "../../orig-assets", "."}) {
+        if (stat((std::string(dir) + "/gen/main_xbox.hdr").c_str(), &st) == 0)
+            return dir;
+    }
+    return std::string();
+}
+
 class HeadlessBootTest : public ::testing::Test {
 protected:
     void SetUp() override {
         std::string binary = GetDc3NativePath();
         if (access(binary.c_str(), X_OK) != 0)
             GTEST_SKIP() << "dc3-native binary not found at " << binary;
+        // Booting with no archive is not a boot test: it dies straight after
+        // "could not find game data" (SIGFPE on the asset-less CI runner),
+        // which says nothing about the main loop.
+        if (FindGameDataDir().empty()) {
+            char cwd[4096];
+            GTEST_SKIP() << "no game data: gen/main_xbox.hdr not under $DC3_DATA "
+                            "or orig-assets/../orig-assets/../../orig-assets/. from cwd "
+                         << (getcwd(cwd, sizeof(cwd)) ? cwd : "?");
+        }
     }
 };
 
