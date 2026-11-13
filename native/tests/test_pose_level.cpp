@@ -280,31 +280,61 @@ TEST(GravityEstimatorTest, UpdatedOnceASecondAndSlowly) {
     float t = 0.0f;
     Feed(e, t, 25.0f, 8.0f, 0.0f);
     ASSERT_NEAR(e.PitchDeg(), 8.0f, 0.3f);
-    // The camera is knocked level.  Within one update period the estimate
-    // does not move at all, however many frames arrive.
-    int changes = 0;
+    // The camera is pushed level over 40 s, so the window's median moves on
+    // nearly every frame.  The estimate still changes at most once per
+    // update period, by at most kBlend of the gap, and is held in between.
+    int changes = 0, frames = 0;
     float prev = e.PitchDeg();
-    std::vector<float> history;
-    for (int k = 0; k < 90; k++) {
-        Body b = SeenBy(Dancer(t), 0.0f, 0.0f);
+    for (int k = 0; k < 40 * 30; k++, frames++) {
+        float cam = 8.0f * (1.0f - k / (40.0f * 30.0f));
+        Body b = SeenBy(Dancer(t), cam, 0.0f);
         e.AddPerson(b.j, b.c);
         bool changed = e.Tick(1.0f / 30.0f);
         t += 1.0f / 30.0f;
         if (e.PitchDeg() != prev) {
             changes++;
-            EXPECT_TRUE(changed);
-            // A step is at most kBlend of the way to the window's median
-            // (which still holds the old camera's samples).
+            EXPECT_TRUE(changed) << k;
             EXPECT_LE(prev - e.PitchDeg(), NativeGravityEstimator::kBlend * 8.5f) << k;
             prev = e.PitchDeg();
         } else {
-            EXPECT_FALSE(changed);
+            EXPECT_FALSE(changed) << k;
         }
     }
-    EXPECT_LE(changes, 3); // 3 s: at most one update a second
-    EXPECT_GT(e.PitchDeg(), 6.0f); // and still near the old camera: slow
+    EXPECT_GT(changes, 10);                                        // it does follow
+    EXPECT_LE(changes, (int)(frames / 30.0f / NativeGravityEstimator::kUpdatePeriodSecs) + 1);
+    // ... and lags: the camera is level now, the estimate is not yet.
+    EXPECT_GT(e.PitchDeg(), 1.5f);
     Feed(e, t, 40.0f, 0.0f, 0.0f);
     EXPECT_NEAR(e.PitchDeg(), 0.0f, 0.5f);
+}
+
+TEST(GravityEstimatorTest, AJumpInTheMedianIsBlendedIn) {
+    NativeGravityEstimator e;
+    float t = 0.0f;
+    Feed(e, t, 25.0f, 8.0f, 0.0f);
+    ASSERT_NEAR(e.PitchDeg(), 8.0f, 0.3f);
+    // The camera is knocked level at once.  Once new samples are the
+    // window's majority its median jumps by ~8 deg; each update may close
+    // only kBlend of that gap.
+    float prev = e.PitchDeg(), maxStep = 0.0f;
+    int updatesToSettle = 0;
+    bool settled = false;
+    for (int k = 0; k < 40 * 30; k++) {
+        Body b = SeenBy(Dancer(t), 0.0f, 0.0f);
+        e.AddPerson(b.j, b.c);
+        if (e.Tick(1.0f / 30.0f)) {
+            maxStep = std::max(maxStep, prev - e.PitchDeg());
+            prev = e.PitchDeg();
+            if (!settled && maxStep > 1.0f)
+                updatesToSettle++;
+            if (e.PitchDeg() < 0.5f)
+                settled = true;
+        }
+        t += 1.0f / 30.0f;
+    }
+    EXPECT_TRUE(settled);
+    EXPECT_LE(maxStep, NativeGravityEstimator::kBlend * 8.5f);
+    EXPECT_GE(updatesToSettle, 5);
 }
 
 // ===========================================================================
