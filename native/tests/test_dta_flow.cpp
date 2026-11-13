@@ -416,6 +416,44 @@ TEST_F(DtaFlowTest, GameplayReachesPlayingState) {
         << "first gameStage=playing sample was not on game_screen:\n" << line;
 }
 
+TEST_F(DtaFlowTest, HelpbarHiddenDuringGameplay) {
+    // G-7.  On the 360 the "EXIT CONTROLLER MODE / SELECT" helpbar is gone for
+    // the whole song: ShellInput::Poll's TheGamePanel arm (0x82902CC0) calls
+    // ExitControllerMode(true) whenever the gameplay panel has focus, and
+    // HelpBarPanel::Draw shows all.grp only while
+    // `(!hide_helpbar && !disabled) || InControllerMode()` -- and the game
+    // panel sets hide_helpbar TRUE (ui/gameplay/game_modes.dta).  The default
+    // DC3_CONTROLLER_MODE=forced policy pins GestureMgr in controller mode, so
+    // the bar used to stay up through gameplay.  HelpBarPanel::Draw logs every
+    // change of its decision ("DC3 HelpBar: all.grp showing=N"); the LAST
+    // decision once the song is playing must be 0.
+    const std::string &out = sResult.output;
+    size_t playing = out.find("gameStage=playing");
+    ASSERT_NE(playing, std::string::npos)
+        << "the flow never reached gameplay (no gameStage=playing sample); "
+           "nothing below is meaningful";
+    EXPECT_NE(out.find("DC3 ControllerMode: forced: helpbar leaves controller "
+                       "mode for gameplay"),
+              std::string::npos)
+        << "the gameplay-panel exit never took the helpbar out of controller mode";
+    const std::string needle = "DC3 HelpBar: all.grp showing=";
+    size_t last = out.rfind(needle);
+    ASSERT_NE(last, std::string::npos)
+        << "HelpBarPanel::Draw never logged a decision -- is the helpbar drawn?";
+    size_t gameEnter = out.find("Screen 'game_screen' Enter");
+    ASSERT_NE(gameEnter, std::string::npos);
+    EXPECT_GT(last, gameEnter)
+        << "the helpbar made no draw decision after game_screen was entered, "
+           "so whatever it decided before gameplay (shown, in controller mode) "
+           "stood for the whole song";
+    size_t eol = out.find('\n', last);
+    std::string line = out.substr(last, eol == std::string::npos ? std::string::npos
+                                                                  : eol - last);
+    EXPECT_EQ(line.compare(0, needle.size() + 1, needle + "0"), 0)
+        << "the helpbar's last draw decision during gameplay was to SHOW it:\n"
+        << line;
+}
+
 TEST_F(DtaFlowTest, NoCrashCleanExit) {
     EXPECT_EQ(sResult.signal, 0)
         << "Engine crashed with signal " << sResult.signal;

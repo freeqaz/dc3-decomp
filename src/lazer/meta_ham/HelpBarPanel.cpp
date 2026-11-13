@@ -49,7 +49,20 @@ BEGIN_PROPSYNCS(HelpBarPanel)
 END_PROPSYNCS
 
 void HelpBarPanel::Draw() {
+#ifdef HX_NATIVE
+    // Controller mode policy: see NativeHelpbarInControllerMode (HelpBarPanel.h).
+    bool show = (!ShouldHideHelpbar() && !mDisabled) || NativeHelpbarInControllerMode();
+    static int sLastShow = -1;
+    if ((int)show != sLastShow) {
+        printf("DC3 HelpBar: all.grp showing=%d (hide_helpbar=%d disabled=%d "
+               "helpbar_controller_mode=%d)\n",
+               (int)show, (int)ShouldHideHelpbar(), (int)mDisabled,
+               (int)NativeHelpbarInControllerMode());
+        sLastShow = show;
+    }
+#else
     bool show = (!ShouldHideHelpbar() && !mDisabled) || TheGestureMgr->InControllerMode();
+#endif
     mAll->SetShowing(show);
     UIPanel::Draw();
 }
@@ -155,6 +168,39 @@ void NativeBootControllerModeOnce() {
         return;
     hbp->EnterControllerMode();
     sActivated = true;
+}
+
+// Set while the helpbar is out of controller mode for gameplay under `forced`.
+static bool sForcedHelpbarExitedForGameplay = false;
+
+void NativeForcedHelpbarExitForGameplay(bool immediate) {
+    if (!Dc3ControllerModeForced() || sForcedHelpbarExitedForGameplay)
+        return;
+    HelpBarPanel *hbp = HelpBarPanel::sInstance;
+    if (!hbp || !hbp->CheckIsLoaded() || !hbp->DataDir())
+        return;
+    printf("DC3 ControllerMode: forced: helpbar leaves controller mode for gameplay\n");
+    // The helpbar half of the image's ShellInput::ExitControllerMode.
+    hbp->ExitControllerMode(immediate);
+    sForcedHelpbarExitedForGameplay = true;
+}
+
+void NativeForcedHelpbarRestoreAfterGameplay() {
+    if (!sForcedHelpbarExitedForGameplay)
+        return;
+    sForcedHelpbarExitedForGameplay = false;
+    HelpBarPanel *hbp = HelpBarPanel::sInstance;
+    if (!hbp || !hbp->CheckIsLoaded() || !hbp->DataDir())
+        return;
+    printf("DC3 ControllerMode: forced: helpbar re-enters controller mode after gameplay\n");
+    // `forced` never leaves controller mode outside gameplay, so this is the
+    // re-entry a pad press would make on the 360: the helpbar half of
+    // ShellInput::EnterControllerMode.
+    hbp->EnterControllerMode();
+}
+
+bool NativeHelpbarInControllerMode() {
+    return TheGestureMgr->InControllerMode() && !sForcedHelpbarExitedForGameplay;
 }
 #endif
 

@@ -81,4 +81,18 @@ private:
 // A no-op under DC3_CONTROLLER_MODE=faithful (docs/debugging/native.md
 // "Controller mode policy"), where the image's EnterControllerMode runs instead.
 void NativeBootControllerModeOnce();
+
+// Gameplay half of the controller mode policy (DC3_CONTROLLER_MODE=forced).
+// The image leaves controller mode whenever the gameplay panel has focus
+// (ShellInput::Poll's TheGamePanel arm calls ExitControllerMode(true)), so the
+// helpbar -- whose Draw shows `all.grp` whenever InControllerMode() -- is gone
+// for the whole song. `forced` pins GestureMgr in controller mode (gameplay
+// reads it through HamGameData::IsSkeletonPresent), so the helpbar never left.
+// These take the helpbar alone out of controller mode for gameplay and put it
+// back when focus leaves the gameplay panel; GestureMgr is untouched. All are
+// no-ops under `faithful`, where the image's ExitControllerMode runs instead.
+void NativeForcedHelpbarExitForGameplay(bool immediate);
+void NativeForcedHelpbarRestoreAfterGameplay();
+// What HelpBarPanel::Draw reads in place of TheGestureMgr->InControllerMode().
+bool NativeHelpbarInControllerMode();
 #endif
