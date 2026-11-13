@@ -25,11 +25,15 @@ not exist on web. macOS last ran in March and would not build today.
 | Story | Choose profile → difficulty → song 1 → `campaign_perform_endgame_screen` → next song → `campaign_intro_perform_continue_screen`, with no input after the difficulty. The Perform tutorial shows only on a console that has not seen it. See [Reaching Story and Fitness](#reaching-story-and-fitness). | headless GPU run with screenshots, plus no-GPU runs, 2026-11-13 (`np-modes`) |
 | Fitness | A fitness song starts from the `playlists` row, not row 0. See [Reaching Story and Fitness](#reaching-story-and-fitness). | headless runs, 2026-11-13 (`np-modes`) |
 | Party / Crew | Crew Throwdown with two people: all 4 events, standings, rematch, main; both scored every event. Party Time: events scored for both; with one person its perform event plays solo (the game's own `use_1p_instead`). See [Two-player modes](#two-player-modes). | headless GPU runs, 2026-11-13 (`np-twoplayer`) |
-| Options, store | Not reached | — |
+| Options, store | Every Options page reached; settings persist across a relaunch (freestyle, overscan, calibration, crowd volume). Store reaches its offline dialog; credits show. Defects: Options → Gameplay raises 16 `MILO_FAIL`s on the no-voice nav-provider path and its checkboxes never change (PLAN G-12); Kinect Tuner does nothing (G-16) | headless runs, 2026-11-13 (`np-dogfood2`) |
+| Movies | **Every desktop `.bik` fails to open** (`avformat_open_input: No such file or directory`; relative path from cwd `native/build`): no intro, no song-select previews, no era/credits movies (PLAN G-15) | logs, 2026-11-13 (`np-dogfood2`) |
+| Rehearse dancer | **No dancer drawn** in Rehearse (and Crew "Make Your Move"), with or without pose; telemetry says `player0` exists with clip layers (PLAN G-11) | screenshots, 2026-11-13 (`np-dogfood2`) |
+| Post-process | The "awesome" post-process covers the whole screen, HUD and pause menus included, in animated static (engine `PostProcPass.cpp` noise vs the image's `NgPostProc::CheckNoise`; PLAN G-14) | screenshots + live `force_postproc` read, 2026-11-13 (`np-dogfood2`) |
 | Audio | **Not verified by ear.** Headless skips audio; under Xvfb `ma_device_init` fails | — |
 | Windowed | Starts at 1280×720 and real keys drive it into gameplay. Space opens pause but doesn't close it; Esc is B, not quit, although the log says "press ESC to exit". | Xvfb |
 | Visual | Black box over the final-results header; controller-mode help bar stays on during gameplay; "raise both hands" bubble on most menus (doubled in party); title background purple vs blue on Xbox; missing glyphs (`S` in Vibration-Medium, `%`/`f` in Eagle-Light) | screenshots |
-| Noise | No asserts, Debug::Fail or crashes in any controller-driven run | logs |
+| Noise | ~~No asserts, Debug::Fail or crashes in any controller-driven run~~ **False** (second pass, `np-dogfood2`): Options → Gameplay raises 16 `MILO_FAIL`s (G-12), and closing the window crashes in static teardown (`ObjDirPtr<ObjectDir>::operator=` after an X `BadWindow` → `exit()`; H-9) | logs, 2026-11-13 |
+| Test gate (2nd pass) | 691 registered / 621 executed / 621 passed / 0 failed / 70 skipped, exit 0 | ran, 2026-11-13 at `09586f7d9` (`np-dogfood2`) |
 
 ### Reaching Story and Fitness
 
@@ -151,7 +155,8 @@ party winner screens are white (PLAN P-4).
 |---|---|---|
 | Build | Fresh worktree, `scripts/web/build.sh`, ~3 min (release) | ran |
 | Play | Whole song in Chromium on a real GPU, ~60 fps (rAF-capped), no page errors; song audio played the whole track | headless-shell |
-| Input | Keyboard/gamepad only; **no pose path** (dummy skeleton scored 7,581, 0 stars) | ran |
+| Input | ~~Keyboard/gamepad only~~ Webcam pose since P-9: with a fake camera, tracking runs at ~25 fps and Macarena → Cupid Shuffle play to results with pause/resume (`np-dogfood2`). Web console carries **no** `MILO_NOTIFY` output, so failures are silent there (PLAN W-9) | ran, 2026-11-13 |
+| Large songs | `np-dogfood2` (tree at `09586f7d9`, before `185b6f50e`) saw Ice Ice Baby and In Da Club go back to the title after preloading: the preload-budget bug fixed by `185b6f50e`. Re-check: `np-songs` | ran |
 | Memory | ~460 MB of the 512 MB cap during gameplay | ran |
 | Variants | "release" is `-O0`, "debug" is `-O3`; labels are swapped | read flags |
 | Test scripts | `scripts/web/*.mjs` cannot launch their browser here (Playwright/browser version mismatch) | ran |
