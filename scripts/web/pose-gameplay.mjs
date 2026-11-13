@@ -5,6 +5,7 @@
 //
 //   node scripts/web/pose-gameplay.mjs --port 8432 --camera FILE.y4m --out DIR
 //        [--song-index 3] [--timeout 480] [--extra "&pose_model=lite"]
+//        [--difficulty easy|medium|expert|beginner] [--no-select-difficulty]
 //   --camera none   no fake device (the page sees no camera -> stand-in skeleton)
 //   --camera deny   a fake device but permission refused
 //
@@ -16,6 +17,23 @@
 // side) and window.dc3PoseGame (engine side: player 0's bound skeleton, score,
 // rating), every DC3 DETECTFRAC line for player 0, the final score, and
 // screenshots.
+//
+// Difficulty matters to what this measures. multiuser_screen opens on
+// `beginner`, and MoveDir::ResetDetectFrames builds NO move keys for Beginner
+// (the image skips it: `cmpwi r15, 3; beq` at 0x82505714), so on Beginner
+// every per-beat DetectFrac reads branch=no-move-key keys=0 and only the async
+// detectors rate moves. A driver that just presses Enter therefore never
+// exercises the frame-based (ham2) scorer -- which is what np-web-pose's runs
+// did, and why they read "DetectFrac 0 on web". The default is now Easy (one
+// Down), the same as scripts/dc3-input-flows/betteroffalone.txt on desktop.
+//
+// Exit status (the regression check): 0 = the run reached gameplay and the
+// DetectFrac probe agrees with the difficulty -- on a non-Beginner difficulty,
+// player 0 has ham2 samples, every one finite, and the engine reports that
+// difficulty; on Beginner, every p0 sample is no-move-key. 1 = that check
+// failed. 2 = the run never reached gameplay. --no-select-difficulty keeps the
+// old Enter-only driver (lands on Beginner) while still asserting the requested
+// difficulty: it is the sabotage control and must exit 1.
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, appendFileSync } from 'fs';
 
@@ -27,6 +45,10 @@ const camera = arg('camera', 'none');
 const timeoutS = +arg('timeout', 480);
 const songIndex = +arg('song-index', 3);
 const extra = arg('extra', '');
+const DIFFS = ['beginner', 'easy', 'medium', 'expert']; // seldiff list order on multiuser_screen
+const difficulty = arg('difficulty', 'easy');
+if (!DIFFS.includes(difficulty)) { console.error(`--difficulty must be one of ${DIFFS.join('|')}`); process.exit(2); }
+const selectDifficulty = !argv.includes('--no-select-difficulty');
 mkdirSync(out, { recursive: true });
 
 const t0 = Date.now();
@@ -69,8 +91,8 @@ page.on('console', (m) => {
     appendFileSync(logf, JSON.stringify(e) + '\n');
     const mm = e.text.match(/will enter '([^']+)'/);
     if (mm) { screens.push({ t: e.t, screen: mm[1] }); console.log(`[${e.t}s] SCREEN ${mm[1]}`); }
-    const d = e.text.match(/DC3 DETECTFRAC\[\d+\] p=(\d) beat=(-?\d+) .*branch=(\w+) .*frac=([-\d.naif]+)/i);
-    if (d) detect.push({ t: e.t, p: +d[1], beat: +d[2], branch: d[3], frac: parseFloat(d[4]) });
+    const d = e.text.match(/DC3 DETECTFRAC\[\d+\] p=(\d) beat=(-?\d+) keys=(\d+) branch=(\w+) .*frac=([-\d.naif]+)(?: diff=(\w+))?/i);
+    if (d) detect.push({ t: e.t, p: +d[1], beat: +d[2], keys: +d[3], branch: d[4], frac: parseFloat(d[5]), diff: d[6] || null });
     const mp = e.text.match(/move_passed #(\d+) player=(\d) frac=([-\d.naif]+)/i);
     if (mp) movePassed.push({ t: e.t, n: +mp[1], p: +mp[2], frac: parseFloat(mp[3]) });
     if (/DC3 POSE|dc3-pose/.test(e.text)) { poseLog.push(e); console.log(`[${e.t}s] ${e.text.slice(0, 160)}`); }
@@ -136,6 +158,14 @@ try {
     await press('Enter');
     const b2 = screens.length;
     const inGame = () => screens.slice(b2).some((s) => s.screen === 'game_screen');
+    // Difficulty: the seldiff list opens on `beginner`; Down N times, then the
+    // Enter loop below confirms it, `play` and `skip_waiting`.
+    if (await waitFor(() => screens.slice(b2).some((s) => s.screen === 'multiuser_screen') || inGame(), 30000) && !inGame()) {
+        await new Promise((r) => setTimeout(r, 2500));
+        const downs = selectDifficulty ? DIFFS.indexOf(difficulty) : 0;
+        for (let i = 0; i < downs; i++) { await press('ArrowDown'); await new Promise((r) => setTimeout(r, 500)); }
+        console.log(`[${el()}s] multiuser_screen: ${downs} down(s) for ${selectDifficulty ? difficulty : '(not selected: Enter-only driver)'}`);
+    }
     for (let i = 0; i < 30 && !inGame(); i++) {
         await new Promise((r) => setTimeout(r, 2500));
         if (!/loading/.test(cur())) await press('Enter');
@@ -162,7 +192,8 @@ await sampler;
 // Score: the last engine-side reading taken while in gameplay.
 const inGameSamples = samples.filter((s) => s.screen === 'game_screen' && s.game && s.game.players);
 const last = inGameSamples.length ? inGameSamples[inGameSamples.length - 1] : null;
-const p0 = detect.filter((d) => d.p === 0 && d.branch === 'ham2' && Number.isFinite(d.frac));
+const p0All = detect.filter((d) => d.p === 0);
+const p0 = p0All.filter((d) => d.branch === 'ham2' && Number.isFinite(d.frac));
 const fr = p0.map((d) => d.frac);
 const mean = fr.length ? fr.reduce((a, b) => a + b, 0) / fr.length : null;
 const ratings = [];
@@ -173,14 +204,33 @@ const summary = {
     finalScoreP0: last ? last.game.players[0].score : null,
     gameSecondsTracked: inGameSamples.filter((s) => s.game.players[0].tracked).length,
     gameSeconds: inGameSamples.length,
-    detectFracP0: { n: fr.length, mean, min: fr.length ? Math.min(...fr) : null, max: fr.length ? Math.max(...fr) : null, nan: detect.filter((d) => d.p === 0 && !Number.isFinite(d.frac)).length },
+    difficultyRequested: difficulty, difficultySelected: selectDifficulty,
+    difficultyEngine: [...new Set(p0All.map((d) => d.diff).filter(Boolean))],
+    detectFracP0: { n: fr.length, mean, min: fr.length ? Math.min(...fr) : null, max: fr.length ? Math.max(...fr) : null, nan: detect.filter((d) => d.p === 0 && !Number.isFinite(d.frac)).length,
+                    samples: p0All.length, branches: p0All.reduce((m, d) => ((m[d.branch] = (m[d.branch] || 0) + 1), m), {}) },
     ratingChanges: ratings,
     movePassed: movePassed.slice(0, 12),
     pagePose: pageLast ? pageLast.page : null,
     wasmMBMax: Math.max(...samples.map((s) => s.wasmMB || 0)),
     screens, samples, detect,
 };
+// The regression check (see the header): does DetectFrac agree with the difficulty?
+const fails = [];
+const reachedGame = /^left_gameplay_/.test(result) || inGameSamples.length > 0;
+if (!p0All.length) fails.push('no DC3 DETECTFRAC lines for player 0 (probe off, or no gameplay)');
+const engDiffs = summary.difficultyEngine;
+if (p0All.length && !engDiffs.length) fails.push('probe lines carry no diff= field (engine predates the probe change)');
+if (engDiffs.length && (engDiffs.length !== 1 || engDiffs[0] !== difficulty)) fails.push(`engine played difficulty ${engDiffs.join(',')}, requested ${difficulty}`);
+if (difficulty === 'beginner') {
+    const other = p0All.filter((d) => d.branch !== 'no-move-key').length;
+    if (other) fails.push(`Beginner should have no move keys, but ${other} p0 samples took another branch`);
+} else {
+    if (!fr.length) fails.push(`no ham2 DetectFrac samples for player 0 on ${difficulty} (branches: ${JSON.stringify(summary.detectFracP0.branches)})`);
+    if (summary.detectFracP0.nan) fails.push(`${summary.detectFracP0.nan} non-finite DetectFrac samples`);
+}
+summary.check = { pass: reachedGame && !fails.length, reachedGame, fails };
 writeFileSync(`${out}/summary.json`, JSON.stringify(summary, null, 1));
-console.log(`RESULT ${result} camera=${camera} score=${summary.finalScoreP0} detectFrac(p0) n=${fr.length} mean=${mean && mean.toFixed(4)} ratings=${ratings.join('>')} tracked ${summary.gameSecondsTracked}/${summary.gameSeconds}s wasmMax=${summary.wasmMBMax}MB errors=${errors.length}`);
+console.log(`RESULT ${result} camera=${camera} difficulty=${difficulty}${selectDifficulty ? '' : '(not selected)'} engine=${engDiffs.join(',') || '?'} score=${summary.finalScoreP0} detectFrac(p0) n=${fr.length} mean=${mean && mean.toFixed(4)} min=${summary.detectFracP0.min} max=${summary.detectFracP0.max} branches=${JSON.stringify(summary.detectFracP0.branches)} ratings=${ratings.join('>')} tracked ${summary.gameSecondsTracked}/${summary.gameSeconds}s wasmMax=${summary.wasmMBMax}MB errors=${errors.length}`);
+console.log(summary.check.pass ? 'CHECK PASS' : `CHECK FAIL: ${reachedGame ? fails.join('; ') : 'never reached gameplay'}`);
 try { await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 5000))]); } catch {}
-process.exit(0);
+process.exit(!reachedGame ? 2 : fails.length ? 1 : 0);
