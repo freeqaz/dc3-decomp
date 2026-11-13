@@ -364,6 +364,17 @@ if(EMSCRIPTEN)
         AudioDevice_Web.cpp
         ImGuiBackend_Web.cpp)
 endif()
+# FFmpegMovieImpl.cpp exists in both trees (H-5), and both define every
+# FFmpegMovieImpl symbol. DC3's copy carries two image-faithful fixes the
+# engine's lacks (Ready() is true with no pending load; Poll() of a movie that
+# never opened reports DONE, so a missing .bik no longer "plays" forever). It
+# only won because the engine's archive member was never pulled -- link-order
+# luck, invisible to --allow-multiple-definition and to the LinkHygiene gate.
+# Keep the engine copy out of DC3's libmilo-engine.a so there is exactly one
+# definition. Drop this (and native/src/platform/FFmpegMovieImpl.*) once the
+# engine carries the fixes. (FFmpegAudioReader was byte-identical in both
+# trees; DC3's copy is deleted and the engine's links.)
+list(APPEND MILO_ENGINE_DECOMP_PLATFORM_EXCLUDE FFmpegMovieImpl.cpp)
 add_subdirectory(${MILO_ENGINE_PATH} ${CMAKE_BINARY_DIR}/milo-engine)
 # The engine prepends its own checked-in STL shim (include/) with BEFORE PUBLIC,
 # which would win over the directory-level generated shim for the engine's own
@@ -1210,7 +1221,6 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Achievements_Stub.cpp
     src/platform/MemcardMgr_Stub.cpp
     src/platform/BinkMovie_Stub.cpp
-    $<$<BOOL:${ENABLE_FFMPEG}>:src/platform/FFmpegAudioReader.cpp>
     $<$<BOOL:${ENABLE_FFMPEG}>:src/platform/FFmpegMovieImpl.cpp>
     $<$<BOOL:${ENABLE_FFMPEG}>:src/platform/XmaSampleDecoder.cpp>
     src/platform/NetXbox_Stub.cpp
@@ -1247,8 +1257,8 @@ set(DC3_NATIVE_CORE_SOURCES
 # native/src/audio/ -- were deleted outright on 2026-11-13, H-1: no target
 # compiled them, and their stale HEADERS were shadowing the engine's for every
 # dc3 TU, because -I native/src precedes -I <engine>/src.)
-# (FFmpeg*.cpp are genex list items and stay in both; allow-multiple-definition
-#  tolerates the duplicate.)
+# (FFmpegMovieImpl.cpp is the exception the other way round: DC3's copy links
+#  and the engine's is excluded -- see MILO_ENGINE_DECOMP_PLATFORM_EXCLUDE.)
 set(DC3_NATIVE_CORE_SOURCES_ENGINE ${DC3_NATIVE_CORE_SOURCES})
 # src/platform/Cache_Stub.cpp is deliberately NOT in this removal list (it used
 # to be, because it was an empty placeholder whose engine twin was the real
