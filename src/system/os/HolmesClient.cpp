@@ -368,21 +368,16 @@ unsigned int HolmesClientPollJoypad() {
     return ret;
 }
 
-// RESIDUAL (w12-d, 98.28): the image calls the deleting destructor with NO
-// null test (`cmplwi cr6, r30, 0` / `beq` are ours only). Measured INERT:
-// binding the stream as `TextFileStream &log = *new ...` and `delete &log`.
-// w20-o (98.28, rows 103-104 only): `delete static_cast<TextStream *>(log)`
-// is also inert.  This is NOT a guard our source adds: it is the implicit null
-// test of the `delete` expression itself, and the image omits it (deleting
-// dtor `lwz r11, 0(r30)` / `li r4, 1` / `bctrl` straight after the Flush
-// vcall).  Behaviourally dead on both sides: on the null-`new` path
-// (`mr r30, r24`, r24 = 0) both builds already dereference r30 for File()/
-// Fail() (`lwz r11, 0x4(r30)` / `bctrl`) before reaching the delete.  Native
-// needs nothing here -- `delete` of null is a no-op in standard C++.
+// w-field-call (98.28 -> 100.0, 116/116 equal): the image has no null test
+// before the deleting-dtor vcall.  It was the `FileStream &fs = log->File();`
+// reference local: with it MSVC could not use the File() dereference to
+// prove `log` non-null, so `delete log` kept its implicit null test (ours-only
+// `cmplwi cr6, r30, 0` / `beq`).  Calling `log->File()` at each use lets the
+// null test fold.  Codegen-only: on a failed `new` both builds already crash
+// on the Fail() vcall before the delete, so the dead test changed nothing.
 DataNode DumpHolmesLog(DataArray *) {
     TextFileStream *log = new TextFileStream("holmes.csv", true);
-    FileStream &fs = log->File();
-    if (!fs.Fail()) {
+    if (!log->File().Fail()) {
         *log << HolmesClient::PlatformGetHostName() << ", ";
         *log << -1 << ", ";
         *log << -1 << "\n";
@@ -395,7 +390,7 @@ DataNode DumpHolmesLog(DataArray *) {
             *log << wait << ", ";
             *log << work << "\n";
         }
-        fs.Flush();
+        log->File().Flush();
     }
     delete log;
     return 0;

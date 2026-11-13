@@ -711,6 +711,12 @@ void SpotlightDrawer::DrawWorld() {
                     // decision.
                     // w13-c: the 3-arg Hmx::Color ctor (alpha from the init
                     // list) in place of Set(r, g, b, 1.0f) is also inert, 98.47.
+                    // w-field-call (2026-11-13, behaviour re-read): the sweep's
+                    // "fmuls f13,f13,f0 vs f13,f13,f12" is NOT a different
+                    // multiplicand -- intensity (0x1c0) lives in f0 in the
+                    // image and f12 here; both store red*I->0x60, blue*I->0x68,
+                    // green*I->0x64, 1.0->0x6c.  The ours-only `stw r31,0x54`
+                    // homes the same `it` (e1).  Codegen-only.
                     c.Set(
                         spot->Color().red * intensity,
                         spot->Color().green * intensity,

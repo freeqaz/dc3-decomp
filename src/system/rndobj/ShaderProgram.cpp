@@ -163,6 +163,20 @@ bool RndShaderProgram::Cache(
                 // binary-wide blast radius, not a change this call site can
                 // make.  Left unfaithful deliberately; the missing call is a
                 // logged-message-only path, so no gameplay behaviour differs.
+                // w-field-call (2026-11-13), re-measured: the faithful wrapper
+                // still reads 99.14 -> 98.0 (frame +0x1010, inlined FormatString
+                // ctor).  And the header fix is REFUTED: marking that overload
+                // `__declspec(noinline)` drops 536 functions binary-wide (e.g.
+                // XboxContentMgr::ContentPath 100 -> 20.7) -- the image DOES
+                // inline it into small callers and only calls it out of line
+                // from large ones like this.  So the difference is MSVC's
+                // per-caller inline budget, not the declaration.  Also checked:
+                // the "type"/"mat" string rows below are scheduling only --
+                // SendDebugDataPoint receives identical r4..r10 + stack args.
+                // Kept unfaithful on purpose: the image re-runs the formatted
+                // text through FormatString as a FORMAT string, so a '%' in a
+                // material/environ path would be reinterpreted (and read
+                // garbage varargs on native).
                 MILO_NOTIFY(
                     "Missing shader %s_%llx\n(material: %s)\n(environment: %s)\n(compile options: %s)",
                     ShaderTypeName(shaderType),
