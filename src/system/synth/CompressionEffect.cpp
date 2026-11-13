@@ -50,16 +50,9 @@ void CompressionEffect::SetParameters(CompressionEffect::Params const &params) {
     mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
 }
 
-// w16-e (98.73): residual is the hoisted-constant FPR assignment (image
-// f27..f31 for 1.15/0.001/0.002/1.0/0.02, ours f3/f4/f27..f29) and the
-// f12/f13 relabelling it drags.  A plain `for (channel...)` without the
-// numChannels guard is worse (95.8, 161 vs 159 instructions).
-// w21-av: the gate update writes mGateMin directly in both arms and the 1.15
-// test reads mGateMin back (the image stores, then multiplies the stored
-// value: stfs f0,0x2c(r3); fmuls f0,f0,f27).  The `attack_release` local was
-// ours; dropping it fixed the whole hoisted-constant FPR colouring.  Left:
-// one `fmuls f0,f12,f0` operand order (sample*mDCBlock) in the output loop;
-// `mDCBlock * samples[idx]` and a `float sample` local are inert.
+// Lane history (10 lines moved): docs/decomp/notes/system/synth/CompressionEffect.md
+// > w16-e (98.73): residual is the hoisted-constant FPR assignment (image f27..f31 for
+// > 1.15/0.001/0.002/1.0/0.02, ours f3/f4/f27..f29) and the f12/f13 relabelling it drags.
 void CompressionEffect::Process(float *samples, int numFrames, int numChannels) {
     if (mRatio > 1.01f) {
         float envelope = mEnvelope;

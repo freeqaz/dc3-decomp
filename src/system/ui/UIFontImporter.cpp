@@ -217,13 +217,7 @@ BEGIN_LOADS(UIFontImporter)
     d >> mPunctuation;
     d >> mUpperEuro;
     d >> mLowerEuro;
-    // w20-f BEHAVIOUR FIX: the DC3-only fields are gated on the ALT rev, not
-    // rev.  Image: rev lives in r26 (clrlwi r26,r11,16), altRev in r25
-    // (srwi r25,r11,16), and these four tests read r25 -- 0x827ACA6C
-    // `cmpwi cr6, r25, 0x0`, 0x827ACAD0 `cmpwi cr6, r25, 0x4`, 0x827ACB7C
-    // `cmpwi cr6, r25, 0x1`, 0x827ACB94 `cmpwi cr6, r25, 0x2`.  RB3's importer
-    // has none of these fields and gates mFontSupersample on rev > 1, which
-    // stays on rev here.
+    // Lane history (7 lines moved): docs/decomp/notes/system/ui/UIFontImporter.md
     if (d.altRev > 0) {
         d >> mRussian;
         d >> mPolish;

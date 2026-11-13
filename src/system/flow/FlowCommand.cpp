@@ -51,12 +51,7 @@ BEGIN_LOADS(FlowCommand)
     LOAD_REVS(bs)
     ASSERT_REVS(3, 0)
 
-    // w16-d: 99.966 -> 100. The image declares symbols FIRST and drives the
-    // SetProperty loop off `sit != symbols.end()` (0x8241DA98 compares r29, the
-    // list<Symbol> walker, against &symbols at r31+0x70). The slot pair follows
-    // the loop's controlling list, not declaration order -- which is why the
-    // declaration swap alone (w7-aa, w8-l) only moved the ctor/dtor order.
-    // Same trip count either way: both lists are pushed in lockstep above.
+    // Lane history (6 lines moved): docs/decomp/notes/system/flow/FlowCommand.md
     std::list<Symbol> symbols;
     std::list<DataNode> datanodes;
     if (d.rev > 2) {

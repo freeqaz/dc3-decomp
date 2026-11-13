@@ -832,11 +832,7 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
         short convBuf[0x800];
         int chIdx = 0;
         while (chIdx < numChannels) {
-            // One WriteData per arm: MSVC cross-jumps the two calls back into
-            // the image's single call site AFTER colouring, but the duplicate
-            // drops the loop down-counter's COLOR priority (6 -> -6), so it
-            // pops after samplesToConsume and the memcpy size and takes r27
-            // as in the image (c2rs tap, w25-gq).
+            // Lane history (5 lines moved): docs/decomp/notes/system/synth/StandardStream.md
             if (mFloatSamples) {
                 unsigned int j = 0;
                 while (j < (unsigned int)samplesToConsume) {
@@ -882,19 +878,7 @@ __declspec(noinline) bool StandardStream::IsPastStreamJumpPointOfNoReturn() {
     float curTime = GetInSongTime();
     if (curTime <= 0.0f)
         return false;
-    // w21-af: 97.727 -> 100. ONE condition for the true exit, with the two
-    // jump-point tests written as negated `>=` so NaN still falls through to
-    // true exactly as the image's two `bge`s do. Every earlier spelling (kept
-    // in the history below) returned false from the jump-point tests as
-    // separate statements, which let MSVC tail-duplicate a `li r3, 0x0`
-    // before the last `bge`; as one || / && the false exit is the single
-    // shared `li r3, 0x0` block at the top, as in the image.
-    // History: w7-av/w9-c measured 97.727 for `if (curTime >= mJumpFromMs)
-    // return false; if (mJumpFromMs >= fromTime) return false; return true;`;
-    // a merged `curTime >= mJumpFromMs || mJumpFromMs >= fromTime -> false`
-    // read 86.02, `return mJumpFromMs < fromTime;` 90.659, and w19-e's nested
-    // `if (curTime < mJumpFromMs) { if (mJumpFromMs < fromTime) return true; }`
-    // 86.0 (those `<` spellings also return false on NaN, unlike the image).
+    // Lane history (13 lines moved): docs/decomp/notes/system/synth/StandardStream.md
     if (fromTime < curTime || (!(curTime >= mJumpFromMs) && !(mJumpFromMs >= fromTime)))
         return true;
     return false;

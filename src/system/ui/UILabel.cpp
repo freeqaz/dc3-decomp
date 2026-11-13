@@ -606,14 +606,7 @@ void UILabel::DrawShowing() {
             }
 #endif
             for (int i = 0; i < mLabelStyles.size(); i++) {
-                // w14-f: 96.03 -> 100.  The image binds the element address
-                // before Style() (`add r27, r28, r11`, callee-saved) and reads
-                // mColorOverride AFTER the mFontColorOverride store, with a SIGNED
-                // null test (`lwz r11, 0xc(r27)` / `cmpwi cr6, r11, 0x0`).  A
-                // ternary reading the ObjPtr twice (CSE'd to one load) is what
-                // keeps the element pointer live across the call; an `if (!c)`
-                // after a single read held _M_start instead (w8-era note: 96.9
-                // canonical but 29 rows).
+                // Lane history (8 lines moved): docs/decomp/notes/system/ui/UILabel.md
                 LabelStyle &curLabelStyle = mLabelStyles[i];
                 RndText::Style &curStyle = Style(i);
                 curStyle.mFontColorOverride = true;

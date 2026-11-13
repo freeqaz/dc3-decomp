@@ -874,14 +874,7 @@ DataNode UIList::OnSetData(DataArray *da) {
     return 1;
 }
 
-// w21-z: 98.15 -> 100.  The image's double home store of mParent to
-// 0x50(r31) and its cr0 `cmplwi r29, 0` are the return temp of an inlined
-// ParentList() accessor (RB3's spelling, rb3 UIList.cpp:249), called three
-// times; offset is built as `offset = spacing; offset *= (float)n;` (the
-// CalcBoundingBox shape), which gives the image's `fmuls f31, f1, f0` operand
-// order -- `spacing * (float)n` and `n * spacing` both give f0, f1.  w11-b's
-// residual note (mParent && ..., parent local, header-inline ChildList,
-// (float)n * spacing all inert) is superseded.
+// Lane history (8 lines moved): docs/decomp/notes/system/ui/UIList.md
 void UIList::DrawShowing() {
     if (mScrollPending) {
         mListState.Poll(TheTaskMgr.UISeconds());

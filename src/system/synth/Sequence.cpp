@@ -623,28 +623,7 @@ void GroupSeqInst::SetTranspose(float f) {
 #pragma endregion
 #pragma region RandomGroupSeqInst
 
-// w14-e (99.10, 27 register rows + the image's `stw r29, 0x50(r31)` of
-// childrenSize just before the NextIndex call, at an EH-table label).  The map
-// lists RandomGroupSeq::AddToPlayedHistory as `f i`; marking it inline (it is
-// reached through PickNextIndex) is byte-inert for this ctor, so not kept.
-// w18-e (99.10): `next % children.size()` reloads the size after NextIndex
-// (98.2); std::min(mNumSeqs, childrenSize) homes childrenSize before the
-// compare and selects addresses (95.3).  The image's min is a value select.
-// w21-av (99.10 normalized, fuzzy 97.66 -> 99.10): a separate `childrenLeft`
-// counter for the reservoir loop (rb3-xenon's shape) fixed every register row.
-// One row left: the image's dead `stw r29,0x50(r31)` of childrenSize just
-// before `bl NextIndex` (8274C4F4; 0x50 is the else-arm's (float)childrenLeft
-// conversion slot). Inert: the rb3-xenon ternary for numSeqs; `const int &`
-// childrenSize. Worse: childrenLeft declared at function scope (registers
-// rotate back, 97.7 fuzzy).
-// w21-bf (still 99.10, the same one row): `int target = seq->NextIndex() %
-// childrenSize;` (no `next` local) is inert; function-scope childrenLeft
-// re-measured at 98.20 canonical (adds `mr r26, r29`, permutes r26/r28/r29).
-// w-homeslot (2026-11-13, still 99.10, the same one row): routing the modulo
-// through an inline `int f(int a, const int &b) { return a % b; }` called as
-// f(seq->NextIndex(), childrenSize) -- right-to-left argument evaluation, so a
-// const-ref home of childrenSize would land just before `bl NextIndex` -- is
-// byte-inert: MSVC folds the reference through the inline and emits no store.
+// Lane history (22 lines moved): docs/decomp/notes/system/synth/Sequence.md
 RandomGroupSeqInst::RandomGroupSeqInst(RandomGroupSeq *seq)
     : GroupSeqInst(seq, false), mIt(mSeqs.end()) {
     ObjPtrList<Sequence> &children = seq->Children();

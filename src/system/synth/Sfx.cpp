@@ -12,25 +12,10 @@
 
 #pragma region SfxInst
 
-// Open: fuzzy 99.744 / normalized 100.0, three rows, all one commutative
-// `fadds` operand order -- image `fadds f1, f0, f13`, ours `fadds f1, f13, f0`
-// (the loads themselves, and their order, already match).
-// At the §8.7 sort both operands are memory leaves: `it->Volume()` has base
-// `it` (the SfxMap pointer) at disp 0x14, `mRandVol` has base `this` at disp
-// 0x30.  Per §8.7 the key is ((sid & mask) << 13|14) + fold(disp), so the
-// IMAGE's order (Volume first) is what two VARIABLE bases give (a local
-// outranks a param), and our order is what two bases of equal sid residue give,
-// where the displacement decides and 0x30 beats 0x14.  That reading is inferred
-// from the emitted order -- the c2 tap's cqlo3 dump for this function was
-// searched and no tuple carrying both of these displacements is printed, so the
-// fadds tuple itself was NOT read from the tap.
-// w26-f6 measured and rejected, all inert or worse: swapping the source
-// operands (canonicalised), binding the `it->X()` result or `mRandX` as a
-// const float reference, plain named copies of either, `const SfxMap &map =
-// *it`, `SfxMap *map = it`, naming `it->Sample()`'s result, and hoisting
-// mRandVol/mRandPan/mRandTp to the top of the loop body.  Open question: which
-// surviving named load upstream moves exactly ONE of the two base temps' sid
-// mod 4 without changing the emitted loads.
+// Lane history (19 lines moved): docs/decomp/notes/system/synth/Sfx.md
+// > Open: fuzzy 99.744 / normalized 100.0, three rows, all one commutative `fadds`
+// > operand order -- image `fadds f1, f0, f13`, ours `fadds f1, f13, f0` (the loads
+// > themselves, and their order, already match).
 SfxInst::SfxInst(Sfx *sfx) : SeqInst(sfx), mSfx(sfx), mStartProgress(0) {
     FOREACH (it, sfx->SfxMaps()) {
         SampleInst *inst = nullptr;

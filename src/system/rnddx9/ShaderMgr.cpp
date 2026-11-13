@@ -109,18 +109,7 @@ void DxShader::EstimatedCost(float &min, float &max) {
 
 RndShaderBuffer *DxShader::NewBuffer(unsigned int ui) { return new DxShaderBuffer(ui); }
 
-// w18-c: 94.37 -> 100.  The two buffers are built with the SIZED ctor,
-// `new DxShaderBuffer(0)`, not the default one.  With 0 the D3DXCreateBuffer /
-// MILO_FAIL arm folds away and the code is the same two stores, but the EH
-// states that arm needed survive: the image has an operator-delete and a
-// ~RndShaderBuffer unwind funclet per `new` (r31+0x1104 / +0x1108), and the
-// default ctor gave us neither.  Those states are what scheduled the two
-// D3DXCompileShaderExA argument blocks (the old 27-row "scheduling floor",
-// w7-bh/w7-bn).  Same object built either way: mBuffer == nullptr.
-//
-// The MakeString name rows are ICF noise: the image's three MILO_ASSERT
-// MakeStrings resolve to whichever `MakeString<char[N], int, char[M]>`
-// instantiation won the fold (all resolve to 0x824D1870 in icf_aliases.map).
+// Lane history (12 lines moved): docs/decomp/notes/system/rnddx9/ShaderMgr.md
 bool DxShader::Compile(
     ShaderType s, const ShaderOptions &opts, RndShaderBuffer *&buf1, RndShaderBuffer *&buf2
 ) {
@@ -328,16 +317,10 @@ void DxShaderMgr::SetPConstant(PShaderConstant psc, int i) {
     D3DDevice_SetPixelShaderConstantI(TheDxRnd.Device(), psc, &i, 1);
 }
 
-// 85.2 canonical (w12-c; was 70.0 at w8-h's floor), SetPConstant(PShaderConstant,
-// const Vector4 &) below likewise.  `start` is a SIGNED int holding the logical
-// shift: that is what keeps MSVC from fusing the 32-bit `srwi r8,r4,2` with the
-// zero-extension its 64-bit consumer (`srd`) needs (an `unsigned int` start
-// gives `rldicl r8,r4,62,34`; measured in a scratch TU, every unsigned spelling
-// fuses).  What remains is scheduling: the image computes the VertexShaderF
-// index (`addi r10,r4,0x78`) at slot 2 and `li r11,1` after the TheDxRnd addi;
-// we emit `li` first.  A `__restrict` dst moves the addi up but also hoists
-// the `slwi` and scores lower (72.7); statement order, a reference dev, a
-// mask temp and a no-dst spelling are all inert (scratch TU).
+// Lane history (10 lines moved): docs/decomp/notes/system/rnddx9/ShaderMgr.md
+// > What remains is scheduling: the image computes the VertexShaderF index (`addi
+// > r10,r4,0x78`) at slot 2 and `li r11,1` after the TheDxRnd addi; we emit `li` first.
+// > (w8-h)
 void DxShaderMgr::SetVConstant(VShaderConstant vsc, const Vector4 &v) {
     D3DDevice *dev = TheDxRnd.Device();
     float x = v.x, y = v.y, z = v.z, w = v.w;
