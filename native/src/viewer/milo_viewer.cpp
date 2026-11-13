@@ -167,9 +167,16 @@ int main(int argc, char** argv) {
     }
 
     // ---- Engine init ----
+    // The engine reads MILO_RENDER / MILO_NORENDER by PRESENCE, not value
+    // (Rnd_Wgpu.cpp: MILO_RENDER set at all forces the GPU on), so the old
+    // MILO_RENDER=0 for export-only runs brought the GPU up anyway.
+    // Export-only needs no GPU: the exporters read CPU-side texture/material
+    // data. MILO_NORENDER is the off switch.
     if (cfg.IsExportOnly()) {
-        setenv("MILO_RENDER", "0", 1);
+        unsetenv("MILO_RENDER");
+        setenv("MILO_NORENDER", "1", 1);
     } else {
+        unsetenv("MILO_NORENDER");
         setenv("MILO_RENDER", "1", 1);
     }
     if (cfg.screenshotPath || cfg.videoPath) {
@@ -190,13 +197,15 @@ int main(int argc, char** argv) {
     printf("Milo Viewer: TheRnd.Init...\n");
     TheRnd.Init();
 
-    if (!gWgpuRnd || !gWgpuRnd->Gpu().IsReady()) {
+    if (cfg.IsExportOnly()) {
+        // GPU deliberately off (above); nothing below needs it before the
+        // export-and-exit branch.
+    } else if (!gWgpuRnd || !gWgpuRnd->Gpu().IsReady()) {
         fprintf(stderr, "ERROR: GPU initialization failed. Renders will be black/empty.\n");
         fprintf(stderr, "  This often happens when Vulkan ICD access is blocked (e.g. sandbox).\n");
         fprintf(stderr, "  Try running outside the sandbox or with dangerouslyDisableSandbox.\n");
         return 2;
-    }
-    if (gWgpuRnd->Gpu().IsNullBackend()) {
+    } else if (gWgpuRnd->Gpu().IsNullBackend()) {
         fprintf(stderr, "ERROR: GPU fell back to Null backend — no real GPU available.\n");
         fprintf(stderr, "  Vulkan ICD access is likely blocked by sandbox restrictions.\n");
         fprintf(stderr, "  Renders will be black/empty. Exiting.\n");
