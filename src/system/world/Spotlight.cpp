@@ -765,6 +765,10 @@ void Spotlight::SetIntensity(float f) { SetColorIntensity(Color(), f); }
 // here -- `Hmx::Color &dst = mColorOwner->mColor; dst = c;` -- leaves SetColor
 // at 94.091 unchanged and drops Spotlight::SyncProperty 99.829 -> 99.744.
 // Reverted.  Call-site respellings were already refuted by the note at ~222.
+// w-field-call (2026-11-13, behaviour re-read): the sweep's "target-only
+// `lfs f12, 0x1c0(r9)`" in SetColor is an ALIGNMENT artifact -- ours reads the
+// same mIntensity one row later (`lfs f12, 0x1c0(r10)`), before the colour
+// stores on both sides.  Same fields, same order, same values; not a bug.
 void Spotlight::SetColorIntensity(const Hmx::Color &c, float f) {
     mColorOwner->mColor = c;
     mColorOwner->mIntensity = f;
