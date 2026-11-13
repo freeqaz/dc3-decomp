@@ -17,6 +17,8 @@
 #include <gtest/gtest.h>
 
 #include "test_helpers.h"
+#include "shell_timeout.h"
+#include "platform/ExecutablePath.h"
 #include "../src/platform/PosePerformer_Native.h"
 #include "hamobj/MoveDir.h"
 #include "obj/Data.h"
@@ -199,3 +201,63 @@ TEST(SensorLatencyTest, LoadScoringAppliesIt) {
 }
 
 } // namespace
+
+// ===========================================================================
+// PLAN P-13: DC3_POSE_PERFORM on its own drives a headless engine.
+// ===========================================================================
+//
+// GestureMgr_NativeInit skips every pose provider under MILO_HEADLESS unless
+// DC3_POSE is set.  The in-process performer spawns nothing, but it lives
+// behind that provider, so before the fix a headless DC3_POSE_PERFORM run with
+// no DC3_POSE silently scored the standing dummy (np-dogfood3's story run).
+// Now the performer counts as asking for the provider; a value that is not a
+// performer mode keeps the dummy and says so.
+
+static std::string PerformerHeadlessBoot(const char *performValue) {
+    char buf[4096];
+    ssize_t len = ReadExecutablePath(buf, sizeof(buf) - 1);
+    if (len <= 0) return "";
+    buf[len] = '\0';
+    std::string dir(buf);
+    dir = dir.substr(0, dir.rfind('/'));
+    std::string binary = dir + "/dc3-native";
+    if (access(binary.c_str(), X_OK) != 0) return "";
+    char tmpl[] = "/tmp/dc3-p13-XXXXXX";
+    char *root = mkdtemp(tmpl);
+    if (!root) return "";
+    std::string R = root;
+    std::string cmd = std::string(kShellTimeoutLookup) +
+        "env -u DC3_POSE -u DC3_POSE_NO_SPAWN MILO_HEADLESS=1 MILO_NORENDER=1 "
+        "MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1 MILO_MAX_FRAMES=30 "
+        "DC3_CACHE_DIR=" + R + "/cache DC3_SAVE_DIR=" + R + "/saves "
+        "DC3_POSE_PERFORM=" + performValue + " ${t:+$t 120} " + binary + " 2>&1";
+    FILE *p = popen(cmd.c_str(), "r");
+    if (!p) return "";
+    std::string out;
+    char line[4096];
+    while (fgets(line, sizeof line, p)) out += line;
+    pclose(p);
+    return out;
+}
+
+TEST(PosePerformerHeadlessTest, PerformerAloneStartsTheProvider) {
+    if (!getenv("DC3_DTA_FLOW_TESTS"))
+        GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable (requires game assets)";
+    std::string out = PerformerHeadlessBoot("stand");
+    ASSERT_NE(out.find("DC3_EXIT:"), std::string::npos)
+        << "dc3-native did not run (missing next to milo-tests?):\n" << out;
+    EXPECT_NE(out.find("DC3_POSE_PERFORM: in-process synthetic performer"), std::string::npos)
+        << "headless DC3_POSE_PERFORM=stand without DC3_POSE never started the performer";
+    EXPECT_EQ(out.find("using dummy skeleton"), std::string::npos)
+        << "headless DC3_POSE_PERFORM=stand fell back to the dummy skeleton";
+}
+
+TEST(PosePerformerHeadlessTest, AnUnknownModeSaysWhy) {
+    if (!getenv("DC3_DTA_FLOW_TESTS"))
+        GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable (requires game assets)";
+    std::string out = PerformerHeadlessBoot("dancing");
+    ASSERT_NE(out.find("DC3_EXIT:"), std::string::npos) << out;
+    EXPECT_NE(out.find("using dummy skeleton"), std::string::npos);
+    EXPECT_NE(out.find("DC3_POSE_PERFORM='dancing' is not a performer mode"), std::string::npos)
+        << "an unrecognised DC3_POSE_PERFORM kept the dummy without saying why";
+}
