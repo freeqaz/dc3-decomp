@@ -1,0 +1,50 @@
+# Fitness -> a playlist -> multiuser (G-4, docs/native/PLAN.md)
+#
+# fitness_screen is a hub, not a song list.  FitnessProvider::UpdateList
+# builds exactly four rows:
+#   0 fitness_option            toggles the active profile's fitness mode
+#   1 fitness_set_fitness_goals pushes goal_reset_warning_screen
+#   2 fitness_body_profile      platform body-profile dialog
+#   3 playlists                 -> song_select_playlist_tutorial_check_screen
+# (ui/fitness/fitness.dta NAV_SELECT_MSG).  A fitness song therefore starts
+# from row 3: song_select_playlist_screen sets gamemode playlist_perform, a
+# playlist row shows its options, playlist_play starts it and goes to the
+# mode's seldiff_screen (multiuser_screen).  With fitness mode on,
+# perform_endgame_panel's continue_next_screen takes its "fitness playlist"
+# branch ({is_active_profile_in_fitness_mode} && in_mode playlist_perform).
+#
+# The fixture seeds the global cache with kTutorialFitness and
+# kTutorialPlaylists seen, so neither tutorial is inserted.
+# title_screen's confirm is what signs pad 0's profile in (title.dta
+# NAV_SELECT_MSG sets the initial profiles); fast boot keeps the full title
+# delay so it can land.  Without it there is no active profile, and
+# fitness_panel shows its no_profile view with an empty list.
+wait_screen title_screen
++43 wake
++45 confirm
+
+wait_screen main_screen
++43 wake
++45 down
++75 down
++120 confirm
+
+# Row 0: turn fitness mode on, then three downs to `playlists`.
+wait_screen fitness_screen
++43 wake
++45 confirm
++105 down
++135 down
++165 down
++210 confirm
+
+# Playlist list (fresh profile): 0 playlist_custom header, 1 playlist_create,
+# 2 playlist_era header, 3 1970s_dynamic_playlist.  Confirm shows the options
+# list, whose row 0 is playlist_play.
+wait_screen song_select_playlist_screen
++43 wake
++45 down
++75 down
++105 down
++150 confirm
++270 confirm
