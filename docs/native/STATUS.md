@@ -148,7 +148,7 @@ so no `tutorial_battle_screen_*` intervenes, and run under `DC3_FAST_TIME`
 nothing to photograph. With camera frames (`np-media`, 2026-11-13) a two-performer
 battle takes its final-pose photo and the results screen reveals it, but the card
 shows only its "DC3" backing: the snapshot is alpha 0 and the photo materials blend
-by source alpha. On the engine branch `np-media` (`e1d2137`; series also in
+by source alpha. On the engine branch `np-media` (`094b0a2`; series also in
 `~/tmp/np-media-engine.patch`) a TexRenderer's clear reaches its target, as
 `DxRnd::Clear` does, and the card shows both performers. Not landed (PLAN
 P-4); party winner team photos not reached.
