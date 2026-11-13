@@ -18,7 +18,11 @@
 #include <cstring>
 #include <string>
 #include <vector>
-#include <malloc.h>
+#ifdef __APPLE__
+#include <malloc/malloc.h> // malloc_size
+#else
+#include <malloc.h> // malloc_usable_size
+#endif
 #include <unistd.h>
 
 #include "utl/TextStream.h"
@@ -218,7 +222,11 @@ void MemTrackerHashChild() {
     alarm(30);
     MemTracker *t = new MemTracker(0, 64);
     const size_t need = (size_t)t->mHashTable->Size() * sizeof(AllocInfo *);
+#ifdef __APPLE__
+    const size_t have = malloc_size(t->mHashMem);
+#else
     const size_t have = malloc_usable_size(t->mHashMem);
+#endif
     if (have < need) {
         fprintf(stderr, "hash table needs %zu bytes, mHashMem holds %zu\n", need, have);
         _exit(2);
