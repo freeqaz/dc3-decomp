@@ -2052,6 +2052,8 @@ if(BUILD_TESTS)
         tests/test_native_twoplayer.cpp
         tests/test_native_pose_socket.cpp
         tests/test_native_tree_paths.cpp
+        tests/test_movie_audio.cpp
+        tests/test_texrenderer_clear.cpp
         tests/test_native_gesture_menus.cpp
         tests/test_native_audioseek.cpp
         tests/test_native_notables.cpp

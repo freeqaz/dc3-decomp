@@ -128,14 +128,41 @@ replaces Bink entirely.
   when not building with Emscripten (`if(ENABLE_FFMPEG AND NOT EMSCRIPTEN)`) and defines `HX_FFMPEG`.
 - **Video:** `BinkMovieSys::CreateMovieImpl()` in `src/system/moviebink/BinkMovieSys.cpp` returns
   `new FFmpegMovieImpl()` under `#ifdef HX_FFMPEG`, else `BinkMovieImpl`. Bink SDK init in that file
-  is guarded `#ifndef HX_FFMPEG`. Linked implementation:
-  `../milo-native-engine/src/platform/FFmpegMovieImpl.cpp`. The DC3-local
-  `native/src/platform/FFmpegMovieImpl.cpp` differs from it, and both are compiled as list items;
-  which definition wins is not verified here.
-- **Preview audio:** `FFmpegAudioReader` (`../milo-native-engine/src/platform/FFmpegAudioReader.cpp`)
+  is guarded `#ifndef HX_FFMPEG`. The definition that runs is the engine's
+  `../milo-native-engine/src/platform/FFmpegMovieImpl.cpp`. DC3's own copy was deleted when the
+  pin moved to `4e738fe` (H-5). The movie-sound work below is on the engine branch `np-media`
+  (private clone `/home/free/tmp/claude-1000/np-media-engine`, commit `1d5174f`). It is not
+  landed yet, and `MovieAudio.*` compiles only against an engine that has it
+  (`MILO_MOVIE_AUDIO_SOURCE`).
+- **Movie sound (G-15, `np-media`).** The image plays a movie's sound through Bink's own XAudio2
+  output (`BinkSetSoundSystem(BinkOpenXAudio2)`, `BinkMovieSys_Xbox.cpp`), so it is the movie's
+  clock. `BinkMovieImpl::BeginFromFile(path, volume, noSound, loop, preload, fillWidth, track, …)`:
+  the third argument turns sound off (`BinkSetSoundOnOff(!noSound)`), the fourth loops, and a
+  non-zero `track` selects Bink sound track `track - 1` (`set_bink_track` overrides it). `TexMovie`
+  passes sound on, its own `loop`, track 1 (or its localization track); `MoviePanel` passes
+  `!audio`, `loop`, `preload`, `fillWidth` and its language. Natively `FFmpegMovieImpl` does the
+  same: the selected track (the n-th audio stream of the file; `intro.bik` carries 15, one per
+  language) is decoded, resampled to the device rate with libswresample and fed to a
+  `MovieAudioSource` on the engine mixer. That source places samples at timeline positions, so a
+  main-thread stall costs a dropout, not a lasting offset, and its played-frame count is the
+  movie's clock: the picture shows frame `clock / msPerFrame + 1`. Without an audio device
+  (headless, no `MILO_AUDIO`), with no track, or with `noSound`, the clock is wall time less time
+  paused. `Movie::Poll`'s fader level reaches the source through `SetVolume(dB)` (clamped to
+  `[0, 1]`, as Bink's `[0, 0x8000]`). Before this the sound track was never opened and the
+  second flag (`noSound`) was read as `loop`, so song previews never looped.
+  A song preview's sound is that track: `SongPreview::PrepareSong` opens no song stream when the
+  preview `.bik` exists.
+  Measured end to end (headless, `MILO_AUDIO=1 MILO_AUDIO_BACKEND=null DC3_DUMP_AUDIO=…`): the
+  intro's English track is in the device output from 1.07 s; 2 s windows from 2 s to 26 s
+  cross-correlate with the file's track at offset 0 and coefficient 1.0000 (gain 0.794, -2 dB;
+  inferred to be the fader group, not traced); the whole intro closes with `3655168 frames played (3655168 with sound,
+  0 silent), 0 dropped late, picture at frame 2484` (all of its frames).
+  Tests: `MovieAudio.*`, `MovieAudioSourceRing.*` (`native/tests/test_movie_audio.cpp`).
+- **Stream audio:** `FFmpegAudioReader` (`../milo-native-engine/src/platform/FFmpegAudioReader.cpp`)
   replaces `BinkReader` as the `"bink"` stream decoder.
 - **Web:** there is no FFmpeg. `native/src/platform/WebMovieImpl.cpp` rewrites a `.bik` path to
-  `.webm` and plays it through the browser's decoder. The offline `.bik` -> `.webm` conversion is
+  `.webm` and plays it through the browser's decoder. **Open:** it still reads the third argument
+  (`noSound`) as `loop` and the fourth as `noSound`, the mapping desktop had before G-15. The offline `.bik` -> `.webm` conversion is
   described in [native/web/VIDEO_ASSETS.md](../../../native/web/VIDEO_ASSETS.md)
   (`scripts/web/transcode_bink.py`, `scripts/web/transcode_bik.sh`).
 
@@ -145,6 +172,7 @@ replaces Bink entirely.
 |---|---|---|
 | `BinkFFmpeg.*` (OpenBikFile, DecodeFirstVideoFrame, DecodeAudioTrack, SeekAndDecode) | `native/tests/test_bink_ffmpeg.cpp` | `MILO_TEST_BIK` |
 | `FFmpegIntegration.*`, `FFmpegMovieImplError.BadFile` | `native/tests/test_bink_integration.cpp` | `MILO_TEST_BIK` |
+| `MovieAudio.*` (the track is the file's, sample-exact; `noSound`; loop is the 4th flag; localized track; picture follows the sound clock; fader volume), `MovieAudioSourceRing.*` | `native/tests/test_movie_audio.cpp` | game assets; an engine with `MILO_MOVIE_AUDIO_SOURCE` |
 | Audio device / receiver / synth tests | `native/tests/test_audio.cpp` | audio device for some; `MILO_TEST_BIK` for the bik cases |
 | Mid-song seek: `VorbisReader::DoRawSeek` re-keys AES-CTR; the counter word must land little-endian on a little-endian host | `native/tests/test_native_audioseek.cpp` | game assets (see the file header) |
 

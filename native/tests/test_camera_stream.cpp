@@ -366,8 +366,9 @@ TEST(CameraMeshFilterTest, ThePlayerViewBoxDrawsOnlyWithAStream) {
     Publish(std::move(img));
     for (const char *m : box)
         EXPECT_FALSE(ShouldSkipMesh(m, nullptr)) << m << " hidden with a camera stream";
-    // not camera paths: unchanged either way
-    EXPECT_TRUE(ShouldSkipMesh("preview.mesh", nullptr));
+    // not camera paths: unchanged either way.  preview.mesh (the song-preview
+    // movie) draws now that the movie decodes on desktop (G-15, np-media).
+    EXPECT_FALSE(ShouldSkipMesh("preview.mesh", nullptr));
     EXPECT_TRUE(ShouldSkipMesh("pose_flash_p0.mesh", nullptr));
     EXPECT_TRUE(ShouldSkipMesh("grid_80by60_cube.mesh", nullptr));
     for (const char *m : frame)
@@ -375,5 +376,6 @@ TEST(CameraMeshFilterTest, ThePlayerViewBoxDrawsOnlyWithAStream) {
     Stop();
     for (const char *m : box)
         EXPECT_TRUE(ShouldSkipMesh(m, nullptr)) << m << " drawn after the stream stopped";
+    EXPECT_FALSE(ShouldSkipMesh("preview.mesh", nullptr)) << "preview.mesh hidden without a stream";
     ResetForTest();
 }
