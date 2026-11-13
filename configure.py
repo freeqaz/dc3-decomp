@@ -802,7 +802,21 @@ if args.mode == "configure":
         ]
         build_config["units"].extend(extra_units)
     generate_build_ninja(config, objects, build_config)
-    generate_objdiff_config(config, objects, build_config)
+    # link_glue is built and linked, but it is NOT declared to objdiff. It has
+    # no target object, so objdiff's report lists every code symbol in
+    # link_glue.obj as an unpaired 0 % row and adds it to the denominator
+    # (2026-11-13: 76 functions / 1,888 B). None of those rows can be a retail
+    # function: checked against ham_xbox_r.map, 28 names are absent from the
+    # image, 13 are the same name scored in its real unit, 25 are ICF-folded
+    # into a survivor scored in its real unit, and 10 fold into xdk/LIBCMT rows.
+    objdiff_build_config = build_config
+    if build_config is not None:
+        extra_names = {u["name"] for u in extra_units}
+        objdiff_build_config = dict(build_config)
+        objdiff_build_config["units"] = [
+            u for u in build_config["units"] if u["name"] not in extra_names
+        ]
+    generate_objdiff_config(config, objects, objdiff_build_config)
     generate_compile_commands(config, objects, build_config)
 elif args.mode == "progress":
     # Print progress and write progress.json
