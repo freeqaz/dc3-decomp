@@ -123,11 +123,16 @@ Tool-specific deep docs live in subdirectories:
 
 ## Native Port
 
-<!-- NP-DOCS: coordinator fills this section -->
-<!-- (living README / PLAN / STATUS / LINUX / MACOS / WEB / POSE_INPUT pages go
-     here; native/MACOS_ARM_BUILD.md, native/WEB.md,
-     native/SCORING_ENV_VARS.md and ../native/web/VIDEO_ASSETS.md are pending
-     fold-in and deliberately not listed yet) -->
+Start at [native/README.md](native/README.md).
+
+| Doc | Description |
+|-----|-------------|
+| [native/PLAN.md](native/PLAN.md) | **Roadmap to playable** — pose, gameplay, web, macOS and hygiene tracks; owner decisions pending |
+| [native/STATUS.md](native/STATUS.md) | Measured state, dated (2026-11-13): what plays, what crashes, test numbers |
+| [native/POSE_INPUT.md](native/POSE_INPUT.md) | Webcam → MediaPipe → Kinect skeleton → scoring; running without a camera; gaps |
+| [native/WEB.md](native/WEB.md) | Web build, measured runtime, Playwright scripts, deployment |
+| [native/MACOS.md](native/MACOS.md) | macOS: what broke since March, Linux-side proxies, bring-up order |
+| [native/SCORING_ENV_VARS.md](native/SCORING_ENV_VARS.md) | Scoring and pose env vars |
 
 The rows below are the reference and procedure pages that already exist. For
 debugging and the master env-var table see [debugging/native.md](debugging/native.md).
