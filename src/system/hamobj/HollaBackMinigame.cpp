@@ -511,6 +511,12 @@ void HollaBackMinigame::SetDefaultShot() {
     // boundary (`WorldDir *venue = TheHamDirector->GetVenueWorld();`) is
     // byte-identical; a `HamDirector *dir` copy there is -0.5pp and at function
     // scope -8.8pp.
+    // w-this-adjust (2026-11-13): POINTER AUDIT, NOT A BUG.  The four
+    // `addi r3, r31, 0x78/0x88/0x98/0xa8` (r31 = frame pointer: the Handle
+    // return DataNode temp) are on BOTH sides -- objdiff aligned ours one row
+    // later.  The ours-only instruction is `addi r30, r11, TheHamDirector@l`,
+    // the w28-a anchor.  Handle's receiver is the same vbase-converted
+    // TheHamDirector on both sides.  98.1 / equal 195, diff_arg 15, ins 4.
     RndPropAnim *anim = TheHamDirector->GetVenueWorld()->Find<RndPropAnim>(
         "bid_start_character_faded_out.anim", true
     );
