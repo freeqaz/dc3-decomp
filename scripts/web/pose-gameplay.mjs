@@ -36,8 +36,12 @@
 // DetectFrac is taken at all, on desktop either). --no-select-difficulty keeps the
 // old Enter-only driver (lands on Beginner) while still asserting the requested
 // difficulty: it is the sabotage control and must exit 1.
-import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync, appendFileSync } from 'fs';
+//
+//   node scripts/web/pose-gameplay.mjs --recheck DIR [--difficulty X]
+// re-applies the check to a finished run's DIR/console.jsonl + summary.json with
+// no browser -- for sabotage-testing the check itself, and for judging runs
+// recorded before it existed.
+import { mkdirSync, writeFileSync, appendFileSync, readFileSync } from 'fs';
 
 const argv = process.argv.slice(2);
 const arg = (k, d) => { const i = argv.indexOf('--' + k); return i >= 0 ? argv[i + 1] : d; };
@@ -51,6 +55,57 @@ const DIFFS = ['beginner', 'easy', 'medium', 'expert']; // seldiff list order on
 const difficulty = arg('difficulty', 'easy');
 if (!DIFFS.includes(difficulty)) { console.error(`--difficulty must be one of ${DIFFS.join('|')}`); process.exit(2); }
 const selectDifficulty = !argv.includes('--no-select-difficulty');
+
+// One probe line: MoveDir.cpp Dc3DetectFracProbe. Branch names carry hyphens
+// (no-move-key, async-empty-range) -- a \w+ branch pattern silently drops them.
+const DETECT_RE = /DC3 DETECTFRAC\[\d+\] p=(\d) beat=(-?\d+) keys=(\d+) branch=([\w-]+) .*frac=([-\d.naif]+)(?: diff=(\w+))?/i;
+const parseDetect = (text, t) => {
+    const d = text.match(DETECT_RE);
+    return d ? { t, p: +d[1], beat: +d[2], keys: +d[3], branch: d[4], frac: parseFloat(d[5]), diff: d[6] || null } : null;
+};
+// The regression check (see the header): does DetectFrac agree with the difficulty?
+function checkDetect(detect, want, result) {
+    const p0All = detect.filter((d) => d.p === 0);
+    const fr = p0All.filter((d) => d.branch === 'ham2' && Number.isFinite(d.frac)).map((d) => d.frac);
+    const nan = p0All.filter((d) => !Number.isFinite(d.frac)).length;
+    const branches = p0All.reduce((m, d) => ((m[d.branch] = (m[d.branch] || 0) + 1), m), {});
+    const engine = [...new Set(p0All.map((d) => d.diff).filter(Boolean))];
+    const fails = [];
+    const reachedGame = /^left_gameplay_/.test(result);
+    if (!p0All.length) fails.push('no DC3 DETECTFRAC lines for player 0 (probe off, or no gameplay)');
+    if (p0All.length && !engine.length) fails.push('probe lines carry no diff= field (engine predates the probe change)');
+    if (engine.length && (engine.length !== 1 || engine[0] !== want)) fails.push(`engine played difficulty ${engine.join(',')}, requested ${want}`);
+    if (want === 'beginner') {
+        const other = p0All.filter((d) => d.branch !== 'no-move-key').length;
+        if (other) fails.push(`Beginner should have no move keys, but ${other} p0 samples took another branch`);
+    } else {
+        if (!fr.length) fails.push(`no ham2 DetectFrac samples for player 0 on ${want} (branches: ${JSON.stringify(branches)})`);
+        if (nan) fails.push(`${nan} non-finite DetectFrac samples`);
+    }
+    const stats = { n: fr.length, mean: fr.length ? fr.reduce((a, b) => a + b, 0) / fr.length : null,
+                    min: fr.length ? Math.min(...fr) : null, max: fr.length ? Math.max(...fr) : null, nan, samples: p0All.length, branches };
+    return { pass: reachedGame && !fails.length, reachedGame, fails, engine, stats,
+             line: reachedGame ? (fails.length ? `CHECK FAIL: ${fails.join('; ')}` : 'CHECK PASS') : `CHECK FAIL: song not played through (${result})`,
+             code: !reachedGame ? 2 : fails.length ? 1 : 0 };
+}
+
+const recheck = arg('recheck', null);
+if (recheck) {
+    const sm = JSON.parse(readFileSync(`${recheck}/summary.json`, 'utf8'));
+    const det = [];
+    for (const l of readFileSync(`${recheck}/console.jsonl`, 'utf8').split('\n')) {
+        if (!l) continue;
+        const e = JSON.parse(l);
+        const d = parseDetect(e.text, e.t);
+        if (d) det.push(d);
+    }
+    const c = checkDetect(det, difficulty, sm.result);
+    console.log(`RECHECK ${recheck} difficulty=${difficulty} result=${sm.result} engine=${c.engine.join(',') || '?'} p0 samples=${c.stats.samples} branches=${JSON.stringify(c.stats.branches)} ham2 n=${c.stats.n} mean=${c.stats.mean && c.stats.mean.toFixed(4)}`);
+    console.log(c.line);
+    process.exit(c.code);
+}
+
+const { chromium } = await import('playwright');
 mkdirSync(out, { recursive: true });
 
 const t0 = Date.now();
@@ -93,8 +148,8 @@ page.on('console', (m) => {
     appendFileSync(logf, JSON.stringify(e) + '\n');
     const mm = e.text.match(/will enter '([^']+)'/);
     if (mm) { screens.push({ t: e.t, screen: mm[1] }); console.log(`[${e.t}s] SCREEN ${mm[1]}`); }
-    const d = e.text.match(/DC3 DETECTFRAC\[\d+\] p=(\d) beat=(-?\d+) keys=(\d+) branch=(\w+) .*frac=([-\d.naif]+)(?: diff=(\w+))?/i);
-    if (d) detect.push({ t: e.t, p: +d[1], beat: +d[2], keys: +d[3], branch: d[4], frac: parseFloat(d[5]), diff: d[6] || null });
+    const d = parseDetect(e.text, e.t);
+    if (d) detect.push(d);
     const mp = e.text.match(/move_passed #(\d+) player=(\d) frac=([-\d.naif]+)/i);
     if (mp) movePassed.push({ t: e.t, n: +mp[1], p: +mp[2], frac: parseFloat(mp[3]) });
     if (/DC3 POSE|dc3-pose/.test(e.text)) { poseLog.push(e); console.log(`[${e.t}s] ${e.text.slice(0, 160)}`); }
@@ -194,10 +249,7 @@ await sampler;
 // Score: the last engine-side reading taken while in gameplay.
 const inGameSamples = samples.filter((s) => s.screen === 'game_screen' && s.game && s.game.players);
 const last = inGameSamples.length ? inGameSamples[inGameSamples.length - 1] : null;
-const p0All = detect.filter((d) => d.p === 0);
-const p0 = p0All.filter((d) => d.branch === 'ham2' && Number.isFinite(d.frac));
-const fr = p0.map((d) => d.frac);
-const mean = fr.length ? fr.reduce((a, b) => a + b, 0) / fr.length : null;
+const chk = checkDetect(detect, difficulty, result);
 const ratings = [];
 for (const s of inGameSamples) { const r = s.game.players[0].rating; if (r && (!ratings.length || ratings[ratings.length - 1] !== r)) ratings.push(r); }
 const pageLast = [...samples].reverse().find((s) => s.page);
@@ -207,32 +259,17 @@ const summary = {
     gameSecondsTracked: inGameSamples.filter((s) => s.game.players[0].tracked).length,
     gameSeconds: inGameSamples.length,
     difficultyRequested: difficulty, difficultySelected: selectDifficulty,
-    difficultyEngine: [...new Set(p0All.map((d) => d.diff).filter(Boolean))],
-    detectFracP0: { n: fr.length, mean, min: fr.length ? Math.min(...fr) : null, max: fr.length ? Math.max(...fr) : null, nan: detect.filter((d) => d.p === 0 && !Number.isFinite(d.frac)).length,
-                    samples: p0All.length, branches: p0All.reduce((m, d) => ((m[d.branch] = (m[d.branch] || 0) + 1), m), {}) },
+    difficultyEngine: chk.engine,
+    detectFracP0: chk.stats,
     ratingChanges: ratings,
     movePassed: movePassed.slice(0, 12),
     pagePose: pageLast ? pageLast.page : null,
     wasmMBMax: Math.max(...samples.map((s) => s.wasmMB || 0)),
     screens, samples, detect,
 };
-// The regression check (see the header): does DetectFrac agree with the difficulty?
-const fails = [];
-const reachedGame = /^left_gameplay_/.test(result);
-if (!p0All.length) fails.push('no DC3 DETECTFRAC lines for player 0 (probe off, or no gameplay)');
-const engDiffs = summary.difficultyEngine;
-if (p0All.length && !engDiffs.length) fails.push('probe lines carry no diff= field (engine predates the probe change)');
-if (engDiffs.length && (engDiffs.length !== 1 || engDiffs[0] !== difficulty)) fails.push(`engine played difficulty ${engDiffs.join(',')}, requested ${difficulty}`);
-if (difficulty === 'beginner') {
-    const other = p0All.filter((d) => d.branch !== 'no-move-key').length;
-    if (other) fails.push(`Beginner should have no move keys, but ${other} p0 samples took another branch`);
-} else {
-    if (!fr.length) fails.push(`no ham2 DetectFrac samples for player 0 on ${difficulty} (branches: ${JSON.stringify(summary.detectFracP0.branches)})`);
-    if (summary.detectFracP0.nan) fails.push(`${summary.detectFracP0.nan} non-finite DetectFrac samples`);
-}
-summary.check = { pass: reachedGame && !fails.length, reachedGame, fails };
+summary.check = { pass: chk.pass, reachedGame: chk.reachedGame, fails: chk.fails };
 writeFileSync(`${out}/summary.json`, JSON.stringify(summary, null, 1));
-console.log(`RESULT ${result} camera=${camera} difficulty=${difficulty}${selectDifficulty ? '' : '(not selected)'} engine=${engDiffs.join(',') || '?'} score=${summary.finalScoreP0} detectFrac(p0) n=${fr.length} mean=${mean && mean.toFixed(4)} min=${summary.detectFracP0.min} max=${summary.detectFracP0.max} branches=${JSON.stringify(summary.detectFracP0.branches)} ratings=${ratings.join('>')} tracked ${summary.gameSecondsTracked}/${summary.gameSeconds}s wasmMax=${summary.wasmMBMax}MB errors=${errors.length}`);
-console.log(summary.check.pass ? 'CHECK PASS' : `CHECK FAIL: ${reachedGame ? fails.join('; ') : `song not played through (${result})`}`);
+console.log(`RESULT ${result} camera=${camera} difficulty=${difficulty}${selectDifficulty ? '' : '(not selected)'} engine=${chk.engine.join(',') || '?'} score=${summary.finalScoreP0} detectFrac(p0) n=${chk.stats.n} mean=${chk.stats.mean && chk.stats.mean.toFixed(4)} min=${chk.stats.min} max=${chk.stats.max} branches=${JSON.stringify(chk.stats.branches)} ratings=${ratings.join('>')} tracked ${summary.gameSecondsTracked}/${summary.gameSeconds}s wasmMax=${summary.wasmMBMax}MB errors=${errors.length}`);
+console.log(chk.line);
 try { await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 5000))]); } catch {}
-process.exit(!reachedGame ? 2 : fails.length ? 1 : 0);
+process.exit(chk.code);
