@@ -66,31 +66,7 @@ BEGIN_LOADS(CharSleeve)
     bs >> mInertia >> mGravity >> mStiffness >> mRange >> mNegLength >> mPosLength;
 END_LOADS
 
-// w26-f10 stop note.  Canonical 100.0, fuzzy 99.795: ten `diff_arg` rows, all
-// commutative operand order, and in all ten we emit the image's two operands
-// reversed (55 and 139 `fadds` on `absed + mPosLength`, 235 and 403 the `fmadds`
-// of the inlined ScaleAdd/ScaleAddEq, 323 and 330 two products of the first
-// Normalize(tf90.m.z), 453/454/456/460 four of the second).
-//
-// Not a class rule, and not the 8.8 base-binding lever.  The same expressions
-// occur again in this one function with the OPPOSITE order and score equal:
-// `absed + mPosLength` at ClampEq's upper bound is equal while the other two
-// sites are charged, and of the six products in Normalize two are charged in
-// the first copy and four in the second.  So the operand keys are the per-site
-// temp sids of C2RS-BRIDGE 8.7 lever 3, not a property of these spellings.
-//
-// Measured on this row, all with nsearch (per-target, exact for src/system):
-//   const float &posLength = mPosLength;  used at one / all three sites
-//                                           99.754 (worse)
-//   const Vector3 &mx / &mz before Cross     99.774 (worse)
-//   const Vector3 &pv2 = ...WorldXfm().v     99.755 (worse)
-//   const Vector3 &pmx2 over the whole
-//     mTopSleeve block                       92.846 (much worse)
-// The CalcError lever (name a single-use subexpression so it changes leaf
-// class) has no target here: every charged operand is already a leaf, and
-// naming either side of `absed + mPosLength` only moves the sids.  What is
-// left is an id-budget question -- how many temps the image mints before this
-// block -- of the kind 8.9 describes, and no source spelling tried moves it.
+// Lane history (25 lines moved): docs/decomp/notes/system/char/CharSleeve.md
 void CharSleeve::Poll() {
     auto _tmp1 = mSleeve->TransParent();
     if (mSleeve && _tmp1) {

@@ -176,11 +176,7 @@ bool CharLipSyncDriver::SetLipSync(CharLipSync *sync) {
         && (streq(sync->Name(), "player1_cam.lipsync")
             || streq(sync->Name(), "player2_cam.lipsync")
             || streq(sync->Name(), "dancer_face.lipsync"))) {
-        // w14-b: a guarded delete, not RELEASE(). The image clears the member
-        // only inside the taken arm (beq skips the `stw r29, 0x94(r30)` at
-        // 0x823B9158) and homes the old pointer at 0x50(r31) for the deleting
-        // dtor; RELEASE's unconditional `x = null` merges the store below the
-        // test. Same behaviour either way. 98.22 -> 100.
+        // Lane history (5 lines moved): docs/decomp/notes/system/char/CharLipSyncDriver.md
         if (mOverridePlayback) {
             delete mOverridePlayback;
             mOverridePlayback = nullptr;
@@ -315,43 +311,10 @@ void CharLipSyncDriver::UpdatePlayback(CharLipSync::PlayBack *pb, float weight, 
                 if (curWeight < 0.0f) {
                     MILO_FAIL("weight = %f", curWeight);
                 }
-                // w19-c (96.505 -> 100 canonical): the image re-tests after the
-                // fail and zeroes on a BRANCH (fcmpu f31,f30 / bge / fmr f31,f30).
-                // Written with the constant on the LEFT, MSVC no longer threads
-                // this test into the fail test above (w13-c measured
-                // `if (curWeight < 0) curWeight = 0;` at 95.1 for exactly that).
-                // One branch-target row remains: our first `bge` skips straight
-                // past the re-test, the image's lands on it.  Same instructions
-                // on the value path, so NaN behaves as the image does.  Max()
-                // (one fsel) was 96.505; std::max 96.8 with a +0x10 frame.
-                // w25-gh: the remaining row is jump threading.  og-dc3's
-                // `MILO_ASSERT_FMT(curWeight >= 0, ...); if (curWeight < 0)
-                // curWeight = 0;` matches 103/103: the fail test then carries a
-                // GE condition in the IL, which c2 does not identify with the LT
-                // re-test, so the fail-skip lands on the re-test.  Rejected:
-                // on native (no fast-math) `>= 0` fails on a NaN weight, where
-                // the image's `bge` (fp:fast) skips the fail.  Every NaN-safe
-                // spelling probed is an LT/GT test and gets threaded (102/103):
-                // `!(w < 0)` assert, `0 > w` fail test with `w < 0` re-test,
-                // a 0.0 double literal, a `w <= 0 && w != 0` re-test; `w >= 0 ||
-                // w != w` and a nested GE/LT test add code (70/105).
-                // DECIDED 2026-11-05, owner delegated: do NOT take the GE form.
-                // Native correctness outranks one fuzzy row, so a NaN weight must
-                // not print FAIL on the port where the image ignores it. What is
-                // still open is a NaN-safe source form whose IL test is GE; none
-                // of the eight probed is one.
-                // w26-f14 (measured in this tree, exact): the og-dc3 form
-                // `MILO_ASSERT_FMT(curWeight >= 0.0f, "weight = %f", curWeight)`
-                // alone closes the row -- fuzzy 99.951454 -> 100.000000 with
-                // canonical 100.0 unchanged.  Not landed: GE is the only IL test
-                // that lands the fail-skip on the re-test, and under clang (no
-                // fast-math) `>=` fails on a NaN weight where the image's `bge`
-                // (fp:fast) skips the fail, so native would print FAIL: (and abort
-                // under MILO_FATAL_FAILS=1) on an input the image ignores.
-                // `!(curWeight < 0.0f)` is NaN-safe and reproduces 99.951454
-                // (LT in the IL, threaded).  This is a behaviour trade settled in
-                // favour of native correctness, not a compiler limit -- do not
-                // re-open it for the score without a NaN-safe GE form.
+                // Lane history (37 lines moved): docs/decomp/notes/system/char/CharLipSyncDriver.md
+                // > Native correctness outranks one fuzzy row, so a NaN weight must not
+                // > print FAIL on the port where the image ignores it. (w25-gh)
+                // > Verdicts: do not re-open (w26-f14)
                 if (0.0f > curWeight)
                     curWeight = 0.0f;
                 ScaleAddViseme(clip, curWeight);
@@ -568,11 +531,6 @@ void CharLipSyncDriver::ScaleAddViseme(CharClip *clip, float weight) {
         dVar2 = 0.0f;
     }
     length = clip->FrameToBeat(clip->FramesPerSec() * dVar2);
-    // BUG FIX (w19-x): the WEIGHT is the second argument and the trailing
-    // dframe is 0 -- image 0x823B6618/0x823B661C `fmr f3, f31` (f31 = 0.0f,
-    // loaded at 0x823B65C0) / `fmr f1, f30` (f30 = the weight, `fmr f30, f1`
-    // at 0x823B65AC) before the slot-1 ScaleAdd(CharClip *, float weight,
-    // float frame, float dframe) bctrl.  We passed (0, beat, weight), so every
-    // viseme was blended at weight zero.  RB3's ScaleAddViseme agrees.
+    // Lane history (6 lines moved): docs/decomp/notes/system/char/CharLipSyncDriver.md
     mBones.Ptr()->ScaleAdd(clip, weight, length, 0.0f);
 }

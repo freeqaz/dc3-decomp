@@ -61,11 +61,7 @@ void CharGuitarString::Poll() {
     const Vector3 &nutvec = mNut->WorldXfm().v;
     const Vector3 &bridgevec = mBridge->WorldXfm().v;
     const Transform &tf4 = mTarget->WorldXfm();
-    // w17-c: both differences spelled out at the call site in y, z, x order and
-    // the denominator written as the image's (y + z) + x; with Subtract() the
-    // load order could not follow (the w14-b note below measured parentheses
-    // alone at 87.9).  Found by a 36x8 non-PCH probe sweep: this is the only
-    // combination with zero diff rows.
+    // Lane history (5 lines moved): docs/decomp/notes/system/char/CharGuitarString.md
     Vector3 tmp;
     tmp.y = tf4.v.y - nutvec.y;
     tmp.z = tf4.v.z - nutvec.z;
@@ -74,12 +70,10 @@ void CharGuitarString::Poll() {
     tmp2.y = bridgevec.y - nutvec.y;
     tmp2.z = bridgevec.z - nutvec.z;
     tmp2.x = bridgevec.x - nutvec.x;
-    // w14-b: the numerator is the image's own association, (z + x) + y
-    // (fmuls z, fmadds x, fmadds y); Dot(tmp, tmp2) sums x, z, y. MSVC honours
-    // the parentheses, so this is the same float result the image computes.
-    // 98.65 -> 99.96. Residual (12 rows): the denominator, image (y + z) + x,
-    // ours (x + y) + z; spelling it with explicit parentheses in any order is
-    // 87.9 (MSVC re-schedules every load), LengthSquared/flat sum inert.
+    // Lane history (6 lines moved): docs/decomp/notes/system/char/CharGuitarString.md
+    // > Residual (12 rows): the denominator, image (y + z) + x, ours (x + y) + z;
+    // > spelling it with explicit parentheses in any order is 87.9 (MSVC re-schedules
+    // > every load), LengthSquared/flat sum inert. (w14-b)
     float clamped = Clamp(
         0.0f,
         1.0f,
