@@ -1,0 +1,48 @@
+# Options > Gameplay twice, then A/V > Kinect Tuner (G-12, G-16,
+# docs/native/PLAN.md)
+#
+# Options is main_screen's Y button (the help bar's "(Y) OPTIONS"), not a row.
+# options_screen: row 0 option_gameplay, row 1 av_settings.
+# options_gameplay_screen's provider is provider_no_voice.hnp (native
+# {speech_mgr is_speech_supportable} is 0, as on a console whose locale has no
+# speech): option_photo, option_freestyle, autosave, option_choosestorage, then
+# the native overlay's option_camera_blend and option_debug_panel.  Row 1
+# toggles freestyle.  The screen is left and entered again so a second `enter`
+# runs: the overlay must not append its rows twice.  Each visit selects one
+# row (a checkbox toggle) so HamNavList's select log reports numData for it;
+# the second select does not move the cursor, so it toggles whichever of
+# photo/freestyle the list re-opens on -- both are plain checkboxes.
+# options_av_screen: row 1 natal_troubleshooter, the Kinect Tuner.
+wait_screen main_screen
++43 wake
++90 y
+
+wait_screen options_screen
++43 wake
++90 confirm
+
+wait_screen options_gameplay_screen
++43 wake
++45 down
++90 confirm
++150 cancel
+
+wait_screen options_screen
++43 wake
++90 confirm
+
+wait_screen options_gameplay_screen
++43 wake
++90 confirm
++150 cancel
+
+wait_screen options_screen
++43 wake
++45 down
++90 confirm
+
+wait_screen options_av_screen
++43 wake
++45 down
++90 confirm
++150 cancel
