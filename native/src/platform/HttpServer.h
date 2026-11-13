@@ -13,6 +13,7 @@
 #include <condition_variable>
 #include <functional>
 #include <cstdint>
+#include <chrono>
 
 class HttpServer {
 public:
@@ -67,7 +68,8 @@ public:
     void ProcessCommands();
 
     // Called from main thread after EndDrawing — processes screenshot requests
-    void ProcessScreenshots();
+    void ProcessScreenshots();          // from WgpuRnd's frame-ready callback
+    void ProcessScreenshotsWithoutFrame(); // after EndDrawing: only when nothing renders
 
     // Phase 4: Notify current screen + frame from main loop (called each frame)
     void NotifyFrame(const char* screenName, int frame);
@@ -113,8 +115,8 @@ private:
     // Opaque pointer to httplib::Server (avoid header in .h)
     void* mServer = nullptr;
 
-    // Uptime tracking
-    float mStartTime = 0;
+    // Uptime tracking (wall clock; see /api/health)
+    std::chrono::steady_clock::time_point mStartTime;
 
     // Phase 4: Input injection
     struct InputEvent {

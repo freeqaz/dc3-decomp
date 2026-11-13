@@ -1303,7 +1303,10 @@ void App::RunWithoutDebugging() {
 
         TheRnd.EndDrawing();
 #ifdef DC3_HTTP_SERVER
-        if (TheHttpServer) TheHttpServer->ProcessScreenshots();
+        // Screenshots are read in the renderer's frame-ready callback (between
+        // the frame's submit and present, the only time a windowed frame is
+        // readable; PLAN H-13).  This answers them when nothing renders.
+        if (TheHttpServer) TheHttpServer->ProcessScreenshotsWithoutFrame();
 #endif
 
         frameCount++;
