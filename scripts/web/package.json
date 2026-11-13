@@ -1,0 +1,11 @@
+{
+  "name": "dc3-web-scripts",
+  "version": "0.1.0",
+  "description": "DC3 web port browser-automation scripts and the vendored pose-input runtime (MediaPipe tasks-vision).",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@mediapipe/tasks-vision": "1.0.0",
+    "playwright": "1.60.0"
+  }
+}
