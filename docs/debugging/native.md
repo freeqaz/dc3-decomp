@@ -293,6 +293,21 @@ The engine also keeps a classified registry of its own flags in
 | `DC3_SHOW_SPLASH` | shown | `0` skips the splash. Never shown on web | `src/App.cpp` |
 | `DC3_FAST_TIME` | unset | Presence. Song time advances per frame instead of on the wall clock (see [Fast Time Mode](#fast-time-mode)) | `src/lazer/game/LiveInput.cpp` |
 | `DC3_HEARTBEAT_S` | `60` | Seconds between `DC3_HEARTBEAT: uptime_s=… rss_kb=…` lines on stderr; `0` disables | `native/src/main_native.cpp` |
+| `DC3_TAG_MODALS` | desktop `0`, **web `1`** | Every `MILO_WARN`/`MILO_NOTIFY` (desktop also `MILO_FAIL`) printed as one `MILO_<KIND>: <msg>` line. Desktop: stderr, plus a backtrace for each new message. Web: the browser devtools console only (`console.warn`, not the page's console), each distinct message's first 5 repeats then every power of ten (W-9); `?env=DC3_TAG_MODALS=0` turns it off. Without it a notify at `notify_level` 1 goes to `cheat_display` and is never printed | `src/system/os/Debug.cpp` |
+
+### Stopping the engine (H-9)
+
+Every exit path writes one `DC3_EXIT: how=… detail=… code=…` line.
+
+| What | Result |
+|---|---|
+| Window close (window manager's close button, `WM_DELETE_WINDOW`) | loop ends: `how=main_loop_returned detail=window_closed`, rc 0 |
+| Window destroyed by another client (`xdotool windowclose`), or a `BadWindow` on it | loop ends before drawing: `detail=window_lost`, rc 0 (`native/src/platform/WindowLoss_X11.cpp`) |
+| `SIGTERM` / `SIGINT` / `SIGHUP` | a quit request: the loop ends at the next frame boundary, so a save being written in that frame completes; `detail=SIGTERM` (etc.), rc 128+sig. A second signal, or 5 s without reaching the boundary, stops at once (`how=terminating_signal`) |
+| `SIGQUIT`, a fatal signal | immediate, rc 128+sig |
+| `exit()` from anywhere (DTA `{exit}`, `Debug::Exit` → `XLaunchNewImage`, Xlib's default error handlers) | `how=exit_runtime` with exit()'s own code; the static destructors are skipped, as the main loop's return always did (they crash in `ObjDirPtr<ObjectDir>::operator=`) |
+
+Tests: `NativeExitTest.*` (runs its own Xvfb; no window manager needed).
 
 ### Input
 

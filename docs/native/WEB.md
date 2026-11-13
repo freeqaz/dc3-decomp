@@ -192,6 +192,17 @@ either (they use only `#dc3-canvas`, the console, `window.dc3FrameCount` and
 the pose globals). `scripts/web/page-states.mjs` checks both layouts and the
 error card (exit 1 if the player page shows any harness element).
 
+`MILO_NOTIFY` / `MILO_WARN` go to the browser devtools console only, as
+`console.warn` lines `MILO_<KIND>: <msg>` (W-9; on by default,
+`?env=DC3_TAG_MODALS=0` turns it off). They bypass `Module.print`, so neither
+the player page nor the `?dev` console shows them. Each distinct message prints
+its first 5 repeats, then at every power of ten with the count. On the boot
+route to the title a web run prints the same notifies as a desktop run with
+`DC3_TAG_MODALS=1`, plus one the desktop does not raise (`DataNode::Equal:
+DataNodes 0.00 and dance_battle ... are not compatible`, not yet traced).
+`scripts/web/notify-console.mjs` checks all of this (exit 1 on a build without
+the tap).
+
 ## Automated testing
 
 Scripts live in `scripts/web/` and share `scripts/web/lib/core.mjs`:
