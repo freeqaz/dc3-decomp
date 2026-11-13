@@ -82,16 +82,15 @@ if (mode === 'geometry') {
     });
     const page = await browser.newPage();
     page.on('console', (m) => { if (m.type() === 'error' || /dc3-pose/.test(m.text())) console.log('[page] ' + m.text()); });
-    await page.route(`${origin}/__parity/**`, (route) => {
-        const u = new URL(route.request().url());
-        const name = u.pathname.split('/').pop();
-        if (name === 'index.html') {
-            return route.fulfill({ contentType: 'text/html', headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' }, body: '<!doctype html><title>parity</title><body></body>' });
-        }
+    // The page sits at the server root so pose_input.js's relative pose/...
+    // URLs resolve exactly as they do from index.html.
+    await page.route(`${origin}/__parity.html*`, (route) => route.fulfill({ contentType: 'text/html', headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' }, body: '<!doctype html><title>parity</title><body></body>' }));
+    await page.route(`${origin}/__parity_frames/**`, (route) => {
+        const name = new URL(route.request().url()).pathname.split('/').pop();
         return route.fulfill({ contentType: 'image/png', headers: { 'Cross-Origin-Resource-Policy': 'same-origin' }, body: readFileSync(join(framesDir, name)) });
     });
     const q = new URLSearchParams({ pose: 'off', pose_model: arg('model', 'full'), pose_delegate: arg('delegate', 'CPU') });
-    await page.goto(`${origin}/__parity/index.html?${q}`);
+    await page.goto(`${origin}/__parity.html?${q}`);
     const t0 = Date.now();
     const out = await page.evaluate(async ({ frames }) => {
         window.__dc3PoseNoAutoInit = true;
@@ -101,7 +100,7 @@ if (mode === 'geometry') {
         const info = await ready;
         const results = [], timing = [];
         for (const fr of frames) {
-            const blob = await (await fetch('/__parity/' + fr.file)).blob();
+            const blob = await (await fetch('/__parity_frames/' + fr.file)).blob();
             const bmp = await createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
             const msg = await new Promise((res) => {
                 const h = (ev) => { if (ev.data.type === 'pose' || ev.data.type === 'error') { worker.removeEventListener('message', h); res(ev.data); } };
