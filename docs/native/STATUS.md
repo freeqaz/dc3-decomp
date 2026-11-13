@@ -57,14 +57,17 @@ not exist on web. macOS last ran in March and would not build today.
 ## macOS — see [MACOS.md](MACOS.md)
 
 Ran windowed on a real Mac in March 2026. Not built on a Mac since. Seven known
-breakages, five of them fixable from Linux. The Linux libc++ proxy build compiles
-873/874 files, links with zero undefined symbols, and reaches `game_screen`.
+breakages, five of them fixable from Linux; on branch `np-macprep` the
+Linux-fixable parts are done (engine half as patch files). The Linux libc++ proxy
+build (libc++ 23, generated shim, branch `np-macprep`) compiles every
+`dc3-native` TU, links, and plays: `ymca` flow to `game_screen`,
+`state=playing`, 8000-frame cap, exit 0.
 
 ## Build and CI health
 
 | Item | State |
 |---|---|
-| GitHub `native-build` workflow | Failed 36 of the last 40 runs at "Build native targets"; cause unknown (the log fetch was truncated) |
-| `wgpu-window-test` | Does not compile (since the gfx move to the engine) |
-| Dead dc3 renderer copies | `native/src/gfx/*`, `native/src/platform/{Rnd,Mesh,Tex,Part}_Wgpu.cpp` compile into no building target and have drifted from the engine |
+| GitHub `native-build` workflow | Failed 36 of the last 40 runs at "Build native targets". Build-step causes found and fixed on branch `np-macprep` (H-3, not pushed): on pre-GCC-15 runners a checked-in GCC-15 `stl_iterator.h` and a date-keyed `random_shuffle` shim, on 26.04 a nonexistent gtest-discovery cwd and an asset-less `HeadlessBootTest` crash. Still red after that: with no assets, 320 tests in 58 suites crash in the archive load (container replay) |
+| `wgpu-window-test` | Deleted on `np-macprep` (H-2); `ninja all` builds again |
+| Dead dc3 renderer copies | `native/src/gfx/*`, `native/src/platform/{Rnd,Mesh,Tex,Part}_Wgpu.cpp` deleted on `np-macprep` (H-1). Other dead copies remain in the `REMOVE_ITEM DC3_NATIVE_CORE_SOURCES_ENGINE` list |
 | HX_NATIVE footprint | 987 guard lines in 314 files (`grep -rc` over `src/`, conditional lines) |

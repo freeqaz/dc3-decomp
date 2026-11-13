@@ -21,26 +21,24 @@ Code paths below are repo-relative to dc3-decomp unless they start with
 - **dc3-web uses the same engine copies.** It has linked `milo-engine` since
   `2a51acd7e`; see the comment block above `set(DC3_WEB_CORE_SOURCES` in
   `native/CMakeLists.txt`.
-- **dc3's own copies are dead code. Do not edit them expecting an effect.**
-  That covers `native/src/gfx/*` and `native/src/platform/{Rnd,Mesh,Tex,Part}_Wgpu.cpp`,
-  `MaterialSetup.cpp`, `MeshGpuCache.cpp` and `TransparentQueue.cpp`. Measured
-  in `native/CMakeLists.txt`:
-  - The `src/platform/*` files are taken out of every engine-linking target by
-    `list(REMOVE_ITEM DC3_NATIVE_CORE_SOURCES_ENGINE ...)`.
-  - `DC3_NATIVE_SOURCES`, `DC3_GFX_SOURCES` and `DC3_WEB_GFX_SOURCES` are set
-    but never expanded. `grep -n 'DC3_NATIVE_SOURCES}\|DC3_GFX_SOURCES}\|DC3_WEB_GFX_SOURCES}' native/CMakeLists.txt`
-    prints nothing; the dc3-web source list even says
-    "DC3_WEB_GFX_SOURCES is unused".
-  - `DC3_GFX_CORE_SOURCES` (dc3's `src/gfx/GpuDevice.cpp` and `MetalSurface.mm`)
-    reaches only `wgpu-window-test`. That target has not built since
-    `GpuDevice.h` moved into the engine, per the comment near
-    `MILO_TEST_REQUIRED_TARGETS`.
-  - The copies have already drifted: dc3's `native/src/gfx/standard_wgsl.inc`
-    differs from the engine's (`cmp` reports a difference at line 23).
-- **One trap points back at a dead copy.**
+- **dc3's renderer copies are gone.** `native/src/gfx/*` and
+  `native/src/platform/{Rnd,Mesh,Tex,Part}_Wgpu.cpp` were deleted on
+  2026-11-13 (H-1), with the source lists that named them
+  (`DC3_NATIVE_SOURCES`, `DC3_GFX_CORE_SOURCES`, `DC3_GFX_SOURCES`,
+  `DC3_WEB_GFX_SOURCES`) and `wgpu-window-test`, the only target that compiled
+  any of them. No linked binary's defined-symbol set changed. Their stale
+  headers had been shadowing the engine's for every dc3 TU (`-I native/src`
+  precedes `-I <engine>/src`).
+- **Some dc3 copies are still dead. Do not edit them expecting an effect.**
+  `native/src/platform/MaterialSetup.cpp`, `MeshGpuCache.cpp`,
+  `TransparentQueue.cpp` and the rest of
+  `list(REMOVE_ITEM DC3_NATIVE_CORE_SOURCES_ENGINE ...)` in
+  `native/CMakeLists.txt` are taken out of every engine-linking target.
+- **One engine path still names the deleted copy.**
   `PipelineManager::ReloadShaders()` (`../milo-native-engine/src/gfx/PipelineManager.cpp`)
-  looks for `native/src/gfx/standard_wgsl.inc` on disk. It has no caller today,
-  but if it is ever wired up it will load dc3's stale copy. The shader that
+  looks for `native/src/gfx/standard_wgsl.inc` on disk. It has no caller today;
+  the file no longer exists, so if it is wired up it finds nothing instead of
+  loading a stale copy. The shader that
   actually runs is the engine's copy, `#include`d into `PipelineManager.cpp`.
 
 ## Shading model
