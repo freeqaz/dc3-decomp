@@ -12,9 +12,10 @@
 //
 // That is every photo the game takes: ui/augmented_photo.milo's
 // TexRenderer.rndtex has clear_buffer 1, clear_alpha 1, and all six of its
-// materials have alpha_write 0.  The results screen shows the snapshots through
-// result_photoshare_photo1..3.mat, blend kBlendSrcAlpha -- so a snapshot with
-// alpha 0 is an invisible photo.  WgpuRnd::Clear used to only remember the
+// materials pin alpha_write 0 with force_alpha_write 1, so the engine's
+// render-target alpha rule (engine 17d00b6) rightly leaves them alone.  The
+// results screen shows the snapshots through result_photoshare_photo1..3.mat,
+// blend kBlendSrcAlpha -- so a snapshot with alpha 0 is an invisible photo.  WgpuRnd::Clear used to only remember the
 // colour for the next frame pass, leaving every texture target at the
 // transparent black its pass was opened with: the snapshot target measured
 // alpha 0 everywhere (POSE_INPUT.md, Player on screen).
@@ -24,7 +25,8 @@
 // (MILO_READBACK_GPU_RENDER_TARGET, ~/tmp/np-media-engine.patch).
 //
 // Sabotage (np-media, scratch engine): WgpuRnd::Clear back to only storing the
-// colour -> both tests fail (alpha 0, colour 0).
+// colour -> both tests fail (alpha 0, colour 0), on engine fe22a2e too, i.e.
+// with the render-target alpha rule in place: 0 of 307200 texels opaque.
 
 #include "test_helpers.h"
 
@@ -37,6 +39,7 @@
 #include "rndobj/Cam.h"
 #include "rndobj/Dir.h"
 #include "rndobj/Group.h"
+#include "rndobj/Mat.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/Tex.h"
 #include "rndobj/TexRenderer.h"
@@ -141,6 +144,17 @@ TEST_F(TexRendererClearTest, TheAugmentedPhotoIsOpaque) {
     // The authored state this test is about.
     ASSERT_EQ(tr->Property("clear_buffer", true)->Int(), 1);
     ASSERT_FLOAT_EQ(tr->Property("clear_alpha", true)->Float(), 1.0f);
+    // Every material pins its alpha write off (force_alpha_write 1, alpha_write
+    // 0). In the image's SetColorWriteMask that keeps alpha unwritten even into a
+    // render target (mForceAlphaWrite ? mAlphaWrite : ... || Offscreen() ...),
+    // and the engine's DC3 shape honours it (MatPinsAlphaWrite). So the clear is
+    // the only thing that gives the photo its alpha.
+    int mats = 0;
+    for (ObjDirItr<RndMat> m(photo, true); m != nullptr; ++m, ++mats) {
+        EXPECT_EQ(m->Property("force_alpha_write", true)->Int(), 1) << m->Name();
+        EXPECT_EQ(m->Property("alpha_write", true)->Int(), 0) << m->Name();
+    }
+    EXPECT_EQ(mats, 6);
 
     RndTex *snapshot = NewTarget(640, 480);
     tr->SetProperty("output_texture", DataNode(snapshot));

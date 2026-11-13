@@ -868,11 +868,14 @@ StreamRenderer::DrawToTexture, HX_NATIVE body: compose on the CPU
   100% `name_check`; a rendered `DxTex` is A8R8G8B8 at any bpp). The engine's
   `WgpuRnd::Clear` only stored the colour for the next frame pass, so the snapshot kept
   the texture pass's transparent black, and `result_photoshare_photo1..3.mat` are
-  `kBlendSrcAlpha`: the photo was invisible. Measured, Dance Battle with two synthetic
+  `kBlendSrcAlpha`: the photo was invisible. The render-target alpha rule
+  (engine `17d00b6`) leaves these materials alone, as the image does: all six
+  set `force_alpha_write 1` with `alpha_write 0` (asserted in the test). On `fe22a2e`
+  with the clear disabled, 0 of 307200 texels are opaque. Measured, Dance Battle with two synthetic
   performers and `--frames 320x240` (GPU, `DC3_HTTP_PACE_FPS=30`, 1 snapshot):
   pinned engine — the results card shows only its "DC3" backing
   (`/home/free/tmp/claude-1000/np-media-photoA3/res/r_027_22s.png`); with
-  engine branch `np-media` (`094b0a2`; series also in `~/tmp/np-media-engine.patch`) — the two performers in colour over the dimmed
+  engine branch `np-media` (`c810e49`; series also in `~/tmp/np-media-engine.patch`) — the two performers in colour over the dimmed
   background (`…/np-media-photoB3/res/r_029_21s.png`). Guard:
   `TexRendererClearTest` (`native/tests/test_texrenderer_clear.cpp`, GPU; compiled
   only against an engine with the patch): 307200 of 307200 texels opaque with it,
@@ -1029,7 +1032,7 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
 | P-1 | **Crash on a motionless skeleton.** `RhythmDetector::AnalyzeData` divides by a variance that becomes zero → NaN → `SymbolKeys::SetFrame` segfault (`RhythmBattlePlayer::Poll`). A webcam trips it whenever joints are held (legs out of frame are held all song). | S–M | all |
 | P-2 | Never run against a live webcam. **No-camera part done** (`np-pose-desk`): fast failure + on-screen notice (above); camera request, capture timestamps, HFOV and the lost-camera exit unit-tested against a fake capture (`tests/test_pose_server.py`). Left: a real webcam session. | S | all |
 | P-3 | ~~Gesture menus~~ **Done (`np-gesture-menus`)**, see [Gesture menus](#gesture-menus). Left: a real person on a real webcam has not driven them; the depth image in the player box is P-4. | — | all |
-| P-4 | Player on screen. **Silhouette done** (`np-player-view`): protocol v3 / `dc3_camera_push` carry the picture and a person mask, a `LiveCameraInput` stand-in feeds the decompiled `StreamRenderer`, and the cursor and gameplay boxes draw the player ([Player on screen](#player-on-screen-p-4)). Photos root-caused (`np-media`): the snapshot's alpha is its TexRenderer's clear, which the engine dropped; fix in engine branch `np-media` (`094b0a2`; series also in `~/tmp/np-media-engine.patch`), not landed. Left: that engine change, `DepthBuffer3D`'s draw, the `pose_flash` entries (not camera), a live webcam. | M | all |
+| P-4 | Player on screen. **Silhouette done** (`np-player-view`): protocol v3 / `dc3_camera_push` carry the picture and a person mask, a `LiveCameraInput` stand-in feeds the decompiled `StreamRenderer`, and the cursor and gameplay boxes draw the player ([Player on screen](#player-on-screen-p-4)). Photos root-caused (`np-media`): the snapshot's alpha is its TexRenderer's clear, which the engine dropped; fix in engine branch `np-media` (`c810e49`; series also in `~/tmp/np-media-engine.patch`), not landed. Left: that engine change, `DepthBuffer3D`'s draw, the `pose_flash` entries (not camera), a live webcam. | M | all |
 | P-5 | ~~Tests~~ **Done** (`np-pose-desk`): ctests `PoseSocketReaderTest`, `PoseCocoMappingTest`, `PoseSensorSlotTest` (no GPU, no game data); keypoint fixture + `PoseFixture.Python`; the gate runs the whole song and judges means, final scores and per-move distances (above). Open: standing still out-scores a different dance (P-7). | — | all |
 | P-6 | ~~Remove the dead ncnn/YOLO path~~ **Done** (`np-pose-desk`). | — | all |
 | P-7 | Scoring believability. **Answered** (`np-scoring`, [above](#scoring-believability-p-7-np-scoring)): the leniency is the original's. Real Kinect data (UTD-MHAD) scores like our inputs, and the scoring code is 100% matched. Added: the 30 Hz in-process performer + matrix, and the `DC3_POSE_LATENCY_MS` knob. **Video calibration** (`np-video-calib`, [above](#video-calibration-np-video-calib-2026-11-13)): 16 story-mode songs from a stream, replayed at Medium against the original's own results cards, 1162 = 1162 moves. Perfect+awesome 0.91 vs 0.96, but perfect 0.54 vs 0.79; score 74% of the original's (78% with a 10° camera-pitch correction). Still-body jitter ~1.7 mm (VIDEO mode). A causal One Euro filter costs 13–26% of the score, so there is no smoothing. Knob default stays unset: a recording cannot measure a live pipeline, and the score curve is flat over ±50 ms. Left: a live webcam's latency from `pose_server.py`'s capture stamps (P-2); camera-pitch auto-levelling (whole-body lean +6.9° ± 1.4° over the reference on this camera); the perfect/awesome gap (arms carry the limb error). | S | all |

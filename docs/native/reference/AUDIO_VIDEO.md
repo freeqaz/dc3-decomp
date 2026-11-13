@@ -131,7 +131,7 @@ replaces Bink entirely.
   is guarded `#ifndef HX_FFMPEG`. The definition that runs is the engine's
   `../milo-native-engine/src/platform/FFmpegMovieImpl.cpp`. DC3's own copy was deleted when the
   pin moved to `4e738fe` (H-5). The movie-sound work below is on the engine branch `np-media`
-  (private clone `/home/free/tmp/claude-1000/np-media-engine`, commit `9b14712`). It is not
+  (private clone `/home/free/tmp/claude-1000/np-media-engine`, commit `1d5174f`). It is not
   landed yet, and `MovieAudio.*` compiles only against an engine that has it
   (`MILO_MOVIE_AUDIO_SOURCE`).
 - **Movie sound (G-15, `np-media`).** The image plays a movie's sound through Bink's own XAudio2
