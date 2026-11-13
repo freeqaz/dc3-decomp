@@ -5,7 +5,7 @@
 // (which plays each song to the results on desktop).
 //
 //   node scripts/web/song-sweep.mjs --port 8438 --order SONG_ORDER.json --out DIR
-//        [--songs iceicebaby,indaclub] [--seconds 30] [--timeout 300]
+//        [--songs iceicebaby,indaclub] [--seconds 30] [--timeout 300] [--gap 400]
 //
 // SONG_ORDER.json is what native_song_sweep.py's discovery run writes
 // (<out>/song_order.json: the song-select rows as the game lists them and the
@@ -32,6 +32,10 @@ const port = +arg('port', 8438);
 const outRoot = arg('out', '/tmp/dc3-web-song-sweep');
 const seconds = +arg('seconds', 30);
 const timeoutS = +arg('timeout', 300);
+// ms between song-select ArrowDowns.  At 400 a press is occasionally dropped
+// while the list scrolls (chingaling, 40 downs: landed 1 and 2 rows short);
+// the picked song is checked against the game's select line either way.
+const gapMs = +arg('gap', 400);
 const order = JSON.parse(readFileSync(arg('order'), 'utf8'));
 const entry = order.entry_index;
 let songs = order.rows.filter(([, s, hdr]) => !hdr && s !== 'playlists' && s !== 'random_song');
@@ -119,7 +123,7 @@ async function playOne(index, song) {
             if (!seen(target)) throw new Error(`never reached ${target} (current ${cur()})`);
         }
         await new Promise((r) => setTimeout(r, 3000));
-        for (let i = 0; i < res.downs; i++) { await press('ArrowDown'); await new Promise((r) => setTimeout(r, 400)); }
+        for (let i = 0; i < res.downs; i++) { await press('ArrowDown'); await new Promise((r) => setTimeout(r, gapMs)); }
         await new Promise((r) => setTimeout(r, 1000));
         await press('Enter');
         const b2 = screens.length;
