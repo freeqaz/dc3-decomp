@@ -799,12 +799,10 @@ void RhythmBattle::OnBeat() {
         b22 = true;
         mBattleStarted = true;
         onMeasure = false;
-        if (mCommandLabel) {
+        if (mCommandLabel)
             mCommandLabel->SetTextToken(gNullStr);
-        }
-        if (mIntroLine2Label) {
+        if (mIntroLine2Label)
             mIntroLine2Label->SetTextToken(gNullStr);
-        }
         mCommandLabel = nullptr;
         mIntroLine2Label = nullptr;
         mPlayerOne->SetActive(true);
@@ -890,19 +888,16 @@ void RhythmBattle::OnBeat() {
                     }
                 }
                 static bool autojack = OptionBool("autojack", false);
-                if (zoneActive && autojack) {
+                if (zoneActive && autojack)
                     f48 = 1;
-                }
                 if (f48 > 0.70f) {
                     RhythmBattlePlayer *jacker = mPlayerOne;
                     RhythmBattlePlayer *jackee = mPlayerTwo;
                     if (jacker->InTheZone() && jackee->InTheZone()) {
-                        if (jacker->GetScore() > jackee->GetScore()) {
+                        if (jacker->GetScore() > jackee->GetScore())
                             jackee = jacker;
-                        }
-                    } else if (jacker->InTheZone()) {
+                    } else if (jacker->InTheZone())
                         jackee = jacker;
-                    }
                     MILO_ASSERT_IF(jackee->InTheZone(), 0x398)
                     b40 = true;
                     mJackCooldown = 4;
@@ -911,9 +906,8 @@ void RhythmBattle::OnBeat() {
                 mMoveRecorder->ClearRecording();
                 mMoveRecorder->ClearFrameScores();
                 mJackCooldown--;
-                if (mJackCooldown < 0) {
+                if (mJackCooldown < 0)
                     mJackCooldown = 0;
-                }
             }
             if (!mBattleFinished) {
                 mMoveRecorder->StartRecording();
