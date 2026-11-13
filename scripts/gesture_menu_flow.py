@@ -337,7 +337,7 @@ def run(a):
 
         f.wait_screen("title_screen", timeout=180, settle=1.5)
         f.shot("title")
-        f.pick("title_screen_menu", expect_screen="main_screen", timeout=120)
+        f.pick("title_screen_menu", expect_screen="main_screen", timeout=30)
         f.shot("main")
         f.pick("gameplay", expect_screen="choose_mode_screen")
         f.pick("perform", expect_screen="song_select_screen")
