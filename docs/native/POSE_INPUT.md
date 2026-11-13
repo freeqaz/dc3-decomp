@@ -90,6 +90,15 @@ working directory when `/proc/self/exe` resolution fails.
 
 ## Measured scoring (Better Off Alone, 25k frames, GPU, pre-2026-11-13)
 
+> **Caveat (P-7, `np-scoring`).** These rows came from a socket performer that sent
+> one skeleton per *game* frame. Scoring keeps each node's best error over every
+> player frame inside a ±0.23 s window, so more frames per song second means more
+> chances to match. Under `DC3_FAST_TIME` that is 120 frames per song second; a
+> Kinect delivers 30. With the same noise, Better Off Alone Easy rates 77/77
+> perfect at 120 Hz, 75/77 at 30 Hz and 52/77 at 15 Hz. "Noise + lateness is still
+> all perfect" is partly a frame-rate artefact. For the 30 Hz numbers, see
+> [Scoring believability](#scoring-believability-p-7-np-scoring).
+
 | Input | Ratings | p0 score at ≤100 s |
 |---|---|---|
 | perfect replay of the target | all perfect | 1,680,671 |
@@ -137,6 +146,203 @@ opening moves rate a standing body at 0.80–0.90, and the wrong dance draws
 16,995). It is a P-7 scoring-believability finding, not something to freeze into a gate. A
 positive control for that direction needs a recording of the song's own
 choreography; none exists in the repo.
+
+## Scoring believability (P-7, `np-scoring`)
+
+**Question.** Is the leniency the original game's, or does our input fail to look
+like a Kinect skeleton?
+
+**Answer.** The leniency is the original's. Two things in our input did diverge
+from what the original expects, and both are now handled or measurable:
+
+1. **Frame rate.** Old harnesses sent a skeleton every game frame, which made
+   scoring look more lenient than it is. This was an instrument problem, not a
+   game problem.
+2. **Latency.** `latency_offset` describes the Kinect's latency. A webcam has
+   its own, and `DC3_POSE_LATENCY_MS` now declares it.
+
+The other differences are real but small, or move scores both ways:
+
+- MediaPipe jitters 5–10× more than a Kinect.
+- MediaPipe arms come out ~15% shorter.
+
+**Why the scoring itself is not the cause:**
+
+- **The scoring code is the original's.** These are 100% matched under
+  `name_check`, with no `HX_NATIVE` shadow bodies:
+  - `DetectFrame::AddError`, `LimbPSNR`
+  - `HamMove::PSNRToDetectFrac`, `DetectRangePSNR`
+  - `MoveDetector::LastDetectFrac`, `MoveAsyncDetector::MoveRatingFrac`
+  - `Game::SetHamMove`, `MoveDir::LoadScoring`
+
+  Other facts about the original's scoring:
+  - Body size is normalised: `ErrorNode::NormBoneLengths` scales by summed bone
+    lengths.
+  - The per-move PSNR thresholds were set from recorded bad / awesome / perfect
+    distributions. `scoring.dta`'s ok and awesome thresholds sit at
+    bad_mean + bad_std. If the bad distribution is roughly normal, about one bad
+    performance in six reaches ok or better by design.
+- **A real Kinect stream gets the same treatment as ours.** UTD-MHAD (Kinect v1,
+  30 Hz, 862 trials) was replayed through the same path. It scores like our
+  synthetic and MediaPipe inputs. Standing still earns credit only on near-static
+  moves:
+  - On Better Off Alone that is `Roxbury_betteroffalone.move`, whose reference
+    moves 1.7 cm. A still body gets perfect or awesome there, depending on its
+    stance.
+  - The real Kinect still stream rates it awesome ×4.
+  - The Kinect frame baked into the image (`StubSkeletonData`), and a MediaPipe
+    still photo, rate it perfect ×4.
+  - Everywhere else a still body draws ok or bad.
+- **Still beating a different dance on Better Off Alone is the original's
+  behaviour.** The P-5 gate measured still 49,119 vs a different dance 33,662.
+  The same ordering happens with genuine Kinect data:
+  - The image's own Kinect frame, held still: 104k.
+  - Real Kinect motion that is not the choreography: 75k.
+
+  Four Roxbury perfects outweigh the scattered awesomes a wrong dance collects.
+  On The Hustle, which has no such move, every moving input beats every still
+  one. Dancing the *song's own* moves at the wrong time (26 beats off) beats
+  still everywhere: 187k vs 104k.
+- **Half tempo and 300 ms late still earning many perfect and awesome ratings is
+  the algorithm.** The ±0.23 s best-of window and the bone-normalised PSNR
+  forgive timing.
+
+### The matrix
+
+The matrix runs in-process and deterministically: `DC3_POSE_PERFORM`,
+`DC3_FAST_TIME`, 30 Hz, headless, no GPU, about 25 s per song. It runs each whole
+song to the end.
+
+- Cells read `perfect/awesome/ok/bad` · mean `LastDetectFrac` over rated moves ·
+  final score.
+- Re-running a cell gives identical ratings and DetectFrac. The final score varies
+  by ±5 points.
+
+| input | BOA Easy | BOA Expert | Hustle Easy | Hustle Expert |
+|---|---|---|---|---|
+| choreography, exact (synthetic) | 77/0/0/0 · 1.00 · 2,746k | 77/0/0/0 · 1.00 · 4,021k | 59/0/0/0 · 1.00 · 2,225k | 59/0/0/0 · 1.00 · 3,239k |
+| choreography + webcam-like noise¹ | 75/2/0/0 · 0.96 · 2,506k | 70/7/0/0 · 0.96 · 3,520k | 59/0/0/0 · 0.98 · 2,092k | 58/1/0/0 · 0.97 · 2,897k |
+| … + 150 ms late | 64/13/0/0 · 0.94 · 2,317k | 64/13/0/0 · 0.93 · 3,250k | 57/2/0/0 · 0.96 · 1,965k | 54/5/0/0 · 0.95 · 2,710k |
+| … + 150 ms late, `DC3_POSE_LATENCY_MS=250` | 76/1/0/0 · 0.97 · 2,502k | 71/6/0/0 · 0.96 · 3,545k | 58/1/0/0 · 0.98 · 2,063k | 58/1/0/0 · 0.97 · 2,932k |
+| choreography 300 ms late | 29/28/0/20 · 0.74 · 1,265k | 24/30/8/15 · 0.75 · 1,246k | 22/32/1/4 · 0.83 · 1,076k | 20/32/7/0 · 0.83 · 1,449k |
+| … 300 ms late, `DC3_POSE_LATENCY_MS=400` | 77/0/0/0 · 1.00 · 2,746k | 77/0/0/0 · 1.00 · 4,020k | 59/0/0/0 · 1.00 · 2,225k | 59/0/0/0 · 1.00 · 3,239k |
+| choreography at half tempo | 19/29/3/26 · 0.67 · 829k | 26/20/6/25 · 0.68 · 1,085k | 14/33/6/6 · 0.79 · 654k | 11/26/11/11 · 0.71 · 732k |
+| wrong choreography (same song, 26 beats off) | 10/3/12/52 · 0.45 · 187k | 8/6/8/55 · 0.45 · 258k | 1/11/15/32 · 0.48 · 130k | 1/6/10/42 · 0.44 · 149k |
+| **real Kinect** motion, not the choreography² | 0/13/2/62 · 0.38 · 75k | 0/10/2/65 · 0.38 · 85k | 2/6/13/38 · 0.46 · 90k | 2/3/12/42 · 0.43 · 99k |
+| MediaPipe, a different dance (`taye01` fixture) | 0/1/3/73 · 0.29 · 23k | 0/0/3/74 · 0.29 · 29k | 0/6/19/34 · 0.44 · 94k | 0/5/9/45 · 0.40 · 89k |
+| MediaPipe, a different dance (second woot clip) | 0/1/2/74 · 0.29 · 14k | 0/0/2/75 · 0.29 · 19k | 0/6/20/33 · 0.45 · 95k | 0/5/11/43 · 0.41 · 89k |
+| **real Kinect** standing still² | 0/4/4/69 · 0.31 · 33k | 0/3/1/73 · 0.31 · 20k | 0/0/34/25 · 0.46 · 87k | 0/0/21/38 · 0.38 · 72k |
+| the image's Kinect frame (`StubSkeletonData`), held | 4/0/4/69 · 0.30 · 104k | 3/0/1/73 · 0.30 · 45k | 0/0/30/29 · 0.45 · 77k | 0/0/18/41 · 0.36 · 63k |
+| MediaPipe on a still photo, held | 4/0/4/69 · 0.29 · 104k | 3/0/1/73 · 0.28 · 45k | 0/0/35/24 · 0.45 · 77k | 0/0/21/38 · 0.37 · 63k |
+| stand-in stick figure, held | 0/4/0/73 · 0.25 · 18k | 0/3/0/74 · 0.24 · 11k | 0/0/25/34 · 0.41 · 53k | 0/0/15/44 · 0.34 · 41k |
+
+¹ AR(1) Gaussian per joint per axis: σxy 3 cm, σz 8.5 cm, ρ 0.9 per 30 Hz frame
+(`DC3_POSE_PERFORM_NOISE=0.03,0.085,0.9,1`).
+
+² [UTD-MHAD](https://personal.utdallas.edu/~kehtar/UTD-MHAD.html) Kinect v1
+skeletons, downloaded and kept outside the repo:
+- "Still": the subject's quietest standing, facing, arms-down 20-frame window,
+  played forwards and backwards.
+- "Motion": subject 1's 25 standing actions, middle 60% of each, mean joint speed
+  0.65 m/s. For comparison, the MediaPipe dances run at 0.46–0.61 m/s.
+
+**MediaPipe on video of the correct choreography** (Better Off Alone Easy only).
+Source: the engine's own render, mirrored, measures 5–40.
+- Rendered: `DC3_POSE_PERFORM=choreo DC3_POSE_PERFORM_CLOCKLOG=1`, 640×360,
+  every 4th frame = 30 Hz of song.
+- Keyed to song time with `pose_replay_record.py --times`, lead dancer
+  (`--pick maxx`), untracked frames held.
+
+| input, same 36 measures | P/A/O/B | mean DetectFrac |
+|---|---|---|
+| MediaPipe on the render of the correct choreography | 2/8/5/21 | 0.52 |
+| synthetic choreography + noise¹ | 35/1/0/0 | 0.96 |
+| real Kinect motion, not the choreography | 0/8/1/27 | 0.41 |
+| held still (image frame / real Kinect) | 4/0/2/30 · 0/4/2/30 | 0.33 · 0.33 |
+| MediaPipe, a different dance | 0/0/3/33 | 0.29 |
+
+This is a lower bound, not a webcam measurement:
+- The gameplay camera cuts, frames the dancers at the knees and shows two of them.
+- MediaPipe found a person in only 1,008 of 2,125 frames.
+- Wrist speed reads 10 m/s, because tracking jumps between the two dancers.
+
+It does rank correctly. The next step is a real player on a real webcam (P-2).
+
+**Frame rate.** Same noisy choreography, Better Off Alone Easy:
+
+| performer rate | P/A/O/B | mean |
+|---|---|---|
+| 120 Hz (`DC3_FAST_TIME` game rate, the old harnesses) | 77/0/0/0 | 1.00 |
+| 30 Hz (Kinect) | 75/2/0/0 | 0.96 |
+| 15 Hz | 52/25/0/0 | 0.90 |
+
+The Hustle Easy shows the same pattern: 59/0, 59/0, 51/8. **The P-5 gate's
+`sensor` config also streams at game rate**, so its "perfect sensor" row is a
+120 Hz figure.
+
+### Our skeletons vs a Kinect's
+
+| quantity | Kinect v1 (UTD-MHAD, the image's frame) | MediaPipe (desktop backend) | matters? |
+|---|---|---|---|
+| rate | 30 Hz | camera rate. The performer and replays are fixed at 30 Hz of song time. | **yes**: see Frame rate above |
+| still-body jitter, median per axis | x 1.9 · y 1.8 · z 2.1 mm, hands z 7.8 mm | still photo + video noise: x 2.4–5.1 · y 2.7–5.8 · **z 9–19 mm**, hands z 10–24 mm | mild noise (z 9 mm) scores like a Kinect. Heavy noise (z 19 mm) raises a still body on The Hustle Easy from 0/0/34/25 (Kinect) to 0/19/21/19. |
+| bone lengths, median | upper arm 26.9, forearm 22.9, shoulders 33.2, torso 41.8 cm | upper arm 22–23, forearm 19, shoulders 32–33, torso 39–40 cm | scale is normalised (`NormBoneLengths`). Arm-to-torso proportion is ~10% short. |
+| depth | per-joint ToF/structured light | per-joint z from BlazePose world landmarks plus a pinhole root (`DC3_POSE_HFOV`) | the spread of hand z relative to the hip while moving is similar: Kinect UTD actions 21.7 cm, MediaPipe dances 19.8–21.1 cm |
+| inferred joints | Kinect tracking state | confidence ≥ 0.6 tracked, 0.3–0.6 inferred, < 0.3 held: ~1% inferred on clean video | small. UTD-MHAD carries no tracking state to compare against. |
+| coordinate frame | camera space, +y up, +z away, player-left = −x | same (`pose_mediapipe.py`) | — |
+
+The original consumes `NuiSkeletonGetNextFrame` directly
+(`SkeletonUpdate::Update`, tracking flags `2`). Nothing in the game calls
+`NuiTransformSmooth`. So there is no game-side smoothing we skip.
+
+### Latency: `DC3_POSE_LATENCY_MS`
+
+`MoveDir::PostUpdateFilters` scores the skeleton that arrives at song time S
+against the choreography at S − `latency_offset`. `latency_offset` is 100 ms in
+`config/scoring.dta`, tuned for the Kinect. `DC3_POSE_LATENCY_MS` replaces it with
+the player's own sensor latency, the same quantity in ms:
+
+- unset: the image's value
+- outside 0–1000: ignored, with a warning
+- hook: one `HX_NATIVE` call in `MoveDir::LoadScoring`, still 100.0% `name_check`
+
+Set it to `latency_offset` + (webcam pipeline latency − Kinect pipeline latency).
+For example, if capture + MediaPipe + socket is 150 ms slower than the Kinect, use
+`DC3_POSE_LATENCY_MS=250`. The matrix shows it closes the gap exactly:
+- 300 ms late + knob 400 = an on-time sensor, all four cells.
+- An on-time sensor declared 400 ms rates 33/16/2/26, like 300 ms late.
+
+**The default stays unset.** Nobody has measured a real webcam's latency yet
+(P-2). It can be read from the capture timestamps `pose_server.py` already puts on
+each packet.
+
+### Running the matrix
+
+```bash
+# One cell (headless, no GPU, ~25 s per whole song under DC3_FAST_TIME)
+DC3_POSE=external DC3_POSE_PERFORM=choreo DC3_MOVE_RATING_LOG=1 DC3_FAST_TIME=1 \
+  MILO_HEADLESS=1 MILO_NORENDER=1 DC3_FAST_BOOT=1 MILO_INPUT_SCRIPT=<flow> native/build/dc3-native
+#   modes: choreo | wrong | halftempo | still | stand | replay:FILE
+#   DC3_POSE_PERFORM_NOISE=sxy,sz,rho,seed  _LEAD_MS=-150  _HZ=30  _SHIFT_BEATS=26
+#   _REPLAY_SYNC=song  _CLOCKLOG=1 (render frame -> song time)
+# Per move: DC3 MOVE_RATING p=0 measure=12 move=Roxbury_betteroffalone.move rating=move_perfect lastfrac=0.9066 score=... diff=easy
+
+# A replay file (dc3-pose-fixture v1, same format as scripts/pose_fixture_record.py)
+.venv/bin/python scripts/pose_replay_record.py --video clip.mp4 --out clip.dc3pose
+.venv/bin/python scripts/pose_replay_record.py --frames SHOTS --times T.txt --mirror --pick maxx --out r.dc3pose
+```
+
+The performer (`native/src/platform/PosePerformer_Native.{h,cpp}`):
+- Publishes through `NativeSkeletonProvider::PublishFrame`, the seam the socket
+  and the web push use, so everything after it is the shipped path.
+- Sends 30 frames per second of song time, however fast the game loop runs.
+- Models a sensor with `scoring.dta`'s latency, so `DC3_POSE_LATENCY_MS` stays
+  measurable against it.
+- Reseeds its noise when the song clock restarts.
+- Publishes an untracked replay frame as 0 persons, as the socket does.
+
+Tests: `PosePerformerClockTest`, `PosePerformerReplayTest`, `SensorLatencyTest`
+(`native/tests/test_pose_scoring.cpp`). Each was sabotage-checked.
 
 ## Web
 
@@ -276,7 +482,7 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
 | P-4 | Player on screen: silhouette, camera preview, photo moments. `LiveCameraInput` is null natively; `StreamRenderer::DrawToTexture` and `DepthBuffer3D` are stubbed; `MeshFilter` hides `silhouette_guy*`, `preview.mesh`, `pose_flash*`. Needs webcam RGB + a segmentation mask. | L | all |
 | P-5 | ~~Tests~~ **Done** (`np-pose-desk`): ctests `PoseSocketReaderTest`, `PoseCocoMappingTest`, `PoseSensorSlotTest` (no GPU, no game data); keypoint fixture + `PoseFixture.Python`; the gate runs the whole song and judges means, final scores and per-move distances (above). Open: standing still out-scores a different dance (P-7). | — | all |
 | P-6 | ~~Remove the dead ncnn/YOLO path~~ **Done** (`np-pose-desk`). | — | all |
-| P-7 | Scoring believability: calibrate against a recorded human, expose a latency knob. | M | all |
+| P-7 | Scoring believability. **Answered** (`np-scoring`, [above](#scoring-believability-p-7-np-scoring)): the leniency is the original's. Real Kinect data (UTD-MHAD) scores like our inputs, and the scoring code is 100% matched. Added: the 30 Hz in-process performer + matrix, and the `DC3_POSE_LATENCY_MS` knob. Left: measure a real webcam's latency and jitter (P-2), then decide whether to set the knob's default and whether to add per-joint smoothing. | S | all |
 | P-8 | macOS: `/proc/self/exe` → `_NSGetExecutablePath`; camera permission goes to the Python child. See [MACOS.md](MACOS.md). | S–M | mac |
 | P-9 | ~~Web pose~~ **Done in `np-web-pose`** (see [Web](#web)). Left: never run on a real webcam/permission prompt; GPU delegate and the lite model unmeasured on an idle box; no camera preview inside the game (P-4). | — | web |
 
@@ -289,6 +495,10 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
   back (`native/tests/test_native_twoplayer.cpp` drives Battle with 2, 1, 0).
 - `pose_server.py --video` — real MediaPipe on a file; runs end to end but is not
   deterministic (wall-clock paced).
+- `DC3_POSE_PERFORM=choreo|wrong|halftempo|still|stand|replay:FILE` — the
+  in-process performer (P-7). No socket, no second process, 30 Hz of song time,
+  deterministic under `DC3_FAST_TIME`. It replays the same fixture files as
+  `synthetic_kinect.py --replay`. See [Scoring believability](#scoring-believability-p-7-np-scoring).
 - Deterministic keypoint fixture (P-5):
   `native/tests/data/pose/taye01_stand_dance.dc3pose` (139 KB, 240 frames,
   8 s) is MediaPipe's DC3-20 stream for

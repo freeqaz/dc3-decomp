@@ -24,6 +24,8 @@ public:
     // reference skeletons this detector scores the move against, one per
     // MoveFrame of Move().
     const std::vector<DancerFrame> &NativeDancerFrames() const { return mDancerFrames; }
+    // LastDetectFrac asserts an active detector (DC3_MOVE_RATING_LOG, Game.cpp).
+    bool NativeActive() const { return mActive; }
 #endif
     void Activate() {
         if (mActive != true) {

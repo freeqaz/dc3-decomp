@@ -1228,6 +1228,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/DataParser_Native.cpp
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/HttpServer.cpp>
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/PoseTarget_Native.cpp>
+    $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/PosePerformer_Native.cpp>  # DC3_POSE_PERFORM
     src/platform/DtaEvalSupport.cpp   # DTA eval state guard + result serializer (unit-tested)
     src/engine_stubs_generated.cpp
     src/StubTrace.cpp
@@ -1962,6 +1963,7 @@ if(BUILD_TESTS)
         tests/test_native_lifetime2.cpp
         tests/test_cascade_guards.cpp
         tests/test_native_posesynth.cpp
+        tests/test_pose_scoring.cpp
         tests/test_native_twoplayer.cpp
         tests/test_native_pose_socket.cpp
         tests/test_native_audioseek.cpp

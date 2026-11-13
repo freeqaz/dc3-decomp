@@ -1122,6 +1122,13 @@ void MoveDir::LoadScoring(const DataArray *cfg) {
     static Symbol latency_offset("latency_offset");
     cfg->FindData(latency_offset, sLatencySeconds);
     sLatencySeconds /= 1000;
+#ifdef HX_NATIVE
+    // PLATFORM: latency_offset is the Kinect pipeline's; a native sensor
+    // (webcam + pose model) may declare its own (DC3_POSE_LATENCY_MS,
+    // Skeleton_Native.cpp).  Unset, this is the identity.
+    extern float Dc3SensorLatencySeconds(float);
+    sLatencySeconds = Dc3SensorLatencySeconds(sLatencySeconds);
+#endif
     static Symbol plf_min_time_error("plf_min_time_error");
     sPLFMinTimeError = cfg->FindFloat(plf_min_time_error);
     ScoreUtlInit(cfg);

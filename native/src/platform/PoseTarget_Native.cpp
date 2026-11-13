@@ -197,6 +197,33 @@ bool MoveAt(int p, float beat, Vector3 *out, const HamMove *&move) {
 
 } // namespace
 
+// The choreography reference player `p` should be showing when the scorer
+// compares it with the frame scheduled at `refSecs` (see SOURCES above): fills
+// `out` and returns "choreo" or "move", or returns null ("none").  Also used by
+// the in-process performer (PosePerformer_Native.cpp).  Main thread only;
+// call once per game frame per player, it advances the move tracker.
+const char *Dc3PoseChoreoTarget(int p, float refSecs, Vector3 *out, const char **moveName) {
+    MoveDir *dir = TheHamDirector ? TheHamDirector->GetMoveDir() : nullptr;
+    if (moveName)
+        *moveName = "";
+    if (!dir || p < 0 || p > 1)
+        return nullptr;
+    TrackMove(p, dir->CurrentMove(p), TheTaskMgr.CurrentMeasure());
+    if (ChoreoAt(dir->NativePlayerDetectFrames(p), refSecs, out)) {
+        HamMove *cur = dir->CurrentMove(p);
+        if (cur && moveName)
+            *moveName = cur->Name();
+        return "choreo";
+    }
+    const HamMove *move = nullptr;
+    if (MoveAt(p, SecondsToBeat(refSecs), out, move)) {
+        if (moveName)
+            *moveName = move->Name();
+        return "move";
+    }
+    return nullptr;
+}
+
 // Builds the JSON body for GET /api/pose/target.  Main thread only.
 std::string Dc3PoseTargetJson(float leadMs) {
     std::string out = "{";
@@ -275,18 +302,9 @@ std::string Dc3PoseTargetJson(float leadMs) {
         if (dir)
             TrackMove(p, dir->CurrentMove(p), TheTaskMgr.CurrentMeasure());
         if (!strcmp(source, "none") && dir) {
-            if (ChoreoAt(dir->NativePlayerDetectFrames(p), refSecs, joints)) {
-                source = "choreo";
-                HamMove *cur = dir->CurrentMove(p);
-                if (cur)
-                    moveName = cur->Name();
-            } else {
-                const HamMove *move = nullptr;
-                if (MoveAt(p, SecondsToBeat(refSecs), joints, move)) {
-                    source = "move";
-                    moveName = move->Name();
-                }
-            }
+            const char *choreo = Dc3PoseChoreoTarget(p, refSecs, joints, &moveName);
+            if (choreo)
+                source = choreo;
         }
         snprintf(buf, sizeof(buf), "\"source\":\"%s\",\"move\":\"%s\",\"frames\":%d", source,
                  moveName, dir ? (int)dir->NativePlayerDetectFrames(p).size() : 0);

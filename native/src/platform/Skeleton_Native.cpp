@@ -8,6 +8,7 @@
 #include <vector>
 #include <sys/wait.h> // WIFEXITED & co. for DescribeServerExit (also on web)
 #ifndef __EMSCRIPTEN__
+#include "PosePerformer_Native.h"
 #include "platform/ExecutablePath.h"
 #include <unistd.h>
 #include <signal.h>
@@ -166,6 +167,48 @@ void NativeSkeletonProvider::ReportProblem(const Problem &p) {
     NativeNotice::Post(kPoseNoticeKey, p.text, p.brief, 20.0f);
 }
 
+// ---------------------------------------------------------------------------
+// Sensor latency.  MoveDir::LoadScoring reads `latency_offset` (100 ms,
+// config/scoring.dta) and compares the skeleton that arrives at song time S
+// with the choreography scheduled at S - latency_offset
+// (MoveDir::PostUpdateFilters).  That constant describes the KINECT's
+// pipeline -- capture to NuiSkeletonGetNextFrame -- plus the display/audio lag
+// it was tuned with.  A webcam + MediaPipe pipeline has its own latency, so
+// DC3_POSE_LATENCY_MS lets the player's sensor say what its latency is; it
+// replaces latency_offset (same units, same meaning).  Unset, the image's
+// value stands.  A value outside [0, 1000] ms is ignored with a warning.
+// Measured, docs/native/POSE_INPUT.md (Better Off Alone, Easy): a correct
+// performance 300 ms later than latency_offset assumes rates 29 perfect / 28
+// awesome / 20 bad of 77; the same with DC3_POSE_LATENCY_MS=400 rates 77/77
+// perfect, score identical to an on-time sensor.
+// ---------------------------------------------------------------------------
+static float sScoringDtaLatency = -1.0f;
+
+// latency_offset as config/scoring.dta gave it, before DC3_POSE_LATENCY_MS:
+// the latency of the sensor the game was tuned for.  The in-process performer
+// (PosePerformer_Native.cpp) is a sensor of exactly that latency, so the knob
+// has something to correct when it is told to be late.  Before LoadScoring has
+// run, the scorer's own value.
+float Dc3ScoringDtaLatencySeconds(float scorerSeconds) {
+    return sScoringDtaLatency >= 0.0f ? sScoringDtaLatency : scorerSeconds;
+}
+
+float Dc3SensorLatencySeconds(float scoringDtaSeconds) {
+    sScoringDtaLatency = scoringDtaSeconds;
+    const char *v = getenv("DC3_POSE_LATENCY_MS");
+    if (!v || !*v)
+        return scoringDtaSeconds;
+    char *end = nullptr;
+    double ms = strtod(v, &end);
+    if (end == v || ms < 0.0 || ms > 1000.0) {
+        fprintf(stderr, "DC3_POSE_LATENCY_MS='%s' ignored (want 0..1000 ms)\n", v);
+        return scoringDtaSeconds;
+    }
+    fprintf(stderr, "DC3_POSE_LATENCY_MS: scoring latency %.0f ms (latency_offset %.0f ms)\n", ms,
+            scoringDtaSeconds * 1000.0f);
+    return (float)(ms * 0.001);
+}
+
 #ifdef __EMSCRIPTEN__
 // Web: only the TRANSPORT is absent -- no pose_server.py to spawn, no Unix
 // socket to read.  Frames arrive from the page's camera + MediaPipe pipeline
@@ -227,6 +270,14 @@ bool NativeSkeletonProvider::Start(
     const std::string &socketPath, const std::string &modelPath, int cameraIndex
 ) {
     if (mRunning) return true;
+
+    // DC3_POSE_PERFORM: frames come from the in-process performer (Poll pumps
+    // it), not from a socket.  See PosePerformer_Native.h.
+    if (Dc3PosePerformerEnabled()) {
+        printf("DC3_POSE_PERFORM: in-process synthetic performer\n");
+        mRunning = true;
+        return true;
+    }
 
     mSocketPath = socketPath;
     mCameraIndex = cameraIndex;
@@ -557,6 +608,10 @@ void NativeSkeletonProvider::PublishFrame(
 }
 
 void NativeSkeletonProvider::Poll() {
+#ifndef __EMSCRIPTEN__
+    if (mRunning && mSocketFd < 0 && Dc3PosePerformerEnabled())
+        Dc3PosePerformerPump(this); // publishes; latched below
+#endif
     std::lock_guard<std::mutex> lock(mSwapMutex);
     memcpy(mPersons, mBack, sizeof(mPersons));
     mNumPersons = mNumPersonsBack;
