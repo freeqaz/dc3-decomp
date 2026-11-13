@@ -19,6 +19,8 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <string>
+#include <unistd.h> // getpid (default pose socket)
 
 // The native sensor.  On the 360, SkeletonUpdate (the image's skeleton hub:
 // history archive, Skeleton::Poll of six slots, the per-player binding, the
@@ -180,8 +182,16 @@ void GestureMgr_NativeInit() {
         if (!TheSkeletonProvider) {
             TheSkeletonProvider = new NativeSkeletonProvider();
 
+            // Default socket: the documented /tmp/dc3_pose.sock when attaching
+            // to a server someone else started (DC3_POSE_NO_SPAWN); per process
+            // when this engine spawns its own, since pose_server.py unlinks
+            // whatever is at its path -- a second windowed engine on the box
+            // took over the first one's socket (np-harness).
+            std::string defaultSocket = getenv("DC3_POSE_NO_SPAWN")
+                ? std::string("/tmp/dc3_pose.sock")
+                : "/tmp/dc3_pose_" + std::to_string((int)getpid()) + ".sock";
             const char *socketPath = getenv("DC3_POSE_SOCKET");
-            if (!socketPath) socketPath = "/tmp/dc3_pose.sock";
+            if (!socketPath) socketPath = defaultSocket.c_str();
 
             // MediaPipe BlazePose is the only backend: real per-joint depth
             // (protocol layout 1, DC3-20 in camera-space metres), Apache-2.0.
