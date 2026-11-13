@@ -99,6 +99,18 @@ output.
 
 ### The link-glue pseudo-unit (2026-08-19)
 
+⚠ **Superseded 2026-11-13: `configure.py` no longer declares `link_glue` to
+objdiff**, so it is out of `report.json` entirely (it is still built and
+linked). The "would hide real work" argument below does not survive a check
+against the retail map: the unit has no target object, so none of its rows can
+*be* a retail function. Of the 76 rows then present, 28 names are absent from
+`ham_xbox_r.map`, 13 are the same name scored in its real unit, 25 are ICF-folded
+into a survivor scored in its real unit (`FormatString::operator<<(float)` folds
+into `(double)` in MakeString, `HDCache::Flush` and `HolmesClientPrint` into
+`OnlyReturns`, all at 100 %), and 10 fold into xdk/LIBCMT rows. Authorable
+denominator 32,221 → 32,158; matched count unchanged. `dedup_glue_shadows()` in
+`progress_metrics.py` now finds nothing to drop, which is correct.
+
 `default/link_glue` is not a translation unit of the original binary. It holds
 the ALTERNATENAME scaffolding this repo invented so the link resolves, and every
 one of its 55 report rows scores 0 %.

@@ -904,12 +904,7 @@
         "mw_version": "X360/16.00.11886.00",
         "cflags": "base",
         "objects": {
-            "system/zlib/ZlibLicense.c": {
-                "status": "Matching",
-                "extra_cflags": [
-                    "/TP"
-                ]
-            },
+            "system/zlib/ZlibLicense.cpp": "Matching",
             "system/zlib/adler32.c": "Matching",
             "system/zlib/crc32.c": "Matching",
             "system/zlib/deflate.c": "Matching",
