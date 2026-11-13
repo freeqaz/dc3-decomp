@@ -25,7 +25,12 @@
 //               DC3_POSE_PERFORM_REPLAY_SYNC=song plays the frame for the
 //               reference time (as choreo), otherwise it loops on song time.
 // Perturbations, any mode:
-//   DC3_POSE_PERFORM_LEAD_MS  shift of the reference time (negative = late)
+//   DC3_POSE_PERFORM_LEAD_MS  shift of the reference time (negative = late).
+//                             The performer is a sensor with config/scoring.dta's
+//                             latency_offset (the Kinect's); DC3_POSE_LATENCY_MS
+//                             moves the scorer, not the performer, so
+//                             LEAD_MS=-300 + DC3_POSE_LATENCY_MS=400 is a late
+//                             sensor with its latency declared.
 //   DC3_POSE_PERFORM_NOISE    "sxy,sz,rho,seed": AR(1) Gaussian error per joint
 //                             per axis, metres, rho per 30 Hz frame
 //   DC3_POSE_PERFORM_HZ       frame rate in song time (default 30)

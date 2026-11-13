@@ -14,6 +14,7 @@
 #include <vector>
 
 const char *Dc3PoseChoreoTarget(int p, float refSecs, Vector3 *out, const char **moveName);
+float Dc3ScoringDtaLatencySeconds(float scorerSeconds);
 
 namespace Dc3PosePerformer {
 
@@ -263,7 +264,11 @@ void Dc3PosePerformerPump(NativeSkeletonProvider *provider) {
         memset(gState.err, 0, sizeof(gState.err));
     }
 
-    float refSecs = (float)song - MoveDir::NativeLatencySeconds() + gState.leadSecs;
+    // A sensor of the Kinect's latency (scoring.dta latency_offset), made late
+    // or early by LEAD_MS.  Deliberately NOT the scorer's latency: with
+    // DC3_POSE_LATENCY_MS set the two differ, and the knob must be measurable.
+    float scorerLatency = MoveDir::NativeLatencySeconds();
+    float refSecs = (float)song - Dc3ScoringDtaLatencySeconds(scorerLatency) + gState.leadSecs;
     Vector3 joints[kNumJoints];
     float conf[kNumJoints];
     for (int j = 0; j < kNumJoints; j++)

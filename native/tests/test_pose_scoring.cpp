@@ -29,6 +29,7 @@
 #include <vector>
 
 float Dc3SensorLatencySeconds(float scoringDtaSeconds);
+float Dc3ScoringDtaLatencySeconds(float scorerSeconds);
 
 namespace {
 
@@ -163,6 +164,10 @@ TEST(SensorLatencyTest, UnsetKeepsTheKinectValue) {
 TEST(SensorLatencyTest, TheSensorsOwnLatencyReplacesIt) {
     ScopedEnv e("DC3_POSE_LATENCY_MS", "180");
     EXPECT_FLOAT_EQ(Dc3SensorLatencySeconds(0.1f), 0.18f);
+    // ...for the scorer only: the performer keeps modelling the Kinect's 100 ms
+    // (otherwise it follows the knob and the knob can never be measured --
+    // it was, once: late300 with the knob at 400 scored as late300 without).
+    EXPECT_FLOAT_EQ(Dc3ScoringDtaLatencySeconds(0.18f), 0.1f);
 }
 
 TEST(SensorLatencyTest, NonsenseIsIgnored) {
