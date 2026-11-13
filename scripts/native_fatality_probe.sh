@@ -31,7 +31,8 @@
 # EndFatal, fatals_over.
 #
 # usage: scripts/native_fatality_probe.sh <dc3-native> <outdir> <port> [INJECT_BEAT] [extra harvest args]
-#   default INJECT_BEAT 200.  Needs the GPU (run outside the sandbox).
+#   default INJECT_BEAT 200.  <port> 0 = the engine binds a free one (recommended:
+#   a fixed port collides with any other run).  Needs the GPU (run outside the sandbox).
 set -euo pipefail
 bin=$1; out=$2; port=$3; inject=${4:-200}; shift 3
 if [ $# -gt 0 ]; then shift; fi

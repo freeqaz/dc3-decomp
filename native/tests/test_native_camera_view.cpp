@@ -43,11 +43,13 @@
 #include <netinet/in.h>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
 #include "platform/ExecutablePath.h"
+#include "engine_http_port.h"
 
 namespace {
 
@@ -70,28 +72,6 @@ bool Exists(const std::string &p) {
     return ::stat(p.c_str(), &st) == 0;
 }
 
-// Same scheme as test_native_twoplayer.cpp: 20000-29999, below the ephemeral
-// range, pid-spread, each candidate test-bound.
-int FreePort() {
-    for (int attempt = 0; attempt < 200; attempt++) {
-        int port = 20000 + (int)(((unsigned)getpid() * 41u + (unsigned)attempt * 103u) % 10000u);
-        int fd = socket(AF_INET, SOCK_STREAM, 0);
-        if (fd < 0)
-            return -1;
-        int one = 1;
-        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
-        sockaddr_in addr = {};
-        addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        addr.sin_port = htons((uint16_t)port);
-        bool ok = bind(fd, (sockaddr *)&addr, sizeof(addr)) == 0;
-        close(fd);
-        if (ok)
-            return port;
-    }
-    return -1;
-}
-
 std::string RunCapture(const std::string &cmd) {
     std::string out;
     FILE *p = popen(cmd.c_str(), "r");
@@ -109,6 +89,7 @@ struct ViewRun {
     std::string output; // engine log
     std::string driver; // DRIVER: lines
     std::string camera; // GET /api/camera?grid=32x24
+    std::string health; // GET /api/health, six times, one per line
     bool Entered(const char *screen) const {
         return output.find(std::string("Screen '") + screen + "' Enter") != std::string::npos;
     }
@@ -147,12 +128,6 @@ ViewRun RunToMainScreen(bool frames) {
     }
     mkdir((R + "/cache").c_str(), 0755);
     mkdir((R + "/saves").c_str(), 0755);
-    int port = FreePort();
-    if (port <= 0) {
-        r.setupError = "could not get a free loopback port";
-        return r;
-    }
-    std::string api = "http://127.0.0.1:" + std::to_string(port) + "/api";
     std::string sock = R + "/kinect.sock";
     std::string log = R + "/engine.log";
     std::ostringstream sh;
@@ -162,7 +137,7 @@ ViewRun RunToMainScreen(bool frames) {
        << "end=$((SECONDS+20)); until [ -S " << sock << " ] || [ $SECONDS -ge $end ]; do sleep 0.2; done; "
        << "[ -S " << sock << " ] || echo 'DRIVER: sensor socket never appeared'; "
        << "( MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1"
-       << " DC3_HTTP=1 DC3_HTTP_PORT=" << port << " MILO_MAX_FRAMES=0"
+       << EngineHttpPortShellEnv(R) << " MILO_MAX_FRAMES=0"
        << " DC3_CACHE_DIR=" << R << "/cache DC3_SAVE_DIR=" << R << "/saves"
        << " MILO_INPUT_SCRIPT=" << R << "/input.txt"
        << " DC3_POSE=external DC3_POSE_NO_SPAWN=1 DC3_POSE_SOCKET=" << sock
@@ -171,14 +146,17 @@ ViewRun RunToMainScreen(bool frames) {
        // the picture, not navigation
        << " DC3_CONTROLLER_MODE=forced"
        << " exec timeout 180 ./dc3-native > " << log << " 2>&1 ) & epid=$!; "
+       << EngineHttpApiShell(R, "epid", 120)
        << "end=$((SECONDS+120)); "
        << "until grep -aq \"Screen 'main_screen' Enter\" " << log
        << " 2>/dev/null || [ $SECONDS -ge $end ] || ! kill -0 $epid 2>/dev/null; do sleep 0.5; done; "
        // a few seconds of frames at main_screen, so the boxes have drawn
        << "sleep 4; "
        << "echo \"DRIVER: stop after ${SECONDS}s, engine alive=$(kill -0 $epid 2>/dev/null && echo 1 || echo 0)\"; "
-       << "echo \"CAMERA: $(curl -s -m 10 '" << api << "/camera?grid=" << kGridW << "x" << kGridH
-       << "')\"; "
+       << "echo \"CAMERA: $(curl -s -m 10 \"$api/camera?grid=" << kGridW << "x" << kGridH
+       << "\")\"; "
+       // which engine answered: compared with the pid in its DC3_EXIT line
+       << "for i in 1 2 3 4 5 6; do echo \"HEALTH: $(curl -s -m 5 \"$api/health\")\"; done; "
        << "kill $epid 2>/dev/null; sleep 1; kill -9 $epid 2>/dev/null; "
        << "kill $kpid 2>/dev/null; sleep 1; kill -9 $kpid 2>/dev/null; "
        << "cat " << log;
@@ -187,6 +165,8 @@ ViewRun RunToMainScreen(bool frames) {
     while (std::getline(all, line)) {
         if (!line.compare(0, 7, "DRIVER:"))
             r.driver += line + "\n";
+        else if (!line.compare(0, 7, "HEALTH:"))
+            r.health += line.substr(7) + "\n";
         else if (!line.compare(0, 7, "CAMERA:"))
             r.camera += line.substr(7);
         else
@@ -250,13 +230,21 @@ std::vector<std::string> ExpectedWireMask() {
     return rows;
 }
 
-std::string Dump(const ViewRun &r) {
+// pid in the name: a fixed name was shared by every concurrent run of the gate
+std::string Dump(const ViewRun &r, int copy = 0) {
     std::string path = "/tmp/claude-1000/cameraview_" +
-        std::string(::testing::UnitTest::GetInstance()->current_test_info()->name()) + ".log";
+        std::string(::testing::UnitTest::GetInstance()->current_test_info()->name()) + "_" +
+        std::to_string((int)getpid()) + (copy ? "_" + std::to_string(copy) : "") + ".log";
     std::ofstream f(path);
     if (f.is_open())
-        f << r.driver << "CAMERA: " << r.camera << "\n" << r.output;
+        f << r.driver << "CAMERA: " << r.camera << "\nHEALTH:\n" << r.health << r.output;
     return path;
+}
+
+// `"key":<int>` in `s` after `needle`, or -1.
+long IntAfter(const std::string &s, const char *needle) {
+    size_t at = s.find(needle);
+    return at == std::string::npos ? -1 : strtol(s.c_str() + at + strlen(needle), nullptr, 10);
 }
 
 class ViewFixture : public ::testing::Test {
@@ -269,6 +257,7 @@ protected:
 
 class CameraViewTest : public ViewFixture {};
 class NoCameraViewTest : public ViewFixture {};
+class ConcurrentFlowTest : public ViewFixture {};
 
 } // namespace
 
@@ -358,4 +347,53 @@ TEST_F(NoCameraViewTest, AV2SensorDrawsNoPlayerView) {
     EXPECT_EQ(Token(r.camera, "standIn"), "false") << r.camera;
     EXPECT_EQ(Token(r.camera, "uploads"), "0") << r.camera;
     EXPECT_EQ(r.output.find("stand-in attached"), std::string::npos) << where;
+}
+
+// Two copies of the same flow, started together, must each reach main_screen
+// and talk only to their own engine (np-harness).  Several lanes run the gate
+// on one box at once; GestureMenusTest once died because another process held
+// its port.  The old launchers chose the port themselves and passed it in
+// (FreePort here: a pid-derived candidate, probed by bind + close), so two
+// copies in one process got the SAME port, and a probe cannot stop a third
+// process taking the port before the engine binds it.  Now the engine binds
+// DC3_HTTP_PORT=0 and reports the port (engine_http_port.h).  The checks:
+//   * both reach main_screen with the camera live (the loser of a port fight
+//     exits 98 before it gets there);
+//   * different ports;
+//   * every GET /api/health answers with the pid in that run's own DC3_EXIT
+//     line.  This is what caught the engine's SO_REUSEPORT: two engines on one
+//     port both listened and the kernel split the requests between them.
+TEST_F(ConcurrentFlowTest, TwoCopiesOfAFlowRunAtOnce) {
+    ViewRun runs[2];
+    std::thread a([&] { runs[0] = RunToMainScreen(true); });
+    std::thread b([&] { runs[1] = RunToMainScreen(true); });
+    a.join();
+    b.join();
+    long ports[2] = {-1, -1};
+    for (int i = 0; i < 2; i++) {
+        ViewRun &r = runs[i];
+        ASSERT_TRUE(r.setupError.empty()) << "copy " << i << ": " << r.setupError;
+        std::string where = Dump(r, i + 1);
+        EXPECT_TRUE(r.Entered("main_screen"))
+            << "copy " << i << " never reached main_screen; " << r.driver << where;
+        EXPECT_EQ(Token(r.camera, "active"), "true")
+            << "copy " << i << ": " << r.camera.substr(0, 200) << " " << where;
+        ports[i] = IntAfter(r.output, "DC3_HTTP_PORT=");
+        EXPECT_GT(ports[i], 0) << "copy " << i << " bound no port; " << where;
+        size_t exitAt = r.output.find("DC3_EXIT: ");
+        long pid = exitAt == std::string::npos ? -1 : IntAfter(r.output.substr(exitAt), " pid=");
+        ASSERT_GT(pid, 0) << "copy " << i << ": no DC3_EXIT line with a pid; " << where;
+        std::string own = "\"pid\":" + std::to_string(pid) + "}";
+        int answers = 0, mine = 0;
+        std::istringstream in(r.health);
+        std::string line;
+        while (std::getline(in, line)) {
+            answers++;
+            mine += line.find(own) != std::string::npos;
+        }
+        EXPECT_EQ(answers, 6) << where;
+        EXPECT_EQ(mine, answers) << "copy " << i << ": /api/health answered by another engine "
+                                 << "(own pid " << pid << "):\n" << r.health << where;
+    }
+    EXPECT_NE(ports[0], ports[1]) << "both copies on one port";
 }

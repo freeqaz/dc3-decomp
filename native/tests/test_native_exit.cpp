@@ -267,6 +267,71 @@ TEST_F(NativeExitTest, DtaExitSkipsTheStaticDestructors) {
     EXPECT_TRUE(Contains(out, "DC3_EXIT: how=exit_runtime")) << Tail(out);
 }
 
+// np-harness: an HTTP port the engine cannot bind is a named exit (98, a FATAL
+// line naming the port, DC3_EXIT detail=http_port_in_use), not an abort() that
+// reads like any other crash.  The port is held by a plain listener, as by an
+// unrelated process.
+TEST_F(NativeExitTest, HttpPortInUseIsANamedExit) {
+    int holder = socket(AF_INET, SOCK_STREAM, 0);
+    ASSERT_GE(holder, 0);
+    sockaddr_in addr = {};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = 0;
+    ASSERT_EQ(bind(holder, (sockaddr *)&addr, sizeof(addr)), 0);
+    ASSERT_EQ(listen(holder, 1), 0);
+    socklen_t len = sizeof(addr);
+    ASSERT_EQ(getsockname(holder, (sockaddr *)&addr, &len), 0);
+    int port = ntohs(addr.sin_port);
+
+    Engine e;
+    Start(e, mRunDir, {"MILO_HEADLESS=1", "DC3_HTTP=1", "DC3_HTTP_PORT=" + std::to_string(port)});
+    bool exited = e.WaitExit(120);
+    close(holder);
+    std::string out = e.Output();
+    ASSERT_TRUE(exited) << "still running with its port taken\n" << Tail(out);
+    ExpectNoCrash(out);
+    ASSERT_TRUE(WIFEXITED(e.status)) << "not a named exit (signal?)\n" << Tail(out);
+    EXPECT_EQ(WEXITSTATUS(e.status), 98) << Tail(out);
+    std::string named = "FATAL - HTTP debug server: port " + std::to_string(port) +
+                        " already in use";
+    EXPECT_TRUE(Contains(out, named.c_str()))
+        << Tail(out);
+    EXPECT_TRUE(Contains(out, "DC3_EXIT: how=exit_runtime detail=http_port_in_use code=98"))
+        << Tail(out);
+}
+
+// np-harness: a second engine started on the first one's port exits 98 instead
+// of sharing it.  Before, cpp-httplib's default SO_REUSEPORT let both listen and
+// the kernel split the requests between them (measured: /api/health answered
+// alternately by two engines on 9290).  Also checks DC3_HTTP_PORT_FILE.
+TEST_F(NativeExitTest, SecondEngineOnAPortExitsInsteadOfSharing) {
+    std::string otherDir = MakeRunDir();
+    ASSERT_FALSE(otherDir.empty());
+    std::string portFile = mRunDir + "/http_port";
+    Engine first;
+    Start(first, mRunDir,
+          {"MILO_HEADLESS=1", "DC3_HTTP=1", "DC3_HTTP_PORT=0", "DC3_HTTP_PORT_FILE=" + portFile});
+    ASSERT_TRUE(first.WaitFor("DC3_HTTP_PORT=", 120)) << Tail(first.Output());
+    int port = atoi(ReadAll(portFile).c_str());
+    ASSERT_GT(port, 0) << "DC3_HTTP_PORT_FILE not written\n" << Tail(first.Output());
+    std::string line = "DC3_HTTP_PORT=" + std::to_string(port) + "\n";
+    EXPECT_TRUE(Contains(first.Output(), line.c_str()))
+        << "the port file disagrees with the engine's own line\n" << Tail(first.Output());
+
+    Engine second;
+    Start(second, otherDir,
+          {"MILO_HEADLESS=1", "DC3_HTTP=1", "DC3_HTTP_PORT=" + std::to_string(port)});
+    bool exited = second.WaitExit(120);
+    std::string out = second.Output();
+    ASSERT_TRUE(exited) << "the second engine is still running on port " << port
+                        << " -- the two share it\n" << Tail(out);
+    ASSERT_TRUE(WIFEXITED(second.status)) << Tail(out);
+    EXPECT_EQ(WEXITSTATUS(second.status), 98) << Tail(out);
+    EXPECT_TRUE(Contains(out, "detail=http_port_in_use")) << Tail(out);
+    EXPECT_FALSE(first.Poll()) << "the first engine died\n" << Tail(first.Output());
+}
+
 namespace {
 
 // A private X server. Skips (via `available`) when Xvfb is not installed.

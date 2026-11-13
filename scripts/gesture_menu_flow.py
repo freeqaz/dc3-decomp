@@ -42,7 +42,6 @@ import http.client
 import json
 import os
 import signal
-import socket
 import subprocess
 import sys
 import time
@@ -50,6 +49,7 @@ import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from synthetic_kinect import SyntheticKinect  # noqa: E402
+from engine_http_port import EnginePortError, engine_port_env, port_file, wait_for_port  # noqa: E402
 
 
 class FlowError(Exception):
@@ -266,24 +266,12 @@ def seed_all_tutorials_seen(cache_dir):
         fh.write(bytes(b))
 
 
-def free_port():
-    for _ in range(50):
-        s = socket.socket()
-        s.bind(("127.0.0.1", 0))
-        p = s.getsockname()[1]
-        s.close()
-        if 20000 <= p < 60000:
-            return p
-    return 0
-
-
 def run(a):
     os.makedirs(a.workdir, exist_ok=True)
     for d in ("cache", "saves"):
         os.makedirs(os.path.join(a.workdir, d), exist_ok=True)
     if a.all_tutorials_seen:
         seed_all_tutorials_seen(os.path.join(a.workdir, "cache"))
-    port = a.port or free_port()
     sock = os.path.join(a.workdir, "kinect.sock")
     engine_log = os.path.join(a.workdir, "engine.log")
     flow_log = open(os.path.join(a.workdir, "flow.log"), "w")
@@ -294,7 +282,7 @@ def run(a):
         env.pop(v, None)
     env.update({
         "MILO_HEADLESS": "1", "MILO_FATAL_FAILS": "0", "DC3_SHOW_SPLASH": "0",
-        "DC3_FAST_TIME": "1", "DC3_HTTP": "1", "DC3_HTTP_PORT": str(port),
+        "DC3_FAST_TIME": "1",
         "MILO_MAX_FRAMES": "0",
         # A frame window the performer can answer in (HttpServer.cpp PaceFrame);
         # unpaced, a GPU-less engine runs ~3000 fps and a swipe arrives as a
@@ -304,6 +292,8 @@ def run(a):
         "DC3_SAVE_DIR": os.path.join(a.workdir, "saves"),
     })
     env.update(SyntheticKinect.engine_env(sock))
+    # The engine binds its own port (scripts/engine_http_port.py); --port pins one.
+    env.update(engine_port_env(a.workdir, a.port))
     if a.gpu:
         env.pop("MILO_NORENDER", None)
         env["MILO_RENDER"] = "1"
@@ -321,10 +311,16 @@ def run(a):
                                 env=env, stdout=lf, stderr=subprocess.STDOUT,
                                 start_new_session=True)
     report = {"ok": False, "failed_at": None, "error": None, "steps": [],
-              "screens": [], "engine_log": engine_log, "port": port}
-    eng = Engine(f"http://127.0.0.1:{port}/api")
+              "screens": [], "engine_log": engine_log, "port": None}
+    eng = Engine("http://127.0.0.1:0/api")
     f = Flow(eng, k, flow_log, a.shots)
     try:
+        try:
+            port = wait_for_port(port_file(a.workdir), proc, timeout=120)
+        except EnginePortError as ex:
+            raise FlowError(str(ex))
+        report["port"] = port
+        eng = f.e = Engine(f"http://127.0.0.1:{port}/api")
         end = time.monotonic() + 120
         while eng.screen() is None:
             if proc.poll() is not None:
@@ -406,7 +402,8 @@ def main():
     ap.add_argument("--engine", required=True)
     ap.add_argument("--workdir", required=True)
     ap.add_argument("--report", required=True)
-    ap.add_argument("--port", type=int, default=0)
+    ap.add_argument("--port", type=int, default=0,
+                    help="pin the engine's HTTP port (default 0: the engine binds a free one)")
     ap.add_argument("--gpu", action="store_true", help="render (needed for --shots)")
     ap.add_argument("--gpu-lock", default=None, help="flock -s this file around the engine")
     ap.add_argument("--shots", default=None, help="screenshot directory (with --gpu)")
