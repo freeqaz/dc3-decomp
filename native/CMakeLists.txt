@@ -1551,30 +1551,48 @@ set_source_files_properties(
     PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 
 # ============================================================================
-# Web release/debug split (mirrors rb3's RB3_WEB_RELEASE). Default OFF = debug:
-# the engine helper's -O0 -g2 gives debug-friendly stack traces / DWARF, served
-# no-store. `scripts/web/build.sh --release` configures a SEPARATE
-# native/build-web-release/ dir with this ON, which appends -g0 to strip debug
-# info (the major size win) — served immutable + version-busted for fast reloads.
+# Web release/debug split (mirrors rb3's RB3_WEB_RELEASE), one build dir each
+# (scripts/web/build.sh):
+#   DC3_WEB_RELEASE=ON  -> native/build-web-release, deployed to release/ (the
+#       default page): -${DC3_WEB_OPT_LEVEL} (default O3), -g0, function names
+#       kept (--profiling-funcs, so a crash stack reads as C++ names). Served
+#       immutable + version-busted.
+#   DC3_WEB_RELEASE=OFF -> native/build-web, deployed to debug/ (?debug=true):
+#       -O0, linked -g2 (wasm function names; emcc keeps DWARF only at -g3).
+#       build.sh configures it CMAKE_BUILD_TYPE=Debug, so the engine library
+#       and imgui are unoptimised too. no-store.
 #
-# Order matters in emcc: later -O / -g override earlier ones, so we append to
-# both compile and link AFTER milo_engine_apply_web_target_options()'s -g2. We
-# keep its -sASSERTIONS=1 / -sSTACK_OVERFLOW_CHECK=2 in place (the matched-fork's
-# missing-stub abort hooks rely on them).
+# Both -O levels are set HERE, explicitly, on compile and link. They used to be
+# implied, and came out swapped (W-3, 2026-11-13): build.sh configured both dirs
+# with CMAKE_BUILD_TYPE=Release, whose -O3 sits at the front of every compile
+# and link line; release appended -O0 (the old DC3_WEB_OPT_LEVEL default) and
+# won, debug appended nothing and stayed -O3. emcc honours the LAST -O/-g, and
+# these target options come after both CMAKE_CXX_FLAGS_<CONFIG> and the engine
+# helper's -g2, so they win whatever build type a cache holds.
 #
-# DC3_WEB_OPT_LEVEL is opt-in: any -O>0 currently risks the matched-fork's
-# optimizer-driven exception-edge codegen (same brittleness rb3 documents), so
-# the default is O0 — i.e. -g0 strip only, the safe win. No --closure knob: dc3
-# has no pre-js abort-patcher to break (it uses the engine's missing_stubs.js).
+# Why O3 is now safe to ship (measured 2026-11-13, docs/native/WEB.md "Optimisation
+# level"): the -O0 default dated from 6298c017c, which copied rb3's caution
+# ("-O>0 risks the matched-fork") without a dc3 failure behind it. rb3's two
+# -O>0 faults do not reproduce here: (1) rb3's inline-discard (cross-TU calls
+# to `inline` bodies becoming undefined imports at -O>0) -- dc3's -O3 wasm has
+# 163 imports vs 166 at -O0, none new; (2) per-TU miscompiles -- a whole song
+# with webcam pose input plays at -O3 with no page error and scores like -O0.
+# Keep -sASSERTIONS=1 / -sSTACK_OVERFLOW_CHECK=2 from the engine helper (the
+# missing-stub hooks rely on them). No --closure: dc3 has no pre-js
+# abort-patcher to break (it uses the engine's missing_stubs.js).
 # ============================================================================
-option(DC3_WEB_RELEASE "Size-optimised web release build (strip debug info)" OFF)
-set(DC3_WEB_OPT_LEVEL "O0" CACHE STRING
-    "emcc -O level for dc3-web release builds (O0/Oz/Os/O3/O2/O1)")
-set_property(CACHE DC3_WEB_OPT_LEVEL PROPERTY STRINGS O0 Oz Os O3 O2 O1)
+option(DC3_WEB_RELEASE "Optimised web release build (-O3 -g0); OFF = -O0 debug build" OFF)
+set(DC3_WEB_OPT_LEVEL "O3" CACHE STRING
+    "emcc -O level for dc3-web release builds (O3/O2/Os/Oz/O1/O0)")
+set_property(CACHE DC3_WEB_OPT_LEVEL PROPERTY STRINGS O3 O2 Os Oz O1 O0)
 if(DC3_WEB_RELEASE)
-    message(STATUS "dc3-web: RELEASE strip + opt build (-${DC3_WEB_OPT_LEVEL} -g0)")
+    message(STATUS "dc3-web: release build (-${DC3_WEB_OPT_LEVEL} -g0, function names kept)")
     target_compile_options(dc3-web PRIVATE -${DC3_WEB_OPT_LEVEL} -g0)
-    target_link_options(dc3-web PRIVATE -${DC3_WEB_OPT_LEVEL} -g0)
+    target_link_options(dc3-web PRIVATE -${DC3_WEB_OPT_LEVEL} -g0 --profiling-funcs)
+else()
+    message(STATUS "dc3-web: debug build (-O0 -g2)")
+    target_compile_options(dc3-web PRIVATE -O0)
+    target_link_options(dc3-web PRIVATE -O0 -g2)
 endif()
 
 else() # NOT EMSCRIPTEN — native targets

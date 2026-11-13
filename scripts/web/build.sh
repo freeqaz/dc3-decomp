@@ -7,20 +7,23 @@
 #
 # DUAL BUILD: produces TWO deployable builds you switch between at runtime via a
 # URL param (?debug=true), each from its OWN cmake build dir + cmake config:
-#   - release/  — DC3_WEB_RELEASE=ON: debug-info stripped (-g0) for the size win,
-#                 brotli/gzip precompressed. Served `immutable` + version-busted
-#                 by server.py, so http://localhost:8420/ RELOADS ARE FAST (the
+#   - release/  — DC3_WEB_RELEASE=ON, CMAKE_BUILD_TYPE=Release: -O3 (--opt to
+#                 change), -g0 with function names kept, brotli/gzip
+#                 precompressed. Served `immutable` + version-busted by
+#                 server.py, so http://localhost:8420/ RELOADS ARE FAST (the
 #                 browser reuses the cached + already-compiled wasm).
-#   - debug/    — DC3_WEB_RELEASE=OFF: full -O0 -g2 wasm (DWARF), gzip only.
-#                 Served `no-store`. Loaded by http://localhost:8420/?debug=true.
+#   - debug/    — DC3_WEB_RELEASE=OFF, CMAKE_BUILD_TYPE=Debug: -O0, linked -g2
+#                 (function names), gzip only. Served `no-store`. Loaded by
+#                 http://localhost:8420/?debug=true.
+# (Until 2026-11-13 these were swapped: both dirs were configured Release, so
+# "debug" was -O3 and "release" -O0. docs/native/WEB.md, PLAN W-3.)
 #
 # Usage:
 #   scripts/web/build.sh                # build BOTH release + debug (default)
 #   scripts/web/build.sh --release      # release only
 #   scripts/web/build.sh --debug        # debug only (fast iteration loop)
 #   scripts/web/build.sh --reconfigure  # force a fresh cmake configure
-#   scripts/web/build.sh --opt Os       # higher -O for release (opt-in; -O>0 is
-#                                       # risky for the matched-fork — defaults O0)
+#   scripts/web/build.sh --opt O2       # release -O level (default O3)
 #
 # Output:
 #   native/build-web/         — emcc build dir for debug   (DC3_WEB_RELEASE=OFF)
@@ -41,7 +44,7 @@ DEPLOY_DIR="$NATIVE_DIR/web/build"  # pure deploy dir — what server.py serves
 
 BUILD_DEBUG=1
 BUILD_RELEASE=1
-OPT_LEVEL=""
+OPT_LEVEL="O3"   # release -O level; debug is always -O0
 FORCE_RECONFIGURE=0
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -51,7 +54,7 @@ while [ $# -gt 0 ]; do
         --reconfigure) FORCE_RECONFIGURE=1 ;;
         --opt)         shift; OPT_LEVEL="$1" ;;
         --opt=*)       OPT_LEVEL="${1#--opt=}" ;;
-        -h|--help)     sed -n '17,23p' "$0"; exit 0 ;;
+        -h|--help)     sed -n '/^# Usage:/,/^# Output:/p' "$0" | sed '$d'; exit 0 ;;
         *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
     shift
@@ -108,16 +111,20 @@ rm -f "$DEPLOY_DIR"/dc3-web.js "$DEPLOY_DIR"/dc3-web.js.* \
 
 # Build one configuration (mode = release | debug) into its own emcc build dir
 # and deploy it to web/build/<mode>/. Each build dir is pinned to its mode via
-# DC3_WEB_RELEASE, so we only reconfigure when the cache is missing, the flag
-# drifted (e.g. an old single-dir build), or --reconfigure was passed.
+# DC3_WEB_RELEASE + CMAKE_BUILD_TYPE (+ DC3_WEB_OPT_LEVEL for release), so we
+# only reconfigure when the cache is missing, one of those drifted (e.g. a dir
+# configured before the W-3 fix, or an old single-dir build), or --reconfigure
+# was passed.
 build_one() {
     local mode="$1"
-    local release_flag bdir ddir
+    local release_flag bdir ddir build_type
     if [ "$mode" = "release" ]; then
         release_flag=ON
+        build_type=Release
         bdir="$NATIVE_DIR/build-web-release"
     else
         release_flag=OFF
+        build_type=Debug
         bdir="$NATIVE_DIR/build-web"
     fi
     ddir="$DEPLOY_DIR/$mode"
@@ -125,11 +132,11 @@ build_one() {
 
     local cmake_args=(
         -DMILO_ENGINE_PATH="$MILO_ENGINE_PATH"
-        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_BUILD_TYPE="$build_type"
         -DBUILD_TESTS=OFF
         -DDC3_WEB_RELEASE="$release_flag"
     )
-    [ -n "$OPT_LEVEL" ] && cmake_args+=(-DDC3_WEB_OPT_LEVEL="$OPT_LEVEL")
+    [ "$mode" = "release" ] && cmake_args+=(-DDC3_WEB_OPT_LEVEL="$OPT_LEVEL")
     # imgui is a FetchContent git clone (full history) at configure time, and
     # concurrent clones from GitHub can crawl for many minutes. Reuse a checkout
     # that is already at the pinned commit -- $DC3_IMGUI_SOURCE_DIR, or the main
@@ -151,11 +158,12 @@ build_one() {
     if [ ! -f "$bdir/CMakeCache.txt" ] || [ "$FORCE_RECONFIGURE" = "1" ]; then
         need_configure=1
     else
-        local cached_release cached_opt
+        local cached_release cached_opt cached_type
         cached_release="$(grep -E '^DC3_WEB_RELEASE:BOOL=' "$bdir/CMakeCache.txt" 2>/dev/null | cut -d= -f2 || echo OFF)"
         cached_opt="$(grep -E '^DC3_WEB_OPT_LEVEL:STRING=' "$bdir/CMakeCache.txt" 2>/dev/null | cut -d= -f2 || echo O0)"
-        if [ "$cached_release" != "$release_flag" ] \
-           || { [ -n "$OPT_LEVEL" ] && [ "$cached_opt" != "$OPT_LEVEL" ]; }; then
+        cached_type="$(grep -E '^CMAKE_BUILD_TYPE:STRING=' "$bdir/CMakeCache.txt" 2>/dev/null | cut -d= -f2 || true)"
+        if [ "$cached_release" != "$release_flag" ] || [ "$cached_type" != "$build_type" ] \
+           || { [ "$mode" = "release" ] && [ "$cached_opt" != "$OPT_LEVEL" ]; }; then
             echo "==> [$mode] build flags changed; reconfiguring + relinking"
             rm -f "$bdir/dc3-web.wasm" "$bdir/dc3-web.js"
             need_configure=1
@@ -163,7 +171,7 @@ build_one() {
     fi
 
     if [ "$need_configure" = "1" ]; then
-        echo "==> [$mode] configuring ($bdir, DC3_WEB_RELEASE=$release_flag)"
+        echo "==> [$mode] configuring ($bdir, DC3_WEB_RELEASE=$release_flag, $build_type)"
         emcmake cmake -S "$NATIVE_DIR" -B "$bdir" "${cmake_args[@]}"
     fi
 
