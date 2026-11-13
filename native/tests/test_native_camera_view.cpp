@@ -166,6 +166,10 @@ ViewRun RunToMainScreen(bool frames) {
        << " DC3_CACHE_DIR=" << R << "/cache DC3_SAVE_DIR=" << R << "/saves"
        << " MILO_INPUT_SCRIPT=" << R << "/input.txt"
        << " DC3_POSE=external DC3_POSE_NO_SPAWN=1 DC3_POSE_SOCKET=" << sock
+       // the script's `confirm` navigates; with a sensor running the default
+       // controller mode (`auto`) would want a gesture -- this test is about
+       // the picture, not navigation
+       << " DC3_CONTROLLER_MODE=forced"
        << " exec timeout 180 ./dc3-native > " << log << " 2>&1 ) & epid=$!; "
        << "end=$((SECONDS+120)); "
        << "until grep -aq \"Screen 'main_screen' Enter\" " << log

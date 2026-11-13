@@ -17,7 +17,8 @@
 //                       its skeleton slot's player index, Stop().
 //   CameraComposeTest   StreamRenderer's player mode colours exactly the mask
 //                       that went in; greenscreen keeps the picture there.
-//   CameraMeshFilterTest the player-view box is drawn only with a stream.
+//   CameraMeshFilterTest the depth image in the player box is drawn only with a
+//                        stream; the box around it draws either way.
 //
 // Sabotage-checked (see the commit): each assertion block failed against a
 // deliberately broken conversion / stream / compose / filter.
@@ -349,9 +350,15 @@ TEST(CameraComposeTest, GreenscreenKeepsThePictureOnlyWhereThePlayerIs) {
 
 TEST(CameraMeshFilterTest, ThePlayerViewBoxDrawsOnlyWithAStream) {
     ResetForTest();
-    const char *box[] = { "buffer_left.mesh", "buffer_right.mesh", "buffer_container_left.mesh",
-                          "buffer_glass_right.mesh", "buffer_left_crown.mesh",
-                          "silhouette_guy_left1" };
+    // The depth image (and its leader-crown variant) needs the stream.
+    const char *box[] = { "buffer_left.mesh", "buffer_right.mesh", "buffer_left_crown.mesh",
+                          "buffer_right_crown.mesh" };
+    // The box around it (P-3, np-gesture-menus) draws either way: frame,
+    // glass and the empty-slot placeholder figure.
+    const char *frame[] = { "buffer_container_left.mesh", "buffer_glass_right.mesh",
+                            "silhouette_guy_left1" };
+    for (const char *m : frame)
+        EXPECT_FALSE(ShouldSkipMesh(m, nullptr)) << m << " hidden with no camera";
     for (const char *m : box)
         EXPECT_TRUE(ShouldSkipMesh(m, nullptr)) << m << " drawn with no camera";
     Image img;
@@ -363,6 +370,8 @@ TEST(CameraMeshFilterTest, ThePlayerViewBoxDrawsOnlyWithAStream) {
     EXPECT_TRUE(ShouldSkipMesh("preview.mesh", nullptr));
     EXPECT_TRUE(ShouldSkipMesh("pose_flash_p0.mesh", nullptr));
     EXPECT_TRUE(ShouldSkipMesh("grid_80by60_cube.mesh", nullptr));
+    for (const char *m : frame)
+        EXPECT_FALSE(ShouldSkipMesh(m, nullptr)) << m << " hidden with a camera stream";
     Stop();
     for (const char *m : box)
         EXPECT_TRUE(ShouldSkipMesh(m, nullptr)) << m << " drawn after the stream stopped";
