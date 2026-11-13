@@ -1354,6 +1354,13 @@ void ObjectDir::PreLoad(BinStream &bs) {
             // (inert -- MSVC coalesces it with the member); rb3-xenon's
             // two-local spelling `char *ptr = (char *)mAlwaysInlineHash;`
             // (inert on [159] and it flips the stbx operand order at [163]).
+            // w-homeslot (2026-11-13): the assignment as Read's argument,
+            // `bs.Read((void *)(mAlwaysInlineHash = (char *)MemOrPoolAlloc(..)),
+            // hashLen)`, is byte-inert (still only [159]); a local `hash` used
+            // for the terminator after Read (`hash[hashLen] = 0`) keeps it in a
+            // callee-saved register -- 85 rows, r19/r20 rotate.  The image
+            // reloads the MEMBER after Read, so nothing after the call reads
+            // the stored copy.
             mAlwaysInlineHash =
                 (char *)MemOrPoolAlloc(hashLen + 1, __FILE__, 0x30A, "Always Inline CDB");
             bs.Read((void *)mAlwaysInlineHash, hashLen);

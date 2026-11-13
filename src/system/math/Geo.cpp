@@ -1603,6 +1603,19 @@ void Clip(const Hmx::Polygon &poly, const Hmx::Ray &ray, Hmx::Polygon &out) {
     // is byte-for-byte inert (96.0938 / 95.8984 and the identical 8-row table),
     // which is the same commutative-operand floor recorded for fmuls elsewhere.
     // The five dead-home-store deletes above remain the only live lead.
+    // w-homeslot (2026-11-13, 98.39 canonical / 98.125 fuzzy, 6 rows: the two
+    // image-only `stfs 0x54(r31)` homes of the y-differences + 4 commutative
+    // rows).  The homed value is the Y difference (back().y - base.y, then
+    // i->y - base.y), not lastDot.  Measured, none produces a store:
+    //   - named `Vector2 diff = SubV2(..)` using diff.x and diff.y: 98.3, 24 rows
+    //     (the x/y loads swap order -- six lfs offset rows);
+    //   - `const Vector2 &diff = SubV2(..)` (temp bound to a reference), and
+    //     SubV2 rewritten as an NRVO local (`Vector2 r; r.x = ..; r.y = ..`):
+    //     both 98.39 canonical / 97.6 fuzzy, 20 rows, same lfs offset swaps;
+    //   - writing the y-difference into `v.y` (v is the 0x50 Vector2, so its y
+    //     IS the 0x54 slot): 96.8, 23 rows, and still no 0x54 store at [46]/[65].
+    // So a Vector2 temporary's y does not home here under any spelling tried;
+    // whatever the original wrote, MSVC kept its y in memory and its x not.
     const Vector2 *lastPoint = &poly.points.back();
     const Vector2 *dirPtr = &ray.dir;
 

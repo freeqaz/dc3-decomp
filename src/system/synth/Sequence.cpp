@@ -640,6 +640,11 @@ void GroupSeqInst::SetTranspose(float f) {
 // w21-bf (still 99.10, the same one row): `int target = seq->NextIndex() %
 // childrenSize;` (no `next` local) is inert; function-scope childrenLeft
 // re-measured at 98.20 canonical (adds `mr r26, r29`, permutes r26/r28/r29).
+// w-homeslot (2026-11-13, still 99.10, the same one row): routing the modulo
+// through an inline `int f(int a, const int &b) { return a % b; }` called as
+// f(seq->NextIndex(), childrenSize) -- right-to-left argument evaluation, so a
+// const-ref home of childrenSize would land just before `bl NextIndex` -- is
+// byte-inert: MSVC folds the reference through the inline and emits no store.
 RandomGroupSeqInst::RandomGroupSeqInst(RandomGroupSeq *seq)
     : GroupSeqInst(seq, false), mIt(mSeqs.end()) {
     ObjPtrList<Sequence> &children = seq->Children();
