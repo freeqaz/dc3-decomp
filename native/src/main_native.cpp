@@ -4,6 +4,7 @@
 #include "App.h"
 #include "os/Debug.h"
 #include "StubTrace.h"
+#include "NativeQuit.h"
 #include <cstdio>
 #include <cstdlib>
 #include <csignal>
@@ -84,27 +85,87 @@ static void Dc3ReportExit(const char *how, const char *detail, int code, bool as
     if (len > 0) write(STDERR_FILENO, buf, (size_t)len);
 }
 
-// Catches exit()/quick paths we do not control — notably XLaunchNewImage(),
-// which the Xbox code calls from Debug::Exit and which the native shim
-// implements as a bare exit(0). Without this hook that route is invisible.
-static void Dc3AtExitHook() {
+// Catches exit() paths we do not control: XLaunchNewImage(), which the Xbox
+// code calls from Debug::Exit (DTA `{exit}`, a fatal FAIL) and which the native
+// shim implements as a bare exit(0); Xlib's default error handlers, which call
+// exit(1); the dirty-disc shims' exit(1).
+//
+// H-9: it also ENDS the process. exit() goes on to run the static destructors,
+// and those are not safe here: the ObjDirPtr<ObjectDir> globals' destructors
+// reach a hash map that was destroyed before them, so every exit() route died
+// of SIGSEGV after printing its DC3_EXIT line (measured: window close via the
+// X BadWindow handler, and `{exit}` through /api/dta/eval, both rc 139). The
+// main loop's return already _exit()s for this reason, and the image never runs
+// static destructors at all (a 360 title is ended by the dashboard), so every
+// exit() route now does the same: report, flush stdio, _exit with exit()'s own
+// status. glibc's on_exit hands the hook that status; elsewhere atexit cannot
+// see it, so the hook only reports there.
+static void Dc3ExitHookReport(int code) {
     Dc3ReportExit("exit_runtime",
                   gDc3ExitReason ? gDc3ExitReason : "exit()_called_no_reason_recorded",
-                  0, false);
+                  code, false);
 }
+#if defined(__GLIBC__)
+static void Dc3OnExitHook(int status, void *) {
+    Dc3ExitHookReport(status);
+    fflush(nullptr);
+    _exit(status);
+}
+static void Dc3InstallExitHook() { on_exit(Dc3OnExitHook, nullptr); }
+#else
+static void Dc3AtExitHook() { Dc3ExitHookReport(-1); }
+static void Dc3InstallExitHook() { atexit(Dc3AtExitHook); }
+#endif
 
 // Termination signals. These are exactly what an OOM-killed parent shell or a
 // closing tmux session delivers, and previously they killed the process with no
 // record at all — the single most likely explanation for a run that "vanished".
 // SIGKILL cannot be caught; its signature is a log with heartbeats and no
 // DC3_EXIT line.
+//
+// H-9: SIGTERM, SIGINT and SIGHUP are a request to QUIT, not an instant death.
+// The handler sets the quit flag (NativeQuit.h) and the main loop leaves at the
+// next frame boundary, through the same return -> _exit path as a window close,
+// so a save being written in this frame is finished, never cut in half (saves
+// are synchronous fopen/fwrite/fclose on the main thread). The exit code stays
+// 128+sig: it is what every caller already decodes as "stopped from outside"
+// (`timeout`, the test harness's RunResult, the dogfood drivers), and an
+// external stop must not read as a natural end -- rc 0 meaning anything at all
+// is the failure the exit records were added to fix. A second signal, or a
+// loop that has not come round within kQuitGraceSeconds (a stuck frame, a long
+// synchronous load), stops the process at once, as before. SIGQUIT keeps its
+// immediate meaning.
+static const unsigned kQuitGraceSeconds = 5;
+static volatile sig_atomic_t sQuitSignal = 0;
+
+static const char *Dc3SignalName(int sig) {
+    return (sig == SIGTERM) ? "SIGTERM" :
+           (sig == SIGINT)  ? "SIGINT"  :
+           (sig == SIGHUP)  ? "SIGHUP"  :
+           (sig == SIGQUIT) ? "SIGQUIT" :
+           (sig == SIGPIPE) ? "SIGPIPE" : "SIGNAL";
+}
+
 static void Dc3TermSignalHandler(int sig) {
-    const char *name = (sig == SIGTERM) ? "SIGTERM" :
-                       (sig == SIGINT)  ? "SIGINT"  :
-                       (sig == SIGHUP)  ? "SIGHUP"  :
-                       (sig == SIGQUIT) ? "SIGQUIT" :
-                       (sig == SIGPIPE) ? "SIGPIPE" : "SIGNAL";
+    const char *name = Dc3SignalName(sig);
+    if (sig != SIGQUIT && Dc3RequestQuit(name, 128 + sig)) {
+        sQuitSignal = sig;
+        char buf[160];
+        int len = snprintf(buf, sizeof(buf),
+            "\nDC3 Native: %s received - quitting at the end of this frame "
+            "(again, or %us, to stop at once)\n", name, kQuitGraceSeconds);
+        if (len > 0) write(STDERR_FILENO, buf, (size_t)len);
+        alarm(kQuitGraceSeconds);
+        return;
+    }
     Dc3ReportExit("terminating_signal", name, 128 + sig, true);
+    _exit(128 + sig);
+}
+
+// The quit grace period ran out: the loop never reached a frame boundary.
+static void Dc3QuitGraceExpired(int) {
+    int sig = sQuitSignal ? (int)sQuitSignal : SIGTERM;
+    Dc3ReportExit("terminating_signal", "quit_grace_expired", 128 + sig, true);
     _exit(128 + sig);
 }
 
@@ -179,7 +240,7 @@ int main(int argc, char **argv) {
     setbuf(stderr, NULL);
 
     sStartTime = time(nullptr);
-    atexit(Dc3AtExitHook);
+    Dc3InstallExitHook();
 
     // Use sigaction for reliable signal handling
     struct sigaction sa;
@@ -203,6 +264,11 @@ int main(int argc, char **argv) {
     sigaction(SIGINT, &st, nullptr);
     sigaction(SIGHUP, &st, nullptr);
     sigaction(SIGQUIT, &st, nullptr);
+    struct sigaction sg;
+    memset(&sg, 0, sizeof(sg));
+    sg.sa_handler = Dc3QuitGraceExpired;
+    sigemptyset(&sg.sa_mask);
+    sigaction(SIGALRM, &sg, nullptr);
 
     Dc3StartHeartbeat();
 
@@ -210,13 +276,26 @@ int main(int argc, char **argv) {
 
     App app(argc, argv);
 
+    // Exit handlers run last-registered-first, so a function-local static
+    // constructed during boot would have its destructor run BEFORE a hook
+    // registered at the top of main. Register again now that boot is done, so
+    // an exit() from the main loop reaches the hook ahead of all of those.
+    Dc3InstallExitHook();
+    // A closed or destroyed X window ends the loop instead of the process.
+    extern void Dc3WindowWatchInstall();
+    Dc3WindowWatchInstall();
+
     printf("DC3 Native Port - App constructed, calling Run()...\n");
     app.Run();
 
+    // A quit request (signal, lost window) carries its own code; a window
+    // close or the frame cap is 0.
+    const int code = gDc3QuitRequest.load() ? gDc3QuitCode.load() : 0;
     printf("DC3 Native Port - Run() returned, exiting cleanly.\n");
     Dc3ReportExit("main_loop_returned",
-                  gDc3ExitReason ? gDc3ExitReason : "unknown", 0, false);
+                  gDc3ExitReason ? gDc3ExitReason : "unknown", code, false);
     // Use _exit() to skip global destructors — static destruction order issues
     // cause crashes when ObjDirPtr destructors run after Loader list is destroyed
-    _exit(0);
+    fflush(nullptr);
+    _exit(code);
 }
