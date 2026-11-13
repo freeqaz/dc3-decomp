@@ -677,6 +677,9 @@ def main():
                     help="person 0 performs this keypoint fixture keyed on song time")
     ap.add_argument("--replay-still", action="store_true",
                     help="with --replay: hold the fixture's first frame all song")
+    ap.add_argument("--offset", type=float, default=None, metavar="METRES",
+                    help="with --people 1: stand this far along camera x (+ = the "
+                         "player's right) instead of on the axis")
     ap.add_argument("--frames", default=None, metavar="WxH",
                     help="send protocol v3 with a WxH camera picture + person mask "
                          "rendered from the joints (needs numpy)")
@@ -687,6 +690,10 @@ def main():
     if a.frames:
         fw, fh = (int(v) for v in a.frames.lower().split("x"))
         k.frames = (fw, fh)
+    if a.offset is not None:
+        if a.people != 1:
+            ap.error("--offset needs --people 1")
+        k.offsets = [a.offset]
     if a.replay:
         k.replay(a.replay, still=a.replay_still)
     if a.socket:

@@ -1444,6 +1444,7 @@ set(DC3_WEB_LIFTED_ENGINE_SOURCES
 add_executable(dc3-web
     src/main_web.cpp
     src/platform/PoseInput_Web.cpp  # dc3_pose_push: the page's camera pipeline -> pose provider
+    src/platform/CameraInput_Web.cpp # dc3_camera_push: the page's camera picture + mask (P-4)
     src/platform/WebSvcMgr_Stub.cpp
     src/platform/DebugPanel.cpp
     src/dc3_render_hook.cpp       # HamRenderHook (registers with milo-engine's WgpuRnd)
@@ -1993,6 +1994,8 @@ if(BUILD_TESTS)
         tests/test_shaderprogram_cache_logic.cpp
         tests/test_dta_eval_endpoint.cpp
         tests/test_camera_yuv_decode.cpp
+        tests/test_camera_stream.cpp
+        tests/test_native_camera_view.cpp
         tests/test_native_shadow.cpp
         tests/test_native_shadow_stream.cpp
         tests/test_native_shadow_cam.cpp

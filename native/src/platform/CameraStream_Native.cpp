@@ -214,7 +214,8 @@ void ConvertColor(const uint8_t *rgb, int w, int h, uint32_t *out) {
         for (int x = 0; x < words; x++) {
             int yy[2], cb = 0, cr = 0;
             for (int i = 0; i < 2; i++) {
-                const uint8_t *p = srcRow + (size_t)(((2 * x + i) * w) / kColorW) * 3;
+                // mirrored: Kinect column c shows camera column w-1-c (header)
+                const uint8_t *p = srcRow + (size_t)(w - 1 - ((2 * x + i) * w) / kColorW) * 3;
                 int r = p[0], g = p[1], b = p[2];
                 // BT.601 full range -- the inverse of the matrix the decoders
                 // use (91881 / -46802 / -22553 / 116130 in Q16).
@@ -235,7 +236,7 @@ void ConvertDepth(const uint8_t *mask, int w, int h, const int *playerIndex,
         const uint8_t *srcRow = mask + (size_t)((y * h) / kDepthH) * w;
         uint16_t *dst = out + (size_t)y * kDepthPitchTexels;
         for (int x = 0; x < kDepthW; x++) {
-            int k = srcRow[(x * w) / kDepthW];
+            int k = srcRow[w - 1 - (x * w) / kDepthW]; // mirrored, as ConvertColor
             uint16_t texel = 0; // nobody, and no depth: the webcam has none
             if (k >= 1 && k <= numPersons && playerIndex[k - 1] > 0)
                 texel = (uint16_t)((depthMm[k - 1] << 3) | playerIndex[k - 1]);

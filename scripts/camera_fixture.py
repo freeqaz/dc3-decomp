@@ -5,10 +5,12 @@ The native port's player view (PLAN P-4) is drawn from the webcam picture and a
 person-segmentation mask (pose_server.py protocol v3, --frames).  Tests and
 headless runs have no webcam, so this renders the same two images from the DC3
 camera-space joints a synthetic performer already sends: each person is a set
-of capsules (limbs, torso) and a disc (head), projected with the Kinect's own
-depth-camera model (u = 160 + 285.63 x/z, v = 120 - 285.63 y'/z over 320x240,
-scaled to the requested size; the same projection Skeleton_Native.h documents
-and pose_mediapipe.py's default focal length uses).
+of capsules (limbs, torso) and a disc (head), projected with the Kinect's
+depth-camera focal length (285.63 px at 320x240, Skeleton_Native.h) but AS A
+CAMERA CAPTURES, not mirrored: u = w/2 - f x/z, v = h/2 - f y'/z.  A player's
+right hand (+x) lands on the picture's left, which is what a webcam frame
+looks like and what the wire carries; the native side mirrors it into the
+Kinect's mirror view (CameraStream_Native.h, "Orientation").
 
 y' = y - camera_height, per person.  A real Kinect (and pose_server.py)
 reports y relative to the sensor, about hip-high, and so does the choreography
@@ -62,7 +64,7 @@ def project(joints, w, h, camera_height=DEFAULT_CAMERA_HEIGHT):
     scale (px per metre) at each joint's depth."""
     f = KINECT_FOCAL_320 * w / 320.0
     pts = np.array([(j[0], j[1] - camera_height, max(j[2], 0.3)) for j in joints], np.float64)
-    u = w / 2.0 + f * pts[:, 0] / pts[:, 2]
+    u = w / 2.0 - f * pts[:, 0] / pts[:, 2]     # as captured: +x on the left
     # square pixels: the vertical scale is the horizontal one
     v = h / 2.0 - f * pts[:, 1] / pts[:, 2]
     return np.stack([u, v], axis=1), f / pts[:, 2]
@@ -130,12 +132,32 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--size", default="320x240")
     ap.add_argument("--people", type=int, default=1)
-    ap.add_argument("--out", required=True, help="output prefix; writes <out>_rgb.png, <out>_mask.png")
+    ap.add_argument("--out", help="output prefix; writes <out>_rgb.png, <out>_mask.png")
+    ap.add_argument("--offset", type=float, default=None,
+                    help="as synthetic_kinect.py --offset (one person)")
+    ap.add_argument("--grid", metavar="GWxGH",
+                    help="print the (wire, as-captured) mask sampled on a GWxGH grid of "
+                         "cell centres, one row per line ('.' nobody, digit = ordinal) -- "
+                         "the sampling GET /api/camera?grid= uses, for "
+                         "native/tests/test_native_camera_view.cpp")
     a = ap.parse_args()
+    if not a.out and not a.grid:
+        ap.error("--out or --grid")
     w, h = (int(v) for v in a.size.split("x"))
     k = sk.SyntheticKinect(None, people=a.people)
+    if a.offset is not None:
+        k.offsets = [a.offset]
     persons = [k._joints(i, "stand") for i in range(a.people)]
     rgb, mask = render(persons, w, h, DEFAULT_CAMERA_HEIGHT)   # STAND is floor-based
+    if a.grid:
+        gw, gh = (int(v) for v in a.grid.split("x"))
+        for gy in range(gh):
+            y = (2 * gy + 1) * h // (2 * gh)
+            print("".join("." if not mask[y, (2 * gx + 1) * w // (2 * gw)]
+                          else str(mask[y, (2 * gx + 1) * w // (2 * gw)])
+                          for gx in range(gw)))
+        if not a.out:
+            return
     import cv2
     cv2.imwrite(a.out + "_rgb.png", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
     cv2.imwrite(a.out + "_mask.png", (mask * (255 // max(1, a.people))).astype(np.uint8))

@@ -107,11 +107,21 @@ const char *ParseWireBlock(const uint8_t *p, const uint8_t *end, const int *trac
                            Image &out);
 
 // ---- pure conversions (no state; unit-tested) -----------------------------
+//
+// Orientation.  The wire picture is the camera's own view, as captured: a
+// player facing it has their right hand on the picture's LEFT (the convention
+// NativeSkeletonProvider::NormalizedToMeters and pose_mediapipe.py already
+// use, x = (0.5 - nx) * width).  A Kinect frame is a MIRROR view: the image's
+// projection, recovered from JointUtl.s (u = 160 + 285.63 x/z), puts the
+// player's right (+x) on the image's RIGHT, and every consumer -- CursorPanel's
+// crown, placed with the skeleton's ScreenPos -- assumes the picture agrees.
+// So both conversions mirror horizontally: Kinect column c is camera column
+// w-1-c (nearest-sampled).
 
-// RGB (any size) -> 640x480 UYVY words, nearest-neighbour scaled.
+// RGB (any size) -> 640x480 UYVY words, nearest-neighbour scaled, mirrored.
 // `out` holds kColorH rows of kColorPitchBytes / 4 words.
 void ConvertColor(const uint8_t *rgb, int w, int h, uint32_t *out);
-// Mask (any size) -> 320x240 depth|player texels at kDepthPitchTexels.
+// Mask (any size) -> 320x240 depth|player texels at kDepthPitchTexels, mirrored.
 // playerIndex[k-1] is the NUI player index for ordinal k (0 = drop it),
 // depthMm[k-1] its depth.
 void ConvertDepth(const uint8_t *mask, int w, int h, const int *playerIndex,
