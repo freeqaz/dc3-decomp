@@ -4,8 +4,9 @@
 end. A recorded video fed through MediaPipe is scored; a replay of the song's own
 choreography gets all-perfect ratings; `scripts/pose_scoring_gate.sh` passes.
 **It has never been run against a live webcam**, it has a reproducible crash on a
-motionless skeleton, menus cannot be driven by gesture, and the player is never
-shown on screen. **Web** has a pose path since `np-web-pose` (see [Web](#web)).
+motionless skeleton. The player's
+silhouette is drawn from the camera picture since `np-player-view`
+([Player on screen](#player-on-screen-p-4)); photos are not. **Web** has a pose path since `np-web-pose` (see [Web](#web)).
 Work items: [PLAN.md](PLAN.md) track P.
 
 ## Data path
@@ -17,7 +18,7 @@ Work items: [PLAN.md](PLAN.md) track P.
 | Wire | Unix socket, protocol v2, layout 1 (20 DC3 joints). Layout 0 = COCO, remapped by `MapCOCOToDC3`. | `DC3_POSE_SOCKET`, `DC3_POSE_NO_SPAWN=1` (connect to a server you started) |
 | Socket → slots | `GestureMgr_Native.cpp`: `BuildSensorFrame` → `FillPersonSlots` / `AssignSlots` / `NativeAutoAssignPlayers`. `FillSkeletonData` holds the last good position of joints under 0.3 confidence. No provider → a jittered standing dummy (two in two-player modes, `DC3_DUMMY_PLAYERS`). Every valid person fills its own slot: two people on the socket or in one `dc3_pose_push` frame are two players. | `DC3_POSE` (`off`, `external`, …), `DC3_NATIVE_SCORING` (default on), `DC3_POSE_SELFTEST` |
 | Scoring | Decompiled code: SkeletonUpdate → `Skeleton::Poll` → FilterQueue / MoveDir / async MoveDetectors → `move_passed` | `DC3_REAL_MOVE_PASSED` (default on) |
-| Feedback | Ratings and score through the normal HUD. **No** player silhouette or camera preview (see Gaps). | — |
+| Feedback | Ratings and score through the normal HUD. **Player view (P-4):** the camera picture and a per-person mask become the Kinect's colour and depth\|player streams, so the decompiled `StreamRenderer` draws the player's silhouette in the menu and gameplay boxes ([Player on screen](#player-on-screen-p-4)). | `DC3_CAMERA_FRAMES` (`WxH`, default `320x240`; `off`) · web `?pose_frames=` |
 
 The seam for any new backend is `NativeSkeletonProvider::PublishFrame(persons,
 count, frameId, timestamp)`: `PersonData` = 20 joints in metres, per-joint
@@ -344,6 +345,150 @@ The performer (`native/src/platform/PosePerformer_Native.{h,cpp}`):
 Tests: `PosePerformerClockTest`, `PosePerformerReplayTest`, `SensorLatencyTest`
 (`native/tests/test_pose_scoring.cpp`). Each was sabotage-checked.
 
+## Player on screen (P-4)
+
+**State (2026-11-13, `np-player-view`):** the player's silhouette is drawn by
+the decompiled `StreamRenderer` from the camera picture, in the main-menu
+player boxes (`cursor.milo`) and the gameplay box. Verified on screenshots from
+synthetic frames and from real MediaPipe masks over a video; never on a live
+webcam. Photos are not done (below).
+
+### Who reads the Kinect image streams (ground truth: the decompiled code)
+
+| Reader | Stream, format | When |
+|---|---|---|
+| `LiveCameraInput` (the device wrapper) | opens colour `NUI_IMAGE_TYPE_COLOR_YUV` 640×480 and depth `DEPTH_AND_PLAYER_INDEX_IN_COLOR_SPACE` 320×240; `PollTracking` resets the polled/received flags every skeleton update | every frame |
+| `StreamRenderer::DrawToTexture` (`.sr` objects) | depth\|player and/or colour per display mode (`DisplayStreams` = {2,1,1,1,1,2,3,3,3}: bit 1 depth, bit 2 colour); player colours by `GetPlayerIndexes` (game player *i* → NUI index skeleton+1); `mNumBlurs` blur passes; output = its render-target texture | each draw of a showing `.sr` |
+| — `cursor.milo` `depth_buffer_left/right.sr` | mode 4 (player colours), blur 1 → `depth_buffer_*.tex`, drawn on the menu and gameplay boxes (`buffer_*` meshes, `srcAlphaAdd`) | menus, gameplay HUD |
+| — `StreamRendererColor.sr` (augmented photo) | mode 8 crew photo: colour, background × `mCrewPhotoBackgroundBrightness` | photo moments |
+| `DepthBuffer3D` | depth\|player at the 384-texel pitch (`row*0x180`) → a voxel grid (`grid_80by60`) | gameplay, where shown |
+| `FreestyleMoveRecorder` | depth\|player (`src += 0x600` shorts = 4 rows) → a palette texture via `TexelsLock` | freestyle recording |
+| `LiveCameraInput::TextureStore` (`StoreColorBuffer` / `StoreDepthBuffer` / `…Clip`) | colour → 640×480 16-bpp scratch texture (`YUVtoRGB`), depth → same | `ui store_color_buff_at` etc.; **no shipped script sends these** (party photos use `store_texture_at` / `store_texture_clip_at`, which copy a `TexRenderer` output) |
+| `HamUI::Draw` snapshot | `take_snapshot` → `IncrementSnapshotCount`, `TexRenderer.rndtex` in `augmented_photo` renders into a 640×480 snapshot target | `midi_parsers.dta` `take` events, unless photos are disabled; `kinect camera max_snapshots` is 1 under `_DEBUG` |
+| `CameraDump` / `camera_debug_depth` | debug | never in play |
+
+Colour word layout (numeric, not bytes): bits 31..24 Cb, 23..16 Y0, 15..8 Cr,
+7..0 Y1. Depth texel = `depth_mm << 3 | player`, player 0 = nobody, *k* =
+skeleton slot *k*−1.
+
+### Design
+
+```
+camera ─► MediaPipe (pose + per-pose segmentation masks)
+            │  desktop: pose_server.py --frames WxH → protocol v3 packet
+            │  web:     pose_worker.js → dc3_camera_push
+            ▼
+NativeCamera::Publish(Image{RGB888, ordinal mask, trackIds, hip depth})   any thread
+            ▼  GestureMgr_NativePoll: Latch(slot for each trackId)
+ConvertColor → 640×480 UYVY        ConvertDepth → 320×240 depth|player, pitch 384
+            ▼  NuiImageStreamOpen / GetNextFrame / ReleaseFrame (typed natively)
+LiveCameraInput stand-in (HX_NATIVE ctor: streams + display mats, no NUI/speech)
+            ▼
+StreamRenderer::DrawToTexture, HX_NATIVE body: compose on the CPU
+(StreamCompose_Native: every display mode + [1 2 1] blur) → UploadRGBAToRndTex
+```
+
+- **Protocol v3** (`pose_server.py` docstring): v2 with magic `0x44503303` and,
+  after the persons, `[u16 w][u16 h][u8 rgb=1][u8 mask=1][u16 0]`, `w*h*3` RGB888
+  bytes, `w*h` mask bytes (0 nobody, *k* = the packet's *k*-th person; the most
+  confident mask over 0.5 wins). Sent only when the game passes `--frames`;
+  without it the server sends v2 byte for byte as before, and the reader still
+  takes v1/v2. A v3 packet does not fit the socket buffer in one write, so the
+  server keeps an outbox instead of treating a short write as a disconnect.
+- **The picture is mirrored into the Kinect's view.** A Kinect frame is a
+  mirror (the image's own projection, from `JointUtl`, puts the player's right
+  at +u); a webcam frame as captured is not (`NormalizedToMeters` uses
+  `x = 0.5 − nx`). `ConvertColor` / `ConvertDepth` flip columns; the wire
+  carries the picture as captured.
+- **No camera → no change.** The stand-in is created only after the first
+  published frame (`NativeCamera::Active()`); until then
+  `GestureMgr::GetLiveCameraInput()` stays null and every reader keeps its null
+  path. `LiveCameraInput::sInstance` stays null natively in all cases (the
+  skeleton fallback is the native sensor). The depth-image quads stay hidden
+  as before.
+- **MeshFilter** (`native/src/platform/MeshFilter.cpp`): P-3 (`np-gesture-menus`)
+  unhid the box frame, glass, crowns and `silhouette_guy` (the empty-box
+  placeholder and position guide, with arrows). P-4 gates the depth image
+  itself: `buffer_left*` / `buffer_right*` (and their crowns) draw while
+  `NativeCamera::Active()` and stay hidden without a stream (rule
+  `depth-image`). Root cause of the hide: they show `depth_buffer_*.tex`, render
+  targets nothing filled, so they drew as flat magenta/blue squares.
+  Still hidden, with corrected comments:
+  `pose_flash*` (an avatar `TexRenderer` → `projection.rndtex`, not the camera),
+  `preview.mesh` (the song-preview movie `preview.tmov`), `grid_80by60`
+  (`DepthBuffer3D`'s voxel template; its draw is a native stub). The ring that
+  fades at a box's top-left is `cursor.milo`'s own animation (same fade whichever
+  meshes are hidden); the left box draws its player in the right box's colour
+  at alpha 0 by design (`srcAlphaAdd`).
+
+### Measured
+
+| | 160×120 | 320×240 (default) | 640×480 |
+|---|---|---|---|
+| v3 block per frame | 76,808 B | 307,208 B | 1,228,808 B |
+| at 30 fps | 2.3 MB/s | 9.2 MB/s | 36.9 MB/s |
+| `camera_block` (scale + mask) in `pose_server.py` | 0.44 ms | 0.25 ms | 0.65 ms |
+
+- MediaPipe with masks on: median 21.7 ms per frame vs 21.6 ms off (same model).
+- Unix socket: 0.046 ms per 307 KB packet.
+- Web worker camera block: 1–3.5 ms per frame; worker masks vs desktop masks on
+  the same three video frames: IoU 0.980 / 0.983 / 0.988.
+- Web in game (debug build, Chromium 1223 headless shell, fake camera
+  `dance.y4m` from `make_pose_fixtures.sh`, `pose-gameplay.mjs`): the gameplay
+  box shows the dancer's silhouette; 4,691 pictures pushed, 0 rejected; picture
+  block p50 2.25 ms / p95 7.6 ms (GPU shared with a desktop run).
+- Engine (`GET /api/camera`, GPU run, `pose_server.py --video … --frames
+  320x240`): latch (both conversions) 1.2 ms, compose + blur + upload 0.5 ms per
+  box, frame age from arrival to texture upload 12–15 ms mean. Camera to box ≈
+  inference 22 ms + transport < 0.1 ms + 12–15 ms + the frame's draw.
+
+### Tests
+
+- `native/tests/test_camera_stream.cpp` (milo-tests, no GPU): BT.601 colour
+  against a float matrix and mirrored; depth\|player at the 384 pitch; an
+  ordinal with no slot is nobody; the v3 block; the NUI stream contract (no
+  frame until one is published, a latched frame delivered once, with its player
+  index); player-mode and greenscreen compose; the box drawn only with a stream.
+- `native/tests/test_native_camera_view.cpp` (`DC3_DTA_FLOW_TESTS`, one headless
+  engine run each): `CameraViewTest` stands a v3 synthetic person 0.6 m right
+  and asserts that at `main_screen` both `depth_buffer_*.tex` hold the sent
+  mask, mirrored (752/768 cells agree; unmirrored would be 600);
+  `NoCameraViewTest` (a v2 sensor) asserts no stream, no stand-in, nothing drawn.
+- Sabotage, each built and run: player index dropped, colour not mirrored,
+  depth not mirrored, compose ignoring the player, v3 block not parsed, box
+  never gated, a frame delivered twice, stand-in without a stream — 8 of 8
+  caught.
+- `GET /api/camera?grid=WxH` (default 32×24): `active`, `standIn`, `latched`,
+  `uploads`, `latchMsMean`, and per `StreamRenderer` output its size, uploads,
+  `composeMsMean`, `frameAgeMsMean` and the last picture sampled on the grid
+  (`rrggbbaa`). Works headless (`MILO_NORENDER=1`): `DrawToTexture` runs and the
+  CPU copy is what it reports.
+
+### Left
+
+- **Photos.** The snapshot path runs with the stand-in: `{gesture_mgr init_snapshots 1}` +
+  `{ui take_snapshot}` on `main_screen` (GPU, `MILO_DUMP_RT=1`) leaves `num_snapshots` 1 and
+  the 640×480 snapshot target holding the augmented crew photo (dimmed background,
+  the player in colour, mirrored), but with **alpha 0 everywhere** — whether that
+  matters depends on the blend of the result screens' photo materials
+  (`result_photoshare_photo*.mat`, shown in campaign / battle / holla-back /
+  fitness results only), and no run reached one with photos: a battle run with
+  camera frames finished the song but took no snapshot that the log shows.
+  Party team photos (`store_texture_at` / `store_texture_clip_at` of a
+  `TexRenderer` output) were not reached: `native_assert_harvest.py --route party`
+  stalls on `tutorial_crew_showdown_screen_1` with or without camera frames (a
+  route gap, not this change; seeding the all-tutorials-seen options cache as
+  `test_native_twoplayer.cpp` does gets battle past its tutorials).
+- `DepthBuffer3D`'s draw (native stub), `FreestyleMoveRecorder`'s palette
+  (`TexelsLock` on a texture with no CPU texels natively), the
+  `TextureStore::StoreColorBuffer` family (same: a 16-bpp `kScratch` `RndTex`
+  has no bitmap natively, so `TexelsLock` returns null — unreachable from
+  shipped data, but a debug `ui store_color_buff_at` with a stream live would
+  write through it).
+- `pose_flash*` and `preview.mesh` are not camera meshes; they belong to the
+  avatar projection and the song-preview movie.
+- A live webcam session (P-2), desktop and web.
+
 ## Web
 
 | Stage | Code |
@@ -353,6 +498,7 @@ Tests: `PosePerformerClockTest`, `PosePerformerReplayTest`, `SensorLatencyTest`
 | Inference | `native/web/pose/pose_worker.js`, a module worker: `@mediapipe/tasks-vision` 1.0.0 (the Python mediapipe version) `PoseLandmarker`, VIDEO mode, the same `pose_landmarker_full.task` and options as `pose_server.py`. CPU (XNNPACK) delegate by default. |
 | Geometry | `native/web/pose/pose_geometry.js`: line-for-line port of `pose_mediapipe.py` (root DLT/torso fallback, axis flips, centre joints, hands, feet, one-euro on root depth, centroid tracker). Timestamps are the `VideoFrame` capture time. |
 | Push | `Module.dc3PosePush` (`native/web/dc3_pre.js`, heap copy) → `dc3_pose_push` (`native/src/platform/PoseInput_Web.cpp`) → `PublishFrame`. First push starts the provider; `dc3_pose_stop` (track ended) returns to the dummy. A 0-person frame is real: nobody tracked. |
+| Picture (P-4) | With `?pose_frames=WxH` (default `320x240`, `off` = skeletons only) the worker turns on segmentation masks, scales the frame to RGB888 and builds the same ordinal mask as `pose_server.py`; `pose_input.js` sets `globalThis.dc3CameraPending` and calls `Module._dc3_camera_push(w, h, n, t)` right after the frame's `dc3_pose_push` (`native/src/platform/CameraInput_Web.cpp`, copies with `EM_ASM`, so `dc3_pre.js` is untouched) → `NativeCamera::Publish`. `_dc3_camera_stop` on track end. Stats: `picturesPushed` / `picturesRejected` / `pictureMs` in `dc3PoseSummary()`. |
 | Status | `window.dc3PoseSummary()` (page: state, frames, fps, inference ms) and `window.dc3PoseGame` (engine: player 0's bound skeleton joints, score, rating; every 15 engine frames). |
 
 URL knobs: `?pose=off|manual`, `pose_model=lite|full|heavy`,
@@ -479,7 +625,7 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
 | P-1 | **Crash on a motionless skeleton.** `RhythmDetector::AnalyzeData` divides by a variance that becomes zero → NaN → `SymbolKeys::SetFrame` segfault (`RhythmBattlePlayer::Poll`). A webcam trips it whenever joints are held (legs out of frame are held all song). | S–M | all |
 | P-2 | Never run against a live webcam. **No-camera part done** (`np-pose-desk`): fast failure + on-screen notice (above); camera request, capture timestamps, HFOV and the lost-camera exit unit-tested against a fake capture (`tests/test_pose_server.py`). Left: a real webcam session. | S | all |
 | P-3 | ~~Gesture menus~~ **Done (`np-gesture-menus`)**, see [Gesture menus](#gesture-menus). Left: a real person on a real webcam has not driven them; the depth image in the player box is P-4. | — | all |
-| P-4 | Player on screen: silhouette, camera preview, photo moments. `LiveCameraInput` is null natively; `StreamRenderer::DrawToTexture` and `DepthBuffer3D` are stubbed; `MeshFilter` hides `silhouette_guy*`, `preview.mesh`, `pose_flash*`. Needs webcam RGB + a segmentation mask. | L | all |
+| P-4 | Player on screen. **Silhouette done** (`np-player-view`): protocol v3 / `dc3_camera_push` carry the picture and a person mask, a `LiveCameraInput` stand-in feeds the decompiled `StreamRenderer`, and the cursor and gameplay boxes draw the player ([Player on screen](#player-on-screen-p-4)). Left: photo moments, `DepthBuffer3D`'s draw, the `pose_flash` / `preview.mesh` entries (not camera), a live webcam. | M | all |
 | P-5 | ~~Tests~~ **Done** (`np-pose-desk`): ctests `PoseSocketReaderTest`, `PoseCocoMappingTest`, `PoseSensorSlotTest` (no GPU, no game data); keypoint fixture + `PoseFixture.Python`; the gate runs the whole song and judges means, final scores and per-move distances (above). Open: standing still out-scores a different dance (P-7). | — | all |
 | P-6 | ~~Remove the dead ncnn/YOLO path~~ **Done** (`np-pose-desk`). | — | all |
 | P-7 | Scoring believability. **Answered** (`np-scoring`, [above](#scoring-believability-p-7-np-scoring)): the leniency is the original's. Real Kinect data (UTD-MHAD) scores like our inputs, and the scoring code is 100% matched. Added: the 30 Hz in-process performer + matrix, and the `DC3_POSE_LATENCY_MS` knob. Left: measure a real webcam's latency and jitter (P-2), then decide whether to set the knob's default and whether to add per-joint smoothing. | S | all |
@@ -549,11 +695,20 @@ Measured working: hover ≥ 0.6 s, forearm 0.24 m swept 110° in 0.3 s.
   `set_pose(i, "absent")` takes a person out of view and `"stand"` brings them
   back (`native/tests/test_native_twoplayer.cpp` drives Battle with 2, 1, 0).
 - `pose_server.py --video` — real MediaPipe on a file; runs end to end but is not
-  deterministic (wall-clock paced).
+  deterministic (wall-clock paced). Add `--frames 320x240` for the v3 picture +
+  masks (the game passes it itself when it spawns the server).
 - `DC3_POSE_PERFORM=choreo|wrong|halftempo|still|stand|replay:FILE` — the
   in-process performer (P-7). No socket, no second process, 30 Hz of song time,
   deterministic under `DC3_FAST_TIME`. It replays the same fixture files as
   `synthetic_kinect.py --replay`. See [Scoring believability](#scoring-believability-p-7-np-scoring).
+- Camera picture without a camera (P-4): `synthetic_kinect.py --frames 320x240`
+  sends protocol v3 with a picture and mask drawn from its own joints by
+  `scripts/camera_fixture.py` (deterministic: capsule limbs + head disc, the
+  Kinect's projection, striped background); `--offset 0.6` stands the person
+  0.6 m to the right so a mirror bug shows. `camera_fixture.py --out DIR`
+  writes the PNGs; `--grid 32x24` prints the mask sampled the way
+  `GET /api/camera` samples. `native_assert_harvest.py --camera-frames 320x240`
+  passes it through on any route.
 - Deterministic keypoint fixture (P-5):
   `native/tests/data/pose/taye01_stand_dance.dc3pose` (139 KB, 240 frames,
   8 s) is MediaPipe's DC3-20 stream for

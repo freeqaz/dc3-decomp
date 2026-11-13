@@ -239,6 +239,10 @@ class Harvest:
             sock = os.path.join(self.out, "kinect.sock")
             people = 2 if (a.route == "party" or a.multiuser == "duo") else 1
             self.kinect = SyntheticKinect(sock, people=people)
+            if a.camera_frames:
+                # protocol v3: a camera picture + person mask rendered from the
+                # same joints (scripts/camera_fixture.py), the PLAN P-4 player view
+                self.kinect.frames = tuple(int(v) for v in a.camera_frames.lower().split("x"))
             self.kinect.start()
             env.update(SyntheticKinect.engine_env(sock))
             # The route below presses buttons with no `wake` directives; with
@@ -905,6 +909,10 @@ def main():
     ap.add_argument("--stand-and-watch", action="store_true",
                     help="negative control for --perform: the same sensor and the same "
                          "per-move record, but its people stand still")
+    ap.add_argument("--camera-frames", default=None, metavar="WxH",
+                    help="with --perform/--stand-and-watch/party: the synthetic sensor "
+                         "also sends a WxH camera picture + person mask (protocol v3), "
+                         "so the game's player view (PLAN P-4) has a stream")
     ap.add_argument("--gameplay-eval", action="append", default=[],
                     metavar="BEAT:DTA",
                     help="POST DTA to /api/dta/eval once, when the song beat first "

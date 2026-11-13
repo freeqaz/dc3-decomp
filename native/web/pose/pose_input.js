@@ -14,6 +14,9 @@
 //   pose_transport=stream|bitmap (default stream when MediaStreamTrackProcessor exists)
 //   pose_cdn=1          load tasks-vision + model from the CDN instead of this server
 //   pose_hfov=<deg>     camera horizontal FOV (default 58.51, DC3's Kinect)
+//   pose_frames=WxH|off the camera picture + person mask the game draws the
+//                       player view from (PLAN P-4; default 320x240, the
+//                       desktop default; off = skeleton only)
 //
 // Test hooks: window.dc3PoseStats (page side) and window.dc3PoseGame (what the
 // engine sees, published by PoseInput_Web.cpp).
@@ -32,13 +35,23 @@ const opt = {
         (typeof MediaStreamTrackProcessor !== 'undefined' ? 'stream' : 'bitmap'),
     cdn: params.get('pose_cdn') === '1',
     hfov: params.get('pose_hfov') ? parseFloat(params.get('pose_hfov')) : 58.51,
+    frames: parseFrames(params.get('pose_frames')),
 };
+
+function parseFrames(v) {
+    if (v === 'off' || v === '0') return null;
+    const m = /^(\d+)x(\d+)$/.exec(v || '320x240');
+    if (!m) return [320, 240];
+    const w = Math.min(1920, Math.max(16, +m[1])), h = Math.min(1920, Math.max(16, +m[2]));
+    return [w, h];
+}
 
 const stats = window.dc3PoseStats = {
     state: 'idle', detail: '', model: opt.model, delegate: opt.delegate,
     transport: opt.transport, source: null, loadMs: null,
     framesIn: 0, framesWithPerson: 0, pushed: 0, pushRejected: 0,
     lastCount: 0, inferMs: [], mainMs: [], fps: 0, camera: null,
+    frames: opt.frames, picturesPushed: 0, picturesRejected: 0, pictureMs: [],
 };
 const RING = 120;
 function ring(arr, v) { arr.push(v); if (arr.length > RING) arr.shift(); }
@@ -47,6 +60,8 @@ export function summary() {
     return {
         ...stats, inferMs: undefined, mainMs: undefined,
         inferMsP50: q(stats.inferMs, 0.5), inferMsP95: q(stats.inferMs, 0.95),
+        pictureMs: undefined, pictureMsP50: q(stats.pictureMs, 0.5),
+        pictureMsP95: q(stats.pictureMs, 0.95),
         mainMsP50: q(stats.mainMs, 0.5), mainMsP95: q(stats.mainMs, 0.95),
     };
 }
@@ -131,6 +146,26 @@ function pushToEngine(floats, count, captureSec) {
     return !!ok;
 }
 
+// The frame's picture + mask (PLAN P-4), right after its skeletons: the mask's
+// ordinals name the persons in `floats`.  dc3_camera_push (CameraInput_Web.cpp)
+// copies globalThis.dc3CameraPending into the engine.
+function pushCameraToEngine(msg) {
+    const M = window.Module;
+    if (!M || typeof M._dc3_camera_push !== 'function') { stats.picturesRejected++; return; }
+    const n = msg.count;
+    const trackIds = new Int32Array(n), depthM = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+        trackIds[i] = msg.floats[i * 81];
+        depthM[i] = msg.floats[i * 81 + 3]; // joint 0 (hip centre) z
+    }
+    const c = msg.camera;
+    globalThis.dc3CameraPending = { rgb: c.rgb, mask: c.mask, trackIds, depthM };
+    let ok = 0;
+    try { ok = M._dc3_camera_push(c.width, c.height, n, msg.captureSec); } catch (e) { ok = 0; }
+    if (ok) stats.picturesPushed++; else stats.picturesRejected++;
+    ring(stats.pictureMs, c.ms);
+}
+
 // ---------------------------------------------------------------- pipeline
 let worker = null;
 let stream = null;
@@ -166,6 +201,7 @@ function onWorkerMessage(ev) {
         }
         lastPoseT = t0;
         const pushed = pushToEngine(msg.floats, msg.count, msg.captureSec);
+        if (pushed && msg.camera) pushCameraToEngine(msg);
         drawOverlay(msg.image2d, msg.numPoses);
         if (!pushed) setStateOnce('waiting', 'Camera ready — waiting for the game…', 'warn');
         else if (msg.count === 0) setStateOnce('noperson', 'No one in view — step into the camera', 'warn');
@@ -195,7 +231,8 @@ export async function createWorker(sources) {
         };
         w.addEventListener('message', h);
     });
-    w.postMessage({ type: 'init', ...sources, delegate: opt.delegate, hfovDeg: opt.hfov, numPoses: 2 });
+    w.postMessage({ type: 'init', ...sources, delegate: opt.delegate, hfovDeg: opt.hfov, numPoses: 2,
+        frames: opt.frames });
     return { worker: w, ready };
 }
 
@@ -230,6 +267,7 @@ async function start() {
     ui.view.style.display = 'block';
     track.addEventListener('ended', () => {
         if (window.Module && window.Module.dc3PoseStop) window.Module.dc3PoseStop();
+        if (window.Module && window.Module._dc3_camera_stop) window.Module._dc3_camera_stop();
         setState('ended', 'Camera disconnected — using a stand-in player', 'err', true);
     });
 

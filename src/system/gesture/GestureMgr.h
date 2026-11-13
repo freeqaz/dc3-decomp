@@ -51,6 +51,13 @@ public:
     const Skeleton &GetSkeleton(int) const;
     SkeletonQualityFilter &GetSkeletonQualityFilter(int);
     LiveCameraInput *GetLiveCameraInput() const;
+#ifdef HX_NATIVE
+    /** PLATFORM (PLAN P-4): the image binds mLiveCamInput to
+     *  LiveCameraInput::sInstance in the ctor; natively the webcam stand-in
+     *  (LiveCameraInput::NativeCreate) is attached once the camera delivers a
+     *  frame, by GestureMgr_Native.cpp. */
+    void SetNativeLiveCameraInput(LiveCameraInput *cam) { mLiveCamInput = cam; }
+#endif
     void SetTrackedSkeletons(int, int);
     void UpdateTrackedSkeletons();
     int GetActiveSkeletonIndex() const;

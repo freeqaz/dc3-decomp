@@ -1196,6 +1196,8 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
     src/platform/NuiImageSurface_Native.cpp
+    src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
+    src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
     src/platform/StreamReceiver_Native.cpp
     src/platform/SampleInst_Native.cpp
     src/platform/StbVorbisImpl.cpp
@@ -1383,6 +1385,8 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
     src/platform/NuiImageSurface_Native.cpp
+    src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
+    src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
     # ThreadCall_Native.cpp lifted to milo-engine (engine 0.2b drop-xdk POSIX
     # graduation); compiled via DC3_WEB_LIFTED_ENGINE_SOURCES below.
     # AudioDevice_Web.cpp lifted to milo-engine (MILO_BUILD_WEB, W0).
@@ -1440,6 +1444,7 @@ set(DC3_WEB_LIFTED_ENGINE_SOURCES
 add_executable(dc3-web
     src/main_web.cpp
     src/platform/PoseInput_Web.cpp  # dc3_pose_push: the page's camera pipeline -> pose provider
+    src/platform/CameraInput_Web.cpp # dc3_camera_push: the page's camera picture + mask (P-4)
     src/platform/WebSvcMgr_Stub.cpp
     src/platform/DebugPanel.cpp
     src/dc3_render_hook.cpp       # HamRenderHook (registers with milo-engine's WgpuRnd)
@@ -1989,6 +1994,8 @@ if(BUILD_TESTS)
         tests/test_shaderprogram_cache_logic.cpp
         tests/test_dta_eval_endpoint.cpp
         tests/test_camera_yuv_decode.cpp
+        tests/test_camera_stream.cpp
+        tests/test_native_camera_view.cpp
         tests/test_native_shadow.cpp
         tests/test_native_shadow_stream.cpp
         tests/test_native_shadow_cam.cpp

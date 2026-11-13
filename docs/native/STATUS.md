@@ -135,7 +135,10 @@ so no `tutorial_battle_screen_*` intervenes, and run under `DC3_FAST_TIME`
 (~8–35 s each).
 
 **Seen on the way, not fixed:** the team-photo boxes on the battle results and
-party winner screens are white (PLAN P-4).
+party winner screens are white (PLAN P-4). Without a camera there is nothing to
+photograph; with camera frames the snapshot target now renders the crew photo
+(alpha 0, see POSE_INPUT.md *Player on screen*), but no run has reached a
+results screen showing one yet.
 
 ## Pose input — see [POSE_INPUT.md](POSE_INPUT.md)
 
@@ -146,7 +149,7 @@ party winner screens are white (PLAN P-4).
 | Motionless skeleton | SIGSEGV at ~130 s (zero variance in `RhythmDetector`) — **fixed** by the sensor noise floor (PLAN P-1); 45k-frame still run exits 0 | ran |
 | Live webcam | Never tried (no camera on the measurement box) | — |
 | Gesture menus | Whole perform route by gesture alone (title → song → results → main), 10 gesture / 0 button selects; default policy `auto` (faithful with a camera). Web: same policy, title → song select → back by gesture through `dc3_pose_push`. See [POSE_INPUT](POSE_INPUT.md#gesture-menus) | `GestureMenusTest` + its forced sabotage, `scripts/web/gesture-menus.mjs`, 2026-11-13 (`np-gesture-menus`) |
-| Player silhouette/preview | Absent (P-4); the player boxes draw, the depth image inside them does not | screenshots |
+| Player silhouette (P-4) | With a camera stream the depth image inside the menu and gameplay player boxes draws the player (`np-player-view`): synthetic v3 frames and real MediaPipe masks over a video; mirrored like a Kinect. Photos, `DepthBuffer3D`, song-preview movie: not done. No camera: unchanged | screenshots + `CameraViewTest` / `NoCameraViewTest` |
 | `scripts/pose_scoring_gate.sh` | Passes (~13 min): five configs, each the whole song under `DC3_FAST_TIME`; judges means, final scores and per-move distances (`scripts/pose_gate_report.py`). Standing still out-scores a different recorded dance (P-7) | ran |
 
 ## Web — see [WEB.md](WEB.md)

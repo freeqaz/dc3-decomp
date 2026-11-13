@@ -1,6 +1,7 @@
 #include "Skeleton_Native.h"
 #include "gesture/GestureMgr.h" // NUM_SKELETONS
 #include "platform/NativeNotice.h"
+#include "platform/CameraStream_Native.h"
 #include <cstdint>
 #include <cstring>
 #include <cstdio>
@@ -215,7 +216,10 @@ float Dc3SensorLatencySeconds(float scoringDtaSeconds) {
 // (native/web/pose/) through dc3_pose_push (PoseInput_Web.cpp) into
 // PublishFrame; the buffering, slot fill and joint hold below are shared.
 bool NativeSkeletonProvider::Start(const std::string&, const std::string&, int) { return false; }
-void NativeSkeletonProvider::Stop() { mRunning = false; }
+void NativeSkeletonProvider::Stop() {
+    mRunning = false;
+    NativeCamera::Stop(); // the camera picture goes with the pose stream
+}
 #endif
 
 // COCO keypoint indices
@@ -265,6 +269,18 @@ NativeSkeletonProvider::~NativeSkeletonProvider() {
 
 #ifndef __EMSCRIPTEN__
 // ---- Desktop transport: pose_server.py child + Unix socket reader ----------
+
+// pose_server.py's --frames argument (PLAN P-4): "" = do not ask for camera
+// frames (protocol v2).  DC3_CAMERA_FRAMES=off|0 disables, WxH picks the size.
+static std::string CameraFramesArg() {
+    const char *v = getenv("DC3_CAMERA_FRAMES");
+    if (!v || !*v)
+        return "320x240";
+    if (!strcmp(v, "off") || !strcmp(v, "0"))
+        return "";
+    return v;
+}
+
 
 bool NativeSkeletonProvider::Start(
     const std::string &socketPath, const std::string &modelPath, int cameraIndex
@@ -334,6 +350,15 @@ bool NativeSkeletonProvider::Start(
                 argv.push_back("--hfov");
                 argv.push_back(hfov);
             }
+            // PLAN P-4: ask for the camera picture + person mask (protocol v3)
+            // the player view is drawn from.  DC3_CAMERA_FRAMES=off keeps the
+            // pose-only v2 stream; WxH picks the size (default 320x240, the
+            // Kinect depth resolution).
+            std::string framesArg = CameraFramesArg();
+            if (!framesArg.empty()) {
+                argv.push_back("--frames");
+                argv.push_back(framesArg.c_str());
+            }
             argv.push_back(nullptr);
             execvp("python3", const_cast<char *const *>(argv.data()));
             // If exec fails
@@ -402,6 +427,7 @@ bool NativeSkeletonProvider::Start(
 
 void NativeSkeletonProvider::Stop() {
     mRunning = false;
+    NativeCamera::Stop(); // the camera picture goes with the pose stream
 
     if (mReaderThread.joinable()) {
         mReaderThread.join();
@@ -425,6 +451,7 @@ void NativeSkeletonProvider::Stop() {
 // EXIT_CAMERA_LOST); otherwise -- a connect-only server, or one still running
 // -- say that the stream stopped.
 void NativeSkeletonProvider::ReportServerGone() {
+    NativeCamera::Stop(); // no more camera frames either (PLAN P-4)
     if (mServerPid > 0) {
         for (int i = 0; i < 20; i++) {
             int status = 0;
@@ -440,6 +467,33 @@ void NativeSkeletonProvider::ReportServerGone() {
     p.text = std::string("The pose stream stopped - pose tracking is off.") + kStandIn;
     p.brief = "Pose stream stopped: pose tracking off";
     ReportProblem(p);
+}
+
+// The v3 camera block that follows the persons: hand it to the camera stream
+// with the persons' tracking ids and root depths, so the mask's ordinals can
+// become NUI player indices when the frame is latched.
+static void ParseCameraBlock(const uint8_t *p, const uint8_t *end,
+                             const NativeSkeletonProvider::PersonData *persons,
+                             int numPersons, double timestamp) {
+    int trackIds[NativeCamera::kMaxPersons];
+    float depthM[NativeCamera::kMaxPersons];
+    int n = numPersons < NativeCamera::kMaxPersons ? numPersons : NativeCamera::kMaxPersons;
+    for (int i = 0; i < n; i++) {
+        trackIds[i] = persons[i].valid ? persons[i].trackId : -1;
+        depthM[i] = persons[i].valid ? persons[i].joints[kJointHipCenter].z : 0.0f;
+    }
+    NativeCamera::Image image;
+    const char *err = NativeCamera::ParseWireBlock(p, end, trackIds, depthM, n, timestamp, image);
+    if (err) {
+        static bool sWarned = false;
+        if (!sWarned) {
+            sWarned = true;
+            fprintf(stderr, "Pose packet camera block rejected: %s\n", err);
+        }
+        return;
+    }
+    if (image.width > 0)
+        NativeCamera::Publish(std::move(image));
 }
 
 static bool readExact(int fd, void *buf, size_t len) {
@@ -490,14 +544,18 @@ void NativeSkeletonProvider::ReaderThread() {
         //   [i32 track_id] + num_landmarks x (f32 x, y, z, conf).
         // They are distinguished by the leading magic: v1's first field is a small
         // incrementing frame_id, so a large sentinel cannot collide.
+        // v3 (pose_server.py --frames): v2 with a new magic and a camera image
+        // block after the persons (ParseCameraBlock).
         static const uint32_t kProtocolMagic = 0x44503302u;
+        static const uint32_t kProtocolMagicV3 = 0x44503303u;
         if (packetLen < 16) continue;
         const uint8_t *p = packet.data();
         const uint8_t *end = packet.data() + packetLen;
 
         uint32_t magic = 0;
         memcpy(&magic, p, 4);
-        const bool v2 = (magic == kProtocolMagic);
+        const bool v3 = (magic == kProtocolMagicV3);
+        const bool v2 = (magic == kProtocolMagic) || v3;
 
         uint32_t frameId, numPersons;
         double timestamp;
@@ -585,6 +643,9 @@ void NativeSkeletonProvider::ReaderThread() {
                     packetLen, numPersons, numLandmarks, layout);
             }
         }
+
+        if (v3 && !truncated)
+            ParseCameraBlock(p, end, newBack, (int)numPersons, timestamp);
 
         PublishFrame(newBack, (int)numPersons, frameId, timestamp);
     }

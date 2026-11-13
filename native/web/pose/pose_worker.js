@@ -7,7 +7,9 @@
 // never waits on inference.
 //
 // main -> worker
-//   { type: 'init', bundleUrl, wasmBase, modelUrl, delegate, hfovDeg, numPoses }
+//   { type: 'init', bundleUrl, wasmBase, modelUrl, delegate, hfovDeg, numPoses,
+//     frames: [w, h] | null }   frames: also return the camera picture + person
+//                               mask (PLAN P-4; segmentation masks on)
 //   { type: 'stream', readable }        MediaStreamTrackProcessor frames (preferred)
 //   { type: 'frame', image, tsMs, captureSec }   one ImageBitmap/VideoFrame (fallback,
 //                                        and the parity harness, which passes
@@ -16,7 +18,9 @@
 // worker -> main
 //   { type: 'ready', delegate, loadMs }  | { type: 'error', message }
 //   { type: 'pose', floats, count, image2d, width, height, tsMs, captureSec,
-//     inferMs, geomMs, raw? }
+//     inferMs, geomMs, raw?, camera?: { width, height, rgb, mask, ms } }
+//     camera.mask: one byte per pixel, 0 = nobody, k = the k-th person of
+//     `floats` (the same rule as pose_server.py --frames)
 import { PoseGeometry, posesFromResult, packPersons } from './pose_geometry.js';
 
 let landmarker = null;
@@ -41,7 +45,7 @@ async function init(msg) {
         minPoseDetectionConfidence: 0.5,
         minPosePresenceConfidence: 0.5,
         minTrackingConfidence: 0.5,
-        outputSegmentationMasks: false,
+        outputSegmentationMasks: !!msg.frames,
     });
     let delegate = msg.delegate || 'CPU';
     try {
@@ -61,6 +65,45 @@ function sourceSize(img) {
     return [img.width, img.height];
 }
 
+// pose_server.py MASK_THRESHOLD: a pixel belongs to the most confident person
+// whose mask passes it.
+const MASK_THRESHOLD = 0.5;
+let frameCanvas = null;
+
+// The v3 camera block, as pose_server.py camera_block builds it: the frame
+// scaled to cfg.frames as RGB888, and the persons' masks (in `persons` order,
+// matched through poseIndex) as an ordinal byte per pixel.  As captured, not
+// mirrored -- the engine mirrors into the Kinect's view.
+function cameraBlock(img, res, persons) {
+    const [w, h] = cfg.frames;
+    if (!frameCanvas || frameCanvas.width !== w || frameCanvas.height !== h)
+        frameCanvas = new OffscreenCanvas(w, h);
+    const ctx = frameCanvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, w, h);
+    const rgba = ctx.getImageData(0, 0, w, h).data;
+    const rgb = new Uint8Array(w * h * 3);
+    for (let i = 0, j = 0; i < rgba.length; i += 4, j += 3) {
+        rgb[j] = rgba[i]; rgb[j + 1] = rgba[i + 1]; rgb[j + 2] = rgba[i + 2];
+    }
+    const mask = new Uint8Array(w * h);
+    const best = new Float32Array(w * h).fill(MASK_THRESHOLD);
+    const masks = res.segmentationMasks || [];
+    persons.forEach((person, k) => {
+        const m = masks[person.poseIndex];
+        if (!m) return;
+        const mw = m.width, mh = m.height, f = m.getAsFloat32Array();
+        for (let y = 0; y < h; y++) {
+            const row = Math.min(mh - 1, Math.floor((y + 0.5) * mh / h)) * mw;
+            for (let x = 0; x < w; x++) {
+                const v = f[row + Math.min(mw - 1, Math.floor((x + 0.5) * mw / w))];
+                const o = y * w + x;
+                if (v > best[o]) { best[o] = v; mask[o] = k + 1; }
+            }
+        }
+    });
+    return { width: w, height: h, rgb, mask };
+}
+
 function processImage(img, tsMs, captureSec, wantRaw) {
     // VIDEO mode needs strictly increasing timestamps.
     if (tsMs <= lastTsMs) tsMs = lastTsMs + 1;
@@ -73,6 +116,13 @@ function processImage(img, tsMs, captureSec, wantRaw) {
     const persons = geometry.process(poses, width, height, tsMs);
     const { floats, count } = packPersons(persons);
     const t2 = performance.now();
+    let camera = null;
+    if (cfg.frames) {
+        // packPersons keeps the first 6: the ordinals must name those
+        camera = cameraBlock(img, res, persons.slice(0, count));
+        camera.ms = performance.now() - t2;
+    }
+    if (res.close) res.close(); // frees the segmentation masks
     // 2D landmarks for the preview overlay: per pose 33 x (x, y, visibility).
     const image2d = new Float32Array(Math.max(poses.length, 1) * 33 * 3);
     poses.forEach((p, pi) => {
@@ -88,7 +138,12 @@ function processImage(img, tsMs, captureSec, wantRaw) {
         width, height, tsMs, captureSec, inferMs: t1 - t0, geomMs: t2 - t1,
     };
     if (wantRaw) msg.raw = poses;
-    post(msg, [floats.buffer, image2d.buffer]);
+    const transfer = [floats.buffer, image2d.buffer];
+    if (camera) {
+        msg.camera = camera;
+        transfer.push(camera.rgb.buffer, camera.mask.buffer);
+    }
+    post(msg, transfer);
 }
 
 async function pumpStream(readable) {

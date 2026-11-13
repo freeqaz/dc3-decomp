@@ -21,6 +21,10 @@
 #include "rndobj\Utl.h"
 #include "rnddx9\RenderState.h"
 #include "rnddx9\Rnd.h"
+#ifdef HX_NATIVE
+#include "platform/StreamCompose_Native.h"
+#include <vector>
+#endif
 
 RndCam *StreamRenderer::mCam;
 RndTex *StreamRenderer::mBlurRT[2];
@@ -278,11 +282,6 @@ BEGIN_LOADS(StreamRenderer)
     }
 END_LOADS
 
-#ifdef HX_NATIVE
-void StreamRenderer::DrawToTexture() {}
-void StreamRenderer::SetCrewPhotoPlayerCenters() {}
-#else
-
 namespace {
     int DisplayStreams[] = { 2, 1, 1, 1, 1, 2, 3, 3, 3 };
 
@@ -329,6 +328,84 @@ namespace {
             }
         }
     }
+#ifdef HX_NATIVE
+}
+
+// PLATFORM (PLAN P-4): the image draws the NUI stream texture through a Xenos
+// stream shader into mOutputTex (the #else arm).  Natively the stream is the
+// webcam stand-in's (native/src/platform/CameraStream_Native.cpp) and the
+// shader is a CPU compose (StreamCompose_Native.h), uploaded into the output
+// render target.  The polling and "draw only on a new frame" logic is the
+// image's.  No LiveCameraInput (no camera) -> nothing is drawn, as before P-4.
+void StreamRenderer::DrawToTexture() {
+    if (!Showing() || !mOutputTex || !TheGestureMgr)
+        return;
+    LiveCameraInput *camInput = TheGestureMgr->GetLiveCameraInput();
+    if (!camInput)
+        return;
+    unsigned int streamFlags = DisplayStreams[mDisplay];
+    bool needsDepth = streamFlags & 1;
+    bool needsColor = (streamFlags >> 1) & 1;
+    if (needsDepth && !camInput->mDepthPolled) {
+        camInput->PollNewStream(LiveCameraInput::kBufferDepth);
+    } else if (needsColor && !camInput->mColorPolled) {
+        camInput->PollNewStream(LiveCameraInput::kBufferColor);
+    }
+    if (!(mForceDraw || (needsDepth && camInput->mDepthReceived)
+          || (needsColor && camInput->mColorReceived)))
+        return;
+
+    NativeStreamComposeParams prm;
+    prm.display = mDisplay;
+    const Hmx::Color *colors[6] = { &mPlayer1DepthColor, &mPlayer2DepthColor,
+                                    &mPlayer3DepthColor, &mPlayer4DepthColor,
+                                    &mPlayer5DepthColor, &mPlayer6DepthColor };
+    for (int i = 0; i < 6; i++) {
+        prm.playerColor[i][0] = colors[i]->red;
+        prm.playerColor[i][1] = colors[i]->green;
+        prm.playerColor[i][2] = colors[i]->blue;
+        prm.playerColor[i][3] = colors[i]->alpha;
+    }
+    prm.nobody[0] = mPlayerDepthNobody.red;
+    prm.nobody[1] = mPlayerDepthNobody.green;
+    prm.nobody[2] = mPlayerDepthNobody.blue;
+    prm.nobody[3] = mPlayerDepthNobody.alpha;
+    if (mStaticColorIndices) {
+        for (int i = 0; i < 6; i++)
+            prm.playerIndexes[i] = i;
+    } else {
+        GetPlayerIndexes(prm.playerIndexes);
+    }
+    prm.numBlurs = mNumBlurs;
+    prm.backgroundBrightness = mCrewPhotoBackgroundBrightness;
+
+    LiveCameraInput::LockedRect depthRect = { 0, nullptr }, colorRect = { 0, nullptr };
+    void *depthData = needsDepth || mDisplay == kStreamPlayerGreenscreen
+            || mDisplay == kStreamPlayerDepthGreenscreen || mDisplay == kStreamCrewPhoto
+        ? camInput->StreamBufferData(LiveCameraInput::kBufferDepth)
+        : nullptr;
+    void *colorData = needsColor ? camInput->StreamBufferData(LiveCameraInput::kBufferColor)
+                                 : nullptr;
+    if (depthData)
+        camInput->LockStream(depthData, depthRect);
+    if (colorData)
+        camInput->LockStream(colorData, colorRect);
+    int w = mOutputTex->Width() > 0 ? mOutputTex->Width() : 256;
+    int h = mOutputTex->Height() > 0 ? mOutputTex->Height() : 256;
+    std::vector<unsigned char> rgba((size_t)w * h * 4);
+    NativeStreamCompose(
+        (const unsigned short *)depthRect.mBits, depthRect.mPitch / 2,
+        (const unsigned int *)colorRect.mBits, colorRect.mPitch / 4, prm, w, h, rgba.data()
+    );
+    if (depthData)
+        camInput->UnlockStream(depthData);
+    if (colorData)
+        camInput->UnlockStream(colorData);
+    NativeStreamUpload(mOutputTex, rgba.data(), w, h);
+}
+
+void StreamRenderer::SetCrewPhotoPlayerCenters() {}
+#else
 
     bool CheckTexType(RndTex *tex) {
         MILO_ASSERT(tex, 0x45);
