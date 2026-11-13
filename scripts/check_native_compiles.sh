@@ -130,7 +130,7 @@ if [[ $CONFIGURE -eq 1 || ! -f "${BUILD_DIR}/build.ninja" ]]; then
     echo "=== Configuring native build (${BUILD_TYPE}) ==="
     # The configure line lives in ONE place now: scripts/native_configure.sh.
     # This used to inline it, with a hardcoded /home/free fallback for Dawn_DIR
-    # and no ncnn — so it produced a subtly different build dir from the one
+    # and no ncnn (since removed, PLAN P-6) — so it produced a subtly different build dir from the one
     # scripts/native_test.sh uses, on the same tree. One derivation, several
     # consumers; -DMILO_ENGINE_PATH is passed through as an extra arg.
     MILO_BUILD_TYPE="${BUILD_TYPE}" \

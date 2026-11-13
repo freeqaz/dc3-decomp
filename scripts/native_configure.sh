@@ -27,10 +27,9 @@
 #
 #   Dawn_DIR              sibling repo, gitignored/absent in a worktree — HARD
 #                         requirement, cmake fails without it
-#   ncnn_DIR + ENABLE_NCNN native/third_party/ is in .gitignore, so a worktree
-#                         has no ncnn; main configures with it ON. Soft: cmake
-#                         degrades to OFF, but then the worktree is silently
-#                         building a different dc3-native than main.
+#   (ncnn_DIR + ENABLE_NCNN used to be on this list. The in-process ncnn pose
+#                         path they enabled was removed 2026-11-13, PLAN P-6;
+#                         native/CMakeLists.txt drops the cached options.)
 #   CMAKE_BUILD_TYPE      RelWithDebInfo (cmake's default is an empty, -O0 build)
 #   C/CXX compiler        clang (the decomp sources need -fms-compatibility;
 #                         cmake's default cc is not necessarily clang)
@@ -68,7 +67,6 @@
 #   MILO_CONFIGURE_PLATFORM  override `uname -s` (Linux / Darwin); for testing
 #                         the Darwin branch on Linux together with
 #   MILO_CONFIGURE_DRY_RUN=1  print the cmake command and exit 0 without running
-#   NCNN_DIR / ncnn_DIR   path to the dir containing ncnnConfig.cmake
 #   CC / CXX              compilers (default: clang / clang++ from PATH)
 #   MILO_BUILD_TYPE       CMAKE_BUILD_TYPE (default: RelWithDebInfo)
 #
@@ -189,25 +187,6 @@ if [ -z "$cc" ] || [ -z "$cxx" ]; then
     exit 9
 fi
 
-# ---- ncnn (OPTIONAL, but main has it ON) ------------------------------------
-# native/third_party/ is gitignored, so it exists only in the main checkout.
-# Without this a worktree silently configures ENABLE_NCNN=OFF and builds a
-# dc3-native with no internal pose estimator — a different binary from main's,
-# under a gate whose whole job is to compare against main.
-ncnn_dir=""
-if [ "$PLATFORM" = "Darwin" ]; then
-    # In-process pose capture (native/src/pose/CameraCapture.cpp) is V4L2-only,
-    # so ENABLE_NCNN cannot compile on macOS; the Python pose server is the Mac
-    # path (docs/native/POSE_INPUT.md). Skip the probe; ENABLE_NCNN stays OFF.
-    :
-else
-for c in "${ncnn_DIR:-}" "${NCNN_DIR:-}" \
-         "$REPO_ROOT/native/third_party/ncnn-install/lib/cmake/ncnn" \
-         "$MAIN_CHECKOUT/native/third_party/ncnn-install/lib/cmake/ncnn"; do
-    if [ -n "$c" ] && [ -f "$c/ncnnConfig.cmake" ]; then ncnn_dir="$c"; break; fi
-done
-fi
-
 # ---- imgui source cache (OPTIONAL) ------------------------------------------
 # Pure speed/offline convenience: reuse the main checkout's already-fetched
 # imgui rather than re-cloning it per worktree. Falls back to FetchContent's
@@ -229,12 +208,6 @@ CMAKE_ARGS=(
     -DDawn_DIR="$dawn_dir"
     -DBUILD_TESTS="$BUILD_TESTS_VALUE"
 )
-if [ "$PLATFORM" = "Darwin" ]; then
-    CMAKE_ARGS+=(-DENABLE_NCNN=OFF)
-fi
-if [ -n "$ncnn_dir" ]; then
-    CMAKE_ARGS+=(-DENABLE_NCNN=ON -Dncnn_DIR="$ncnn_dir")
-fi
 if [ -n "$imgui_src" ]; then
     CMAKE_ARGS+=(-DFETCHCONTENT_SOURCE_DIR_IMGUI="$imgui_src")
 fi
@@ -245,7 +218,6 @@ echo "    source     : $REPO_ROOT/native"
 echo "    build dir  : $BUILD_DIR"
 echo "    main repo  : $MAIN_CHECKOUT"
 echo "    Dawn_DIR   : $dawn_dir"
-echo "    ncnn_DIR   : ${ncnn_dir:-<not found — ENABLE_NCNN stays OFF>}"
 echo "    platform   : $PLATFORM    BUILD_TESTS=$BUILD_TESTS_VALUE"
 [ -n "$imgui_src" ] && echo "    imgui src  : $imgui_src (reused from main; no clone)"
 

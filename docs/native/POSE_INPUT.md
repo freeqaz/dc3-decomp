@@ -24,14 +24,15 @@ count, frameId, timestamp)`: `PersonData` = 20 joints in metres, per-joint
 confidence, trackId. The desktop socket reader and the web push both call it,
 so everything after it — `Poll`, the frame-id gate, `FillSkeletonData` (joint
 hold, noise floor), `FillPersonSlots` — is one code path, and `BuildSensorFrame`
-has one external-provider branch (plus the legacy ncnn one). Pinned by
+has one provider branch. Pinned by
 `NativeSkeletonProviderPublishTest` in `native/tests/test_native_posesynth.cpp`.
 
-**Legacy in-process path** (`native/src/pose/*`, ncnn): compiled in because
-`native_configure.sh` turns `ENABLE_NCNN` on, tried first on every windowed boot
-unless `DC3_POSE=external`, and always fails because its YOLO model was retired
-(`23f92cb78`). Its log line says "ncnn + RTMPose"; it is YOLO. The YOLO weights
-`native/yolo11n-pose.pt` are still tracked. Scheduled for removal (PLAN P-6).
+The old in-process path (`native/src/pose/*`: ncnn running YOLO-Pose, behind
+`ENABLE_NCNN`, `DC3_POSE=internal`, `DC3_POSE_MODELS`, `DC3_POSE_GPU`) was
+removed on 2026-11-13 (P-6) together with the tracked AGPL weights
+`native/yolo11n-pose.pt`. It was tried first on every windowed boot and always
+failed, because its model had been retired in `23f92cb78`; a windowed boot now
+goes straight to the MediaPipe server.
 
 Env-var reference: [SCORING_ENV_VARS.md](SCORING_ENV_VARS.md) and the master
 table in [../debugging/native.md](../debugging/native.md).
@@ -208,7 +209,7 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
 | P-3 | Gesture menus: `DC3_CONTROLLER_MODE` defaults to `forced`; `faithful` runs the original nav code but the hand meshes are hidden by `native/src/platform/MeshFilter.cpp` and nothing tests swipe nav. | M–L | all |
 | P-4 | Player on screen: silhouette, camera preview, photo moments. `LiveCameraInput` is null natively; `StreamRenderer::DrawToTexture` and `DepthBuffer3D` are stubbed; `MeshFilter` hides `silhouette_guy*`, `preview.mesh`, `pose_flash*`. Needs webcam RGB + a segmentation mask. | L | all |
 | P-5 | Tests: no ctest for the socket reader, COCO mapping or `AssignSlots`; gate is max-only and short; no deterministic human-video fixture. | S–M | all |
-| P-6 | Remove the dead ncnn/YOLO path and its tracked weights; fix the log line. | S | all |
+| P-6 | ~~Remove the dead ncnn/YOLO path~~ **Done** (`np-pose-desk`). | — | all |
 | P-7 | Scoring believability: calibrate against a recorded human, expose a latency knob. | M | all |
 | P-8 | macOS: `/proc/self/exe` → `_NSGetExecutablePath`; camera permission goes to the Python child. See [MACOS.md](MACOS.md). | S–M | mac |
 | P-9 | ~~Web pose~~ **Done in `np-web-pose`** (see [Web](#web)). Left: never run on a real webcam/permission prompt; GPU delegate and the lite model unmeasured on an idle box; no camera preview inside the game (P-4). | — | web |

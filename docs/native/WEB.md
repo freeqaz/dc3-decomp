@@ -76,7 +76,7 @@ Keyboard and gamepad reach the game through the engine's `Joypad_Native.cpp`.
 BlazePose in a worker, and pushes DC3's 20 joints into the same provider the
 desktop socket feeds — see [POSE_INPUT.md](POSE_INPUT.md#web). No camera,
 permission refused, or `?pose=off`: the game scores the stand-in skeleton, as
-before. ncnn is not an option on web (disabled under Emscripten).
+before.
 
 ## Deployment
 

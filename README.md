@@ -186,7 +186,7 @@ Building
 --------
 
 ```sh
-scripts/native_configure.sh                # finds Dawn (dc3-decomp-deps), ncnn, clang; exit 9 names what is missing
+scripts/native_configure.sh                # finds Dawn (dc3-decomp-deps), clang; exit 9 names what is missing
 cmake --build native/build --target dc3-native -- -j$(nproc)
 scripts/native_test.sh                     # the test gate: builds first, enforces the skip budget
 ```

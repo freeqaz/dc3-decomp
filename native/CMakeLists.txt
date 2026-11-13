@@ -167,18 +167,14 @@ if(ENABLE_FFMPEG AND NOT EMSCRIPTEN)
     pkg_check_modules(FFMPEG REQUIRED libavformat libavcodec libswscale libavutil)
 endif()
 
-# ncnn — lightweight neural network inference for internal pose estimation
-option(ENABLE_NCNN "Enable ncnn for internal pose estimation (replaces Python pose server)" OFF)
-if(ENABLE_NCNN AND NOT EMSCRIPTEN)
-    find_package(ncnn QUIET)
-    if(ncnn_FOUND)
-        message(STATUS "ncnn found: ${ncnn_DIR}")
-    else()
-        message(WARNING "ncnn not found — internal pose estimation disabled. "
-                        "Install ncnn or set -Dncnn_DIR=<path>")
-        set(ENABLE_NCNN OFF)
-    endif()
-endif()
+# The in-process ncnn pose path (native/src/pose/, ENABLE_NCNN) was removed
+# 2026-11-13 (docs/native/PLAN.md P-6): its YOLO-Pose model was retired in
+# 23f92cb78, so it failed on every boot before the MediaPipe pose server was
+# tried. Pose input is native/scripts/pose_server.py over the socket, or
+# PoseInput_Web.cpp on web. Drop the options an older configure cached, so an
+# existing build dir configures exactly like a fresh one.
+unset(ENABLE_NCNN CACHE)
+unset(ncnn_DIR CACHE)
 
 # Platform-specific linker flags and libraries (Linux vs macOS)
 if(NOT EMSCRIPTEN)
@@ -1199,10 +1195,6 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Skeleton_Native.cpp
     src/platform/GestureMgr_Native.cpp
     src/platform/NuiImageSurface_Native.cpp
-    $<$<BOOL:${ENABLE_NCNN}>:src/pose/PoseEstimator.cpp>
-    $<$<BOOL:${ENABLE_NCNN}>:src/pose/PoseTracker.cpp>
-    $<$<BOOL:${ENABLE_NCNN}>:src/pose/CameraCapture.cpp>
-    $<$<BOOL:${ENABLE_NCNN}>:src/pose/InternalPoseProvider.cpp>
     src/platform/StreamReceiver_Native.cpp
     src/platform/SampleInst_Native.cpp
     src/platform/StbVorbisImpl.cpp
@@ -1390,10 +1382,6 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/NuiImageSurface_Native.cpp
     # ThreadCall_Native.cpp lifted to milo-engine (engine 0.2b drop-xdk POSIX
     # graduation); compiled via DC3_WEB_LIFTED_ENGINE_SOURCES below.
-    $<$<BOOL:${ENABLE_NCNN}>:src/pose/PoseEstimator.cpp>
-    $<$<BOOL:${ENABLE_NCNN}>:src/pose/PoseTracker.cpp>
-    $<$<BOOL:${ENABLE_NCNN}>:src/pose/CameraCapture.cpp>
-    $<$<BOOL:${ENABLE_NCNN}>:src/pose/InternalPoseProvider.cpp>
     # AudioDevice_Web.cpp lifted to milo-engine (MILO_BUILD_WEB, W0).
     src/platform/StbVorbisImpl.cpp
     # Rnd_Wgpu.cpp / MeshGpuCache.cpp lifted to milo-engine; compiled via
@@ -1611,7 +1599,6 @@ target_compile_definitions(dc3-native PRIVATE
     HX_IMGUI=1
     DC3_HTTP_SERVER=1
     $<$<BOOL:${ENABLE_FFMPEG}>:HX_FFMPEG=1>
-    $<$<BOOL:${ENABLE_NCNN}>:ENABLE_NCNN=1>
 )
 
 # Include paths matching Xbox build structure
@@ -1637,7 +1624,6 @@ target_link_libraries(dc3-native PRIVATE
     ${DC3_PLATFORM_LIBS}
     ${FFMPEG_LIBRARIES}
     imgui
-    $<$<BOOL:${ENABLE_NCNN}>:ncnn>
 )
 
 # NOTE: GFX sources include BOTH Dawn/WebGPU headers AND decomp engine headers.
@@ -1732,7 +1718,6 @@ target_compile_definitions(milo-viewer PRIVATE
     MILO_DEBUG=1
     _DEBUG=1
     $<$<BOOL:${ENABLE_FFMPEG}>:HX_FFMPEG=1>
-    $<$<BOOL:${ENABLE_NCNN}>:ENABLE_NCNN=1>
 )
 
 target_include_directories(milo-viewer PRIVATE
@@ -1756,7 +1741,6 @@ target_link_libraries(milo-viewer PRIVATE
     ${DC3_PLATFORM_LIBS}
     imgui
     $<$<BOOL:${ENABLE_FFMPEG}>:${FFMPEG_LIBRARIES}>
-    $<$<BOOL:${ENABLE_NCNN}>:ncnn>
 )
 target_precompile_headers(milo-viewer PRIVATE
     "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"

@@ -134,7 +134,7 @@ See [SCANNER_TRUTHFULNESS.md](SCANNER_TRUTHFULNESS.md). Run all three before tru
 | Tool | Description | Doc |
 |------|-------------|-----|
 | [HTTP Debug Server](HTTP_DEBUG_SERVER.md) | Embedded HTTP server for live engine interaction — DTA eval, screenshots, telemetry, settings | [HTTP_DEBUG_SERVER.md](HTTP_DEBUG_SERVER.md) |
-| `scripts/native_configure.sh` | Configure `native/build` for the current tree (worktree-safe): derives `Dawn_DIR`, ncnn, compiler, build type and generator from the main checkout and exits 9 naming every path it probed when a dependency is missing | [../native/TESTING.md](../native/TESTING.md) |
+| `scripts/native_configure.sh` | Configure `native/build` for the current tree (worktree-safe): derives `Dawn_DIR`, compiler, build type and generator from the main checkout and exits 9 naming every path it probed when a dependency is missing | [../native/TESTING.md](../native/TESTING.md) |
 | `scripts/native_test.sh` | **The native test gate.** Builds the required targets first, runs ctest, prints executed/passed/failed/skipped separately and enforces the skip-budget ratchet (`native/tests/skip_budget.txt`). Use it instead of bare `ctest`; exit codes are in its header | [../native/TESTING.md](../native/TESTING.md) |
 | `scripts/dc3-agent-test.sh` | Launch `dc3-native` with the HTTP debug server, fast boot and telemetry on, for interactive agent probing | [HTTP_DEBUG_SERVER.md](HTTP_DEBUG_SERVER.md), [../debugging/native.md](../debugging/native.md) |
 | `scripts/web/build.sh` | The one canonical web (Emscripten/WASM) build: `--release`/`--debug`/`--both`/`--reconfigure` | [../native/WEB.md](../native/WEB.md) |
