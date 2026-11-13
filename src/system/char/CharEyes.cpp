@@ -38,7 +38,9 @@ const float kDefaultMinLookTime = 1.0f;
 
 INIT_REVS(18, 0)
 
-#if !defined(__EMSCRIPTEN__) && !defined(__APPLE__)
+// libc++ (Emscripten, Apple, or -stdlib=libc++ on Linux) already declares a
+// global ::pow(float, float); defining one is a redefinition there.
+#if !defined(__EMSCRIPTEN__) && !defined(__APPLE__) && !defined(_LIBCPP_VERSION)
 float pow(float base, float exp) { return std::pow(base, exp); }
 #endif
 
