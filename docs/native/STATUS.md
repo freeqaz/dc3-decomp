@@ -34,7 +34,7 @@ prepared from Linux and has not been built on a Mac since March.
 | Fitness | A fitness song starts from the `playlists` row, not row 0. See [Reaching Story and Fitness](#reaching-story-and-fitness). | headless runs, 2026-11-13 (`np-modes`) |
 | Party / Crew | Crew Throwdown with two people: all 4 events, standings, rematch, main; both scored every event. Party Time: events scored for both; with one person its perform event plays solo (the game's own `use_1p_instead`). See [Two-player modes](#two-player-modes). | headless GPU runs, 2026-11-13 (`np-twoplayer`) |
 | Options, store | Every Options page reached; settings persist across a relaunch (freestyle, overscan, calibration, crowd volume). Store reaches its offline dialog; credits show. Options → Gameplay: **0 `MILO_FAIL`s**, 6 rows on every visit (`np-options`; was 16 FAILs from the native overlay's `num_data`, G-12). Checkbox state was always right; both glyphs and every help-bar button glyph still draw white until the engine patch for G-12 lands (with it: coloured (A)/(B), filled vs outline boxes, the Battle "1 vs 1" icon). Kinect Tuner now says it is the 360 dashboard's (notice `kinect_tuner`, G-16) | headless runs, 2026-11-13 (`np-dogfood2`; `np-options` re-measure) |
-| Movies | Desktop movies open out of the archive through the File layer. The intro plays on the attract screen (windowed from `native/build`). Song-select previews open and decode into `preview.tex`, but the on-screen look is unconfirmed. No movie audio (PLAN G-15) | screenshots + RT dump + `NativeTreeEnginePaths.*`, 2026-11-13 (`np-paths`) |
+| Movies | Desktop movies open out of the archive through the File layer. The intro plays on the attract screen (windowed from `native/build`). **Sound:** each movie plays its Bink track (localized track for the intro) through the engine mixer and the picture follows it: the intro's output correlates with the file's track at offset 0, r = 1.0000 (2–26 s), and closes with all 2484 frames shown, 0 samples dropped. Song previews loop. The song-select card shows album art with the preview behind it, as Xenia does. Web movies: flags still swapped (PLAN G-15) | screenshots + RT dump + `NativeTreeEnginePaths.*` (`np-paths`); captured device output + `MovieAudio.*`, 2026-11-13 (`np-media`) |
 | Rehearse dancer | **Drawn** (main `02e6c130e`, engine `fe22a2e`): the dancer is rendered into `projection.tex` and shown on the projection quad, covering 17–39% of its area; needed the render-target alpha rule and the mesh vertex re-sync together (PLAN G-11). Crew "Make Your Move" still shows no character: it is the depth-image view (P-4) | `RehearseProjectionTest`, 2026-11-13 (`np-rehearse`, `np-crowd-land`) |
 | Venue crowd | Drawn in 3D and animating in all crowd venues: 27–76 members, palette colours, 0 impostors, ~0.5 ms a frame; no white figures with alpha written (PLAN H-6, G-17) | `CrowdTest`, `PerformCrowdTest`, 2026-11-13 (`np-crowd-land`) |
 | Post-process | The "awesome" post-process covers the whole screen, HUD and pause menus included, in animated static (engine `PostProcPass.cpp` noise vs the image's `NgPostProc::CheckNoise`; PLAN G-14). **Root-caused; engine patch verified in a scratch copy, not landed**: the image overlays a stationary striped noise *texture*, which gives a mild brightening, not ±0.5 per-pixel static | screenshots + live `force_postproc` read, 2026-11-13 (`np-dogfood2`) |
@@ -144,11 +144,13 @@ provider; the dummy count pinned to 1. The tests seed the global options cache
 so no `tutorial_battle_screen_*` intervenes, and run under `DC3_FAST_TIME`
 (~8–35 s each).
 
-**Seen on the way, not fixed:** the team-photo boxes on the battle results and
-party winner screens are white (PLAN P-4). Without a camera there is nothing to
-photograph; with camera frames the snapshot target now renders the crew photo
-(alpha 0, see POSE_INPUT.md *Player on screen*), but no run has reached a
-results screen showing one yet.
+**Seen on the way:** the photo on the battle results. Without a camera there is
+nothing to photograph. With camera frames (`np-media`, 2026-11-13) a two-performer
+battle takes its final-pose photo and the results screen reveals it, but the card
+shows only its "DC3" backing: the snapshot is alpha 0 and the photo materials blend
+by source alpha. With `~/tmp/np-media-engine.patch` (a TexRenderer's clear reaches
+its target, as `DxRnd::Clear` does) the card shows both performers. Not landed (PLAN
+P-4); party winner team photos not reached.
 
 ### Every song
 
@@ -280,7 +282,7 @@ and differs between runs):
 | Live webcam | Never tried (no camera on the measurement box) | — |
 | Pose server from `native/build` | A windowed boot from `native/build` spawns this tree's `pose_server.py` with the tree's model (absolute path), and the server loads it (PLAN P-10) | log, 2026-11-13 (`np-paths`, a video standing in for the camera) |
 | Gesture menus | Whole perform route by gesture alone (title → song → results → main), 10 gesture / 0 button selects; default policy `auto` (faithful with a camera). Web: same policy, title → song select → back by gesture through `dc3_pose_push`. See [POSE_INPUT](POSE_INPUT.md#gesture-menus) | `GestureMenusTest` + its forced sabotage, `scripts/web/gesture-menus.mjs`, 2026-11-13 (`np-gesture-menus`) |
-| Player silhouette (P-4) | With a camera stream the depth image inside the menu and gameplay player boxes draws the player (`np-player-view`): synthetic v3 frames and real MediaPipe masks over a video; mirrored like a Kinect. Photos, `DepthBuffer3D`, song-preview movie: not done. No camera: unchanged | screenshots + `CameraViewTest` / `NoCameraViewTest` |
+| Player silhouette (P-4) | With a camera stream the depth image inside the menu and gameplay player boxes draws the player (`np-player-view`): synthetic v3 frames and real MediaPipe masks over a video; mirrored like a Kinect. Photos: taken and revealed on battle results, invisible (alpha 0) until the engine patch lands, then correct (`np-media`). `DepthBuffer3D`: not done. No camera: unchanged | screenshots + `CameraViewTest` / `NoCameraViewTest`; photos: battle screenshots, `TexRendererClearTest` in a patched scratch engine, 2026-11-13 |
 | `scripts/pose_scoring_gate.sh` | Passes (~13 min): five configs, each the whole song under `DC3_FAST_TIME`; judges means, final scores and per-move distances (`scripts/pose_gate_report.py`). Standing still out-scores a different recorded dance (P-7) | ran |
 
 ## Web — see [WEB.md](WEB.md)
