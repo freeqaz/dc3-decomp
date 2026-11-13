@@ -2051,6 +2051,7 @@ if(BUILD_TESTS)
         tests/test_pose_level.cpp
         tests/test_native_twoplayer.cpp
         tests/test_native_pose_dropout.cpp
+        tests/test_native_second_person.cpp
         tests/test_native_pose_socket.cpp
         tests/test_native_tree_paths.cpp
         tests/test_native_gesture_menus.cpp

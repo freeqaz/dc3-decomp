@@ -16,6 +16,9 @@
 #include "gesture/SkeletonUpdate.h"
 #include "hamobj/HamGameData.h"   // TheGameData (player->skeleton binding)
 #include "hamobj/HamPlayerData.h" // GetSkeletonTrackingID
+#include "meta_ham/HamUI.h"          // TheHamUI -> ShellInput -> SkeletonChooser
+#include "meta_ham/ShellInput.h"
+#include "meta_ham/SkeletonChooser.h"
 #include "flow/PropertyEventProvider.h" // TheHamProvider (NativeDummyPlayerCount)
 #include "obj/Task.h"
 #include "os/Debug.h" // TheDebug.AddExitCallback
@@ -384,6 +387,18 @@ static int AssignSlots(const int *trackIds, const Vector3 *hips, int numValid,
     return reassignments;
 }
 
+// The hamprovider says this mode needs two players: the two properties the
+// image's Game::CheckForSkeletonLoss reads to want a second bound player.
+static bool NativeModeNeedsTwoPlayers() {
+    if (!TheHamProvider)
+        return false;
+    static Symbol requires_2_players("requires_2_players");
+    static Symbol is_in_party_mode("is_in_party_mode");
+    const DataNode *two = TheHamProvider->Property(requires_2_players, false);
+    const DataNode *party = TheHamProvider->Property(is_in_party_mode, false);
+    return (two && two->Int() != 0) || (party && party->Int() != 0);
+}
+
 // Xbox builds SkeletonUpdateData::mSkeletonsLeft as a 2-entry array indexed by
 // PLAYER, by matching each player's assigned skeleton tracking ID
 // (HamPlayerData::GetSkeletonTrackingID, snapshotted in SkeletonUpdate::
@@ -397,6 +412,34 @@ static int AssignSlots(const int *trackIds, const Vector3 *hips, int numValid,
 // dummy is tracked before its filter has seen enough frames to be valid).  It
 // runs on GestureMgr's skeletons (last frame's, post quality filter) before the
 // frame is handed over, so the binding lands in this frame's snapshot.
+//
+// It must agree with the chooser, or the two undo each other every frame
+// (np-tracking, PLAN W-10).  Two rules:
+//  * Player 2 is auto-assigned only in a mode that needs two players
+//    (NativeModeNeedsTwoPlayers).  Everywhere else the image's way in for a
+//    second person is the drop-in: SkeletonChooser round-robins the extra
+//    skeleton for a raised hand ("New player detected!  Raise your hand to
+//    join.") and, while it waits, UpdatePlayerSkeletonNavData drops that
+//    skeleton's id from the player ids, so SetPlayerSkeletonNavData unbinds
+//    whoever holds it.  Auto-assigning player 2 to it re-bound and was unbound
+//    every frame, and the chooser switched its active player back and forth;
+//    each unbind is an Overshell player_quit (perform.dta on_player_quit:
+//    start_score_move_index 1000, flash cards cleared) and each rebind a
+//    player_join that restarts the drop-in grace period.  Measured: a second
+//    detection for one second at song start (a fake-camera cut) left the
+//    dancer on player 2 and a whole song with no move scored and no cards.
+//  * A skeleton bound here is no longer the chooser's round-robin candidate
+//    (SkeletonChooser::NativeSkeletonBound).  Otherwise a person who is moving
+//    while unbound (a dancing camera feed in the menus, or after a re-acquire
+//    in a song) is bound here and unbound by the chooser every frame until she
+//    stands still or raises a hand.
+static int sAutoAssignCount[2] = { 0, 0 };
+
+static SkeletonChooser *NativeChooser() {
+    ShellInput *shell = TheHamUI.GetShellInput();
+    return shell ? shell->GetSkeletonChooser() : nullptr;
+}
+
 static void NativeAutoAssignPlayers() {
     if (!TheGameData || !TheGestureMgr)
         return;
@@ -414,9 +457,10 @@ static void NativeAutoAssignPlayers() {
             }
         }
     }
+    const int autoPlayers = NativeModeNeedsTwoPlayers() ? 2 : 1;
     for (int pass = 0; pass < 2; pass++) {
         bool requireValid = (pass == 0);
-        for (int p = 0; p < 2; p++) {
+        for (int p = 0; p < autoPlayers; p++) {
             if (bound[p])
                 continue;
             for (int s = 0; s < NUM_SKELETONS; s++) {
@@ -427,10 +471,18 @@ static void NativeAutoAssignPlayers() {
                     continue;
                 bound[p] = &skel;
                 HamPlayerData *playerData = TheGameData->Player(p);
-                if (playerData && playerData->GetSkeletonTrackingID() != skel.TrackingID())
+                if (playerData && playerData->GetSkeletonTrackingID() != skel.TrackingID()) {
                     TheGameData->AssignSkeleton(p, skel.TrackingID());
+                    sAutoAssignCount[p]++;
+                }
                 break;
             }
+        }
+    }
+    if (SkeletonChooser *chooser = NativeChooser()) {
+        for (int p = 0; p < 2; p++) {
+            if (bound[p])
+                chooser->NativeSkeletonBound((int)(bound[p] - &TheGestureMgr->GetSkeleton(0)));
         }
     }
 
@@ -445,6 +497,20 @@ static void NativeAutoAssignPlayers() {
             sPrevIdx[1] = idx[1];
             fprintf(stderr, "DC3 SCORING: player->slot binding p0=%d p1=%d\n",
                 idx[0], idx[1]);
+        }
+        // How often this had to (re)bind: once per join is normal; every frame
+        // means something else unbinds the player each frame.
+        static int sReported[2] = { 0, 0 };
+        static auto sLast = std::chrono::steady_clock::now();
+        auto now = std::chrono::steady_clock::now();
+        if (now - sLast >= std::chrono::seconds(5)) {
+            sLast = now;
+            if (sAutoAssignCount[0] != sReported[0] || sAutoAssignCount[1] != sReported[1]) {
+                fprintf(stderr, "DC3 SCORING: auto-assign rebinds p0=%d p1=%d (total)\n",
+                    sAutoAssignCount[0], sAutoAssignCount[1]);
+                sReported[0] = sAutoAssignCount[0];
+                sReported[1] = sAutoAssignCount[1];
+            }
         }
     }
 }
@@ -654,16 +720,8 @@ int NativeDummyPlayerCount(bool modeNeedsTwo, const char *policy) {
 }
 
 static int NativeDummyPlayerCount() {
-    bool needsTwo = false;
-    if (TheHamProvider) {
-        static Symbol requires_2_players("requires_2_players");
-        static Symbol is_in_party_mode("is_in_party_mode");
-        const DataNode *two = TheHamProvider->Property(requires_2_players, false);
-        const DataNode *party = TheHamProvider->Property(is_in_party_mode, false);
-        needsTwo = (two && two->Int() != 0) || (party && party->Int() != 0);
-    }
     static const char *sPolicy = getenv("DC3_DUMMY_PLAYERS");
-    return NativeDummyPlayerCount(needsTwo, sPolicy);
+    return NativeDummyPlayerCount(NativeModeNeedsTwoPlayers(), sPolicy);
 }
 
 // A new frame when the provider produced one (it runs at camera rate, slower
