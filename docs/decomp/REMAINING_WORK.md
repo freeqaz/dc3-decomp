@@ -64,20 +64,35 @@ the two division results live. Rediscovering any of those costs the whole
 investigation; the tool prints them in one second.
 
 Give it a mangled symbol (it resolves unit → file through `decomp.db`) or
-`--unit` / `--file` directly. It reports the note blocks **near the definition**
-— adjacent-above first, then inside the body, then further above (which is
-usually the *previous* function's note) — rather than the whole file, because
-`src/system/rndobj/Utl.cpp` alone has 27 note blocks and 782 lines of them.
+`--unit` / `--file` directly. It reads the unit's **sidecar** first and then the
+source: note blocks near the definition — adjacent-above first, then inside the
+body, then further above (which is usually the *previous* function's note).
 
-**Sidecar notes (pilot, 2026-11-13).** Five functions' lane history moved out of
-the source into `docs/decomp/notes/<path under src/>.md`, one `` ## `<mangled>` ``
-section per function and one fenced block per original comment block, verbatim:
-`RndMatAnim::Copy`, `JoypadClient::Poll`, `SpeechMgr::Poll`, `CamShot::GetCam`,
-`HollaBackMinigame::SetDefaultShot`. The tool reads the sidecar too (exact
-symbol, then short name) and prints its blocks first; a moved function answers
-exit 0 with the same text it gave before the move. The source keeps a 3–4 line
-mechanism comment ending in `Lane history: docs/decomp/notes/...`. New notes on
-those five go in the sidecar section, not back into the source.
+**Lane history lives in sidecars, not in `src/` (since 2026-11-13).** Every
+lane-tagged note wall in `src/` — 1,057 blocks from 347 files; `//` lines in
+`src/` went 43,985 → 25,911 — was moved verbatim into `docs/decomp/notes/<path under src/>.md`: one
+`` ## `<mangled>` `` section per function (`` ## `(file-level)` `` for blocks
+attached to no function, printed by the tool as context only), one fenced block
+per original comment block with its original line range. The source keeps a
+marker line, `// Lane history (N lines moved): docs/decomp/notes/....md`, plus at
+most three `// >` lines quoting the block verbatim (its load-bearing sentence
+and/or verdicts such as *do not retry* / *NOT a behaviour bug*). Every batch was
+gated byte-identical by `scripts/notes/verify_comment_move.py` (function and data
+symbols plus relocations, before vs after a full `ninja`, and `report.json`), so
+a moved comment changed no object.
+
+**Writing a new note: put it in the sidecar.** Append a fenced block under the
+function's `` ## `<mangled>` `` section (create the section if it is missing),
+tagged with your lane name; in the source, at most a few lines stating the
+residual mechanism in plain words. If you wrote a wall in the source anyway,
+`python3 scripts/notes/migrate_notes.py <file>` moves it for you. A **new**
+lane-tagged note block of ≥ 5 lines anywhere under `src/` fails every full
+`ninja` (post-compile step `CHECK no lane-note walls in src/`, script
+`scripts/notes/check_no_lane_walls.py`, allowance ratchet
+`scripts/notes/lane_walls_allowed.txt`) and `tests/test_no_lane_walls.py`. It is
+**not** run by `ninja <one>.obj` and there is no commit hook. Untagged prose —
+documentation that happens to say "inert" or "MEASURED" — is left alone. To
+grep prior art by hand, search `docs/decomp/notes/` as well as `src/`.
 
 Exit codes are the point: **0** notes found, **1** looked and found none,
 **2** could not look (symbol not in the DB, or the unit maps to no file). A

@@ -675,6 +675,27 @@ config.custom_build_steps = {
                 "desc": "VERIFY no symbol is called but defined nowhere",
             },
         },
+        {
+            # Lane history (what a lane tried, what it measured) lives in
+            # docs/decomp/notes/<path under src/>.md, where
+            # scripts/find_refutations.py reads it -- not as comment walls in
+            # src/.  2026-11-13: ~20k lines of such walls were moved out
+            # byte-identically (scripts/notes/verify_comment_move.py).  This
+            # step is what stops them growing back: a NEW lane-tagged note
+            # block of >= 5 lines anywhere under src/ is exit 1 and fails the
+            # build before REPORT.  A file with FEWER walls than its allowance
+            # (scripts/notes/lane_walls_allowed.txt) is exit 3, non-fatal here
+            # for the same reason as the step above.  ~1.3 s, and only when
+            # an object moved.  Not reached by `ninja <one>.obj`.
+            "outputs": str(stamp_dir / "lane_walls_checked.stamp"),
+            "rule": "run_script",
+            "implicit": ["all_source"],
+            "variables": {
+                "cmd": "python3 scripts/notes/check_no_lane_walls.py "
+                       "|| test $$? -eq 3",
+                "desc": "CHECK no lane-note walls in src/ (they go in docs/decomp/notes)",
+            },
+        },
     ],
 }
 

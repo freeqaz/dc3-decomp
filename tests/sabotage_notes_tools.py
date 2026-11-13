@@ -10,7 +10,7 @@ reported UNDETECTED and makes this exit 1; so does a final clean run that is
 not green.  Restores are in-memory single-anchor replacements, so this is safe
 on a dirty tree; a non-unique anchor is reported, never applied.
 
-Run:  python3 tests/sabotage_notes_tools.py     (~15 s)
+Run:  python3 tests/sabotage_notes_tools.py     (~4 min: the live-tree scans run per mutation)
 """
 import subprocess
 import sys
@@ -19,7 +19,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MN = ROOT / "scripts" / "notes" / "migrate_notes.py"
 VG = ROOT / "scripts" / "notes" / "verify_comment_move.py"
-TESTS = ["tests/test_migrate_notes.py", "tests/test_verify_comment_move.py"]
+CK = ROOT / "scripts" / "notes" / "check_no_lane_walls.py"
+CF = ROOT / "configure.py"
+TESTS = ["tests/test_migrate_notes.py", "tests/test_verify_comment_move.py",
+         "tests/test_no_lane_walls.py"]
 
 # (label, file, [(old, new), ...], [test names, any of which must fail])
 MUTATIONS = [
@@ -59,6 +62,35 @@ MUTATIONS = [
     ("G9 label identity ignores its offset", VG,
      [("|{_h(sec['data'])}+{s['value']:#x}>\")", "|{_h(sec['data'])}>\")")],
      ["test_a_label_that_moves_is_a_difference"]),
+
+    ("G10 a changed header's readers are not required to be rebuilt", VG,
+     [('                stale.append(f"{obj} (reads a changed header)")',
+       '                pass')],
+     ["test_changed_header_whose_reader_was_not_rebuilt_is_vacuous"]),
+    ("G11 PCH-read headers charged to no object", VG,
+     [("            out[r] |= users\n", "            pass\n")],
+     ["test_pch_header_is_charged_to_every_pch_user"]),
+
+    ("C1 a wall in a file with no allowance line is ignored", CK,
+     [("        if have > may:\n", "        if have > may and rel in allowed:\n")],
+     ["test_new_wall_in_a_new_file_is_refused_and_named",
+      "test_missing_allowance_is_strict_and_malformed_cannot_run"]),
+    ("C2 a stale allowance is never reported (a wall could grow back unseen)", CK,
+     [("        elif have < may:\n", "        elif False:\n")],
+     ["test_allowance_is_a_ratchet"]),
+    ("C3 prefilter reads only the head of each file", CK,
+     [("if not LANE_HISTORY_RE.search(text) or not NOTE_RE.search(text):",
+       "if not LANE_HISTORY_RE.search(text[:2000]) or not NOTE_RE.search(text[:2000]):")],
+     ["test_prefilter_drops_no_file_the_detector_would_flag"]),
+    ("C4 a malformed allowance line is accepted", CK,
+     [(' or not parts[0].startswith("src/"):', ":")],
+     ["test_missing_allowance_is_strict_and_malformed_cannot_run"]),
+    ("C5 --write drops the recorded reasons", CK,
+     [("{reasons.get(rel) or 'reason not recorded'}", "reason not recorded")],
+     ["test_write_records_current_walls_and_keeps_reasons"]),
+    ("C6 the check is unwired from configure.py's post-compile chain", CF,
+     [('"cmd": "python3 scripts/notes/check_no_lane_walls.py "', '"cmd": "true "')],
+     ["test_full_ninja_reaches_the_check"]),
 
     ("M1 lane tag not required (documentation saying 'inert' is moved)", MN,
      [("or not LANE_HISTORY_RE.search(", "or not True or LANE_HISTORY_RE.search(")],

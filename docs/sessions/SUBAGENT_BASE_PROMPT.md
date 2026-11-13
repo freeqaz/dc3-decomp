@@ -47,6 +47,16 @@ ninja build/373307D9/src/path/to/File.obj
 - **Linker-merged calls detected** - These cannot be reproduced, accept current match
 - **After 5+ iterations with no improvement** - Document blockers and move on
 
+## Where to Write Down What You Tried
+- **Before your first measurement:** `scripts/find_refutations.py '<mangled>'` — prints
+  what earlier lanes already measured for this function (sidecar first, then source).
+- **Lane history goes in the sidecar, not in `src/`:**
+  `docs/decomp/notes/<path under src/>.md`, under the function's `` ## `<mangled>` ``
+  heading, as a fenced block tagged with your lane name. In the source, leave at most a
+  few lines stating the residual mechanism in plain words.
+- A new lane-tagged note block of 5+ lines in `src/` **fails the full `ninja`**
+  (`CHECK no lane-note walls in src/`). Fix: `python3 scripts/notes/migrate_notes.py <file>`.
+
 ## Function Type Patterns
 
 ### Load Functions
