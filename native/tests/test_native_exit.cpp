@@ -320,6 +320,9 @@ TEST_F(NativeExitTest, SecondEngineOnAPortExitsInsteadOfSharing) {
     Start(first, mRunDir,
           {"MILO_HEADLESS=1", "DC3_HTTP=1", "DC3_HTTP_PORT=0", "DC3_HTTP_PORT_FILE=" + portFile});
     ASSERT_TRUE(first.WaitFor("DC3_HTTP_PORT=", 120)) << Tail(first.Output());
+    // Read at once, with no wait: HttpServer::Start writes the port file before
+    // it prints the line, so the line implies the file.  Until 2026-11-13 it
+    // printed first, and under load (~40) this read found no file.
     int port = atoi(ReadAll(portFile).c_str());
     ASSERT_GT(port, 0) << "DC3_HTTP_PORT_FILE not written\n" << Tail(first.Output());
     std::string line = "DC3_HTTP_PORT=" + std::to_string(port) + "\n";

@@ -353,6 +353,7 @@ variables are value-parsed: `0`/`false`/`off`/`no` disable.
 | `MILO_VIDEO_FPS` | `30` | Frame rate for `MILO_VIDEO` | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
 | `MILO_CAPTURE_FRAME` | unset | Arm a GPU frame capture at frame N (see [native/TOOLS.md](../native/TOOLS.md)) | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
 | `MILO_FRAME_TIMES` | unset | Write a per-frame timing CSV to this path | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
+| `DC3_CROWD_STATS` | unset | `N`: every N render frames, one `DC3_CROWD: frame=… draws3d=… impostors=… pose=…` line on stderr (3D crowd draws, impostor renders, checksum of the drawn crowd poses). Draws nothing differently; read by `CrowdTest` | `src/system/world/Crowd.cpp` |
 | `MILO_PERF` | unset | Presence. Frame timing | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
 | `DC3_TEL` | `0` | Non-zero: gameplay telemetry lines on stderr | `native/src/telemetry/GameplayTelemetry.cpp` |
 | `DC3_TEL_INTERVAL` | `10` | Frames between telemetry lines | `native/src/telemetry/GameplayTelemetry.cpp` |

@@ -26,7 +26,9 @@
 #include <cfloat>
 #ifdef HX_NATIVE
 inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
-#include <unordered_map>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #else
 #include "xdk\LIBCMT\ppcintrinsics.h"
 #endif
@@ -36,8 +38,111 @@ static RndCam *gImpostorCamera = nullptr;
 static RndMat *gImpostorMat = nullptr;
 static int gNumCrowd = 0;
 static WorldCrowd *gParent = nullptr;
+
 #ifdef HX_NATIVE
-static std::unordered_map<Character *, RndTex *> sImpostorCache;
+// Native-only crowd draw counters (PLAN H-6), off unless DC3_CROWD_STATS is
+// set. Value N > 0 prints one line every N render frames:
+//   DC3_CROWD: frame=F draws3d=D impostors=I pose=P ms=T
+// draws3d counts Draw3DChars' curChar->Draw() calls (one per 3D crowd member),
+// impostors counts DrawShowing's renders of a character into gImpostorTex, and
+// pose is a checksum of the local transforms of every transformable inside
+// each Character drawn that frame, so it moves when the crowd animates; ms is
+// the wall time spent inside WorldCrowd::DrawShowing that frame (CPU-side
+// recording of the crowd's draws, less the checksum walk). Read by
+// native/tests/test_native_crowd.cpp; draws nothing and changes nothing.
+namespace {
+    struct NativeCrowdStats {
+        int every = -1; // -1 unread, 0 off
+        unsigned int frame = 0;
+        int draws3d = 0;
+        int impostors = 0;
+        double pose = 0;
+        double ms = 0;
+        bool any = false;
+
+        bool On() {
+            if (every < 0) {
+                const char *env = getenv("DC3_CROWD_STATS");
+                every = env ? atoi(env) : 0;
+                if (env && every <= 0)
+                    every = 1;
+            }
+            return every > 0;
+        }
+        void Roll() {
+            unsigned int now = TheRnd.GetFrameID();
+            if (any && now != frame) {
+                if (frame % (unsigned int)every == 0) {
+                    fprintf(
+                        stderr,
+                        "DC3_CROWD: frame=%u draws3d=%d impostors=%d pose=%.6f ms=%.3f\n",
+                        frame,
+                        draws3d,
+                        impostors,
+                        pose,
+                        ms
+                    );
+                }
+                draws3d = impostors = 0;
+                pose = ms = 0;
+            }
+            frame = now;
+            any = true;
+        }
+        void AddPose(Character *c) {
+            // Its own cost is taken back out of ms.
+            auto t0 = std::chrono::steady_clock::now();
+            // Weighted by position in the walk so a swap of two bones moves it.
+            int n = 1;
+            for (ObjDirItr<RndTransformable> it(c, true); it; ++it, ++n) {
+                RndTransformable *t = it;
+                if (t == c)
+                    continue;
+                const Transform &x = t->LocalXfm();
+                pose += n
+                    * (x.v.x + x.v.y + x.v.z + x.m.x.x + x.m.x.y + x.m.x.z + x.m.y.x
+                       + x.m.y.y + x.m.y.z + x.m.z.x + x.m.z.y + x.m.z.z);
+            }
+            ms -= std::chrono::duration<double, std::milli>(
+                      std::chrono::steady_clock::now() - t0
+            )
+                      .count();
+        }
+        void On3DDraw(Character *c) {
+            if (!On())
+                return;
+            Roll();
+            draws3d++;
+            AddPose(c);
+        }
+        void OnImpostor(Character *c) {
+            if (!On())
+                return;
+            Roll();
+            impostors++;
+            AddPose(c);
+        }
+    } sNativeCrowdStats;
+
+    // Times one WorldCrowd::DrawShowing into sNativeCrowdStats.ms.
+    struct NativeCrowdDrawTimer {
+        bool on;
+        std::chrono::steady_clock::time_point start;
+        NativeCrowdDrawTimer() : on(sNativeCrowdStats.On()) {
+            if (on)
+                start = std::chrono::steady_clock::now();
+        }
+        ~NativeCrowdDrawTimer() {
+            if (!on)
+                return;
+            sNativeCrowdStats.Roll();
+            sNativeCrowdStats.ms += std::chrono::duration<double, std::milli>(
+                                        std::chrono::steady_clock::now() - start
+            )
+                                        .count();
+        }
+    };
+}
 #endif
 
 namespace {
@@ -151,12 +256,6 @@ WorldCrowd::~WorldCrowd() {
         }
         RELEASE(gImpostorCamera);
         RELEASE(gImpostorMat);
-#ifdef HX_NATIVE
-        for (auto &pair : sImpostorCache) {
-            RELEASE(pair.second);
-        }
-        sImpostorCache.clear();
-#endif
     }
 }
 
@@ -354,14 +453,7 @@ BEGIN_LOADS(WorldCrowd)
     if (d.rev > 0xC) {
         bool force = false;
         d >> force;
-#ifdef HX_NATIVE
-        // On native we only have billboard rendering (no 3D character RTT pipeline).
-        // Force3DCrowd(true) moves all instances from MultiMesh to m3DChars,
-        // emptying the billboard instance list. Always use billboard path instead.
-        Force3DCrowd(false);
-#else
         Force3DCrowd(force);
-#endif
     }
     if (d.rev > 5) {
         d >> mShow3DOnly;
@@ -662,13 +754,6 @@ void WorldCrowd::Draw3DChars() {
                 for (int i = 0; i != it->m3DChars.size(); i++) {
                     auto _tmp0 = RndCam::Current();
                     Apply3DCharXfm(it, i, _tmp0);
-#ifdef HX_NATIVE
-                    // 3D crowd characters not used in normal rendering —
-                    // Force3DCrowd is always false on native, so m3DChars is empty.
-                    // The impostor billboard path in DrawShowing handles all crowd rendering.
-                    (void)i;
-                    break;
-#else
                     if (it->mDef.mUseRandomColor) {
                         SetMatColorFlags(
                             it->mDef.mMats,
@@ -688,13 +773,15 @@ void WorldCrowd::Draw3DChars() {
                         curChar->SetLodType(mCharForceLod);
                     }
                     curChar->Draw();
+#ifdef HX_NATIVE
+                    sNativeCrowdStats.On3DDraw(curChar);
+#endif
                     if (mCharForceLod != kLODPerFrame) {
                         curChar->SetLodType(kLODPerFrame);
                     }
                     curChar->SetSelfShadow(selfShadow);
                     curChar->SetFloorShadow(floorShadow);
                     curChar->SetSpotCutout(spotCutout);
-#endif
                 }
             }
         }
@@ -1083,6 +1170,9 @@ void WorldCrowd::DrawShowing() {
     //
     // Lane history (28 lines moved): docs/decomp/notes/system/world/Crowd.md
     START_AUTO_TIMER("crowd_draw");
+#ifdef HX_NATIVE
+    NativeCrowdDrawTimer nativeCrowdTimer;
+#endif
     if (!mPlacementMesh) return;
     Draw3DChars();
     if (Rnd::kDrawOcclusionDepth == TheRnd.DrawMode()) return;
@@ -1100,129 +1190,6 @@ void WorldCrowd::DrawShowing() {
                 numInstances++;
             }
             if ((unsigned long)(int)numInstances != 0) {
-#ifdef HX_NATIVE
-                // Native cached impostor path: render each character type to a
-                // dedicated texture ONCE, then reuse on all subsequent frames.
-                // Characters don't animate on native (no clip subdirs), so a
-                // single snapshot is sufficient.
-                RndTex *cachedTex = nullptr;
-                {
-                    auto cacheIt = sImpostorCache.find(curChar);
-                    if (cacheIt != sImpostorCache.end()) {
-                        cachedTex = cacheIt->second;
-                    }
-                }
-                if (!cachedTex) {
-                    cachedTex = Hmx::Object::New<RndTex>();
-                    cachedTex->SetBitmap(256, 512, 32, RndTex::kRendered, true, nullptr);
-
-                    gImpostorCamera->SetTargetTex(cachedTex);
-
-                    RndCam *curCam = RndCam::Current();
-                    Transform camXfmCopy;
-                    memcpy(&camXfmCopy, &curCam->WorldXfm(), sizeof(Transform) - sizeof(Vector3));
-
-                    float halfHeight = charIt->mDef.mHeight * 0.5f;
-
-                    // Position impostor camera at distance along camera's -Y axis
-                    const Transform &placementXfm = mPlacementMesh->WorldXfm();
-                    const Transform &curCamXfm = curCam->WorldXfm();
-                    float dx = curCamXfm.v.x - placementXfm.v.x;
-                    float dy = curCamXfm.v.y - placementXfm.v.y;
-                    float dz = curCamXfm.v.z - placementXfm.v.z - halfHeight;
-                    float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-                    float minDist = curCam->NearPlane() + halfHeight;
-                    if (dist < minDist) dist = minDist;
-                    float negDist = -dist;
-                    camXfmCopy.v.x = camXfmCopy.m.y.x * negDist;
-                    camXfmCopy.v.y = camXfmCopy.m.y.y * negDist;
-                    camXfmCopy.v.z = camXfmCopy.m.y.z * negDist + halfHeight;
-                    gImpostorCamera->SetLocalXfm(camXfmCopy);
-                    float yFov = std::atan((double)(halfHeight / dist)) * 2.0f;
-                    gImpostorCamera->SetFrustum(
-                        curCam->NearPlane(), curCam->FarPlane(), yFov, 1.0f
-                    );
-
-                    // Orient character based on crowd rotation mode
-                    Transform charXfm;
-                    if (mCrowdRotate == kCrowdRotateNone) {
-                        memcpy(&charXfm, &mPlacementMesh->WorldXfm(), 0x30);
-                    } else {
-                        const Transform &meshXfm = mPlacementMesh->WorldXfm();
-                        float upX = meshXfm.m.z.x;
-                        float upY = meshXfm.m.z.y;
-                        float upZ = meshXfm.m.z.z;
-                        float fwdY, fwdZ, camA, upA, camB, upB;
-                        if (mCrowdRotate == kCrowdRotateFace) {
-                            const Transform &camWXfm = curCam->WorldXfm();
-                            fwdZ = camWXfm.m.y.y * upX - camWXfm.m.y.x * upY;
-                            fwdY = camWXfm.m.y.x * upZ - camWXfm.m.y.z * upX;
-                            camA = camWXfm.m.y.z; upA = upY;
-                            camB = camWXfm.m.y.y; upB = upZ;
-                        } else {
-                            const Transform &camWXfm = curCam->WorldXfm();
-                            fwdY = camWXfm.m.y.z * upX - camWXfm.m.y.x * upZ;
-                            fwdZ = camWXfm.m.y.x * upY - camWXfm.m.y.y * upX;
-                            camA = camWXfm.m.y.y; upA = upZ;
-                            camB = camWXfm.m.y.z; upB = upY;
-                        }
-                        charXfm.m.x.x = camA * upA - camB * upB;
-                        charXfm.m.x.y = fwdY;
-                        charXfm.m.x.z = fwdZ;
-                        Normalize(charXfm.m.x, charXfm.m.x);
-                        charXfm.m.y.x = charXfm.m.x.y * upX - upY * charXfm.m.x.x;
-                        charXfm.m.y.y = upZ * charXfm.m.x.x - charXfm.m.x.z * upX;
-                        charXfm.m.y.z = charXfm.m.x.z * upY - charXfm.m.x.y * upZ;
-                        charXfm.m.z.x = upX;
-                        charXfm.m.z.y = upY;
-                        charXfm.m.z.z = upZ;
-                    }
-                    charXfm.v.x = 0;
-                    charXfm.v.y = 0;
-                    charXfm.v.z = 0;
-                    curChar->SetWorldXfm(charXfm);
-
-                    // Render character to the cached impostor texture
-                    RndEnviron *env = mEnviron;
-                    bool savedApprox = true;
-                    if (env) {
-                        savedApprox = env->UsesApproxGlobal();
-                        env->SetUseApproxGlobal(false);
-                    }
-                    {
-                        const Transform &charWorldXfm = curChar->WorldXfm();
-                        RndEnvironTracker tracker(env, &charWorldXfm.v);
-                        gImpostorCamera->Select();
-                        curChar->SetShowing(true);
-                        if (mCharForceLod != kLODPerFrame) {
-                            curChar->SetLodType(mCharForceLod);
-                        }
-                        curChar->DrawShowing();
-                        if (mCharForceLod != kLODPerFrame) {
-                            curChar->SetLodType(kLODPerFrame);
-                        }
-                    }
-                    if (env) {
-                        env->SetUseApproxGlobal(savedApprox);
-                    }
-                    curCam->Select();
-
-                    gImpostorCamera->SetTargetTex(gImpostorTex[mLod]);
-                    sImpostorCache[curChar] = cachedTex;
-                }
-
-                gImpostorMat->SetDiffuseTex(cachedTex);
-                // Character materials don't write alpha, so the RT alpha stays
-                // at the clear value (0). Use additive blend to bypass alpha:
-                // black background adds nothing (0+scene=scene), character
-                // color adds on top. Disable alpha cut since alpha is all zero.
-                gImpostorMat->SetAlphaCut(false);
-                gImpostorMat->SetBlend(RndMat::kBlendAdd);
-                DrawMultiMeshWithEnviron(mmesh);
-                gImpostorMat->SetAlphaCut(true);
-                gImpostorMat->SetBlend(RndMat::kBlendSrc);
-                continue;
-#endif
                 SetMatAndCameraLod();
                 RndCam *curCam = RndCam::Current();
                 Transform camXfmCopy;
@@ -1429,6 +1396,9 @@ void WorldCrowd::DrawShowing() {
                             curChar->SetLodType(mCharForceLod);
                         }
                         curChar->DrawShowing();
+#ifdef HX_NATIVE
+                        sNativeCrowdStats.OnImpostor(curChar);
+#endif
                         if (mCharForceLod != kLODPerFrame) {
                             curChar->SetLodType(kLODPerFrame);
                         }

@@ -162,7 +162,8 @@ extern const char *gDc3ExitReason; // src/App.cpp; read by the DC3_EXIT record
 }
 
 // DC3_HTTP_PORT_FILE=<path>: once bound, write the port (decimal, newline) to
-// <path>.  Written to a temporary name and renamed, so a reader polling for the
+// <path>, before the DC3_HTTP_PORT= stdout line (so the line implies the file).
+// Written to a temporary name and renamed, so a reader polling for the
 // file never sees it half-written.  This is how a shell or a second process
 // (the synthetic sensor's --perform-port-file) learns a DC3_HTTP_PORT=0 port
 // without parsing the engine's stdout.
@@ -243,11 +244,17 @@ bool HttpServer::Start(int port) {
     mRunning = true;
     mServerThread = std::thread(&HttpServer::ServerThread, this);
 
+    // The port file is written BEFORE the stdout line, so a reader that sees
+    // the line can read the file at once.  The other order was a race:
+    // NativeExitTest.SecondEngineOnAPortExitsInsteadOfSharing reads the file
+    // as soon as the line appears, and under load (~40) the engine was
+    // descheduled between the two and the test read no file.
+    WritePortFile(port);
+
     // Machine-readable line on stdout for scripts to parse
     fprintf(stdout, "DC3_HTTP_PORT=%d\n", port);
     fflush(stdout);
     fprintf(stderr, "[HttpServer] Listening on port %d\n", port);
-    WritePortFile(port);
     return true;
 }
 

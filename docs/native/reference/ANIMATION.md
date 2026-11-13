@@ -94,15 +94,33 @@ FileMerger's `load_tempo` handler (`orig-assets/extracted/char/char_objects.dta`
 - **Registration.** WorldCrowd objects load their placement mesh and character list. The DTA
   `WorldCrowd` init sets type `band`, whose `enter` runs `{$this set_fullness 1 1}` and registers
   with `$hamwardrobe add_crowd` (`orig-assets/extracted/world/world_objects.dta`).
-- **Billboards.** Each character type becomes a 4-vertex billboard (`BuildBillboard`) drawn with
-  `gImpostorMat` through an `RndMultiMesh`.
-- **Native differences:**
-  - `Load` always calls `Force3DCrowd(false)`, whatever the saved flag. Native has no 3D-character
-    crowd path, and `Force3DCrowd(true)` would empty the billboard instance list.
-  - `DrawShowing` renders each character type once to its own 256x512 render target, cached in
-    `sImpostorCache` (keyed by `Character*`), and reuses it every frame. **Native crowd billboards
-    are therefore static snapshots** — crowd animation does not reach the screen even when the
-    clips play. The Xbox re-renders the impostors through `Draw3DChars()`.
+- **3D crowd.** `Load` passes the serialised force flag to `Force3DCrowd`. Every WorldCrowd in
+  the five crowd venues saves force=1 (34 objects: dci 10, houseparty 7, rollerrink 6,
+  streetside 6, dclive 5; measured by loading each venue `.milo`), so every instance moves into
+  `m3DChars`. Each frame `Draw3DChars` draws the crowd member's `Character` at every instance's
+  transform (`Apply3DCharXfm`), with the member's three `random*.pal` colours set as
+  `kColorModModulate` first. The Characters are polled by `WorldCrowd::Poll`, so the crowd
+  animates; rollerrink draws up to 57 members a frame (27 in some camera shots).
+- **Billboards (impostors).** Each character type also has a 4-vertex billboard (`BuildBillboard`)
+  drawn with `gImpostorMat` through an `RndMultiMesh`. For every character type with billboard
+  instances, `DrawShowing` re-renders the Character into the shared `gImpostorTex[mLod]` every
+  frame in `kDrawNormal`, crops the quad to the `CharCollide` screen rects, and draws it
+  `kBlendSrc` with the 0x80 alpha cut. With force=1 there are no billboard instances, so in the
+  shipped venues this path draws nothing.
+- **Native:** runs the image's code (H-6, `np-crowd`). Until then `Load` forced
+  `Force3DCrowd(false)`, `Draw3DChars` broke out before drawing, and `DrawShowing` rendered each
+  character once into a cached texture drawn with an additive blend that the transparent queue
+  then drew with the restored alpha-cut material, so no crowd reached the screen at all.
+  `CrowdTest` (`native/tests/test_native_crowd.cpp`, `DC3_CROWD_STATS`) guards it. Colours need
+  the engine change in PLAN H-6 (`MatColorMod`, no fringe fade on colour-mod band texels); without it the crowd draws with untinted clothes and black skin.
+- **`could not find group _00s_cameraperson_ok` (and `_70s_dj_skills_ok`,
+  `_70s_arcademachine_skills_ok`)** is the shipped data, not a native gap.
+  `HamWardrobe::PlayCrowdAnimation` plays `<stance>_<anim>`, then falls back to `<stance>_ok`
+  (`CharDriver::PlayGroup` notifies on each miss). The crowd anim files define only
+  `_00s_cameraperson` and `_00s_cameraperson_realtime_idle` for that stance, and `_70s_dj_*` only
+  in the tempo files; the original logs the same kind of notify under Xenia
+  (`archive/screenshots/xenia-gameplay/12-gameplay-venue-midsong.png`: `crowd_m_70s_02 ... could
+  not find clip from group _70s_dj_skills...`).
 
 Venues whose crowd objects are empty in the `.milo` and populated only by DTA scripting were
 reported in March as unsupported (unverified now).

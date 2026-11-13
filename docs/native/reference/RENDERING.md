@@ -262,7 +262,9 @@ Limits:
 Consumers in the decomp:
 - `RndTexRenderer` (`src/system/rndobj/TexRenderer.cpp`);
 - the WorldCrowd impostors (`src/system/world/Crowd.cpp`: `gImpostorCamera`,
-  `gImpostorTex[]`, `sImpostorCache`);
+  `gImpostorTex[]`; re-rendered per frame as in the image, but the shipped
+  venues put every crowd member in 3D, so none is drawn — see
+  [ANIMATION.md](ANIMATION.md#worldcrowd-rendering));
 - `src/system/world/SpotlightDrawer_NG.cpp`;
 - `src/system/world/Reflection.cpp`;
 - `src/system/rndobj/ShadowMap.cpp`.
