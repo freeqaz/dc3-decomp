@@ -22,7 +22,7 @@
  *   node scripts/web/smoke-test.mjs [--port 8420] [--verbose]
  *   npm run web:smoke-test
  *
- * See docs/native/TODO.md §8.6 for context.
+ * See docs/archive/2026-11-13-native-doc-audit/native/TODO.md §8.6 for context.
  */
 
 import {
@@ -72,7 +72,7 @@ try {
         failures.push(`pageerror: ${err}`);
         if (/function signature mismatch|call_indirect/i.test(err)) {
             failures.push('  ^ AppLabel-class WASM vtable regression suspected');
-            failures.push('  ^ see docs/native/TODO.md §8.6 and PR #217');
+            failures.push('  ^ see docs/archive/2026-11-13-native-doc-audit/native/TODO.md §8.6 and PR #217');
         }
     }
 

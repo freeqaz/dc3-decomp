@@ -111,7 +111,7 @@ name**, which is found by tokenising — neither end of the string is the answer
 | `StreamReceiver360::SendDoneImpl` (`src/system/synth_xbox/StreamReceiver360.h`) | public | **protected** | **found by this scanner, previously unrecorded** |
 | `DName::append` (`src/xdk/LIBCMT/undname.cpp:16`) | public | **private** | **found 2026-09-16 by the parser fix** — `?append@DName@@QAAXPAVDNameNode@@@Z` vs the map's `…@@AAAX…`. Structurally invisible to `rfind`, whose last `@@` was `DNameNode@@`. Low severity: a CRT `undname` reconstruction whose `class DName` declares everything `public:`; the fix is an access section, not a code change. |
 
-`GroupSeqInst::Poll` appears in `docs/native/DECOMP_GAPS.md` only as
+`GroupSeqInst::Poll` appears in `docs/native/DECOMP_GAPS.md` (archived 2026-11-13 to `docs/archive/2026-11-13-native-doc-audit/native/`) only as
 implementation status ("Done, 99.4%"); `StreamReceiver360`'s other methods
 appear in several pattern docs for their match percentages. Neither the access
 divergence nor its class is described anywhere before this document, and

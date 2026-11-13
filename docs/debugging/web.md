@@ -84,7 +84,7 @@ npm run web:smoke-test
 ```
 
 Exits 0 on pass, 1 on fail. Run before declaring AppLabel / HamLabel /
-MainMenuProvider changes safe on web. See TODO.md §8.6 for the original bug.
+MainMenuProvider changes safe on web. See [the archived TODO.md §8.6](../archive/2026-11-13-native-doc-audit/native/TODO.md) for the original bug.
 
 ### Song List Scroll Test
 

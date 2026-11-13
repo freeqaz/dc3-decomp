@@ -94,10 +94,6 @@ Tool-specific deep docs live in subdirectories:
 | Doc | Description |
 |-----|-------------|
 | [plans/permuter/PERFORMANCE_ROADMAP.md](plans/permuter/PERFORMANCE_ROADMAP.md) | Permuter speed & power roadmap — throughput, search quality, synthesis revival (living tracker) |
-| [plans/custom-graphics-engine/PLAN.md](plans/custom-graphics-engine/PLAN.md) | Native port master plan — rendering/audio/input/motion |
-| [plans/dc3-native/STATUS.md](plans/dc3-native/STATUS.md) | Native port status — boot flow, error handling, env vars |
-| [plans/dc3-native/PLATFORM_HACKS_ANALYSIS.md](plans/dc3-native/PLATFORM_HACKS_ANALYSIS.md) | HX_NATIVE hacks audit — 298 guards categorized, DTA handler root cause, screen flow reference |
-| [plans/dc3-native/TEST_GAP_ANALYSIS.md](plans/dc3-native/TEST_GAP_ANALYSIS.md) | Test gaps — high-value missing tests for native port correctness |
 | [plans/XENIA_ORACLE.md](plans/XENIA_ORACLE.md) | Xenia as an oracle for the native port — what the fork can be trusted for, tiered plan (evaluator DTA channel first), recorded goldens with patch manifests |
 
 ## Projects
@@ -113,8 +109,8 @@ Tool-specific deep docs live in subdirectories:
 | [debugging/native.md](debugging/native.md) | **Start here** — native port debugging, ASan, headless testing, scripted input, ObjRef rings |
 | [debugging/web.md](debugging/web.md) | Web build debugging — WASM/Emscripten testing, CDP debugger |
 | [tools/HTTP_DEBUG_SERVER.md](tools/HTTP_DEBUG_SERVER.md) | HTTP debug server — live DTA eval, screenshots, telemetry, settings, object introspection |
-| [native/CONSOLE_DTA_EVAL.md](native/CONSOLE_DTA_EVAL.md) | Evaluating DTA on a **real Xbox 360** and getting the answer back on the PC — surface survey, wire protocols, `tools/console/dc3_eval.py` |
-| [native/CONSOLE_HW_FINDINGS.md](native/CONSOLE_HW_FINDINGS.md) | **Hardware ground truth** for the console channel: why the FTP transport can never work (a title launch unloads the dashboard's FTP server), the XBDM file transport that replaces it, drive-name aliasing behind the `game:\` trap, and `tools/console/hw_smoke.py` |
+| [tools/console/CONSOLE_DTA_EVAL.md](tools/console/CONSOLE_DTA_EVAL.md) | Evaluating DTA on a **real Xbox 360** (or under Xenia) and getting the answer back on the PC — surface survey, wire protocols, `tools/console/dc3_eval.py`; §10 is the **hardware ground truth**: why FTP can never carry the loop (a title launch unloads the dashboard's FTP server), the XBDM file channel that replaces it, drive-name aliasing behind the `game:\` trap, and `tools/console/hw_smoke.py` |
+| [tools/console/KINECT_CAPTURE.md](tools/console/KINECT_CAPTURE.md) | Recording real Kinect skeleton clips on a dev console — ground truth for pose input |
 
 ## Runtime (original binary under emulation)
 
@@ -127,11 +123,34 @@ Tool-specific deep docs live in subdirectories:
 
 ## Native Port
 
+<!-- NP-DOCS: coordinator fills this section -->
+<!-- (living README / PLAN / STATUS / LINUX / MACOS / WEB / POSE_INPUT pages go
+     here; native/MACOS_ARM_BUILD.md, native/WEB_TESTING.md,
+     native/SCORING_ENV_VARS.md and ../native/web/VIDEO_ASSETS.md are pending
+     fold-in and deliberately not listed yet) -->
+
+The rows below are the reference and procedure pages that already exist. For
+debugging and the master env-var table see [debugging/native.md](debugging/native.md).
+
 | Doc | Description |
 |-----|-------------|
-| [native/TESTING.md](native/TESTING.md) | Native build testing guide — GTest fixtures, ASan, debugging |
+| [native/TESTING.md](native/TESTING.md) | Native test gate — `scripts/native_test.sh`, gates, exit codes, skip-budget ratchet, fixtures, ASan, screenshot/pose goldens |
+| [native/RENDER_TEST.md](native/RENDER_TEST.md) | `render-test` — programmatic render checker |
+| [native/TOOLS.md](native/TOOLS.md) | GPU debugging tools — screenshots, GFXReconstruct, RenderDoc |
+| [native/MISSING_DEFINITIONS.md](native/MISSING_DEFINITIONS.md) | Weak stubs, shadowed definitions and the `--no-undefined` link — `scripts/native/check_stub_shadow.py` |
+| [native/SAVE_PERSISTENCE_PLAN.md](native/SAVE_PERSISTENCE_PLAN.md) | Native save/cache persistence — design record and on-disk contract |
+| [native/ENDIANNESS_PORT_CHECKLIST_DC3.md](native/ENDIANNESS_PORT_CHECKLIST_DC3.md) | Endianness checklist for DC3 serializers |
+| [native/reference/RENDERING.md](native/reference/RENDERING.md) | Rendering reference — where the renderer code lives, materials, lighting, post-processing, textures, render-to-texture, UI render path |
+| [native/reference/AUDIO_VIDEO.md](native/reference/AUDIO_VIDEO.md) | Audio and video reference — synth/stream pipeline, mogg decrypt, FFmpeg/Bink, web audio and video sidecars |
+| [native/reference/ANIMATION.md](native/reference/ANIMATION.md) | Animation reference — clip pipeline, crowd, lip sync, skeleton conventions, foot IK |
+| [native/reference/LOADING_AND_BOOT.md](native/reference/LOADING_AND_BOOT.md) | Loading and boot — FileMerger topology, async load chain, boot DTA order, screen flow |
+| [native/reference/PORTING.md](native/reference/PORTING.md) | Porting rules — LP64, endianness, iterator shim, Dawn gotchas, stream desync diagnosis, guard policy, link policy |
+| [native/reference/VIEWER.md](native/reference/VIEWER.md) | `milo-viewer` — how to run it, flags, scene renderer |
+| [native/reference/LIVE_STATE_PROBING.md](native/reference/LIVE_STATE_PROBING.md) | Probing live engine state on native and console — DTA eval, PROPSYNC vocabulary, syncing both sides |
+| [native/reference/CODE_STYLE.md](native/reference/CODE_STYLE.md) | Style rules for new native code |
 | [native/dta/OVERLAY_ENGINE.md](native/dta/OVERLAY_ENGINE.md) | DTA overlay engine — file overlay system design |
 | [native/dta/USAGE_GUIDE.md](native/dta/USAGE_GUIDE.md) | DTA overlay usage — settings toggles, locale strings |
+| [../native/docs/viewer-internals.md](../native/docs/viewer-internals.md), [../native/docs/scene-renderer.md](../native/docs/scene-renderer.md) | Viewer internals and the YAML scene renderer (live next to the code) |
 
 ## History
 
@@ -141,9 +160,9 @@ measurement ruler that has since changed.
 
 | Where | Count | What it is |
 |-------|-------|------------|
-| [sessions/](sessions/) | 365 files, 2025-01 → 2026-08 | Work-session logs, named by date and topic (e.g. `2026-02-11-x360-linking-pipeline.md`). History by construction |
+| [sessions/](sessions/) | 365 top-level files, 2025-01 → 2026-09 (`ls docs/sessions/*.md \| wc -l`) | Work-session logs, named by date and topic (e.g. `2026-02-11-x360-linking-pipeline.md`). History by construction |
 | [investigations/](investigations/) | 5 dated lanes | Self-contained investigation lanes with their own findings — [`2026-06-10-roadmap-to-100/`](investigations/2026-06-10-roadmap-to-100/), [`2026-07-01-native-camera-fixes/`](investigations/2026-07-01-native-camera-fixes/), [`2026-08-02-viewer-rb3-asset-render/`](investigations/2026-08-02-viewer-rb3-asset-render/README.md) (milo-viewer dropped geometry the asset asks for — LOD resolution from `Character::mLods`, material-less geometry libraries, outlier-guarded auto-framing), [`2026-08-04-bustamovepanel-poll.md`](investigations/2026-08-04-bustamovepanel-poll.md), [`2026-08-12-local-static-scope-ordinal.md`](investigations/2026-08-12-local-static-scope-ordinal.md) |
-| [archive/](archive/README.md) | 42 files (1 archive) | Superseded status snapshots and planning worklists, preserved byte-for-byte with a [manifest](archive/2026-08-17-doc-audit/MANIFEST.md) recording what went stale in each and what replaced it |
+| [archive/](archive/README.md) | 100 files (2 archives) | Superseded status snapshots, plans and worklists, preserved byte-for-byte; each archive has a manifest recording what went stale in each file and what replaced it — [2026-08-17 decomp docs](archive/2026-08-17-doc-audit/MANIFEST.md), [2026-11-13 native-port docs](archive/2026-11-13-native-doc-audit/MANIFEST.md) |
 
 ## General
 
