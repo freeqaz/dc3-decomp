@@ -5,20 +5,9 @@
 # of". The gate fails if a duplicate appears that is NOT listed (exit 1) and
 # if a listed one disappears (exit 3), so this file can only shrink.
 #
-# Every entry below has its LOSER in ../milo-native-engine: a fallback body
-# the engine defines for consumers without a decompiled one, linked into
-# libmilo-engine.a, while DC3's real decomp body links first and wins. The fix
-# is to make the engine's definitions weak, which is an engine change (shared
-# with rb3) -- see the engine patch referenced in docs/native/MACOS.md item 4.
-# When it lands, delete these lines; the gate will demand it.
-
-# engine src/platform/MeshGpuCache.cpp  vs  src/system/rndobj/Mesh.cpp
-RndMesh::OnSync(int)
-# engine src/platform/RndTex_Native.cpp  vs  src/system/rndobj/Tex.cpp
-RndTex::Load(BinStream&)
-RndTex::PreLoad(BinStream&)
-RndTex::PostLoad(BinStream&)
-# engine src/platform/StreamReceiver_Native.cpp  vs  src/system/synth/StreamReceiver.cpp
-StreamReceiver::sFactory
-# engine src/platform/Rnd_Wgpu.cpp  vs  src/lazer/meta_ham/HamUI.cpp
-TheUI
+# Empty since the engine made its fallback definitions weak (engine-stack
+# commit "platform: engine fallbacks that a consumer's decomp also defines are
+# weak", PLAN M-4): RndMesh::OnSync, RndTex::Load/PreLoad/PostLoad,
+# StreamReceiver::sFactory and TheUI each had their LOSER in
+# ../milo-native-engine, and DC3's decomp body now wins by rule instead of by
+# archive order. Add a line here only with the reason next to it.
