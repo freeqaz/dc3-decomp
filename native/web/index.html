@@ -295,6 +295,23 @@
             // Stop here — don't load the WASM module.
             throw new Error('WebGPU unavailable');
         }
+        // The build also needs JSPI (WebAssembly.Suspending; Chrome/Edge 137+).
+        // Safari 26 has WebGPU and passes the check above, but has no JSPI, so
+        // without this it fails later inside the WASM instantiate with an
+        // error that names neither feature.
+        if (typeof WebAssembly === 'undefined' || typeof WebAssembly.Suspending !== 'function') {
+            setStatus(
+                '<strong>This browser lacks WebAssembly JSPI.</strong><br>' +
+                '<span style="color:#aaa">DC3 needs WebGPU and JSPI. Use Chrome or Edge 137 or newer ' +
+                '(also on macOS). Safari and Firefox are not supported yet.</span>',
+                'error');
+            status.style.maxWidth = '900px';
+            status.style.textAlign = 'center';
+            log('JSPI (WebAssembly.Suspending) not available — refusing to boot engine', true);
+            const sv = document.getElementById('splash-video');
+            if (sv) sv.remove();
+            throw new Error('JSPI unavailable');
+        }
         {
             setStatus('Loading…', 'loading');
 
