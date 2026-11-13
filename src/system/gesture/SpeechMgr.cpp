@@ -676,6 +676,11 @@ void SpeechMgr::Poll() {
             // so c1 canonicalises on the first element address formed and
             // no expression of the address re-biases it.  Open question:
             // what makes c1 form &elem.pResult before &elem.
+            // w-this-adjust (2026-11-13): POINTER AUDIT, NOT A BUG -- the
+            // image's `subi r30, r31, 0x10` is &event[i] derived from
+            // &event[i].pResult (a stack array, not a this-adjustment); the
+            // address passed to NuiSpeechDestroyEvent is the same on both
+            // sides.  Re-measured 98.0 / equal 38, diff_arg 12, del 1.
             for (ULONG i = 0; i < fetched; i++) {
                 NUI_SPEECH_EVENT &cur = event[i];
                 if (cur.eventId > 0x20 && (cur.eventId == 0x40 || cur.eventId == 0x80)
