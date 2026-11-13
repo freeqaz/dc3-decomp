@@ -277,6 +277,71 @@ void ExpectVec(const Vector3 &got, float x, float y, float z, const char *what) 
 // ===========================================================================
 // PoseSocketReaderTest
 // ===========================================================================
+TEST(PoseSocketReaderTest, Dc3LayoutArrivesInMetresWithConfidenceBands) {
+    FakePoseServer server;
+    ASSERT_TRUE(server.ok());
+    NativeSkeletonProvider provider;
+    ASSERT_TRUE(Connect(provider, server));
+
+    WirePerson a = Dc3Person(11, 0.0f, 0.9f);
+    WirePerson b = Dc3Person(12, 0.5f, 0.9f);
+    a.values[kJointHandRight * 4 + 3] = 0.45f; // inferred band [0.3, 0.6)
+    a.values[kJointFootLeft * 4 + 3] = 0.29f;  // not tracked (< 0.3)
+    a.values[kJointHead * 4 + 3] = 0.6f;       // tracked (>= 0.6)
+    ASSERT_TRUE(server.Send(PacketV2(41, 12.25, 1280, 720, kNumJoints, 1, { a, b })));
+    ASSERT_TRUE(WaitForFrame(provider, 41));
+
+    ASSERT_EQ(provider.NumPersons(), 2);
+    EXPECT_DOUBLE_EQ(provider.Timestamp(), 12.25);
+    const NativeSkeletonProvider::PersonData &pa = provider.GetPerson(0);
+    const NativeSkeletonProvider::PersonData &pb = provider.GetPerson(1);
+    EXPECT_TRUE(pa.valid);
+    EXPECT_TRUE(pb.valid);
+    EXPECT_EQ(pa.trackId, 11);
+    EXPECT_EQ(pb.trackId, 12);
+    // Metres pass through untouched (no NormalizedToMeters, no 4:3 box).
+    ExpectVec(pa.joints[kJointElbowLeft], -0.30f, 1.60f, 1.9f, "a elbowL");
+    ExpectVec(pb.joints[kJointElbowLeft], 0.20f, 1.60f, 1.9f, "b elbowL");
+    EXPECT_EQ(pa.confidence[kJointHandRight], kConfidenceInferred);
+    EXPECT_EQ(pa.confidence[kJointFootLeft], kConfidenceNotTracked);
+    EXPECT_EQ(pa.confidence[kJointHead], kConfidenceTracked);
+    EXPECT_EQ(pa.confidence[kJointSpine], kConfidenceTracked);
+    EXPECT_EQ(provider.FindByTrackId(12), 1);
+    provider.Stop();
+}
+
+TEST(PoseSocketReaderTest, TruncatedAndUnknownPacketsDoNotDesyncTheStream) {
+    FakePoseServer server;
+    ASSERT_TRUE(server.ok());
+    NativeSkeletonProvider provider;
+    ASSERT_TRUE(Connect(provider, server));
+
+    // Declares two people, carries one: the second must be dropped, not read
+    // from past the end of the packet.
+    ASSERT_TRUE(server.Send(
+        PacketV2(1, 1.0, 640, 480, kNumJoints, 1, { Dc3Person(3, 0.0f) }, /*declared*/ 2)
+    ));
+    ASSERT_TRUE(WaitForFrame(provider, 1));
+    EXPECT_TRUE(provider.GetPerson(0).valid);
+    EXPECT_FALSE(provider.GetPerson(1).valid);
+
+    // An unknown landmark count: the person is skipped, the cursor stays in
+    // step, and the NEXT packet parses normally.
+    WirePerson odd;
+    odd.trackId = 9;
+    odd.values.assign(5 * 4, 0.25f);
+    ASSERT_TRUE(server.Send(PacketV2(2, 1.1, 640, 480, 5, 7, { odd })));
+    ASSERT_TRUE(WaitForFrame(provider, 2));
+    EXPECT_FALSE(provider.GetPerson(0).valid);
+
+    ASSERT_TRUE(server.Send(PacketV2(3, 1.2, 640, 480, kNumJoints, 1, { Dc3Person(4, 0.1f) })));
+    ASSERT_TRUE(WaitForFrame(provider, 3));
+    EXPECT_TRUE(provider.GetPerson(0).valid);
+    EXPECT_EQ(provider.GetPerson(0).trackId, 4);
+    ExpectVec(provider.GetPerson(0).joints[kJointHipCenter], 0.10f, 0.90f, 2.0f, "hip");
+    provider.Stop();
+}
+
 TEST(PoseSocketReaderTest, ADisconnectStopsTheProviderAndTellsThePlayer) {
     FakePoseServer server;
     ASSERT_TRUE(server.ok());
@@ -298,6 +363,212 @@ TEST(PoseSocketReaderTest, ADisconnectStopsTheProviderAndTellsThePlayer) {
         << "notice: " << NativeNotice::Text("pose");
     provider.Stop();
     NativeNotice::Clear("pose");
+}
+
+// ===========================================================================
+// PoseCocoMappingTest -- the layout-0 path (any external COCO-17 source)
+// ===========================================================================
+
+// Independent reference for NormalizedToMeters: the Kinect view width at the
+// fixed 3.0 m depth (2 * 3.0 * 160 / 285.63, JointUtl.s), x flipped so the
+// subject's left is -X, y flipped, height from the frame's own aspect.
+Vector3 RefMeters(float nx, float ny, float aspect) {
+    const float viewW = 2.0f * 3.0f * 160.0f / 285.63f;
+    return Vector3((0.5f - nx) * viewW, (0.5f - ny) * viewW * aspect, 3.0f);
+}
+
+void CheckCoco(const NativeSkeletonProvider::PersonData &p, float aspect) {
+    auto ref = [&](int k) { return RefMeters(kCoco[k][0], kCoco[k][1], aspect); };
+    auto mid = [](const Vector3 &a, const Vector3 &b) {
+        return Vector3((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f, (a.z + b.z) * 0.5f);
+    };
+    Vector3 v = ref(5);
+    ExpectVec(p.joints[kJointShoulderLeft], v.x, v.y, v.z, "shoulderL = COCO left shoulder");
+    EXPECT_LT(p.joints[kJointShoulderLeft].x, p.joints[kJointShoulderRight].x)
+        << "the subject's left must land at -X (not mirrored)";
+    // Head: ear midpoint while both ears are confident.
+    v = mid(ref(3), ref(4));
+    ExpectVec(p.joints[kJointHead], v.x, v.y, v.z, "head = ear midpoint");
+    // Hand: past the wrist along the forearm by 0.42 of it.
+    Vector3 e = ref(7), w = ref(9);
+    ExpectVec(p.joints[kJointHandLeft], w.x + (w.x - e.x) * 0.42f, w.y + (w.y - e.y) * 0.42f,
+              3.0f, "handL extrapolated");
+    // Spine: midway between the hip and shoulder midpoints.
+    Vector3 hc = mid(ref(11), ref(12)), sc = mid(ref(5), ref(6));
+    v = mid(hc, sc);
+    ExpectVec(p.joints[kJointSpine], v.x, v.y, v.z, "spine");
+    ExpectVec(p.joints[kJointHipCenter], hc.x, hc.y, hc.z, "hip centre");
+    // Confidence: per keypoint, and the weaker parent for synthesised joints.
+    EXPECT_EQ(p.confidence[kJointElbowRight], kConfidenceInferred);
+    EXPECT_EQ(p.confidence[kJointHandRight], kConfidenceInferred); // min(wrist, elbow)
+    EXPECT_EQ(p.confidence[kJointAnkleLeft], kConfidenceNotTracked);
+    EXPECT_EQ(p.confidence[kJointFootLeft], kConfidenceNotTracked);
+    EXPECT_EQ(p.confidence[kJointHead], kConfidenceTracked);
+}
+
+TEST(PoseCocoMappingTest, V2CocoUsesTheFramesOwnAspect) {
+    FakePoseServer server;
+    ASSERT_TRUE(server.ok());
+    NativeSkeletonProvider provider;
+    ASSERT_TRUE(Connect(provider, server));
+    // 16:9: the vertical extent must follow 720/1280, not the Kinect 4:3.
+    ASSERT_TRUE(server.Send(PacketV2(7, 3.0, 1280, 720, 17, 0, { CocoPerson(2, true) })));
+    ASSERT_TRUE(WaitForFrame(provider, 7));
+    ASSERT_TRUE(provider.GetPerson(0).valid);
+    CheckCoco(provider.GetPerson(0), 720.0f / 1280.0f);
+    provider.Stop();
+}
+
+TEST(PoseCocoMappingTest, V1PacketsKeepTheKinectAspect) {
+    FakePoseServer server;
+    ASSERT_TRUE(server.ok());
+    NativeSkeletonProvider provider;
+    ASSERT_TRUE(Connect(provider, server));
+    ASSERT_TRUE(server.Send(PacketV1(9, 4.0, { CocoPerson(6, false) })));
+    ASSERT_TRUE(WaitForFrame(provider, 9));
+    ASSERT_TRUE(provider.GetPerson(0).valid);
+    EXPECT_EQ(provider.GetPerson(0).trackId, 6);
+    CheckCoco(provider.GetPerson(0), 0.75f);
+    provider.Stop();
+}
+
+TEST(PoseCocoMappingTest, HeadFallsBackToTheNoseWithoutBothEars) {
+    FakePoseServer server;
+    ASSERT_TRUE(server.ok());
+    NativeSkeletonProvider provider;
+    ASSERT_TRUE(Connect(provider, server));
+    WirePerson p = CocoPerson(2, true);
+    p.values[4 * 4 + 3] = 0.1f; // right ear not tracked (profile view)
+    ASSERT_TRUE(server.Send(PacketV2(8, 3.0, 640, 480, 17, 0, { p })));
+    ASSERT_TRUE(WaitForFrame(provider, 8));
+    Vector3 nose = RefMeters(kCoco[0][0], kCoco[0][1], 0.75f);
+    ExpectVec(provider.GetPerson(0).joints[kJointHead], nose.x, nose.y, nose.z, "head = nose");
+    provider.Stop();
+}
+
+// ===========================================================================
+// PoseSensorSlotTest -- AssignSlots, as the image sees it
+// ===========================================================================
+class PoseSensorSlotTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        if (!SkeletonUpdate::HasInstance()) {
+            EnsureSymbolInit(); // SkeletonUpdate::Init registers DTA funcs
+            GestureMgr_NativePreInit();
+        }
+        mSensor = SkeletonUpdate::InstanceHandle().GetCameraInput();
+        ASSERT_NE(mSensor, nullptr);
+        // No provider: the sensor resets its slot map and feeds the dummy.
+        TheSkeletonProvider = nullptr;
+        mSensor->PollNewFrame();
+        ASSERT_TRUE(mServer.ok());
+        ASSERT_TRUE(Connect(mProvider, mServer));
+        TheSkeletonProvider = &mProvider;
+    }
+    void TearDown() override {
+        TheSkeletonProvider = nullptr;
+        mProvider.Stop();
+        if (mSensor)
+            mSensor->PollNewFrame(); // back to the dummy, slot map reset
+    }
+
+    // Send one frame of people (track id, x offset) and return the sensor's
+    // SkeletonFrame for it.
+    const SkeletonFrame *Frame(const std::vector<std::pair<int, float> > &people) {
+        std::vector<WirePerson> wire;
+        for (auto &p : people)
+            wire.push_back(Dc3Person(p.first, p.second));
+        // Ids keep rising across tests: the sensor remembers the last one it
+        // integrated, and a repeat is (correctly) not a new frame.
+        uint32_t id = ++sFrameId;
+        if (!mServer.Send(PacketV2(id, id / 30.0, 640, 480, kNumJoints, 1, wire)))
+            return nullptr;
+        if (!WaitForFrame(mProvider, id))
+            return nullptr;
+        return mSensor->PollNewFrame();
+    }
+
+    // slot -> track id for every tracked slot (-1 = untracked).
+    static std::vector<int> Slots(const SkeletonFrame *f) {
+        std::vector<int> out(NUM_SKELETONS, -1);
+        for (int s = 0; s < NUM_SKELETONS; s++) {
+            if (f->mSkeletonDatas[s].mTracking == kSkeletonTracked)
+                out[s] = f->mSkeletonDatas[s].mTrackingID;
+        }
+        return out;
+    }
+    static int SlotOf(const SkeletonFrame *f, int trackId) {
+        std::vector<int> s = Slots(f);
+        for (int i = 0; i < NUM_SKELETONS; i++) {
+            if (s[i] == trackId)
+                return i;
+        }
+        return -1;
+    }
+
+    CameraInput *mSensor = nullptr;
+    FakePoseServer mServer;
+    NativeSkeletonProvider mProvider;
+    static uint32_t sFrameId;
+};
+uint32_t PoseSensorSlotTest::sFrameId = 1000;
+
+TEST_F(PoseSensorSlotTest, PeopleKeepTheirSlotsWhateverOrderTheyArriveIn) {
+    const SkeletonFrame *f = Frame({ { 21, -0.4f }, { 22, 0.4f } });
+    ASSERT_NE(f, nullptr);
+    int slotA = SlotOf(f, 21), slotB = SlotOf(f, 22);
+    ASSERT_GE(slotA, 0);
+    ASSERT_GE(slotB, 0);
+    EXPECT_NE(slotA, slotB);
+    // The slot carries that person's skeleton, not just the id.
+    EXPECT_NEAR(f->mSkeletonDatas[slotA].mJointPositions[kJointHipCenter].x, -0.4f, 1e-4f);
+    EXPECT_NEAR(f->mSkeletonDatas[slotB].mJointPositions[kJointHipCenter].x, 0.4f, 1e-4f);
+
+    // The server lists them the other way round: slots must not follow.
+    f = Frame({ { 22, 0.4f }, { 21, -0.4f } });
+    ASSERT_NE(f, nullptr);
+    EXPECT_EQ(SlotOf(f, 21), slotA);
+    EXPECT_EQ(SlotOf(f, 22), slotB);
+    EXPECT_NEAR(f->mSkeletonDatas[slotA].mJointPositions[kJointHipCenter].x, -0.4f, 1e-4f);
+}
+
+TEST_F(PoseSensorSlotTest, ADepartedSlotIsNotHandedToANewcomerInTheSameFrame) {
+    const SkeletonFrame *f = Frame({ { 31, 0.0f } });
+    ASSERT_NE(f, nullptr);
+    int slotA = SlotOf(f, 31);
+    ASSERT_GE(slotA, 0);
+
+    // 31 leaves as 32 arrives: 32 must not inherit 31's slot this frame, or
+    // SkeletonUpdate archives 31's last pose as 32's history.
+    f = Frame({ { 32, 0.3f } });
+    ASSERT_NE(f, nullptr);
+    EXPECT_EQ(SlotOf(f, 31), -1);
+    int slotB = SlotOf(f, 32);
+    ASSERT_GE(slotB, 0);
+    EXPECT_NE(slotB, slotA);
+    EXPECT_NE(f->mSkeletonDatas[slotA].mTracking, kSkeletonTracked)
+        << "the departed slot reads untracked for a frame";
+}
+
+TEST_F(PoseSensorSlotTest, AnUntrackedDetectionNeverClaimsASlot) {
+    const SkeletonFrame *f = Frame({ { -1, 0.0f }, { 41, 0.5f } });
+    ASSERT_NE(f, nullptr);
+    // Count tracked slots by their tracking state, not their id: a slot taken
+    // by the -1 detection would carry tracking id -1.
+    int tracked = 0;
+    for (int s = 0; s < NUM_SKELETONS; s++) {
+        if (f->mSkeletonDatas[s].mTracking == kSkeletonTracked) {
+            tracked++;
+            EXPECT_EQ(f->mSkeletonDatas[s].mTrackingID, 41) << "slot " << s;
+        }
+    }
+    EXPECT_EQ(tracked, 1);
+}
+
+TEST_F(PoseSensorSlotTest, ARepeatedFrameIdIsNotANewSensorFrame) {
+    ASSERT_NE(Frame({ { 51, 0.0f } }), nullptr);
+    // Same generation again: the camera has not produced a new picture.
+    EXPECT_EQ(mSensor->PollNewFrame(), nullptr);
 }
 
 // ===========================================================================
