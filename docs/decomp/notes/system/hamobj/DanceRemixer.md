@@ -84,6 +84,15 @@ Inside the body (was lines 320-370):
     // allocation rather than an expression shape.
 ```
 
+w-low-ham-math (2026-11-13), lane D:
+
+```text
+NOT A BUG. Against 0x824F0228: from = mFromMeasure*4 (0x4c), to = mToMeasure*4
+(0x50); beat < from returns beat; beat in [from, to) returns beat + jump when
+beat < to - (jump >> 1) (srawi), otherwise beat - jump; beat >= to returns beat
+when to >= from, otherwise (beat - from) + to. All match. The residual is the
+-0x8 conversion slot already documented.
+```
 
 ## `?BuildSetOfPrevAdjacentMoveParents@@YAXAAV?$set@PBVMoveParent@@U?$less@PBVMoveParent@@@stlpmtx_std@@V?$StlNodeAlloc@PBVMoveParent@@@3@@stlpmtx_std@@ABV12@@Z`
 
