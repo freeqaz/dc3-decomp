@@ -1033,6 +1033,65 @@ TEST_F(FitnessPlaylistFlowTest, PlaylistsRowStartsAPlaylist) {
 }
 
 // ===========================================================================
+// The forced help bar survives a song (PLAN G-19)
+// ===========================================================================
+//
+// Under DC3_CONTROLLER_MODE=forced (the default with no camera) the helpbar
+// leaves controller mode for the song and comes back when focus leaves the
+// gameplay panel (G-7, HelpBarPanel.cpp NativeForcedHelpbar*).  Leaving the
+// results, perform_complete_screen hands focus back to game_screen for the
+// frames of its transition to meta_loading_continue_screen; the helpbar used
+// to leave controller mode again there and be put straight back while its
+// exit_controller_mode_immediate.flow was still running, so the exit won and
+// song select came back gesture-styled (LEFT HAND / MODE SELECT) after every
+// song.  The forced exit now waits out a transition.
+
+// song_select_screen came back at frame ~42,300 (MILO_NORENDER, measured);
+// part of the route is wall-clock transitions, so the frame count moves with
+// the box's speed -- leave a wide margin (~25 s at NORENDER rates).
+static constexpr int kSongToSongSelectFrames = 100000;
+
+class ForcedHelpbarAfterSongTest : public ControllerModeFlowTest {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+    static void SetUpTestSuite() {
+        if (!getenv("DC3_DTA_FLOW_TESTS") || sRanEngine) return;
+        sResult = RunDtaFlow(kSongToSongSelectFrames, 180, "song-to-song-select.txt",
+                             "MILO_NORENDER=1 DC3_FAST_TIME=1 DC3_CONTROLLER_MODE=forced",
+                             true, kTutorialGeneral);
+        sRanEngine = true;
+    }
+    void SetUp() override { CheckRan(sResult, sRanEngine); }
+    void TearDown() override {
+        if (HasFailure() && sRanEngine) Dump(sResult);
+    }
+};
+DtaRunResult ForcedHelpbarAfterSongTest::sResult = {};
+bool ForcedHelpbarAfterSongTest::sRanEngine = false;
+
+TEST_F(ForcedHelpbarAfterSongTest, HelpbarLeavesControllerModeOncePerSong) {
+    const std::string &out = sResult.output;
+    const char *kLeave = "DC3 ControllerMode: forced: helpbar leaves controller mode for gameplay";
+    size_t complete = out.find("Screen 'perform_complete_screen' Enter");
+    size_t songSelect = out.find("Screen 'song_select_screen' Enter", complete);
+    ASSERT_NE(complete, std::string::npos)
+        << "precondition: song-to-song-select.txt never reached perform_complete_screen";
+    ASSERT_NE(songSelect, std::string::npos)
+        << "precondition: the flow never returned to song_select_screen after the song";
+    size_t leaves = 0;
+    for (size_t at = out.find(kLeave); at != std::string::npos; at = out.find(kLeave, at + 1))
+        leaves++;
+    EXPECT_EQ(leaves, 1u) << "the helpbar should leave controller mode once, for the song";
+    size_t spurious = out.find(kLeave, complete);
+    EXPECT_TRUE(spurious == std::string::npos || spurious > songSelect)
+        << "the helpbar left controller mode again on the way from the results to "
+           "song select; put straight back while its exit flow is still running, it "
+           "comes back gesture-styled";
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
+}
+
+// ===========================================================================
 // Options > Gameplay and the Kinect Tuner (PLAN G-12, G-16)
 // ===========================================================================
 //

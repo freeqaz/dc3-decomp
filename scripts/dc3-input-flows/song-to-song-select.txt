@@ -1,0 +1,91 @@
+# One whole Perform song (YMCA), then back through the results to song select
+# (PLAN G-19, docs/native/PLAN.md).
+#
+# Run with the move tutorial seen (RunDtaFlow seed kTutorialGeneral) so
+# multiuser_screen goes straight to loading, and with DC3_FAST_TIME +
+# MILO_NORENDER so the song takes seconds.  After the song:
+#   perform_endgame_screen -> perform_final_results_screen (confirm)
+#   -> perform_complete_screen (confirm: row 0, select song)
+#   -> game_screen (focus, inside the transition) -> meta_loading_continue_screen
+#   -> song_select_screen
+# Presses wait out each HamNavList's enter animation (see ymca.txt).
+#
+# A wait_screen gives up after 1800 FRAMES and moves on, and MILO_NORENDER
+# runs thousands of frames a second, so the long waits (the multiuser ->
+# loading transition, the song itself, ~25k frames under DC3_FAST_TIME) are
+# the same wait repeated: each one that times out hands over to the next, and
+# once the screen is up the rest are satisfied on the same frame.
+wait_screen title_screen
++43 wake
++45 confirm
+
+wait_screen main_screen
++43 wake
++45 confirm
+
+wait_screen choose_mode_screen
++43 wake
++45 confirm
+
+wait_screen song_select_screen
++43 wake
++45 down
++105 confirm
+
+wait_screen multiuser_screen
++38 wake
++40 confirm
++150 confirm
++270 confirm
+
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
++90 confirm
+
+wait_screen perform_complete_screen
++90 confirm
+
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
