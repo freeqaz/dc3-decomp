@@ -25905,11 +25905,10 @@
   },
   {
    "name": "retailmap:merged_ObjPtrListRemove",
-   "survivor": "merged_ObjPtrListRemove",
+   "survivor": "?remove@?$ObjPtrList@VObject@Hmx@@VObjectDir@@@@QAA_NPAVObject@Hmx@@@Z",
    "address": "0x825c6868",
    "folded": [
     "?remove@?$ObjPtrList@VFlowNode@@VObjectDir@@@@QAA_NPAVFlowNode@@@Z",
-    "?remove@?$ObjPtrList@VObject@Hmx@@VObjectDir@@@@QAA_NPAVObject@Hmx@@@Z",
     "?remove@?$ObjPtrList@VRndDrawable@@VObjectDir@@@@QAA_NPAVRndDrawable@@@Z",
     "?remove@?$ObjPtrList@VRndLight@@VObjectDir@@@@QAA_NPAVRndLight@@@Z",
     "?remove@?$ObjPtrList@VThreeDSound@@VObjectDir@@@@QAA_NPAVThreeDSound@@@Z"
