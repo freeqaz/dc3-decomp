@@ -28,7 +28,11 @@
 #include "rndobj/Mesh.h"
 #include "xdk/nui/nuidiagnostics.h"
 
+#include <climits>
+#include <cstdlib>
 #include <string>
+
+const char *NativeGetOverlayDir(); // File_Native.cpp
 
 namespace {
 
@@ -96,4 +100,22 @@ TEST_F(NativeOptionsTest, KinectTunerSaysItIsTheDashboards) {
         << "XShowNuiTroubleshooterUI posted no notice; the player got no "
            "feedback.  notice: '" << text << "'";
     NativeNotice::Clear("kinect_tuner");
+}
+
+// The DTA overlay (native/dta) must be the one of the tree this binary was
+// built from.  In a worktree, orig-assets is a symlink to the main checkout's,
+// and the overlay used to be derived as "<data dir>/../native/dta" -- which
+// the kernel resolves after the symlink, i.e. MAIN's native/dta.  Every DTA
+// flow test under ctest (working directory: orig-assets) then ran main's
+// overlay, so a worktree's own native/dta edits were never tested.
+TEST_F(NativeOptionsTest, OverlayIsThisTreesNativeDta) {
+    char want[PATH_MAX];
+    ASSERT_NE(realpath(DC3_DECOMP_SRC_DIR "/../native/dta", want), nullptr)
+        << "this tree has no native/dta";
+    const char *overlay = NativeGetOverlayDir();
+    ASSERT_TRUE(overlay && overlay[0]) << "no overlay dir was detected";
+    char got[PATH_MAX];
+    ASSERT_NE(realpath(overlay, got), nullptr) << "overlay dir does not exist: " << overlay;
+    EXPECT_STREQ(got, want) << "the overlay is another tree's (configured as '" << overlay
+                            << "')";
 }
