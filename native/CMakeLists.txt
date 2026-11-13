@@ -1595,6 +1595,27 @@ else()
     target_link_options(dc3-web PRIVATE -O0 -g2)
 endif()
 
+# Wasm heap cap (W-6). The engine helper links every web target with
+# -sMAXIMUM_MEMORY=512MB; repeated -s settings resolve to the last one, so this
+# overrides it for dc3-web only (rb3-web keeps the engine's value).
+# Why 1024MB: measured with an 8MB linear growth step, one whole song peaks at
+# 399-444 MB depending on venue (dci highest; docs/native/WEB.md "Heap per
+# venue"). With emcc's normal geometric growth (+20%, at most +96 MB a step)
+# the 512MB build's heap already sat AT the cap on dci's results screen, so
+# the next growth there would have failed. The memory is not shared, so a
+# higher max only reserves address space; nothing is committed until used.
+# DC3_WEB_MEMORY_GROWTH_LINEAR_STEP is the measurement knob: with geometric
+# growth buffer.byteLength can sit up to ~96 MB above what the program asked
+# for; a small linear step (e.g. 8MB) makes it track the real high-water mark.
+set(DC3_WEB_MAX_MEMORY "1024MB" CACHE STRING "dc3-web -sMAXIMUM_MEMORY")
+set(DC3_WEB_MEMORY_GROWTH_LINEAR_STEP "" CACHE STRING
+    "dc3-web -sMEMORY_GROWTH_LINEAR_STEP (empty = emcc's geometric growth)")
+target_link_options(dc3-web PRIVATE -sMAXIMUM_MEMORY=${DC3_WEB_MAX_MEMORY})
+if(DC3_WEB_MEMORY_GROWTH_LINEAR_STEP)
+    target_link_options(dc3-web PRIVATE
+        -sMEMORY_GROWTH_LINEAR_STEP=${DC3_WEB_MEMORY_GROWTH_LINEAR_STEP})
+endif()
+
 else() # NOT EMSCRIPTEN — native targets
 
 add_executable(dc3-native
