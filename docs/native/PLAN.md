@@ -33,7 +33,7 @@ Size: S < half a day · M ≈ 1–2 days · L = several days.
 | P-6 | Remove the dead ncnn/YOLO path, its log line and the tracked `native/yolo11n-pose.pt` | S | Windowed boot tries the MediaPipe server first; weights gone from the tree |
 | P-7 | Scoring believability: calibrate on a recorded human; webcam latency knob vs Kinect-tuned `latency_offset` in `config/scoring.dta` | M | Standing still no longer earns "awesome"; a recorded human gets a plausible spread |
 | P-8 | macOS pose: `_NSGetExecutablePath`, camera permission for the Python child | S–M | Pose server starts on the owner's Mac |
-| P-9 | Web pose: provider seam + exported `dc3_pose_push`, MediaPipe tasks-vision + getUserMedia, geometry ported from `pose_mediapipe.py`. **In progress: `np-web-pose`.** | M–L | Fake-camera dance clip, still person and empty frame score differently in Chromium |
+| P-9 | ~~Web pose~~ **DONE 2026-11-13 (`np-web-pose`)**: `PublishFrame` seam shared with the socket path, `dc3_pose_push`, tasks-vision in a worker, geometry ported (1.8e-15 m vs Python on identical landmarks; 0.71 mm max end to end). Fake camera: dance 29,859 · still 7,240 · stand-in 7,581 · empty frame pauses. Follow-ups: real webcam, `DetectFrac` `no-move-key` on the web flow. | M–L | Fake-camera dance clip, still person and empty frame score differently in Chromium |
 
 ## Track G — gameplay and modes (desktop findings, also apply to web)
 
@@ -55,7 +55,7 @@ Size: S < half a day · M ≈ 1–2 days · L = several days.
 | # | Item | Size | Done when |
 |---|---|---|---|
 | W-1 | Pose input = P-9 | — | — |
-| W-2 | `scripts/web/*.mjs` launch a WebGPU-capable browser on this box (Playwright vs headless-shell version). In `np-web-pose`. | S | `smoke-test.mjs` runs from a worktree |
+| W-2 | ~~Playwright version~~ **DONE (`np-web-pose`)**: `scripts/web/package.json` pins Playwright 1.60.0 (headless shell 1223); `npm ci --prefix scripts/web`. `smoke-test.mjs` PASSES from a worktree. | S | `smoke-test.mjs` runs from a worktree |
 | W-3 | Swap the release/debug optimisation levels back: the default page is `-O0` | S | `flags.make` shows `-O3` for release |
 | W-4 | Configure clones imgui with full history per build dir and can hang; `index.html` not copied if the debug half fails | S | Offline/shallow fetch; `index.html` always deployed |
 | W-5 | Public deployment: stale build and unauthenticated asset API. **Owner decision.** | — | Owner's call |

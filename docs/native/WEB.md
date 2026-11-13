@@ -3,9 +3,11 @@
 **State (2026-11-13, measured):** builds from a fresh worktree and plays a whole
 song in Chromium on a real GPU — boot → menus → tutorial → song select →
 loading → gameplay → results — at the browser's 60 fps cap with no page errors.
-**There is no player input that affects the score**: the web build has no pose
-path, so the game scores a stand-in standing skeleton (one measured run: 7,581,
-0 stars). Work items: [PLAN.md](PLAN.md) track W.
+**Webcam pose input works** (`np-web-pose`): with a fake camera playing a dance
+clip the song scores 29,859, a motionless person 7,240, the no-camera stand-in
+7,581, and an empty frame pauses the game for a missing player. Details and
+caveats: [POSE_INPUT.md](POSE_INPUT.md#web). Work items: [PLAN.md](PLAN.md)
+track W.
 
 ## Build
 
@@ -24,7 +26,9 @@ python3 native/web/server.py --port 8420
   SharedArrayBuffer) and JSPI (Chrome 137+). Safari is not supported.
 - Known build defects (W-3, W-4 in PLAN):
   - Every build dir clones imgui from GitHub with full history at configure
-    time (`FetchContent_Declare(imgui)`); concurrent configures can hang on it.
+    time (`FetchContent_Declare(imgui)`); concurrent configures can crawl for
+    many minutes. `build.sh` now reuses `$DC3_IMGUI_SOURCE_DIR` or the main
+    checkout's `native/build/_deps/imgui-src` when it is at the pinned commit.
   - If the debug half of `--both` fails, `index.html` is never copied.
   - **The variants are swapped relative to their comments**: "release" compiles
     and links unoptimised (`-O0 -g0`), "debug" is `CMAKE_BUILD_TYPE=Release`
@@ -57,21 +61,22 @@ Scripts live in `scripts/web/` and share `scripts/web/lib/core.mjs`:
 `audio-probe.mjs`, `cdp-break.mjs`, `netperf-lite.mjs`. Menus advance with
 Enter (not Space).
 
-**They do not run on this box as installed** (W-2): `node_modules/playwright`
-1.58.2 wants `chromium_headless_shell-1208`, which is absent, and full Chrome in
-headless mode gets a null WebGPU adapter. What works: headless-shell 1223 with
-the `core.mjs` flags plus `--ozone-platform=x11`, or full Chrome under Xvfb.
-rb3's `scripts/web` pins Playwright 1.60, which matches.
+**Install once per checkout or worktree:** `npm ci --prefix scripts/web`
+(W-2, fixed in `np-web-pose`). `scripts/web/package.json` pins Playwright
+1.60.0, whose headless shell (Chromium 1223) gets a WebGPU adapter here with
+the `core.mjs` flags (incl. `--ozone-platform=x11`); Node resolves
+`scripts/web/node_modules` before the repo root's stale 1.58.2. The same
+package pins `@mediapipe/tasks-vision`, which `build.sh` vendors for pose input.
 
 ## Input
 
 Keyboard and gamepad reach the game through the engine's `Joypad_Native.cpp`.
-Pose: `native/src/platform/Skeleton_Native.cpp` stubs every provider method
-under `__EMSCRIPTEN__`, so `GestureMgr_Native.cpp` always feeds
-`FillDummySkeletonData`. The seam a browser pose pipeline must feed, and the plan
-for it (MediaPipe tasks-vision + getUserMedia → an exported `dc3_pose_push`), is
-in [POSE_INPUT.md](POSE_INPUT.md) gap P-9. ncnn is not an option on web
-(disabled under Emscripten; no model files).
+
+**Pose (webcam):** the page asks for the camera on load, runs MediaPipe
+BlazePose in a worker, and pushes DC3's 20 joints into the same provider the
+desktop socket feeds — see [POSE_INPUT.md](POSE_INPUT.md#web). No camera,
+permission refused, or `?pose=off`: the game scores the stand-in skeleton, as
+before. ncnn is not an option on web (disabled under Emscripten).
 
 ## Deployment
 
