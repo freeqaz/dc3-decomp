@@ -20,7 +20,7 @@ in `../milo-native-engine` (rendering, audio, input, file I/O).
 ## Linux quick start
 
 ```bash
-scripts/native_configure.sh                  # finds Dawn (dc3-decomp-deps), ncnn, clang; exit 9 names what is missing
+scripts/native_configure.sh                  # finds Dawn (dc3-decomp-deps), clang; exit 9 names what is missing
 cmake --build native/build --target dc3-native
 scripts/native_test.sh                       # builds first, then the gate; read its printed numbers
 

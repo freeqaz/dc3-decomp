@@ -28,7 +28,7 @@ feature** — audit before relying on old semantics.
 | `DC3_NATIVE_SCORING` | **on** | Per-frame `TheGestureMgr->Poll()` (pose → skeleton → FilterQueue → MoveDir callback fan-out). `=0` restores the pre-flip baseline bit-exactly (no poll, `has_skeleton` false). Gate sites: `src/App.cpp` RunOneFrame (web loop) and RunWithoutDebugging (native headless loop), both inside `#ifdef HX_NATIVE`. |
 | `DC3_REAL_MOVE_PASSED` | **on** | Genuine Xbox `move_passed` DTA path (`Game::SetHamMove` → `MetaPerformer::OnMovePassed`), byte-identical to the Xbox `#else`. `=0` suppresses `move_passed` emission on native. Gate site: `src/lazer/game/Game.cpp` inside `#ifdef HX_NATIVE`. Landed as a separate commit so it can be reverted independently. |
 | `DC3_POSE_SELFTEST` | off | Feeds the choreography's OWN reference pose as the player (perfect self-mimicry → `DetectFrac` → ~1.0). Still OR'd into the `App.cpp` scoring gate, so it forces the poll even under `DC3_NATIVE_SCORING=0`. Parsed with `Dc3EnvFlag(..., false)` at `FilterQueue.cpp` and both `App.cpp` sites, so `DC3_POSE_SELFTEST=0` can never accidentally enable it. |
-| `DC3_POSE` | unset | Provider select: `external` (unix-socket `pose_server.py`) or `internal` (ncnn). Also overrides the `MILO_HEADLESS` skip in `GestureMgr_NativeInit`. |
+| `DC3_POSE` | unset | `off`: no pose provider (the stand-in skeleton). Any other value (conventionally `external`, the unix-socket `pose_server.py`) also overrides the `MILO_HEADLESS` skip in `GestureMgr_NativeInit`. The in-process ncnn provider (`internal`, with `DC3_POSE_MODELS` / `DC3_POSE_GPU`) was removed 2026-11-13 (PLAN P-6). |
 | `DC3_POSE_NO_SPAWN` | unset | Connect-only; do not fork `pose_server.py`. |
 | `DC3_POSE_MODEL` | `native/models/pose_landmarker_full.task` | MediaPipe pose landmarker `.task` path passed to the spawned server (`lite`/`full`/`heavy` tiers ship in `native/models/`). The AGPL YOLO backend and its weights were retired after ground-truth measurement (`tools/pose_corpus/bench_model_z.py`). |
 | `DC3_POSE_SOCKET` | `/tmp/dc3_pose.sock` | Unix socket path shared with the pose server. |
@@ -86,6 +86,16 @@ runs that half.  Packets carry a sensor clock that advances by song time, and
 Xbox does from `NUI_SKELETON_FRAME`), so `DC3_FAST_TIME` replays at the
 choreography's own speed.  `--stand-and-watch` is the negative control: the same
 sensor and the same per-move record (`<out>/kinect.json`), people standing.
+
+`--replay FIXTURE` (2026-11-13, PLAN P-5) swaps the target for a RECORDED
+human: player 0 gets the fixture frame at `int(song * fps) mod n` instead of
+the choreography whenever a move is on (`moveDir` set), so the stream is
+deterministic under `DC3_FAST_TIME` -- no inference and no wall clock in the
+loop. `--replay-still` holds the fixture's frame 0 all song (the same body,
+standing). The fixture format and recorder are in
+[POSE_INPUT.md](POSE_INPUT.md#testing-without-a-webcam). With `--perform` and
+no `--socket`, the script is a pure score recorder (no sensor), which
+`scripts/pose_scoring_gate.sh` uses for the `selftest` and `dummy` configs.
 
 The async detectors that perform and battle rate from (`last_detector_result`)
 used to be switched off natively (two `HX_NATIVE` guards); they run as on the

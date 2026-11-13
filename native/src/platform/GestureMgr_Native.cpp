@@ -14,9 +14,6 @@
 #include "obj/Task.h"
 #include "os/Debug.h" // TheDebug.AddExitCallback
 #include <vector>
-#ifdef ENABLE_NCNN
-#include "pose/InternalPoseProvider.h"
-#endif
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -26,8 +23,8 @@
 // callback fan-out) is fed by the Kinect NUI device.  Natively that device is
 // replaced -- PLATFORM -- by this CameraInput, an override camera
 // (IsOverride() true, as CameraInput's own default) whose PollNewFrame()
-// builds a SkeletonFrame from the pose provider (DC3_POSE=internal|external)
-// or, with no provider, the static tracked dummy skeleton.  Everything
+// builds a SkeletonFrame from the pose provider (the pose_server.py socket on
+// desktop, dc3_pose_push on web) or, with no provider, the static tracked dummy skeleton.  Everything
 // downstream of that frame is the image's own code: SkeletonUpdate::PostUpdate
 // copies it into mSkeletonFrame, runs Update() itself (the update thread is
 // inactive natively) -> UpdateCallbacks (archive-then-Poll, mSkeletonsLeft by
@@ -63,10 +60,6 @@ static HRESULT NativeNuiSkeletonFrameSource(NUI_SKELETON_FRAME *) {
     // 0x83010001: any failure HRESULT; the image only tests for 0.
     return (cam && cam->NewFrame()) ? 0 : (HRESULT)0x83010001;
 }
-
-#ifdef ENABLE_NCNN
-static InternalPoseProvider *sInternalPose = nullptr;
-#endif
 
 // Persistent trackId -> skeleton-slot assignment (index = slot, value = owning
 // trackId, -1 = free). A new trackId claims the lowest free slot and keeps it
@@ -120,7 +113,7 @@ void GestureMgr_NativePreInit() {
 }
 
 // Native implementation of GestureMgr::Init's device half: the pose provider
-// (webcam + MediaPipe / ncnn) that the sensor reads.
+// (webcam + MediaPipe) that the sensor reads.
 void GestureMgr_NativeInit() {
     ResetSlotMap();
     JoypadScriptSetWakeNeeded(NativeWakeNeeded);
@@ -145,24 +138,6 @@ void GestureMgr_NativeInit() {
     const char *camStr = getenv("DC3_POSE_CAMERA");
     int camIdx = camStr ? atoi(camStr) : 0;
 
-#ifdef ENABLE_NCNN
-    // Try internal ncnn-based pose estimation first (unless explicitly set to external)
-    if (!poseMode || strcmp(poseMode, "external") != 0) {
-        const char *modelDir = getenv("DC3_POSE_MODELS");
-        if (!modelDir) modelDir = "native/models";
-        bool useGPU = getenv("DC3_POSE_GPU") != nullptr;
-
-        sInternalPose = new InternalPoseProvider();
-        if (sInternalPose->Start(modelDir, camIdx, useGPU)) {
-            printf("Native: internal pose estimation started (ncnn + RTMPose)\n");
-            goto pose_ready;
-        }
-        printf("Native: internal pose failed, falling back to external server\n");
-        delete sInternalPose;
-        sInternalPose = nullptr;
-    }
-#endif
-
 #ifdef __EMSCRIPTEN__
     // Web: nothing to spawn or connect to.  The provider is created idle; the
     // page's camera pipeline starts it with its first dc3_pose_push
@@ -174,7 +149,8 @@ void GestureMgr_NativeInit() {
         printf("Native: web pose provider ready (waiting for dc3_pose_push)\n");
     }
 #else
-    // Fall back to external Python pose server
+    // Desktop: spawn the MediaPipe pose server (native/scripts/pose_server.py)
+    // and read it over a Unix socket.
     if (!poseMode || strcmp(poseMode, "off") != 0) {
         if (!TheSkeletonProvider) {
             TheSkeletonProvider = new NativeSkeletonProvider();
@@ -193,13 +169,11 @@ void GestureMgr_NativeInit() {
             if (TheSkeletonProvider->Start(socketPath, modelPath, camIdx)) {
                 printf("Native: external pose server started\n");
             } else {
-                printf("Native: pose tracking unavailable (no ncnn, no pose server)\n");
+                printf("Native: pose tracking unavailable (pose server did not start)\n");
             }
         }
     }
 #endif
-
-pose_ready:
 
     // Controller-mode policy (DC3_CONTROLLER_MODE, docs/debugging/native.md):
     // only `forced` pins controller mode here.
@@ -209,13 +183,6 @@ pose_ready:
 }
 
 void GestureMgr_NativeTerminate() {
-#ifdef ENABLE_NCNN
-    if (sInternalPose) {
-        sInternalPose->Stop();
-        delete sInternalPose;
-        sInternalPose = nullptr;
-    }
-#endif
     if (TheSkeletonProvider) {
         TheSkeletonProvider->Stop();
         delete TheSkeletonProvider;
@@ -513,31 +480,7 @@ static const SkeletonFrame *BuildSensorFrame() {
     bool providerRunning = false;
     bool newFrame = false;
 
-#ifdef ENABLE_NCNN
-    if (sInternalPose && sInternalPose->IsRunning()) {
-        providerRunning = true;
-        sInternalPose->Poll();
-
-        static unsigned sNcnnLastGen = 0;
-        static bool sNcnnHaveGen = false;
-        unsigned gen = sInternalPose->Generation();
-        newFrame = !sNcnnHaveGen || gen != sNcnnLastGen;
-        sNcnnHaveGen = true;
-        sNcnnLastGen = gen;
-
-        if (newFrame) {
-            BeginSensorFrame(AcceptedFrameElapsed());
-            NativeSkeletonProvider::PersonData persons[NativeSkeletonProvider::kMaxPersons];
-            int numPersons = 0;
-            sInternalPose->FillPersonData(persons, NativeSkeletonProvider::kMaxPersons, numPersons);
-            ScoringDebugTick(true, false, FillPersonSlots(persons, numPersons));
-        } else {
-            ScoringDebugTick(false, true, 0);
-        }
-    }
-#endif
-
-    if (!providerRunning && TheSkeletonProvider && TheSkeletonProvider->IsRunning()) {
+    if (TheSkeletonProvider && TheSkeletonProvider->IsRunning()) {
         providerRunning = true;
         TheSkeletonProvider->Poll();
 

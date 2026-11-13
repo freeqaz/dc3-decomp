@@ -1,5 +1,6 @@
 #include "platform/DebugPanel.h"
 #include "platform/NativeSettings.h"
+#include "platform/NativeNotice.h"
 #include <imgui.h>
 
 static bool sVisible = false;
@@ -68,3 +69,43 @@ void DebugPanel::Draw() {
 bool DebugPanel::IsVisible() { return sVisible; }
 void DebugPanel::Toggle() { sVisible = !sVisible; }
 void DebugPanel::SetVisible(bool v) { sVisible = v; }
+
+// Player-facing notices (NativeNotice): a banner across the top of the screen,
+// then a one-line reminder in the bottom-right corner while the notice stays
+// posted.  An input-transparent ImGui window, so it never takes the mouse or
+// keyboard from the game, and drawn whether or not the debug panel is open.
+void DebugPanel::DrawNotices() {
+    NativeNotice::View v;
+    if (!NativeNotice::Current(v))
+        return;
+    const ImGuiIO &io = ImGui::GetIO();
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration
+        | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize
+        | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing
+        | ImGuiWindowFlags_NoNav;
+    if (v.banner) {
+        float width = io.DisplaySize.x * 0.7f;
+        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.06f),
+            ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+        ImGui::SetNextWindowSizeConstraints(ImVec2(width, 0), ImVec2(width, io.DisplaySize.y));
+        ImGui::SetNextWindowBgAlpha(0.85f * v.bannerAlpha);
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, v.bannerAlpha);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18, 14));
+        if (ImGui::Begin("##native_notice_banner", nullptr, flags)) {
+            ImGui::SetWindowFontScale(1.5f);
+            ImGui::PushTextWrapPos(0.0f);
+            ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "%s", v.text.c_str());
+            ImGui::PopTextWrapPos();
+        }
+        ImGui::End();
+        ImGui::PopStyleVar(2);
+    } else if (v.corner) {
+        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 12.0f, io.DisplaySize.y - 12.0f),
+            ImGuiCond_Always, ImVec2(1.0f, 1.0f));
+        ImGui::SetNextWindowBgAlpha(0.55f);
+        if (ImGui::Begin("##native_notice_corner", nullptr, flags)) {
+            ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.35f, 1.0f), "%s", v.shortText.c_str());
+        }
+        ImGui::End();
+    }
+}

@@ -48,10 +48,10 @@ the wrong code.
    ```bash
    scripts/native_configure.sh            # default build dir native/build
    ```
-   This derives `Dawn_DIR` (the sibling `dc3-decomp-deps` repo), `ncnn_DIR` and
-   `ENABLE_NCNN`, clang, Ninja, `CMAKE_BUILD_TYPE=RelWithDebInfo` and
-   `CMAKE_EXPORT_COMPILE_COMMANDS` from the main checkout. Override with
-   `DAWN_DIR`, `NCNN_DIR`, `CC`/`CXX` or `MILO_BUILD_TYPE` if needed.
+   This derives `Dawn_DIR` (the sibling `dc3-decomp-deps` repo), clang, Ninja,
+   `CMAKE_BUILD_TYPE=RelWithDebInfo` and `CMAKE_EXPORT_COMPILE_COMMANDS` from
+   the main checkout. Override with `DAWN_DIR`, `CC`/`CXX` or `MILO_BUILD_TYPE`
+   if needed.
    Exit 9 means a required dependency (Dawn, clang, cmake) is missing; the
    script names every path it probed. Exit 10 means cmake itself failed.
 

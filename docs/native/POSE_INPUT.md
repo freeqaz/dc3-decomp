@@ -12,7 +12,7 @@ Work items: [PLAN.md](PLAN.md) track P.
 
 | Stage | Code | Gate |
 |---|---|---|
-| Camera frame | `native/scripts/pose_server.py` (`cv2.VideoCapture`), a Python child spawned by `NativeSkeletonProvider::Start` in `native/src/platform/Skeleton_Native.cpp` | `DC3_POSE_CAMERA` (index) |
+| Camera frame | `native/scripts/pose_server.py` (`cv2.VideoCapture`: 640×480 @ 30 fps, 1-frame driver buffer), a Python child spawned by `NativeSkeletonProvider::Start` in `native/src/platform/Skeleton_Native.cpp`. Packet timestamp = capture time (the device's `CAP_PROP_POS_MSEC` when it is on our monotonic clock, as V4L2's is; else when `read()` returned). | `DC3_POSE_CAMERA` (index) |
 | 2D + 3D pose | `native/scripts/pose_mediapipe.py` `MediaPipeBackend`: BlazePose world landmarks (metres), absolute root by PnP, one-euro filter on root depth, centroid tracker. Emits DC3's 20 Kinect joints in camera-space metres. | `DC3_POSE_MODEL` (default `native/models/pose_landmarker_full.task`, gitignored), `DC3_POSE_HFOV` |
 | Wire | Unix socket, protocol v2, layout 1 (20 DC3 joints). Layout 0 = COCO, remapped by `MapCOCOToDC3`. | `DC3_POSE_SOCKET`, `DC3_POSE_NO_SPAWN=1` (connect to a server you started) |
 | Socket → slots | `GestureMgr_Native.cpp`: `BuildSensorFrame` → `FillPersonSlots` / `AssignSlots` / `NativeAutoAssignPlayers`. `FillSkeletonData` holds the last good position of joints under 0.3 confidence. No provider → a jittered standing dummy (two in two-player modes, `DC3_DUMMY_PLAYERS`). Every valid person fills its own slot: two people on the socket or in one `dc3_pose_push` frame are two players. | `DC3_POSE` (`off`, `external`, …), `DC3_NATIVE_SCORING` (default on), `DC3_POSE_SELFTEST` |
@@ -24,14 +24,46 @@ count, frameId, timestamp)`: `PersonData` = 20 joints in metres, per-joint
 confidence, trackId. The desktop socket reader and the web push both call it,
 so everything after it — `Poll`, the frame-id gate, `FillSkeletonData` (joint
 hold, noise floor), `FillPersonSlots` — is one code path, and `BuildSensorFrame`
-has one external-provider branch (plus the legacy ncnn one). Pinned by
+has one provider branch. Pinned by
 `NativeSkeletonProviderPublishTest` in `native/tests/test_native_posesynth.cpp`.
 
-**Legacy in-process path** (`native/src/pose/*`, ncnn): compiled in because
-`native_configure.sh` turns `ENABLE_NCNN` on, tried first on every windowed boot
-unless `DC3_POSE=external`, and always fails because its YOLO model was retired
-(`23f92cb78`). Its log line says "ncnn + RTMPose"; it is YOLO. The YOLO weights
-`native/yolo11n-pose.pt` are still tracked. Scheduled for removal (PLAN P-6).
+The old in-process path (`native/src/pose/*`: ncnn running YOLO-Pose, behind
+`ENABLE_NCNN`, `DC3_POSE=internal`, `DC3_POSE_MODELS`, `DC3_POSE_GPU`) was
+removed on 2026-11-13 (P-6) together with the tracked AGPL weights
+`native/yolo11n-pose.pt`. It was tried first on every windowed boot and always
+failed, because its model had been retired in `23f92cb78`; a windowed boot now
+goes straight to the MediaPipe server.
+
+### When there is no camera (desktop)
+
+`pose_server.py` checks the cheap things first and exits with a code that says
+what failed: model file missing **5**, `cv2`/`mediapipe` not importable **6**,
+camera will not open or opens and sends no frame within 3 s **3**, `--video`
+unreadable **4**. Only then does it bind the socket (before loading the model,
+so the game is not blocked on the ~1 s load). Mid-run, a camera that delivers
+nothing for 2 s exits **7**. `Start()` polls the child every 50 ms while it
+waits for the socket, so a failure is noticed when it happens, not after the
+5 s timeout: on this box (no `/dev/video*`) a windowed boot now gives up after
+**200–350 ms** instead of 5 s.
+
+The game then tells the player, through `NativeNotice`
+(`native/src/platform/NativeNotice.{h,cpp}`, drawn by `DebugPanel::DrawNotices`
+from App.cpp's ImGui overlay pass whether or not the debug panel is open): a
+banner across the top for 20 s from the first frame that can draw it — *"No
+camera found (camera 0) - pose tracking is off. The game is using a stand-in
+skeleton, so your dancing is not scored. Connect a webcam and restart, or pick
+another camera with DC3_POSE_CAMERA."* — then a one-line reminder in the
+bottom-right corner (*"No camera: pose tracking off"*) for the rest of the
+session. Each exit code, a crash, a lost stream and the 5 s timeout have their
+own text. Every notice is also printed as `DC3 NOTICE [pose]: …` on stderr.
+
+Why an ImGui overlay: the decompiled game has no "no sensor" screen (on the 360
+the dashboard owned that), and the game's own *stand in front of the Kinect*
+pause never fires because the stand-in skeleton is tracked; the overlay is the
+one layer that draws on every screen, in every state, without touching game UI
+data. Caveat: ImGui has no display size in headless runs, so the overlay — like
+the debug panel — is not in `/api/screenshot` captures; it was verified on a
+windowed boot under Xvfb (screen grab).
 
 Env-var reference: [SCORING_ENV_VARS.md](SCORING_ENV_VARS.md) and the master
 table in [../debugging/native.md](../debugging/native.md).
@@ -49,14 +81,14 @@ DC3_POSE=external DC3_POSE_NO_SPAWN=1 scripts/dc3-agent-test.sh
 # No camera: synthetic performer that dances whatever the game asks for
 python3 scripts/synthetic_kinect.py --perform    # reads GET /api/pose/target
 
-# Gate (GPU, ~11 min)
-scripts/pose_scoring_gate.sh
+# Gate (GPU, ~13 min): five configs, each the whole song under DC3_FAST_TIME
+scripts/pose_scoring_gate.sh                      # --only replay,still  --out DIR
 ```
 
 Run from the repo root: the server script and the model are found relative to the
 working directory when `/proc/self/exe` resolution fails.
 
-## Measured scoring (Better Off Alone, 25k frames, GPU)
+## Measured scoring (Better Off Alone, 25k frames, GPU, pre-2026-11-13)
 
 | Input | Ratings | p0 score at ≤100 s |
 |---|---|---|
@@ -68,8 +100,43 @@ working directory when `/proc/self/exe` resolution fails.
 
 Readings: scoring is very lenient (noise + lateness is still all perfect; standing
 still earns "awesome"). `config/scoring.dta` `latency_offset` is 100 ms, tuned for
-Kinect, not a webcam pipeline. The gate compares only maximums and its 25k frames
-end before the song does.
+Kinect, not a webcam pipeline. (The SIGSEGV was P-1, since fixed.)
+
+### The gate, whole song (2026-11-13, `np-pose-desk`)
+
+`scripts/pose_scoring_gate.sh` plays Better Off Alone **start to finish** under
+`DC3_FAST_TIME` for each input and stops when `perform_endgame_screen` enters
+(~2.5–3 min wall each; `--frames` cap 60k is only a backstop). Scores and ratings
+are recorded from `GET /api/pose/target`; `scripts/pose_gate_report.py` judges.
+DetectFrac is the 35 `ham2` samples the probe logs for player 0.
+
+| config | input | DetectFrac mean (min–max) | final score | ratings |
+|---|---|---|---|---|
+| selftest | reference fed back inside the scorer | 1.0000 (1.0–1.0) | 2,617,260 | perfect 77 |
+| sensor | choreography streamed through the socket | 1.0000 (1.0–1.0) | 2,674,598 | perfect 77 |
+| dummy | static skeleton, no provider | 0.2579 (0.14–0.73) | 16,992 | awesome 4, bad 2 |
+| replay | MediaPipe fixture (a different dance), keyed on song time | 0.3010 (0.05–0.66) | 33,662 | awesome 4, ok 5, bad 10 |
+| still | the fixture's frame 0 held all song | 0.3066 (0.17–0.90) | 49,119 | perfect 2, awesome 2, ok 4, bad 6 |
+
+Ratings count rated events, one per change of (move, rating, score).
+Two `replay` runs gave identical scores and ratings, and a mean of 0.3010 both times.
+
+What it asserts: every config finishes the song with no crash; selftest and
+sensor score mean ≥ 0.95 and beat dummy on mean and on final score; no config
+other than those two is pinned at one DetectFrac value of 0 or 1; dummy, replay
+and still rate perfect on fewer than half their rated moves. The last check is
+move by move. The mean per-move |replay − still| DetectFrac distance is
+**0.146**. The same distance between two still bodies (still vs dummy) is
+**0.049**. The gate requires the first to be more than 2× the second (measured
+2.96×), which shows the fixture's motion reaches the scorer.
+
+What it does **not** assert: that the dancing stream out-scores the still one.
+It does not. Standing still beats a different dance, 49,119 to 33,662. The
+opening moves rate a standing body at 0.80–0.90, and the wrong dance draws
+"bad". This agrees with the 25k-frame table above (video 6,317 vs still
+16,995). It is a P-7 scoring-believability finding, not something to freeze into a gate. A
+positive control for that direction needs a recording of the song's own
+choreography; none exists in the repo.
 
 ## Web
 
@@ -204,11 +271,11 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
 | # | Gap | Size | Platform |
 |---|---|---|---|
 | P-1 | **Crash on a motionless skeleton.** `RhythmDetector::AnalyzeData` divides by a variance that becomes zero → NaN → `SymbolKeys::SetFrame` segfault (`RhythmBattlePlayer::Poll`). A webcam trips it whenever joints are held (legs out of frame are held all song). | S–M | all |
-| P-2 | Never run against a live webcam: camera mode, wall-clock timestamps, 640×480 request, HFOV. No "no camera" message to the player; a 5 s silent stall then the dummy. | S–M | all |
+| P-2 | Never run against a live webcam. **No-camera part done** (`np-pose-desk`): fast failure + on-screen notice (above); camera request, capture timestamps, HFOV and the lost-camera exit unit-tested against a fake capture (`tests/test_pose_server.py`). Left: a real webcam session. | S | all |
 | P-3 | Gesture menus: `DC3_CONTROLLER_MODE` defaults to `forced`; `faithful` runs the original nav code but the hand meshes are hidden by `native/src/platform/MeshFilter.cpp` and nothing tests swipe nav. | M–L | all |
 | P-4 | Player on screen: silhouette, camera preview, photo moments. `LiveCameraInput` is null natively; `StreamRenderer::DrawToTexture` and `DepthBuffer3D` are stubbed; `MeshFilter` hides `silhouette_guy*`, `preview.mesh`, `pose_flash*`. Needs webcam RGB + a segmentation mask. | L | all |
-| P-5 | Tests: no ctest for the socket reader, COCO mapping or `AssignSlots`; gate is max-only and short; no deterministic human-video fixture. | S–M | all |
-| P-6 | Remove the dead ncnn/YOLO path and its tracked weights; fix the log line. | S | all |
+| P-5 | ~~Tests~~ **Done** (`np-pose-desk`): ctests `PoseSocketReaderTest`, `PoseCocoMappingTest`, `PoseSensorSlotTest` (no GPU, no game data); keypoint fixture + `PoseFixture.Python`; the gate runs the whole song and judges means, final scores and per-move distances (above). Open: standing still out-scores a different dance (P-7). | — | all |
+| P-6 | ~~Remove the dead ncnn/YOLO path~~ **Done** (`np-pose-desk`). | — | all |
 | P-7 | Scoring believability: calibrate against a recorded human, expose a latency knob. | M | all |
 | P-8 | macOS: `/proc/self/exe` → `_NSGetExecutablePath`; camera permission goes to the Python child. See [MACOS.md](MACOS.md). | S–M | mac |
 | P-9 | ~~Web pose~~ **Done in `np-web-pose`** (see [Web](#web)). Left: never run on a real webcam/permission prompt; GPU delegate and the lite model unmeasured on an idle box; no camera preview inside the game (P-4). | — | web |
@@ -222,9 +289,18 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
   back (`native/tests/test_native_twoplayer.cpp` drives Battle with 2, 1, 0).
 - `pose_server.py --video` — real MediaPipe on a file; runs end to end but is not
   deterministic (wall-clock paced).
-- Planned deterministic fixture (P-5): run MediaPipe offline over a video once,
-  store the DC3-20 keypoint stream, and replay it keyed on song time under
-  `DC3_FAST_TIME`.
+- Deterministic keypoint fixture (P-5):
+  `native/tests/data/pose/taye01_stand_dance.dc3pose` (139 KB, 240 frames,
+  8 s) is MediaPipe's DC3-20 stream for
+  `archive/screenshots-old/woot/taye01_stand_dance.mp4`, recorded offline by
+  `scripts/pose_fixture_record.py` (frame-index timestamps, one rigid shift to
+  stand the dancer at 2.5 m; re-recording is byte-identical).
+  `synthetic_kinect.py --perform URL --socket S --replay FIXTURE` streams it
+  keyed on song time (frame = `int(song * 30) mod 240`), so under
+  `DC3_FAST_TIME` every run sees the same joints at the same song time;
+  `--replay-still` holds frame 0 all song (same body, standing still).
+  `tests/test_pose_fixture.py` (ctest `PoseFixture.Python`) checks the file
+  and the keying without a GPU.
 - On-disk video: rendered dance loops under `archive/screenshots-old/woot/`
   (MediaPipe detects the rendered dancer in 300/300 frames). No Kinect `.clp`
   recordings exist; for capturing them from a real console see

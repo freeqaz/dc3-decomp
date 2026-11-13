@@ -33,6 +33,34 @@ public:
     NativeSkeletonProvider();
     ~NativeSkeletonProvider();
 
+    // Exit codes native/scripts/pose_server.py uses for a failure the player
+    // should hear about (keep in sync with its EXIT_* constants), plus the
+    // spawned child's own exec failure.
+    enum ServerExit {
+        kExitNoCamera = 3,    // camera would not open, or opened and sent no frame
+        kExitNoVideo = 4,     // --video file unreadable
+        kExitNoModel = 5,     // the .task model file is missing
+        kExitNoDeps = 6,      // mediapipe / opencv / numpy not importable
+        kExitCameraLost = 7,  // the camera stopped delivering frames mid-run
+        kExitExecFailed = 127 // python3 itself could not be run
+    };
+
+    // What went wrong, in the player's words: `text` for a banner, `brief` for
+    // a one-line reminder.  Empty while the provider is healthy.
+    struct Problem {
+        std::string text;
+        std::string brief;
+        bool empty() const { return text.empty(); }
+    };
+
+    // The problem the server's exit says it had.  `waitStatus` is waitpid's
+    // status word; `cameraIndex` names the camera in the message.
+    static Problem DescribeServerExit(int waitStatus, int cameraIndex);
+
+    // Why the last Start() failed, or why a running server stopped (the reader
+    // posts it when the socket closes).  Thread-safe copy.
+    Problem LastProblem();
+
     bool Start(const std::string &socketPath = "/tmp/dc3_pose.sock",
                const std::string &modelPath = "native/models/pose_landmarker_full.task",
                int cameraIndex = 0);
@@ -105,12 +133,17 @@ public:
 
 private:
     void ReaderThread();
+    // Record a problem and show it to the player (NativeNotice key "pose").
+    void ReportProblem(const Problem &p);
+    void ReportServerGone(); // reader thread: the socket closed
     void MapCOCOToDC3(const float cocoKpts[][3], PersonData &out);
     Vector3 NormalizedToMeters(float nx, float ny) const;
 
     std::string mSocketPath;
     int mSocketFd = -1;
     pid_t mServerPid = -1;
+    int mCameraIndex = 0;
+    Problem mProblem; // guarded by mSwapMutex
 
     std::thread mReaderThread;
     volatile bool mRunning = false;

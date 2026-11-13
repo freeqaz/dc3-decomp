@@ -46,6 +46,20 @@ PERFORMING (k.perform(http_base))
   from these stamps, as Xbox does from NUI_SKELETON_FRAME), so under
   DC3_FAST_TIME the replay moves at the choreography's own speed.
 
+REPLAYING (k.replay(fixture) before k.perform(...); CLI --replay FIXTURE)
+  Instead of the game's own target, person 0 performs a recorded DC3-20
+  keypoint stream (scripts/pose_fixture_record.py: MediaPipe run offline over a
+  video), keyed on SONG time: at song second t it shows the fixture frame at
+  t mod the clip length. With DC3_FAST_TIME that is deterministic -- the same
+  joints at the same song time on every run. --replay-still holds the
+  fixture's first frame all song: the same body standing still, the negative
+  control. Outside a song (no MoveDir) the person stands.
+
+WATCHING ONLY (CLI --perform URL without --socket)
+  No socket is served; the performing loop only reads /api/pose/target and
+  records scores and ratings -- a score recorder for runs whose skeleton comes
+  from elsewhere (the dummy, DC3_POSE_SELFTEST).
+
 USAGE (as a library; scripts/native_assert_harvest.py --route party uses it)
   k = SyntheticKinect("/tmp/x.sock", people=2)
   k.start()                      # listens; the engine connects at boot
@@ -124,6 +138,10 @@ class SyntheticKinect:
         self.clock = time.monotonic()
         self.last_tick = time.monotonic()
         self.last_perf_packet = 0.0
+        self.replay_frames = None     # [(joints|None)] at replay_fps, see replay()
+        self.replay_fps = 30.0
+        self.replay_still = False
+        self.replay_shown = 0         # packets that carried a fixture frame
 
     # ---- pose control -------------------------------------------------------
     def set_pose(self, person, pose):
@@ -159,6 +177,24 @@ class SyntheticKinect:
                                             args=(http_base, lead_ms), daemon=True)
         self.perf_thread.start()
         self.log.append((time.time(), "perform"))
+
+    def replay(self, path, still=False):
+        """Person 0 performs the fixture at `path` keyed on song time (see
+        module doc). Call before perform()."""
+        self.replay_frames, self.replay_fps = load_fixture(path)
+        self.replay_still = still
+
+    def _replay_at(self, song):
+        frames = self.replay_frames
+        if self.replay_still:
+            idx = 0
+        else:
+            idx = int(song * self.replay_fps) % len(frames)
+        # an untracked fixture frame holds the last tracked one before it
+        for k in range(idx, idx - len(frames), -1):
+            if frames[k % len(frames)] is not None:
+                return frames[k % len(frames)]
+        return None
 
     def stop_performing(self):
         self.perf_stop.set()
@@ -197,13 +233,20 @@ class SyntheticKinect:
             song = d.get("songSeconds")
             targets = [None] * len(self.targets)
             sources = []
+            if self.replay_frames is not None and d.get("moveDir") and song is not None \
+                    and song > 0.0:
+                joints = self._replay_at(song)
+                if joints is not None:
+                    targets[0] = [(x + self.offsets[0], y, z, c) for x, y, z, c in joints]
+                    self.replay_shown += 1
             for pl in d.get("players", []):
                 src = pl.get("source", "none")
                 sources.append(src)
                 if src == "none" or "joints" not in pl:
                     continue
                 i = self._person_for(pl["player"], pl.get("trackingId"))
-                if i is None or targets[i] is not None or self.watch_only:
+                if i is None or targets[i] is not None or self.watch_only \
+                        or self.replay_frames is not None:
                     continue
                 targets[i] = self._place(i, pl["joints"], src)
             now = time.monotonic()
@@ -262,7 +305,7 @@ class SyntheticKinect:
         with self.lock:
             target = self.targets[i] if i < len(self.targets) else None
         if target is not None:
-            return [(x, y, z, 1.0) for x, y, z in target]
+            return [(p[0], p[1], p[2], p[3] if len(p) > 3 else 1.0) for p in target]
         ox = self.offsets[i]
         pts = dict(STAND)
         if pose == "raise_right":
@@ -357,19 +400,48 @@ class SyntheticKinect:
             self.stop_performing()
         self.stop_evt.set()
         self.send_evt.set()
-        try:
-            self.server.close()
-        except OSError:
-            pass
+        server = getattr(self, "server", None)   # absent when only recording
+        if server is not None:
+            try:
+                server.close()
+            except OSError:
+                pass
         if self.thread:
             self.thread.join(2)
-        if os.path.exists(self.path):
+        if self.path and server is not None and os.path.exists(self.path):
             os.unlink(self.path)
 
     @staticmethod
     def engine_env(path):
         """Environment that points dc3-native's external pose provider here."""
         return {"DC3_POSE": "external", "DC3_POSE_NO_SPAWN": "1", "DC3_POSE_SOCKET": path}
+
+
+def load_fixture(path):
+    """(frames, fps) from a scripts/pose_fixture_record.py file: frames[k] is
+    20 (x, y, z, conf) tuples in camera-space metres, or None if untracked."""
+    fps = 30.0
+    frames = []
+    with open(path) as f:
+        for line in f:
+            if line.startswith("#"):
+                for tok in line[1:].split():
+                    if tok.startswith("fps="):
+                        fps = float(tok[4:])
+                continue
+            parts = line.split()
+            if not parts:
+                continue
+            if parts[1] == "0":
+                frames.append(None)
+                continue
+            v = [float(x) for x in parts[2:]]
+            if len(v) != NUM_JOINTS * 4:
+                raise ValueError(f"{path}: frame {len(frames)} has {len(v)} values")
+            frames.append([tuple(v[4 * j:4 * j + 4]) for j in range(NUM_JOINTS)])
+    if not any(f is not None for f in frames):
+        raise ValueError(f"{path}: no tracked frames")
+    return frames, fps
 
 
 def main():
@@ -380,7 +452,9 @@ def main():
     import argparse
     import signal
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--socket", required=True, help="unix socket path (DC3_POSE_SOCKET)")
+    ap.add_argument("--socket", default=None,
+                    help="unix socket path (DC3_POSE_SOCKET); omit with --perform to only "
+                         "record scores")
     ap.add_argument("--people", type=int, default=1)
     ap.add_argument("--perform", metavar="HTTP_API",
                     help="debug-server /api root to read targets from, "
@@ -389,9 +463,18 @@ def main():
                     help="negative control: record targets/scores but stand still")
     ap.add_argument("--lead-ms", type=float, default=0.0)
     ap.add_argument("--record", default=None, help="write the performing record here on exit")
+    ap.add_argument("--replay", default=None, metavar="FIXTURE",
+                    help="person 0 performs this keypoint fixture keyed on song time")
+    ap.add_argument("--replay-still", action="store_true",
+                    help="with --replay: hold the fixture's first frame all song")
     a = ap.parse_args()
+    if not a.socket and not a.perform:
+        ap.error("--socket is required unless --perform only records")
     k = SyntheticKinect(a.socket, people=a.people)
-    k.start()
+    if a.replay:
+        k.replay(a.replay, still=a.replay_still)
+    if a.socket:
+        k.start()
     if a.perform:
         k.perform(a.perform, lead_ms=a.lead_ms, watch_only=a.watch_only)
     done = threading.Event()
@@ -402,7 +485,8 @@ def main():
     k.stop()
     if a.record:
         with open(a.record, "w") as f:
-            json.dump({"frames_sent": k.frames_sent, "perform_sources": k.perf_stats,
+            json.dump({"frames_sent": k.frames_sent, "replay_frames_shown": k.replay_shown,
+                       "perform_sources": k.perf_stats,
                        "perform_samples": k.perf_samples, "perform_events": k.perf_events,
                        "perform_fatal_frames": k.perf_fatal_frames},
                       f, indent=1)

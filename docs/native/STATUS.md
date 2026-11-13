@@ -142,7 +142,7 @@ party winner screens are white (PLAN P-4).
 | Motionless skeleton | SIGSEGV at ~130 s (zero variance in `RhythmDetector`) — **fixed** by the sensor noise floor (PLAN P-1); 45k-frame still run exits 0 | ran |
 | Live webcam | Never tried (no camera on the measurement box) | — |
 | Gesture menus, player silhouette/preview | Absent | read |
-| `scripts/pose_scoring_gate.sh` | Passes (~11 min); compares maximums only and stops before the song ends | ran |
+| `scripts/pose_scoring_gate.sh` | Passes (~13 min): five configs, each the whole song under `DC3_FAST_TIME`; judges means, final scores and per-move distances (`scripts/pose_gate_report.py`). Standing still out-scores a different recorded dance (P-7) | ran |
 
 ## Web — see [WEB.md](WEB.md)
 

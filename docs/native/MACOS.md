@@ -35,7 +35,7 @@ rb3): `engine-cmake-shim-apple.patch`, `engine-weaken-duplicates.patch`,
 | 4 | 23 strong duplicate definitions at link (Linux hides them with `--allow-multiple-definition`; Apple ld errors). The loser is always a stub or fallback: 13 in `engine_stubs_generated.cpp`, `RndTex::{Load,PreLoad,PostLoad}`, `RndMesh::OnSync`, `TheUI`, `StreamReceiver::sFactory`, 2 in `SongSortMgr_Native`, `gDrawJmpBuf{,Set}`. | dc3 + engine | Delete or weaken the losers; make "links without `--allow-multiple-definition`" a Linux gate. **Done on Linux** (`ecfd3e581`): the 17 dc3-side losers are gone; the 6 engine-side ones are listed in `native/tests/link_duplicates_allow.txt`, and the weak-attribute patch takes them to 0. Gate: ctest `LinkHygiene.DuplicateDefinitions` + a self-test | [L] |
 | 5 | `scripts/native_configure.sh` has no macOS path: it never looks for a Mac Dawn and refuses `BUILD_TESTS=OFF`. | dc3 | Add a Darwin branch. **Done on Linux** (`8db01cdd7`): `DAWN_PREFIX`, `BUILD_TESTS=OFF`, no ncnn, bash 3.2; checked with `MILO_CONFIGURE_PLATFORM=Darwin MILO_CONFIGURE_DRY_RUN=1` | [L] then [Mac] |
 | 6 | `/proc/self/exe` is used to find `pose_server.py` (`native/src/platform/Skeleton_Native.cpp`) and by five tests; `main_native.cpp` reads `/proc/self/statm` (fails soft). | dc3 | `_NSGetExecutablePath` under `__APPLE__`. **Done for `/proc/self/exe`** (`c84d7ddae`, `native/src/platform/ExecutablePath.h`); `statm` left | [L] |
-| 7 | In-process camera capture (`native/src/pose/CameraCapture.cpp`) is V4L2-only. Only matters for the in-process ncnn pose path; the Python pose server uses its own capture. See [POSE_INPUT.md](POSE_INPUT.md). | dc3 | AVFoundation backend | [Mac] |
+| 7 | ~~In-process camera capture (`native/src/pose/CameraCapture.cpp`) is V4L2-only.~~ **Gone**: the in-process ncnn pose path was removed 2026-11-13 (PLAN P-6); the Python pose server does its own capture. See [POSE_INPUT.md](POSE_INPUT.md). | dc3 | — | — |
 
 Not problems: case-insensitive APFS (no case collisions in either repo or in the
 asset tree), endianness, x86 intrinsics (none in compiled code), BC textures
@@ -53,7 +53,7 @@ These catch most of the above without a Mac. Use them before asking for Mac time
 
   ```sh
   BUILD_TESTS=OFF scripts/native_configure.sh <dir> \
-      -DCMAKE_CXX_FLAGS=-stdlib=libc++ -DENABLE_NCNN=OFF \
+      -DCMAKE_CXX_FLAGS=-stdlib=libc++ \
       "-DCMAKE_EXE_LINKER_FLAGS=-stdlib=libc++ -Wl,--no-as-needed -l:libstdc++.so.6"
   ninja -C <dir> dc3-native
   ```

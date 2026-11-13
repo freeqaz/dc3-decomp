@@ -280,17 +280,13 @@ if [ -e "$MAIN_REPO/archive" ] && [ ! -e "$WORKTREE_PATH/archive" ]; then
     ln -s "$MAIN_REPO/archive" "$WORKTREE_PATH/archive"
 fi
 
-# ---- native/third_party, native/models : symlinks (gitignored build inputs) --
-# Same family of bug as archive/ above, found the same way: diff the main
-# checkout's native/build/CMakeCache.txt against what a bare cmake produces in a
-# worktree. `native/third_party/` is in .gitignore (line 144), so a worktree has
-# no ncnn — and the main checkout configures with -DENABLE_NCNN=ON. Absence is
-# SILENT: find_package(ncnn QUIET) fails, CMakeLists sets ENABLE_NCNN OFF, cmake
-# exits 0, and the worktree quietly builds a dc3-native without the internal
-# pose estimator. The gate then compares a different binary against main's.
-# native/models/ (also gitignored) holds the pose model that
-# GestureMgr_Native.cpp opens by relative path at runtime.
-for d in third_party models; do
+# ---- native/models : symlink (gitignored runtime input) ----------------------
+# Same family of bug as archive/ above. native/models/ is gitignored and holds
+# the MediaPipe pose model (pose_landmarker_*.task) that GestureMgr_Native.cpp
+# hands pose_server.py by relative path at runtime. (native/third_party/ used to
+# be linked here too, for the in-process ncnn pose path; that path was removed
+# 2026-11-13, PLAN P-6, and nothing else reads native/third_party/.)
+for d in models; do
     if [ -e "$MAIN_REPO/native/$d" ] && [ ! -e "$WORKTREE_PATH/native/$d" ]; then
         echo "==> native/$d  (symlink — gitignored native build input, read-only)"
         ln -s "$MAIN_REPO/native/$d" "$WORKTREE_PATH/native/$d"

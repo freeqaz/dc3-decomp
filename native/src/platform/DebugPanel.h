@@ -11,5 +11,6 @@ void Draw();        // Call between ImGuiBackend::NewFrame() and ImGui::Render()
 bool IsVisible();
 void Toggle();
 void SetVisible(bool v);
+void DrawNotices(); // NativeNotice banner/corner line; same call window as Draw()
 
 } // namespace DebugPanel
