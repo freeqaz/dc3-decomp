@@ -21,10 +21,10 @@ not exist on web. macOS last ran in March and would not build today.
 | Perform | Boot → title → song select → multiuser → tutorial (fresh profile) → loading → gameplay → results → song select → main, on YMCA / Better Off Alone / Give It Up in three venues; two songs back to back | headless GPU runs |
 | Save | `profile_0_save.dat` written at endgame; reloaded after restart; tutorial skipped and score shown | ran |
 | Rehearse | Runs to `practice_endgame_screen` | ran |
-| Battle | **Pauses at ~beat 4** (`pause_on_skeleton_loss`: only slot 0 has a skeleton) | ran |
+| Battle | Two people on the sensor: whole song to results, both scored. One person: pauses at ~beat 4 and waits for the second player, as on a 360. No camera: two stand-ins, results. See [Two-player modes](#two-player-modes). | headless GPU runs + `TwoPlayerBattleTest` / `OnePersonBattleTest` / `NoCameraBattleTest`, 2026-11-13 (`np-twoplayer`) |
 | Story | Choose profile → difficulty → song 1 → `campaign_perform_endgame_screen` → next song → `campaign_intro_perform_continue_screen`, with no input after the difficulty. The Perform tutorial shows only on a console that has not seen it. See [Reaching Story and Fitness](#reaching-story-and-fitness). | headless GPU run with screenshots, plus no-GPU runs, 2026-11-13 (`np-modes`) |
 | Fitness | A fitness song starts from the `playlists` row, not row 0. See [Reaching Story and Fitness](#reaching-story-and-fitness). | headless runs, 2026-11-13 (`np-modes`) |
-| Party / Crew | Not reached; expected to hit the same second-player wall as Battle | inferred |
+| Party / Crew | Crew Throwdown with two people: all 4 events, standings, rematch, main; both scored every event. Party Time: events scored for both; with one person its perform event plays solo (the game's own `use_1p_instead`). See [Two-player modes](#two-player-modes). | headless GPU runs, 2026-11-13 (`np-twoplayer`) |
 | Options, store | Not reached | — |
 | Audio | **Not verified by ear.** Headless skips audio; under Xvfb `ma_device_init` fails | — |
 | Windowed | Starts at 1280×720 and real keys drive it into gameplay. Space opens pause but doesn't close it; Esc is B, not quit, although the log says "press ESC to exit". | Xvfb |
@@ -80,6 +80,58 @@ three was a bug in the game.
   `$post_load_dest_screen` but not the initial profiles. With no profile,
   fitness shows its `no_profile` view and an empty list. Test:
   `FitnessPlaylistFlowTest` (`scripts/dc3-input-flows/fitness-playlist.txt`).
+
+### Two-player modes
+
+PLAN G-1. **The "second-player wall" was not a native bug.** The survey's
+Battle run had no pose provider, so the sensor showed one standing dummy in
+slot 0. The image's own `Game::CheckForSkeletonLoss` wants two bound players
+when the hamprovider says `requires_2_players` or `is_in_party_mode`, and
+`dance_battle.dta`'s `pause_on_skeleton_loss` arms after beat 4. So the game
+paused, as a 360 does with one person in front of it. The providers were never
+limited to slot 0: `BuildSensorFrame`'s provider branch gives every valid
+person its own persistent slot (`FillPersonSlots`), and `NativeAutoAssignPlayers`
+binds each unbound player to a tracked skeleton. Two people on the socket, or
+two in one `dc3_pose_push` frame on web, are two players.
+
+Measured with `scripts/synthetic_kinect.py --people 2` (persons at x = ±0.4 m,
+so `SkeletonChooser` puts them on opposite sides), headless GPU, screenshots
+read:
+
+| Mode | 2 people | 1 person | No camera (controller) |
+|---|---|---|---|
+| Dance Battle | Whole song (YMCA) to `dancebattle_perform_endgame_screen` → complete → song select; both scored (244,336 / 244,299) | Pauses at ~beat 4, "Continue" disabled until player 2 is bound (`pause.dta` `update_skeleton_status_internal`). That is the 360's behaviour and stays | Two stand-ins (below); results, scores 0 |
+| Person 2 leaves mid-song and returns 15 s later | Pause at once; on return player 2 is rebound, Continue resumes, both finish scored (212,360 / 212,337) | — | — |
+| Crew Throwdown | Sign-in → crew announcement → hub → 4 events (battle, perform, perform, showdown battle) → standings each time → rematch → main; both scored every event | Not measured: crew sign-in needs both sides present (DTA) | — |
+| Party Time | Hub → perform event → hub → Keep the Beat (Firework, 628,503 / 628,236) → hub; both scored each event | The perform event plays solo to `perform_endgame_screen` with no pause: the game's own `use_1p_instead` / `force_perform` when fewer than two are present | — |
+
+**No camera.** With no provider running the sensor now shows a second
+stand-in in a two-player mode (tracking id 2, at x = +0.4 m), so a
+controller-only Battle reaches results instead of pausing forever with nobody
+able to make it continue. The count is decided per frame from the
+hamprovider's `requires_2_players` / `is_in_party_mode`
+(`NativeDummyPlayerCount`, `GestureMgr_Native.cpp`), and
+`DC3_DUMMY_PLAYERS=1|2` overrides it. It is never added while a provider runs:
+then the people in front of the camera are the players, and one person must
+get the pause.
+
+**Also fixed.** Under `DC3_FAST_BOOT` the HX_NATIVE boot-advance table in
+`UIManager::Poll` treated `tutorial_party_mode_screen_0/_1` as boot screens and
+jumped to `main_screen`, so Party Time bounced to the main menu on a console
+that had not seen its tutorial. Removed (`UIManager::Poll` is 100.0% under
+`name_check` before and after).
+
+**Tests** (`DC3_DTA_FLOW_TESTS`): `TwoPlayerBattleTest` (two synthetic
+performers to results, both bound and scored, no pause), `OnePersonBattleTest`
+(pause, no results, player 2 unbound), `NoCameraBattleTest` (two stand-ins to
+results), plus `NativeDummyPlayersTest` for the policy. Each was sabotaged and
+failed: providers filling slot 0 only; a stand-in supplementing a running
+provider; the dummy count pinned to 1. The tests seed the global options cache
+so no `tutorial_battle_screen_*` intervenes, and run under `DC3_FAST_TIME`
+(~8–35 s each).
+
+**Seen on the way, not fixed:** the team-photo boxes on the battle results and
+party winner screens are white (PLAN P-4).
 
 ## Pose input — see [POSE_INPUT.md](POSE_INPUT.md)
 

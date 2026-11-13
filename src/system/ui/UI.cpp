@@ -641,8 +641,14 @@ void UIManager::Poll() {
                 {"title_screen_to_voice_control_tutorial_screen", "main_screen", 1},
                 {"tutorial_voice_control_screen_0", "main_screen", 1},
                 {"tutorial_voice_control_screen_1", "main_screen", 1},
-                {"tutorial_party_mode_screen_0", "main_screen", 1},
-                {"tutorial_party_mode_screen_1", "main_screen", 1},
+                // NOT tutorial_party_mode_screen_0/1: those are Party Time's
+                // first-run tutorial (enter_party_screen, reached from
+                // infinite_party_mode_branch_screen's start_the_party), a real
+                // game-flow screen driven by the controller like every other
+                // tutorial.  Skipping them sent a fast-boot run from that
+                // screen to main_screen one frame after entering it, so Party
+                // Time could not be started on a console that had not seen
+                // the tutorial (np-twoplayer, 2026-11-13).
                 {nullptr, nullptr, 0}
             };
 

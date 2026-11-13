@@ -1,0 +1,47 @@
+# Dance Battle, two players -- boot to gameplay with both multiuser sides
+# readied by the controller.  Used by native/tests/test_native_twoplayer.cpp
+# (TwoPlayerBattle*), which puts scripts/synthetic_kinect.py in front of the
+# sensor: the PEOPLE come from the sensor, the menu presses from here.
+#
+#   title -> main -> choose_mode (2 downs: perform, practice, dance_battle)
+#   -> song_select (1 down: YMCA, measured 2026-11-13) -> multiuser_screen
+#   -> loading -> game_screen
+#
+# The run starts from a console that has seen every tutorial (the test seeds
+# the global options cache), so no tutorial_battle_screen_* sits between
+# multiuser_screen and loading_screen.  Offsets are relative to the last
+# wait_screen and must increase; see ymca.txt for the press-spacing reasons.
+
+wait_screen title_screen
++43 wake
++45 confirm
+
+wait_screen main_screen
++43 wake
++45 confirm
+
+wait_screen choose_mode_screen
++43 wake
++45 down
++75 down
++105 confirm
+
+wait_screen song_select_screen
++43 wake
++45 down
++105 confirm
+
+# multiuser_screen: side 0 (right_hand_p1) confirms its difficulty, then
+# `play`; DLeft moves focus to right_hand_p2 (MultiUserGesturePanel::OnMsg
+# (ButtonDownMsg)); side 1 confirms difficulty and `play`.  Both sides ready
+# -> start_game.  Dance battle has requires_2_players, so there is no
+# skip_waiting: with one side ready the screen waits.  Each pane change
+# replays the list's enter animation (presses dropped), hence 70-frame gaps
+# (the harvester's MULTIUSER_GAP).
+wait_screen multiuser_screen
++38 wake
++40 confirm
++110 confirm
++180 left
++250 confirm
++320 confirm

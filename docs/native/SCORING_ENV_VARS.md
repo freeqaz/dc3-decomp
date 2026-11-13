@@ -34,6 +34,7 @@ feature** — audit before relying on old semantics.
 | `DC3_POSE_SOCKET` | `/tmp/dc3_pose.sock` | Unix socket path shared with the pose server. |
 | `DC3_POSE_CAMERA` | `0` | Camera index passed to the spawned server. |
 | `DC3_POSE_HFOV` | unset (server default 58.51°) | Real horizontal FOV of the webcam, degrees. Absolute depth scales with the assumed focal length: the Kinect-default 58.51° measured +0.76–1.73 m depth bias on real 65–72.5° cameras. Pose SHAPE is FOV-invariant, so the default is safe for scoring; calibrate for correct absolute positions/displacements. |
+| `DC3_DUMMY_PLAYERS` | auto | No-provider stand-ins (`NativeDummyPlayerCount`, `GestureMgr_Native.cpp`). Default: one, or two in a mode where `requires_2_players` or `is_in_party_mode` is set, so Battle is playable with a controller and no camera. `1`: always one (reproduces the 360's "second player missing" pause without a camera). `2`: always two. Never applies while a provider (socket, web push) runs. |
 | `DC3_SCORING_DEBUG` | off | Once-per-second liveness counters (archive lookups, frame gating, slot reassignments). Parsed with `Dc3EnvFlag(..., false)`. |
 
 ## Deterministic dummy: `DetectFrac ~0 is CORRECT

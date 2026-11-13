@@ -398,4 +398,42 @@ TEST(AsyncDetectorRatingTest, AnActiveDetectorsLastFractionIsReported) {
     ::operator delete(moveMem);
 }
 
+// ---------------------------------------------------------------------------
+// NativeDummyPlayersTest (np-twoplayer, PLAN G-1): with no pose provider the
+// sensor shows standing stand-ins.  One stand-in makes every two-player mode a
+// dead end without a camera: Game::CheckForSkeletonLoss pauses as soon as
+// player 2 is not playing and the pause screen's Continue stays disabled until
+// two players are bound.  In exactly the modes CheckForSkeletonLoss counts two
+// for (requires_2_players / is_in_party_mode) a second stand-in appears; never
+// otherwise, because a phantom second skeleton gets bound as player 2 and
+// plays every solo song (the HamPlayerData::IsPlaying pin's old failure).
+// ---------------------------------------------------------------------------
+TEST(NativeDummyPlayersTest, SecondStandInOnlyInTwoPlayerModes) {
+    EXPECT_EQ(NativeDummyPlayerCount(false, nullptr), 1) << "solo mode, default policy";
+    EXPECT_EQ(NativeDummyPlayerCount(true, nullptr), 2) << "two-player mode, default policy";
+    EXPECT_EQ(NativeDummyPlayerCount(false, ""), 1);
+    EXPECT_EQ(NativeDummyPlayerCount(true, "auto"), 2);
+    // DC3_DUMMY_PLAYERS=1: the 360's one-person pause, reproducible without a camera.
+    EXPECT_EQ(NativeDummyPlayerCount(true, "1"), 1);
+    EXPECT_EQ(NativeDummyPlayerCount(false, "2"), 2);
+}
+
+TEST(NativeDummyPlayersTest, TheTwoStandInsAreDistinctPeopleOnOppositeSides) {
+    SkeletonData a, b;
+    memset(&a, 0, sizeof(a));
+    memset(&b, 0, sizeof(b));
+    NativeSkeletonProvider::FillDummySkeletonData(a, 0);
+    NativeSkeletonProvider::FillDummySkeletonData(b, 1);
+    EXPECT_EQ(a.mTracking, kSkeletonTracked);
+    EXPECT_EQ(b.mTracking, kSkeletonTracked);
+    // Dummy 0 is the solo stand-in, unchanged: id 1, centred.
+    EXPECT_EQ(a.mTrackingID, 1);
+    EXPECT_NEAR(a.mHipCenter.x, 0.0f, 1e-3f);
+    // Dummy 1 is another person (SkeletonChooser binds by tracking id) on the
+    // other side of SkeletonChooser's +-0.15 m side threshold.
+    EXPECT_EQ(b.mTrackingID, 2);
+    EXPECT_GT(b.mHipCenter.x, 0.15f);
+    EXPECT_NEAR(b.mHipCenter.y, a.mHipCenter.y, 1e-3f);
+}
+
 } // namespace
