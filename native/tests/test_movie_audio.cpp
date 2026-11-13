@@ -289,6 +289,17 @@ TEST_F(MovieAudio, PictureFollowsTheSoundClock) {
         ASSERT_EQ(movie.GetFrame(), want) << "at " << clockMs << " ms of sound";
     }
 
+    // The picture decoded through the read-ahead queue is the dancer, not a
+    // blank frame: some pixels carry alpha.
+    {
+        const uint8_t *px = movie.GetRGBABuffer();
+        int n = movie.GetDecodedWidth() * movie.GetDecodedHeight();
+        int opaque = 0;
+        for (int i = 0; i < n; i++)
+            opaque += px[i * 4 + 3] > 128;
+        EXPECT_GT(opaque, n / 50) << "decoded frame " << movie.GetFrame() << " is empty";
+    }
+
     // Paused: the sound clock stops, and so does the picture.
     movie.SetPaused(true);
     int frame = movie.GetFrame();
