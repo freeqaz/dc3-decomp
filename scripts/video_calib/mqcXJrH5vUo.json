@@ -1,0 +1,45 @@
+{
+ "source": {
+  "url": "https://www.youtube.com/watch?v=mqcXJrH5vUo",
+  "title": "finishing the Dance Central 3 story mode! (Streamed August 20th, 2022)",
+  "channel": "littlesiha live",
+  "duration_s": 8990,
+  "video": "1920x1080 h264 30 fps (yt-dlp format 137) + opus 48 kHz (251)",
+  "note": "Not in the repo: someone else's content. Download with yt-dlp into a fresh directory; every time below is seconds of that file."
+ },
+ "layout": {
+  "player_camera": "full frame 1920x1080, front-facing, MIRRORED (a selfie view: shirt text reads backwards at full resolution), whole body visible when dancing; the dancer stays inside x 280..1336. Replays need fixture_transform.py --mirror: unmirrored, every lead scores mean lastfrac 0.49-0.59; mirrored, 0.84",
+  "pose_crop": "1056:1080:280:0",
+  "game_inset": "bottom right, crop 580:330:1338:742 (Xbox 360 capture, ~30% scale)",
+  "chat_overlay": "right side, roughly x 1380..1900, y 520..730, over the camera picture",
+  "song_title_card": "game inset bottom-left, about 2 s after song time 0",
+  "results_card": "game inset right: gems = num_perfect, green = num_awesome, score, difficulty, moves_passed percent (perform_endgame.dta); counted only from start_score_move_index on (perform.dta)"
+ },
+ "alignment": "t0 = video time of song time 0, from audio cross-correlation of the song's <id>_prev.webm (scripts/video_calib/song_id_audio.py) and confirmed by the on-screen title card at t0+2 s. The preview chorus repeats inside most songs, so the highest-NCC peak is not always the preview's own position; the title card picks the right one. The title card fixes the song, not a whole-measure offset: getlow's audio peak (4279.7) was 4.66 s (2 measures) early, found by the pose geometry (pose_vs_reference.py over +-15 s: limb error 38.8 deg at 0, 25.6 deg at +4661 ms; every other song has its minimum within +-200 ms and a 6-12 deg margin over any far offset).",
+ "songs": [
+  {"song": "dabutt", "t0": 434.5, "ncc": 0.45, "card": {"perfect": 49, "awesome": 15, "score": 1958047, "pct": 98}},
+  {"song": "supersonic", "t0": 825.5, "ncc": 0.67, "card": {"perfect": 62, "awesome": 16, "score": 2419276, "pct": 93}, "note": "second attempt; the first (from ~770) was paused and quit"},
+  {"song": "yougotittherightstuff", "t0": 1077.5, "ncc": 0.55, "card": {"perfect": 55, "awesome": 15, "score": 2015596, "pct": 90}},
+  {"song": "letthemusicplay", "t0": 1329.9, "ncc": 0.50, "card": {"perfect": 56, "awesome": 20, "score": 2433849, "pct": 93}},
+  {"song": "electricboogie", "t0": 2107.9, "ncc": 0.58, "card": {"perfect": 50, "awesome": 14, "score": 1801931, "pct": 92}},
+  {"song": "iceicebaby", "t0": 2411.0, "ncc": 0.66, "card": {"perfect": 59, "awesome": 7, "score": 2345484, "pct": 95}},
+  {"song": "aint2proud2beg", "t0": 3139.2, "ncc": 0.55, "card": {"perfect": 63, "awesome": 9, "score": 2443695, "pct": 97}},
+  {"song": "everybody", "t0": 3531.3, "ncc": 0.47, "card": {"perfect": 55, "awesome": 9, "score": 2087795, "pct": 96}},
+  {"song": "macarena", "t0": 4004.0, "ncc": 0.35, "card": {"perfect": 54, "awesome": 6, "score": 1985201, "pct": 98}},
+  {"song": "getlow", "t0": 4284.36, "t0_audio": 4279.7, "t0_source": "pose geometry (audio peak was 2 measures early)", "ncc": 0.37, "card": {"perfect": 61, "awesome": 10, "score": 2306326, "pct": 97}},
+  {"song": "12step", "t0": 4843.6, "ncc": 0.51, "card": {"perfect": 54, "awesome": 7, "score": 2128773, "pct": 98}},
+  {"song": "indaclub", "t0": 5049.4, "ncc": 0.45, "card": {"perfect": 50, "awesome": 6, "score": 2013394, "pct": 98}},
+  {"song": "cupidshuffle", "t0": 5333.4, "ncc": 0.52, "card": {"perfect": 72, "awesome": 13, "score": 3045166, "pct": 100}},
+  {"song": "teachmehowtodougie", "t0": 5585.8, "ncc": 0.70, "card": null, "exclude": "paused mid-song: gameplay runs ~90 s past the audio-implied end, so song time drifts after the pause; no results card"},
+  {"song": "boyfriend", "t0": 5898.1, "ncc": 0.62, "card": {"perfect": 49, "awesome": 11, "score": 1803226, "pct": 92}},
+  {"song": "mrsaxobeat", "t0": 6250.7, "ncc": 0.51, "card": {"perfect": 70, "awesome": 11, "score": 2639525, "pct": 94}},
+  {"song": "starships", "t0": 6679.3, "ncc": 0.41, "card": {"perfect": 54, "awesome": 22, "score": 2153727, "pct": 93}},
+  {"song": "scream", "t0": 7373.6, "ncc": 0.62, "card": {"perfect": 63, "awesome": 8, "score": 2315365, "pct": 95}}
+ ],
+ "difficulty": "medium (every readable results card)",
+ "not_used": [
+  {"from": 7680, "to": 8400, "what": "story finale in the throne room: short dance-craze segments with their own result cards (7776 958,159; 7856 The Hustle 992,846; 7968 668,787; 8208 995,169), remixed audio; preview NCC only 0.2-0.3. Title cards: Macarena 7691, The Hustle 7789, Cupid Shuffle 7869, Scream 7989, Electric Boogie 8101, OMG 8213. See id_sheets."},
+  {"from": 5740, "to": 5835, "what": "end of Teach Me How To Dougie after a pause"},
+  {"from": 0, "to": 430, "what": "menus, story cutscenes"}
+ ]
+}
