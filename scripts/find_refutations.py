@@ -37,6 +37,19 @@ USAGE
     scripts/find_refutations.py --unit default/system/rndobj/Utl
     scripts/find_refutations.py --file src/system/rndobj/Bitmap.cpp
 
+SIDECAR NOTES
+=============
+Lane history may live OUTSIDE the source, in a per-unit sidecar:
+
+    src/system/rndobj/MatAnim.cpp  ->  docs/decomp/notes/system/rndobj/MatAnim.md
+
+keyed by mangled symbol (one `## `<mangled>`` section per function, one
+```text fenced block per original comment block, moved verbatim).  The sidecar
+is found from the source path (the `src/` ancestor's sibling `docs/decomp/notes`,
+or --notes-root), its blocks are matched by exact mangled symbol (falling back to
+the short name), and they are printed FIRST, as the function's own notes.  A
+function whose notes moved there answers exactly as it did before the move.
+
 Exit codes:  0 = notes found   1 = function/file resolved but NO notes
              2 = could not resolve (symbol not in DB, or the TU file is absent)
 Every run prints which of those it is, so "no notes" is never mistaken for
@@ -60,6 +73,94 @@ NOTE_RE = re.compile(
 )
 
 COMMENT_RE = re.compile(r"^\s*(//|/\*|\*)")
+
+SIDECAR_HEADING_RE = re.compile(r"^## `([^`]+)`\s*$")
+
+
+def sidecar_path(src_path, notes_root=None):
+    """`<root>/src/system/rndobj/MatAnim.cpp` -> `<root>/docs/decomp/notes/system/rndobj/MatAnim.md`.
+
+    The root is the parent of the LAST `src` component of the path, so a
+    worktree, the main checkout and a test's temp tree all resolve their own
+    sidecar.  Returns None for a file that is not under a `src/` directory and
+    no --notes-root was given.
+    """
+    parts = os.path.abspath(src_path).split(os.sep)
+    if "src" not in parts:
+        return None
+    k = len(parts) - 1 - parts[::-1].index("src")
+    rel = parts[k + 1 :]
+    if not rel:
+        return None
+    if notes_root is None:
+        notes_root = os.path.join(os.sep.join(parts[:k]) or os.sep, "docs", "decomp", "notes")
+    stem = os.path.splitext(os.path.join(*rel))[0]
+    return os.path.join(notes_root, stem + ".md")
+
+
+def parse_sidecar(path):
+    """{symbol: [(start_line, end_line, text), ...]} -- one entry per fenced block.
+
+    A section with no fence contributes its whole non-blank body as one block,
+    so a hand-written note is not silently dropped.
+    """
+    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+        lines = fh.read().splitlines()
+    out, sym, body, fence = {}, None, [], None
+
+    def flush():
+        if sym is None:
+            return
+        blocks = out.setdefault(sym, [])
+        if not blocks:
+            text = [(i, l) for i, l in body if l.strip()]
+            if text:
+                blocks.append((text[0][0] + 1, text[-1][0] + 1,
+                               "\n".join(l for _, l in text)))
+
+    for i, ln in enumerate(lines):
+        if fence is not None:
+            if ln.strip() == "```":
+                out.setdefault(sym, []).append(
+                    (fence + 2, i, "\n".join(lines[fence + 1 : i])))
+                fence = None
+            continue
+        m = SIDECAR_HEADING_RE.match(ln)
+        if m:
+            flush()
+            sym, body = m.group(1), []
+            continue
+        if sym is not None and ln.strip().startswith("```"):
+            fence = i
+            continue
+        if sym is not None:
+            body.append((i, ln))
+    if fence is not None and sym is not None:  # unterminated: keep the text
+        out.setdefault(sym, []).append(
+            (fence + 2, len(lines), "\n".join(lines[fence + 1 :])))
+    flush()
+    return out
+
+
+def find_sidecar_notes(src_path, symbol=None, short=None, notes_root=None):
+    """(sidecar_path_or_None, [(symbol, start, end, text), ...]).
+
+    Exact mangled-symbol match wins; otherwise every section whose short name
+    matches; with neither a symbol nor a short name, every section.
+    """
+    path = sidecar_path(src_path, notes_root)
+    if not path or not os.path.exists(path):
+        return path, []
+    sections = parse_sidecar(path)
+    if symbol and symbol in sections:
+        keys = [symbol]
+    elif short:
+        keys = [k for k in sections if _short_name(k) == short]
+    elif symbol is None:
+        keys = list(sections)
+    else:
+        keys = []
+    return path, [(k, s, e, t) for k in keys for s, e, t in sections[k]]
 
 
 def _short_name(sym):
@@ -215,6 +316,8 @@ def main():
         default="decomp.db",
         help="decomp.db path (from a worktree, pass the main checkout's copy)",
     )
+    ap.add_argument("--notes-root",
+                    help="sidecar root (default: <root of src/>/docs/decomp/notes)")
     ap.add_argument("--all", action="store_true",
                     help="whole file instead of the function's window (noisy)")
     ap.add_argument("--window", type=int, default=250,
@@ -226,6 +329,7 @@ def main():
     args = ap.parse_args()
 
     short = None
+    full_sym = args.symbol
     if args.file:
         path = args.file
         if not os.path.exists(path):
@@ -250,6 +354,7 @@ def main():
                 )
                 return 2
             sym, unit = got
+            full_sym = sym
             short = _short_name(sym)
         elif unit and args.symbol:
             short = _short_name(args.symbol)
@@ -270,19 +375,36 @@ def main():
         window=10 ** 9 if args.all else args.window,
         after=0 if args.all else args.after,
     )
+    notes_path, side = find_sidecar_notes(
+        path, full_sym, short, notes_root=args.notes_root
+    )
     where = f"function at line {anchor + 1}" if anchor is not None else "function NOT located"
     print(f"file: {path}  ({nlines} lines, {where})")
-    if not hits:
+    if notes_path:
+        state = "exists" if os.path.exists(notes_path) else "absent"
+        print(f"sidecar: {notes_path}  ({state}, {len(side)} block(s) for this function)")
+    if not hits and not side:
         print(
-            "NO LANE NOTES FOUND near this function -- NOT proof the row is unexplored. "
+            "NO LANE NOTES FOUND near this function or in its sidecar -- "
+            "NOT proof the row is unexplored. "
             "A template implementation's notes usually live in a shared header instead "
             "(e.g. src/system/obj/ObjPtr_p.h for ObjPtrVec<T>::erase), so re-run with "
             "--file on that header. Also check docs/decomp/patterns/."
         )
         return 1
 
-    total = sum(e - s + 1 for s, e, _ in hits)
-    print(f"{len(hits)} note block(s), {total} lines. Adjudicate; do not assume closed.\n")
+    total = sum(e - s + 1 for s, e, _ in hits) + sum(e - s + 1 for _, s, e, _ in side)
+    print(
+        f"{len(side) + len(hits)} note block(s) ({len(side)} sidecar, {len(hits)} source), "
+        f"{total} lines. Adjudicate; do not assume closed.\n"
+    )
+    for sym, start, end, text in side:
+        body = text if args.max_chars in (0, None) else text[: args.max_chars]
+        print(f"--- {notes_path}:{start}-{end} [{sym}] " + "-" * 20)
+        print(body)
+        if args.max_chars and len(text) > args.max_chars:
+            print(f"... [{len(text) - args.max_chars} chars truncated; --max-chars 0]")
+        print()
     for start, end, text in hits:
         body = text if args.max_chars in (0, None) else text[: args.max_chars]
         print(f"--- {path}:{start}-{end} " + "-" * 40)

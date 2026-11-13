@@ -183,79 +183,23 @@ int JoypadClient::OnMsg(const ButtonUpMsg &msg) {
     return 0;
 }
 
-// w18-d (94.45, 5 rows): the plain indexed `for (i) mRepeats[i]...` loop makes
-// &mRepeats[i].mRepeatTimer the IV (`subi r3, r31, 0x30` / `subi r3, r31, 0x40`,
-// 94.2), with or without a `Timer &` local -- reverted.
-// w-this-adjust (2026-11-13): POINTER AUDIT, NOT A BUG.  `subi r3, r28, 0x30`
-// is not a this-adjustment: r28 = &mRepeats[i].mRepeatTimer and the result is
-// &mHoldTimer (Timer is 0x30 B), the same address we form as r31+0x10.  The
-// image's JoypadRepeat::Start keeps its first timer address in a callee-saved
-// GPR the same way.  JoypadRepeat::Reset(JoypadButton) has no out-of-line copy
-// in the image, so it is inlined; `pRepeat->Reset(pRepeat->mLastBtn)` (self-
-// compare folds) is byte-identical at 94.45 -- inert, not shipped.
+// Residual (94.4): the image keeps &repeat->mRepeatTimer in a callee-saved
+// register across the first Reset and derives the hold timer from it (-0x30);
+// MSVC folds every spelling tried back to `repeat + offset` at each use.
+// Lane history: docs/decomp/notes/system/os/JoypadClient.md
 void JoypadClient::Poll() {
-    int i = 0;
-    JoypadRepeat *pRepeat = mRepeats;
+    int pad = 0;
+    JoypadRepeat *repeat = mRepeats;
     do {
         if (ThePlatformMgr.GuideShowing()) {
-            // MECHANISM (w7-av; w33-c): 94.45 is an address-anchor divergence.  The image forms
-            // `addi r28, r31, 0x40` (the repeat timer) into a CALLEE-SAVED
-            // register before the first call and derives the hold timer from it
-            // as `subi r3, r28, 0x30`, which is why it saves one GPR more than
-            // we do (__savegprlr_27 vs _28).  We form each address from r31 at
-            // its use.  Refuted, both 94.45 with identical rows: binding
-            // `Timer &repeatTimer = pRepeat->mRepeatTimer;` before the first
-            // Reset, and even writing the hold timer as explicit pointer
-            // arithmetic off the repeat timer -- MSVC folds both back to
-            // `r31 + constant` at the use site.
-            //
-            // CROSS-BINARY CONFIRMATION (w9-a): rb3-xenon's os/JoypadClient.cpp carries a
-            // byte-identical body and its ?Poll@JoypadClient@@AAAXXZ reads the
-            // SAME 94.44827 -- two binaries, two lanes, one number.  Three more
-            // spellings refuted here, all 94.44827 with the same five rows,
-            // exploiting that Timer is 0x30 bytes so &mHoldTimer == &mRepeatTimer
-            // - 1: `Timer *t = &pRepeat->mRepeatTimer; t[-1].Reset(); t->Reset();`,
-            // the same with a named `holdTimer = t - 1`, and the reference form
-            // `(&repeatTimer)[-1]`.  MSVC re-folds every one of them to
-            // `addi r3, r31, 0x10`.  The residue is that the image spends one
-            // extra callee-saved register (__savegprlr_27) to hold
-            // &mRepeatTimer across the first Reset and then derives the hold
-            // timer as `subi r3, r28, 0x30`; two of the five rows are only the
-            // ThePlatformMgr anchor landing in r27 instead of r28 as a result.
-            //
-            // w31-b (2026-11-03): the mechanism is now named exactly, and it is
-            // one instruction, not five. The image computes the SECOND call's
-            // receiver first -- `addi r28, r31, 0x40` (&mRepeatTimer, into a
-            // callee-saved GPR because it must survive the first bl) -- and
-            // derives the first call's receiver from it as `subi r3, r28, 0x30`
-            // (= &mHoldTimer; Timer is 0x30 bytes, mHoldTimer 0x10 and
-            // mRepeatTimer 0x40, so this is faithful). We materialise each
-            // address at its own use site, so the image is 29 instructions and
-            // we are 28 -- one SHORT, which is why no score on this row may be
-            // banked until that instruction exists. Call order is NOT the lever:
-            // swapping the two Reset statements scores 94.48276 (+0.0345, an
-            // alignment coincidence -- our 0x40 addi then lines up with the
-            // image's) while emitting the calls in the opposite order to the
-            // image, and it is reverted. Every binding form that should force
-            // the callee-saved materialisation -- `Timer &` for one and for
-            // both, `Timer *`, `t[-1]`, pointer arithmetic off the repeat timer
-            // -- is folded back to `r31 + constant` at each use site, and a
-            // `for` loop instead of the do/while costs 0.07.
-            // w33-c behaviour verdict: EQUIVALENT.  Both sides Reset
-            // mHoldTimer then mRepeatTimer (r31+0x10, then r31+0x40); the image
-            // derives the first address as (r31+0x40)-0x30, which is the same
-            // address -- it is the address materialisation, not the calls, that
-            // differs.  Probe: a named `Timer *repeatTimer = &pRepeat->mRepeatTimer`
-            // used for the second Reset is inert (94.44827), i.e. c1 folds it
-            // back to r31+constant exactly as the earlier forms did.
-            pRepeat->mHoldTimer.Reset();
-            pRepeat->mRepeatTimer.Reset();
+            repeat->mHoldTimer.Reset();
+            repeat->mRepeatTimer.Reset();
         } else {
-            pRepeat->Poll(mHoldMs, mRepeatMs, mSink, i);
+            repeat->Poll(mHoldMs, mRepeatMs, mSink, pad);
         }
-        pRepeat++;
-        i++;
-    } while (i < 4);
+        repeat++;
+        pad++;
+    } while (pad < 4);
 }
 
 void JoypadClient::Init() {

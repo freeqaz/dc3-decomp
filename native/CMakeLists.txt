@@ -2035,6 +2035,7 @@ if(BUILD_TESTS)
         tests/test_clamp_fsel_nan.cpp
         tests/test_native_memory_lp64.cpp
         tests/test_cache_native.cpp
+        tests/test_copy_poll_semantics.cpp
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
