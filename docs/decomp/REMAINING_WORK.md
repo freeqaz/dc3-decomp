@@ -69,6 +69,16 @@ Give it a mangled symbol (it resolves unit → file through `decomp.db`) or
 usually the *previous* function's note) — rather than the whole file, because
 `src/system/rndobj/Utl.cpp` alone has 27 note blocks and 782 lines of them.
 
+**Sidecar notes (pilot, 2026-11-13).** Five functions' lane history moved out of
+the source into `docs/decomp/notes/<path under src/>.md`, one `` ## `<mangled>` ``
+section per function and one fenced block per original comment block, verbatim:
+`RndMatAnim::Copy`, `JoypadClient::Poll`, `SpeechMgr::Poll`, `CamShot::GetCam`,
+`HollaBackMinigame::SetDefaultShot`. The tool reads the sidecar too (exact
+symbol, then short name) and prints its blocks first; a moved function answers
+exit 0 with the same text it gave before the move. The source keeps a 3–4 line
+mechanism comment ending in `Lane history: docs/decomp/notes/...`. New notes on
+those five go in the sidecar section, not back into the source.
+
 Exit codes are the point: **0** notes found, **1** looked and found none,
 **2** could not look (symbol not in the DB, or the unit maps to no file). A
 template implementation's notes usually live in a shared header
