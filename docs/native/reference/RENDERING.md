@@ -276,7 +276,7 @@ these consumers render correctly at runtime is not re-verified here.
 | Pass | What it is |
 |---|---|
 | `ShadowPass` | 1024² `Depth32Float` shadow map (`kShadowMapSize`); static and skinned depth pipelines; `InShadowPass()` drives `DrawMeshShadow` in `Mesh_Wgpu.cpp`. The standard shader samples it with a 3×3 `textureSampleCompare` PCF. |
-| `PostProcPass` | Driven by `RndPostProc`. Contrast and brightness use the retail `RndColorXfm::AdjustContrast` formula. Also saturation, levels, posterize, vignette, chromatic aberration + sharpen, flicker (`StepFlicker`), procedural noise, and the bloom composite. |
+| `PostProcPass` | Driven by `RndPostProc`. Contrast and brightness use the retail `RndColorXfm::AdjustContrast` formula. Also saturation, levels, posterize, vignette, chromatic aberration + sharpen, flicker (`StepFlicker`), noise, and the bloom composite. On the pinned engine the noise is procedural ±0.5 static per pixel. The image overlays `mNoiseMap` instead (PLAN G-14; the engine patch is not landed). |
 | `BloomPass` | Bloom extraction and blur, composited by `PostProcPass`. |
 | `DofPass` | Depth of field, ported from retail `NgDOFProc::DoPost`. |
 | `SpotBeamPass` | Volumetric spotlight beams, ported from retail `NgSpotlightDrawer`. |
