@@ -58,3 +58,12 @@ Inside the body (was lines 497-504):
                         // item stops discovery of every item after it in the
                         // batch.  We had `continue`, which skipped only that item.
 ```
+
+NEGATIVE RESULT (np-gpd-review, 2026-11-13, 96.55 name_check): binding the
+state member once (`auto &_ref0 = mState;` and every `mState` read/write in the
+body through it) is INERT -- 255 rows, 58 diff_arg / 1 replace / 4 insert /
+4 delete before and after, same r15-r31 vs r16-r31 prologue. The idea came from
+a 2026-06-02 permuter harvest batch left uncommitted on the GPD
+(`dc3-harvest` worktree, branch `harvest-sweep-wins`), written against a body
+that still had the `continue`/missing-`return` control-flow bugs since fixed.
+The residual is still the vtable-load hoist described in the source comment.
