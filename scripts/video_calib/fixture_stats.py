@@ -96,7 +96,28 @@ def stats(path, still_speed, still_frames):
         # per joint z, to see which joints carry depth noise
         out["still_jitter_z_per_joint_mm"] = [round(float(np.median(s[:, i, 2])) * 1000, 1)
                                               for i in range(20)]
+    # Motion-robust high-frequency noise: r_t = x_t - (x_{t-1} + x_{t+1}) / 2 on
+    # joints moving < --slow-speed m/s.  For white noise of sd s, r has sd
+    # 1.22 s and median |r| 0.826 s; smooth motion adds a*dt^2/2 (1.4 mm at
+    # 5 m/s^2).  Reported as s-equivalent, comparable to a still-window
+    # median |step| (0.95 s) to within 15%.  Blind to slow wobble -- which is
+    # what MediaPipe's own temporal filter leaves -- so a lower bound on error.
+    tri = tracked[2:] & tracked[1:-1] & tracked[:-2]
+    r = xyz[1:-1] - (xyz[:-2] + xyz[2:]) / 2  # n-2, 20, 3
+    v = np.linalg.norm(xyz[2:] - xyz[:-2], axis=2) / (ts[2:] - ts[:-2])[:, None]  # n-2, 20
+    sel = tri[:, None] & (v < SLOW_SPEED)
+    body = [i for i in range(20) if i not in HANDS]
+    hf = {}
+    for name, idx in (("body", body), ("hands", list(HANDS))):
+        rs = np.abs(r[:, idx][sel[:, idx]])  # k, 3
+        hf[name + "_xyz"] = ([round(float(np.median(rs[:, a]) / 0.826) * 1000, 2) for a in range(3)]
+                             if len(rs) > 50 else None)
+        hf[name + "_samples"] = int(len(rs))
+    out["hf_noise_sigma_mm"] = hf
     return out
+
+
+SLOW_SPEED = 0.3
 
 
 def main():

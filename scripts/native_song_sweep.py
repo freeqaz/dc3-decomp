@@ -324,6 +324,7 @@ def play_song(a, song, downs, port, venue):
             time.sleep(1)
         # menus -> multiuser (driven by the input script)
         venue_done = False
+        evals_done = False
         hard = time.time() + a.timeout
         last_beat, last_move = None, time.time()
         shot_game = False
@@ -333,6 +334,9 @@ def play_song(a, song, downs, port, venue):
         while time.time() < hard and e.alive():
             e.pump()
             names = [s for _, s in e.screens]
+            if a.eval and not evals_done and "multiuser_screen" in names:
+                res["eval_replies"] = [e.eval(x).get("data", {}).get("value") for x in a.eval]
+                evals_done = True
             if venue and not venue_done and "multiuser_screen" in names:
                 r = e.eval(f"{{meta_performer set_venue_pref {venue}}}"
                            "{meta_performer setup_venue}{gamedata get venue}")
@@ -479,6 +483,9 @@ def main():
                     help="DC3_POSE_PERFORM mode; '{song}' is replaced by the song id "
                          "(replay:DIR/{song}.dc3pose)")
     ap.add_argument("--difficulty", default="easy", choices=sorted(DIFFICULTY_DOWNS))
+    ap.add_argument("--eval", action="append", default=[], metavar="DTA",
+                    help="DTA evaluated once on multiuser_screen, repeatable; e.g. "
+                         "'{profile_mgr toggle_disable_freestyle}' (Options > Freestyle off)")
     ap.add_argument("--env", action="append", default=[], metavar="K=V",
                     help="extra engine environment, repeatable (e.g. DC3_POSE_LATENCY_MS=250)")
     ap.add_argument("--song-seconds", type=float, default=0,
