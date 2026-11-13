@@ -167,6 +167,35 @@ void NativeSkeletonProvider::ReportProblem(const Problem &p) {
     NativeNotice::Post(kPoseNoticeKey, p.text, p.brief, 20.0f);
 }
 
+// ---------------------------------------------------------------------------
+// Sensor latency.  MoveDir::LoadScoring reads `latency_offset` (100 ms,
+// config/scoring.dta) and compares the skeleton that arrives at song time S
+// with the choreography scheduled at S - latency_offset
+// (MoveDir::PostUpdateFilters).  That constant describes the KINECT's
+// pipeline -- capture to NuiSkeletonGetNextFrame -- plus the display/audio lag
+// it was tuned with.  A webcam + MediaPipe pipeline has its own latency, so
+// DC3_POSE_LATENCY_MS lets the player's sensor say what its latency is; it
+// replaces latency_offset (same units, same meaning).  Unset, the image's
+// value stands.  A value outside [0, 1000] ms is ignored with a warning.
+// Measured effect, docs/native/POSE_INPUT.md: a correct, noisy performance
+// arriving 150 ms later than latency_offset assumes still keeps 92% perfect;
+// 300 ms late (no noise) drops to 38% perfect / 26% bad (Better Off Alone, Easy).
+// ---------------------------------------------------------------------------
+float Dc3SensorLatencySeconds(float scoringDtaSeconds) {
+    const char *v = getenv("DC3_POSE_LATENCY_MS");
+    if (!v || !*v)
+        return scoringDtaSeconds;
+    char *end = nullptr;
+    double ms = strtod(v, &end);
+    if (end == v || ms < 0.0 || ms > 1000.0) {
+        fprintf(stderr, "DC3_POSE_LATENCY_MS='%s' ignored (want 0..1000 ms)\n", v);
+        return scoringDtaSeconds;
+    }
+    fprintf(stderr, "DC3_POSE_LATENCY_MS: scoring latency %.0f ms (latency_offset %.0f ms)\n", ms,
+            scoringDtaSeconds * 1000.0f);
+    return (float)(ms * 0.001);
+}
+
 #ifdef __EMSCRIPTEN__
 // Web: only the TRANSPORT is absent -- no pose_server.py to spawn, no Unix
 // socket to read.  Frames arrive from the page's camera + MediaPipe pipeline
