@@ -2043,6 +2043,7 @@ if(BUILD_TESTS)
         tests/test_native_engineleads.cpp
         tests/test_native_suspects.cpp
         tests/test_native_partyplay.cpp
+        tests/test_native_rehearse.cpp
         tests/test_native_lifetime2.cpp
         tests/test_cascade_guards.cpp
         tests/test_native_posesynth.cpp
