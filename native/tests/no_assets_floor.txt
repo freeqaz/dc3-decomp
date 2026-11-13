@@ -1,4 +1,4 @@
-1
+262
 # ^ The minimum number of tests that must EXECUTE (not skip) in
 #   `scripts/native_test.sh --no-assets` -- the GitHub native-build job, which
 #   has no game data. Fewer executed = exit 2: asset-free coverage shrank.

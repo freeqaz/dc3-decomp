@@ -48,11 +48,15 @@
 # The skip budget describes this box, which has orig-assets. The GitHub runner
 # has none, so every engine-backed suite skips there (EnsureEngineInit's
 # explicit "[no-game-data]" check, test_helpers.cpp) and the budget is
-# meaningless. --no-assets swaps the budget for a FLOOR on the number of tests
-# EXECUTED, recorded in native/tests/no_assets_floor.txt:
-#   * fewer executed than the floor -> exit 2 (coverage shrank). This is what
+# meaningless. --no-assets swaps the budget for a FLOOR on the number of gtest
+# cases VERIFIED to have run and passed (each printed its own "[       OK ]"
+# line in ctest's LastTest.log), recorded in native/tests/no_assets_floor.txt:
+#   * fewer verified than the floor -> exit 2 (coverage shrank). This is what
 #     stops "everything skipped" from passing: ctest scores skips as passes.
-#   * more executed than the floor  -> exit 0 plus a notice to raise it. Not a
+#   * any GHOST -> exit 2: a milo-tests run ctest scored PASSED that printed no
+#     OK/SKIPPED/FAILED line, i.e. ran nothing (a skip in a global gtest
+#     Environment does this, and ctest cannot tell it from a pass).
+#   * more verified than the floor  -> exit 0 plus a notice to raise it. Not a
 #     failure: lanes add asset-free tests all the time, and none of them can
 #     measure this number without a data-less build.
 #   * NO_ASSETS_FLOOR_UPDATE=1 rewrites the floor; lowering it also needs
@@ -438,11 +442,25 @@ fi
 executed=$(( total - skipped ))
 passed=$(( executed - failed ))
 
-# Tests that skipped at the explicit game-data check (EnsureEngineInit,
-# HeadlessBootTest): blocks of ctest's LastTest.log whose output carries the
-# tag. Informational -- it says WHY the skips are skips.
-no_data_skips=$(awk '/^[0-9]+\/[0-9]+ Test: /{t=$3} /\[no-game-data\]/{if(t!="" && !(t in n)){n[t]=1;c++}} END{print c+0}' \
-                "$BUILD_DIR/Testing/Temporary/LastTest.log" 2>/dev/null || echo "?")
+# Per-test evidence from ctest's LastTest.log, which holds every test's output.
+#   no_data_skips -- tests that skipped at the explicit game-data check
+#                    (EnsureEngineInit, HeadlessBootTest): blocks carrying the
+#                    [no-game-data] tag. Informational: WHY the skips are skips.
+#   verified      -- gtest cases that printed their own "[       OK ]" line:
+#                    passes with evidence that the body ran.
+#   ghosts        -- gtest processes ctest scored PASSED that printed no
+#                    OK / SKIPPED / FAILED line at all: nothing ran. A skip in a
+#                    global gtest Environment does exactly this, and ctest has
+#                    no way to tell it from a pass.
+LAST_TEST_LOG="$BUILD_DIR/Testing/Temporary/LastTest.log"
+read -r no_data_skips verified ghosts < <(awk '
+    /^[0-9]+\/[0-9]+ Test: /   { t = $3; gt = 0; mark = 0; next }
+    /^\[==========\] Running / { gt = 1 }
+    /\[no-game-data\]/        { if (t != "" && !(t in nd)) { nd[t] = 1; n++ } }
+    /^\[       OK \] /        { if (!($4 in ok)) { ok[$4] = 1; v++ }; mark = 1 }
+    /^\[  (SKIPPED|FAILED) \] / { mark = 1 }
+    /^Test Passed\./           { if (gt && !mark) g++ ; t = "" }
+    END { print n + 0, v + 0, g + 0 }' "$LAST_TEST_LOG" 2>/dev/null || echo "? ? ?")
 
 if [ "$NO_ASSETS" = "1" ]; then
     # The FLOOR replaces the budget in this mode. Same precondition discipline:
@@ -463,39 +481,54 @@ if [ "$NO_ASSETS" = "1" ]; then
     echo " milo-tests summary, NO GAME DATA mode   (ctest exit $CTEST_RC)"
     echo "--------------------------------------------------------------"
     printf "   registered : %d\n" "$total"
-    printf "   EXECUTED   : %d   floor: %s\n" "$executed" "$floor"
+    printf "   EXECUTED   : %d\n" "$executed"
     printf "     passed   : %d\n" "$passed"
     printf "     FAILED   : %d\n" "$failed"
     printf "   SKIPPED    : %d   (%s at the [no-game-data] check)\n" "$skipped" "$no_data_skips"
+    printf "   VERIFIED   : %s   gtest cases that printed [ OK ]; floor: %s\n" "$verified" "$floor"
+    printf "   ghosts     : %s   gtest runs scored PASSED that ran nothing\n" "$ghosts"
     echo "=============================================================="
-    printf 'NT_MODE=no-assets\nNT_REGISTERED=%s\nNT_EXECUTED=%s\nNT_PASSED=%s\nNT_FAILED=%s\nNT_SKIPPED=%s\nNT_NO_DATA_SKIPS=%s\nNT_FLOOR=%s\n' \
-        "$total" "$executed" "$passed" "$failed" "$skipped" "$no_data_skips" "$floor" \
+    printf 'NT_MODE=no-assets\nNT_REGISTERED=%s\nNT_EXECUTED=%s\nNT_PASSED=%s\nNT_FAILED=%s\nNT_SKIPPED=%s\nNT_NO_DATA_SKIPS=%s\nNT_VERIFIED=%s\nNT_GHOSTS=%s\nNT_FLOOR=%s\n' \
+        "$total" "$executed" "$passed" "$failed" "$skipped" "$no_data_skips" "$verified" "$ghosts" "$floor" \
         > "$BUILD_DIR/native_test_summary.txt"
+    case "$verified$ghosts" in
+        *[!0-9]*|"")
+            echo "error: could not read per-test evidence from $LAST_TEST_LOG;" >&2
+            echo "       refusing to report the floor as met." >&2
+            exit 4 ;;
+    esac
     if [ "${NO_ASSETS_FLOOR_UPDATE:-0}" = "1" ]; then
-        if [ "$executed" -lt "$floor" ] && [ "${ALLOW_FLOOR_LOWER:-0}" != "1" ]; then
-            echo "REFUSING to lower the no-assets floor: $floor -> $executed."
+        if [ "$verified" -lt "$floor" ] && [ "${ALLOW_FLOOR_LOWER:-0}" != "1" ]; then
+            echo "REFUSING to lower the no-assets floor: $floor -> $verified."
             echo "      That records lost coverage as the new normal. If intended,"
             echo "      re-run with ALLOW_FLOOR_LOWER=1 and say why in the commit."
             exit 5
         fi
-        sed -i -E "0,/^[0-9]+/s//$executed/" "$FLOOR_FILE"
-        echo "no-assets floor updated: $floor -> $executed"
+        sed -i -E "0,/^[0-9]+/s//$verified/" "$FLOOR_FILE"
+        echo "no-assets floor updated: $floor -> $verified"
         rm -f "$LOG"
         exit "$CTEST_RC"
     fi
     rc=$CTEST_RC
-    if [ "$executed" -lt "$floor" ]; then
+    if [ "$ghosts" -gt 0 ]; then
         echo
-        echo "FAIL: $executed tests executed with no game data; the floor is $floor."
-        echo "      Coverage shrank: asset-free tests now skip or no longer exist."
-        echo "      Find what stopped running; do not lower the floor to hide it."
-        [ -n "${GITHUB_ACTIONS:-}" ] && echo "::error::no-assets coverage shrank: $executed executed < floor $floor"
+        echo "FAIL: $ghosts gtest run(s) were scored PASSED by ctest but printed no"
+        echo "      [ OK ] / [ SKIPPED ] / [ FAILED ] line: their test never ran."
+        [ -n "${GITHUB_ACTIONS:-}" ] && echo "::error::$ghosts milo-tests runs passed without running a test"
         rc=2
-    elif [ "$executed" -gt "$floor" ]; then
+    fi
+    if [ "$verified" -lt "$floor" ]; then
         echo
-        echo "NOTE: $executed executed, floor is $floor. Raise the floor to lock it in:"
-        echo "      set the first line of native/tests/no_assets_floor.txt to $executed"
-        [ -n "${GITHUB_ACTIONS:-}" ] && echo "::notice::no-assets floor can rise: $floor -> $executed"
+        echo "FAIL: $verified gtest cases passed with no game data; the floor is $floor."
+        echo "      Coverage shrank: asset-free tests now skip, never run, or no"
+        echo "      longer exist. Find what stopped; do not lower the floor to hide it."
+        [ -n "${GITHUB_ACTIONS:-}" ] && echo "::error::no-assets coverage shrank: $verified verified < floor $floor"
+        rc=2
+    elif [ "$verified" -gt "$floor" ]; then
+        echo
+        echo "NOTE: $verified verified, floor is $floor. Raise the floor to lock it in:"
+        echo "      set the first line of native/tests/no_assets_floor.txt to $verified"
+        [ -n "${GITHUB_ACTIONS:-}" ] && echo "::notice::no-assets floor can rise: $floor -> $verified"
     fi
     rm -f "$LOG"
     exit "$rc"
