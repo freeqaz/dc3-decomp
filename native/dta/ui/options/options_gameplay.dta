@@ -45,21 +45,13 @@
          {$this set provider provider.hnp}
          {$this set provider provider_no_voice.hnp}}
       ;; Append the native-only toggles (camera blend, debug overlay) to the
-      ;; chosen provider.  The providers live in options_gameplay.milo, which
-      ;; stays loaded across visits to this screen, so append only once per
-      ;; provider: a second visit would otherwise add two more rows each time.
-      ;; (HamNavProvider has no `num_data` handler -- it is not in its handler
-      ;; chain -- so the row count is the `nav_items` property's size.)
-      {if
-         {!=
-            {[provider]
-               get
-               (nav_items
-                  {- {[provider] size (nav_items)} 1}
-                  label)}
-            option_debug_panel}
-         {$this append_native_option option_camera_blend}
-         {$this append_native_option option_debug_panel}})
+      ;; chosen provider.  options_gameplay.milo, and with it the providers,
+      ;; is loaded afresh on every visit (measured: a second visit still
+      ;; shows 6 rows with no once-only guard), so this appends unconditionally.
+      ;; HamNavProvider has no `num_data` handler -- it is not in its handler
+      ;; chain -- so the row count is the `nav_items` property's size.
+      {$this append_native_option option_camera_blend}
+      {$this append_native_option option_debug_panel})
    (append_native_option
       ($token)
       {[provider] append_nav_item}

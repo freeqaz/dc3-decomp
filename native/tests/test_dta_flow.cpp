@@ -1015,8 +1015,10 @@ TEST_F(FitnessPlaylistFlowTest, PlaylistsRowStartsAPlaylist) {
 //
 // G-12: the overlay counted rows with `num_data`, a message HamNavProvider has
 // never handled (Handle is 100% matched; the image has no such handler), so
-// every append ran against kDataUnhandled: 14 MILO_FAILs per visit.  It must
-// also not append its rows again on the second visit.
+// every append ran against kDataUnhandled: 14 MILO_FAILs per visit.  The two
+// rows must be there on both visits.  (options_gameplay.milo is reloaded per
+// visit -- the providers are new objects each time -- so an unconditional
+// append cannot double them; the second visit pins that.)
 // G-16: the Kinect Tuner row did nothing; it must now say why.
 
 class OptionsGameplayFlowTest : public ControllerModeFlowTest {
@@ -1070,7 +1072,7 @@ TEST_F(OptionsGameplayFlowTest, GameplayOptionsRaiseNoFails) {
     EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }
 
-TEST_F(OptionsGameplayFlowTest, OverlayRowsAppendOncePerProvider) {
+TEST_F(OptionsGameplayFlowTest, OverlayAddsItsTwoRowsEachVisit) {
     std::vector<std::string> lines = GameplayLines();
     ASSERT_FALSE(lines.empty())
         << "precondition: options-gameplay.txt never reached options_gameplay_screen";
@@ -1089,7 +1091,8 @@ TEST_F(OptionsGameplayFlowTest, OverlayRowsAppendOncePerProvider) {
     EXPECT_EQ(counts[0], 6)
         << "first visit: provider_no_voice.hnp's 4 rows + camera blend + debug overlay";
     EXPECT_EQ(counts[1], 6)
-        << "second visit: the overlay appended its rows again";
+        << "second visit: 6 rows again (fewer: an append was lost; more: the "
+           "provider outlived the first visit and the rows doubled)";
 }
 
 TEST_F(OptionsGameplayFlowTest, KinectTunerGivesFeedback) {
