@@ -800,8 +800,11 @@ StreamRenderer::DrawToTexture, HX_NATIVE body: compose on the CPU
   targets nothing filled, so they drew as flat magenta/blue squares.
   Still hidden, with corrected comments:
   `pose_flash*` (an avatar `TexRenderer` → `projection.rndtex`, not the camera),
-  `preview.mesh` (the song-preview movie `preview.tmov`), `grid_80by60`
-  (`DepthBuffer3D`'s voxel template; its draw is a native stub). The ring that
+  `grid_80by60`
+  (`DepthBuffer3D`'s voxel template; its draw is a native stub). `preview.mesh`
+  (the song-preview movie `preview.tmov`) is no longer hidden (`np-media`): the
+  movie decodes, and the card's opaque album meshes cover it as in Xenia (PLAN
+  G-15). The ring that
   fades at a box's top-left is `cursor.milo`'s own animation (same fade whichever
   meshes are hidden); the left box draws its player in the right box's colour
   at alpha 0 by design (`srcAlphaAdd`).
@@ -870,8 +873,7 @@ StreamRenderer::DrawToTexture, HX_NATIVE body: compose on the CPU
   has no bitmap natively, so `TexelsLock` returns null — unreachable from
   shipped data, but a debug `ui store_color_buff_at` with a stream live would
   write through it).
-- `pose_flash*` and `preview.mesh` are not camera meshes; they belong to the
-  avatar projection and the song-preview movie.
+- `pose_flash*` is not a camera mesh; it belongs to the avatar projection.
 - A live webcam session (P-2), desktop and web.
 
 ## Web
