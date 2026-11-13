@@ -57,12 +57,6 @@ using namespace Dc3PosePerformer;
 
 enum Mode { kNone, kChoreo, kWrong, kHalfTempo, kStill, kStand, kReplay };
 
-struct ReplayFrame {
-    double t;
-    Vector3 joints[kNumJoints];
-    float conf[kNumJoints];
-};
-
 struct State {
     bool init = false;
     Mode mode = kNone;
@@ -96,44 +90,59 @@ JointConfidence ConfidenceFromScore(float score) {
     return kConfidenceTracked;
 }
 
-void LoadReplay(const char *path) {
+} // namespace
+
+bool Dc3PosePerformer::LoadReplay(const char *path, std::vector<ReplayFrame> &out) {
     FILE *f = fopen(path, "r");
-    if (!f) {
-        fprintf(stderr, "DC3 PERFORM: cannot open replay %s\n", path);
-        return;
-    }
+    if (!f)
+        return false;
     char line[4096];
     while (fgets(line, sizeof(line), f)) {
         if (line[0] == '#')
             continue;
-        ReplayFrame fr;
+        // "<t> <tracked 0|1> [20 x (x y z conf)]" (dc3-pose-fixture v1,
+        // scripts/pose_fixture_record.py / pose_replay_record.py); an untracked
+        // frame carries no joints.
+        double v[2 + kNumJoints * 4];
+        int n = 0;
         char *p = line;
         char *end;
-        fr.t = strtod(p, &end);
-        if (end == p)
-            continue;
-        p = end;
-        bool ok = true;
-        for (int j = 0; j < kNumJoints && ok; j++) {
-            float v[4];
-            for (int k = 0; k < 4; k++) {
-                v[k] = strtof(p, &end);
-                if (end == p) {
-                    ok = false;
-                    break;
-                }
-                p = end;
-            }
-            if (ok) {
-                fr.joints[j].Set(v[0], v[1], v[2]);
-                fr.conf[j] = v[3];
-            }
+        while (n < (int)(sizeof(v) / sizeof(v[0]))) {
+            double x = strtod(p, &end);
+            if (end == p)
+                break;
+            v[n++] = x;
+            p = end;
         }
-        if (ok)
-            gState.replay.push_back(fr);
+        ReplayFrame fr;
+        fr.t = v[0];
+        if (n == 2 && v[1] == 0.0) {
+            for (int j = 0; j < kNumJoints; j++) {
+                fr.joints[j].Set(0.0f, 0.0f, 0.0f);
+                fr.conf[j] = 0.0f; // nobody in the frame: published as 0 persons
+            }
+        } else if (n == 2 + kNumJoints * 4) {
+            for (int j = 0; j < kNumJoints; j++) {
+                const double *q = &v[2 + j * 4];
+                fr.joints[j].Set((float)q[0], (float)q[1], (float)q[2]);
+                fr.conf[j] = (float)q[3];
+            }
+        } else {
+            continue;
+        }
+        out.push_back(fr);
     }
     fclose(f);
-    fprintf(stderr, "DC3 PERFORM: replay %s, %d frames\n", path, (int)gState.replay.size());
+    return true;
+}
+
+namespace {
+
+void LoadReplay(const char *path) {
+    if (!Dc3PosePerformer::LoadReplay(path, gState.replay))
+        fprintf(stderr, "DC3 PERFORM: cannot open replay %s\n", path);
+    else
+        fprintf(stderr, "DC3 PERFORM: replay %s, %d frames\n", path, (int)gState.replay.size());
 }
 
 void Init() {

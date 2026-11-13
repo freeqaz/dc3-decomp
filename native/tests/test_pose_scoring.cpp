@@ -23,7 +23,10 @@
 #include "os/System.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
+#include <unistd.h>
+#include <vector>
 
 float Dc3SensorLatencySeconds(float scoringDtaSeconds);
 
@@ -87,6 +90,45 @@ TEST(PosePerformerClockTest, NoiseIsSeededAndStandardNormal) {
     EXPECT_TRUE(differs);
     EXPECT_NEAR(sum / 20000, 0.0, 0.03);
     EXPECT_NEAR(sum2 / 20000, 1.0, 0.05);
+}
+
+// DC3_POSE_PERFORM=replay:FILE reads the same dc3-pose-fixture v1 files as
+// scripts/synthetic_kinect.py --replay: the checked-in MediaPipe fixture loads
+// whole, and an untracked line becomes a frame with nobody in it.
+TEST(PosePerformerReplayTest, ReadsTheCheckedInFixture) {
+    std::vector<Dc3PosePerformer::ReplayFrame> frames;
+    ASSERT_TRUE(Dc3PosePerformer::LoadReplay(
+        DC3_DECOMP_SRC_DIR "/../native/tests/data/pose/taye01_stand_dance.dc3pose", frames
+    ));
+    ASSERT_EQ(frames.size(), 240u);
+    EXPECT_DOUBLE_EQ(frames[0].t, 0.0);
+    EXPECT_NEAR(frames[1].t, 1.0 / 30.0, 1e-4);
+    EXPECT_NEAR(frames[0].joints[0].x, -0.0133f, 1e-6f);
+    EXPECT_NEAR(frames[0].joints[0].z, 2.5023f, 1e-6f);
+    EXPECT_NEAR(frames[0].conf[0], 0.9994f, 1e-6f);
+    for (size_t i = 1; i < frames.size(); i++)
+        ASSERT_GT(frames[i].t, frames[i - 1].t) << i;
+}
+
+TEST(PosePerformerReplayTest, AnUntrackedLineIsNobody) {
+    char path[] = "/tmp/dc3poseXXXXXX";
+    int fd = mkstemp(path);
+    ASSERT_GE(fd, 0);
+    FILE *f = fdopen(fd, "w");
+    fprintf(f, "# dc3-pose-fixture v1\n0.5 0\n0.6 1");
+    for (int j = 0; j < kNumJoints; j++)
+        fprintf(f, " %d 1 2 0.7", j);
+    fprintf(f, "\n0.7 1 1 2 3\n"); // truncated: skipped
+    fclose(f);
+    std::vector<Dc3PosePerformer::ReplayFrame> frames;
+    ASSERT_TRUE(Dc3PosePerformer::LoadReplay(path, frames));
+    unlink(path);
+    ASSERT_EQ(frames.size(), 2u);
+    for (int j = 0; j < kNumJoints; j++) {
+        EXPECT_EQ(frames[0].conf[j], 0.0f);
+        EXPECT_FLOAT_EQ(frames[1].joints[j].x, (float)j);
+        EXPECT_FLOAT_EQ(frames[1].conf[j], 0.7f);
+    }
 }
 
 struct ScopedEnv {

@@ -17,8 +17,11 @@
 //   still       the real Kinect skeleton frame baked into the image
 //               (StubCameraInput::StubSkeletonData), held
 //   stand       NativeSkeletonProvider's stick-figure standing pose, held
-//   replay:FILE a recorded DC3-20 stream, one line per frame:
-//               "t x0 y0 z0 c0 ... x19 y19 z19 c19" (t seconds, ascending);
+//   replay:FILE a recorded DC3-20 stream in the dc3-pose-fixture v1 format
+//               ("t tracked [x0 y0 z0 c0 ... x19 y19 z19 c19]", t seconds
+//               ascending; scripts/pose_fixture_record.py, pose_replay_record.py).
+//               An untracked frame is published as 0 persons, as the socket
+//               does when the camera sees nobody.
 //               DC3_POSE_PERFORM_REPLAY_SYNC=song plays the frame for the
 //               reference time (as choreo), otherwise it loops on song time.
 // Perturbations, any mode:
@@ -27,7 +30,9 @@
 //                             per axis, metres, rho per 30 Hz frame
 //   DC3_POSE_PERFORM_HZ       frame rate in song time (default 30)
 #include "math/Vec.h"
+#include "gesture/BaseSkeleton.h"
 #include <cstdint>
+#include <vector>
 
 class NativeSkeletonProvider;
 
@@ -48,4 +53,12 @@ struct Rng {
     double Uniform();
     double Gauss();
 };
+// One frame of a replay file; conf[] is the 0..1 score (all 0 = nobody).
+struct ReplayFrame {
+    double t;
+    Vector3 joints[kNumJoints];
+    float conf[kNumJoints];
+};
+// Appends the frames of a dc3-pose-fixture v1 file; false if it cannot be read.
+bool LoadReplay(const char *path, std::vector<ReplayFrame> &out);
 } // namespace Dc3PosePerformer
