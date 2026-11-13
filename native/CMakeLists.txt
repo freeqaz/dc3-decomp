@@ -1976,6 +1976,7 @@ if(BUILD_TESTS)
         tests/test_native_lifetime2.cpp
         tests/test_cascade_guards.cpp
         tests/test_native_posesynth.cpp
+        tests/test_native_twoplayer.cpp
         tests/test_native_audioseek.cpp
         tests/test_native_notables.cpp
         tests/test_lp64_literals.cpp
