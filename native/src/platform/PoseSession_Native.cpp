@@ -358,6 +358,10 @@ void Dc3PoseSessionReplayPumpAt(NativeSkeletonProvider *provider, double clock) 
         gReplay.lastClock = clock;
         if (!gReplay.armed && clock <= fr.front().song + 1.0) {
             gReplay.armed = true;
+            // Repeatable: the noise floor's counters would otherwise carry how
+            // many frames the menus took (measured: two DC3_FAST_TIME replays
+            // then differed in the 4th decimal of two moves' detector frac).
+            NativeSkeletonProvider::ResetSensorNoiseFloor();
             fprintf(stderr, "DC3 PERFORM: session replay starts at song clock %.2f\n", clock);
         }
         due = gReplay.armed ? Dc3PoseSession::DueIndex(fr, clock) : -1;

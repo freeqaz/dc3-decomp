@@ -217,6 +217,11 @@ public:
     // slot changes occupants, or the incoming person inherits the previous
     // person's held joint positions.
     static void ResetJointHold(int skelIdx);
+    // Restart the sensor noise floor's per-slot frame counters (Skeleton_Native.cpp,
+    // SensorNoiseFloor), so the offsets that follow are those of a fresh
+    // process's first frames.  A session replay calls it when its song starts:
+    // the counters otherwise carry how many frames the menus happened to take.
+    static void ResetSensorNoiseFloor();
 
 private:
     void ReaderThread();

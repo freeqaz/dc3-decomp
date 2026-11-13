@@ -327,3 +327,31 @@ TEST(PosePythonChoiceTest, TheMissingPackagesNoticeNamesTheInterpreterAndTheFix)
     t = P::DescribeServerExit(P::kExitExecFailed << 8, "auto", "/v/bin/python3").text;
     EXPECT_NE(t.find("/v/bin/python3"), std::string::npos) << t;
 }
+// A session replay must be repeatable, so it restarts the sensor noise
+// floor's frame counters when its song starts (PoseSession_Native.cpp).  The
+// offsets are a pure function of that counter: after a reset the same person
+// fills a slot bit for bit as after the last reset, and the next frame does
+// not (the floor still moves a still joint).
+TEST(SensorNoiseFloorTest, AResetRestartsTheOffsets) {
+    NativeSkeletonProvider::PersonData p;
+    p.trackId = 5;
+    p.valid = true;
+    for (int j = 0; j < kNumJoints; j++) {
+        p.joints[j].Set(0.1f * j, 1.0f, 2.0f);
+        p.confidence[j] = kConfidenceTracked;
+    }
+    SkeletonData first, next, again;
+    NativeSkeletonProvider::ResetSensorNoiseFloor();
+    NativeSkeletonProvider::FillSkeletonData(first, p, 1);
+    NativeSkeletonProvider::FillSkeletonData(next, p, 1);
+    NativeSkeletonProvider::ResetSensorNoiseFloor();
+    NativeSkeletonProvider::FillSkeletonData(again, p, 1);
+    bool moved = false;
+    for (int j = 0; j < kNumJoints; j++) {
+        EXPECT_EQ(again.mJointPositions[j].x, first.mJointPositions[j].x) << j;
+        EXPECT_EQ(again.mJointPositions[j].y, first.mJointPositions[j].y) << j;
+        EXPECT_EQ(again.mJointPositions[j].z, first.mJointPositions[j].z) << j;
+        moved |= next.mJointPositions[j].x != first.mJointPositions[j].x;
+    }
+    EXPECT_TRUE(moved);
+}

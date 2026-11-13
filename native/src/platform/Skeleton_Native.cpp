@@ -1093,6 +1093,13 @@ void NativeSkeletonProvider::MapCOCOToDC3(const float cocoKpts[][3], PersonData 
 static Vector3 sLastGoodJointPos[NUM_SKELETONS][kNumJoints];
 static bool sHaveLastGoodJoint[NUM_SKELETONS][kNumJoints];
 
+static uint32_t sNoiseFrame[NUM_SKELETONS + 1];
+
+void NativeSkeletonProvider::ResetSensorNoiseFloor() {
+    for (uint32_t &n : sNoiseFrame)
+        n = 0;
+}
+
 void NativeSkeletonProvider::ResetJointHold(int skelIdx) {
     if (skelIdx < 0 || skelIdx >= NUM_SKELETONS)
         return;
@@ -1106,7 +1113,6 @@ void NativeSkeletonProvider::FillSkeletonData(
     bool canHold = (slot >= 0 && slot < NUM_SKELETONS);
     // One noise-floor frame per delivered frame per slot (see SensorNoiseFloor
     // at the top of this file).  A held joint is exactly the case that needs it.
-    static uint32_t sNoiseFrame[NUM_SKELETONS + 1];
     uint32_t noiseFrame = ++sNoiseFrame[canHold ? slot : NUM_SKELETONS];
     for (int j = 0; j < kNumJoints; j++) {
         Vector3 pos = person.joints[j];
