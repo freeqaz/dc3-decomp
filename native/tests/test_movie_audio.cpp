@@ -25,6 +25,10 @@
 #include "os/File.h"
 #include "platform/FFmpegMovieImpl.h"
 
+// Compiled only against an engine whose FFmpegMovieImpl plays the sound track
+// (MILO_MOVIE_AUDIO_SOURCE; engine branch np-media).
+#ifdef MILO_MOVIE_AUDIO_SOURCE
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -374,3 +378,5 @@ TEST(MovieAudioSourceRing, LateDroppedGapSilentPauseHolds) {
     EXPECT_EQ(out[0], 51.0f); // the frame queued for position 200
     EXPECT_EQ(src.FramesDroppedLate(), 50);
 }
+
+#endif // MILO_MOVIE_AUDIO_SOURCE
