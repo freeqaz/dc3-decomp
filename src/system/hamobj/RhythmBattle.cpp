@@ -758,27 +758,25 @@ void RhythmBattle::OnBeat() {
         }
         mIsGrooveMode = true;
     }
-    if (remainingValue > 2000) {
-        if (!mHalftimePlayed && mHalftimeBeat < curBeat) {
-            static Symbol halftime("halftime");
-            play_vo[0] = halftime;
-            play_vo[1] = leader;
-            if (!mFinale) {
-                focusPanel->HandleType(play_vo);
-                remainingValue = -1;
-            }
-            mHalftimePlayed = true;
+    if (remainingValue > 2000 && !mHalftimePlayed && mHalftimeBeat < curBeat) {
+        static Symbol halftime("halftime");
+        play_vo[0] = halftime;
+        play_vo[1] = leader;
+        if (!mFinale) {
+            focusPanel->HandleType(play_vo);
+            remainingValue = -1;
         }
-        if (remainingValue > 2000 && !mAlmostOverPlayed && mAlmostOverBeat < curBeat) {
-            static Symbol almost_over("almost_over");
-            play_vo[0] = almost_over;
-            play_vo[1] = leader;
-            if (!mFinale) {
-                focusPanel->HandleType(play_vo);
-                remainingValue = -1;
-            }
-            mAlmostOverPlayed = true;
+        mHalftimePlayed = true;
+    }
+    if (remainingValue > 2000 && !mAlmostOverPlayed && mAlmostOverBeat < curBeat) {
+        static Symbol almost_over("almost_over");
+        play_vo[0] = almost_over;
+        play_vo[1] = leader;
+        if (!mFinale) {
+            focusPanel->HandleType(play_vo);
+            remainingValue = -1;
         }
+        mAlmostOverPlayed = true;
     }
     bool b22 = false;
     if (mStartBeat > curBeat) {
