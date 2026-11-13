@@ -358,6 +358,8 @@ def play_song(a, song, downs, port, venue):
                         and song_secs >= a.song_seconds):
                     if not shot_game:
                         res["gameplay_png"] = e.screenshot("gameplay.png")
+                    else:  # a second look: tells a black frame from a black screen
+                        res["gameplay_end_png"] = e.screenshot("gameplay_end.png")
                     break
                 if any(s in names for s in ENDGAME_SCREENS):
                     break
