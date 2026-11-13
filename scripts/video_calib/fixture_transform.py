@@ -15,6 +15,12 @@
              (y' = y cos - z sin, z' = y sin + z cos): positive D undoes a
              camera that looks DOWN at the player, whose feet then read
              farther away than the head.
+  --one-euro MINCUT,BETA
+             causal One Euro filter (Casiez et al. 2012) per joint and axis,
+             what a live pipeline could run: cutoff = MINCUT + BETA*|speed|
+             Hz, derivative cutoff 1 Hz.  Applied after --hold, so held
+             frames are filtered like real ones.  To test whether smoothing
+             MediaPipe changes scores.
 
   python3 -I scripts/video_calib/fixture_transform.py IN OUT [--hold] [--mirror] [--shift 0.1]
 """
@@ -46,6 +52,37 @@ def pitch(vals, deg):
     return out
 
 
+def _alpha(cutoff, dt):
+    tau = 1.0 / (2 * math.pi * cutoff)
+    return 1.0 / (1.0 + tau / dt)
+
+
+def one_euro(frames, mincut, beta, dcut=1.0):
+    """In place, causal: each tracked frame only sees earlier ones.  The
+    confidence channel is left alone; an untracked gap restarts the filter."""
+    prev_t = x_hat = dx_hat = None
+    for f in frames:
+        t, v = f
+        if v is None:
+            prev_t = None
+            continue
+        if prev_t is None:
+            x_hat, dx_hat = list(v), [0.0] * len(v)
+            prev_t = t
+            continue
+        dt = max(t - prev_t, 1e-6)
+        prev_t = t
+        out = list(v)
+        for i in range(len(v)):
+            if i % 4 == 3:
+                continue
+            dx = (v[i] - x_hat[i]) / dt
+            dx_hat[i] += _alpha(dcut, dt) * (dx - dx_hat[i])
+            x_hat[i] += _alpha(mincut + beta * abs(dx_hat[i]), dt) * (v[i] - x_hat[i])
+            out[i] = x_hat[i]
+        f[1] = out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("inp")
@@ -54,6 +91,7 @@ def main():
     ap.add_argument("--mirror", action="store_true")
     ap.add_argument("--shift", type=float, default=0.0)
     ap.add_argument("--pitch", type=float, default=0.0)
+    ap.add_argument("--one-euro", default="", metavar="MINCUT,BETA")
     a = ap.parse_args()
 
     header, frames = [], []
@@ -81,11 +119,14 @@ def main():
                 held += 1
             else:
                 last = f[1]
+    if a.one_euro:
+        mincut, beta = (float(v) for v in a.one_euro.split(","))
+        one_euro(frames, mincut, beta)
     with open(a.out, "w") as o:
         for h in header:
             o.write(h + "\n")
         o.write(f"# fixture_transform.py hold={int(a.hold)} mirror={int(a.mirror)} shift={a.shift} pitch={a.pitch} "
-                f"held={held}\n")
+                f"one_euro={a.one_euro or '-'} held={held}\n")
         for t, v in frames:
             if v is None:
                 o.write(f"{t:.4f} 0\n")
