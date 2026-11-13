@@ -931,8 +931,8 @@ int fft_altivec(float* a, float* b, unsigned long size, long sign, float* twiddl
             XMVECTORF32 sv;
             sv.f[0] = inv_n;
             XMVECTOR scale = __vspltw(sv.v, 0);
-            unsigned int step = (unsigned int)blk >> 3;
-            for (unsigned int k = 0; k < step; ++k) {
+            int step = blk / 8;
+            for (int k = 0; k < step; ++k) {
                 XMVECTOR x0 = __lvx(lo, 0);
                 lo += 4;
                 XMVECTOR s0 = __vmaddfp(x0, scale, v_zero);
@@ -972,8 +972,8 @@ int fft_altivec(float* a, float* b, unsigned long size, long sign, float* twiddl
                 outHi += 4;
             }
         } else {
-            unsigned int step = (unsigned int)blk >> 3;
-            for (unsigned int k = 0; k < step; ++k) {
+            int step = blk / 8;
+            for (int k = 0; k < step; ++k) {
                 XMVECTOR y0 = __lvx(hi, 0);
                 hi += 4;
                 XMVECTOR x0 = __lvx(lo, 0);
