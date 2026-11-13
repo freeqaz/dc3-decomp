@@ -71,6 +71,8 @@ TEST(HamUserPadNumTest, EnrolledPadStillComesFromTheIdentifier) {
 // ---------------------------------------------------------------------------
 #include "platform/Skeleton_Native.h"
 #include "math/Mtx.h"
+#include <cmath>
+#include <vector>
 
 namespace {
 
@@ -143,6 +145,137 @@ TEST(NativeSkeletonPollTest, LiveSkeletonCarriesTheLimbCoordinateSystems) {
     EXPECT_EQ(native.TrackingID(), 5);
     EXPECT_EQ(native.SkeletonIndex(), 2);
     EXPECT_EQ(native.ElapsedMs(), 33);
+}
+
+// ---------------------------------------------------------------------------
+// NativeSensorNoiseFloorTest: a bit-for-bit still skeleton on the pose socket
+// crashed gameplay (SIGSEGV ~130 s into Better Off Alone: RhythmBattlePlayer::
+// Poll -> RndPropAnim::SetFrame -> SymbolKeys::SetFrame -> DataArray::Node).
+// RhythmDetector's AnalyzeData z-scores each joint axis's speed over a
+// 10-sample window and divides by the window's variance unguarded; a joint axis
+// that never moves gives 0 * (1/0) = NaN, which reaches phrase_meter.anim's
+// SymbolKeys::SetFrame as the frame, and AtFrame(NaN) reads a key one past the
+// end.  The image never sees it because a Kinect never repeats a joint bit for
+// bit; the native sensor did (a still feeder, and -- the webcam case -- the
+// low-confidence hold freezing out-of-frame legs at their last good value).
+// This pins the sensor contract the image relies on, measured where the image
+// reads it: Skeleton::Poll's kCoordCamera JointPos, as RhythmDetector::AddFrame
+// does, through the same mean/variance AnalyzeData computes.
+// ---------------------------------------------------------------------------
+
+// RhythmDetector.cpp's anonymous-namespace Mean / Variance, same clamping.
+float WindowMean(const std::vector<float> &v, int start, int end) {
+    end = (int)v.size() < end ? (int)v.size() : end;
+    start = start > 0 ? start : 0;
+    float sum = 0.0f;
+    for (int i = start; i < end; i++)
+        sum += v[i];
+    return end - start ? sum / (end - start) : 0.0f;
+}
+float WindowVariance(const std::vector<float> &v, float mean, int start, int end) {
+    end = (int)v.size() < end ? (int)v.size() : end;
+    start = start > 0 ? start : 0;
+    float sum = 0.0f;
+    for (int i = start; i < end; i++)
+        sum += (v[i] - mean) * (v[i] - mean);
+    return end - start ? sum / (end - start) : 0.0f;
+}
+
+// Feed `frames` sensor frames through FillSkeletonData (or the dummy) and the
+// image's Skeleton::Poll; record every joint's camera-space position.
+template <typename MakePerson>
+std::vector<std::vector<Vector3> > PollFrames(int slot, int frames, bool dummy, MakePerson make) {
+    NativeSkeletonProvider::ResetJointHold(slot);
+    static SkeletonFrame sensorFrame; // 0x11c8 bytes
+    Skeleton skel;
+    std::vector<std::vector<Vector3> > out;
+    for (int f = 0; f < frames; f++) {
+        memset(&sensorFrame, 0, sizeof(sensorFrame));
+        sensorFrame.mElapsedMs = 33 * (f + 1);
+        sensorFrame.mFloorNormal.Set(0, 1, 0);
+        if (dummy) {
+            NativeSkeletonProvider::FillDummySkeletonData(sensorFrame.mSkeletonDatas[slot]);
+        } else {
+            NativeSkeletonProvider::PersonData person;
+            make(f, person);
+            NativeSkeletonProvider::FillSkeletonData(sensorFrame.mSkeletonDatas[slot], person, slot);
+        }
+        skel.Poll(slot, sensorFrame);
+        std::vector<Vector3> joints(kNumJoints);
+        for (int j = 0; j < kNumJoints; j++)
+            skel.JointPos(kCoordCamera, (SkeletonJoint)j, joints[j]);
+        out.push_back(joints);
+    }
+    return out;
+}
+
+// AnalyzeData's first z-score window over every joint axis: |speed| samples
+// ~0.1 s apart (the ring-buffer lag AddFrame picks, 3 frames at 30 Hz), then
+// (raw[i] - mean) * (1 / var).  Returns the number of joint axes that would
+// have gone NaN.
+int CountZeroVarianceAxes(const std::vector<std::vector<Vector3> > &pos, const char *what) {
+    const int kLag = 3, kWindow = 10;
+    int bad = 0;
+    for (int j = 0; j < kNumJoints; j++) {
+        for (int c = 0; c < 3; c++) {
+            std::vector<float> raw;
+            for (int f = kLag; f < (int)pos.size() && (int)raw.size() < kWindow; f++)
+                raw.push_back(fabsf((pos[f][j][c] - pos[f - kLag][j][c]) / 0.1f));
+            float mean = WindowMean(raw, 0, kWindow);
+            float var = WindowVariance(raw, mean, 0, kWindow);
+            float z = (raw[0] - mean) * (1.0f / var);
+            if (!(var > 0.0f) || !std::isfinite(z)) {
+                bad++;
+                ADD_FAILURE() << what << ": joint " << j << " axis " << c
+                              << " has zero speed variance (var=" << var << ", z=" << z
+                              << ") -- AnalyzeData would divide 0 by 0";
+            }
+        }
+    }
+    return bad;
+}
+
+TEST(NativeSensorNoiseFloorTest, AStillSkeletonNeverHasZeroSpeedVariance) {
+    // The socket repro: the same pose, every joint tracked, every frame.
+    std::vector<std::vector<Vector3> > pos = PollFrames(
+        1, 16, false,
+        [](int, NativeSkeletonProvider::PersonData &p) { StandingPose(p); }
+    );
+    EXPECT_EQ(CountZeroVarianceAxes(pos, "still tracked skeleton"), 0);
+}
+
+TEST(NativeSensorNoiseFloorTest, HeldLowConfidenceJointsNeverHaveZeroSpeedVariance) {
+    // The webcam case: the upper body moves, the legs drop under 0.3
+    // confidence after the first frame (out of frame) and their reported
+    // positions are garbage -- the hold replaces them with the last good one.
+    std::vector<std::vector<Vector3> > pos = PollFrames(
+        3, 16, false,
+        [](int f, NativeSkeletonProvider::PersonData &p) {
+            StandingPose(p);
+            for (int j = kJointHipCenter; j <= kJointHandRight; j++) {
+                p.joints[j].x += 0.05f * sinf(0.7f * f + j);
+                p.joints[j].y += 0.03f * sinf(1.1f * f + j);
+                p.joints[j].z += 0.04f * sinf(0.9f * f + j);
+            }
+            if (f > 0) {
+                for (int j = kJointHipLeft; j < kNumJoints; j++) {
+                    p.confidence[j] = kConfidenceNotTracked;
+                    p.joints[j] = Vector3(9.0f + f, -9.0f, 0.0f);
+                }
+            }
+        }
+    );
+    // the hold must still be holding (the garbage never reaches the image)...
+    EXPECT_NEAR(pos.back()[kJointKneeLeft].y, 0.45f, 1e-3f);
+    // ...without freezing the joint bit for bit.
+    EXPECT_EQ(CountZeroVarianceAxes(pos, "held legs"), 0);
+}
+
+TEST(NativeSensorNoiseFloorTest, TheDummySkeletonNeverHasZeroSpeedVariance) {
+    std::vector<std::vector<Vector3> > pos = PollFrames(
+        0, 16, true, [](int, NativeSkeletonProvider::PersonData &) {}
+    );
+    EXPECT_EQ(CountZeroVarianceAxes(pos, "dummy skeleton"), 0);
 }
 
 } // namespace

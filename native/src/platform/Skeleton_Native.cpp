@@ -21,6 +21,60 @@
 
 NativeSkeletonProvider *TheSkeletonProvider = nullptr;
 
+// ---------------------------------------------------------------------------
+// Sensor noise floor -- a contract every skeleton the native sensor hands the
+// image must meet, live provider and dummy alike.
+//
+// A physical depth camera never reports a joint at the same position bit for
+// bit on two frames: every Kinect joint, tracked or inferred, is re-estimated
+// from a fresh, noisy depth image each frame.  The image's code relies on that.
+// RhythmDetector's AnalyzeData (src/system/hamobj/RhythmDetector.cpp) z-scores
+// each weighted joint axis's speed over 10-sample windows and divides by the
+// window's VARIANCE with no zero guard; a joint axis that does not move at all
+// for ten samples gives 0 * (1/0) = NaN (Xenon's FPU, exceptions masked, gives
+// the same IEEE result as x86 -- nothing traps on either).  That NaN becomes
+// the RhythmDetector record's score, RhythmBattlePlayer's mRhythmSuccessFraction
+// and its phrase meter's rating frac; HamPhraseMeter::SetRatingFrac hands
+// SetFrame(NaN) to phrase_meter.anim, and SymbolKeys::SetFrame's AtFrame falls
+// through every NaN comparison, takes `next` one key PAST THE END of the key
+// vector and hands DataGetMacro that garbage symbol: null DataArray, SIGSEGV
+// (measured: RhythmBattlePlayer::Poll -> RndPropAnim::SetFrame ->
+// SymbolKeys::SetFrame -> DataArray::Node, ~130 s into Better Off Alone with a
+// bit-for-bit still skeleton on the pose socket).
+//
+// The native sensors break the contract in three ways the Kinect cannot: the
+// low-confidence joint hold in FillSkeletonData keeps a joint at its last good
+// value for as long as it stays under 0.3 confidence (a webcam with the legs
+// out of frame: both legs constant all song); a socket feeder or a paused video
+// sends the same frame again; and the dummy is a static table.  So every joint
+// axis of every delivered frame carries a deterministic +/-1 micrometre offset
+// (a few float ulps at 2 m).  That is far below anything gesture or move
+// scoring resolves -- the pose gate's dummy DetectFrac samples matched the
+// static dummy's to 4 decimals, where 10 um already moved them by 1e-4 -- and a
+// still joint's z-scored speed is then noise multiplied by a ~1e-5 m/s raw
+// speed, i.e. the ~0 rhythm score a still player should get, not NaN.  The
+// offset is a pure function of (per-slot frame counter, joint, axis), so it
+// adds no run-to-run variation of its own.
+// ---------------------------------------------------------------------------
+static float SensorNoiseFloor(uint32_t frame, int joint, int axis) {
+    const float kJitterMetres = 1.0e-6f;
+    uint32_t h = frame * 0x9E3779B1u ^ (uint32_t)(joint * 3 + axis) * 0x85EBCA77u;
+    h ^= h >> 15;
+    h *= 0xC2B2AE3Du;
+    h ^= h >> 13;
+    // [-1, 1)
+    float unit = (float)(h & 0xFFFFu) / 32768.0f - 1.0f;
+    return unit * kJitterMetres;
+}
+
+static Vector3 WithSensorNoiseFloor(const Vector3 &pos, uint32_t frame, int joint) {
+    return Vector3(
+        pos.x + SensorNoiseFloor(frame, joint, 0),
+        pos.y + SensorNoiseFloor(frame, joint, 1),
+        pos.z + SensorNoiseFloor(frame, joint, 2)
+    );
+}
+
 #ifdef __EMSCRIPTEN__
 // Stubs — no Kinect skeleton tracking on web
 NativeSkeletonProvider::NativeSkeletonProvider() { memset(mFront, 0, sizeof(mFront)); memset(mBack, 0, sizeof(mBack)); memset(mPersons, 0, sizeof(mPersons)); }
@@ -530,6 +584,10 @@ void NativeSkeletonProvider::FillSkeletonData(
     SkeletonData &data, const PersonData &person, int slot
 ) {
     bool canHold = (slot >= 0 && slot < NUM_SKELETONS);
+    // One noise-floor frame per delivered frame per slot (see SensorNoiseFloor
+    // at the top of this file).  A held joint is exactly the case that needs it.
+    static uint32_t sNoiseFrame[NUM_SKELETONS + 1];
+    uint32_t noiseFrame = ++sNoiseFrame[canHold ? slot : NUM_SKELETONS];
     for (int j = 0; j < kNumJoints; j++) {
         Vector3 pos = person.joints[j];
         JointConfidence conf = person.confidence[j];
@@ -543,6 +601,10 @@ void NativeSkeletonProvider::FillSkeletonData(
             }
         }
 
+        // The hold above caches the CLEAN position; the floor is added on the
+        // way out, so a held joint keeps moving by sensor noise and does not
+        // random-walk.
+        pos = WithSensorNoiseFloor(pos, noiseFrame, j);
         data.mJointPositions[j].Set(pos.x, pos.y, pos.z);
         data.mRawPositions[j].Set(pos.x, pos.y, pos.z);
         data.mJointTrackingState[j] = conf;
@@ -586,39 +648,17 @@ void NativeSkeletonProvider::FillDummySkeletonData(SkeletonData &data) {
         { kJointFootRight,       0.12f, 0.00f, 2.0f },
     };
 
-    // Sensor noise floor.  A physical camera never delivers the same joint
-    // position bit-for-bit on two frames, and the image's code relies on that:
-    // RhythmDetector's AnalyzeData z-scores every analysed joint's speed over
-    // a 10-sample window and divides by the variance with no zero guard, so a
-    // perfectly still skeleton yields 0 * (1/0) = NaN.  That NaN becomes
-    // RhythmBattlePlayer's rating frac, and HamPhraseMeter's phrase_meter.anim
-    // SymbolKeys::SetFrame(NaN) indexes one key past the end and hands
-    // DataGetMacro a garbage symbol (null DataArray -> SIGSEGV).  The image
-    // runs the same code; only a synthetic sensor can be that still.  So the
-    // dummy carries a deterministic +/-1 micrometre jitter per joint axis per
-    // frame (a few float ulps at 2 m): far below anything the gesture or move
-    // scoring resolves -- the pose gate's dummy DetectFrac samples match the
-    // static dummy's to 4 decimals outside its usual wall-clock noise, where
-    // 10 um already moved them by 1e-4 -- but enough that every speed window
-    // has non-zero variance.  The jitter is a pure function of a frame
-    // counter, so it adds no run-to-run variation of its own.
+    // The static table would be bit-for-bit still; the sensor noise floor
+    // (SensorNoiseFloor at the top of this file) keeps it a camera's signal.
+    // Same counter and hash the dummy has always used, so its output is
+    // unchanged by the floor moving to a shared helper.
     static uint32_t sDummyFrame = 0;
     sDummyFrame++;
-    const float kJitterMetres = 1.0e-6f;
 
     for (const auto &j : kPose) {
-        float pos[3] = { j.x, j.y, j.z };
-        for (int axis = 0; axis < 3; axis++) {
-            uint32_t h = sDummyFrame * 0x9E3779B1u ^ (uint32_t)(j.joint * 3 + axis) * 0x85EBCA77u;
-            h ^= h >> 15;
-            h *= 0xC2B2AE3Du;
-            h ^= h >> 13;
-            // [-1, 1)
-            float unit = (float)(h & 0xFFFFu) / 32768.0f - 1.0f;
-            pos[axis] += unit * kJitterMetres;
-        }
-        data.mJointPositions[j.joint].Set(pos[0], pos[1], pos[2]);
-        data.mRawPositions[j.joint].Set(pos[0], pos[1], pos[2]);
+        Vector3 pos = WithSensorNoiseFloor(Vector3(j.x, j.y, j.z), sDummyFrame, j.joint);
+        data.mJointPositions[j.joint].Set(pos.x, pos.y, pos.z);
+        data.mRawPositions[j.joint].Set(pos.x, pos.y, pos.z);
         data.mJointTrackingState[j.joint] = kConfidenceTracked;
     }
 
