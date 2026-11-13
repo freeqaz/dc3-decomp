@@ -136,13 +136,19 @@ within 8 MB. One whole song each, stand-in player (no camera), boot to results,
   522.6 MB on omg (whole song, 0 page errors). A failed growth aborts the page. The
   memory is not shared, so 1024 MB only reserves address space. (The 459.9 MB
   figures elsewhere in this doc are geometric reservations, not demand.)
-- **Preload bug found on the way** (fixed in `185b6f50e`, shared with
-  desktop): 34 of 57 song dirs went back to the title screen right after
-  loading. `loading.dta` gives the song preload cache 16 MiB in on-disc
-  bytes; the 360 reads compressed milos (largest ~10 MiB), native reads the
-  inflated extraction (iceicebaby 19.4 MiB), so `FileCache` evicted the song
-  milo, the preload failed and `data_error` sent the game to the title.
-  Native now scales the budget by 4.
+- **Preload bug found on the way** (fixed in `185b6f50e`; the fix is shared
+  with desktop, the bug was web-only): 34 of 57 song dirs went back to the
+  title screen right after loading. `loading.dta` gives the song preload cache
+  16 MiB in on-disc bytes; the 360 reads compressed milos (largest ~10 MiB),
+  the web build reads the inflated extraction (iceicebaby 19.4 MiB), so
+  `FileCache` evicted the song milo, the preload failed and `data_error` sent
+  the game to the title. Native now scales the budget by 4. Desktop reads the
+  ark's compressed bytes (largest set 13.2 MiB) and was never affected: with
+  the ×4 removed it still plays omg. Guarded by `PreloadBudgetTest`
+  (`native/tests/test_preload_budget.cpp`: every song's set, in the bytes
+  each platform reads, against the budget `SetTypeDef` reads from the real
+  `loading.dta`) and `LargestSongFlowTest`; every song to gameplay in
+  Chromium below.
 
 ### SFX sidecars (W-7)
 
