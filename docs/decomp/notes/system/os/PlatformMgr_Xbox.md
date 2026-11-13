@@ -85,6 +85,12 @@ Above the definition (was lines 540-549):
 // is byte-identical to the if/else.
 ```
 
+```text
+lane E w-low-synth-os (2026-11-13), behaviour audit against the target listing, value by value: NOT A BUG
+(88.24).  Full 32-bit XGetGameRegion() == 0xFF selects kRegionNA (1), anything
+else kRegionEurope (2), then one SetRegion call.  Only the `mr r3, r31`
+placement differs (before the li/bne in ours, after the join in the image).
+```
 
 ## `?JsonToDta@?A0x8a9ffbf2@@YA?AVDataArrayPtr@@PAUHJSONREADER__@@_N@Z`
 
