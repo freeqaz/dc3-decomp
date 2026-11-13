@@ -57,12 +57,8 @@ void UsbMidiGuitar::Terminate() {
     RELEASE(TheGuitar);
 }
 
-// w8-l: re-measured at 99.993570 normalized, still the only function short of
-// 100% in this unit (8/9).  Confirmed NOT a behavioural bug: the image loads
-// pgRaw[0xb] before pgRaw[0xc] and we load them the other way round, but the
-// three terms are summed into the same value either way -- the byte loads are
-// independent and every arithmetic instruction matches.  The three refutations
-// recorded below still stand.
+// Lane history (6 lines moved): docs/decomp/notes/system/os/UsbMidiGuitar.md
+// > Verdicts: NOT a behavioural bug (w8-l)
 void UsbMidiGuitar::Poll() {
     if (TheGuitar) {
         ProGuitarData *proData;
@@ -179,28 +175,9 @@ void UsbMidiGuitar::Poll() {
                     RGStompBoxMsg sbMsg(stompBox, i);
                     SendMessage(sbMsg);
                 }
-                // The three program-change bits are the top bit of bytes
-                // 0xa/0xb/0xc (mProgramChangeBit0..2, the MSB of each
-                // accelerometer byte). The target loads them 0xb, 0xc, 0xa; we
-                // load 0xc, 0xb, 0xa -- the only two rows left in this function
-                // (plus the two rlwinm forms that follow from them). Both sides
-                // associate as (b + c) + a and emit the same two adds, so the
-                // residual is purely which of the two byte loads is scheduled
-                // first, and nothing said in source moves it.
-                //
-                // Measured inert (w3 lane): swapping the two terms,
-                // parenthesising as a + (b + c).
-                // Measured inert (w7-m): splitting into three accumulator
-                // statements (`int pc = b; pc += c; pc += a;`) -- the lever that
-                // pins /fp:fast float association does nothing for integers here.
-                // Measured WORSE (w7-m, 99.994 -> 99.5): the named-bitfield
-                // spelling `(mProgramChangeBit1 << 1) + (mProgramChangeBit2 << 2)
-                // + mProgramChangeBit0`. `<< 2` still fuses into one rlwinm but
-                // `<< 1` does not, costing srwi+slwi; the load order does NOT
-                // change, which is what rules the term order out as the cause.
-                // w18-d (99.994, same 4 rows): `bool : 1` program-change bits with
-                // the named-field sum fuses all three rlwinm but still loads 0xc
-                // first (98.5 with locals, 99.5 inline) -- reverted.
+                // Lane history (22 lines moved): docs/decomp/notes/system/os/UsbMidiGuitar.md
+                // > The three program-change bits are the top bit of bytes 0xa/0xb/0xc
+                // > (mProgramChangeBit0..2, the MSB of each accelerometer byte).
                 unsigned char *pgRaw = (unsigned char *)proData;
                 int programChange = (pgRaw[0xb] >> 6 & 2)
                     + (pgRaw[0xc] >> 5 & 4) + (pgRaw[0xa] >> 7);

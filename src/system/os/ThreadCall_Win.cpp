@@ -91,12 +91,7 @@ void ThreadCall(ThreadCallback *callback) {
     gFreeCall = (gFreeCall + 1) % 12;
 }
 
-// w14-d (94.63, 6 rows): the image zero-extends the saved type before the
-// switch (`clrrwi r10, r10, 0` at 825CEAF4) and schedules the gReadyForNext
-// store / gData address differently.  INERT: `uint oldType`.  WORSE (93.88):
-// declaring oldType inside the `if`; RB3's AdvanceIdx/ordering shape.
-// w18-d (94.63): `switch ((unsigned int)oldType)` does not produce the image's
-// `clrrwi r10, r10, 0` zero-extension either.
+// Lane history (6 lines moved): docs/decomp/notes/system/os/ThreadCall_Win.md
 void ThreadCallPoll() {
     if (gCallDone) {
         ThreadCallData &data = gData[gCurCall];

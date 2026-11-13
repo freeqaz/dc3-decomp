@@ -345,17 +345,7 @@ EofType ChunkStream::Eof() {
         // temp as at every scalar swap site, instead of the reversed pair we
         // emitted.  24 rows -> 20, raw 96.993 -> 97.093, nothing regressed.
         File *file = mFile;
-        // w21-ag: 97.97 -> 100 (all 300 rows equal).  mCurBufOffset is spelled
-        // as a read through the freshly stored mCurChunk, not as
-        // mChunkInfo.mMaxChunkSize: mCurChunk = mChunks - 1 points at
-        // mMaxChunkSize (the int just before mChunks[0] in ChunkInfo), so it is
-        // the same word.  MSVC folds the address back to the direct
-        // `lwz r11, 0x30(r31)` the image has, but the dependence on the pointer
-        // store keeps that load after the 0x8ac / 0x8b0 stores (827E0A10), and
-        // the 0x888 store comes last -- the image's order.  The earlier
-        // RESIDUAL note (w7-bp/w7-bs, "no member-store order reaches it",
-        // "ordering dependence the literal does not carry") was this load.
-        // Statement order is RB3's.
+        // Lane history (11 lines moved): docs/decomp/notes/system/utl/ChunkStream.md
         mChunkEnd = chunks + mChunkInfo.mNumChunks;
         mCurChunk = chunks - 1;
         mCurBufOffset = *mCurChunk & kChunkSizeMask;
@@ -445,16 +435,7 @@ void DecompressMemHelper(
     MILO_ASSERT(dstLen == expectedDstLen, 0x3bb);
 }
 
-// w14-d (99.98, 4 rows): the image loads mDecompressedSize before mBuffer in
-// the third arm and computes (size - dataMsk) + buffer.  All INERT: the operand
-// order `(size - dataMsk) + buffer`, the expression inlined as the argument,
-// `buffer + size - dataMsk`, `buffer - dataMsk + size`.
-// w17-d (99.980): also inert -- `&((char *)mBuffer)[size - dataMsk]` and RB3's
-// `dataOffset = &buf[size]; DecompressMem(dataOffset - dataMsk, ...)`.
-// w21-bc: closed (99.98 -> 100) by binding mBuffer to a block-local `buffer`
-// in the third arm only (lever: bind a member to a local once). A
-// function-scope local instead hoists the load into a callee-saved register
-// and breaks the first two arms (probed).
+// Lane history (10 lines moved): docs/decomp/notes/system/utl/ChunkStream.md
 void ChunkStream::DecompressChunk(DecompressTask &task) {
     MILO_ASSERT(*task.mState == kDecompressing, 0x3c1);
     int data = *task.mChunk;

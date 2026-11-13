@@ -70,18 +70,10 @@ bool gHostCached;
 // other way round our object put gUsingCD 8 bytes BELOW gSystemConfig instead
 // of 8 above.
 //
-// ⚠ An objdiff row in InitSystem / PreInitSystem reading "we reference
-// gUsingCD where the target references gSystemConfig" is NOT a wrong-variable
-// read.  Both functions materialise ONE address register (r30) for this pair
-// and reach the other member at ±0x8; the relocation names only the anchor.
-// The target anchors on gUsingCD and reads gSystemConfig at -0x8(r30); we
-// anchor on gSystemConfig.  Measured 2026-09-11: that choice is NOT driven by
-// the layout (it survived this reorder unchanged), nor by reading gUsingCD
-// directly instead of through UsingCD(), nor by binding a `int &` to gUsingCD
-// to force its address temp.  The residual rows are codegen -- do not "fix"
-// them by renaming a global.  w18-d: what DOES drive it is the writes --
-// InitSystem/PreInitSystem store through SetUsingCD() in the image; with plain
-// `gUsingCD = ...` stores MSVC anchors on gSystemConfig instead.
+// Lane history (12 lines moved): docs/decomp/notes/system/os/System.md
+// > The residual rows are codegen -- do not "fix" them by renaming a global. w18-d: what
+// > DOES drive it is the writes -- InitSystem/PreInitSystem store through SetUsingCD() in
+// > the image; with plain `gUsingCD = ...` stores MSVC anchors on gSystemConfig instead.
 static int gUsingCD;
 static DataArray *gSystemTitles;
 static DataArray *gSystemConfig;
@@ -574,13 +566,7 @@ void SetSystemArgs(const char *commandLine) {
             } else if (*ptr == '"') {
                 *ptr = 0;
                 ptr++;
-                // RESIDUAL (w7-al, 96.7 canonical): 19 rows.  16 are one
-                // callee-saved ranking -- the image puts the literal zero in
-                // r30 and the sCommandLineBuffer address in r29, we do the
-                // reverse -- and the other 3 are the scheduler hoisting
-                // `cntlzw` above `stb` and materialising the toggle through an
-                // extra `mr r28, r11` that we fold into the `extrwi.` itself.
-                // Moving this assignment above the `*ptr = 0` is byte-inert.
+                // Lane history (7 lines moved): docs/decomp/notes/system/os/System.md
                 inQuotes = !inQuotes;
                 if (inQuotes) {
                     TheSystemArgs.push_back(ptr);

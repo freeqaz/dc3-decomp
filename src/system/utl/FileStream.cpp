@@ -9,26 +9,8 @@
 // pulls utl/FileStream.h in via `#include "utl/TextFileStream.h"` -> that
 // header's line 2 `#include "utl/FileStream.h"`.
 //
-// REFUTED (w9-a): flipping TextFileStream.h line 2 to a backslash does take this
-// row to 100.0% and costs SEVEN others.  Whole-binary A/B, full ninja both ways:
-//   UP 1    utl/FileStream  ??_GFileStream                  99.583 -> 100.0   96 B
-//   DOWN 7  synth/WavReader ??0WavReader ctor               100.0 -> 99.9505 808 B
-//           rndobj/HiResScreen ?Finish@HiResScreen          100.0 -> 99.9408 676 B
-//           gesture/SkeletonClip ?StopRecordingNoClear      100.0 -> 99.8667 300 B
-//           rndobj/Bitmap ?LoadBmp@RndBitmap                100.0 -> 99.8387 248 B
-//           os/HDCache ?OpenHeader@HDCache                  100.0 -> 99.7872 188 B
-//           rndobj/Bitmap ?SaveBmp@RndBitmap                100.0 -> 99.7297 148 B
-//           midi/MidiReader ??3FileStream@@SAXPAX@Z         100.0 -> 98.3333  24 B
-//   matched_functions 31374 -> 31368, matched_code 5,569,568 -> 5,567,272.
-// obj/Data.h's comment on the same trade says "6 want forward"; the measured
-// number is 7.  The retail build carried both spellings because it had per-TU
-// headers; one shared PCH cannot, so this unit cannot reach 100% without
-// splitting the PCH.  Do not re-try the flip.
-//
-// w21-bc: CLOSED (99.583 -> 100) by building this one TU without the shared
-// PCH (configure.py `pch_excluded_sources`), so line 1 below is the first
-// include of utl\FileStream.h and fixes its __FILE__ spelling, as in retail.
-// Whole-binary A/B: UP 1, DOWN 0.
+// Lane history (20 lines moved): docs/decomp/notes/system/utl/FileStream.md
+// > Verdicts: Do not re-try (w9-a)
 #include "utl\FileStream.h"
 #include "os\File.h"
 #include "os\Debug.h"

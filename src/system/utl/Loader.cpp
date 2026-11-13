@@ -309,11 +309,7 @@ void LoadMgr::PollFrontLoader() {
     mLoaderPos = savedPos;
 }
 #else
-// w17-d: 99.981 -> 100 (and its unwind funclet fn_827D15BC 99.9 -> 100). The
-// image's missing 16 bytes of frame were a MemHeapTracker at 0xc0: the
-// function's second unwind funclet (__unwind$106779) calls
-// ??1MemHeapTracker@@QAA@XZ on r31+0xc0. The push/pop is that RAII scope,
-// not a bare MemPushHeap/MemPopHeap pair.
+// Lane history (5 lines moved): docs/decomp/notes/system/utl/Loader.md
 void LoadMgr::PollFrontLoader() {
     Loader *front = mLoading.front();
     LoaderPos savedPos = mLoaderPos;

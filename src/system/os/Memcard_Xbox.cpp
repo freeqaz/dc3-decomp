@@ -224,41 +224,8 @@ MCResult MCContainerXbox::Mount(CreateType ct) {
     // for ERROR_ALREADY_EXISTS, which also forced `res` into r10; in the image
     // it never leaves r3.
     //
-    // NEGATIVE RESULT on the block PLACEMENT: our build sinks this whole chain
-    // below the epilogue and threads `li r3, 0x570` straight into the Translate
-    // call, because ERROR_FILE_CORRUPT is a compile-time constant on that edge.
-    // The image does not const-propagate it. Four spellings (early returns,
-    // `MCResult result` + if/else-if/else, `switch`, and a `goto` that puts the
-    // success block last) all produce the identical sunk layout; only the
-    // unfaithful "call Translate first, then overwrite" shape keeps the rows
-    // aligned, and it does so with the wrong register. Every instruction here
-    // is present and correct -- the residual is ordering only.
-    // NEGATIVE RESULT (w7-bq, 2026-09-15), a fifth spelling: the inverted
-    // nested form -- `if (res != 3) { if (res != 0xb7) return Translate(res);
-    // return kMCCorrupt; } return kMCFileNotFound;` -- reads 83.9 (22 rows, 10
-    // inserts / 9 deletes), WORSE than the 87.08 of the flat form below.  The
-    // blocker is not arm polarity: it is that MSVC threads the compile-time
-    // 0x570 straight past both compares (base falls from `li r3, 0x570` into
-    // `bl Translate` with the compare chain sunk below the epilogue), and the
-    // image at 0x825F639C..0x825F63B0 does not thread it.  No source spelling
-    // tried so far hides the constant on that edge.
-    // NEGATIVE RESULTS (w7-br, 87.1 held, same 21 rows unless stated), four
-    // more spellings aimed at that constant rather than at the arms:
-    //   - the chain as one nested ternary `return res == 3 ? ... : res == 0xb7
-    //     ? ... : Translate(res);` -- identical rows;
-    //   - the chain moved into an anonymous-namespace `inline` helper and
-    //     called from here -- MSVC inlines it and threads the constant
-    //     through it exactly as before, identical rows;
-    //   - a second `if (res == ERROR_SUCCESS)` test between the corrupt edge
-    //     and the success return (three compares for the constant to cross
-    //     instead of two) -- threaded through all three, identical rows;
-    //   - `res = ERROR_FILE_CORRUPT` written BEFORE the XContentClose call --
-    //     86.4: `res` is then kept in r29 across the call (`mr. r29, r3`) and
-    //     the whole tail recolours; the image assigns after the call
-    //     (0x825F639C) and never leaves r3.
-    // The constant is visible on that edge to every pass MSVC runs after
-    // inlining; nothing at source level makes it opaque without adding
-    // instructions the image does not have.
+    // Lane history (35 lines moved): docs/decomp/notes/system/os/Memcard_Xbox.md
+    // > Every instruction here is present and correct -- the residual is ordering only.
     if (res == ERROR_PATH_NOT_FOUND)
         return kMCFileNotFound;
     if (res == ERROR_ALREADY_EXISTS)

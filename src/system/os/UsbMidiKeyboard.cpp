@@ -50,14 +50,9 @@ void UsbMidiKeyboard::Poll() {
             || gForceDetectKeytar) {
             JoypadData *padData = JoypadGetPadData(i);
             ProKeysData *proData = (ProKeysData *)&padData->mProGuitarData;
-            // RESOLVED (w27-b, 98.900 -> 100.0): the image emits `li r26, 1`
-            // (slotCounter) BETWEEN `lwz TheKeyboard` and `addi r29, r3, 0x34`
-            // (proData), i.e. one slot before the addi.  Declaring slotCounter
-            // first really does hoist the `li` to before the call (w7-r, idx 38
-            // vs the image's 40), which is why order alone never worked.  The
-            // addi's source position moves when the JoypadData pointer is named:
-            // with `padData` in a local the addi is materialised one slot later
-            // and the li lands in 40 from its natural place at the end.
+            // Lane history (8 lines moved): docs/decomp/notes/system/os/UsbMidiKeyboard.md
+            // > Declaring slotCounter first really does hoist the `li` to before the call
+            // > (w7-r, idx 38 vs the image's 40), which is why order alone never worked.
             int slotCounter = 1;
 
             for (int note = 0x30; note - 0x30 < 25; note++) {
@@ -132,14 +127,9 @@ void UsbMidiKeyboard::Poll() {
                 SendMessage(msg);
             }
 
-            // The image emits four separate fused rlwinm extractions and a flat
-            // add chain (d<<2) + (c<<1) + (e<<3) + b.  The declaration order
-            // below is the one that interleaves the loads and shifts the way the
-            // image does: lbz 0xd, lbz 0xc, rlwinm 0xd, lbz 0xe, rlwinm 0xc,
-            // lbz 0xb, rlwinm 0xe.  Measured declaration orders (w27-b, canonical):
-            // B,E,C,D 100.0 | B,D,C,E 99.581 | D,B,C,E 99.165 | D,C,B,E 99.162 |
-            // B,D,E,C 98.897 | B,C,D,E 98.687 | B,C,E,D 98.684 | E,B,D,C 98.485.
-            // The sum keeps the image's term order (d<<2) + (c<<1) + (e<<3) + b.
+            // Lane history (8 lines moved): docs/decomp/notes/system/os/UsbMidiKeyboard.md
+            // > The image emits four separate fused rlwinm extractions and a flat add
+            // > chain (d<<2) + (c<<1) + (e<<3) + b.
             int hhB = proData->unkbbool;
             int hhE = proData->unkemiddle << 3;
             int hhC = proData->unkcbool << 1;

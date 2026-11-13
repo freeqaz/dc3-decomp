@@ -49,17 +49,7 @@ int WStrniCmp(const unsigned short *str1, const unsigned short *str2, int n) {
     const unsigned short *p2 = str2;
     for (; n != 0; n--) {
         unsigned short char1 = WToLower(*p1);
-        // w8-g: CLOSED (89.66 -> 100.0).  The image loads *p2 into a scratch
-        // (`lhzx r11, r8, r9`), saves char1 out of r3, and only then does
-        // `mr r3, r11` -- 0x827E1564-0x827E156C -- where a plain `WToLower(*p2)`
-        // loads straight into r3 and skips both moves.  w7-az was right that an
-        // interposed `unsigned short raw2 = *p2;` is byte-inert (MSVC folds the
-        // temp, re-measured here), but the POST-INCREMENT is not: writing the
-        // advance into the argument makes MSVC evaluate the argument expression
-        // before it has homed the previous call's result, which is exactly the
-        // scratch-then-move sequence.  p1's `++` must stay a separate statement:
-        // moving both inline switches the loop to two lhzu induction pointers and
-        // loses the image's `subf r8, r3, r4` / `lhzx` delta addressing.
+        // Lane history (11 lines moved): docs/decomp/notes/system/utl/UTF8.md
         unsigned short char2 = WToLower(*p2++);
         p1++;
         if (char1 != char2) {
