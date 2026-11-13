@@ -59,7 +59,21 @@ bool PlatformMgr::IsEthernetCableConnected() { return true; }
 const char *PlatformMgr::GetName(int) const { return "Player"; }
 bool PlatformMgr::HasCreatedContentPrivilege() const { return true; }
 bool PlatformMgr::HasKinectSharePrvilege() const { return true; }
-void PlatformMgr::ShowControllerRequiredUI(Hmx::Object *) {}
+// The image (PlatformMgr_Xbox.cpp) opens the dashboard's "controller
+// required" UI only when the selection came from a tracked skeleton
+// (sXShowCallback hands back its tracking ID), and answers the caller's
+// controller_req_op_complete when that UI closes; with no tracked skeleton it
+// answers controller_req_op_complete TRUE at once.  The native port has no
+// dashboard UI, so it always takes the second arm.  It used to answer
+// nothing, so Options > A/V > Kinect Tuner -- whose panel opens the tuner
+// from that message -- did nothing at all (PLAN G-16).
+void PlatformMgr::ShowControllerRequiredUI(Hmx::Object *obj) {
+    static ControllerReqOpCompleteMsg msg(true);
+    msg.SetSuccess(true);
+    if (obj) {
+        obj->Handle(msg, false);
+    }
+}
 bool PlatformMgr::IsInParty() { return false; }
 bool PlatformMgr::IsInPartyWithOthers() { return false; }
 bool PlatformMgr::ShowFitnessBodyProfileUI(int) { return false; }

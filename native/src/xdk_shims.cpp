@@ -5,6 +5,8 @@
 #include "xdk/XAPILIB.h"
 #include "xdk/XGRAPHICS.h"
 #include "os/Debug.h"
+#include "platform/NativeNotice.h"
+#include "xdk/nui/nuidiagnostics.h"
 
 #include <pthread.h>
 #include <unistd.h>
@@ -709,6 +711,20 @@ DWORD XShowPartyUI(DWORD) { return 0; }
 DWORD XShowNuiFriendsUI(DWORD, DWORD) { return 0; }
 DWORD XShowNuiPartyUI(DWORD, DWORD) { return 0; }
 DWORD XShowNuiGuideUI(DWORD) { return 0; }
+
+// The Kinect Tuner (Options > A/V, the pause menu, the title screen's
+// {gesture_mgr show_gesture_troubleshooter}) is the 360 dashboard's own
+// troubleshooter, opened over the game -- the game has no screen for it, so
+// the native port has nothing to show.  Say so instead of doing nothing
+// (PLAN G-16); the camera and pose model are the pose server's business.
+DWORD XShowNuiTroubleshooterUI() {
+    NativeNotice::Post("kinect_tuner",
+                       "The Kinect Tuner is part of the Xbox 360 dashboard, not the "
+                       "game, so the native port has none. Pose input comes from the "
+                       "pose server (native/scripts/pose_server.py); see docs/native/POSE_INPUT.md.",
+                       "", 8.0f);
+    return 0;
+}
 HRESULT XNuiDelayUI(ULONG) { return 0; }
 
 DWORD XUserCheckPrivilege(DWORD, unsigned int, BOOL *pfResult) {

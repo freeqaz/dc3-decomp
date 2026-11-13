@@ -39,6 +39,7 @@
 #include "hamobj/HamGameData.h"
 #include "obj/Dir.h"
 #include "obj/Utl.h"
+#include "rndobj/Mesh.h"
 
 namespace {
 
@@ -67,6 +68,35 @@ public:
     // deliberate no-op slot for re-introduction.
     void RenderCharacterImpostors(void* /*renderCtx*/) override {
         // No-op today. See comment above.
+    }
+
+    // Text glyph colour (PLAN G-12). The engine routes a text mesh's atlas
+    // ALPHA into RGB unless the game marks it a colour font -- right for an
+    // atlas that keeps its glyphs in alpha with RGB == 0, wrong for DC3, whose
+    // shader samples the atlas's RGB like any other texture. Every DC3 font
+    // atlas is DXT5 (bitmap order 0x18) with real RGB:
+    //   icons_buttons.mat (ui/resource/fonts/button_icon.milo) -- coloured
+    //     discs with a dark letter: the help bar's (Y)/(A)/(B);
+    //   icons.mat / icons_ext.mat -- grey/white glyphs: the checkbox pair
+    //     'a' (unchecked) / 'b' (checked) HamNavProvider::Text sets;
+    //   relay_wide_black_shadow, eagle-bold numbers, vibration_numbers --
+    //     coloured or black-shadowed glyphs;
+    //   default / dev / money -- RGB white, where both routes agree.
+    // With the alpha route the button glyphs drew as blank white discs and the
+    // two checkbox glyphs as the same white square, so a toggled option looked
+    // unchanged. Only unnamed meshes are text (RndText builds its per-font
+    // sub-meshes with no name); the engine asks only for those.
+    DrawMaterialPolicy QueryDrawMaterialPolicy(RndMesh* mesh, RndMat* /*mat*/,
+                                               bool /*skinned*/, RndMesh* /*owner*/,
+                                               const char* /*camName*/) override {
+        DrawMaterialPolicy p;
+        p.isColorIcon = IsTextGlyphMesh(mesh);
+        return p;
+    }
+
+    static bool IsTextGlyphMesh(RndMesh* mesh) {
+        const char* name = mesh ? mesh->Name() : nullptr;
+        return name && !name[0];
     }
 };
 

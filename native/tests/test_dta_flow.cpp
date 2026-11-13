@@ -1002,3 +1002,106 @@ TEST_F(FitnessPlaylistFlowTest, PlaylistsRowStartsAPlaylist) {
         << "playlist_play did not reach the playlist_perform seldiff screen";
     EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }
+
+// ===========================================================================
+// Options > Gameplay and the Kinect Tuner (PLAN G-12, G-16)
+// ===========================================================================
+//
+// options-gameplay.txt enters options_gameplay_screen twice, selecting one
+// checkbox row each time, then selects A/V > Kinect Tuner.  native's
+// {speech_mgr is_speech_supportable} is 0, so the panel shows
+// provider_no_voice.hnp: its four rows plus the native overlay's two
+// (option_camera_blend, option_debug_panel) = 6.
+//
+// G-12: the overlay counted rows with `num_data`, a message HamNavProvider has
+// never handled (Handle is 100% matched; the image has no such handler), so
+// every append ran against kDataUnhandled: 14 MILO_FAILs per visit.  The two
+// rows must be there on both visits.  (options_gameplay.milo is reloaded per
+// visit -- the providers are new objects each time -- so an unconditional
+// append cannot double them; the second visit pins that.)
+// G-16: the Kinect Tuner row did nothing; it must now say why.
+
+class OptionsGameplayFlowTest : public ControllerModeFlowTest {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+    static void SetUpTestSuite() {
+        if (!getenv("DC3_DTA_FLOW_TESTS")) return;
+        sResult = RunDtaFlow(1500, 180, "options-gameplay.txt");
+        sRanEngine = true;
+    }
+    void SetUp() override { CheckRan(sResult, sRanEngine); }
+    void TearDown() override {
+        if (HasFailure() && sRanEngine) Dump(sResult);
+    }
+
+    // The lines from the first options_gameplay_screen Enter up to (not
+    // including) the options_av_screen Enter.
+    static std::vector<std::string> GameplayLines() {
+        std::vector<std::string> out;
+        for (const std::string &line :
+             LinesFrom(sResult.output, "Screen 'options_gameplay_screen' Enter")) {
+            if (line.find("Screen 'options_av_screen' Enter") != std::string::npos) break;
+            out.push_back(line);
+        }
+        return out;
+    }
+};
+DtaRunResult OptionsGameplayFlowTest::sResult = {};
+bool OptionsGameplayFlowTest::sRanEngine = false;
+
+TEST_F(OptionsGameplayFlowTest, GameplayOptionsRaiseNoFails) {
+    std::vector<std::string> lines = GameplayLines();
+    ASSERT_FALSE(lines.empty())
+        << "precondition: options-gameplay.txt never reached options_gameplay_screen";
+    int enters = 0, fails = 0;
+    std::string firstBad;
+    for (const std::string &line : lines) {
+        if (line.find("Screen 'options_gameplay_screen' Enter") != std::string::npos) enters++;
+        bool bad = StartsWith(line, "FAIL:") ||
+                   line.find("unhandled msg: num_data") != std::string::npos ||
+                   line.find("null array for key nav_items") != std::string::npos;
+        if (bad) {
+            fails++;
+            if (firstBad.empty()) firstBad = line;
+        }
+    }
+    EXPECT_EQ(enters, 2) << "the flow should enter options_gameplay_screen twice";
+    EXPECT_EQ(fails, 0) << "options_gameplay raised " << fails
+                        << " failures; first: " << firstBad;
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
+}
+
+TEST_F(OptionsGameplayFlowTest, OverlayAddsItsTwoRowsEachVisit) {
+    std::vector<std::string> lines = GameplayLines();
+    ASSERT_FALSE(lines.empty())
+        << "precondition: options-gameplay.txt never reached options_gameplay_screen";
+    std::vector<int> counts;
+    for (const std::string &line : lines) {
+        if (!StartsWith(line, "DC3 HamNavList: select name='right_hand.hnl'")) continue;
+        if (line.find("sym='option_photo'") == std::string::npos &&
+            line.find("sym='option_freestyle'") == std::string::npos)
+            continue;
+        size_t at = line.find("numData=");
+        ASSERT_NE(at, std::string::npos) << "select log carries no numData: " << line;
+        counts.push_back(atoi(line.c_str() + at + strlen("numData=")));
+    }
+    ASSERT_EQ(counts.size(), 2u)
+        << "expected one checkbox select per visit (photo or freestyle)";
+    EXPECT_EQ(counts[0], 6)
+        << "first visit: provider_no_voice.hnp's 4 rows + camera blend + debug overlay";
+    EXPECT_EQ(counts[1], 6)
+        << "second visit: 6 rows again (fewer: an append was lost; more: the "
+           "provider outlived the first visit and the rows doubled)";
+}
+
+TEST_F(OptionsGameplayFlowTest, KinectTunerGivesFeedback) {
+    const std::string &out = sResult.output;
+    size_t sel = out.find("sym='natal_troubleshooter'");
+    ASSERT_NE(sel, std::string::npos)
+        << "precondition: the flow never selected A/V > Kinect Tuner";
+    EXPECT_NE(out.find("DC3 NOTICE [kinect_tuner]", sel), std::string::npos)
+        << "selecting the Kinect Tuner produced no notice: either "
+           "show_controller_required never answered controller_req_op_complete, "
+           "or XShowNuiTroubleshooterUI is silent";
+}

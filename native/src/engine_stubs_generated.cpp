@@ -185,7 +185,7 @@ int XNetGetTitleXnAddr() { HX_STUB_TRACE("XNetGetTitleXnAddr"); return 0; }
 int XNetUnregisterInAddr() { HX_STUB_TRACE("XNetUnregisterInAddr"); return 0; }
 int XNetXnAddrToMachineId() { HX_STUB_TRACE("XNetXnAddrToMachineId"); return 0; }
 int XShowMarketplaceDownloadItemsUI() { HX_STUB_TRACE("XShowMarketplaceDownloadItemsUI"); return 0; }
-int XShowNuiTroubleshooterUI() { HX_STUB_TRACE("XShowNuiTroubleshooterUI"); return 0; }
+// XShowNuiTroubleshooterUI: real definition in xdk_shims.cpp (posts a NativeNotice).
 // XTitleServerCreateEnumerator: typed definition in xbox_link_stubs.cpp (desktop + web).
 #endif
 extern "C" int XNetRandom(unsigned char *pb, unsigned int cb) {

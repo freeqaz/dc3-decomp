@@ -1303,14 +1303,15 @@ void HamNavList::SetSelecting(bool selecting) {
     static int sSelectDiag = 0;
     if (sSelectDiag++ < 32) {
         MILO_LOG(
-            "DC3 HamNavList: select name='%s' selected=%d first=%d sym='%s' focus=%d selecting=%d provider=%p\n",
+            "DC3 HamNavList: select name='%s' selected=%d first=%d sym='%s' focus=%d selecting=%d provider=%p numData=%d\n",
             Name(),
             selected,
             listState.FirstShowing(),
             sym.Str(),
             TheUI->FocusComponent() == this,
             selecting,
-            (void *)provider
+            (void *)provider,
+            provider ? provider->NumData() : -1
         );
     }
 #endif

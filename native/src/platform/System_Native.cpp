@@ -10,9 +10,13 @@
 #include "utl/MakeString.h"
 #include "utl/Symbol.h"
 
+#include "platform/ExecutablePath.h"
+
+#include <climits>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -241,9 +245,40 @@ void NativeDetectDataDir() {
     printf("  Set DC3_DATA env var or run from the repo root.\n");
 }
 
+// The overlay of the tree this binary was built from: <exe dir>/../dta, i.e.
+// native/build/<binary> -> native/dta. Empty when the executable cannot be
+// located or does not sit in a native/<build dir> (a relocated binary).
+std::string NativeExecutableOverlayDir() {
+    char exe[PATH_MAX];
+    ssize_t n = ReadExecutablePath(exe, sizeof(exe) - 1);
+    if (n <= 0) return std::string();
+    exe[n] = '\0';
+    char *slash = strrchr(exe, '/');
+    if (!slash) return std::string();
+    *slash = '\0';
+    char resolved[PATH_MAX];
+    if (!realpath(MakeString("%s/../dta", exe), resolved)) return std::string();
+    struct stat st;
+    if (stat(resolved, &st) != 0 || !S_ISDIR(st.st_mode)) return std::string();
+    return resolved;
+}
+
 // Find the DTA overlay directory (native/dta/ relative to repo root).
 // Overlay files shadow the archive — used for native-only DTA patches.
+//
+// The executable's own tree comes first. Deriving it from the data dir alone
+// ("<dataDir>/../native/dta") goes wrong in a worktree, whose orig-assets is
+// a symlink to the MAIN checkout's: the kernel resolves the `..` after the
+// symlink, so a worktree build -- and every DTA flow test under ctest, whose
+// working directory is orig-assets -- loaded main's native/dta and never the
+// worktree's own edits.
 void NativeDetectOverlayDir() {
+    std::string own = NativeExecutableOverlayDir();
+    if (!own.empty()) {
+        NativeSetOverlayDir(own.c_str());
+        printf("DC3 Native: overlay dir=%s (next to the executable)\n", own.c_str());
+        return;
+    }
     const char *dataDir = NativeGetDataDir();
     // dataDir is typically "orig-assets" relative to repo root.
     // Overlay dir is "native/dta/" relative to repo root = "<dataDir>/../native/dta/"
