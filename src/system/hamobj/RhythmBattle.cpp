@@ -1302,9 +1302,8 @@ void RhythmBattle::OnBeat() {
     if (mFinale) {
         TheHamDirector->GetVenueWorld()->Find<Flow>("show_timeywimey.flow")->Activate();
     }
-    if (inMindControl) {
+    if (inMindControl)
         TheHamDirector->SetPlayerSpotlightsEnabled(false);
-    }
 
     int nextUnk148 = mFinale ? 24 : 8;
     if (inMindControl || mFinale) {
@@ -1316,8 +1315,10 @@ void RhythmBattle::OnBeat() {
                         false
                     );
                 }
-                if (mFinaleSequenceTimer == 0x11 && mFinalePhaseIndex < 3) {
-                    PlayTanClip(mFinalePhaseIndex, false);
+                if (mFinaleSequenceTimer == 0x11) {
+                    if (mFinalePhaseIndex < 3) {
+                        PlayTanClip(mFinalePhaseIndex, false);
+                    }
                 }
                 if (mFinaleSequenceTimer == 0x10) {
                     static Message charProjectionActive("char_projection_move_active");
@@ -1442,37 +1443,35 @@ void RhythmBattle::OnBeat() {
                     }
                     TheHamDirector->ForceShot("tan_finale.shot");
                 } else {
-                    {
-                        mPlayerOne->OnReset(this);
-                        mPlayerTwo->OnReset(this);
-                        static UIPanel *sRhythmDetectorPanel =
-                            ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
-                        if (sRhythmDetectorPanel && sRhythmDetectorPanel->LoadedDir()) {
-                            for (int i = 0; i < 6; i++) {
-                                String name = MakeString("RhythmDetectorX%d.rhy", i);
-                                sRhythmDetectorPanel->LoadedDir()
-                                    ->Find<RhythmDetector>(name.c_str())
-                                    ->ClearData();
-                            }
+                    mPlayerOne->OnReset(this);
+                    mPlayerTwo->OnReset(this);
+                    static UIPanel *sRhythmDetectorPanel =
+                        ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
+                    if (sRhythmDetectorPanel && sRhythmDetectorPanel->LoadedDir()) {
+                        for (int i = 0; i < 6; i++) {
+                            String name = MakeString("RhythmDetectorX%d.rhy", i);
+                            sRhythmDetectorPanel->LoadedDir()
+                                ->Find<RhythmDetector>(name.c_str())
+                                ->ClearData();
                         }
-                        static Symbol working("working");
-                        static Message mindControlCompleteMsg("mind_control_complete");
-                        switch (mFinalePhaseIndex) {
-                        case 0:
-                            PlayMindControlVO(working);
-                            TheHamDirector->ForceShot("CAMP_6.3_DCI_mind_control_01.shot");
-                            break;
-                        case 1:
-                            PlayMindControlVO(working);
-                            TheHamDirector->ForceShot("CAMP_6.3_DCI_mind_control_02.shot");
-                            break;
-                        case 2:
-                            TheHamProvider->Handle(mindControlCompleteMsg, false);
-                            TheHamDirector->ForceShot("CAMP_6.3_DCI_mind_control_03.shot");
-                            break;
-                        default:
-                            break;
-                        }
+                    }
+                    static Symbol working("working");
+                    static Message mindControlCompleteMsg("mind_control_complete");
+                    switch (mFinalePhaseIndex) {
+                    case 0:
+                        PlayMindControlVO(working);
+                        TheHamDirector->ForceShot("CAMP_6.3_DCI_mind_control_01.shot");
+                        break;
+                    case 1:
+                        PlayMindControlVO(working);
+                        TheHamDirector->ForceShot("CAMP_6.3_DCI_mind_control_02.shot");
+                        break;
+                    case 2:
+                        TheHamProvider->Handle(mindControlCompleteMsg, false);
+                        TheHamDirector->ForceShot("CAMP_6.3_DCI_mind_control_03.shot");
+                        break;
+                    default:
+                        break;
                     }
                 }
                 mFinaleSequenceTimer = nextUnk148 + i6cc;
