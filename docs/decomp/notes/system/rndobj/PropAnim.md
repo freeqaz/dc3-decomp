@@ -155,3 +155,15 @@ Above the definition (was lines 856-944):
 // arm 2.  `if (!mFlowLabels.empty())` is 90.38281 -- worse.  No source handle
 // on the state variable was found.
 ```
+
+Added by lane w-low-rndobj, 2026-11-13:
+
+```text
+BEHAVIOUR VERDICT: AGREES (92.77 canonical / 92.70 fuzzy, unchanged).
+Re-derived from the listing value by value: list size counted by the node
+walk; new DataArray(size) (PoolAlloc 0x10, line 0xd2); each node's String
+c_str() (node+0xc) -> Symbol -> DataNode(kDataSymbol=5) stored at Node(i);
+DataNode(arr, kDataArray=0x10), Release, copy into the sret, temp dtor.  The
+empty arm builds DataArray(1) and stores Symbol() (gNullStr, type 5) at
+Node(0).  Residual is only the EH-state/frame difference recorded above.
+```
