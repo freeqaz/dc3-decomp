@@ -1,0 +1,188 @@
+# =============================================================================
+# dc3-decomp — native macOS (arm64) compile + link + asset-free tests (PLAN M-7)
+#
+# The macOS twin of native-build.yml. What it can catch that the Linux job and
+# the Linux libc++ proxy (scripts/mac/libcxx_proxy_build.sh) cannot: Apple
+# clang under -fms-compatibility against the macOS SDK, Apple's ld (ld-prime;
+# the CMake Apple branch passes no relaxing flags, so a duplicate or an
+# undefined symbol FAILS the link), the ObjC++ MetalSurface.mm, Homebrew's
+# libraries, and Google's macOS Dawn prebuilt.
+#
+# What it cannot: the game itself. There is no game data on a hosted runner, so
+# milo-tests runs in NO-GAME-DATA mode exactly as on Linux
+# (`scripts/native_test.sh --no-assets`, the executed-test FLOOR in
+# native/tests/no_assets_floor.txt; see docs/native/TESTING.md). The floor is
+# the Linux one: of the asset-free tests only test_native_exit.cpp's Xvfb
+# window tests are compiled out on macOS, and those skip without data anyway.
+# If a first macOS run comes in under the floor, find out WHICH asset-free
+# tests did not run before touching the floor -- that is a macOS finding.
+#
+# Sibling repo: ../milo-native-engine, from vars.MILO_ENGINE_REPO /
+# vars.MILO_ENGINE_REF as in native-build.yml. Unlike that job this one fails
+# at the checkout if the engine is unreachable: a macOS job that cannot build
+# has nothing to report.
+# =============================================================================
+
+name: native-macos
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DAWN_RELEASE_TAG: v20260423.175430
+  DAWN_TREE_NAME: Dawn-31e25af254ab572c77054edec4946d2244e184dd-macos-latest-Release
+  # sha256 of ${DAWN_TREE_NAME}.tar.gz, measured 2026-11-13 (scripts/mac/bootstrap.sh pins the same).
+  DAWN_SHA256: 8d1db80315ab55ad2c61857d1c7ae4c242a9cc67d0639c709a052fc6af3a7bac
+  HOMEBREW_NO_AUTO_UPDATE: "1"
+  HOMEBREW_NO_INSTALL_CLEANUP: "1"
+
+jobs:
+  dc3-native-macos:
+    name: dc3-native + milo-tests (macos-14 arm64)
+    runs-on: macos-14
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout dc3-decomp
+        uses: actions/checkout@v4
+        with:
+          path: dc3-decomp
+          fetch-depth: 1
+
+      - name: Checkout milo-native-engine sibling
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MILO_ENGINE_REPO || format('{0}/milo-native-engine', github.repository_owner) }}
+          ref: ${{ vars.MILO_ENGINE_REF || 'main' }}
+          path: milo-native-engine
+
+      - name: Install Homebrew dependencies
+        run: |
+          set -e
+          # cmake is preinstalled on the image; listing it keeps the job honest
+          # if the image changes. coreutils provides gtimeout for the tests.
+          brew install cmake ninja pkgconf glfw jpeg-turbo libvorbis libogg ffmpeg googletest coreutils
+          xcode-select -p
+          clang++ --version
+          ld -v 2>&1 | head -1
+          cmake --version | head -1
+          sw_vers
+
+      - name: Cache Dawn prebuilt
+        id: dawn-cache
+        uses: actions/cache@v4
+        with:
+          path: dawn-prebuilt
+          key: dawn-${{ env.DAWN_RELEASE_TAG }}-macos-arm64
+
+      - name: Download + verify + unpack Dawn prebuilt
+        if: steps.dawn-cache.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          curl -fSL --retry 3 -o "$RUNNER_TEMP/dawn.tar.gz" \
+            "https://github.com/google/dawn/releases/download/${DAWN_RELEASE_TAG}/${DAWN_TREE_NAME}.tar.gz"
+          got="$(shasum -a 256 "$RUNNER_TEMP/dawn.tar.gz" | cut -d' ' -f1)"
+          if [ "$got" != "$DAWN_SHA256" ]; then
+            echo "::error::Dawn tarball sha256 $got, expected $DAWN_SHA256"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/dawn"
+          tar -xzf "$RUNNER_TEMP/dawn.tar.gz" -C "$RUNNER_TEMP/dawn"
+          mv "$RUNNER_TEMP/dawn/${DAWN_TREE_NAME}" dawn-prebuilt
+          test -f dawn-prebuilt/lib/cmake/Dawn/DawnConfig.cmake
+
+      - name: Configure (scripts/native_configure.sh, Darwin branch)
+        working-directory: dc3-decomp
+        run: |
+          set -e
+          DAWN_PREFIX="$GITHUB_WORKSPACE/dawn-prebuilt" BUILD_TESTS=ON \
+            scripts/native_configure.sh "$PWD/native/build" \
+            -DMILO_ENGINE_PATH="$GITHUB_WORKSPACE/milo-native-engine"
+
+      - name: Build dc3-native, milo-viewer, milo-tests
+        working-directory: dc3-decomp
+        run: |
+          cmake --build native/build --target dc3-native milo-viewer milo-tests \
+            -j"$(sysctl -n hw.logicalcpu)"
+
+      - name: Verify binaries
+        working-directory: dc3-decomp/native/build
+        run: |
+          set -e
+          ls -la dc3-native milo-viewer milo-tests
+          file dc3-native milo-viewer milo-tests
+          # The Info.plist the CMake Apple branch embeds (NSCameraUsageDescription).
+          otool -s __TEXT __info_plist dc3-native | head -3
+          # A missing symbol would have failed the link (no -undefined
+          # dynamic_lookup), so this only reports the dylibs for the log.
+          otool -L dc3-native
+
+      - name: Run milo-tests (no-game-data mode)
+        working-directory: dc3-decomp
+        run: |
+          # Same invocation and same reasoning as native-build.yml: the wrapper,
+          # not bare ctest; -j1; --no-tests=error. The status is recorded and
+          # gated in the last step so the summary and logs still upload.
+          set +e
+          scripts/native_test.sh --no-assets --no-configure \
+            -j1 --output-on-failure --no-tests=error
+          rc=$?
+          echo "NATIVE_TEST_RC=$rc" >> "$GITHUB_ENV"
+          if [ -f native/build/native_test_summary.txt ]; then
+            cat native/build/native_test_summary.txt >> "$GITHUB_ENV"
+          fi
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## dc3-decomp native macOS (arm64) summary"
+            echo ""
+            echo "**Engine:** \`${{ vars.MILO_ENGINE_REPO || 'github.repository_owner/milo-native-engine' }}@${{ vars.MILO_ENGINE_REF || 'main' }}\` · **Dawn:** ${DAWN_RELEASE_TAG} macos-latest"
+            echo ""
+            echo "### scripts/native_test.sh --no-assets (exit ${NATIVE_TEST_RC:-did not run})"
+            echo "| metric | count |"
+            echo "|--------|-------|"
+            echo "| ctest registered | ${NT_REGISTERED:-n/a} |"
+            echo "| VERIFIED (gtest cases that printed [ OK ]) | ${NT_VERIFIED:-n/a} (floor ${NT_FLOOR:-n/a}) |"
+            echo "| ghosts (scored PASSED, ran nothing) | ${NT_GHOSTS:-n/a} |"
+            echo "| executed | ${NT_EXECUTED:-n/a} |"
+            echo "| failed | ${NT_FAILED:-n/a} |"
+            echo "| skipped | ${NT_SKIPPED:-n/a} (${NT_NO_DATA_SKIPS:-n/a} at the [no-game-data] check) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Gate on test results
+        if: always()
+        run: |
+          # 0 = every executed test passed and at least the floor ran; 2 = under
+          # the floor or a ghost; 8 = ctest failures; the table is in
+          # scripts/native_test.sh's header.
+          if [ "${NATIVE_TEST_RC:-unset}" != "0" ]; then
+            echo "FAIL: scripts/native_test.sh --no-assets exited ${NATIVE_TEST_RC:-unset (did not run)}."
+            exit 1
+          fi
+          echo "OK: ${NT_VERIFIED:-?} verified passes (floor ${NT_FLOOR:-?}), ${NT_EXECUTED:-?} executed, ${NT_FAILED:-?} failed."
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dc3-native-macos-logs
+          path: |
+            dc3-decomp/native/build/Testing/Temporary/LastTest.log
+            dc3-decomp/native/build/Testing/Temporary/LastTestsFailed.log
+            dc3-decomp/native/build/CMakeFiles/CMakeConfigureLog.yaml
+            dc3-decomp/native/build/CMakeCache.txt
+            dc3-decomp/native/build/.ninja_log
+          if-no-files-found: ignore
+          retention-days: 7
