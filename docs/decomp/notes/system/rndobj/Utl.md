@@ -90,6 +90,17 @@ Above the definition (was lines 741-749):
 // Fix the quat block first, then restore the plain ScaleKeys loop.
 ```
 
+Added by lane w-low-rndobj, 2026-11-13:
+
+```text
+BEHAVIOUR VERDICT: AGREES (94.91 / 90.80, unchanged).  m3c rows are tf.m rows
+times 1/scale (x,y,z each row); q58 = Quat(m3c).  The three loops walk the
+KEYS OWNER's (0x58) mTransKeys 0x34 (Multiply by tf), mScaleKeys 0x40
+(component-wise times the extracted scale) and mRotKeys 0x28 (q58 * key, all
+four components checked against the fmadds/fnmsubs chain).  Residual is the
+scale-loop end hoist and quat store order already recorded above.
+```
+
 
 ## `?XfmSort@@YA_NAAUInstance@RndMultiMesh@@0@Z`
 
