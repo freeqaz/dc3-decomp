@@ -225,3 +225,23 @@ Inside the body (was lines 807-812):
     // f19` -- (float)modf(...) * 2.0f - 1.0f.  We used to multiply the double
     // (`fmsub` against 2.0 / 1.0 double literals) and round once at the end.
 ```
+
+lane C / w-low-gesture-char (2026-11-13):
+
+```text
+// Behaviour audit, value by value against the name_check listing: NOT A BUG.
+// Checked: the per-pixel loop (stride (row*0x180+col)*4, v&7 player, v>>3 depth,
+// p1/p2/rows/depths push conditions), the p1/p2 percentile arms (n/5, 4n/5,
+// compare polarity against d44 / d45 / d48 / d53), rows (i5/i10/i995 and the
+// a-(a-(b-c)) zoom), depths (i1/i99/i50, spread, *3.6*0.5), the three reset
+// arms + 256/4096 clamps, the six SetParams targets (0x270 d49, 0x25c dzp0,
+// 0x234 d52, 0x248 dzp1, 0x20c d47, 0x220 d48) and the Smooth thresholds
+// (100/50/3/1.5, 4/d42), all twelve Min/Max fsel operands, the span-padding
+// arms, texZoom, and playerSel.  Every value lands where the image puts it.
+// Codegen lever landed: the three float MILO_ASSERTs (texZoom x2, depthZoom)
+// were wrapped in `if (b <= a) { MILO_ASSERT(a < b) }`, which emitted TWO
+// fcmpu/branch pairs per assert; the image has one (`fcmpu a, b; blt skip`).
+// Bare MILO_ASSERT: 84.885 -> 85.8 canonical, fuzzy 82.77 -> 83.65; equal
+// 723 -> 722 but insert/delete 96/90 -> 86/86 and our instruction count now
+// equals the target's (1297).  Same behaviour, including NaN (both forms fire).
+```
