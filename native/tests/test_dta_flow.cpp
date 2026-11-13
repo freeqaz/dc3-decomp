@@ -940,6 +940,34 @@ TEST_F(StoryTutorialGateSeenTest, SavedConsoleSkipsPerformTutorial) {
     EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }
 
+// PLAN G-22: the story profile chooser listed "Sign Into a Gamer Profile"
+// under the local profile.  On a 360 that row opens the guide's sign-in blade
+// (ChooseProfilePanel show_signin -> PlatformMgr::SignInUsers ->
+// XShowSigninUI); a PC has none, so selecting it did nothing.  Natively the
+// row is offered only when no profile is signed in, so with the local
+// profile signed in the list is that one row.
+TEST_F(StoryTutorialGateSeenTest, ChooseProfileOffersNoDeadSignInRow) {
+    std::vector<std::string> lines =
+        LinesFrom(sResult.output, "Screen 'campaign_choose_profile_screen' Enter");
+    ASSERT_FALSE(lines.empty())
+        << "precondition: story-tutorial-gate.txt never reached campaign_choose_profile_screen";
+    int numData = -1;
+    for (const std::string &line : lines) {
+        if (!StartsWith(line, "DC3 HamNavList: select name='right_hand.hnl'")) continue;
+        size_t at = line.find("numData=");
+        if (at != std::string::npos) numData = atoi(line.c_str() + at + strlen("numData="));
+        break;
+    }
+    ASSERT_NE(numData, -1) << "no right_hand.hnl select on campaign_choose_profile_screen";
+    EXPECT_EQ(numData, 1)
+        << "the profile list should be the local profile alone; 2 = the "
+           "'Sign Into a Gamer Profile' row is back, and on a PC it does nothing";
+    EXPECT_NE(sResult.output.find("Screen 'campaign_choose_profile_screen' Exit (to "
+                                  "'campaign_diffselect_screen')"),
+              std::string::npos)
+        << "selecting the local profile did not proceed to difficulty select";
+}
+
 TEST_F(StoryTutorialGateFreshTest, FreshConsoleShowsPerformTutorial) {
     const std::string &out = sResult.output;
     ASSERT_NE(out.find("DC3 Input: wait_screen 'campaign_diffselect_screen' satisfied"),
