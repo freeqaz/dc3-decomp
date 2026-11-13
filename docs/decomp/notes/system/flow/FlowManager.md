@@ -132,3 +132,13 @@ Inside the body (was lines 258-276):
         // sid mod 4 = 0/1 or the sample temp at sid mod 1024 in [513, 1023];
         // both are symbol-count questions, not operand-binding ones.
 ```
+
+## `?erase@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@QAA?AViterator@1@V21@@Z`
+
+`ObjPtrVec<FlowNode,ObjectDir>::erase`
+
+w-low-world (lane B, 2026-11-13): value-audited against the listing at
+0x823EA0B8: NOT A BUG.  Same body as ObjPtrVec<Spotlight>::erase except Set is
+an out-of-line `bl Set<FlowNode>` with (this, begin+idx, lastObj).  Residual is
+the mirror-image inlining decision (ours inlines Set), PCH-blocked.
+

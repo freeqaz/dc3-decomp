@@ -301,6 +301,16 @@ Inside the body (was lines 1281-1285):
             // restores that order: fuzzy 83.17936 -> 83.20393.
 ```
 
+w-low-world (lane B, 2026-11-13): re-traced value by value against the listing
+(section counts and clamps, border radius/steps, all three y/alpha arms, the
+four columns incl. both fsel clamps, both face arms, the penultimate-row
+rewrite, the halfWidth step, SetTransConstraint(5) before SetTransParent): NOT
+A BUG.  Two permuter results REJECTED: (1) decomp-synth `ghidra_fma_0` rewrote
+`(len - bbl) * (1.0f / 15.0f)` as `len - bbl + 1.0f / 15.0f` -- a real semantic
+change, never apply it; (2) moving `bottomSideBorderVal` below `numSectionsTop`
+reads 85.34 -> 86.3 canonical but EQUAL falls 233 -> 229 and our length moves
+AWAY from the image (403 -> 400 insns vs 407): fails the kill-your-gain rule.
+
 
 ## `?BuildCone@Spotlight@@IAAXAAUBeamDef@1@@Z`
 
@@ -690,3 +700,11 @@ Inside the body (was lines 2026-2062):
     // because the literal's live range is spilt by a wider one, not because
     // the literal is spelled differently.
 ```
+
+w-low-world (lane B, 2026-11-13): face-loop arms swapped to `if (!(iFace & 2))
+{ else-arm } else { if-arm }` -- same twelve halfwords, same condition, only the
+block order changes.  90.63071 -> 91.4 canonical, fuzzy 87.33195 -> 88.12033;
+equal 131 -> 131, insert/delete 11/10 -> 10/9, total rows 252 -> 251 (target
+251-ish), one new beq/bne diff_op at the branch itself.  Found by decomp-synth
+`brpol_0` (hill_climb); its FACT_AGREED validator flagged 5/6, so it was
+re-applied by hand and checked arm by arm against the listing.

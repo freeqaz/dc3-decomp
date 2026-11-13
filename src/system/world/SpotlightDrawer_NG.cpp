@@ -773,8 +773,8 @@ void NgSpotlightDrawer::SetupXSection(Spotlight *sl, const Spotlight::BeamDef &d
     // address computation is dead by the time the loads are folded back to
     // 0x30/0x34/0x38(r30).  Retail has no such addi.
     Vector3 toCam = lightPos;
-    toCam.x -= camXfm.v.x;
     toCam.y -= camXfm.v.y;
+    toCam.x -= camXfm.v.x;
     toCam.z -= camXfm.v.z;
 
     Vector3 viewDir = toCam;
@@ -821,7 +821,7 @@ void NgSpotlightDrawer::SetupXSection(Spotlight *sl, const Spotlight::BeamDef &d
     Normalize(leftPlane, leftPlane);
 
     // Plane constants: the eye lies on both planes, so d == dot(eye, n).
-    float rightD = eye.x * rightPlane.x + (eye.y * rightPlane.y + eye.z * rightPlane.z);
+    float rightD = eye.z * rightPlane.z + eye.y * rightPlane.y + eye.x * rightPlane.x;
     float leftD = eye.x * leftPlane.x + (eye.y * leftPlane.y + eye.z * leftPlane.z);
 
     // Bisector of the two silhouette planes.
