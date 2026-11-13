@@ -133,13 +133,52 @@ static std::string MakePersistenceRoot() {
     return root;
 }
 
+// Tutorial bits, config/macros.dta:1466-1489 (ProfileMgr::mTutorialsSeen).
+static constexpr int kTutorialGeneral = 1;
+static constexpr int kTutorialFitness = 128;
+static constexpr int kTutorialPlaylists = 2048;
+
+// Write the global-options cache entry a previous session would have left:
+// <root>/cache/global/global, the 0x39-byte block ProfileMgr::SaveGlobalOptions
+// fills and SaveLoadManager writes through the cache (states 0x32/0x33,
+// kStrGlobalCacheName).  The bytes are what the native engine itself wrote at
+// the end of a 2026-11-13 Perform run, with mTutorialsSeen (an int at 0x28,
+// after version/mono/sync/volumes/the nine option bools/sync preset/overscan)
+// replaced by `tutorialsSeen`.  The offset is measured, not derived: zeroing
+// byte 0x28 alone turns {profile_mgr has_seen_tutorial kTutorialGeneral} from
+// 1 to 0 on the next boot.  Tutorials-seen is per CONSOLE -- it lives here,
+// not in DC3_SAVE_DIR/profile_0_save.dat -- so a save dir without its cache
+// dir is a console that has never seen a tutorial.
+static bool SeedGlobalOptions(const std::string &root, int tutorialsSeen) {
+    static const unsigned char kGlobalOptions[0x39] = {
+        0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0, 0xc1, 0x00, 0x00, 0x00,
+        0x00, 0x04, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x09, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    };
+    unsigned char bytes[sizeof(kGlobalOptions)];
+    memcpy(bytes, kGlobalOptions, sizeof(bytes));
+    for (int i = 0; i < 4; i++)  // little-endian int, as the native stream writes it
+        bytes[0x28 + i] = (unsigned char)((unsigned)tutorialsSeen >> (8 * i));
+    std::string dir = root + "/cache/global";
+    mkdir(dir.c_str(), 0755);
+    std::ofstream f(dir + "/global", std::ios::binary);
+    if (!f.is_open()) return false;
+    f.write((const char *)bytes, sizeof(bytes));
+    return f.good();
+}
+
 // `extraEnv` is prepended to the command as further VAR=value assignments
 // (e.g. "DC3_CONTROLLER_MODE=faithful").  `fastBoot` false leaves
 // DC3_FAST_BOOT out, so boot screens advance as the image's do -- title_screen
 // in particular then waits for a confirm instead of auto-advancing.
+// `seedTutorialsSeen` >= 0 starts the run from a console whose global options
+// record those tutorials as seen (SeedGlobalOptions); -1 keeps the empty root.
 static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeconds,
                                const char *scriptName = "ymca.txt",
-                               const char *extraEnv = "", bool fastBoot = true) {
+                               const char *extraEnv = "", bool fastBoot = true,
+                               int seedTutorialsSeen = -1) {
     std::string binary = GetDc3NativePath();
     std::string script = GetScriptDir() + "/" + scriptName;
 
@@ -167,6 +206,10 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeco
             "directories have to be owned by the fixture: without them the "
             "flow's screen chain depends on whatever ~/.local/share/dc3/cache "
             "holds on this machine, and the run would write there.";
+        return pre;
+    }
+    if (seedTutorialsSeen >= 0 && !SeedGlobalOptions(persistence, seedTutorialsSeen)) {
+        pre.setupError = "could not write the seeded global options under " + persistence;
         return pre;
     }
 
@@ -783,5 +826,137 @@ TEST_F(YmcaFaithfulNoFastBootTest, TitleWakeReachesChooseMode) {
            "missing or no longer lands before the confirm: the confirm was "
            "swallowed into entering controller mode.";
     EXPECT_FALSE(sResult.timedOut) << "the engine hit the 60 s timeout";
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
+}
+
+// ===========================================================================
+// Story: the Perform-tutorial gate reads the persisted global options (G-2)
+// ===========================================================================
+//
+// docs/native/PLAN.md G-2 was filed as "Story re-shows the Perform tutorial on a
+// profile that has seen it".  Measured 2026-11-13: the surveyed run (n8-story)
+// used a save dir created empty by its own driver, so the console had never
+// seen the tutorial and showing it was correct.  The gate is enter_gameplay's
+// first clause (ui/global.dta:211-230) -- campaign_intro's gameplay_mode is
+// `perform` (campaign's parent_mode) -- and kTutorialGeneral is read from the
+// GLOBAL options cache, not from the profile save.  These two runs pin both
+// branches of that gate on the story path, so a break in persisting or
+// loading mTutorialsSeen (or a gate that always/never fires) turns one red.
+
+class StoryTutorialGateTest : public ControllerModeFlowTest {
+protected:
+    static void RunOnce(DtaRunResult &result, bool &ran, int seed) {
+        if (!getenv("DC3_DTA_FLOW_TESTS") || ran) return;
+        result = RunDtaFlow(5000, 180, "story-tutorial-gate.txt", "", true, seed);
+        ran = true;
+    }
+    static constexpr const char *kToLoading =
+        "Screen 'campaign_diffselect_screen' Exit (to 'loading_screen')";
+    static constexpr const char *kToTutorial =
+        "Screen 'campaign_diffselect_screen' Exit (to 'tutorial_perform_it_screen_0')";
+};
+
+class StoryTutorialGateSeenTest : public StoryTutorialGateTest {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+    static void SetUpTestSuite() { RunOnce(sResult, sRanEngine, kTutorialGeneral); }
+    void SetUp() override { CheckRan(sResult, sRanEngine); }
+    void TearDown() override {
+        if (HasFailure() && sRanEngine) Dump(sResult);
+    }
+};
+DtaRunResult StoryTutorialGateSeenTest::sResult = {};
+bool StoryTutorialGateSeenTest::sRanEngine = false;
+
+class StoryTutorialGateFreshTest : public StoryTutorialGateTest {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+    static void SetUpTestSuite() { RunOnce(sResult, sRanEngine, -1); }
+    void SetUp() override { CheckRan(sResult, sRanEngine); }
+    void TearDown() override {
+        if (HasFailure() && sRanEngine) Dump(sResult);
+    }
+};
+DtaRunResult StoryTutorialGateFreshTest::sResult = {};
+bool StoryTutorialGateFreshTest::sRanEngine = false;
+
+TEST_F(StoryTutorialGateSeenTest, SavedConsoleSkipsPerformTutorial) {
+    const std::string &out = sResult.output;
+    ASSERT_NE(out.find("DC3 Input: wait_screen 'campaign_diffselect_screen' satisfied"),
+              std::string::npos)
+        << "precondition: story-tutorial-gate.txt never reached campaign_diffselect_screen";
+    EXPECT_NE(out.find(kToLoading), std::string::npos)
+        << "with kTutorialGeneral recorded in the global options cache, confirming "
+           "a difficulty must go straight to loading_screen";
+    EXPECT_EQ(out.find("Screen 'tutorial_perform_it_screen_0' Enter"), std::string::npos)
+        << "the Perform tutorial was shown on a console whose global options say it "
+           "was seen: mTutorialsSeen was not loaded from DC3_CACHE_DIR/global/global "
+           "(ProfileMgr::LoadGlobalOptions / SaveLoadManager state 0x32)";
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
+}
+
+TEST_F(StoryTutorialGateFreshTest, FreshConsoleShowsPerformTutorial) {
+    const std::string &out = sResult.output;
+    ASSERT_NE(out.find("DC3 Input: wait_screen 'campaign_diffselect_screen' satisfied"),
+              std::string::npos)
+        << "precondition: story-tutorial-gate.txt never reached campaign_diffselect_screen";
+    EXPECT_NE(out.find(kToTutorial), std::string::npos)
+        << "on a console that has never seen it, story's first song must insert "
+           "tutorial_perform_it_screen_0 (ui/global.dta:230)";
+    EXPECT_EQ(out.find(kToLoading), std::string::npos)
+        << "the tutorial gate was skipped on a fresh console";
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
+}
+
+// ===========================================================================
+// Fitness: a fitness song starts from the `playlists` row (G-4)
+// ===========================================================================
+//
+// docs/native/PLAN.md G-4: "confirm on the first fitness_screen item only
+// toggles fitness_option".  That is the image's design, not a bug:
+// FitnessProvider::UpdateList (100% match) builds fitness_option /
+// fitness_set_fitness_goals / fitness_body_profile / playlists, and only
+// `playlists` leads to songs (ui/fitness/fitness.dta NAV_SELECT_MSG ->
+// song_select_playlist_tutorial_check_screen).  fitness-playlist.txt toggles
+// fitness mode on, takes row 3, picks a playlist and `playlist_play`s it into
+// multiuser_screen under gamemode playlist_perform.  Seeded with the fitness
+// and playlist tutorials seen so neither is inserted.
+
+class FitnessPlaylistFlowTest : public ControllerModeFlowTest {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+    static void SetUpTestSuite() {
+        if (!getenv("DC3_DTA_FLOW_TESTS") || sRanEngine) return;
+        sResult = RunDtaFlow(5000, 180, "fitness-playlist.txt", "", true,
+                             kTutorialGeneral | kTutorialFitness | kTutorialPlaylists);
+        sRanEngine = true;
+    }
+    void SetUp() override { CheckRan(sResult, sRanEngine); }
+    void TearDown() override {
+        if (HasFailure() && sRanEngine) Dump(sResult);
+    }
+};
+DtaRunResult FitnessPlaylistFlowTest::sResult = {};
+bool FitnessPlaylistFlowTest::sRanEngine = false;
+
+TEST_F(FitnessPlaylistFlowTest, PlaylistsRowStartsAPlaylist) {
+    const std::string &out = sResult.output;
+    ASSERT_NE(out.find("DC3 Input: wait_screen 'fitness_screen' satisfied"), std::string::npos)
+        << "precondition: fitness-playlist.txt never reached fitness_screen";
+    EXPECT_NE(out.find("sym='fitness_option'"), std::string::npos)
+        << "row 0 of fitness_screen was not fitness_option";
+    EXPECT_NE(out.find("Screen 'fitness_screen' Exit (to "
+                       "'song_select_playlist_tutorial_check_screen')"),
+              std::string::npos)
+        << "fitness_screen row 3 did not lead to the playlist screens: the "
+           "`playlists` row is FitnessProvider's fourth entry";
+    EXPECT_NE(out.find("sym='playlist_play'"), std::string::npos)
+        << "the playlist options list never offered playlist_play";
+    EXPECT_NE(out.find("Screen 'song_select_playlist_screen' Exit (to 'multiuser_screen')"),
+              std::string::npos)
+        << "playlist_play did not reach the playlist_perform seldiff screen";
     EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }

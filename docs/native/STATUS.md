@@ -22,14 +22,64 @@ not exist on web. macOS last ran in March and would not build today.
 | Save | `profile_0_save.dat` written at endgame; reloaded after restart; tutorial skipped and score shown | ran |
 | Rehearse | Runs to `practice_endgame_screen` | ran |
 | Battle | **Pauses at ~beat 4** (`pause_on_skeleton_loss`: only slot 0 has a skeleton) | ran |
-| Story | **Re-shows the Perform tutorial on a profile that has seen it; endgame screen never advances** | ran |
-| Fitness | Could not start a song (may be navigation, not a bug) | ran |
+| Story | Choose profile → difficulty → song 1 → `campaign_perform_endgame_screen` → next song → `campaign_intro_perform_continue_screen`, with no input after the difficulty. The Perform tutorial shows only on a console that has not seen it. See [Reaching Story and Fitness](#reaching-story-and-fitness). | headless GPU run with screenshots, plus no-GPU runs, 2026-11-13 (`np-modes`) |
+| Fitness | A fitness song starts from the `playlists` row, not row 0. See [Reaching Story and Fitness](#reaching-story-and-fitness). | headless runs, 2026-11-13 (`np-modes`) |
 | Party / Crew | Not reached; expected to hit the same second-player wall as Battle | inferred |
 | Options, store | Not reached | — |
 | Audio | **Not verified by ear.** Headless skips audio; under Xvfb `ma_device_init` fails | — |
 | Windowed | Starts at 1280×720 and real keys drive it into gameplay. Space opens pause but doesn't close it; Esc is B, not quit, although the log says "press ESC to exit". | Xvfb |
 | Visual | Black box over the final-results header; controller-mode help bar stays on during gameplay; "raise both hands" bubble on most menus (doubled in party); title background purple vs blue on Xbox; missing glyphs (`S` in Vibration-Medium, `%`/`f` in Eagle-Light) | screenshots |
 | Noise | No asserts, Debug::Fail or crashes in any controller-driven run | logs |
+
+### Reaching Story and Fitness
+
+These notes correct three survey findings (PLAN G-2, G-3, G-4). None of the
+three was a bug in the game.
+
+- **The tutorial is tracked per console, not per profile.** `has_seen_tutorial`
+  reads `ProfileMgr::mTutorialsSeen`, which is saved in the global options cache
+  (`DC3_CACHE_DIR/global/global`, 0x39 bytes, int at 0x28), not in
+  `DC3_SAVE_DIR/profile_0_save.dat`. A copied save dir with no cache dir is a
+  console that has never seen a tutorial, so Story correctly shows
+  `tutorial_perform_it_screen_*` there. That is what the survey run did: its
+  driver created the save dir empty. Story's gate is `enter_gameplay`
+  (`ui/global.dta:211`). `campaign_intro` inherits `gameplay_mode perform`
+  through `campaign`, so Story uses the same gate as Perform. Tests:
+  `StoryTutorialGateSeenTest`, `StoryTutorialGateFreshTest`.
+- **Story's endgame advances by itself, but only after about 4 s of real time.**
+  At gameover the profile gets a "High Solo Score!" passive message, shown for
+  4000 ms of **wall-clock** time (`PassiveMessageQueue`, a `Timer`, which matches
+  the original). `xp_overlay_panel`'s poll waits while
+  `{passive_messenger has_messages}` is true, and `perform_endgame_panel` waits
+  for the XP overlay to finish. After that the screen goes to
+  `playlist_nextsong_screen`, or to `campaign_intro_perform_continue_screen`
+  after the playlist's last song, and the next song loads. In a headless GPU run
+  the endgame showed the bubble and reached `playlist_nextsong_loading_screen`
+  3,500 frames later, untouched, and song 2 then played. Headless runs with
+  `MILO_NORENDER=1` reach about 5,000–9,000 frames per second, and headless UI
+  time advances a fixed 1/30 s per frame. So those 4 s cost 20k–36k frames
+  (~650 UI-seconds). The survey driver gave up after about 12k frames: 39
+  confirms, each followed by a 300-frame wait. Its confirm went to
+  `perform_continue_panel`, which skips the results. The ~10k-frame "stuck"
+  transition to `playlist_nextsong_screen` that followed was about 2 s of
+  real-time loading. **Drive these screens with wall-clock waits**
+  (`/api/screen/wait/<screen>?timeout=`), not frame counts. The same 4 s message,
+  "Raise both hands to change Profile.", shows from boot. In fast headless runs
+  that covers thousands of menu frames, so check it before reading G-7's bubble
+  as a bug.
+- **`fitness_screen` is a menu, not a song list.** `FitnessProvider::UpdateList`
+  builds exactly four rows: 0 `fitness_option` (toggles the active profile's
+  fitness mode, and that is all it does), 1 `fitness_set_fitness_goals`,
+  2 `fitness_body_profile`, 3 `playlists`. A fitness song starts from row 3:
+  `song_select_playlist_tutorial_check_screen` (playlist tutorial on first use)
+  → `song_select_playlist_screen` (gamemode `playlist_perform`) → a playlist
+  row → `playlist_play` → `multiuser_screen` → song. With fitness mode on,
+  `continue_next_screen` takes its fitness-playlist branch at the endgame. The
+  row needs an **active profile**, and under `DC3_FAST_BOOT` only
+  title_screen's confirm signs one in: the boot skip sets
+  `$post_load_dest_screen` but not the initial profiles. With no profile,
+  fitness shows its `no_profile` view and an empty list. Test:
+  `FitnessPlaylistFlowTest` (`scripts/dc3-input-flows/fitness-playlist.txt`).
 
 ## Pose input — see [POSE_INPUT.md](POSE_INPUT.md)
 

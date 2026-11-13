@@ -1,0 +1,39 @@
+# Story mode up to the Perform-tutorial gate (G-2, docs/native/PLAN.md)
+#
+#   main -> campaign_choose_profile -> campaign_diffselect -> confirm the
+#   first difficulty -> enter_gameplay
+#
+# campaign_diffselect.dta's handle_select_diff steps the campaign state to
+# kCampaignStatePerformIt and calls {enter_gameplay} (ui/global.dta:211), whose
+# first clause sends a `perform` gameplay_mode (campaign_intro inherits it from
+# campaign -> perform) to tutorial_perform_it_screen_0 only while
+# {profile_mgr has_seen_tutorial kTutorialGeneral} is false.  That bit lives in
+# the GLOBAL options cache (DC3_CACHE_DIR/global/global, written by
+# ProfileMgr::SaveGlobalOptions through SaveLoadManager state 0x33), not in
+# the profile save (DC3_SAVE_DIR/profile_0_save.dat).  So the next screen after
+# the confirm is:
+#   tutorial_perform_it_screen_0   on a cache that has not seen the tutorial
+#   loading_screen                 on a cache that has
+#
+# Main menu rows: 0 perform, 1 story.  Presses wait out each HamNavList's enter
+# animation (see ymca.txt).
+# title_screen's confirm is what signs pad 0's profile in (title.dta
+# NAV_SELECT_MSG sets the initial profiles); fast boot keeps the full title
+# delay so it can land.  Without it there is no active profile, and
+# fitness_panel shows its no_profile view with an empty list.
+wait_screen title_screen
++43 wake
++45 confirm
+
+wait_screen main_screen
++43 wake
++45 down
++90 confirm
+
+wait_screen campaign_choose_profile_screen
++43 wake
++45 confirm
+
+wait_screen campaign_diffselect_screen
++43 wake
++45 confirm
