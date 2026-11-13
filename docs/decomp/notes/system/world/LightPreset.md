@@ -21,3 +21,16 @@ Above the definition (was lines 1267-1271):
 // temp leaf (~0x15000).  Loop 1's base temps sit at sid 4k+1/4k+2 (ptr/state);
 // loops 2-4 needed theirs moved by 2, which the two extra loop-1 counters do.
 ```
+
+## `?erase@?$ObjPtrVec@VSpotlight@@VObjectDir@@@@QAA?AViterator@1@V21@@Z`
+
+`ObjPtrVec<Spotlight,ObjectDir>::erase`
+
+w-low-world (lane B, 2026-11-13): value-audited against the listing at
+0x82848AD0: NOT A BUG.  idx from (it - begin)/0x14 (0 for a null it); swap-last
+mode at +0x14 == 1 and idx != size-1 reads back()'s object (end-0x8), pops via
+the node's virtual dtor, then the inlined Set: null object with mListMode
+(+0x18) == 0 recurses into erase, else SetObjConcrete; otherwise _M_erase at
+begin+idx; returns `it`.  Identical to ObjPtr_p.h's template.  Residual stays
+the per-TU Set-inlining decision recorded in the source note.
+
