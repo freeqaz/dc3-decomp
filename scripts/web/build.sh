@@ -24,6 +24,13 @@
 #   scripts/web/build.sh --debug        # debug only (fast iteration loop)
 #   scripts/web/build.sh --reconfigure  # force a fresh cmake configure
 #   scripts/web/build.sh --opt O2       # release -O level (default O3)
+#   scripts/web/build.sh --no-sfx       # skip the kXMA SFX sidecars (below)
+#
+# kXMA SFX sidecars: scripts/web/gen_sfx_sidecars.sh fills
+# native/web/build/sfx_sidecars/ with an .ogg for every key in
+# native/web/sfx_sidecars.manifest (first run ~1 min; then a cheap check). It
+# needs ffmpeg, libav headers and orig-assets; a failure is reported like a
+# failed variant.
 #
 # The page (index.html, favicon, audio-worklet.js, pose/) is deployed FIRST,
 # whatever happens to the builds, so a failed variant never leaves the deploy
@@ -51,12 +58,14 @@ BUILD_DEBUG=1
 BUILD_RELEASE=1
 OPT_LEVEL="O3"   # release -O level; debug is always -O0
 FORCE_RECONFIGURE=0
+BUILD_SFX=1
 while [ $# -gt 0 ]; do
     case "$1" in
         --release)     BUILD_DEBUG=0; BUILD_RELEASE=1 ;;
         --debug)       BUILD_DEBUG=1; BUILD_RELEASE=0 ;;
         --both|--all)  BUILD_DEBUG=1; BUILD_RELEASE=1 ;;
         --reconfigure) FORCE_RECONFIGURE=1 ;;
+        --no-sfx)      BUILD_SFX=0 ;;
         --opt)         shift; OPT_LEVEL="$1" ;;
         --opt=*)       OPT_LEVEL="${1#--opt=}" ;;
         -h|--help)     sed -n '/^# Usage:/,/^# The page/p' "$0" | sed '$d'; exit 0 ;;
@@ -164,6 +173,9 @@ deploy_page() {
 }
 deploy_page
 FAILED=()
+if [ "$BUILD_SFX" = "1" ]; then
+    "$REPO_ROOT/scripts/web/gen_sfx_sidecars.sh" || FAILED+=("sfx-sidecars")
+fi
 
 # Build one configuration (mode = release | debug) into its own emcc build dir
 # and deploy it to web/build/<mode>/. Each build dir is pinned to its mode via
@@ -282,7 +294,9 @@ if [ "${#FAILED[@]}" -gt 0 ]; then
     echo "" >&2
     echo "================================================================" >&2
     for mode in "${FAILED[@]}"; do
-        if [ -f "$DEPLOY_DIR/$mode/dc3-web.wasm" ]; then
+        if [ "$mode" = sfx-sidecars ]; then
+            echo "FAILED: sfx sidecars -- see scripts/web/gen_sfx_sidecars.sh output above (--no-sfx skips)" >&2
+        elif [ -f "$DEPLOY_DIR/$mode/dc3-web.wasm" ]; then
             echo "BUILD FAILED: $mode -- $DEPLOY_DIR/$mode/ still holds the PREVIOUS build" >&2
         else
             echo "BUILD FAILED: $mode -- nothing deployed for it" >&2

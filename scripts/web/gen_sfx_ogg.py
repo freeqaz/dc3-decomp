@@ -12,6 +12,11 @@ so a partially-transcoded dir is always safe.
 Usage:
   python3 scripts/web/gen_sfx_ogg.py                 # default sidecar dir
   python3 scripts/web/gen_sfx_ogg.py --dir PATH      # explicit dir
+  python3 scripts/web/gen_sfx_ogg.py --dir PCMS --out-dir OGGS --keys MANIFEST
+                                     # .ogg into another dir, only the keys
+                                     # listed (first column) in MANIFEST --
+                                     # how scripts/web/gen_sfx_sidecars.sh
+                                     # fills the web deploy dir
   python3 scripts/web/gen_sfx_ogg.py --quality 4     # vorbis -q:a (default 4)
   python3 scripts/web/gen_sfx_ogg.py --jobs 8        # parallel ffmpeg procs
 
@@ -45,9 +50,11 @@ def parse_header(path):
     return sr, ns, ch, HEADER_LEN
 
 
-def transcode_one(pcm_path, quality):
+def transcode_one(pcm_path, quality, out_dir=None):
     """Encode one sidecar. Returns (status, pcm_path, detail)."""
     ogg_path = pcm_path[:-4] + ".ogg"
+    if out_dir:
+        ogg_path = os.path.join(out_dir, os.path.basename(ogg_path))
     try:
         if (os.path.isfile(ogg_path)
                 and os.path.getmtime(ogg_path) >= os.path.getmtime(pcm_path)):
@@ -74,8 +81,7 @@ def transcode_one(pcm_path, quality):
                 os.unlink(tmp)
             return ("fail", pcm_path, proc.stderr.decode(errors="replace")[:200])
         os.replace(tmp, ogg_path)
-        return ("ok", pcm_path,
-                "%d -> %d bytes" % (HEADER_LEN + want, os.path.getsize(ogg_path)))
+        return ("ok", pcm_path, ogg_path)
     except Exception as e:  # keep the batch going on any single-file surprise
         return ("fail", pcm_path, repr(e))
 
@@ -85,7 +91,14 @@ def main():
     ap.add_argument("--dir", default=DEFAULT_DIR, help="sidecar dir (default: %(default)s)")
     ap.add_argument("--quality", type=float, default=4, help="vorbis -q:a (default 4, ~128kbps)")
     ap.add_argument("--jobs", type=int, default=os.cpu_count() or 4)
+    ap.add_argument("--out-dir", default=None,
+                    help="write the .ogg files here instead of next to each .pcm")
+    ap.add_argument("--keys", default=None,
+                    help="only these keys: a file whose lines start with a 16-hex key "
+                         "(# comments ignored), e.g. native/web/sfx_sidecars.manifest")
     args = ap.parse_args()
+    if args.out_dir:
+        os.makedirs(args.out_dir, exist_ok=True)
 
     if not os.path.isdir(args.dir):
         print("no such sidecar dir: %s" % args.dir, file=sys.stderr)
@@ -93,6 +106,15 @@ def main():
     pcms = sorted(
         os.path.join(args.dir, f) for f in os.listdir(args.dir) if f.endswith(".pcm")
     )
+    if args.keys:
+        with open(args.keys) as fh:
+            want = {ln.split()[0] for ln in fh if ln.strip() and not ln.startswith("#")}
+        have = {os.path.basename(p)[:-4] for p in pcms}
+        missing = sorted(want - have)
+        if missing:
+            print("%d listed keys have no .pcm in %s (first: %s)"
+                  % (len(missing), args.dir, missing[0]), file=sys.stderr)
+        pcms = [p for p in pcms if os.path.basename(p)[:-4] in want]
     if not pcms:
         print("no .pcm sidecars in %s" % args.dir, file=sys.stderr)
         return 1
@@ -101,11 +123,11 @@ def main():
     in_bytes = out_bytes = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
         for status, path, detail in pool.map(
-                lambda p: transcode_one(p, args.quality), pcms):
+                lambda p: transcode_one(p, args.quality, args.out_dir), pcms):
             counts[status] += 1
             if status == "ok":
                 in_bytes += os.path.getsize(path)
-                out_bytes += os.path.getsize(path[:-4] + ".ogg")
+                out_bytes += os.path.getsize(detail)
             elif status in ("bad", "fail"):
                 print("%s: %s (%s)" % (status.upper(), os.path.basename(path), detail),
                       file=sys.stderr)
