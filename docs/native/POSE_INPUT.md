@@ -164,8 +164,12 @@ from what the original expects, and both are now handled or measurable:
 
 The other differences are real but small, or move scores both ways:
 
-- MediaPipe jitters 5–10× more than a Kinect.
+- MediaPipe jitters 5–10× more than a Kinect. On real footage in VIDEO mode
+  the level is ~1.7 mm, below anything the scorer reacts to
+  ([Video calibration](#video-calibration-np-video-calib-2026-11-13)).
 - MediaPipe arms come out ~15% shorter.
+- A webcam's tilt reaches the score: the scorer uses camera-space joints.
+  Measured on real footage, correcting 10° of tilt raised the score 6%.
 
 **Why the scoring itself is not the cause:**
 
@@ -286,7 +290,7 @@ The Hustle Easy shows the same pattern: 59/0, 59/0, 51/8. **The P-5 gate's
 | quantity | Kinect v1 (UTD-MHAD, the image's frame) | MediaPipe (desktop backend) | matters? |
 |---|---|---|---|
 | rate | 30 Hz | camera rate. The performer and replays are fixed at 30 Hz of song time. | **yes**: see Frame rate above |
-| still-body jitter, median per axis | x 1.9 · y 1.8 · z 2.1 mm, hands z 7.8 mm | still photo + video noise: x 2.4–5.1 · y 2.7–5.8 · **z 9–19 mm**, hands z 10–24 mm | mild noise (z 9 mm) scores like a Kinect. Heavy noise (z 19 mm) raises a still body on The Hustle Easy from 0/0/34/25 (Kinect) to 0/19/21/19. |
+| still-body jitter, median per axis | x 1.9 · y 1.8 · z 2.1 mm, hands z 7.8 mm | still photo + video noise: x 2.4–5.1 · y 2.7–5.8 · **z 9–19 mm**, hands z 10–24 mm. **Real footage, VIDEO mode** ([Video calibration](#video-calibration-np-video-calib-2026-11-13), its own estimator, which reads the Kinect at 0.3/0.3/0.5): 0.4/0.3/0.6 mm; high-frequency σ 1.7 mm, hands z 3.9 | mild noise (z 9 mm) scores like a Kinect. Heavy noise (z 19 mm) raises a still body on The Hustle Easy from 0/0/34/25 (Kinect) to 0/19/21/19. |
 | bone lengths, median | upper arm 26.9, forearm 22.9, shoulders 33.2, torso 41.8 cm | upper arm 22–23, forearm 19, shoulders 32–33, torso 39–40 cm | scale is normalised (`NormBoneLengths`). Arm-to-torso proportion is ~10% short. |
 | depth | per-joint ToF/structured light | per-joint z from BlazePose world landmarks plus a pinhole root (`DC3_POSE_HFOV`) | the spread of hand z relative to the hip while moving is similar: Kinect UTD actions 21.7 cm, MediaPipe dances 19.8–21.1 cm |
 | inferred joints | Kinect tracking state | confidence ≥ 0.6 tracked, 0.3–0.6 inferred, < 0.3 held: ~1% inferred on clean video | small. UTD-MHAD carries no tracking state to compare against. |
@@ -315,7 +319,10 @@ For example, if capture + MediaPipe + socket is 150 ms slower than the Kinect, u
 
 **The default stays unset.** Nobody has measured a real webcam's latency yet
 (P-2). It can be read from the capture timestamps `pose_server.py` already puts on
-each packet.
+each packet. Recorded footage cannot stand in for that, and
+[Video calibration](#video-calibration-np-video-calib-2026-11-13) explains why.
+That run did measure how much accuracy the knob needs: the score curve is
+flat to ~4% over ±50 ms around its peak.
 
 ### Running the matrix
 
@@ -344,6 +351,213 @@ The performer (`native/src/platform/PosePerformer_Native.{h,cpp}`):
 
 Tests: `PosePerformerClockTest`, `PosePerformerReplayTest`, `SensorLatencyTest`
 (`native/tests/test_pose_scoring.cpp`). Each was sabotage-checked.
+
+### Video calibration (`np-video-calib`, 2026-11-13)
+
+**Question.** Real people dancing in front of a real camera, with the original
+game's own verdict on screen: does MediaPipe through our path score them the
+way the Xbox scored them? And what does the footage say about latency,
+jitter and per-joint error?
+
+**Source.** One public stream: *finishing the Dance Central 3 story mode!*
+(YouTube `mqcXJrH5vUo`, 8990 s, 1920×1080 30 fps). A full-frame player camera
+(front-facing, **mirrored**, whole body visible) with the Xbox capture as an
+inset, bottom right. Every readable results card says **Medium**. The video
+and its frames are someone else's content, so they are **not in the repo**:
+`scripts/video_calib/mqcXJrH5vUo.json` records the layout, crop, per-song
+offsets and the 17 original results cards, and every number below is
+reproducible from a fresh `yt-dlp` download.
+
+**Method** (all scripts in `scripts/video_calib/`, all read the download as
+untrusted data and run with `python3 -I`):
+
+1. **Find the songs.** `song_id_audio.py` cross-correlates each song's
+   unencrypted `<id>_prev.webm` (the `.mogg` is encrypted) against the stream
+   audio: 18 songs, NCC 0.35–0.70, each confirmed by the title card in the
+   inset. The finale's six short battle cuts are identified but not used (no
+   preview match, remixed audio). One song, Teach Me How To Dougie, is
+   excluded: it was paused mid-song and has no results card.
+2. **Record.** `record_segment.py` runs the desktop `MediaPipeBackend` (full
+   model, VIDEO mode, CPU) over the crop `1056:1080:280:0` at 30 fps and
+   writes a dc3-pose-fixture keyed on song time. Tracked 94–100% of frames,
+   30.00 fps, bones: upper arm 23, forearm 23–24, shoulders 32, torso 38 cm.
+3. **Prepare.** `fixture_transform.py --hold --mirror`. Both are required:
+   - untracked frames published as 0 persons paused 3 songs, so they are held;
+   - unmirrored, every lead scored mean lastfrac 0.49–0.59, mirrored 0.84.
+4. **Count the same moves.** The story mode has no freestyle, so its sections
+   are scored moves. `--eval '{profile_mgr toggle_disable_freestyle}'` on
+   multiuser_screen reproduces that. The original's move count is solved from
+   its card (`percent = (P+A)·100 // N`, `MetaPerformer::GetMovesPassed`), and
+   ours matches it on every song: **1162 = 1162**.
+5. **Score.** `run_grid.sh` drives `native_song_sweep.py --difficulty medium
+   --performer replay:DIR/{song}.dc3pose --no-gpu` with
+   `DC3_POSE_PERFORM_REPLAY_SYNC=song`, one config per lead.
+   `compare_cards.py` compares our per-move ratings (`DC3_MOVE_RATING_LOG`)
+   with the original's card.
+6. **Geometry, independent of scoring.** `dump_target.py` records the
+   reference skeleton the scorer uses (`GET /api/pose/target`, whole song).
+   `pose_vs_reference.py` compares it with the fixture, hip-centred and
+   torso-normalised: limb-direction error per lead, plus per-joint signed
+   bias. `pvr_summary.py` aggregates songs.
+
+**Per-move ground truth was not extracted.** The in-game rating text is
+occluded and small, and no OCR tool is installed. The comparison is per
+song, against the card's perfect and awesome counts.
+
+#### Results (MEASURED)
+
+One song was misaligned, and the geometry found it. getlow's audio peak was
+two measures early. Over a ±15 s search the limb error was 38.8° at lead 0
+and 25.6° at +4661 ms. Every other song has its minimum within ±200 ms and a
+6–12° margin over any far offset. The manifest carries the corrected
+`t0`. Until the fix, getlow rated 11/12/8/42: the "worst song" was an
+instrument fault.
+
+Lead sweep: 15 songs (getlow excluded, so every row covers the same songs),
+1089 moves, one shared `DC3_POSE_PERFORM_LEAD_MS`. The original's rates are
+P 0.790 · A 0.165 · rest 0.045.
+
+| lead ms | ours P / A / ok+bad | score ours/orig | mean lastfrac |
+|---|---|---|---|
+| −150 | 0.382 / 0.416 / 0.202 | 0.539 | 0.805 |
+| −100 | 0.437 / 0.421 / 0.141 | 0.625 | 0.831 |
+| **−50** | **0.463 / 0.411 / 0.126** | **0.650** | **0.836** |
+| 0 | 0.449 / 0.407 / 0.144 | 0.627 | 0.828 |
+| +50 | 0.421 / 0.418 / 0.161 | 0.590 | 0.816 |
+| +100 | 0.343 / 0.437 / 0.220 | 0.504 | 0.782 |
+| +150 | 0.302 / 0.439 / 0.259 | 0.448 | 0.761 |
+| per-song lead (geometry) | 0.528 / 0.376 / 0.096 | 0.727 | 0.854 |
+
+All 16 songs, per-song lead, before and after a 10° pitch correction
+(`--pitch 10`, below). Each song is one run; macarena's `p10` run stalled in
+the menus once (the replay-in-menus artifact) and is a retry.
+
+| song | original P/A of N | ours P/A/ok/bad | ours p10 | score ours/orig (p10) |
+|---|---|---|---|---|
+| dabutt | 49/15 of 65 | 34/27/4/0 | 36/21/8/0 | 0.74 (0.66) |
+| supersonic | 62/16 of 83 | 53/23/6/1 | 58/17/6/2 | 0.84 (0.84) |
+| yougotittherightstuff | 55/15 of 77 | 33/38/2/4 | 54/18/1/4 | 0.83 (1.01) |
+| letthemusicplay | 56/20 of 81 | 37/35/3/6 | 44/28/7/2 | 0.71 (0.74) |
+| electricboogie | 50/14 of 69 | 32/26/8/3 | 25/31/9/4 | 0.54 (0.43) |
+| iceicebaby | 59/7 of 69 | 33/30/2/4 | 43/21/1/4 | 0.62 (0.70) |
+| aint2proud2beg | 63/9 of 74 | 30/40/4/0 | 34/36/4/0 | 0.72 (0.75) |
+| macarena | 54/6 of 61 | 42/18/1/0 | 49/11/1/0 | 0.85 (0.92) |
+| getlow | 61/10 of 73 | 52/19/1/1 | 57/14/1/1 | 0.91 (0.94) |
+| 12step | 54/7 of 62 | 38/16/5/3 | 41/17/3/1 | 0.65 (0.74) |
+| indaclub | 50/6 of 57 | 37/18/2/0 | 41/14/2/0 | 0.81 (0.82) |
+| cupidshuffle | 72/13 of 85 | 47/28/5/5 | 50/23/6/6 | 0.61 (0.60) |
+| boyfriend | 49/11 of 65 | 25/36/2/2 | 33/30/1/1 | 0.78 (0.94) |
+| mrsaxobeat | 70/11 of 86 | 44/27/13/2 | 52/23/7/4 | 0.62 (0.76) |
+| starships | 54/22 of 81 | 40/31/7/3 | 42/33/5/1 | 0.89 (0.87) |
+| scream | 63/8 of 74 | 50/17/6/1 | 51/18/5/0 | 0.77 (0.83) |
+| **total, 1162 moves** | **P 0.793 · A 0.164 · rest 0.044** | **0.540 · 0.369 · 0.091** | **0.611 · 0.306 · 0.083** | **0.739 (0.781)** |
+
+- **Pass/fail agrees, and the perfect/awesome split does not.** Perfect+awesome is 0.909
+  ours vs 0.957 original, a mean per-song gap of 4.9 points. But ours
+  rates awesome where the Xbox rated perfect: P 0.54 vs 0.79. So scores
+  come out at 74% of the original's.
+- **Pitch correction helps, and it is systematic.** Rotating the fixture 10°
+  about the camera's x axis lowers the limb error on **17 of 17** songs
+  (median 25.6° → 24.3°) and raises the total score 0.739 → 0.781 (12 of 16
+  songs up). The player's whole body (ankle → head) leans **+6.9° ± 1.4°**
+  more toward the camera than the reference does (legs +7.7° ± 1.7°), the
+  same on every song. The per-joint bias says the same: knees, ankles and feet
+  read +0.25…+0.53 torso units farther and −0.2…−0.3 lower, and the head
+  0.19 nearer. INFERRED: the stream's camera looks down at the player by
+  ~7–10°. The scorer uses camera-space joints, so a webcam's tilt reaches the
+  score directly.
+- **The remaining limb error is arms, not legs.** At the best lead the median
+  error is upper arms 32–35° and forearms 34°, but thighs 18–21° and shins
+  13–15°. Arms are also the bones MediaPipe gets ~15% short.
+
+**Latency.** By geometry, the per-song best lead runs from −170 to +127 ms
+(median −5). It has a weak trend against video time (−75 ms/h, r = −0.48,
+residual sd 81 ms). By score, a single shared lead peaks at −50 ms. The
+curve is broad: −100..0 is within 4% of the peak, and ±150 ms costs 17–31%.
+Aligning each song to its own geometric lead is worth +12% score (0.650 →
+0.727). INFERRED: the lead in a recording is the stream's camera-vs-capture
+sync plus the dancer's own timing plus MediaPipe's lag. It says nothing
+about a live webcam's pipeline latency, which is what
+`DC3_POSE_LATENCY_MS` declares. MediaPipe's VIDEO-mode lag, measured against
+IMAGE mode on macarena, is 0 frames on wrists, elbows and head and 1 frame
+on knees.
+
+**Jitter**, `fixture_stats.py`, on the same estimators for both sources:
+
+| estimator | MediaPipe VIDEO mode, this footage | MediaPipe IMAGE mode (macarena) | Kinect v1, UTD-MHAD |
+|---|---|---|---|
+| still windows, median per-frame step x/y/z: body · hands | 0.4/0.3/0.6 · 0.5/0.4/0.8 mm (5 songs, 180 steps) | — | 0.3/0.3/0.5 · 0.6/0.7/0.6 mm (25 trials, 409 steps) |
+| high-frequency σ (2nd-difference residual, joints < 0.3 m/s): body · hands | 1.65/1.59/1.69 · 1.7/1.9/**3.9** mm (18-song median) | 4/4/5.4 · 4.3/5.7/**14.3** mm | 0.08/0.10/0.10 · 0.18/0.24/0.31 mm |
+
+- Real footage through VIDEO mode is far quieter than this page's earlier
+  MediaPipe figure (z 9–19 mm, a still photo plus synthetic video noise).
+  That figure looks like IMAGE mode, which has no temporal filter. The
+  desktop backend runs VIDEO mode.
+- The Kinect's frame-to-frame residual is ~20× smaller still. INFERRED:
+  UTD-MHAD's recorder smoothed it (no repeated frames, near-zero residual),
+  so it is not the raw stream the game consumed.
+- Both estimators are biased low for noise above ~5 mm, because they keep
+  only slow joints. The IMAGE-mode column shows they can still read 14 mm.
+- The matrix above found mild noise (z 9 mm) scores like a Kinect. Measured
+  VIDEO-mode noise sits well below that.
+
+**Smoothing.** A causal One Euro filter (`fixture_transform.py --one-euro
+1,0.5`) cuts the high-frequency σ 3–4× (body 0.3–0.5 mm). It adds 60–130 ms
+of lag and changes the limb error by under 1° (macarena 25.3 → 24.8°,
+supersonic 21.4 → 20.9°, each at its own best lead). **Scored, it hurts.**
+Over the 16 per-song-aligned fixtures, with the lead moved by its lag
+(+66 ms), the rates went P 0.540 → 0.356, A 0.369 → 0.478, ok+bad 0.091 →
+0.165, and the score 0.739 → 0.543 of the original's. A 1 Hz cutoff rounds
+off the moves' own 2–4 Hz content, which the PSNR scorer rewards. Noise is
+not what separates our ratings from the original's, so the default path gets
+no filter.
+
+#### Recommendations
+
+- **`DC3_POSE_LATENCY_MS`: keep the default unset.** Recorded footage cannot
+  measure it (above). It needs one live session that reads `pose_server.py`'s
+  capture stamps. The broad score curve says ±50 ms accuracy is enough.
+- **No smoothing by default.** VIDEO-mode MediaPipe is already filtered and
+  adds no measurable lag on the arms. An extra One Euro filter lost 26% of the
+  score. Do not switch the backend to IMAGE mode: that is 3–4× the noise.
+- **Camera pitch is the systematic per-joint error worth fixing.** It is not
+  depth noise. A follow-up: estimate the camera's pitch from the player's
+  ankle → head lean (here +6.9° ± 1.4° over the reference, consistent per
+  song) and rotate in `pose_mediapipe.py`, outside `src/`. The Kinect has a
+  floor plane and a tilt motor for this. A webcam on a shelf has neither.
+  Needs a live check before it becomes the default.
+- **The perfect/awesome gap is open.** After alignment and pitch, 0.61 vs
+  0.79 perfect remains. Candidates, untested: arm-length proportion, arm
+  depth (the arms carry most of the limb error), and the stream crop's
+  perspective.
+
+#### Reproducing
+
+```bash
+D=$(mktemp -d ~/tmp/vc.XXXX)   # a fresh dir for the untrusted download
+yt-dlp -f 137+251 --merge-output-format mkv -o "$D/src/video.%(ext)s" \
+  https://www.youtube.com/watch?v=mqcXJrH5vUo
+ffmpeg -i $D/src/video.mkv -ac 1 -ar 8000 $D/stream_8k.wav
+python3 -I scripts/video_calib/song_id_audio.py --audio $D/stream_8k.wav \
+  --songs-dir orig-assets/extracted/songs --out $D/song_hits.json
+# per song (t0 from the manifest):
+.venv/bin/python -I scripts/video_calib/record_segment.py --video $D/src/video.mkv \
+  --t0 4004.0 --start -5 --dur 161.3 --out $D/pose/macarena.dc3pose
+python3 -I scripts/video_calib/fixture_transform.py $D/pose/macarena.dc3pose \
+  $D/fx/macarena.dc3pose --hold --mirror [--pitch 10] [--shift S]
+GRID_EVAL='{profile_mgr toggle_disable_freestyle}' scripts/video_calib/run_grid.sh \
+  $D/grid 9320 4 macarena,indaclub $D/fx l_m050:DC3_POSE_PERFORM_LEAD_MS=-50 l_0:-
+python3 -I scripts/video_calib/compare_cards.py --manifest scripts/video_calib/mqcXJrH5vUo.json $D/grid/*/
+python3 scripts/video_calib/dump_target.py --song macarena --song-order $D/grid/l_0/song_order.json \
+  --port 9326 --out $D/macarena.target.jsonl
+python3 -I scripts/video_calib/pose_vs_reference.py --fixture $D/fx/macarena.dc3pose \
+  --target $D/macarena.target.jsonl --leads=-500:500:33 --json $D/pvr/macarena.json
+```
+
+Cost: MediaPipe on CPU is ~1–2× real time per song. A 16-song config runs
+in ~5–8 min at 4 jobs, unpaced and without a GPU. The `everybody` replay
+stalls on main_screen (the replayed dancer moves the menus), so it is not in
+the grid.
 
 ## Player on screen (P-4)
 
@@ -628,7 +842,7 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
 | P-4 | Player on screen. **Silhouette done** (`np-player-view`): protocol v3 / `dc3_camera_push` carry the picture and a person mask, a `LiveCameraInput` stand-in feeds the decompiled `StreamRenderer`, and the cursor and gameplay boxes draw the player ([Player on screen](#player-on-screen-p-4)). Left: photo moments, `DepthBuffer3D`'s draw, the `pose_flash` / `preview.mesh` entries (not camera), a live webcam. | M | all |
 | P-5 | ~~Tests~~ **Done** (`np-pose-desk`): ctests `PoseSocketReaderTest`, `PoseCocoMappingTest`, `PoseSensorSlotTest` (no GPU, no game data); keypoint fixture + `PoseFixture.Python`; the gate runs the whole song and judges means, final scores and per-move distances (above). Open: standing still out-scores a different dance (P-7). | — | all |
 | P-6 | ~~Remove the dead ncnn/YOLO path~~ **Done** (`np-pose-desk`). | — | all |
-| P-7 | Scoring believability. **Answered** (`np-scoring`, [above](#scoring-believability-p-7-np-scoring)): the leniency is the original's. Real Kinect data (UTD-MHAD) scores like our inputs, and the scoring code is 100% matched. Added: the 30 Hz in-process performer + matrix, and the `DC3_POSE_LATENCY_MS` knob. Left: measure a real webcam's latency and jitter (P-2), then decide whether to set the knob's default and whether to add per-joint smoothing. | S | all |
+| P-7 | Scoring believability. **Answered** (`np-scoring`, [above](#scoring-believability-p-7-np-scoring)): the leniency is the original's. Real Kinect data (UTD-MHAD) scores like our inputs, and the scoring code is 100% matched. Added: the 30 Hz in-process performer + matrix, and the `DC3_POSE_LATENCY_MS` knob. **Video calibration** (`np-video-calib`, [above](#video-calibration-np-video-calib-2026-11-13)): 16 story-mode songs from a stream, replayed at Medium against the original's own results cards, 1162 = 1162 moves. Perfect+awesome 0.91 vs 0.96, but perfect 0.54 vs 0.79; score 74% of the original's (78% with a 10° camera-pitch correction). Still-body jitter ~1.7 mm (VIDEO mode). A One Euro filter costs 26% of the score, so there is no smoothing. Knob default stays unset: a recording cannot measure a live pipeline, and the score curve is flat over ±50 ms. Left: a live webcam's latency from `pose_server.py`'s capture stamps (P-2); camera-pitch auto-levelling (whole-body lean +6.9° ± 1.4° over the reference on this camera); the perfect/awesome gap (arms carry the limb error). | S | all |
 | P-8 | macOS: `/proc/self/exe` → `_NSGetExecutablePath`; camera permission goes to the Python child. See [MACOS.md](MACOS.md). | S–M | mac |
 | P-9 | ~~Web pose~~ **Done in `np-web-pose`** (see [Web](#web)). Left: never run on a real webcam/permission prompt; GPU delegate and the lite model unmeasured on an idle box; no camera preview inside the game (P-4). | — | web |
 
