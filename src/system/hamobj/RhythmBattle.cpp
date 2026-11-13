@@ -1182,39 +1182,43 @@ void RhythmBattle::OnBeat() {
             break;
         }
         }
-        if (play_vo[0].Sym() != stole_congrats && remainingValue > 0) {
-            static Symbol inzone("inzone");
-            static Symbol inzone_warning("inzone_warning");
-            if (JustEnteredZone(mPlayerOne) || JustEnteredZone(mPlayerTwo)) {
-                // The target materialises the pair as one zero copied into the other
-                // (li r29, 0; mr r30, r29), i.e. a chained assignment.
-                bool b42, b43;
-                b42 = b43 = false;
-                if (mPlayerOne->InTheZone() || mPlayerTwo->InTheZone()) {
-                    if (!mPlayerOne->InTheZone() || !mPlayerTwo->InTheZone()) {
-                        play_vo[0] = inzone_warning;
-                    } else {
-                        play_vo[0] = inzone;
+        if (play_vo[0].Sym() != stole_congrats) {
+            if (remainingValue > 0) {
+                static Symbol inzone("inzone");
+                static Symbol inzone_warning("inzone_warning");
+                if (JustEnteredZone(mPlayerOne) || JustEnteredZone(mPlayerTwo)) {
+                    // The target materialises the pair as one zero copied into the other
+                    // (li r29, 0; mr r30, r29), i.e. a chained assignment.
+                    bool b42, b43;
+                    b42 = b43 = false;
+                    if (mPlayerOne->InTheZone() || mPlayerTwo->InTheZone()) {
+                        if (!mPlayerOne->InTheZone() || !mPlayerTwo->InTheZone()) {
+                            play_vo[0] = inzone_warning;
+                        } else {
+                            play_vo[0] = inzone;
+                        }
+                        b42 = mPlayerOne->InTheZone();
+                        b43 = mPlayerTwo->InTheZone();
+                        // w20-b: the image zeroes the VO threshold here
+                        // (`stw r29, 0x78(r31)` with r29 == 0, just before
+                        // `subfe r29` computes b43; 0x78 is i6d8's slot), so an
+                        // inzone VO plays whenever remainingValue > 0.
+                        i6d8 = 0;
                     }
-                    b42 = mPlayerOne->InTheZone();
-                    b43 = mPlayerTwo->InTheZone();
-                    // w20-b: the image zeroes the VO threshold here
-                    // (`stw r29, 0x78(r31)` with r29 == 0, just before
-                    // `subfe r29` computes b43; 0x78 is i6d8's slot), so an
-                    // inzone VO plays whenever remainingValue > 0.
-                    i6d8 = 0;
-                }
-                if (goofy) {
-                    bool tmp = b42;
-                    b42 = b43;
-                    b43 = tmp;
-                }
-                if (b42 && b43) {
-                    play_vo[1] = both;
-                } else if (b42) {
-                    play_vo[1] = right;
-                } else {
-                    play_vo[1] = left;
+                    if (goofy) {
+                        bool tmp = b42;
+                        b42 = b43;
+                        b43 = tmp;
+                    }
+                    if (b42 && b43) {
+                        play_vo[1] = both;
+                    } else {
+                        if (b42) {
+                            play_vo[1] = right;
+                        } else {
+                            play_vo[1] = left;
+                        }
+                    }
                 }
             }
         }
@@ -1236,40 +1240,44 @@ void RhythmBattle::OnBeat() {
         mPlayerTwo->UpdateAnimations(focusPanel);
     }
 
-    if (play_vo[0].Sym() == none && remainingValue > 15000) {
-        static Symbol jack_swag("jack_swag");
-        static Symbol max_multiplier("max_multiplier");
-        static Symbol new_groove_working("new_groove_working");
-        static Symbol inzone("inzone");
-        static Symbol inzone_warning("inzone_warning");
-        if (zone1 != mPlayerOne->InTheZone() || zone2 != mPlayerTwo->InTheZone()) {
-            bool b42 = false;
-            bool b43 = false;
-            if (mPlayerOne->InTheZone() || mPlayerTwo->InTheZone()) {
-                if (!mPlayerOne->InTheZone() || !mPlayerTwo->InTheZone()) {
-                    play_vo[0] = inzone_warning;
-                } else {
-                    play_vo[0] = inzone;
+    if (play_vo[0].Sym() == none) {
+        if (remainingValue > 15000) {
+            static Symbol jack_swag("jack_swag");
+            static Symbol max_multiplier("max_multiplier");
+            static Symbol new_groove_working("new_groove_working");
+            static Symbol inzone("inzone");
+            static Symbol inzone_warning("inzone_warning");
+            if (zone1 != mPlayerOne->InTheZone() || zone2 != mPlayerTwo->InTheZone()) {
+                bool b42 = false;
+                bool b43 = false;
+                if (mPlayerOne->InTheZone() || mPlayerTwo->InTheZone()) {
+                    if (!mPlayerOne->InTheZone() || !mPlayerTwo->InTheZone()) {
+                        play_vo[0] = inzone_warning;
+                    } else {
+                        play_vo[0] = inzone;
+                    }
+                    b42 = mPlayerOne->InTheZone();
+                    b43 = mPlayerTwo->InTheZone();
                 }
-                b42 = mPlayerOne->InTheZone();
-                b43 = mPlayerTwo->InTheZone();
+                if (goofy) {
+                    bool tmp = b42;
+                    b42 = b43;
+                    b43 = tmp;
+                }
+                if (b42 && b43) {
+                    play_vo[1] = both;
+                } else {
+                    if (b42) {
+                        play_vo[1] = right;
+                    } else {
+                        play_vo[1] = left;
+                    }
+                }
             }
-            if (goofy) {
-                bool tmp = b42;
-                b42 = b43;
-                b43 = tmp;
+            if (play_vo[0].Sym() != none && !mFinale) {
+                focusPanel->HandleType(play_vo);
+                remainingValue = -1;
             }
-            if (b42 && b43) {
-                play_vo[1] = both;
-            } else if (b42) {
-                play_vo[1] = right;
-            } else {
-                play_vo[1] = left;
-            }
-        }
-        if (play_vo[0].Sym() != none && !mFinale) {
-            focusPanel->HandleType(play_vo);
-            remainingValue = -1;
         }
     }
 
