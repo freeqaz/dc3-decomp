@@ -63,6 +63,15 @@ Above the definition (was lines 160-205):
 // row -- no register assignment anywhere else in the function moves.
 ```
 
+```text
+lane E w-low-synth-os (2026-11-13), behaviour audit against the target listing, value by value: NOT A BUG
+(93.13).  HeapStats[16] zeroing, 2+2 BlockStatTable(false) ctors, mCurStatTable
+= 0, mFreedInfos = DebugHeapAlloc(y*4) with start=end and endOfStorage =
+start+y*4, mLog/mReport = 0, mHeap = (signed char)x, the three String members,
+mHashMem = DebugHeapAlloc(y*8) + assert 0x4e, KeylessHash(y*2, &0, &-1,
+mHashMem), the two free-memory reads and both DataRegisterFunc names agree.
+Residual is the known dead clrlwi/stw pair and the anchor scheduling.
+```
 
 ## `?DiffDump@MemTracker@@QAAXAAVTextStream@@@Z`
 

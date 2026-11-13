@@ -91,3 +91,11 @@ Inside the body (was lines 36-95):
     // *cur = in;` declared ahead of `key` (25 instrs, __savegprlr_25 instead of
     // _26) and a `const char *p` version (same) both cost more than they buy.
 ```
+
+```text
+lane E w-low-synth-os (2026-11-13), behaviour audit against the target listing, value by value: NOT A BUG
+(91.67).  Two iterations; each enciphers mNonce[i] with mKey (this+0x10),
+XORs with in[i], stores at out = in + (out-in), then increments mNonce[i] in
+place.  Residual is the one mr placement / stdx operand order already
+documented.
+```

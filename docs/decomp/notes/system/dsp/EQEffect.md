@@ -94,6 +94,17 @@ Inside the body (was lines 353-363):
                             // -2.1pp; the accumulator form does not.
 ```
 
+```text
+lane E w-low-synth-os (2026-11-13), behaviour audit against the target listing, value by value: NOT A BUG
+(91.57).  Crossover path: every xd/yd shift, the /mXoverGain[stage] divisor per
+stage, each coefficient index (c0[0..1], c1[0..3], c2[0..1]) against the
+matching delay tap, the (x0+x2)+2*x1 vs (x0+x2)-2*x1 sign per stage, the mix
+mBand2B2*lp + hp*mBand0B2 + bp*mBand1A1, and the three smoothed gains agree.
+Biquad path: bands 0-4 enable bytes 0x38/0x54/0x74/0x90/0xa8, every coefficient
+and delay offset, the fnmsubs pole subtractions and the three shelf smoothers
+agree.  Retail's smoother store order is 0B2, 2B2, 1A1 (0x44/0x80/0x64), which
+is independent stores -- order is not semantic.
+```
 
 ## `?SetParameter@EQEffect@@QAAXHM@Z`
 

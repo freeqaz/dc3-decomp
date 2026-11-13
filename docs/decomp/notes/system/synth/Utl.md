@@ -46,3 +46,15 @@ Inside the body (was lines 53-82):
     // if (!UsingCD()) { ... } wrapper with one return, `ret = 0; if (<= 0)
     // ret = dst;` (bgt + mr: different), for(;;)/break, goto to a label.
 ```
+
+```text
+lane E w-low-synth-os (2026-11-13), behaviour audit against the target listing, value by value: NOT A BUG
+(93.33).  result zeroed first; null / empty-string / kPlatformNone return 0;
+kPlatformPC (3) returns `file` unchanged; MakeString args are path, base, ext,
+PlatformSymbol(platform) in that order (r4=0x58 FileGetPath, r5=0x54
+FileGetBase, r6=0x50 FileGetExt); byte copy into sCacheWavBuf includes the NUL;
+UsingCD() returns the buffer; FileQualifiedFilename(qualified, localized);
+HolmesClientCacheResource(qualified.c_str(), sCacheWavBuf) stored to result;
+signed `result > 0` nulls the return (cmpwi/ble).  Residual is the known
+if-conversion of that last select.
+```

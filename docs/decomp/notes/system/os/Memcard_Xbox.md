@@ -51,3 +51,15 @@ Inside the body (was lines 227-261):
     // inlining; nothing at source level makes it opaque without adding
     // instructions the image does not have.
 ```
+
+```text
+lane E w-low-synth-os (2026-11-13), behaviour audit against the target listing, value by value: NOT A BUG
+(87.08).  Both asserts (0x144 !IsMounted, 0x145 device != ANY),
+GenerateDriveName(device +8, user +4), XCONTENT_DATA (DeviceID, type 1,
+strncpy 42 into szFileName at +0x108, wcsncpy 128 into szDisplayName), the
+CreateType -> flags map (0->3, 1->0x14, 2->0x12, else 0), XContentCreateEx's
+nine arguments (size from Cid +0xc in the low half), XContentGetCreator, the
+not-creator close + ERROR_FILE_CORRUPT (0x570), success = mounted byte +0x10,
+and the 3->kMCFileNotFound / 0xb7->kMCCorrupt / else Translate mapping all
+agree.  Residual is block placement only.
+```

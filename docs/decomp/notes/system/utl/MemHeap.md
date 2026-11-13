@@ -172,6 +172,17 @@ Inside the body (was lines 480-519):
         // 91.68532 -> 91.82517; every other field order is 91.75524 or worse).
 ```
 
+```text
+lane E w-low-synth-os (2026-11-13), behaviour audit against the target listing, value by value: NOT A BUG
+(93.26).  FreeBlockInfo init (0, 0, INT_MAX, INT_MAX), the strategy dispatch
+(0 First, 1 Best, 2 LRU, 3 Last, default assert 0x151 then null), the split
+arm (blockSize = size - pad, header copy, InsertFreeBlock(old, pad, prev, new,
+timestamp), pad = 0, prev = old), the remainder > 8 arm and the unlink arm,
+the header word (used<<8 | (pad&0xF)<<4 | low nibble), the pad-run zeroing,
+the mDebugLevel >= 1 0xABCDABCD fill and allocSize = hdr>>8 all agree.
+run_objdiff's 'wrong field?' rows [81]/[82] are r31 = the FreeBlock, not
+MemHeap: the image stores mNextBlock (+8) before mTimeStamp (+4), order only.
+```
 
 ## `?AttemptMerge@FreeBlock@@QAA_NPAV1@H@Z`
 
