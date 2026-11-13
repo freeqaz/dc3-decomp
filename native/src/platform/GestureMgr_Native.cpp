@@ -16,10 +16,14 @@
 #include "gesture/SkeletonUpdate.h"
 #include "hamobj/HamGameData.h"   // TheGameData (player->skeleton binding)
 #include "hamobj/HamPlayerData.h" // GetSkeletonTrackingID
+#include "meta_ham/HamUI.h"          // TheHamUI -> ShellInput -> SkeletonChooser
+#include "meta_ham/ShellInput.h"
+#include "meta_ham/SkeletonChooser.h"
 #include "flow/PropertyEventProvider.h" // TheHamProvider (NativeDummyPlayerCount)
 #include "obj/Task.h"
 #include "os/Debug.h" // TheDebug.AddExitCallback
 #include <vector>
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -76,9 +80,61 @@ static HRESULT NativeNuiSkeletonFrameSource(NUI_SKELETON_FRAME *) {
 // no provider runs. Shared by both live branches (the dummies use slots 0/1).
 static int sSlotTrackId[NUM_SKELETONS] = {-1, -1, -1, -1, -1, -1};
 
+// Dropout hold (PLAN P-12).  MediaPipe loses a dancer who is fully in view,
+// mid-song, for up to ~1.4 s (measured: 50 dropouts over 18 songs of real
+// footage, longest 1.2 s, and 1.43 s on the cupidshuffle clip of np-dogfood3)
+// -- usually on a turn.  A Kinect keeps such a person TRACKED: its skeleton
+// comes from the depth image the body never left, occluded joints flagged
+// inferred.  The image gives a lost tracking id only GestureMgr::
+// sMaxRecoveryTime (1.0 s, SkeletonRecoverer) before SkeletonChooser unbinds
+// the player and Game::CheckForSkeletonLoss pauses -- and on a 360 that grace
+// exists for a real loss, not for a detector glitch.  So a slot whose person
+// vanishes keeps reporting that person, same tracking id, every joint at its
+// last good position and flagged inferred, for up to DC3_POSE_HOLD_MS
+// (default kDefaultHoldMs) of sensor time.  Bounded: past it the slot is
+// released and the image's own recovery window runs, so a player who walks
+// out still pauses, kDefaultHoldMs later than on a 360.  NATIVE POLICY.
+//
+// Not held: a person who was in a slot for less than kHoldMinPresenceMs (a
+// one-frame false detection is not someone a Kinect would have acquired), and
+// a slot whose position a NEW tracking id has taken (within the image's own
+// GestureMgr::sMaxRecoveryDistance, 0.3 m): the tracker decided that is a new
+// person, and holding the old one too would put two skeletons on one body.
+static const int kDefaultHoldMs = 1000;
+static const float kHoldMinPresenceMs = 500.0f;
+static const float kHoldReacquireMetres = 0.3f;
+
+struct SlotHold {
+    NativeSkeletonProvider::PersonData last; // the slot's last delivered person
+    float presentMs = 0.0f; // sensor time the current owner has been delivered
+    float heldMs = 0.0f;    // sensor time the slot has been held (0 = not held)
+};
+static SlotHold sSlotHold[NUM_SKELETONS];
+
+static void ResetSlotHold(int s) {
+    sSlotHold[s].presentMs = 0.0f;
+    sSlotHold[s].heldMs = 0.0f;
+}
+
 static void ResetSlotMap() {
-    for (int s = 0; s < NUM_SKELETONS; s++)
+    for (int s = 0; s < NUM_SKELETONS; s++) {
         sSlotTrackId[s] = -1;
+        ResetSlotHold(s);
+    }
+}
+
+// DC3_POSE_HOLD_MS: 0 turns the hold off (the pre-P-12 behaviour), unset or
+// unparsable = kDefaultHoldMs, capped at 5000.  Read per call (cheap), so a
+// test can change it between frames.
+static int NativePoseHoldMs() {
+    const char *v = getenv("DC3_POSE_HOLD_MS");
+    if (!v || !*v)
+        return kDefaultHoldMs;
+    char *end = nullptr;
+    long ms = strtol(v, &end, 10);
+    if (end == v || *end != '\0' || ms < 0)
+        return kDefaultHoldMs;
+    return ms > 5000 ? 5000 : (int)ms;
 }
 
 // Is a real pose provider feeding the sensor (ncnn, the external pose server
@@ -245,7 +301,12 @@ void GestureMgr_NativeTerminate() {
 // personForSlot[slot] is the person index k filling that slot, or -1. Slots
 // whose owner departed are released here (the frame reports them untracked).
 // Returns the number of newly-assigned slots (slot reassignments this frame).
-static int AssignSlots(const int *trackIds, int numValid, int *personForSlot) {
+// A slot whose owner is absent but still within the dropout hold (see
+// sSlotHold) keeps its trackId and reads kSlotHeld in personForSlot.
+static const int kSlotHeld = -2;
+
+static int AssignSlots(const int *trackIds, const Vector3 *hips, int numValid,
+                       float elapsedMs, int *personForSlot) {
     for (int s = 0; s < NUM_SKELETONS; s++)
         personForSlot[s] = -1;
 
@@ -265,12 +326,35 @@ static int AssignSlots(const int *trackIds, int numValid, int *personForSlot) {
         }
     }
 
-    // 2. Release slots whose owner is no longer present.
+    // 2. Release slots whose owner is no longer present -- unless the dropout
+    //    hold keeps it (see sSlotHold).
+    const int holdMs = NativePoseHoldMs();
     bool releasedNow[NUM_SKELETONS];
     for (int s = 0; s < NUM_SKELETONS; s++) {
         releasedNow[s] = false;
         if (sSlotTrackId[s] >= 0 && personForSlot[s] < 0) {
+            SlotHold &h = sSlotHold[s];
+            bool hold = holdMs > 0 && h.presentMs >= kHoldMinPresenceMs
+                && h.heldMs + elapsedMs <= (float)holdMs;
+            if (hold) {
+                // A newcomer standing where the held person stood is the
+                // tracker's verdict that this is someone new.
+                const Vector3 &was = h.last.joints[kJointHipCenter];
+                for (int k = 0; k < numValid && hold; k++) {
+                    if (placed[k] || trackIds[k] < 0)
+                        continue;
+                    float dx = hips[k].x - was.x, dy = hips[k].y - was.y, dz = hips[k].z - was.z;
+                    if (dx * dx + dy * dy + dz * dz <= kHoldReacquireMetres * kHoldReacquireMetres)
+                        hold = false;
+                }
+            }
+            if (hold) {
+                h.heldMs += elapsedMs;
+                personForSlot[s] = kSlotHeld;
+                continue;
+            }
             sSlotTrackId[s] = -1;
+            ResetSlotHold(s);
             releasedNow[s] = true;
         }
     }
@@ -294,12 +378,25 @@ static int AssignSlots(const int *trackIds, int numValid, int *personForSlot) {
                 // A new occupant must not inherit the previous person's held
                 // low-confidence joint positions either.
                 NativeSkeletonProvider::ResetJointHold(s);
+                ResetSlotHold(s);
                 reassignments++;
                 break;
             }
         }
     }
     return reassignments;
+}
+
+// The hamprovider says this mode needs two players: the two properties the
+// image's Game::CheckForSkeletonLoss reads to want a second bound player.
+static bool NativeModeNeedsTwoPlayers() {
+    if (!TheHamProvider)
+        return false;
+    static Symbol requires_2_players("requires_2_players");
+    static Symbol is_in_party_mode("is_in_party_mode");
+    const DataNode *two = TheHamProvider->Property(requires_2_players, false);
+    const DataNode *party = TheHamProvider->Property(is_in_party_mode, false);
+    return (two && two->Int() != 0) || (party && party->Int() != 0);
 }
 
 // Xbox builds SkeletonUpdateData::mSkeletonsLeft as a 2-entry array indexed by
@@ -315,6 +412,34 @@ static int AssignSlots(const int *trackIds, int numValid, int *personForSlot) {
 // dummy is tracked before its filter has seen enough frames to be valid).  It
 // runs on GestureMgr's skeletons (last frame's, post quality filter) before the
 // frame is handed over, so the binding lands in this frame's snapshot.
+//
+// It must agree with the chooser, or the two undo each other every frame
+// (np-tracking, PLAN W-10).  Two rules:
+//  * Player 2 is auto-assigned only in a mode that needs two players
+//    (NativeModeNeedsTwoPlayers).  Everywhere else the image's way in for a
+//    second person is the drop-in: SkeletonChooser round-robins the extra
+//    skeleton for a raised hand ("New player detected!  Raise your hand to
+//    join.") and, while it waits, UpdatePlayerSkeletonNavData drops that
+//    skeleton's id from the player ids, so SetPlayerSkeletonNavData unbinds
+//    whoever holds it.  Auto-assigning player 2 to it re-bound and was unbound
+//    every frame, and the chooser switched its active player back and forth;
+//    each unbind is an Overshell player_quit (perform.dta on_player_quit:
+//    start_score_move_index 1000, flash cards cleared) and each rebind a
+//    player_join that restarts the drop-in grace period.  Measured: a second
+//    detection for one second at song start (a fake-camera cut) left the
+//    dancer on player 2 and a whole song with no move scored and no cards.
+//  * A skeleton bound here is no longer the chooser's round-robin candidate
+//    (SkeletonChooser::NativeSkeletonBound).  Otherwise a person who is moving
+//    while unbound (a dancing camera feed in the menus, or after a re-acquire
+//    in a song) is bound here and unbound by the chooser every frame until she
+//    stands still or raises a hand.
+static int sAutoAssignCount[2] = { 0, 0 };
+
+static SkeletonChooser *NativeChooser() {
+    ShellInput *shell = TheHamUI.GetShellInput();
+    return shell ? shell->GetSkeletonChooser() : nullptr;
+}
+
 static void NativeAutoAssignPlayers() {
     if (!TheGameData || !TheGestureMgr)
         return;
@@ -332,9 +457,10 @@ static void NativeAutoAssignPlayers() {
             }
         }
     }
+    const int autoPlayers = NativeModeNeedsTwoPlayers() ? 2 : 1;
     for (int pass = 0; pass < 2; pass++) {
         bool requireValid = (pass == 0);
-        for (int p = 0; p < 2; p++) {
+        for (int p = 0; p < autoPlayers; p++) {
             if (bound[p])
                 continue;
             for (int s = 0; s < NUM_SKELETONS; s++) {
@@ -345,10 +471,18 @@ static void NativeAutoAssignPlayers() {
                     continue;
                 bound[p] = &skel;
                 HamPlayerData *playerData = TheGameData->Player(p);
-                if (playerData && playerData->GetSkeletonTrackingID() != skel.TrackingID())
+                if (playerData && playerData->GetSkeletonTrackingID() != skel.TrackingID()) {
                     TheGameData->AssignSkeleton(p, skel.TrackingID());
+                    sAutoAssignCount[p]++;
+                }
                 break;
             }
+        }
+    }
+    if (SkeletonChooser *chooser = NativeChooser()) {
+        for (int p = 0; p < 2; p++) {
+            if (bound[p])
+                chooser->NativeSkeletonBound((int)(bound[p] - &TheGestureMgr->GetSkeleton(0)));
         }
     }
 
@@ -363,6 +497,20 @@ static void NativeAutoAssignPlayers() {
             sPrevIdx[1] = idx[1];
             fprintf(stderr, "DC3 SCORING: player->slot binding p0=%d p1=%d\n",
                 idx[0], idx[1]);
+        }
+        // How often this had to (re)bind: once per join is normal; every frame
+        // means something else unbinds the player each frame.
+        static int sReported[2] = { 0, 0 };
+        static auto sLast = std::chrono::steady_clock::now();
+        auto now = std::chrono::steady_clock::now();
+        if (now - sLast >= std::chrono::seconds(5)) {
+            sLast = now;
+            if (sAutoAssignCount[0] != sReported[0] || sAutoAssignCount[1] != sReported[1]) {
+                fprintf(stderr, "DC3 SCORING: auto-assign rebinds p0=%d p1=%d (total)\n",
+                    sAutoAssignCount[0], sAutoAssignCount[1]);
+                sReported[0] = sAutoAssignCount[0];
+                sReported[1] = sAutoAssignCount[1];
+            }
         }
     }
 }
@@ -418,6 +566,46 @@ static void ScoringDebugTick(bool accepted, bool skipped, int reassigns) {
     }
 }
 
+// DC3_POSE_LATENCY_LOG=1: how old each pose frame is when the game takes it,
+// capture to SkeletonUpdate, every 5 s:
+//   DC3 POSE AGE: capture->game median 61 ms p10 48 p90 79 (n=150)
+// pose_server.py stamps a packet with its capture time on time.monotonic()
+// (a V4L2 camera's own buffer stamp, CLOCK_MONOTONIC), which is
+// steady_clock's clock here, so the difference is the pipeline's latency up
+// to the game loop: driver, MediaPipe, socket, poll.  It is most of what
+// DC3_POSE_LATENCY_MS declares; what it cannot see is the exposure itself and
+// the audio output delay (the player dances to what she hears).  A stamp that
+// is not on this clock (the in-process performer stamps song time; the web
+// stamps the page's clock) reads outside 0..2 s and is not counted.
+static void PoseAgeLog(double captureSecs) {
+#ifndef __EMSCRIPTEN__
+    static const bool sOn = Dc3EnvFlag("DC3_POSE_LATENCY_LOG", false);
+    if (!sOn || captureSecs < 0.0)
+        return;
+    static std::vector<float> sAges;
+    static std::chrono::steady_clock::time_point sLast = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    double nowSecs = std::chrono::duration<double>(now.time_since_epoch()).count();
+    double age = nowSecs - captureSecs;
+    if (age >= 0.0 && age < 2.0)
+        sAges.push_back((float)(age * 1000.0));
+    if (now - sLast < std::chrono::seconds(5))
+        return;
+    sLast = now;
+    if (sAges.empty()) {
+        fprintf(stderr, "DC3 POSE AGE: no frame stamped on this clock in 5 s\n");
+        return;
+    }
+    std::sort(sAges.begin(), sAges.end());
+    size_t n = sAges.size();
+    fprintf(stderr, "DC3 POSE AGE: capture->game median %.0f ms p10 %.0f p90 %.0f (n=%zu)\n",
+            sAges[n / 2], sAges[n / 10], sAges[(n * 9) / 10], n);
+    sAges.clear();
+#else
+    (void)captureSecs;
+#endif
+}
+
 // The in-process performer (PosePerformer_Native.h) publishes with the
 // default `unlevelled = false`: its synthetic modes play a Kinect.  A replay
 // is a recording from a real camera, so it needs the tilt estimate like the
@@ -463,24 +651,43 @@ static void FinishTrackedSlot(int s) {
     }
 }
 
-// Lay this frame's persons into their persistent slots.
-static int FillPersonSlots(const NativeSkeletonProvider::PersonData *persons, int numPersons) {
+// Lay this frame's persons into their persistent slots.  `elapsedMs` is the
+// sensor time since the previous frame (the dropout hold's clock).
+static int FillPersonSlots(const NativeSkeletonProvider::PersonData *persons, int numPersons,
+                           float elapsedMs) {
     int trackIds[NUM_SKELETONS], origIdx[NUM_SKELETONS], numValid = 0;
+    Vector3 hips[NUM_SKELETONS];
     for (int i = 0; i < numPersons && numValid < NUM_SKELETONS; i++) {
         if (persons[i].valid) {
             trackIds[numValid] = persons[i].trackId;
+            hips[numValid] = persons[i].joints[kJointHipCenter];
             origIdx[numValid] = i;
             numValid++;
         }
     }
     int personForSlot[NUM_SKELETONS];
-    int reassigns = AssignSlots(trackIds, numValid, personForSlot);
+    int reassigns = AssignSlots(trackIds, hips, numValid, elapsedMs, personForSlot);
     for (int s = 0; s < NUM_SKELETONS; s++) {
         int k = personForSlot[s];
         if (k >= 0) {
-            NativeSkeletonProvider::FillSkeletonData(
-                sFrame.mSkeletonDatas[s], persons[origIdx[k]], s
-            );
+            const NativeSkeletonProvider::PersonData &person = persons[origIdx[k]];
+            NativeSkeletonProvider::FillSkeletonData(sFrame.mSkeletonDatas[s], person, s);
+            FinishTrackedSlot(s);
+            SlotHold &h = sSlotHold[s];
+            h.last = person;
+            h.presentMs += elapsedMs;
+            h.heldMs = 0.0f;
+        } else if (k == kSlotHeld) {
+            // What a Kinect reports for a body it can no longer see clearly:
+            // still tracked, every joint inferred.  A joint the detector had
+            // already lost stays not-tracked, so FillSkeletonData's joint
+            // hold puts it at its last good position too.
+            NativeSkeletonProvider::PersonData held = sSlotHold[s].last;
+            for (int j = 0; j < kNumJoints; j++) {
+                if (held.confidence[j] > kConfidenceInferred)
+                    held.confidence[j] = kConfidenceInferred;
+            }
+            NativeSkeletonProvider::FillSkeletonData(sFrame.mSkeletonDatas[s], held, s);
             FinishTrackedSlot(s);
         }
     }
@@ -513,16 +720,8 @@ int NativeDummyPlayerCount(bool modeNeedsTwo, const char *policy) {
 }
 
 static int NativeDummyPlayerCount() {
-    bool needsTwo = false;
-    if (TheHamProvider) {
-        static Symbol requires_2_players("requires_2_players");
-        static Symbol is_in_party_mode("is_in_party_mode");
-        const DataNode *two = TheHamProvider->Property(requires_2_players, false);
-        const DataNode *party = TheHamProvider->Property(is_in_party_mode, false);
-        needsTwo = (two && two->Int() != 0) || (party && party->Int() != 0);
-    }
     static const char *sPolicy = getenv("DC3_DUMMY_PLAYERS");
-    return NativeDummyPlayerCount(needsTwo, sPolicy);
+    return NativeDummyPlayerCount(NativeModeNeedsTwoPlayers(), sPolicy);
 }
 
 // A new frame when the provider produced one (it runs at camera rate, slower
@@ -555,11 +754,12 @@ static const SkeletonFrame *BuildSensorFrame() {
 
         if (newFrame) {
             BeginSensorFrame(AcceptedFrameElapsed(TheSkeletonProvider->Timestamp()));
+            PoseAgeLog(TheSkeletonProvider->Timestamp());
             static NativeSkeletonProvider::PersonData sPersons[NativeSkeletonProvider::kMaxPersons];
             int numPersons = TheSkeletonProvider->NumPersons();
             for (int i = 0; i < numPersons; i++)
                 sPersons[i] = TheSkeletonProvider->GetPerson(i);
-            ScoringDebugTick(true, false, FillPersonSlots(sPersons, numPersons));
+            ScoringDebugTick(true, false, FillPersonSlots(sPersons, numPersons, (float)sFrame.mElapsedMs));
             // SkeletonFrame::Create's gravity step (PoseLevel_Native.h): the
             // slots hold raw camera space; a camera that does not know its
             // gravity gets an estimate, everything else (0,1,0).

@@ -571,6 +571,112 @@ TEST_F(PoseSensorSlotTest, AnUntrackedDetectionNeverClaimsASlot) {
     EXPECT_EQ(tracked, 1);
 }
 
+// ---------------------------------------------------------------------------
+// The dropout hold (PLAN P-12): a person MediaPipe loses while she is still in
+// view keeps her slot and tracking id, every joint inferred at its last good
+// position, for DC3_POSE_HOLD_MS (default 1000) of sensor time.  Frames here
+// are 1/30 s apart, which the sensor integrates as 33 ms.
+// ---------------------------------------------------------------------------
+class PoseSensorHoldTest : public PoseSensorSlotTest {
+protected:
+    void SetUp() override {
+        unsetenv("DC3_POSE_HOLD_MS"); // the default under test
+        PoseSensorSlotTest::SetUp();
+    }
+    void TearDown() override {
+        unsetenv("DC3_POSE_HOLD_MS");
+        PoseSensorSlotTest::TearDown();
+    }
+    // `frames` frames of one person; returns the slot she holds.
+    int Present(int trackId, float x, int frames) {
+        const SkeletonFrame *f = nullptr;
+        for (int i = 0; i < frames; i++)
+            f = Frame({ { trackId, x } });
+        return f ? SlotOf(f, trackId) : -1;
+    }
+};
+
+TEST_F(PoseSensorHoldTest, ADropoutKeepsTheSlotTrackedAndInferredThroughTheHold) {
+    int slot = Present(61, 0.1f, 31); // ~1 s in view
+    ASSERT_GE(slot, 0);
+    // 29 empty frames = 957 ms, inside the 1000 ms hold.
+    for (int i = 0; i < 29; i++) {
+        const SkeletonFrame *f = Frame({});
+        ASSERT_NE(f, nullptr);
+        ASSERT_EQ(SlotOf(f, 61), slot) << "released after " << i + 1 << " empty frames";
+        const SkeletonData &d = f->mSkeletonDatas[slot];
+        EXPECT_NEAR(d.mJointPositions[kJointHipCenter].x, 0.1f, 1e-4f) << "held at the last pose";
+        EXPECT_NEAR(d.mJointPositions[kJointHandLeft].y, 1.92f, 1e-4f);
+        for (int j = 0; j < kNumJoints; j++)
+            ASSERT_EQ(d.mJointTrackingState[j], kConfidenceInferred) << "joint " << j;
+    }
+    // Back: same slot, tracked joints again.
+    const SkeletonFrame *f = Frame({ { 61, 0.15f } });
+    ASSERT_NE(f, nullptr);
+    EXPECT_EQ(SlotOf(f, 61), slot);
+    EXPECT_EQ(f->mSkeletonDatas[slot].mJointTrackingState[kJointHipCenter], kConfidenceTracked);
+    EXPECT_NEAR(f->mSkeletonDatas[slot].mJointPositions[kJointHipCenter].x, 0.15f, 1e-4f);
+}
+
+TEST_F(PoseSensorHoldTest, TheHoldIsBoundedSoSomeoneWhoLeftIsLost) {
+    int slot = Present(62, 0.0f, 31);
+    ASSERT_GE(slot, 0);
+    // 30 x 33 ms = 990 ms: still held.  The 31st (1023 ms) releases the slot.
+    for (int i = 0; i < 30; i++) {
+        const SkeletonFrame *f = Frame({});
+        ASSERT_NE(f, nullptr);
+        ASSERT_EQ(SlotOf(f, 62), slot) << "released after " << i + 1 << " empty frames";
+    }
+    const SkeletonFrame *f = Frame({});
+    ASSERT_NE(f, nullptr);
+    EXPECT_EQ(SlotOf(f, 62), -1) << "held past DC3_POSE_HOLD_MS";
+    EXPECT_NE(f->mSkeletonDatas[slot].mTracking, kSkeletonTracked);
+}
+
+TEST_F(PoseSensorHoldTest, ZeroTurnsTheHoldOff) {
+    setenv("DC3_POSE_HOLD_MS", "0", 1);
+    int slot = Present(63, 0.0f, 31);
+    ASSERT_GE(slot, 0);
+    const SkeletonFrame *f = Frame({});
+    ASSERT_NE(f, nullptr);
+    EXPECT_EQ(SlotOf(f, 63), -1);
+}
+
+TEST_F(PoseSensorHoldTest, ABriefFalseDetectionIsNotHeld) {
+    // 3 frames (100 ms) is under the 500 ms a person must have been seen.
+    ASSERT_GE(Present(64, 0.0f, 3), 0);
+    const SkeletonFrame *f = Frame({});
+    ASSERT_NE(f, nullptr);
+    EXPECT_EQ(SlotOf(f, 64), -1);
+}
+
+TEST_F(PoseSensorHoldTest, ANewIdWhereTheHeldPersonStoodEndsTheHold) {
+    int slot = Present(65, 0.0f, 31);
+    ASSERT_GE(slot, 0);
+    ASSERT_EQ(SlotOf(Frame({}), 65), slot); // held
+    // The tracker calls the person at the same spot someone new: one body,
+    // so one skeleton -- the held one goes.
+    const SkeletonFrame *f = Frame({ { 66, 0.1f } });
+    ASSERT_NE(f, nullptr);
+    EXPECT_EQ(SlotOf(f, 65), -1);
+    EXPECT_GE(SlotOf(f, 66), 0);
+    int tracked = 0;
+    for (int s = 0; s < NUM_SKELETONS; s++)
+        tracked += f->mSkeletonDatas[s].mTracking == kSkeletonTracked;
+    EXPECT_EQ(tracked, 1);
+}
+
+TEST_F(PoseSensorHoldTest, ANewcomerElsewhereDoesNotEndTheHold) {
+    int slot = Present(67, -0.5f, 31);
+    ASSERT_GE(slot, 0);
+    const SkeletonFrame *f = Frame({ { 68, 0.6f } }); // 1.1 m away
+    ASSERT_NE(f, nullptr);
+    EXPECT_EQ(SlotOf(f, 67), slot);
+    int other = SlotOf(f, 68);
+    EXPECT_GE(other, 0);
+    EXPECT_NE(other, slot);
+}
+
 TEST_F(PoseSensorSlotTest, ARepeatedFrameIdIsNotANewSensorFrame) {
     ASSERT_NE(Frame({ { 51, 0.0f } }), nullptr);
     // Same generation again: the camera has not produced a new picture.

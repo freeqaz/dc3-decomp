@@ -208,6 +208,9 @@ class SyntheticKinect:
         self.replay_frames = None     # [(joints|None)] at replay_fps, see replay()
         self.replay_fps = 30.0
         self.replay_still = False
+        self.second_from = None       # --second-person-from SONG_S (perform loop)
+        self.jump_at = None           # --jump-at SONG_S: person 0 re-acquired elsewhere
+        self.jumped = False
         self.replay_shown = 0         # packets that carried a fixture frame
         # following the engine clock (follow_engine): engine frame -> seconds
         self.follow_thread = None
@@ -394,6 +397,19 @@ class SyntheticKinect:
                 time.sleep(0.2)
                 continue
             song = d.get("songSeconds")
+            if self.second_from is not None and len(self.poses) > 1:
+                # --second-person-from: person 1 walks in mid-song
+                arrived = bool(d.get("moveDir")) and song is not None and song >= self.second_from
+                with self.lock:
+                    self.poses[1] = "stand" if arrived else "absent"
+            if self.jump_at is not None and not self.jumped and d.get("moveDir") \
+                    and song is not None and song >= self.jump_at:
+                # --jump-at: what a camera cut (or a detector that lost her and
+                # found her again) reports -- the same dancer, 0.6 m along x,
+                # under a new tracking id
+                with self.lock:
+                    self.jumped = True
+                    self.offsets[0] += 0.6
             targets = [None] * len(self.targets)
             sources = []
             if self.replay_frames is not None and d.get("moveDir") and song is not None \
@@ -528,7 +544,8 @@ class SyntheticKinect:
         persons, heights = [], []
         for i in present:
             pose = poses[i]
-            body += struct.pack("<i", 5 + 4 * i)      # Kinect tracking ids are > 0
+            tid = 101 if i == 0 and self.jumped else 5 + 4 * i  # Kinect tracking ids are > 0
+            body += struct.pack("<i", tid)
             with self.lock:
                 performing = i < len(self.targets) and self.targets[i] is not None
             joints = self._joints(i, pose)
@@ -684,6 +701,14 @@ def main():
     ap.add_argument("--offset", type=float, default=None, metavar="METRES",
                     help="with --people 1: stand this far along camera x (+ = the "
                          "player's right) instead of on the axis")
+    ap.add_argument("--second-person-from", type=float, default=None, metavar="SONG_S",
+                    help="with --people 2 and --perform*: person 1 is out of view until "
+                         "song second SONG_S, then stands beside person 0 (a second "
+                         "person walking in mid-song who never raises a hand to join)")
+    ap.add_argument("--jump-at", type=float, default=None, metavar="SONG_S",
+                    help="with --perform*: at song second SONG_S person 0 reappears 0.6 m "
+                         "along x under a new tracking id (a camera cut, or a detector "
+                         "re-acquiring her as someone new)")
     ap.add_argument("--frames", default=None, metavar="WxH",
                     help="send protocol v3 with a WxH camera picture + person mask "
                          "rendered from the joints (needs numpy)")
@@ -696,6 +721,15 @@ def main():
     if a.frames:
         fw, fh = (int(v) for v in a.frames.lower().split("x"))
         k.frames = (fw, fh)
+    if a.jump_at is not None:
+        if not (a.perform or a.perform_port_file):
+            ap.error("--jump-at needs --perform/--perform-port-file")
+        k.jump_at = a.jump_at
+    if a.second_person_from is not None:
+        if a.people != 2 or not (a.perform or a.perform_port_file):
+            ap.error("--second-person-from needs --people 2 and --perform/--perform-port-file")
+        k.second_from = a.second_person_from
+        k.poses[1] = "absent"
     if a.offset is not None:
         if a.people != 1:
             ap.error("--offset needs --people 1")

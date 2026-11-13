@@ -28,6 +28,19 @@ public:
 
     DataNode OnGetJointDepthPos(const DataArray *);
     int GetActivePlayerIndex() { return mActivePlayerIndex; }
+#ifdef HX_NATIVE
+    // NativeAutoAssignPlayers (native/src/platform/GestureMgr_Native.cpp) just
+    // bound skeleton `skelIdx` to a player. If that is the skeleton the round
+    // robin is waiting on to stand still or raise a hand, the wait is over: the
+    // image clears mNextSkelIdxToTrack itself when the filter fires
+    // (RoundRobinForStandingStill / RoundRobinForHandRaised). Left set,
+    // UpdatePlayerSkeletonNavData drops the candidate's id from the player
+    // ids and SetPlayerSkeletonNavData unbinds the player again, every frame.
+    void NativeSkeletonBound(int skelIdx) {
+        if (mNextSkelIdxToTrack == skelIdx)
+            mNextSkelIdxToTrack = -1;
+    }
+#endif
 
 private:
     void SwitchActiveToPlayerIndexImmediate(int);
