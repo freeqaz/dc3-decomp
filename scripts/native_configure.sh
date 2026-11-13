@@ -57,6 +57,17 @@
 #
 # Environment overrides (all optional):
 #   DAWN_DIR / Dawn_DIR   path to the dir containing DawnConfig.cmake
+#   DAWN_PREFIX           a Dawn install / prebuilt-tarball root (the dir with
+#                         include/ and lib/); lib/cmake/Dawn under it is probed.
+#                         This is the macOS path: Google's macos-latest-Release
+#                         tarball unpacked anywhere (see docs/native/MACOS.md).
+#   BUILD_TESTS           ON (default) / OFF. OFF skips the GTest suite, for a
+#                         box without googletest (a first Mac bring-up). The
+#                         native gate then has nothing to run, so this script
+#                         says so instead of asserting CTestTestfile.cmake.
+#   MILO_CONFIGURE_PLATFORM  override `uname -s` (Linux / Darwin); for testing
+#                         the Darwin branch on Linux together with
+#   MILO_CONFIGURE_DRY_RUN=1  print the cmake command and exit 0 without running
 #   NCNN_DIR / ncnn_DIR   path to the dir containing ncnnConfig.cmake
 #   CC / CXX              compilers (default: clang / clang++ from PATH)
 #   MILO_BUILD_TYPE       CMAKE_BUILD_TYPE (default: RelWithDebInfo)
@@ -89,6 +100,21 @@ BUILD_DIR="${1:-${MILO_TEST_BUILD_DIR:-$REPO_ROOT/native/build}}"
 [ $# -gt 0 ] && shift
 EXTRA_ARGS=("$@")
 
+# Only POSIX sh + bash 3.2 features below: macOS ships /bin/bash 3.2 and BSD
+# userland, so no GNU-only flags (readlink -f, sed -i, stat -c, grep -P).
+PLATFORM="${MILO_CONFIGURE_PLATFORM:-$(uname -s)}"
+BUILD_TESTS_VALUE="${BUILD_TESTS:-ON}"
+for _a in "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}"; do
+    case "$_a" in
+        -DBUILD_TESTS=*|-DBUILD_TESTS:BOOL=*) BUILD_TESTS_VALUE="${_a#*=}" ;;
+    esac
+done
+case "$BUILD_TESTS_VALUE" in
+    ON|on|1|TRUE|true|YES|yes) BUILD_TESTS_VALUE=ON ;;
+    OFF|off|0|FALSE|false|NO|no) BUILD_TESTS_VALUE=OFF ;;
+    *) echo "error: BUILD_TESTS must be ON or OFF (got '$BUILD_TESTS_VALUE')" >&2; exit 1 ;;
+esac
+
 command -v cmake >/dev/null 2>&1 || {
     echo "error: cmake is not on PATH; cannot configure the native build." >&2
     exit 9
@@ -109,12 +135,28 @@ _try_dawn() {
     [ -f "$1/DawnConfig.cmake" ] && { dawn_dir="$1"; return 0; }
     return 1
 }
+_try_dawn_prefix() {
+    # A prebuilt tarball / install prefix: lib/ or lib64/ (the Linux tarball
+    # ships lib64; CI symlinks lib -> lib64).
+    [ -n "${1:-}" ] || return 1
+    _try_dawn "$1/lib/cmake/Dawn" || _try_dawn "$1/lib64/cmake/Dawn"
+}
 _try_dawn "${Dawn_DIR:-}" \
     || _try_dawn "${DAWN_DIR:-}" \
+    || _try_dawn_prefix "${DAWN_PREFIX:-}" \
     || _try_dawn "$REPOS_ROOT/dc3-decomp-deps/dawn/lib/cmake/Dawn" \
     || _try_dawn "$MAIN_CHECKOUT-deps/dawn/lib/cmake/Dawn" \
     || _try_dawn "$REPO_ROOT/../dc3-decomp-deps/dawn/lib/cmake/Dawn" \
     || true
+if [ -z "$dawn_dir" ] && [ "$PLATFORM" = "Darwin" ]; then
+    # The March 2026 Mac build used a Metal Dawn at ~/dc3-deps/dawn; Homebrew
+    # has no Dawn formula, so these are the only conventional spots.
+    _try_dawn_prefix "${HOME:-/nonexistent}/dc3-deps/dawn" \
+        || _try_dawn_prefix "$REPOS_ROOT/dawn-prebuilt" \
+        || _try_dawn_prefix "/opt/homebrew/opt/dawn" \
+        || _try_dawn_prefix "/usr/local/opt/dawn" \
+        || true
+fi
 
 if [ -z "$dawn_dir" ]; then
     echo "error: Dawn (WebGPU) not found — cannot configure the native build." >&2
@@ -128,6 +170,12 @@ if [ -z "$dawn_dir" ]; then
     echo "       Fix, either:" >&2
     echo "         scripts/dev-setup/setup-deps.sh     # clones dc3-decomp-deps" >&2
     echo "         DAWN_DIR=/path/to/dawn/lib/cmake/Dawn scripts/native_configure.sh" >&2
+    echo "         DAWN_PREFIX=/path/to/unpacked/Dawn-...-Release scripts/native_configure.sh" >&2
+    if [ "$PLATFORM" = "Darwin" ]; then
+        echo "       macOS: download Dawn-<hash>-macos-latest-Release.tar.gz from" >&2
+        echo "       https://github.com/google/dawn/releases (tag v20260423.175430)," >&2
+        echo "       unpack it, and pass DAWN_PREFIX. See docs/native/MACOS.md." >&2
+    fi
     exit 9
 fi
 
@@ -147,11 +195,18 @@ fi
 # dc3-native with no internal pose estimator — a different binary from main's,
 # under a gate whose whole job is to compare against main.
 ncnn_dir=""
+if [ "$PLATFORM" = "Darwin" ]; then
+    # In-process pose capture (native/src/pose/CameraCapture.cpp) is V4L2-only,
+    # so ENABLE_NCNN cannot compile on macOS; the Python pose server is the Mac
+    # path (docs/native/POSE_INPUT.md). Skip the probe; ENABLE_NCNN stays OFF.
+    :
+else
 for c in "${ncnn_DIR:-}" "${NCNN_DIR:-}" \
          "$REPO_ROOT/native/third_party/ncnn-install/lib/cmake/ncnn" \
          "$MAIN_CHECKOUT/native/third_party/ncnn-install/lib/cmake/ncnn"; do
     if [ -n "$c" ] && [ -f "$c/ncnnConfig.cmake" ]; then ncnn_dir="$c"; break; fi
 done
+fi
 
 # ---- imgui source cache (OPTIONAL) ------------------------------------------
 # Pure speed/offline convenience: reuse the main checkout's already-fetched
@@ -172,7 +227,11 @@ CMAKE_ARGS=(
     -DCMAKE_CXX_COMPILER="$cxx"
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
     -DDawn_DIR="$dawn_dir"
+    -DBUILD_TESTS="$BUILD_TESTS_VALUE"
 )
+if [ "$PLATFORM" = "Darwin" ]; then
+    CMAKE_ARGS+=(-DENABLE_NCNN=OFF)
+fi
 if [ -n "$ncnn_dir" ]; then
     CMAKE_ARGS+=(-DENABLE_NCNN=ON -Dncnn_DIR="$ncnn_dir")
 fi
@@ -187,7 +246,13 @@ echo "    build dir  : $BUILD_DIR"
 echo "    main repo  : $MAIN_CHECKOUT"
 echo "    Dawn_DIR   : $dawn_dir"
 echo "    ncnn_DIR   : ${ncnn_dir:-<not found — ENABLE_NCNN stays OFF>}"
+echo "    platform   : $PLATFORM    BUILD_TESTS=$BUILD_TESTS_VALUE"
 [ -n "$imgui_src" ] && echo "    imgui src  : $imgui_src (reused from main; no clone)"
+
+if [ "${MILO_CONFIGURE_DRY_RUN:-0}" = "1" ]; then
+    printf 'DRY RUN: cmake'; printf ' %q' "${CMAKE_ARGS[@]}"; printf '\n'
+    exit 0
+fi
 
 if ! cmake "${CMAKE_ARGS[@]}"; then
     echo >&2
@@ -200,7 +265,11 @@ fi
 # Assert the thing the caller actually needs, rather than trusting cmake's
 # exit status. native_test.sh keys off CTestTestfile.cmake; if BUILD_TESTS were
 # somehow off, cmake would exit 0 and the gate would still have nothing to run.
-if [ ! -f "$BUILD_DIR/CTestTestfile.cmake" ]; then
+if [ "$BUILD_TESTS_VALUE" = "OFF" ]; then
+    echo "==> BUILD_TESTS=OFF: no milo-tests in $BUILD_DIR."
+    echo "    scripts/native_test.sh has NOTHING to run in this build dir; a build"
+    echo "    that compiles is not a gate that passed."
+elif [ ! -f "$BUILD_DIR/CTestTestfile.cmake" ]; then
     echo >&2
     echo "error: cmake exited 0 but produced no $BUILD_DIR/CTestTestfile.cmake." >&2
     echo "       There is nothing for ctest to run, so the native gate cannot" >&2
@@ -212,7 +281,8 @@ fi
 # hash. ninja tracks these files but compares mtimes, and pacman restores
 # upstream mtimes -- so a newer package can install OLDER files and no
 # mtime-based rule can ever notice. See scripts/native_toolchain_check.py.
-if [ -f "$REPO_ROOT/scripts/native_toolchain_check.py" ]; then
+# (Linux only: it reads DT_NEEDED with ldd, which macOS does not have.)
+if [ "$PLATFORM" != "Darwin" ] && [ -f "$REPO_ROOT/scripts/native_toolchain_check.py" ]; then
     python3 "$REPO_ROOT/scripts/native_toolchain_check.py" --record "$BUILD_DIR" || true
 fi
 
