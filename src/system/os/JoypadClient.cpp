@@ -193,9 +193,13 @@ int JoypadClient::OnMsg(const ButtonUpMsg &msg) {
 // GPR the same way.  JoypadRepeat::Reset(JoypadButton) has no out-of-line copy
 // in the image, so it is inlined; `pRepeat->Reset(pRepeat->mLastBtn)` (self-
 // compare folds) is byte-identical at 94.45 -- inert, not shipped.
+// w-five-clean (2026-11-13): MEASURED NEGATIVE, readability probe --
+// `JoypadRepeat *repeat = mRepeats; for (int pad = 0; pad < 4; pad++,
+// repeat++)` is 90.3 (the `li r29, 0` / `addi r31, r3, 0x40` init pair swaps
+// order: equal 22 -> 20, 3 replaces).  Kept the do/while; renamed i/pRepeat.
 void JoypadClient::Poll() {
-    int i = 0;
-    JoypadRepeat *pRepeat = mRepeats;
+    int pad = 0;
+    JoypadRepeat *repeat = mRepeats;
     do {
         if (ThePlatformMgr.GuideShowing()) {
             // MECHANISM (w7-av; w33-c): 94.45 is an address-anchor divergence.  The image forms
@@ -248,14 +252,14 @@ void JoypadClient::Poll() {
             // differs.  Probe: a named `Timer *repeatTimer = &pRepeat->mRepeatTimer`
             // used for the second Reset is inert (94.44827), i.e. c1 folds it
             // back to r31+constant exactly as the earlier forms did.
-            pRepeat->mHoldTimer.Reset();
-            pRepeat->mRepeatTimer.Reset();
+            repeat->mHoldTimer.Reset();
+            repeat->mRepeatTimer.Reset();
         } else {
-            pRepeat->Poll(mHoldMs, mRepeatMs, mSink, i);
+            repeat->Poll(mHoldMs, mRepeatMs, mSink, pad);
         }
-        pRepeat++;
-        i++;
-    } while (i < 4);
+        repeat++;
+        pad++;
+    } while (pad < 4);
 }
 
 void JoypadClient::Init() {

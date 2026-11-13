@@ -1984,17 +1984,17 @@ void CamShot::UnHide() {
 // via the same Hmx::Object vbase conversion.  Re-measured 98.9 canonical,
 // equal 57 / diff_arg 34 / del 1; every diff_arg is the r31 frame shift.
 RndCam *CamShot::GetCam() {
-    RndCam *ret = 0;
+    RndCam *cam = nullptr;
     WorldDir *crowdDir = GetCrowdDir();
     if (crowdDir) {
-        ret = crowdDir->Cam();
-        if (ret == 0) {
+        cam = crowdDir->Cam();
+        if (!cam) {
             MILO_NOTIFY_ONCE("%s: paneldir but no cam", PathName(crowdDir));
         }
     } else {
         MILO_NOTIFY_ONCE("%s: no worlddir, so no cam", PathName(this));
     }
-    return ret;
+    return cam;
 }
 
 void CamShot::ClearCrowds() {

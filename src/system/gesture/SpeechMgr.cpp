@@ -632,10 +632,10 @@ void SpeechMgr::Poll() {
         mOverlay->CurrentLine() = "speech is not enabled (no Kinect?)";
     } else {
         ULONG fetched = 0;
-        NUI_SPEECH_EVENT event[5];
-        memset(&event[0], 0, sizeof(event));
-        HRESULT res = NuiSpeechGetEvents(5, event, &fetched);
-        if (SUCCEEDED(res) && fetched != 0) {
+        NUI_SPEECH_EVENT events[5];
+        memset(events, 0, sizeof(events));
+        HRESULT hr = NuiSpeechGetEvents(5, events, &fetched);
+        if (SUCCEEDED(hr) && fetched != 0) {
             // w15-a (97.98 canonical): the image strength-reduces TWO pointers, one at
             // &event[i].pResult (addi r31, r1, 0x70) and one at &event[i] (subi r30,
             // r31, 0x10), costing r28 in the prologue; we use one.  Indexing event[i]
@@ -682,12 +682,13 @@ void SpeechMgr::Poll() {
             // address passed to NuiSpeechDestroyEvent is the same on both
             // sides.  Re-measured 98.0 / equal 38, diff_arg 12, del 1.
             for (ULONG i = 0; i < fetched; i++) {
-                NUI_SPEECH_EVENT &cur = event[i];
-                if (cur.eventId > 0x20 && (cur.eventId == 0x40 || cur.eventId == 0x80)
-                    && cur.pResult) {
-                    ProcessRecoResult(cur.pResult);
+                NUI_SPEECH_EVENT &event = events[i];
+                if (event.eventId > 0x20
+                    && (event.eventId == 0x40 || event.eventId == 0x80)
+                    && event.pResult) {
+                    ProcessRecoResult(event.pResult);
                 }
-                NuiSpeechDestroyEvent(&cur);
+                NuiSpeechDestroyEvent(&event);
             }
         }
     }
