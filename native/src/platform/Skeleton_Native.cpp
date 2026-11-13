@@ -77,18 +77,13 @@ static Vector3 WithSensorNoiseFloor(const Vector3 &pos, uint32_t frame, int join
 }
 
 #ifdef __EMSCRIPTEN__
-// Stubs — no Kinect skeleton tracking on web
-NativeSkeletonProvider::NativeSkeletonProvider() { memset(mFront, 0, sizeof(mFront)); memset(mBack, 0, sizeof(mBack)); memset(mPersons, 0, sizeof(mPersons)); }
-NativeSkeletonProvider::~NativeSkeletonProvider() {}
+// Web: only the TRANSPORT is absent -- no pose_server.py to spawn, no Unix
+// socket to read.  Frames arrive from the page's camera + MediaPipe pipeline
+// (native/web/pose/) through dc3_pose_push (PoseInput_Web.cpp) into
+// PublishFrame; the buffering, slot fill and joint hold below are shared.
 bool NativeSkeletonProvider::Start(const std::string&, const std::string&, int) { return false; }
-void NativeSkeletonProvider::Stop() {}
-void NativeSkeletonProvider::Poll() {}
-int NativeSkeletonProvider::FindByTrackId(int) const { return -1; }
-Vector3 NativeSkeletonProvider::NormalizedToMeters(float, float) const { return Vector3(0,0,0); }
-void NativeSkeletonProvider::MapCOCOToDC3(const float[][3], PersonData&) {}
-void NativeSkeletonProvider::ResetJointHold(int) {}
-void NativeSkeletonProvider::FillSkeletonData(SkeletonData&, const PersonData&, int) {}
-#else
+void NativeSkeletonProvider::Stop() { mRunning = false; }
+#endif
 
 // COCO keypoint indices
 enum COCOKeypoint {
@@ -134,6 +129,9 @@ NativeSkeletonProvider::NativeSkeletonProvider() {
 NativeSkeletonProvider::~NativeSkeletonProvider() {
     Stop();
 }
+
+#ifndef __EMSCRIPTEN__
+// ---- Desktop transport: pose_server.py child + Unix socket reader ----------
 
 bool NativeSkeletonProvider::Start(
     const std::string &socketPath, const std::string &modelPath, int cameraIndex
@@ -393,15 +391,25 @@ void NativeSkeletonProvider::ReaderThread() {
             }
         }
 
-        // Swap to back buffer
-        {
-            std::lock_guard<std::mutex> lock(mSwapMutex);
-            memcpy(mBack, newBack, sizeof(mBack));
-            mNumPersonsBack = numPersons;
-            mFrameIdBack = frameId;
-            mTimestampBack = timestamp;
-        }
+        PublishFrame(newBack, (int)numPersons, frameId, timestamp);
     }
+}
+
+#endif // !__EMSCRIPTEN__ (desktop transport)
+
+void NativeSkeletonProvider::PublishFrame(
+    const PersonData *persons, int numPersons, uint32_t frameId, double timestamp
+) {
+    if (numPersons < 0)
+        numPersons = 0;
+    if (numPersons > kMaxPersons)
+        numPersons = kMaxPersons;
+    std::lock_guard<std::mutex> lock(mSwapMutex);
+    memcpy(mBack, persons, numPersons * sizeof(PersonData));
+    memset(mBack + numPersons, 0, (kMaxPersons - numPersons) * sizeof(PersonData));
+    mNumPersonsBack = numPersons;
+    mFrameIdBack = frameId;
+    mTimestampBack = timestamp;
 }
 
 void NativeSkeletonProvider::Poll() {
@@ -619,8 +627,6 @@ void NativeSkeletonProvider::FillSkeletonData(
     // ShellInput::HasSkeleton and the player binding).
     data.mHipCenter = data.mJointPositions[kJointHipCenter];
 }
-
-#endif // !__EMSCRIPTEN__
 
 void NativeSkeletonProvider::FillDummySkeletonData(SkeletonData &data) {
     // Neutral standing pose — hands at sides, below hip height.

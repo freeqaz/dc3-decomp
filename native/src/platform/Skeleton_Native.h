@@ -34,6 +34,23 @@ public:
     void Stop();
     bool IsRunning() const { return mRunning; }
 
+    // Publish one frame of persons into the back buffer; the next Poll() latches
+    // it.  This is the provider's whole contract with its transports: the
+    // desktop socket reader calls it once per packet, and on web the page's
+    // camera pipeline calls it through dc3_pose_push (PoseInput_Web.cpp).
+    // Everything downstream -- Poll, FrameId/Timestamp, FillSkeletonData -- is
+    // shared, so BuildSensorFrame reads both transports through one branch.
+    void PublishFrame(const PersonData *persons, int numPersons, uint32_t frameId,
+                      double timestamp);
+
+#ifdef __EMSCRIPTEN__
+    // Web has no server to spawn or socket to read: the provider is "running"
+    // while the page is pushing frames (StartPushed, on its first push) and
+    // stops when the page loses its camera (Stop), which returns the sensor to
+    // the dummy skeleton.
+    void StartPushed() { mRunning = true; }
+#endif
+
     // Call each frame to read latest data
     void Poll();
 

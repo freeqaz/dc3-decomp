@@ -5,8 +5,8 @@ end. A recorded video fed through MediaPipe is scored; a replay of the song's ow
 choreography gets all-perfect ratings; `scripts/pose_scoring_gate.sh` passes.
 **It has never been run against a live webcam**, it has a reproducible crash on a
 motionless skeleton, menus cannot be driven by gesture, and the player is never
-shown on screen. Web has no pose path at all. Work items: [PLAN.md](PLAN.md)
-track P.
+shown on screen. **Web** has a pose path since `np-web-pose` (see [Web](#web)).
+Work items: [PLAN.md](PLAN.md) track P.
 
 ## Data path
 
@@ -19,10 +19,13 @@ track P.
 | Scoring | Decompiled code: SkeletonUpdate → `Skeleton::Poll` → FilterQueue / MoveDir / async MoveDetectors → `move_passed` | `DC3_REAL_MOVE_PASSED` (default on) |
 | Feedback | Ratings and score through the normal HUD. **No** player silhouette or camera preview (see Gaps). | — |
 
-The de facto seam for any new backend (web, in-process) is
-`NativeSkeletonProvider::PersonData` — 20 joints in metres, per-joint confidence,
-trackId — plus frame id and timestamp, consumed by `FillPersonSlots`. There is no
-abstract interface yet; `BuildSensorFrame` has two hardcoded branches.
+The seam for any new backend is `NativeSkeletonProvider::PublishFrame(persons,
+count, frameId, timestamp)`: `PersonData` = 20 joints in metres, per-joint
+confidence, trackId. The desktop socket reader and the web push both call it,
+so everything after it — `Poll`, the frame-id gate, `FillSkeletonData` (joint
+hold, noise floor), `FillPersonSlots` — is one code path, and `BuildSensorFrame`
+has one external-provider branch (plus the legacy ncnn one). Pinned by
+`NativeSkeletonProviderPublishTest` in `native/tests/test_native_posesynth.cpp`.
 
 **Legacy in-process path** (`native/src/pose/*`, ncnn): compiled in because
 `native_configure.sh` turns `ENABLE_NCNN` on, tried first on every windowed boot
@@ -68,6 +71,79 @@ still earns "awesome"). `config/scoring.dta` `latency_offset` is 100 ms, tuned f
 Kinect, not a webcam pipeline. The gate compares only maximums and its 25k frames
 end before the song does.
 
+## Web
+
+| Stage | Code |
+|---|---|
+| Camera | `native/web/pose/pose_input.js`: `getUserMedia` (640×480 ideal, 30 fps) on page load; states shown in a panel at the canvas's bottom-left: asking → loading model → looking for you / tracking, or blocked / no camera / error with a retry button. Mirrored preview with the BlazePose skeleton drawn (green tracked, amber inferred; joints under 0.3 are not drawn because the engine holds them). |
+| Frames → worker | `MediaStreamTrackProcessor` (max buffer 1, stale frames dropped) transfers the camera stream to the worker; no per-frame main-thread work. Fallback `?pose_transport=bitmap`: `requestVideoFrameCallback` + `createImageBitmap`. |
+| Inference | `native/web/pose/pose_worker.js`, a module worker: `@mediapipe/tasks-vision` 1.0.0 (the Python mediapipe version) `PoseLandmarker`, VIDEO mode, the same `pose_landmarker_full.task` and options as `pose_server.py`. CPU (XNNPACK) delegate by default. |
+| Geometry | `native/web/pose/pose_geometry.js`: line-for-line port of `pose_mediapipe.py` (root DLT/torso fallback, axis flips, centre joints, hands, feet, one-euro on root depth, centroid tracker). Timestamps are the `VideoFrame` capture time. |
+| Push | `Module.dc3PosePush` (`native/web/dc3_pre.js`, heap copy) → `dc3_pose_push` (`native/src/platform/PoseInput_Web.cpp`) → `PublishFrame`. First push starts the provider; `dc3_pose_stop` (track ended) returns to the dummy. A 0-person frame is real: nobody tracked. |
+| Status | `window.dc3PoseSummary()` (page: state, frames, fps, inference ms) and `window.dc3PoseGame` (engine: player 0's bound skeleton joints, score, rating; every 15 engine frames). |
+
+URL knobs: `?pose=off|manual`, `pose_model=lite|full|heavy`,
+`pose_delegate=CPU|GPU`, `pose_transport=stream|bitmap`, `pose_cdn=1`,
+`pose_hfov=<deg>`.
+
+Assets: `scripts/web/build.sh` vendors tasks-vision (bundle + module wasm, from
+`scripts/web/node_modules`, `npm ci --prefix scripts/web`) and the `lite`/`full`
+`.task` models (from `native/models`) into `native/web/build/pose/`, so the page
+loads nothing cross-origin and needs no CDN inside its COOP/COEP isolation. If
+either is missing the page falls back to jsdelivr / storage.googleapis.com
+(the survey found jsdelivr's headers compatible; storage.googleapis.com is
+unverified).
+
+Tests (no webcam needed):
+
+```bash
+npm ci --prefix scripts/web
+scripts/web/make_pose_fixtures.sh /tmp/fx         # dance/still/empty .y4m + parity PNGs
+.venv/bin/python scripts/web/pose_parity.py --frames /tmp/fx/frames --out /tmp/fx/ref.json
+node scripts/web/pose_parity.mjs geometry /tmp/fx/ref.json                 # JS geometry on Python's landmarks
+node scripts/web/pose_parity.mjs browser /tmp/fx/ref.json --port 8432 --no-gpu   # whole JS pipeline
+node scripts/web/pose-gameplay.mjs --port 8432 --camera /tmp/fx/dance.y4m --out /tmp/run   # GPU
+```
+
+`pose-gameplay.mjs` drives Chromium's fake camera
+(`--use-fake-device-for-media-stream --use-file-for-fake-video-capture=…`),
+plays a song and writes per-second page + engine samples to `summary.json`.
+
+### Measured (2026-11-13, Chromium 1223 headless shell, RTX 3090, fake camera)
+
+Same song and path as the WEB.md survey (song-select index 3, `-O0` release
+build), one run per input, player 0 score from `window.dc3PoseGame`:
+
+| Fake camera | Engine sees | Final score | Ratings | Outcome |
+|---|---|---|---|---|
+| dancing (`taye01_stand_dance`, 640×360) | tracked 166/166 s | **29,859** (rises all song) | 23 changes, awesome/ok/bad | whole song, results screen |
+| person standing still (frame 0 held) | tracked 161/161 s | 7,240 (0 until the end) | 4 changes | whole song, **no crash** (P-1 fix holds on web) |
+| empty grey frame + noise | nobody tracked | 0 | — | game's own *PAUSED — stand in front of the Kinect sensor* 5 s into the song |
+| no camera (stand-in dummy) | dummy tracked | 7,581 | 4 changes | same score as the survey's dummy run |
+
+- Joints reach the game: provider running, player 0's bound skeleton tracked,
+  camera-space hands moving (σ ≈ 0.15–0.22 m per axis while dancing, 0 at
+  display precision while still), root depth ≈ 3.1–3.7 m.
+- **`DetectFrac` is `branch=no-move-key keys=0` on every beat in all four runs**,
+  so `move_passed` carries frac 0 and the frame-based (ham2) scorer never runs on
+  this path; ratings and score come from the async move detectors. Whether that
+  is the difficulty this Enter-only flow lands on or a web-specific gap is not
+  yet known (the desktop `pose_scoring_gate.sh` flow asserts on `ham2` samples).
+- JS vs Python: on identical landmarks the geometry agrees to 1.8e-15 m with
+  identical track ids; the whole web pipeline (tasks-vision 1.0.0 in the worker)
+  vs desktop `MediaPipeBackend` (mediapipe 1.0.0) on the same 150 frames at the
+  same timestamps: 150/150 detections agree, joint error mean 0.05 mm,
+  p95 0.14 mm, max 0.71 mm. A one-frame-shift sabotage reads 28 mm mean.
+- Cost: inference + geometry in the worker p50 35 ms, worst in-song p95 63 ms
+  (full model, CPU delegate); pose rate median 28 fps (min 21) on a 30 fps
+  camera; main-thread work per pose frame p50 0.05 ms, p95 0.17 ms. Game wasm
+  heap in gameplay 458.9–461.6 MB, unchanged from the survey (MediaPipe has its
+  own heap in the worker; that heap was not measured).
+- Caveat: the box was heavily loaded by other lanes (load average 60–70 on 32
+  cores). The still-person run got engine 30 fps / pose 10 fps / inference
+  117 ms against the dancing run's 60 / 28 / 35; the empty and no-camera runs
+  shared the GPU with other lanes. Treat timings as upper bounds.
+
 ## Gaps
 
 | # | Gap | Size | Platform |
@@ -80,7 +156,7 @@ end before the song does.
 | P-6 | Remove the dead ncnn/YOLO path and its tracked weights; fix the log line. | S | all |
 | P-7 | Scoring believability: calibrate against a recorded human, expose a latency knob. | M | all |
 | P-8 | macOS: `/proc/self/exe` → `_NSGetExecutablePath`; camera permission goes to the Python child. See [MACOS.md](MACOS.md). | S–M | mac |
-| P-9 | Web: provider seam + `dc3_push_pose(...)` export in `native/src/main_web.cpp`; move `FillSkeletonData` out of the `!__EMSCRIPTEN__` stub; getUserMedia + MediaPipe tasks-vision in `native/web/`, ideally in a worker; port the ~400 lines of geometry in `pose_mediapipe.py`. See [WEB.md](WEB.md). | M–L | web |
+| P-9 | ~~Web pose~~ **Done in `np-web-pose`** (see [Web](#web)). Left: never run on a real webcam/permission prompt; `DetectFrac` reads `no-move-key` on the web flow; GPU delegate and the lite model unmeasured on an idle box; no camera preview inside the game (P-4). | — | web |
 
 ## Testing without a webcam
 

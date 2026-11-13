@@ -1,0 +1,4 @@
+{
+  "//": "ES modules (the browser loads them as such; this tells Node for scripts/web/pose_parity.mjs).",
+  "type": "module"
+}

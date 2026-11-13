@@ -278,6 +278,63 @@ TEST(NativeSensorNoiseFloorTest, TheDummySkeletonNeverHasZeroSpeedVariance) {
     EXPECT_EQ(CountZeroVarianceAxes(pos, "dummy skeleton"), 0);
 }
 
+// ---------------------------------------------------------------------------
+// NativeSkeletonProviderPublishTest: PublishFrame is the provider's one entry
+// point for every transport (the desktop socket reader, and on web
+// dc3_pose_push in PoseInput_Web.cpp). BuildSensorFrame integrates a frame only
+// when FrameId changes, and takes the frame interval from Timestamp, so both
+// must arrive exactly as published, latch only on Poll, and a later frame with
+// fewer people must not leave the departed person's data behind.
+// ---------------------------------------------------------------------------
+TEST(NativeSkeletonProviderPublishTest, PollLatchesExactlyWhatWasPublished) {
+    NativeSkeletonProvider provider;
+    NativeSkeletonProvider::PersonData persons[2];
+    StandingPose(persons[0]);
+    StandingPose(persons[1]);
+    persons[0].trackId = 4;
+    persons[1].trackId = 9;
+    persons[1].joints[kJointHandRight] = Vector3(0.5f, 1.25f, 2.5f);
+    persons[0].valid = persons[1].valid = true;
+
+    provider.PublishFrame(persons, 2, 7, 1.5);
+    EXPECT_EQ(provider.NumPersons(), 0) << "nothing is visible before Poll";
+    EXPECT_EQ(provider.FrameId(), 0u);
+
+    provider.Poll();
+    ASSERT_EQ(provider.NumPersons(), 2);
+    EXPECT_EQ(provider.FrameId(), 7u);
+    EXPECT_DOUBLE_EQ(provider.Timestamp(), 1.5);
+    EXPECT_EQ(provider.GetPerson(1).trackId, 9);
+    EXPECT_FLOAT_EQ(provider.GetPerson(1).joints[kJointHandRight].y, 1.25f);
+    EXPECT_EQ(provider.FindByTrackId(4), 0);
+
+    // An empty frame (nobody in view) is a real frame: it advances the id and
+    // clears the slots rather than repeating the last people.
+    provider.PublishFrame(persons, 0, 8, 1.533);
+    provider.Poll();
+    EXPECT_EQ(provider.NumPersons(), 0);
+    EXPECT_EQ(provider.FrameId(), 8u);
+    EXPECT_FALSE(provider.GetPerson(0).valid);
+    EXPECT_FALSE(provider.GetPerson(1).valid);
+    EXPECT_EQ(provider.FindByTrackId(4), -1);
+}
+
+TEST(NativeSkeletonProviderPublishTest, CountIsClampedToCapacity) {
+    NativeSkeletonProvider provider;
+    const int kMax = NativeSkeletonProvider::kMaxPersons; // EXPECT_EQ takes a reference
+    std::vector<NativeSkeletonProvider::PersonData> many(kMax + 3);
+    for (auto &p : many) {
+        StandingPose(p);
+        p.valid = true;
+    }
+    provider.PublishFrame(many.data(), (int)many.size(), 1, 0.0);
+    provider.Poll();
+    EXPECT_EQ(provider.NumPersons(), kMax);
+    provider.PublishFrame(many.data(), -5, 2, 0.0);
+    provider.Poll();
+    EXPECT_EQ(provider.NumPersons(), 0);
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
