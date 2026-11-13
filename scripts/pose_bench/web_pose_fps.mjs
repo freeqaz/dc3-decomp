@@ -13,7 +13,8 @@
 // the file's own rate (scripts/web/make_pose_fixtures.sh, or
 // `ffmpeg -i clip.mp4 -t 15 -pix_fmt yuv420p clip.y4m`).
 //
-// Prints frames/s over the window (frames that reached the page), and the
+// Prints frames/s over the window (frames that reached the page), the game's
+// own frame rate meanwhile (window.dc3FrameCount), and the
 // per-stage p50/p95 the worker and page report (window.dc3PoseSummary().stages):
 //   wait     worker blocked on the camera stream for the next frame
 //   infer    PoseLandmarker.detectForVideo
@@ -72,19 +73,23 @@ for (const extra of extras) {
     page.on('console', (m) => { const t = m.text(); if (/dc3-pose|pose-worker/.test(t)) logs.push(t.slice(0, 200)); });
     await page.goto(`http://127.0.0.1:${opt.port}/?fast_boot=1${extra}`, { waitUntil: 'domcontentloaded' });
     await sleep(opt.settle);
-    const a = await page.evaluate(() => window.dc3PoseSummary && window.dc3PoseSummary({ reset: true }));
+    const grab = (reset) => page.evaluate((reset) => ({ ...(window.dc3PoseSummary ? window.dc3PoseSummary({ reset }) : {}),
+        gameFrame: window.dc3FrameCount || 0, at: performance.now() }), reset);
+    const a = await grab(true);
     await sleep(opt.window);
-    const b = await page.evaluate(() => window.dc3PoseSummary && window.dc3PoseSummary());
-    const fps = a && b ? +((b.framesIn - a.framesIn) / opt.window).toFixed(2) : null;
+    const b = await grab(false);
+    const span = (b.at - a.at) / 1000;
+    const fps = a.framesIn !== undefined ? +((b.framesIn - a.framesIn) / span).toFixed(2) : null;
+    const gameFps = +((b.gameFrame - a.gameFrame) / span).toFixed(1);
     const st = (b && b.stages) || {};
-    const line = `${opt.label} ${extra || '(default)'}\tframes/s=${fps}\tdelegate=${b && b.delegate}` +
-        `\tmodel=${b && b.model}\tpersons=${b && b.numPoses}\tframes=${b && JSON.stringify(b.frames)}` +
+    const line = `${opt.label} ${extra || '(default)'}\tframes/s=${fps}\tgame fps=${gameFps}\tdelegate=${b && b.delegate}` +
+        `\tmodel=${b && b.model}\tseen=${b && b.numPoses}\tframes=${b && JSON.stringify(b.frames)}` +
         `\tperson-frames=${a && b ? b.framesWithPerson - a.framesWithPerson : 'n/a'}\n  ` +
         Object.entries(st).map(([k, v]) => `${k} ${v[0]}/${v[1]}`).join('  ') + '   (ms p50/p95)';
     console.log(line);
     for (const l of logs.filter((l) => /ready|delegate|failed|error/.test(l))) console.log('   ', l);
     if (opt.json) {
-        fs.appendFileSync(opt.json, JSON.stringify({ label: opt.label, extra, fps, delegate: b && b.delegate,
+        fs.appendFileSync(opt.json, JSON.stringify({ label: opt.label, extra, fps, gameFps, delegate: b && b.delegate,
             model: b && b.model, numPoses: b && b.numPoses, frames: b && b.frames, stages: st,
             framesWithPerson: a && b ? b.framesWithPerson - a.framesWithPerson : null }) + '\n');
     }
