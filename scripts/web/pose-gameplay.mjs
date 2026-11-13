@@ -7,7 +7,16 @@
 //        [--song-index 3] [--timeout 480] [--extra "&pose_model=lite"]
 //        [--difficulty easy|medium|expert|beginner] [--no-select-difficulty]
 //   --camera none   no fake device (the page sees no camera -> stand-in skeleton)
+//   --unmute        drop --mute-audio (the audio worklet then runs on the box's
+//                   real output; with it muted Chromium clocks a fake sink)
 //   --camera deny   a fake device but permission refused
+//   --max-timer-errors-per-s R   the song-clock check (W-12): exit 1 when more
+//                   than R "timer error is large" lines a game second are
+//                   logged. Default 0.25 with --unmute, off when muted (a muted
+//                   Chromium clocks a fake sink; its rate says little about a
+//                   player's). Measured on thehustle/easy/no camera, unmuted:
+//                   0.93/s before W-12, 0.05/s after. --recheck takes the
+//                   default from the run's own summary (audio.unmuted).
 //
 // Fixtures: scripts/web/make_pose_fixtures.sh. Needs a GPU (run outside the
 // sandbox) and `npm ci --prefix scripts/web` (Playwright 1.60 -> Chromium 1223
@@ -55,6 +64,8 @@ const DIFFS = ['beginner', 'easy', 'medium', 'expert']; // seldiff list order on
 const difficulty = arg('difficulty', 'easy');
 if (!DIFFS.includes(difficulty)) { console.error(`--difficulty must be one of ${DIFFS.join('|')}`); process.exit(2); }
 const selectDifficulty = !argv.includes('--no-select-difficulty');
+const unmute = argv.includes('--unmute');
+const maxTimerErrorsArg = arg('max-timer-errors-per-s', null);
 
 // One probe line: MoveDir.cpp Dc3DetectFracProbe. Branch names carry hyphens
 // (no-move-key, async-empty-range) -- a \w+ branch pattern silently drops them.
@@ -89,6 +100,25 @@ function checkDetect(detect, want, result) {
              code: !reachedGame ? 2 : fails.length ? 1 : 0 };
 }
 
+// "timer error is large" during gameplay: how often, and how big.
+function timerStats(list, gameSeconds) {
+    const g = list.filter((x) => x.screen === 'game_screen').map((x) => Math.abs(x.ms)).sort((a, b) => a - b);
+    const q = (f) => (g.length ? +g[Math.min(g.length - 1, Math.floor(f * g.length))].toFixed(1) : null);
+    return { total: list.length, inGame: g.length, perGameSecond: gameSeconds ? +(g.length / gameSeconds).toFixed(2) : null,
+             medianMs: q(0.5), p90Ms: q(0.9), maxMs: g.length ? +g[g.length - 1].toFixed(1) : null };
+}
+
+// The W-12 regression check: the song clock must not keep jumping in game.
+function checkClock(chk, ts, unmuted) {
+    const maxTimerErrors = maxTimerErrorsArg !== null ? maxTimerErrorsArg : unmuted ? '0.25' : null;
+    if (maxTimerErrors === null || !chk.reachedGame) return;
+    const r = ts && ts.perGameSecond;
+    if (r === null || r === undefined) chk.fails.push('no timer-error statistics (run predates them)');
+    else if (r > +maxTimerErrors) chk.fails.push(`song clock: ${r} "timer error is large" lines a game second > ${maxTimerErrors} (${ts.inGame} in game, median ${ts.medianMs} ms, max ${ts.maxMs} ms)`);
+    else return;
+    chk.pass = false; chk.code = 1; chk.line = `CHECK FAIL: ${chk.fails.join('; ')}`;
+}
+
 const recheck = arg('recheck', null);
 if (recheck) {
     const sm = JSON.parse(readFileSync(`${recheck}/summary.json`, 'utf8'));
@@ -100,6 +130,7 @@ if (recheck) {
         if (d) det.push(d);
     }
     const c = checkDetect(det, difficulty, sm.result);
+    checkClock(c, sm.timerErrors, !!(sm.audio && sm.audio.unmuted));
     console.log(`RECHECK ${recheck} difficulty=${difficulty} result=${sm.result} engine=${c.engine.join(',') || '?'} p0 samples=${c.stats.samples} branches=${JSON.stringify(c.stats.branches)} ham2 n=${c.stats.n} mean=${c.stats.mean && c.stats.mean.toFixed(4)}`);
     console.log(c.line);
     process.exit(c.code);
@@ -124,7 +155,8 @@ const browser = await chromium.launch({
         '--no-sandbox', '--enable-unsafe-webgpu', '--use-angle=vulkan', '--ozone-platform=x11',
         '--enable-features=Vulkan,VulkanFromANGLE,WebAssemblyJSPromiseIntegration',
         '--disable-extensions', '--disable-background-networking', '--disable-default-apps',
-        '--disable-sync', '--autoplay-policy=no-user-gesture-required', '--mute-audio',
+        '--disable-sync', '--autoplay-policy=no-user-gesture-required',
+        ...(unmute ? [] : ['--mute-audio']),
         ...media,
     ],
 });
@@ -142,7 +174,7 @@ await page.addInitScript(() => {
     WebAssembly.instantiate = (...a) => ii.apply(WebAssembly, a).then(grab);
 });
 
-const screens = [], errors = [], samples = [], detect = [], movePassed = [], poseLog = [];
+const screens = [], errors = [], samples = [], detect = [], movePassed = [], poseLog = [], timerErrors = [];
 page.on('console', (m) => {
     const e = { t: el(), type: m.type(), text: m.text() };
     appendFileSync(logf, JSON.stringify(e) + '\n');
@@ -152,6 +184,10 @@ page.on('console', (m) => {
     if (d) detect.push(d);
     const mp = e.text.match(/move_passed #(\d+) player=(\d) frac=([-\d.naif]+)/i);
     if (mp) movePassed.push({ t: e.t, n: +mp[1], p: +mp[2], frac: parseFloat(mp[3]) });
+    // StandardStream::UpdateTime: the song clock jumped more than 50 ms against
+    // its own timer between two polls (W-12).
+    const te = e.text.match(/timer error is large: (-?[\d.]+)/);
+    if (te) timerErrors.push({ t: e.t, ms: parseFloat(te[1]), screen: cur() });
     if (/DC3 POSE|dc3-pose/.test(e.text)) { poseLog.push(e); console.log(`[${e.t}s] ${e.text.slice(0, 160)}`); }
 });
 page.on('pageerror', (err) => { errors.push({ t: el(), msg: String(err.message || err) }); console.log(`[${el()}s] PAGEERROR ${err.message}`); });
@@ -172,6 +208,11 @@ const sampler = (async () => {
                 jsMB: performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null,
                 page: window.dc3PoseSummary ? window.dc3PoseSummary() : null,
                 game: window.dc3PoseGame || null,
+                audio: window._dc3Audio && window._dc3Audio.ctx ? {
+                    rate: window._dc3Audio.ctx.sampleRate, state: window._dc3Audio.ctx.state,
+                    baseLatency: window._dc3Audio.ctx.baseLatency, outputLatency: window._dc3Audio.ctx.outputLatency,
+                    underruns: window._dc3Audio.underruns ? window._dc3Audio.underruns.underrunEvents : null,
+                } : null,
             })), new Promise((_, r) => setTimeout(() => r(new Error('eval timeout')), 4000))]);
             s.t = el(); s.screen = screens.length ? screens[screens.length - 1].screen : '';
             samples.push(s);
@@ -250,6 +291,7 @@ await sampler;
 const inGameSamples = samples.filter((s) => s.screen === 'game_screen' && s.game && s.game.players);
 const last = inGameSamples.length ? inGameSamples[inGameSamples.length - 1] : null;
 const chk = checkDetect(detect, difficulty, result);
+checkClock(chk, timerStats(timerErrors, inGameSamples.length), unmute);
 const ratings = [];
 for (const s of inGameSamples) { const r = s.game.players[0].rating; if (r && (!ratings.length || ratings[ratings.length - 1] !== r)) ratings.push(r); }
 const pageLast = [...samples].reverse().find((s) => s.page);
@@ -265,11 +307,14 @@ const summary = {
     movePassed: movePassed.slice(0, 12),
     pagePose: pageLast ? pageLast.page : null,
     wasmMBMax: Math.max(...samples.map((s) => s.wasmMB || 0)),
+    audio: { unmuted: unmute, ctx: [...samples].reverse().map((s) => s.audio).find(Boolean) || null },
+    timerErrors: timerStats(timerErrors, inGameSamples.length),
     screens, samples, detect,
 };
 summary.check = { pass: chk.pass, reachedGame: chk.reachedGame, fails: chk.fails };
 writeFileSync(`${out}/summary.json`, JSON.stringify(summary, null, 1));
 console.log(`RESULT ${result} camera=${camera} difficulty=${difficulty}${selectDifficulty ? '' : '(not selected)'} engine=${chk.engine.join(',') || '?'} score=${summary.finalScoreP0} detectFrac(p0) n=${chk.stats.n} mean=${chk.stats.mean && chk.stats.mean.toFixed(4)} min=${chk.stats.min} max=${chk.stats.max} branches=${JSON.stringify(chk.stats.branches)} ratings=${ratings.join('>')} tracked ${summary.gameSecondsTracked}/${summary.gameSeconds}s wasmMax=${summary.wasmMBMax}MB errors=${errors.length}`);
+console.log(`AUDIO unmuted=${unmute} ctx=${JSON.stringify(summary.audio.ctx)} timer errors in game: ${JSON.stringify(summary.timerErrors)}`);
 console.log(chk.line);
 try { await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 5000))]); } catch {}
 process.exit(chk.code);
