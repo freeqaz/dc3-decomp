@@ -85,6 +85,12 @@ WIRE_RGB888 = 1
 WIRE_MASK_ORDINAL = 1
 MASK_THRESHOLD = 0.5
 
+# native/models/ next to this script's own native/scripts/, not the cwd: the
+# engine runs from native/build and always passes --model, but a standalone run
+# from anywhere else used to look for native/models under the cwd (PLAN P-10).
+DEFAULT_MODEL = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir,
+                             "models", "pose_landmarker_full.task")
+
 # Exit codes the game turns into a message (NativeSkeletonProvider::ServerExit
 # in native/src/platform/Skeleton_Native.h -- keep in sync).
 EXIT_NO_CAMERA = 3
@@ -282,7 +288,7 @@ def parse_args(argv=None):
                               "fallback 20.0 if unreadable). Ignored in camera mode.")
     parser.add_argument("--width", type=int, default=640, help="Capture width")
     parser.add_argument("--height", type=int, default=480, help="Capture height")
-    parser.add_argument("--model", default="native/models/pose_landmarker_full.task",
+    parser.add_argument("--model", default=DEFAULT_MODEL,
                         help="MediaPipe pose landmarker .task path")
     parser.add_argument("--hfov", type=float, default=None,
                         help="Camera horizontal FOV in degrees. Default 58.51 = DC3's "

@@ -6,11 +6,10 @@
 #include "os/Debug.h"
 #include "os/File.h"
 #include "os/System.h"
+#include "platform/ExecutablePath.h"
 #include "utl/Loader.h"
 #include "utl/MakeString.h"
 #include "utl/Symbol.h"
-
-#include "platform/ExecutablePath.h"
 
 #include <climits>
 #include <cstdio>
@@ -204,7 +203,9 @@ static bool FileExistsRaw(const char *path) {
 
 // Where the game data is: the directory containing gen/main_xbox.hdr, probed
 // as $DC3_DATA first, then orig-assets / ../orig-assets / ../../orig-assets / .
-// relative to the CWD. nullptr = no game data. Pure query (no side effects), so
+// relative to the CWD, then orig-assets beside the executable's own tree
+// (<repo>/native/build/<exe> -> <repo>/orig-assets), so a launch from any
+// other directory still finds it. nullptr = no game data. Pure query (no side effects), so
 // the test harness asks exactly the question the boot path asks: see
 // EnsureEngineInit() in native/tests/test_helpers.cpp and HeadlessBootTest.
 const char *NativeFindDataDir() {
@@ -223,6 +224,15 @@ const char *NativeFindDataDir() {
         snprintf(buf, sizeof(buf), "%s/gen/main_xbox.hdr", *p);
         if (FileExistsRaw(buf))
             return *p;
+    }
+    static std::string sTreeData;
+    std::string treeDir = NativeTreeDir();
+    if (!treeDir.empty()) {
+        std::string candidate = treeDir + "/../orig-assets";
+        if (FileExistsRaw((candidate + "/gen/main_xbox.hdr").c_str())) {
+            sTreeData = candidate;
+            return sTreeData.c_str();
+        }
     }
     return nullptr;
 }
@@ -245,39 +255,24 @@ void NativeDetectDataDir() {
     printf("  Set DC3_DATA env var or run from the repo root.\n");
 }
 
-// The overlay of the tree this binary was built from: <exe dir>/../dta, i.e.
-// native/build/<binary> -> native/dta. Empty when the executable cannot be
-// located or does not sit in a native/<build dir> (a relocated binary).
-std::string NativeExecutableOverlayDir() {
-    char exe[PATH_MAX];
-    ssize_t n = ReadExecutablePath(exe, sizeof(exe) - 1);
-    if (n <= 0) return std::string();
-    exe[n] = '\0';
-    char *slash = strrchr(exe, '/');
-    if (!slash) return std::string();
-    *slash = '\0';
-    char resolved[PATH_MAX];
-    if (!realpath(MakeString("%s/../dta", exe), resolved)) return std::string();
-    struct stat st;
-    if (stat(resolved, &st) != 0 || !S_ISDIR(st.st_mode)) return std::string();
-    return resolved;
-}
-
 // Find the DTA overlay directory (native/dta/ relative to repo root).
 // Overlay files shadow the archive — used for native-only DTA patches.
 //
-// The executable's own tree comes first. Deriving it from the data dir alone
-// ("<dataDir>/../native/dta") goes wrong in a worktree, whose orig-assets is
-// a symlink to the MAIN checkout's: the kernel resolves the `..` after the
-// symlink, so a worktree build -- and every DTA flow test under ctest, whose
-// working directory is orig-assets -- loaded main's native/dta and never the
-// worktree's own edits.
+// The executable's own tree comes first: the overlay is SOURCE, and belongs to
+// the checkout the binary was built from.  "<dataDir>/../native/dta" is not
+// that in a worktree -- orig-assets there is a symlink to the main checkout's,
+// so the kernel resolves "orig-assets/.." to the MAIN checkout and every
+// worktree boot (and every ctest run, cwd orig-assets) loaded main's overlay
+// DTAs instead of its own.
 void NativeDetectOverlayDir() {
-    std::string own = NativeExecutableOverlayDir();
-    if (!own.empty()) {
-        NativeSetOverlayDir(own.c_str());
-        printf("DC3 Native: overlay dir=%s (next to the executable)\n", own.c_str());
-        return;
+    std::string treeDir = NativeTreeDir();
+    if (!treeDir.empty()) {
+        std::string treeOverlay = treeDir + "/dta";
+        if (FileExistsRaw(treeOverlay.c_str())) {
+            NativeSetOverlayDir(treeOverlay.c_str());
+            printf("DC3 Native: overlay dir=%s\n", treeOverlay.c_str());
+            return;
+        }
     }
     const char *dataDir = NativeGetDataDir();
     // dataDir is typically "orig-assets" relative to repo root.
