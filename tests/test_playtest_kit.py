@@ -6,7 +6,10 @@ Stdlib unittest, no GPU, no camera, no game data: synthetic files only.
   pose_session.py    a session splits into song segments where the song clock
                      jumps back; a song is a segment that starts in the
                      count-in; a cut reads back frame for frame; a file cut off
-                     mid-frame loses only that frame; a wrong header is refused
+                     mid-frame loses only that frame; a wrong header is refused;
+                     compare passes a faithful replay (held frames, later song
+                     times) and fails a changed person, a missing frame, a
+                     frame played early and frames out of order
   session_summary.py ratings, results screen, frame rates, memory, modal
                      counts and the exit line out of an engine log; a log with
                      no DC3_EXIT line says so
@@ -93,6 +96,65 @@ class PoseSessionTest(unittest.TestCase):
             f.write("# dc3-pose-fixture v1\n")
         with self.assertRaises(ValueError):
             pose_session.load(self.path)
+
+    def test_compare_a_replay_with_its_source(self):
+        _, src = pose_session.load(self.path)
+        a, b = pose_session.segments(src)[1]
+        src = src[a:b]
+
+        def replayed(edit=None):
+            lines = ["# dc3-pose-session v1"]
+            hold = 0
+            for k, f in enumerate(src):
+                if k % 50 == 0:  # a held frame in between: ignored
+                    hold += 1
+                    lines += frame(0x80000000 + hold, f.song)
+                fl = list(f.lines)
+                tok = fl[0].split()
+                tok[1], tok[2], tok[3] = "9", "9", "9"       # seq, rnd, wall: free
+                tok[4] = f"{f.song + 0.004:.6f}"             # a render frame later
+                fl[0] = " ".join(tok)
+                if edit:
+                    fl = edit(k, fl)
+                if fl:
+                    lines += fl
+            path = os.path.join(self.dir, "replayed.dc3session")
+            with open(path, "w") as fh:
+                fh.write("\n".join(lines) + "\n")
+            return pose_session.load(path)[1]
+
+        ok = pose_session.compare(src, replayed())
+        self.assertTrue(ok["identical"], ok)
+        self.assertEqual(ok["unknown_ids"], 0)
+        self.assertAlmostEqual(ok["lag_min"], 0.004, places=5)
+
+        def person(k, fl):
+            return fl[:1] + [fl[1].replace("0.1 0.2", "0.1 0.3", 1)] if k == 100 else fl
+        self.assertEqual(pose_session.compare(src, replayed(person))["mismatched"], 1)
+
+        def drop(k, fl):
+            return [] if k == 200 else fl
+        r = pose_session.compare(src, replayed(drop))
+        self.assertFalse(r["identical"])
+        self.assertEqual(r["missing"], 1)
+
+        def early(k, fl):
+            if k == 300:
+                tok = fl[0].split()
+                tok[4] = f"{float(tok[4]) - 0.1:.6f}"
+                fl = [" ".join(tok)] + fl[1:]
+            return fl
+        self.assertFalse(pose_session.compare(src, replayed(early))["identical"])
+
+        swapped = replayed()
+        swapped[10], swapped[11] = swapped[11], swapped[10]
+        r = pose_session.compare(src, swapped)
+        self.assertFalse(r["identical"])
+        self.assertEqual(r["out_of_order"], 1)
+
+        def stranger(k, fl):
+            return fl + frame(99999, 0.0)[:1] + fl[1:] if k == 400 else fl
+        self.assertFalse(pose_session.compare(src, replayed(stranger))["identical"])
 
 
 LOG = """\

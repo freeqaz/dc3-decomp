@@ -170,8 +170,10 @@ else
             setdef DC3_FOOTAGE_PRE "$VIDEO_PRE"
         fi
     fi
-    setdef DC3_POSE_RECORD "$SESSION/pose.dc3session"
 fi
+# Every session records what the sensor accepted -- a replay too, so a replay
+# can be checked against the file it replayed (pose_session.py compare).
+[ "$NO_POSE" = 1 ] || setdef DC3_POSE_RECORD "$SESSION/pose.dc3session"
 mkdir -p "$DC3_SFX_PCM_DIR"
 
 {

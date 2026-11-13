@@ -10,6 +10,13 @@ needs one song's frames, so:
   pose_session.py info  FILE            frames, people, and the song segments
   pose_session.py split FILE OUTDIR     one file per song segment (seg01.dc3session ...)
   pose_session.py cut   FILE N OUT      only segment N (as listed by info)
+  pose_session.py compare SOURCE REPLAYED
+                                        did a replay feed the scorer SOURCE?  REPLAYED
+                                        is the recording the replaying game made
+                                        (play.sh records every session): each SOURCE
+                                        frame must appear once, in order, with the
+                                        same id, timestamp, people and floor, and
+                                        its song time no earlier than recorded
 
 Replay one cut with
   scripts/play.sh --replay OUT     (or DC3_POSE=external DC3_POSE_PERFORM=session:OUT)
@@ -111,6 +118,61 @@ def write(path, comments, frames):
             fh.write("\n".join(f.lines) + "\n")
 
 
+HELD_ID = 0x80000000  # PoseSession_Native.cpp: a held frame's id has the high bit set
+
+
+def payload(f):
+    """What the scorer receives from a frame: everything but seq, rnd, wall
+    and song time (frame id, timestamp, unlevelled, level, floor normal,
+    people)."""
+    return [" ".join(f.lines[0].split()[5:])] + f.lines[1:]
+
+
+def compare(source, replayed):
+    """Match REPLAYED's recorded (non-held) frames to SOURCE by frame id.
+    Returns a dict of counts and song-time lags (replayed - source, s)."""
+    by_id = {}
+    for k, f in enumerate(source):
+        by_id.setdefault(f.frame_id, k)
+    seen, lags, mismatched, unknown, out_of_order = set(), [], [], 0, 0
+    last = -1
+    for f in replayed:
+        if f.frame_id >= HELD_ID:
+            continue
+        k = by_id.get(f.frame_id)
+        if k is None:
+            unknown += 1
+            continue
+        if k in seen or k < last:
+            out_of_order += 1
+        seen.add(k)
+        last = k
+        if payload(f) != payload(source[k]):
+            mismatched.append(f.frame_id)
+        lags.append(f.song - source[k].song)
+    lags.sort()
+    return {"source_frames": len(source), "replayed": len(seen),
+            "missing": len(source) - len(seen), "mismatched": len(mismatched),
+            "first_mismatch": mismatched[0] if mismatched else None,
+            "unknown_ids": unknown, "out_of_order": out_of_order,
+            "lag_min": lags[0] if lags else None, "lag_max": lags[-1] if lags else None,
+            "lag_median": lags[len(lags) // 2] if lags else None,
+            "identical": bool(source) and len(seen) == len(source) and not mismatched
+            and not out_of_order and not unknown and (not lags or lags[0] >= -1e-6)}
+
+
+def cmd_compare(a):
+    _, src = load(a.source)
+    _, rep = load(a.replayed)
+    r = compare(src, rep)
+    print(f"{r['replayed']} of {r['source_frames']} frames replayed, {r['missing']} missing, "
+          f"{r['mismatched']} differ, {r['out_of_order']} out of order, {r['unknown_ids']} "
+          f"not in the source; song-time lag {r['lag_min']}..{r['lag_max']} s "
+          f"(median {r['lag_median']})")
+    print("IDENTICAL" if r["identical"] else "DIFFERENT")
+    return 0 if r["identical"] else 1
+
+
 def cmd_info(a):
     comments, frames = load(a.file)
     print(f"{a.file}: {len(frames)} frames over {frames[-1].wall - frames[0].wall:.1f} s"
@@ -159,9 +221,13 @@ def main(argv=None):
     c.add_argument("file")
     c.add_argument("n", type=int)
     c.add_argument("out")
+    m = sub.add_parser("compare")
+    m.add_argument("source")
+    m.add_argument("replayed")
     a = ap.parse_args(argv)
     try:
-        return {"info": cmd_info, "split": cmd_split, "cut": cmd_cut}[a.cmd](a)
+        return {"info": cmd_info, "split": cmd_split, "cut": cmd_cut,
+                "compare": cmd_compare}[a.cmd](a)
     except (OSError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
