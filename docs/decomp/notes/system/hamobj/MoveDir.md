@@ -79,6 +79,16 @@ Inside the body (was lines 102-163):
             // The three parks are still missing, so the body stays 3 short of the image.
 ```
 
+w-low-ham-math (2026-11-13), lane D:
+
+```text
+NOT A BUG. Value-by-value against 0x824FCD98: statics EAF8/EAE8/EB08 =
+sDarkerGray/sGreen/sLightGray into the three locals; the mirrored arm
+halves r/g/b and copies alpha; the format strings and arguments (detected*100
+vs &detected); both DrawOverlayBar calls (min, (max-min)+min) and (min,
+(max-min)*detected+min); the text at (min, y); and the y + sLineHeight return
+are all identical. The residual is FPR renaming and scheduling only.
+```
 
 ## `?RecordClipName@@YA?AVString@@PBDH@Z`
 
