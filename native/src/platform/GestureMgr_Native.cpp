@@ -2,6 +2,10 @@
 
 #include "Skeleton_Native.h"
 #include "CameraStream_Native.h"
+#include "PoseLevel_Native.h" // NativeSensorLevel: the camera-tilt step
+#ifndef __EMSCRIPTEN__
+#include "PosePerformer_Native.h" // Dc3PosePerformerEnabled
+#endif
 #include "gesture/LiveCameraInput.h"
 #include "NativeSettings.h" // Dc3EnvFlag, Dc3ControllerModeForced
 #include "platform/JoypadScriptHook.h"
@@ -414,6 +418,22 @@ static void ScoringDebugTick(bool accepted, bool skipped, int reassigns) {
     }
 }
 
+// The in-process performer (PosePerformer_Native.h) publishes with the
+// default `unlevelled = false`: its synthetic modes play a Kinect.  A replay
+// is a recording from a real camera, so it needs the tilt estimate like the
+// live webcam it stands in for.
+static bool PerformerReplaysRecording() {
+#ifdef __EMSCRIPTEN__
+    return false;
+#else
+    static const bool sReplay = [] {
+        const char *mode = getenv("DC3_POSE_PERFORM");
+        return mode && !strncmp(mode, "replay:", 7);
+    }();
+    return sReplay && Dc3PosePerformerEnabled();
+#endif
+}
+
 // The sensor's frame.  memset gives every slot the untracked contract the
 // image's own sensorless path (SkeletonUpdate::Update's StubSkeletonFrame arm)
 // uses, except the tracking id, set to -1 per slot below as that arm does.
@@ -540,6 +560,11 @@ static const SkeletonFrame *BuildSensorFrame() {
             for (int i = 0; i < numPersons; i++)
                 sPersons[i] = TheSkeletonProvider->GetPerson(i);
             ScoringDebugTick(true, false, FillPersonSlots(sPersons, numPersons));
+            // SkeletonFrame::Create's gravity step (PoseLevel_Native.h): the
+            // slots hold raw camera space; a camera that does not know its
+            // gravity gets an estimate, everything else (0,1,0).
+            bool unlevelled = TheSkeletonProvider->FrameUnlevelled() || PerformerReplaysRecording();
+            NativeSensorLevel(sFrame, sPersons, numPersons, unlevelled, sFrame.mElapsedMs * 0.001f);
         } else {
             ScoringDebugTick(false, true, 0);
         }
@@ -553,6 +578,7 @@ static const SkeletonFrame *BuildSensorFrame() {
             NativeSkeletonProvider::FillDummySkeletonData(sFrame.mSkeletonDatas[d], d);
             FinishTrackedSlot(d);
         }
+        NativeSensorLevel(sFrame, nullptr, 0, false, sFrame.mElapsedMs * 0.001f);
         newFrame = true;
     }
 

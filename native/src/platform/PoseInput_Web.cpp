@@ -88,7 +88,8 @@ int dc3_pose_push(int count, const float *data, double timestamp) {
         }
         persons[i].valid = true;
     }
-    provider->PublishFrame(persons, count, ++sPushFrameId, timestamp);
+    // A browser camera has no accelerometer: the sensor estimates its tilt.
+    provider->PublishFrame(persons, count, ++sPushFrameId, timestamp, /*unlevelled*/ true);
     if (!provider->IsRunning()) {
         provider->StartPushed();
         printf("DC3 POSE: web camera pipeline connected (first frame, %d person(s))\n", count);

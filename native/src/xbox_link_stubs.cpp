@@ -64,19 +64,33 @@ XMVECTOR __vmaddfp(XMVECTOR mul1, XMVECTOR mul2, XMVECTOR addend) {
 }
 
 // ============================================================================
-// Kinect NUI — STUB
+// Kinect NUI
 // ----------------------------------------------------------------------------
-// NuiTransformMatrixLevel returns the identity matrix: Skeleton.cpp multiplies
-// joint positions through it to correct for sensor tilt, so identity is the
-// honest "no tilt correction applied" answer. A zero matrix would collapse
-// every joint to the origin.
+// NuiTransformMatrixLevel: the XDK's tilt correction, ported from the image
+// (build/373307D9/asm/xdk/nuiapi/nuiskeleton.s, 0x829C3568, 0xF4 bytes).
+// SkeletonFrame::Create multiplies every joint by it (XMVector3Transform, row
+// vectors), and the native sensor frame does the same with its estimated
+// gravity (platform/PoseLevel_Native.cpp).  What the image does:
+//   n   = vNormalToGravity / |vNormalToGravity|   (vrsqrtefp + one Newton
+//         step; a zero vector is kept as it is)
+//   ax  = cross(n, (0,1,0))                       (vpermwi 99/135 + vnmsubfp)
+//   all four lanes of ax == 0  ->  the identity   (vupkd3d128 + vpermwi)
+//   else XMMatrixRotationAxis(ax, acos(dot((0,1,0), n)))
+// so the matrix rotates the sensor's "up" onto +y about the axis
+// perpendicular to both: the minimal rotation, which levels pitch and roll and
+// leaves yaw alone.  An "up" of exactly (0,1,0) -- or (0,-1,0), or zero --
+// gives the identity.  XMMatrixRotationAxis normalises the axis and builds
+// XMMatrixRotationNormal's matrix (a right-handed rotation of a row vector,
+// v * M).  Not bit-exact: an exact 1/sqrt and libm sin/cos stand in for the
+// VMX estimate and XMScalarSinCos (differences ~1e-7).
 // ============================================================================
 
 #include "xdk/nui/nuiskeleton.h"
 #include "xdk/nui/nuiidentity.h"
 
-XMMATRIX NuiTransformMatrixLevel(XMVECTOR) {
-    HX_STUB_TRACE("NuiTransformMatrixLevel");
+#include <cmath>
+
+XMMATRIX NuiTransformMatrixLevel(XMVECTOR vNormalToGravity) {
     XMMATRIX m;
     for (int row = 0; row < 4; ++row) {
         m.r[row].x = (row == 0) ? 1.0f : 0.0f;
@@ -84,6 +98,35 @@ XMMATRIX NuiTransformMatrixLevel(XMVECTOR) {
         m.r[row].z = (row == 2) ? 1.0f : 0.0f;
         m.r[row].w = (row == 3) ? 1.0f : 0.0f;
     }
+    float nx = vNormalToGravity.x, ny = vNormalToGravity.y, nz = vNormalToGravity.z;
+    float nw = vNormalToGravity.w;
+    float lenSq = nx * nx + ny * ny + nz * nz + nw * nw; // vmsum4fp128: all four lanes
+    if (lenSq != 0.0f) {
+        float inv = 1.0f / sqrtf(lenSq);
+        nx *= inv;
+        ny *= inv;
+        nz *= inv;
+    }
+    // cross(n, up) with up = (0, 1, 0): (n.y*0 - n.z*1, n.z*0 - n.x*0, n.x*1 - n.y*0)
+    float ax = -nz, ay = 0.0f, az = nx;
+    if (ax == 0.0f && az == 0.0f)
+        return m;
+    float angle = (float)acos((double)ny); // dot(up, n)
+    float axLen = sqrtf(ax * ax + ay * ay + az * az);
+    ax /= axLen;
+    ay /= axLen;
+    az /= axLen;
+    float s = sinf(angle), c = cosf(angle), t = 1.0f - c;
+    // XMMatrixRotationNormal: r0 = (c + t x^2, t x y + s z, t x z - s y), ...
+    m.r[0].x = c + t * ax * ax;
+    m.r[0].y = t * ax * ay + s * az;
+    m.r[0].z = t * ax * az - s * ay;
+    m.r[1].x = t * ax * ay - s * az;
+    m.r[1].y = c + t * ay * ay;
+    m.r[1].z = t * ay * az + s * ax;
+    m.r[2].x = t * ax * az + s * ay;
+    m.r[2].y = t * ay * az - s * ax;
+    m.r[2].z = c + t * az * az;
     return m;
 }
 

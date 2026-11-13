@@ -244,6 +244,9 @@ enum COCOKeypoint {
     COCO_RIGHT_ANKLE = 16,
 };
 
+// v2/v3 header flag bits (native/scripts/pose_server.py FLAG_*).
+static const uint16_t kFlagUnlevelled = 1u << 0;
+
 // Wire layout ids (see native/scripts/pose_server.py protocol v2).
 enum PoseLayout {
     kLayoutCOCO17 = 0,  // normalised [0,1] image coords, no depth
@@ -534,6 +537,10 @@ void NativeSkeletonProvider::ReaderThread() {
         // incrementing frame_id, so a large sentinel cannot collide.
         // v3 (pose_server.py --frames): v2 with a new magic and a camera image
         // block after the persons (ParseCameraBlock).
+        // v2/v3 header flags (the u16 after `layout`, 0 from older servers):
+        // bit 0 = the camera does not know its gravity (pose_server.py: a
+        // webcam), so the sensor estimates its tilt (PoseLevel_Native.h).
+        // synthetic_kinect.py sends 0: it plays a Kinect, which is level.
         static const uint32_t kProtocolMagic = 0x44503302u;
         static const uint32_t kProtocolMagicV3 = 0x44503303u;
         if (packetLen < 16) continue;
@@ -547,7 +554,7 @@ void NativeSkeletonProvider::ReaderThread() {
 
         uint32_t frameId, numPersons;
         double timestamp;
-        uint16_t frameW = 0, frameH = 0;
+        uint16_t frameW = 0, frameH = 0, flags = 0;
         uint8_t numLandmarks = 17, layout = kLayoutCOCO17;
 
         if (v2) {
@@ -560,7 +567,7 @@ void NativeSkeletonProvider::ReaderThread() {
             memcpy(&frameH, p, 2); p += 2;
             numLandmarks = *p++;
             layout = *p++;
-            p += 2; // pad
+            memcpy(&flags, p, 2); p += 2;
             // Must be set before the person loop below: MapCOCOToDC3 ->
             // NormalizedToMeters consumes it for THIS packet's landmarks.
             if (frameW > 0 && frameH > 0)
@@ -635,14 +642,15 @@ void NativeSkeletonProvider::ReaderThread() {
         if (v3 && !truncated)
             ParseCameraBlock(p, end, newBack, (int)numPersons, timestamp);
 
-        PublishFrame(newBack, (int)numPersons, frameId, timestamp);
+        PublishFrame(newBack, (int)numPersons, frameId, timestamp, (flags & kFlagUnlevelled) != 0);
     }
 }
 
 #endif // !__EMSCRIPTEN__ (desktop transport)
 
 void NativeSkeletonProvider::PublishFrame(
-    const PersonData *persons, int numPersons, uint32_t frameId, double timestamp
+    const PersonData *persons, int numPersons, uint32_t frameId, double timestamp,
+    bool unlevelled
 ) {
     if (numPersons < 0)
         numPersons = 0;
@@ -654,6 +662,7 @@ void NativeSkeletonProvider::PublishFrame(
     mNumPersonsBack = numPersons;
     mFrameIdBack = frameId;
     mTimestampBack = timestamp;
+    mUnlevelledBack = unlevelled;
 }
 
 void NativeSkeletonProvider::Poll() {
@@ -666,6 +675,7 @@ void NativeSkeletonProvider::Poll() {
     mNumPersons = mNumPersonsBack;
     mFrameIdFront = mFrameIdBack;
     mTimestampFront = mTimestampBack;
+    mUnlevelledFront = mUnlevelledBack;
 }
 
 int NativeSkeletonProvider::FindByTrackId(int trackId) const {

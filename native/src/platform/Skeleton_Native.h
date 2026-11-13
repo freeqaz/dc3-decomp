@@ -80,8 +80,11 @@ public:
     // camera pipeline calls it through dc3_pose_push (PoseInput_Web.cpp).
     // Everything downstream -- Poll, FrameId/Timestamp, FillSkeletonData -- is
     // shared, so BuildSensorFrame reads both transports through one branch.
+    // `unlevelled`: the frame comes from a camera that does not know its own
+    // gravity (pose_server.py's header flag, every web push), so the sensor
+    // estimates the camera's tilt and levels it (platform/PoseLevel_Native.h).
     void PublishFrame(const PersonData *persons, int numPersons, uint32_t frameId,
-                      double timestamp);
+                      double timestamp, bool unlevelled = false);
 
 #ifdef __EMSCRIPTEN__
     // Web has no server to spawn or socket to read: the provider is "running"
@@ -109,6 +112,10 @@ public:
     // time from NUI_SKELETON_FRAME's own timestamp, not from when the game got
     // round to reading it; GestureMgr_NativePoll does the same with this.
     double Timestamp() const { return mTimestampFront; }
+
+    // Whether that packet came from a camera that does not know its gravity
+    // (PublishFrame's `unlevelled`).
+    bool FrameUnlevelled() const { return mUnlevelledFront; }
 
     // Find person by BOTSORT track ID, returns -1 if not found
     int FindByTrackId(int trackId) const;
@@ -169,6 +176,8 @@ private:
     uint32_t mFrameIdFront = 0;
     double mTimestampBack = 0.0;
     double mTimestampFront = 0.0;
+    bool mUnlevelledBack = false;
+    bool mUnlevelledFront = false;
 
     // Coordinate mapping: camera view extent in metres at mViewDepth.
     //
