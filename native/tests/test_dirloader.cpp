@@ -66,7 +66,7 @@ static std::string WriteDirHeaderFixture() {
     PutDeadMarker(chunk);
     PutBE32(chunk, 0x12345678);
 
-    std::string path = "/tmp/claude-1000/milo_tests/dirloader_header_fixture.milo_xbox";
+    std::string path = TestScratchDir() + "/dirloader_header_fixture.milo_xbox";
     EXPECT_TRUE(WriteSyntheticMilo(path.c_str(), {chunk}));
     return path;
 }

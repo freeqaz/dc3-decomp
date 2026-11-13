@@ -41,6 +41,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "platform/ExecutablePath.h"
+#include "engine_http_port.h"
 
 namespace {
 
@@ -58,32 +59,6 @@ std::string BinaryDir() {
 bool Exists(const std::string &p) {
     struct stat st;
     return ::stat(p.c_str(), &st) == 0;
-}
-
-// A loopback port for the engine's debug server, from 20000-29999: below the
-// kernel's ephemeral range (32768+), because a port handed out by bind(0) was
-// measured being taken back by an outgoing connection (the sensor of a
-// parallel test talking to its engine) before this engine bound it -- the
-// engine then aborts with "port ... already in use".  Starts at a pid-derived
-// offset so parallel test processes spread out; each candidate is test-bound.
-int FreePort() {
-    for (int attempt = 0; attempt < 200; attempt++) {
-        int port = 20000 + (int)(((unsigned)getpid() * 37u + (unsigned)attempt * 101u) % 10000u);
-        int fd = socket(AF_INET, SOCK_STREAM, 0);
-        if (fd < 0)
-            return -1;
-        int one = 1;
-        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
-        sockaddr_in addr = {};
-        addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        addr.sin_port = htons((uint16_t)port);
-        bool ok = bind(fd, (sockaddr *)&addr, sizeof(addr)) == 0;
-        close(fd);
-        if (ok)
-            return port;
-    }
-    return -1;
 }
 
 // The global-options cache of a console that has seen every tutorial, so no
@@ -172,12 +147,6 @@ BattleRun RunBattle(int people, const char *stopScreens, int waitSeconds) {
         r.setupError = "could not seed the global options cache under " + R;
         return r;
     }
-    int port = FreePort();
-    if (port <= 0) {
-        r.setupError = "could not get a free loopback port";
-        return r;
-    }
-    std::string api = "http://127.0.0.1:" + std::to_string(port) + "/api";
     std::string sock = R + "/kinect.sock";
     std::string log = R + "/engine.log";
 
@@ -185,23 +154,24 @@ BattleRun RunBattle(int people, const char *stopScreens, int waitSeconds) {
     sh << "cd " << dir << " || exit 1; ";
     if (people >= 0) {
         sh << "python3 " << sensor << " --socket " << sock << " --people " << people
-           << " --perform " << api << " --record " << R << "/kinect.json"
+           << " --perform-port-file " << EngineHttpPortFile(R) << " --record " << R << "/kinect.json"
            << " > " << R << "/kinect.log 2>&1 & kpid=$!; "
            << "end=$((SECONDS+20)); until [ -S " << sock << " ] || [ $SECONDS -ge $end ]; do sleep 0.2; done; "
            << "[ -S " << sock << " ] || echo 'DRIVER: sensor socket never appeared'; ";
     }
     sh << "( MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1"
-       << " DC3_FAST_TIME=1 DC3_HTTP=1 DC3_HTTP_PORT=" << port << " MILO_MAX_FRAMES=0"
+       << " DC3_FAST_TIME=1" << EngineHttpPortShellEnv(R) << " MILO_MAX_FRAMES=0"
        << " DC3_CACHE_DIR=" << R << "/cache DC3_SAVE_DIR=" << R << "/saves"
        << " MILO_INPUT_SCRIPT=" << script;
     if (people >= 0)
         sh << " DC3_POSE=external DC3_POSE_NO_SPAWN=1 DC3_POSE_SOCKET=" << sock;
     sh << " exec timeout " << (waitSeconds + 60) << " ./dc3-native > " << log << " 2>&1 ) & epid=$!; "
+       << EngineHttpApiShell(R, "epid", 120)
        << "end=$((SECONDS+" << waitSeconds << ")); "
        << "until grep -aqE \"Screen '(" << stopScreens << ")' Enter\" " << log
        << " 2>/dev/null || [ $SECONDS -ge $end ] || ! kill -0 $epid 2>/dev/null; do sleep 0.5; done; "
        << "echo \"DRIVER: stop after ${SECONDS}s, engine alive=$(kill -0 $epid 2>/dev/null && echo 1 || echo 0)\"; "
-       << "echo \"PLAYERS: $(curl -s -m 5 " << api << "/pose/target)\"; "
+       << "echo \"PLAYERS: $(curl -s -m 5 \"$api/pose/target\")\"; "
        << "kill $epid 2>/dev/null; sleep 1; kill -9 $epid 2>/dev/null; ";
     if (people >= 0)
         sh << "kill $kpid 2>/dev/null; sleep 1; kill -9 $kpid 2>/dev/null; ";
@@ -240,7 +210,8 @@ protected:
     }
     static std::string Dump(const BattleRun &r) {
         std::string path = "/tmp/claude-1000/twoplayer_" +
-            std::string(::testing::UnitTest::GetInstance()->current_test_info()->name()) + ".log";
+            std::string(::testing::UnitTest::GetInstance()->current_test_info()->name()) + "_" +
+            std::to_string((int)getpid()) + ".log";
         std::ofstream f(path);
         if (f.is_open())
             f << r.driver << r.players << r.output;

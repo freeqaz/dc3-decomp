@@ -43,6 +43,9 @@ static const size_t kMaxHttpBodyBytes = 1024 * 1024; // hard transport ceiling
 #include <algorithm>
 #include <signal.h>
 #include <setjmp.h>
+#include <cerrno>
+#include <string>
+#include <unistd.h>
 
 extern WgpuRnd* gWgpuRnd;
 extern std::map<Symbol, DataFunc*> gDataFuncs;
@@ -132,6 +135,52 @@ static std::string SceneTreeJson(ObjectDir* dir, int depth, int maxDepth) {
 // HttpServer implementation
 // ---------------------------------------------------------------------------
 
+// Exit status for "the debug server's port could not be bound" (98 is Linux's
+// EADDRINUSE).  docs/debugging/native.md, "Stopping the engine".
+static const int kHttpBindExitCode = 98;
+extern const char *gDc3ExitReason; // src/App.cpp; read by the DC3_EXIT record
+
+[[noreturn]] static void HttpBindFailed(int port, int err) {
+    const char *env = getenv("DC3_HTTP_PORT");
+    if (port != 0 && err == EADDRINUSE) {
+        fprintf(stderr,
+                "DC3 Native: FATAL - HTTP debug server: port %d already in use "
+                "(DC3_HTTP_PORT=%s). Another process holds it; DC3_HTTP_PORT=0 "
+                "lets the kernel pick a free port.\n",
+                port, env ? env : "unset");
+        gDc3ExitReason = "http_port_in_use";
+    } else {
+        fprintf(stderr,
+                "DC3 Native: FATAL - HTTP debug server: cannot bind port %d "
+                "(DC3_HTTP_PORT=%s): %s\n",
+                port, env ? env : "unset", err ? strerror(err) : "unknown error");
+        gDc3ExitReason = "http_port_bind_failed";
+    }
+    fflush(stderr);
+    exit(kHttpBindExitCode);
+}
+
+// DC3_HTTP_PORT_FILE=<path>: once bound, write the port (decimal, newline) to
+// <path>.  Written to a temporary name and renamed, so a reader polling for the
+// file never sees it half-written.  This is how a shell or a second process
+// (the synthetic sensor's --perform-port-file) learns a DC3_HTTP_PORT=0 port
+// without parsing the engine's stdout.
+static void WritePortFile(int port) {
+    const char *path = getenv("DC3_HTTP_PORT_FILE");
+    if (!path || !*path) return;
+    std::string tmp = std::string(path) + ".tmp." + std::to_string((int)getpid());
+    FILE *f = fopen(tmp.c_str(), "w");
+    bool ok = f && fprintf(f, "%d\n", port) > 0;
+    if (f) ok = (fclose(f) == 0) && ok;
+    if (!ok || rename(tmp.c_str(), path) != 0) {
+        fprintf(stderr, "DC3 Native: FATAL - HTTP debug server: cannot write "
+                        "DC3_HTTP_PORT_FILE=%s: %s\n", path, strerror(errno));
+        gDc3ExitReason = "http_port_file_unwritable";
+        fflush(stderr);
+        exit(kHttpBindExitCode);
+    }
+}
+
 HttpServer::HttpServer() {}
 
 HttpServer::~HttpServer() {
@@ -149,6 +198,19 @@ bool HttpServer::Start(int port) {
     static_assert(kMaxHttpBodyBytes >= DtaEval::kMaxScriptBytes,
                   "transport ceiling must not be tighter than the script cap");
     svr->set_payload_max_length(kMaxHttpBodyBytes);
+    // cpp-httplib's default socket option on Linux is SO_REUSEPORT, which
+    // lets every same-uid process bind the same port: two engines started on
+    // one DC3_HTTP_PORT both "listen", and the kernel deals each incoming
+    // connection to either of them.  Measured 2026-11-13 (np-harness): two
+    // dc3-native on 9290, eight GET /api/health answered alternately by both
+    // (frame 65k vs 73k) -- a harness drives somebody else's engine and
+    // nothing says so.  SO_REUSEADDR alone still rebinds over TIME_WAIT but
+    // makes a second listener fail its bind, which is reported below.
+    svr->set_socket_options([](socket_t sock) {
+        int one = 1;
+        setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&one),
+                   sizeof(one));
+    });
     mServer = svr;
     RegisterEndpoints();
 
@@ -161,15 +223,19 @@ bool HttpServer::Start(int port) {
     // take it, and under fleet load one did -- dc3-native aborted with
     // "port N already in use" before ready. The chosen port is reported on
     // the DC3_HTTP_PORT= stdout line below, which is what scripts parse.
+    //
+    // A port that cannot be bound is a named exit, not an abort(): exit code
+    // kHttpBindExitCode and `DC3_EXIT: ... detail=http_port_in_use` (or
+    // http_port_bind_failed), so a harness can tell "my port was taken" from
+    // a crash.  The "already in use" wording is kept: tools/state_diff/golden.py
+    // matches it.
+    errno = 0;
     if (port == 0) {
         port = svr->bind_to_any_port("0.0.0.0");
-        if (port <= 0) {
-            fprintf(stderr, "[HttpServer] FATAL: could not bind any port\n");
-            abort();
-        }
+        if (port <= 0)
+            HttpBindFailed(0, errno);
     } else if (!svr->bind_to_port("0.0.0.0", port)) {
-        fprintf(stderr, "[HttpServer] FATAL: port %d already in use\n", port);
-        abort();
+        HttpBindFailed(port, errno);
     }
 
     mPort = port;
@@ -180,6 +246,7 @@ bool HttpServer::Start(int port) {
     fprintf(stdout, "DC3_HTTP_PORT=%d\n", port);
     fflush(stdout);
     fprintf(stderr, "[HttpServer] Listening on port %d\n", port);
+    WritePortFile(port);
     return true;
 }
 
@@ -964,7 +1031,8 @@ void HttpServer::RegisterEndpoints() {
         float uptime = TheTaskMgr.Seconds(TaskMgr::kRealTime) - mStartTime;
         char buf[256];
         snprintf(buf, sizeof(buf),
-            "{\"status\":\"ok\",\"frame\":%d,\"uptime_s\":%.1f}", frame, uptime);
+            "{\"status\":\"ok\",\"frame\":%d,\"uptime_s\":%.1f,\"pid\":%d}", frame, uptime,
+            (int)getpid());
         res.set_content(JsonOk(buf), "application/json");
     });
 

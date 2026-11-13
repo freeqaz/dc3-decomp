@@ -44,18 +44,21 @@ USAGE
   perform (default route):
     python3 scripts/native_assert_harvest.py --out /tmp/h-perform
   dance battle (both multiuser sides readied with the controller):
-    python3 scripts/native_assert_harvest.py --out /tmp/h-battle --port 9195 --mode-downs 2 \
+    python3 scripts/native_assert_harvest.py --out /tmp/h-battle --mode-downs 2 \
         --post-screens dancebattle_perform_endgame_screen,dancebattle_perform_complete_screen
   practice (--route practice = the flags below; practice_welcome_screen needs
   its confirm too, without it the route stalls there):
-    python3 scripts/native_assert_harvest.py --out /tmp/h-practice --port 9195 \
+    python3 scripts/native_assert_harvest.py --out /tmp/h-practice \
         --mode-downs 1 --multiuser none --confirm-screens \
         seldiff_practice_screen,startgame_practice_screen,practice_welcome_screen \
         --post-screens practice_endgame_screen
   party mode / Crew Throwdown (crew select -> team photos -> hub -> every
   event -> standings -> rematch -> main_screen; see route_party):
-    python3 scripts/native_assert_harvest.py --out /tmp/h-party --port 9196 --route party
+    python3 scripts/native_assert_harvest.py --out /tmp/h-party --route party
   (--route perform|battle|practice|party are presets for the flags above.)
+  Runs can overlap: each engine binds its own HTTP port (written to
+  <out>/http_port) and keeps its cache/saves under <out>/persist-*, seeded as a
+  console that has seen every tutorial (--tutorials unseen for an empty one).
   re-analyse a finished run:  --out <dir> --analyse-only
   (GPU access: run outside the sandbox.  Needs a built native/build/dc3-native.)
 """
@@ -73,13 +76,15 @@ import urllib.request
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from synthetic_kinect import SyntheticKinect  # noqa: E402
+from engine_http_port import EnginePortError, engine_port_env, port_file, wait_for_port  # noqa: E402
+from gesture_menu_flow import seed_all_tutorials_seen  # noqa: E402
 MENU_SCREENS = {"main_screen", "choose_mode_screen", "song_select_screen"}
 
 
 class Harvest:
     def __init__(self, args):
         self.args = args
-        self.base = f"http://127.0.0.1:{args.port}/api"
+        self.base = None  # http://127.0.0.1:<port>/api once the engine has bound it
         self.out = os.path.abspath(args.out)
         os.makedirs(self.out, exist_ok=True)
         self.log_path = os.path.join(self.out, "engine.log")
@@ -201,8 +206,26 @@ class Harvest:
             print(f"error: {binary} not built", file=sys.stderr)
             sys.exit(2)
         env = dict(os.environ)
+        # Persistence: a private cache/save root per run.  Without it the engine
+        # read and wrote ~/.local/share/dc3 -- shared with every other run and
+        # with the developer's own -- and whether a first-run tutorial screen
+        # appears is read from that cache (ProfileMgr::HasSeenTutorial), so a
+        # route stalled or not depending on what ran before it (PLAN H-7).
+        import tempfile
+        persist = tempfile.mkdtemp(prefix="persist-", dir=self.out)
+        for d in ("cache", "saves"):
+            os.makedirs(os.path.join(persist, d))
+        if self.args.tutorials == "seen":
+            # A console that has seen every tutorial, as TwoPlayerBattleTest
+            # and gesture_menu_flow.py seed it: no tutorial screen sits between
+            # the menus and gameplay (party's tutorial_crew_showdown_screen_1
+            # stalled the party route; PLAN H-7).
+            seed_all_tutorials_seen(os.path.join(persist, "cache"))
+        self.persist = persist
         env.update({
-            "DC3_HTTP": "1", "DC3_HTTP_PORT": str(self.args.port), "DC3_FAST_BOOT": "1",
+            "DC3_CACHE_DIR": os.path.join(persist, "cache"),
+            "DC3_SAVE_DIR": os.path.join(persist, "saves"),
+            "DC3_FAST_BOOT": "1",
             "DC3_TEL": "1", "DC3_SHOW_SPLASH": "0", "MILO_MAX_FRAMES": "0",
             "MILO_HEADLESS": "1", "DC3_FAST_TIME": "1", "MILO_RENDER": "1",
             "DC3_TAG_MODALS": "1",
@@ -330,6 +353,9 @@ class Harvest:
         with open(boot_script, "w") as f:
             f.write("\n".join(lines) + "\n")
         env["MILO_INPUT_SCRIPT"] = boot_script
+        # The engine binds its own HTTP port (DC3_HTTP_PORT=0) and writes it to
+        # <out>/http_port; --port pins one (scripts/engine_http_port.py).
+        env.update(engine_port_env(self.out, a.port))
         # Pin the exact executable this run uses: symbolising a backtrace
         # against a binary relinked mid-run names the wrong functions (seen
         # 2026-09-30: every site resolved to Debug::Modal / MakeString after a
@@ -355,6 +381,12 @@ class Harvest:
         self.proc = subprocess.Popen(cmd, cwd=build_dir, env=env,
                                      stdout=self.logf, stderr=subprocess.STDOUT)
         self.t0 = time.time()
+        try:
+            port = wait_for_port(port_file(self.out), self.proc, timeout=120)
+        except EnginePortError as ex:
+            return self.mark("boot", False, str(ex))
+        self.base = f"http://127.0.0.1:{port}/api"
+        print(f"[harvest] engine HTTP port {port}", flush=True)
         deadline = time.time() + 120
         while time.time() < deadline:
             if not self.alive():
@@ -876,7 +908,14 @@ def apply_route_preset(args):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", required=True)
-    ap.add_argument("--port", type=int, default=9191)
+    ap.add_argument("--port", type=int, default=0,
+                    help="pin the engine's HTTP port (default 0: the engine binds a free "
+                         "one and reports it, so runs can overlap)")
+    ap.add_argument("--tutorials", choices=["seen", "unseen"], default="seen",
+                    help="seen (default): seed the run's private options cache as a "
+                         "console that has seen every tutorial, so no first-run tutorial "
+                         "screen interrupts the route; unseen: start from an empty cache "
+                         "(the tutorial screens show; the route does not drive them)")
     ap.add_argument("--route", choices=["custom", "perform", "battle", "practice", "party"],
                     default="custom",
                     help="preset route (fills --mode-downs/--confirm-screens/--post-screens/"

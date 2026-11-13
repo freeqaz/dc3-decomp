@@ -29,6 +29,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include "platform/ExecutablePath.h"
+#include "engine_http_port.h"
 
 namespace {
 
@@ -78,7 +79,7 @@ std::string PersistenceRoot() {
 // Boot to main_screen, then POST confirm until the screen changes (at most
 // `tries` presses, 2 s apart).  Everything is bounded: the engine is killed by
 // PID (never by pattern), and `timeout` caps the whole run.
-HttpRun RunHttpPressOnMain(int port, int tries) {
+HttpRun RunHttpPressOnMain(int tries) {
     HttpRun r;
     std::string bin = BinaryDir() + "/dc3-native";
     std::string script = BinaryDir() + "/../../scripts/dc3-input-flows/idle-main.txt";
@@ -110,12 +111,12 @@ HttpRun RunHttpPressOnMain(int port, int tries) {
     std::ostringstream sh;
     sh << "cd " << BinaryDir() << " && "
        << "( MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1"
-       << " DC3_HTTP=1 DC3_HTTP_PORT=" << port << " MILO_MAX_FRAMES=0"
+       << EngineHttpPortShellEnv(persist) << " MILO_MAX_FRAMES=0"
        << " DC3_CACHE_DIR=" << persist << "/cache"
        << " DC3_SAVE_DIR=" << persist << "/saves"
        << " MILO_INPUT_SCRIPT=" << script
        << " timeout 240 ./dc3-native > " << log << " 2>&1 & echo $! > " << log << ".pid ); "
-       << "pid=$(cat " << log << ".pid); api=http://127.0.0.1:" << port << "/api; "
+       << "pid=$(cat " << log << ".pid); " << EngineHttpApiShell(persist, "pid", 120)
        << "scr() { curl -s -m 5 $api/screen | sed -n 's/.*\"screen\":\"\\([^\"]*\\)\".*/\\1/p'; }; "
        << "end=$((SECONDS+150)); "
        << "until [ \"$(scr)\" = main_screen ] || [ $SECONDS -ge $end ] || ! kill -0 $pid 2>/dev/null;"
@@ -153,7 +154,7 @@ protected:
     static void SetUpTestSuite() {
         if (!getenv("DC3_DTA_FLOW_TESTS"))
             return;
-        sRun = RunHttpPressOnMain(9500 + (getpid() % 400), 8); // clear of the harvest ports (9191..)
+        sRun = RunHttpPressOnMain(8); // the engine binds its own port (engine_http_port.h)
         sRan = true;
     }
     void SetUp() override {

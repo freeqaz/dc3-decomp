@@ -669,6 +669,10 @@ def main():
     ap.add_argument("--perform", metavar="HTTP_API",
                     help="debug-server /api root to read targets from, "
                          "e.g. http://127.0.0.1:9191/api")
+    ap.add_argument("--perform-port-file", metavar="PATH",
+                    help="like --perform, for an engine on DC3_HTTP_PORT=0: wait for the "
+                         "port it writes to DC3_HTTP_PORT_FILE=PATH, then perform against "
+                         "http://127.0.0.1:<port>/api (scripts/engine_http_port.py)")
     ap.add_argument("--watch-only", action="store_true",
                     help="negative control: record targets/scores but stand still")
     ap.add_argument("--lead-ms", type=float, default=0.0)
@@ -684,7 +688,9 @@ def main():
                     help="send protocol v3 with a WxH camera picture + person mask "
                          "rendered from the joints (needs numpy)")
     a = ap.parse_args()
-    if not a.socket and not a.perform:
+    if a.perform and a.perform_port_file:
+        ap.error("--perform and --perform-port-file are exclusive")
+    if not a.socket and not (a.perform or a.perform_port_file):
         ap.error("--socket is required unless --perform only records")
     k = SyntheticKinect(a.socket, people=a.people)
     if a.frames:
@@ -698,11 +704,23 @@ def main():
         k.replay(a.replay, still=a.replay_still)
     if a.socket:
         k.start()
-    if a.perform:
-        k.perform(a.perform, lead_ms=a.lead_ms, watch_only=a.watch_only)
     done = threading.Event()
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: done.set())
+    if a.perform_port_file:
+        # The engine boots after this socket is up, so its port is not known
+        # yet.  Wait for it (until stopped; the launcher bounds the run).
+        from engine_http_port import read_port
+        port = None
+        while not done.is_set() and not port:
+            port = read_port(a.perform_port_file)
+            if not port:
+                done.wait(0.1)
+        if port:
+            a.perform = f"http://127.0.0.1:{port}/api"
+            print(f"synthetic_kinect: performing against {a.perform}", flush=True)
+    if a.perform:
+        k.perform(a.perform, lead_ms=a.lead_ms, watch_only=a.watch_only)
     while not done.is_set():
         done.wait(1.0)
     k.stop()

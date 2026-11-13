@@ -34,8 +34,8 @@ measures a stale binary, and checks the system toolchain by content hash
 that tier quickly, run the binary directly so the fixture is built once:
 
 ```bash
-cd orig-assets && DC3_GAMEPLAY_TESTS=1 \
-    ../native/build/milo-tests --gtest_filter='GameplayTelemetryTest.*'
+B=$PWD/native/build; cd orig-assets && DC3_GAMEPLAY_TESTS=1 \
+    $B/milo-tests --gtest_filter='GameplayTelemetryTest.*'
 ```
 
 ### Exit codes
@@ -179,17 +179,66 @@ does not reach the test process. Gates are decided in `native/CMakeLists.txt`.
 Runtime variables for `dc3-native` itself are in the master table in
 [debugging/native.md](../debugging/native.md#environment-variables).
 
+## Running alongside other gates
+
+Several lanes run `scripts/native_test.sh` on this box at once. Each worktree has
+its own build dir and lock (exit 11 is only for two gates on *one* build dir), and
+ctest runs one test at a time, so collisions are between lanes: anything a test
+puts at a fixed place on the box is shared with every other lane's run.
+
+- **HTTP port: the engine picks it.** A test that launches `dc3-native` with
+  `DC3_HTTP=1` sets `DC3_HTTP_PORT=0` and `DC3_HTTP_PORT_FILE=<run dir>/http_port`
+  and reads the port back. Helpers: `native/tests/engine_http_port.h` (shell
+  fragments for the C++ flow tests), `scripts/engine_http_port.py`, and
+  `scripts/synthetic_kinect.py --perform-port-file`, for a sensor started before
+  its engine. Never pick a port and pass it in: between the probe and the engine's
+  bind, seconds of boot later, any process can take it. `GestureMenusTest` died
+  that way (port 48041 already held).
+- **A port collision is loud.** An explicit port that is taken exits 98 with a
+  `FATAL - HTTP debug server: port N already in use` line. Before 2026-11-13 two
+  engines on one port both listened (cpp-httplib's `SO_REUSEPORT`) and each took
+  some of the other's requests. `/api/health` reports the engine's `pid`, so a
+  driver can check that the engine answering is the one it launched.
+- **Files and sockets: per run.** Flow tests `mkdtemp` a run dir and keep the
+  sensor socket, logs, the port file and `DC3_CACHE_DIR`/`DC3_SAVE_DIR` in it (the
+  default `~/.local/share/dc3` is shared by every run and by the developer).
+  Unit-test fixtures go in `TestScratchDir()` (`test_helpers.h`), a per-process dir
+  removed at exit. A dc3-native that spawns its own pose server uses
+  `/tmp/dc3_pose_<pid>.sock`. `/tmp/claude-1000/bik_fixtures` stays shared on
+  purpose (`ExtractBik` writes it, the Bink tests read it). Files are written to a
+  temporary name and renamed into place. Failure dumps under `/tmp/claude-1000`
+  carry the pid.
+- **Guards** (all sabotage-checked, np-harness):
+  `ConcurrentFlowTest.TwoCopiesOfAFlowRunAtOnce` runs two camera-view flows at once
+  in one process. Both must reach `main_screen`, on different ports, and every
+  `/api/health` must answer with the pid in that run's own `DC3_EXIT` line. With
+  the old launcher (port chosen by the test) it fails: both copies got port 23798,
+  and one exited 98. With the old launcher and the engine's `SO_REUSEPORT` back,
+  both runs reached `main_screen`, and the test failed on the pid check: each
+  run's six health answers came from both engines.
+  `NativeExitTest.HttpPortInUseIsANamedExit` holds a port with a plain listener;
+  under the old `abort()` it reads rc 134. `NativeExitTest.SecondEngineOnAPortExitsInsteadOfSharing`
+  starts a second engine on the first one's port; with `SO_REUSEPORT` the second
+  keeps running and the test times out.
+
 ## Configure and run by hand
 
 ```bash
 scripts/native_configure.sh               # cmake configure; NOT plain `cmake ..`
                                           # (find_package(Dawn REQUIRED) needs -DDawn_DIR)
 cmake --build native/build --target milo-tests
+B=$PWD/native/build                       # absolute: see the note below
 cd orig-assets                            # tests resolve assets relative to cwd
-../native/build/milo-tests                            # Run all tests
-../native/build/milo-tests --gtest_filter='Suite.Test' # Run specific test
-../native/build/milo-tests --gtest_list_tests         # List available tests
+$B/milo-tests                             # Run all tests
+$B/milo-tests --gtest_filter='Suite.Test' # Run specific test
+$B/milo-tests --gtest_list_tests          # List available tests
 ```
+
+**In a worktree, never `../native/build/milo-tests` from `orig-assets`.**
+`orig-assets` is a symlink to the main checkout's, and the kernel resolves `..`
+physically, so that path is the **main checkout's** binary: your edits are not
+in it, and its tests are not yours (measured: the worktree's new tests were
+missing from `--gtest_list_tests`).
 
 ## Fixture Hierarchy
 
@@ -247,15 +296,30 @@ MILO_BULK_LIMIT=50 ctest -R BulkLoadAllFiles --output-on-failure     # files per
 MILO_BULK_ALL=1 ctest -R BulkLoad --output-on-failure                # every file, every case
 ```
 
+### Assert harvest
+
+`scripts/native_assert_harvest.py` drives one route headless and lists every
+`MILO_ASSERT`/`FAIL`/`WARN`/`NOTIFY` site it hits (not part of the gate; GPU, so
+take the GPU lock). Routes: `--route perform|battle|practice|party`. Each run takes
+a free HTTP port and a private cache under `<out>/persist-*`, seeded as a console
+that has seen every tutorial, so runs can overlap and no first-run tutorial screen
+interrupts the route (PLAN H-7). `--tutorials unseen` starts from an empty cache;
+the route does not drive the tutorials and stalls on the first one.
+
+```bash
+flock -s -w 3600 /home/free/tmp/claude-1000/gpu1.lock \
+    python3 scripts/native_assert_harvest.py --route party --out /tmp/claude-1000/h-party
+```
+
 ### Bone ground truth and clip poses
 
 `native/tests/test_bone_ground_truth.cpp` (`BoneGroundTruth`, `ClipPoseFixture`,
 `MainMiloLoadTest`) checks skeleton topology, rest pose and clip evaluation numerically:
 
 ```bash
-cd orig-assets
-../native/build/milo-tests --gtest_filter='BoneGroundTruth.*:ClipPoseFixture.*:MainMiloLoadTest.LoadMainCharacterMilo'
-../native/build/milo-tests --gtest_filter='CharBonesSamplesTest.*'
+B=$PWD/native/build; cd orig-assets
+$B/milo-tests --gtest_filter='BoneGroundTruth.*:ClipPoseFixture.*:MainMiloLoadTest.LoadMainCharacterMilo'
+$B/milo-tests --gtest_filter='CharBonesSamplesTest.*'
 ```
 
 ### Xenia goldens

@@ -219,3 +219,15 @@ const char *GetTestBikPath();
 // Returns true on success.
 bool WriteSyntheticMilo(const char *path,
                         const std::vector<std::vector<uint8_t>> &chunks);
+
+// ============================================================================
+// Per-process scratch directory (np-harness)
+// ============================================================================
+
+// A directory private to this test process, created on first use:
+// /tmp/claude-1000/milo-tests-<pid>-<n>, removed when the process exits.  Several
+// lanes run the gate on one box at once, and ctest runs each case in its own
+// process, so a fixed path such as /tmp/claude-1000/milo_tests was written,
+// read and deleted by unrelated runs at the same time.  Fixtures written here
+// cannot be touched by another run.  Empty string if it cannot be created.
+const std::string &TestScratchDir();

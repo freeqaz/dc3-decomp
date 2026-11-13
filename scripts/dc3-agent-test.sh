@@ -5,6 +5,10 @@
 #   ./scripts/dc3-agent-test.sh                          # headless, HTTP on :9090
 #   ./scripts/dc3-agent-test.sh --windowed                # with window
 #   ./scripts/dc3-agent-test.sh --port 8080               # custom HTTP port
+#   ./scripts/dc3-agent-test.sh --port 0                  # engine picks a free port and
+#                                                         # prints DC3_HTTP_PORT=<n>
+#   A port another process holds is exit 98 with a FATAL line naming it (an
+#   engine no longer shares a port with another one: docs/debugging/native.md).
 #   ./scripts/dc3-agent-test.sh --script ymca.txt         # with input script
 #   ./scripts/dc3-agent-test.sh -- --extra-engine-args    # pass args to dc3-native
 #
@@ -96,7 +100,8 @@ while [ $# -gt 0 ]; do
             echo "Options:"
             echo "  --windowed         Run with a window (default if GLFW available)"
             echo "  --headless         Force headless mode"
-            echo "  --port PORT        HTTP server port (default: 9090)"
+            echo "  --port PORT        HTTP server port (default: 9090; 0 = a free one,"
+            echo "                     printed as DC3_HTTP_PORT=<n>; taken = exit 98)"
             echo "  --script FILE      Input script (name or path, e.g. ymca.txt)"
             echo "  --frames N         Max frames before exit (default: 100000)"
             echo "  --help             Show this help"

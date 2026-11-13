@@ -305,6 +305,7 @@ Every exit path writes one `DC3_EXIT: how=… detail=… code=…` line.
 | Window destroyed by another client (`xdotool windowclose`), or a `BadWindow` on it | loop ends before drawing: `detail=window_lost`, rc 0 (`native/src/platform/WindowLoss_X11.cpp`) |
 | `SIGTERM` / `SIGINT` / `SIGHUP` | a quit request: the loop ends at the next frame boundary, so a save being written in that frame completes; `detail=SIGTERM` (etc.), rc 128+sig. A second signal, or 5 s without reaching the boundary, stops at once (`how=terminating_signal`) |
 | `SIGQUIT`, a fatal signal | immediate, rc 128+sig |
+| The HTTP debug server's port cannot be bound (`DC3_HTTP_PORT` held by another process) | `DC3 Native: FATAL - HTTP debug server: port N already in use (DC3_HTTP_PORT=N)`, `how=exit_runtime detail=http_port_in_use`, **rc 98** (`http_port_bind_failed` for another bind error, `http_port_file_unwritable` for `DC3_HTTP_PORT_FILE`) |
 | `exit()` from anywhere (DTA `{exit}`, `Debug::Exit` → `XLaunchNewImage`, Xlib's default error handlers) | `how=exit_runtime` with exit()'s own code; the static destructors are skipped, as the main loop's return always did (they crash in `ObjDirPtr<ObjectDir>::operator=`) |
 
 Tests: `NativeExitTest.*` (runs its own Xvfb; no window manager needed).
@@ -336,7 +337,7 @@ variables are value-parsed: `0`/`false`/`off`/`no` disable.
 | `DC3_POSE_CAMERA` | `0` | Camera index | `native/src/platform/GestureMgr_Native.cpp` |
 | `DC3_POSE_MODEL` | `<tree>/native/models/pose_landmarker_full.task`, found from the executable, not the cwd | MediaPipe model passed to the spawned server | `native/src/platform/GestureMgr_Native.cpp` |
 | `DC3_DUMMY_PLAYERS` | auto | `1` or `2`: how many standing stand-ins the sensor shows when no pose provider runs. Unset: one, two in two-player modes (`requires_2_players` / `is_in_party_mode`). Ignored while a provider runs | `native/src/platform/GestureMgr_Native.cpp` |
-| `DC3_POSE_SOCKET` | `/tmp/dc3_pose.sock` | Unix socket shared with the pose server | `native/src/platform/GestureMgr_Native.cpp` |
+| `DC3_POSE_SOCKET` | spawned server: `/tmp/dc3_pose_<pid>.sock`; with `DC3_POSE_NO_SPAWN`: `/tmp/dc3_pose.sock` | Unix socket shared with the pose server. Per process when the engine spawns the server, since `pose_server.py` unlinks whatever is at its path | `native/src/platform/GestureMgr_Native.cpp` |
 | `DC3_POSE_NO_SPAWN` | unset | Presence. Connect to an already-running pose server instead of forking `pose_server.py` | `native/src/platform/Skeleton_Native.cpp` |
 | `DC3_POSE_HFOV` | unset | Horizontal camera FOV passed to the spawned server | `native/src/platform/Skeleton_Native.cpp` |
 
@@ -354,7 +355,8 @@ variables are value-parsed: `0`/`false`/`off`/`no` disable.
 | `DC3_TEL` | `0` | Non-zero: gameplay telemetry lines on stderr | `native/src/telemetry/GameplayTelemetry.cpp` |
 | `DC3_TEL_INTERVAL` | `10` | Frames between telemetry lines | `native/src/telemetry/GameplayTelemetry.cpp` |
 | `DC3_HTTP` | `0` | Non-zero: start the HTTP debug server ([tools/HTTP_DEBUG_SERVER.md](../tools/HTTP_DEBUG_SERVER.md)). Only `dc3-native` is built with `DC3_HTTP_SERVER` | `native/src/platform/HttpServer.cpp` (DC3 glue; the engine copy is not compiled) |
-| `DC3_HTTP_PORT` | `9090` | HTTP debug server port. `0` or `auto`: kernel-assigned port, printed on stdout as `DC3_HTTP_PORT=<n>` | `native/src/platform/HttpServer.cpp` |
+| `DC3_HTTP_PORT` | `9090` | HTTP debug server port. `0` or `auto`: kernel-assigned port, printed on stdout as `DC3_HTTP_PORT=<n>`. A port that cannot be bound exits 98 (see [Stopping the engine](#stopping-the-engine-h-9)) | `native/src/platform/HttpServer.cpp` |
+| `DC3_HTTP_PORT_FILE` | unset | Once the debug server is bound, write its port to this file (temp file + rename). How harnesses learn a `DC3_HTTP_PORT=0` port | `native/src/platform/HttpServer.cpp` |
 
 ### Audio
 

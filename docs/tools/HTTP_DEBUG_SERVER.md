@@ -16,12 +16,26 @@ DC3_HTTP=1 DC3_HTTP_PORT=8080 ./dc3-native
 # Kernel-assigned free port; the chosen one is printed on stdout as
 # DC3_HTTP_PORT=<n> (the race-free choice for scripts and parallel tests)
 DC3_HTTP=1 DC3_HTTP_PORT=0 ./dc3-native | grep -m1 '^DC3_HTTP_PORT='
+
+# ...and also written to a file once bound (temp file + rename, so a poller
+# never reads half of it); what the test harnesses use
+DC3_HTTP=1 DC3_HTTP_PORT=0 DC3_HTTP_PORT_FILE=/tmp/run/http_port ./dc3-native
 ```
 
-An explicit port that is already taken aborts the process (`[HttpServer] FATAL:
-port N already in use`, rc 134). A harness that picks a "free" port itself and
-passes it in is racy under load — any ephemeral socket can take it before
-dc3-native binds; use `DC3_HTTP_PORT=0` and read the stdout line instead.
+An explicit port that cannot be bound is a named exit, **rc 98**:
+`DC3 Native: FATAL - HTTP debug server: port N already in use (DC3_HTTP_PORT=N)`
+and `DC3_EXIT: how=exit_runtime detail=http_port_in_use code=98`
+(`http_port_bind_failed` for any other bind error). Before 2026-11-13 it was an
+`abort()` (rc 134), and a port held by **another dc3-native** did not fail at
+all: cpp-httplib binds with `SO_REUSEPORT` by default, so both engines listened
+and the kernel split the requests between them (measured: `/api/health` on 9290
+answered alternately by two engines). The server now sets `SO_REUSEADDR` only.
+
+A harness must not pick a "free" port itself and pass it in: any process can
+take it before dc3-native binds, seconds later. Use `DC3_HTTP_PORT=0` with
+`DC3_HTTP_PORT_FILE` (helpers: `scripts/engine_http_port.py`,
+`native/tests/engine_http_port.h`; the synthetic sensor's
+`--perform-port-file`). See [native/TESTING.md](../native/TESTING.md#running-alongside-other-gates).
 
 ## Endpoints
 
@@ -29,10 +43,11 @@ dc3-native binds; use `DC3_HTTP_PORT=0` and read the stdout line instead.
 
 ```bash
 curl localhost:9090/api/health
-# {"ok":true,"data":{"status":"ok","frame":1234,"uptime_s":5.2}}
+# {"ok":true,"data":{"status":"ok","frame":1234,"uptime_s":5.2,"pid":4321}}
 ```
 
-Poll this to know when the engine is ready. Scripts can wait for a successful response before interacting.
+Poll this to know when the engine is ready. `pid` is the engine's process id,
+so a driver can check that the engine answering is the one it launched. Scripts can wait for a successful response before interacting.
 
 ### Telemetry
 
