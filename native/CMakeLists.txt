@@ -2349,6 +2349,14 @@ if(BUILD_TESTS)
             COMMAND ${MILO_PYTHON3_LINK} -B ${CMAKE_SOURCE_DIR}/../tests/test_pose_fixture.py)
         set_tests_properties(PoseFixture.Python PROPERTIES
             LABELS PoseServer TIMEOUT 300 ENVIRONMENT "${MILO_TEST_ENV}")
+        # PoseTracker.Python: CentroidTracker keeps a dancer's id through a
+        # MediaPipe dropout (PLAN P-12), and the web port gives the same ids
+        # (tests/test_pose_tracker.py; node for the parity half, skipped in
+        # the file without it).
+        add_test(NAME PoseTracker.Python
+            COMMAND ${MILO_PYTHON3_LINK} -B ${CMAKE_SOURCE_DIR}/../tests/test_pose_tracker.py)
+        set_tests_properties(PoseTracker.Python PROPERTIES
+            LABELS PoseServer TIMEOUT 120 ENVIRONMENT "${MILO_TEST_ENV}")
     endif()
 
     # XeniaGolden.*: the native port against state recorded from the ORIGINAL

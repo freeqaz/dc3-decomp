@@ -76,9 +76,61 @@ static HRESULT NativeNuiSkeletonFrameSource(NUI_SKELETON_FRAME *) {
 // no provider runs. Shared by both live branches (the dummies use slots 0/1).
 static int sSlotTrackId[NUM_SKELETONS] = {-1, -1, -1, -1, -1, -1};
 
+// Dropout hold (PLAN P-12).  MediaPipe loses a dancer who is fully in view,
+// mid-song, for up to ~1.4 s (measured: 50 dropouts over 18 songs of real
+// footage, longest 1.2 s, and 1.43 s on the cupidshuffle clip of np-dogfood3)
+// -- usually on a turn.  A Kinect keeps such a person TRACKED: its skeleton
+// comes from the depth image the body never left, occluded joints flagged
+// inferred.  The image gives a lost tracking id only GestureMgr::
+// sMaxRecoveryTime (1.0 s, SkeletonRecoverer) before SkeletonChooser unbinds
+// the player and Game::CheckForSkeletonLoss pauses -- and on a 360 that grace
+// exists for a real loss, not for a detector glitch.  So a slot whose person
+// vanishes keeps reporting that person, same tracking id, every joint at its
+// last good position and flagged inferred, for up to DC3_POSE_HOLD_MS
+// (default kDefaultHoldMs) of sensor time.  Bounded: past it the slot is
+// released and the image's own recovery window runs, so a player who walks
+// out still pauses, kDefaultHoldMs later than on a 360.  NATIVE POLICY.
+//
+// Not held: a person who was in a slot for less than kHoldMinPresenceMs (a
+// one-frame false detection is not someone a Kinect would have acquired), and
+// a slot whose position a NEW tracking id has taken (within the image's own
+// GestureMgr::sMaxRecoveryDistance, 0.3 m): the tracker decided that is a new
+// person, and holding the old one too would put two skeletons on one body.
+static const int kDefaultHoldMs = 1000;
+static const float kHoldMinPresenceMs = 500.0f;
+static const float kHoldReacquireMetres = 0.3f;
+
+struct SlotHold {
+    NativeSkeletonProvider::PersonData last; // the slot's last delivered person
+    float presentMs = 0.0f; // sensor time the current owner has been delivered
+    float heldMs = 0.0f;    // sensor time the slot has been held (0 = not held)
+};
+static SlotHold sSlotHold[NUM_SKELETONS];
+
+static void ResetSlotHold(int s) {
+    sSlotHold[s].presentMs = 0.0f;
+    sSlotHold[s].heldMs = 0.0f;
+}
+
 static void ResetSlotMap() {
-    for (int s = 0; s < NUM_SKELETONS; s++)
+    for (int s = 0; s < NUM_SKELETONS; s++) {
         sSlotTrackId[s] = -1;
+        ResetSlotHold(s);
+    }
+}
+
+// DC3_POSE_HOLD_MS: 0 turns the hold off (the pre-P-12 behaviour), unset or
+// unparsable = kDefaultHoldMs, capped at 5000.  Read per call (cheap), so a
+// test can change it between frames.
+static int NativePoseHoldMs() {
+    const char *v = getenv("DC3_POSE_HOLD_MS");
+    if (!v || !*v)
+        return kDefaultHoldMs;
+    char *end = nullptr;
+    long ms = strtol(v, &end, 10);
+    if (end == v || *end != '\0' || ms < 0)
+        return kDefaultHoldMs;
+    return ms > 5000 ? 5000 : (int)ms;
 }
 
 // Is a real pose provider feeding the sensor (ncnn, the external pose server
@@ -245,7 +297,12 @@ void GestureMgr_NativeTerminate() {
 // personForSlot[slot] is the person index k filling that slot, or -1. Slots
 // whose owner departed are released here (the frame reports them untracked).
 // Returns the number of newly-assigned slots (slot reassignments this frame).
-static int AssignSlots(const int *trackIds, int numValid, int *personForSlot) {
+// A slot whose owner is absent but still within the dropout hold (see
+// sSlotHold) keeps its trackId and reads kSlotHeld in personForSlot.
+static const int kSlotHeld = -2;
+
+static int AssignSlots(const int *trackIds, const Vector3 *hips, int numValid,
+                       float elapsedMs, int *personForSlot) {
     for (int s = 0; s < NUM_SKELETONS; s++)
         personForSlot[s] = -1;
 
@@ -265,12 +322,35 @@ static int AssignSlots(const int *trackIds, int numValid, int *personForSlot) {
         }
     }
 
-    // 2. Release slots whose owner is no longer present.
+    // 2. Release slots whose owner is no longer present -- unless the dropout
+    //    hold keeps it (see sSlotHold).
+    const int holdMs = NativePoseHoldMs();
     bool releasedNow[NUM_SKELETONS];
     for (int s = 0; s < NUM_SKELETONS; s++) {
         releasedNow[s] = false;
         if (sSlotTrackId[s] >= 0 && personForSlot[s] < 0) {
+            SlotHold &h = sSlotHold[s];
+            bool hold = holdMs > 0 && h.presentMs >= kHoldMinPresenceMs
+                && h.heldMs + elapsedMs <= (float)holdMs;
+            if (hold) {
+                // A newcomer standing where the held person stood is the
+                // tracker's verdict that this is someone new.
+                const Vector3 &was = h.last.joints[kJointHipCenter];
+                for (int k = 0; k < numValid && hold; k++) {
+                    if (placed[k] || trackIds[k] < 0)
+                        continue;
+                    float dx = hips[k].x - was.x, dy = hips[k].y - was.y, dz = hips[k].z - was.z;
+                    if (dx * dx + dy * dy + dz * dz <= kHoldReacquireMetres * kHoldReacquireMetres)
+                        hold = false;
+                }
+            }
+            if (hold) {
+                h.heldMs += elapsedMs;
+                personForSlot[s] = kSlotHeld;
+                continue;
+            }
             sSlotTrackId[s] = -1;
+            ResetSlotHold(s);
             releasedNow[s] = true;
         }
     }
@@ -294,6 +374,7 @@ static int AssignSlots(const int *trackIds, int numValid, int *personForSlot) {
                 // A new occupant must not inherit the previous person's held
                 // low-confidence joint positions either.
                 NativeSkeletonProvider::ResetJointHold(s);
+                ResetSlotHold(s);
                 reassignments++;
                 break;
             }
@@ -463,24 +544,43 @@ static void FinishTrackedSlot(int s) {
     }
 }
 
-// Lay this frame's persons into their persistent slots.
-static int FillPersonSlots(const NativeSkeletonProvider::PersonData *persons, int numPersons) {
+// Lay this frame's persons into their persistent slots.  `elapsedMs` is the
+// sensor time since the previous frame (the dropout hold's clock).
+static int FillPersonSlots(const NativeSkeletonProvider::PersonData *persons, int numPersons,
+                           float elapsedMs) {
     int trackIds[NUM_SKELETONS], origIdx[NUM_SKELETONS], numValid = 0;
+    Vector3 hips[NUM_SKELETONS];
     for (int i = 0; i < numPersons && numValid < NUM_SKELETONS; i++) {
         if (persons[i].valid) {
             trackIds[numValid] = persons[i].trackId;
+            hips[numValid] = persons[i].joints[kJointHipCenter];
             origIdx[numValid] = i;
             numValid++;
         }
     }
     int personForSlot[NUM_SKELETONS];
-    int reassigns = AssignSlots(trackIds, numValid, personForSlot);
+    int reassigns = AssignSlots(trackIds, hips, numValid, elapsedMs, personForSlot);
     for (int s = 0; s < NUM_SKELETONS; s++) {
         int k = personForSlot[s];
         if (k >= 0) {
-            NativeSkeletonProvider::FillSkeletonData(
-                sFrame.mSkeletonDatas[s], persons[origIdx[k]], s
-            );
+            const NativeSkeletonProvider::PersonData &person = persons[origIdx[k]];
+            NativeSkeletonProvider::FillSkeletonData(sFrame.mSkeletonDatas[s], person, s);
+            FinishTrackedSlot(s);
+            SlotHold &h = sSlotHold[s];
+            h.last = person;
+            h.presentMs += elapsedMs;
+            h.heldMs = 0.0f;
+        } else if (k == kSlotHeld) {
+            // What a Kinect reports for a body it can no longer see clearly:
+            // still tracked, every joint inferred.  A joint the detector had
+            // already lost stays not-tracked, so FillSkeletonData's joint
+            // hold puts it at its last good position too.
+            NativeSkeletonProvider::PersonData held = sSlotHold[s].last;
+            for (int j = 0; j < kNumJoints; j++) {
+                if (held.confidence[j] > kConfidenceInferred)
+                    held.confidence[j] = kConfidenceInferred;
+            }
+            NativeSkeletonProvider::FillSkeletonData(sFrame.mSkeletonDatas[s], held, s);
             FinishTrackedSlot(s);
         }
     }
@@ -559,7 +659,7 @@ static const SkeletonFrame *BuildSensorFrame() {
             int numPersons = TheSkeletonProvider->NumPersons();
             for (int i = 0; i < numPersons; i++)
                 sPersons[i] = TheSkeletonProvider->GetPerson(i);
-            ScoringDebugTick(true, false, FillPersonSlots(sPersons, numPersons));
+            ScoringDebugTick(true, false, FillPersonSlots(sPersons, numPersons, (float)sFrame.mElapsedMs));
             // SkeletonFrame::Create's gravity step (PoseLevel_Native.h): the
             // slots hold raw camera space; a camera that does not know its
             // gravity gets an estimate, everything else (0,1,0).
