@@ -18,7 +18,7 @@ not exist on web. macOS last ran in March and would not build today.
 |---|---|---|
 | Test gate | `scripts/native_test.sh`: 654 registered / 584 executed / 584 passed / 0 failed / 70 skipped (budget 70), exit 0 | ran |
 | Gameplay gate | `--all-gates`: all 48 `GameplayTelemetryTest` pass, including feet-above-floor and no-bone-garbage. Each test is its own 51–89 s engine run, so the gate takes ~50 min. | ran (stopped at test 402 by a timeout, 0 failures) |
-| Perform | Boot → title → song select → multiuser → tutorial (fresh profile) → loading → gameplay → results → song select → main, on YMCA / Better Off Alone / Give It Up in three venues; two songs back to back | headless GPU runs |
+| Perform | Boot → title → song select → multiuser → tutorial (fresh profile) → loading → gameplay → results → song select → main, on YMCA / Better Off Alone / Give It Up in three venues; two songs back to back. **Every quickplay song (45) plays whole to the results**, none bounces, hangs or crashes; the largest, omg, is a test (`LargestSongFlowTest`). See [Every song](#every-song) | headless GPU runs; no-GPU sweep of all 45, 2026-11-13 (`np-songs`) |
 | Save | `profile_0_save.dat` written at endgame; reloaded after restart; tutorial skipped and score shown | ran |
 | Rehearse | Runs to `practice_endgame_screen` | ran |
 | Battle | Two people on the sensor: whole song to results, both scored. One person: pauses at ~beat 4 and waits for the second player, as on a 360. No camera: two stand-ins, results. See [Two-player modes](#two-player-modes). | headless GPU runs + `TwoPlayerBattleTest` / `OnePersonBattleTest` / `NoCameraBattleTest`, 2026-11-13 (`np-twoplayer`) |
@@ -144,7 +144,7 @@ results screen showing one yet.
 
 | Area | State | How measured |
 |---|---|---|
-| Synthetic performer | All-perfect ratings, ~1.68 M at 100 s; still all perfect with webcam-like noise and 150 ms lateness | ran |
+| Synthetic performer | All-perfect ratings, ~1.68 M at 100 s; still all perfect with webcam-like noise and 150 ms lateness. Over all 45 songs (whole song, `choreo`, `DC3_FAST_TIME`): all perfect on 43; macarena 49/4/0/0, the same on the real clock (`So_Fly_macarena` falls 0.97 → 0.92 → 0.88 → 0.79 across each 4-measure block: awesome in the 3rd and 4th, both blocks; PLAN P-10); chingaling 60/0/0/1 under FAST_TIME (`Whip_Step` right after a rest, frac 0, deterministic) but 61/0/0/0 on the real clock. **Under `DC3_FAST_TIME`, a run lasting more than ~3 min of wall clock with song time slower than wall (paced or GPU) stops scoring** — harness only, the real clock is clean (PLAN H-9) | ran; [Every song](#every-song) |
 | MediaPipe on a video file | Scored (wrong-dance clip → mostly bad/ok) | ran |
 | Motionless skeleton | SIGSEGV at ~130 s (zero variance in `RhythmDetector`) — **fixed** by the sensor noise floor (PLAN P-1); 45k-frame still run exits 0 | ran |
 | Live webcam | Never tried (no camera on the measurement box) | — |
