@@ -125,7 +125,7 @@ Tool-specific deep docs live in subdirectories:
 
 <!-- NP-DOCS: coordinator fills this section -->
 <!-- (living README / PLAN / STATUS / LINUX / MACOS / WEB / POSE_INPUT pages go
-     here; native/MACOS_ARM_BUILD.md, native/WEB_TESTING.md,
+     here; native/MACOS_ARM_BUILD.md, native/WEB.md,
      native/SCORING_ENV_VARS.md and ../native/web/VIDEO_ASSETS.md are pending
      fold-in and deliberately not listed yet) -->
 
