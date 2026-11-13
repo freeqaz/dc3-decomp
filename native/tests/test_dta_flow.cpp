@@ -1011,8 +1011,11 @@ TEST_F(FitnessPlaylistFlowTest, PlaylistsRowStartsAPlaylist) {
 // options-gameplay.txt enters options_gameplay_screen twice, selecting one
 // checkbox row each time, then selects A/V > Kinect Tuner.  native's
 // {speech_mgr is_speech_supportable} is 0, so the panel shows
-// provider_no_voice.hnp: its four rows plus the native overlay's two
-// (option_camera_blend, option_debug_panel) = 6.
+// provider_no_voice.hnp: its four rows, plus -- in a developer run
+// (DC3_DEV_OPTIONS=1) -- the native overlay's two (option_camera_blend,
+// option_debug_panel) = 6.  This suite runs with the developer rows on, so it
+// keeps exercising the overlay's append path; OptionsGameplayPlayerFlowTest
+// below runs the same flow as a player and requires the retail four (G-20).
 //
 // G-12: the overlay counted rows with `num_data`, a message HamNavProvider has
 // never handled (Handle is 100% matched; the image has no such handler), so
@@ -1028,7 +1031,7 @@ protected:
     static bool sRanEngine;
     static void SetUpTestSuite() {
         if (!getenv("DC3_DTA_FLOW_TESTS")) return;
-        sResult = RunDtaFlow(1500, 180, "options-gameplay.txt");
+        sResult = RunDtaFlow(1500, 180, "options-gameplay.txt", "DC3_DEV_OPTIONS=1");
         sRanEngine = true;
     }
     void SetUp() override { CheckRan(sResult, sRanEngine); }
@@ -1036,16 +1039,33 @@ protected:
         if (HasFailure() && sRanEngine) Dump(sResult);
     }
 
+public:
     // The lines from the first options_gameplay_screen Enter up to (not
     // including) the options_av_screen Enter.
-    static std::vector<std::string> GameplayLines() {
+    static std::vector<std::string> GameplayLines(const DtaRunResult &result = sResult) {
         std::vector<std::string> out;
         for (const std::string &line :
-             LinesFrom(sResult.output, "Screen 'options_gameplay_screen' Enter")) {
+             LinesFrom(result.output, "Screen 'options_gameplay_screen' Enter")) {
             if (line.find("Screen 'options_av_screen' Enter") != std::string::npos) break;
             out.push_back(line);
         }
         return out;
+    }
+
+    // The right-hand list's row count at each checkbox select (one per visit):
+    // HamNavList logs numData with every select.
+    static std::vector<int> RowCountsPerVisit(const std::vector<std::string> &lines) {
+        std::vector<int> counts;
+        for (const std::string &line : lines) {
+            if (!StartsWith(line, "DC3 HamNavList: select name='right_hand.hnl'")) continue;
+            if (line.find("sym='option_photo'") == std::string::npos &&
+                line.find("sym='option_freestyle'") == std::string::npos)
+                continue;
+            size_t at = line.find("numData=");
+            if (at == std::string::npos) continue;
+            counts.push_back(atoi(line.c_str() + at + strlen("numData=")));
+        }
+        return counts;
     }
 };
 DtaRunResult OptionsGameplayFlowTest::sResult = {};
@@ -1077,16 +1097,7 @@ TEST_F(OptionsGameplayFlowTest, OverlayAddsItsTwoRowsEachVisit) {
     std::vector<std::string> lines = GameplayLines();
     ASSERT_FALSE(lines.empty())
         << "precondition: options-gameplay.txt never reached options_gameplay_screen";
-    std::vector<int> counts;
-    for (const std::string &line : lines) {
-        if (!StartsWith(line, "DC3 HamNavList: select name='right_hand.hnl'")) continue;
-        if (line.find("sym='option_photo'") == std::string::npos &&
-            line.find("sym='option_freestyle'") == std::string::npos)
-            continue;
-        size_t at = line.find("numData=");
-        ASSERT_NE(at, std::string::npos) << "select log carries no numData: " << line;
-        counts.push_back(atoi(line.c_str() + at + strlen("numData=")));
-    }
+    std::vector<int> counts = RowCountsPerVisit(lines);
     ASSERT_EQ(counts.size(), 2u)
         << "expected one checkbox select per visit (photo or freestyle)";
     EXPECT_EQ(counts[0], 6)
@@ -1094,6 +1105,44 @@ TEST_F(OptionsGameplayFlowTest, OverlayAddsItsTwoRowsEachVisit) {
     EXPECT_EQ(counts[1], 6)
         << "second visit: 6 rows again (fewer: an append was lost; more: the "
            "provider outlived the first visit and the rows doubled)";
+}
+
+// G-20: a player (no DC3_DEV_OPTIONS) sees the retail rows only, as on a 360:
+// provider_no_voice.hnp's option_photo, option_freestyle, autosave,
+// option_choosestorage.  Before the fix every run showed the two developer
+// rows (camera blend, debug overlay) too.
+class OptionsGameplayPlayerFlowTest : public ControllerModeFlowTest {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+    static void SetUpTestSuite() {
+        if (!getenv("DC3_DTA_FLOW_TESTS") || sRanEngine) return;
+        sResult = RunDtaFlow(1500, 180, "options-gameplay.txt", "env -u DC3_DEV_OPTIONS");
+        sRanEngine = true;
+    }
+    void SetUp() override { CheckRan(sResult, sRanEngine); }
+    void TearDown() override {
+        if (HasFailure() && sRanEngine) Dump(sResult);
+    }
+};
+DtaRunResult OptionsGameplayPlayerFlowTest::sResult = {};
+bool OptionsGameplayPlayerFlowTest::sRanEngine = false;
+
+TEST_F(OptionsGameplayPlayerFlowTest, PlayerSeesTheRetailRowsOnly) {
+    std::vector<std::string> lines = OptionsGameplayFlowTest::GameplayLines(sResult);
+    ASSERT_FALSE(lines.empty())
+        << "precondition: options-gameplay.txt never reached options_gameplay_screen";
+    std::vector<int> counts = OptionsGameplayFlowTest::RowCountsPerVisit(lines);
+    ASSERT_EQ(counts.size(), 2u)
+        << "expected one checkbox select per visit (photo or freestyle)";
+    EXPECT_EQ(counts[0], 4) << "first visit: provider_no_voice.hnp's 4 retail rows only "
+                               "(6 = the developer rows are showing to a player)";
+    EXPECT_EQ(counts[1], 4) << "second visit: the retail 4 again";
+    int fails = 0;
+    for (const std::string &line : lines)
+        if (StartsWith(line, "FAIL:")) fails++;
+    EXPECT_EQ(fails, 0) << "Options > Gameplay raised MILO_FAILs without the developer rows";
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }
 
 TEST_F(OptionsGameplayFlowTest, KinectTunerGivesFeedback) {
