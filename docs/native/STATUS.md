@@ -159,7 +159,7 @@ Easy:
   before a practice) is compared with the song. That is the image's
   `MILO_NOTIFY_ONCE`, not a native fault. Per song, the only file lines not
   shared by the venue are the loading-music `.mid` (PLAN H-11) and the
-  song-select preview movies passed on the way (PLAN H-10).
+  song-select preview movies passed on the way (those were `np-paths`' G-15, fixed on main since).
 - **Desktop, GPU** (`--song-seconds 40`, gameplay screenshot at beat 48):
   45/45 reach gameplay with venue, dancers and HUD drawn; ratings all
   perfect to 40 s except macarena (`So_Fly` again). Peak RSS 627–851 MB. The
@@ -174,7 +174,7 @@ Easy:
   gameplay, all perfect, 732–849 MB. **Results screen:** ymca whole song on
   GPU reached the results with the right card, stars and score (one run;
   the whole-song no-GPU runs reach the results for all 45). The single
-  results shot predates the H-9 diagnosis: it read 62/0/0/5, the dropout,
+  results shot predates the H-10 diagnosis: it read 62/0/0/5, the dropout,
   because the GPU run passed ~3 min of wall clock.
 - **Web** (`scripts/web/song-sweep.mjs`, release build of this branch,
   Chromium, fresh page per song, gameplay + 30 s): 45/45 reach `game_screen`
@@ -258,7 +258,7 @@ and differs between runs):
 
 | Area | State | How measured |
 |---|---|---|
-| Synthetic performer | All-perfect ratings, ~1.68 M at 100 s; still all perfect with webcam-like noise and 150 ms lateness. Over all 45 songs (whole song, `choreo`, `DC3_FAST_TIME`): all perfect on 43; macarena 49/4/0/0, the same on the real clock (`So_Fly_macarena` falls 0.97 → 0.92 → 0.88 → 0.79 across each 4-measure block: awesome in the 3rd and 4th, both blocks; PLAN P-10); chingaling 60/0/0/1 under FAST_TIME (`Whip_Step` right after a rest, frac 0, deterministic) but 61/0/0/0 on the real clock. **Under `DC3_FAST_TIME`, a run lasting more than ~3 min of wall clock with song time slower than wall (paced or GPU) stops scoring** — harness only, the real clock is clean (PLAN H-9) | ran; [Every song](#every-song) |
+| Synthetic performer | All-perfect ratings, ~1.68 M at 100 s; still all perfect with webcam-like noise and 150 ms lateness. Over all 45 songs (whole song, `choreo`, `DC3_FAST_TIME`): all perfect on 43; macarena 49/4/0/0, the same on the real clock (`So_Fly_macarena` falls 0.97 → 0.92 → 0.88 → 0.79 across each 4-measure block: awesome in the 3rd and 4th, both blocks; PLAN P-11); chingaling 60/0/0/1 under FAST_TIME (`Whip_Step` right after a rest, frac 0, deterministic) but 61/0/0/0 on the real clock. **Under `DC3_FAST_TIME`, a run lasting more than ~3 min of wall clock with song time slower than wall (paced or GPU) stops scoring** — harness only, the real clock is clean (PLAN H-10) | ran; [Every song](#every-song) |
 | MediaPipe on a video file | Scored (wrong-dance clip → mostly bad/ok) | ran |
 | Motionless skeleton | SIGSEGV at ~130 s (zero variance in `RhythmDetector`) — **fixed** by the sensor noise floor (PLAN P-1); 45k-frame still run exits 0 | ran |
 | Live webcam | Never tried (no camera on the measurement box) | — |
@@ -272,10 +272,10 @@ and differs between runs):
 | Area | State | How measured |
 |---|---|---|
 | Build | Fresh worktree, `scripts/web/build.sh`, ~3 min (release) | ran |
-| Play | Whole song in Chromium on a real GPU, ~60 fps (rAF-capped), no page errors; song audio played the whole track | headless-shell |
+| Play | Whole song in Chromium on a real GPU, ~60 fps (rAF-capped), no page errors; song audio played the whole track. Every quickplay song (45) reaches gameplay and stays 30 s, no bounce (Ice Ice Baby and In Da Club included), 0 page errors; see [Every song](#every-song) | headless-shell; `scripts/web/song-sweep.mjs`, 2026-11-13 (`np-songs`) |
 | Input | ~~Keyboard/gamepad only~~ Webcam pose since P-9: with a fake camera, tracking runs at ~25 fps and Macarena → Cupid Shuffle play to results with pause/resume (`np-dogfood2`). `MILO_NOTIFY`/`MILO_WARN` now reach the devtools console (W-9, `np-exit`: boot → title, the desktop's notifies plus one web-only `DataNode::Equal` notify) | ran, 2026-11-13 |
 | Large songs | `np-dogfood2` (tree at `09586f7d9`, before `185b6f50e`) saw Ice Ice Baby and In Da Club go back to the title after preloading: the preload-budget bug fixed by `185b6f50e`. Re-check: `np-songs` | ran |
-| Memory | ~460 MB of the 512 MB cap during gameplay | ran |
+| Memory | wasm byteLength 363–523 MB over the 45 songs (geometric growth, so reservation; true peaks in [WEB.md](WEB.md#heap-per-venue-w-6)); omg and youmakemefeeldc pass the old 512 MB cap, the cap is now 1024 MB | ran (`np-songs`) |
 | Variants | "release" is `-O0`, "debug" is `-O3`; labels are swapped | read flags |
 | Test scripts | `scripts/web/*.mjs` cannot launch their browser here (Playwright/browser version mismatch) | ran |
 | Public deploy | Serves a 2026-07-27 build | read unit |
