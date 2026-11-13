@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <sys/stat.h>
+#include <unistd.h>
 
 // Dc3EnvFlag — value-parsed boolean env gate for native runtime toggles.
 //
@@ -150,17 +151,15 @@ static bool FileExistsRaw(const char *path) {
     return stat(path, &st) == 0;
 }
 
-// Find the game data directory containing gen/main_xbox.hdr
-void NativeDetectDataDir() {
-    // Check environment variable first
+// Where the game data is: the directory containing gen/main_xbox.hdr, probed
+// as $DC3_DATA first, then orig-assets / ../orig-assets / ../../orig-assets / .
+// relative to the CWD. nullptr = no game data. Pure query (no side effects), so
+// the test harness asks exactly the question the boot path asks: see
+// EnsureEngineInit() in native/tests/test_helpers.cpp and HeadlessBootTest.
+const char *NativeFindDataDir() {
     const char *env = getenv("DC3_DATA");
-    if (env && FileExistsRaw(MakeString("%s/gen/main_xbox.hdr", env))) {
-        NativeSetDataDir(env);
-        printf("DC3 Native: data dir from DC3_DATA=%s\n", env);
-        return;
-    }
-
-    // Search common locations relative to CWD
+    if (env && *env && FileExistsRaw(MakeString("%s/gen/main_xbox.hdr", env)))
+        return env;
     static const char *searchPaths[] = {
         "orig-assets",
         "../orig-assets",
@@ -171,11 +170,25 @@ void NativeDetectDataDir() {
     for (const char **p = searchPaths; *p; p++) {
         char buf[512];
         snprintf(buf, sizeof(buf), "%s/gen/main_xbox.hdr", *p);
-        if (FileExistsRaw(buf)) {
-            NativeSetDataDir(*p);
-            printf("DC3 Native: data dir=%s\n", *p);
-            return;
-        }
+        if (FileExistsRaw(buf))
+            return *p;
+    }
+    return nullptr;
+}
+
+// Find the game data directory containing gen/main_xbox.hdr
+void NativeDetectDataDir() {
+    const char *env = getenv("DC3_DATA");
+    const char *dir = NativeFindDataDir();
+    if (env && *env && dir != env)
+        printf("DC3 Native: WARNING - DC3_DATA=%s has no gen/main_xbox.hdr; ignoring it\n", env);
+    if (dir) {
+        NativeSetDataDir(dir);
+        if (dir == env)
+            printf("DC3 Native: data dir from DC3_DATA=%s\n", env);
+        else
+            printf("DC3 Native: data dir=%s\n", dir);
+        return;
     }
     printf("DC3 Native: WARNING - could not find game data (gen/main_xbox.hdr)\n");
     printf("  Set DC3_DATA env var or run from the repo root.\n");
@@ -203,6 +216,24 @@ void NativeDetectOverlayDir() {
     printf("DC3 Native: no overlay dir found (optional)\n");
 }
 
+#ifndef __EMSCRIPTEN__
+// Exit (status 1) with a message a player can act on. _exit, not exit: this
+// runs inside SystemPreInit, before anything worth flushing exists, and static
+// destructors (Dawn's among them) are not safe to run from here.
+[[noreturn]] static void NativeFatalNoGameData(const char *hdrPath, const char *why) {
+    const char *env = getenv("DC3_DATA");
+    fflush(stdout);
+    fprintf(stderr,
+            "DC3 Native: FATAL - no game data: %s %s.\n"
+            "  DC3_DATA is %s%s%s.\n"
+            "  Point DC3_DATA at the extracted game data (the directory that contains\n"
+            "  gen/main_xbox.hdr), or run from a directory with orig-assets/ in it.\n",
+            hdrPath, why, env ? "'" : "", env ? env : "unset", env ? "'" : "");
+    fflush(stderr);
+    _exit(1);
+}
+#endif
+
 // Native archive initialization - simplified from ArchiveInit()
 // Skips TheContentMgr dependency, directly creates archive from known path
 void NativeArchiveInit() {
@@ -216,7 +247,22 @@ void NativeArchiveInit() {
     Symbol plat = PlatformSymbol(TheLoadMgr.GetPlatform());
     const char *mainArk = MakeString("gen/main_%s", plat);
     printf("DC3 Native: Loading archive %s.hdr\n", mainArk);
+    // No archive is a fatal configuration error, reported as one. Archive::Read
+    // (decomp code, kept as the image has it) only MILO_ASSERTs on a missing or
+    // unreadable header, and asserts are non-fatal natively, so it used to hand
+    // back an Archive with an EMPTY hash table; the first file lookup then did
+    // HashString(..., 0) -- `% 0` -- and the process died of SIGFPE with no
+    // explanation (every engine test on the asset-less CI runner, and any
+    // player with a bad DC3_DATA). Check before reading, and check the result.
+    // A local copy, not MakeString's rotating buffer: Archive's constructor
+    // below makes many MakeString calls of its own.
+    char hdrPath[1024];
+    snprintf(hdrPath, sizeof(hdrPath), "%s/%s.hdr", NativeGetDataDir(), mainArk);
+    if (!FileExistsRaw(hdrPath))
+        NativeFatalNoGameData(hdrPath, "does not exist");
     TheArchive = new Archive(mainArk, 0);
+    if (TheArchive->NumArkFiles() <= 0)
+        NativeFatalNoGameData(hdrPath, "could not be read as a version-6 archive header");
     static int preinitArk = 1;
     TheArchive->SetArchivePermission(1, &preinitArk);
     printf("DC3 Native: Archive loaded, %d ark files\n", TheArchive->NumArkFiles());
