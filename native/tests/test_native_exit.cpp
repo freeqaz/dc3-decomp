@@ -416,11 +416,18 @@ Window FindEngineWindow(Display *dpy) {
 
 // Boots dc3-native in a window on `x`, lets it draw, then hands the window to
 // `act` from a second X client. Returns the engine's output.
+// The display RunWindowed's engine is on, for an `act` that runs X tools.
+std::string sWindowDisplay;
+
 template <typename Act>
-void RunWindowed(const std::string &runDir, Act act, Engine &e) {
+void RunWindowed(const std::string &runDir, Act act, Engine &e,
+                 std::vector<std::string> env = {}) {
     Xvfb x;
     if (!x.available) GTEST_SKIP() << "Xvfb not installed; the window tests need a private X server";
-    Start(e, runDir, {"MILO_HEADLESS", "DISPLAY=" + x.display});
+    sWindowDisplay = x.display;
+    env.push_back("MILO_HEADLESS");
+    env.push_back("DISPLAY=" + x.display);
+    Start(e, runDir, env);
     ASSERT_TRUE(e.WaitFor("DC3 Native: Entering main loop", 120)) << Tail(e.Output());
     if (GpuUnavailable(e.Output()))
         GTEST_SKIP() << "GPU unavailable; no window to close";
@@ -436,6 +443,26 @@ void RunWindowed(const std::string &runDir, Act act, Engine &e) {
     XSync(dpy, False);
     XCloseDisplay(dpy);
     ASSERT_TRUE(e.WaitExit(30)) << "still running 30 s after the window went\n" << Tail(e.Output());
+}
+
+// Runs `xdotool <args>` against the engine's display; false if it failed.
+bool Xdotool(const std::string &args) {
+    std::string cmd = "DISPLAY=" + sWindowDisplay + " xdotool " + args + " >/dev/null 2>&1";
+    return system(cmd.c_str()) == 0;
+}
+
+bool HaveXdotool() { return system("command -v xdotool >/dev/null 2>&1") == 0; }
+
+void SendWmDeleteWindow(Display *dpy, Window w) {
+    XEvent ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.xclient.type = ClientMessage;
+    ev.xclient.window = w;
+    ev.xclient.message_type = XInternAtom(dpy, "WM_PROTOCOLS", False);
+    ev.xclient.format = 32;
+    ev.xclient.data.l[0] = (long)XInternAtom(dpy, "WM_DELETE_WINDOW", False);
+    ev.xclient.data.l[1] = CurrentTime;
+    XSendEvent(dpy, w, False, NoEventMask, &ev);
 }
 
 } // namespace
@@ -460,17 +487,7 @@ TEST_F(NativeExitTest, DestroyedWindowEndsTheLoop) {
 // _NET_CLOSE_WINDOW to the root window, which only a window manager acts on).
 TEST_F(NativeExitTest, WmDeleteWindowEndsTheLoop) {
     Engine e;
-    RunWindowed(mRunDir, [](Display *dpy, Window w) {
-        XEvent ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.xclient.type = ClientMessage;
-        ev.xclient.window = w;
-        ev.xclient.message_type = XInternAtom(dpy, "WM_PROTOCOLS", False);
-        ev.xclient.format = 32;
-        ev.xclient.data.l[0] = (long)XInternAtom(dpy, "WM_DELETE_WINDOW", False);
-        ev.xclient.data.l[1] = CurrentTime;
-        XSendEvent(dpy, w, False, NoEventMask, &ev);
-    }, e);
+    RunWindowed(mRunDir, [](Display *dpy, Window w) { SendWmDeleteWindow(dpy, w); }, e);
     if (IsSkipped() || HasFatalFailure()) return;
     std::string out = e.Output();
     ExpectNoCrash(out);
@@ -478,6 +495,72 @@ TEST_F(NativeExitTest, WmDeleteWindowEndsTheLoop) {
     EXPECT_EQ(WEXITSTATUS(e.status), 0) << Tail(out);
     EXPECT_TRUE(Contains(out, "DC3_EXIT: how=main_loop_returned detail=window_closed code=0"))
         << Tail(out);
+}
+
+// G-5: the keys PLAN G-5 added -- X, Y, Z (LT), C (RT) -- reach pad 0 as
+// button messages, typed into the window from a second X client the way a
+// person would (XTEST, the window under the pointer has the focus). Each is a
+// `xdotool key` tap, press and release inside one frame, which only reads as a
+// press because the poll turns on GLFW sticky keys. X is typed first: the
+// session's first press is answered by the poll's own action table, which used
+// to give X ViewModify (5) on the press and ShellOption (14) on the release.
+// MILO_INPUT_LOG=1 prints one "Joypad: down ..." line per button message.
+TEST_F(NativeExitTest, KeysForXYAndTriggersReachThePad) {
+    if (!HaveXdotool()) GTEST_SKIP() << "xdotool not installed";
+    Engine e;
+    std::string missing;
+    RunWindowed(mRunDir, [&](Display *dpy, Window w) {
+        const char *keys[] = {"x", "y", "z", "c"};
+        for (const char *k : keys) {
+            ASSERT_TRUE(Xdotool(std::string("key ") + k)) << "xdotool key " << k;
+            std::this_thread::sleep_for(std::chrono::milliseconds(400));
+        }
+        const char *want[] = {
+            "Joypad: down pad=0 button=7 (X) action=14",
+            "Joypad: down pad=0 button=4 (Y) action=3",
+            "Joypad: down pad=0 button=0 (LT)",
+            "Joypad: down pad=0 button=1 (RT)",
+        };
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        for (;;) {
+            std::string out = e.Output();
+            missing.clear();
+            for (const char *line : want)
+                if (!Contains(out, line)) missing += std::string("\n  ") + line;
+            if (missing.empty() || std::chrono::steady_clock::now() > deadline) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+        SendWmDeleteWindow(dpy, w);
+    }, e, {"MILO_INPUT_LOG=1"});
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_TRUE(missing.empty()) << "no button message for:" << missing << "\n" << Tail(out);
+    EXPECT_TRUE(Contains(out, "X = X, Y = Y")) << "startup key map not printed\n" << Tail(out);
+    EXPECT_TRUE(Contains(out, "Z = LT, C = RT, Ctrl+Q = quit")) << Tail(out);
+    EXPECT_FALSE(Contains(out, "press ESC to exit")) << "Esc is B; the log must not call it quit";
+    ExpectNoCrash(out);
+}
+
+// G-5: Ctrl+Q quits like a window close -- at a frame boundary, rc 0 -- and is
+// not also an LB press (Q alone is LB). Ctrl is held across the Q tap, as a
+// person presses it. (`xdotool key ctrl+q` releases Ctrl before Q within
+// microseconds; the ImGui backend's modifier reads in its key callback use up
+// Ctrl's sticky state, so that synthetic chord is not seen. Human-speed
+// presses are.)
+TEST_F(NativeExitTest, CtrlQEndsTheLoop) {
+    if (!HaveXdotool()) GTEST_SKIP() << "xdotool not installed";
+    Engine e;
+    RunWindowed(mRunDir, [&](Display *, Window) {
+        ASSERT_TRUE(Xdotool("keydown ctrl sleep 0.2 key q sleep 0.2 keyup ctrl"));
+    }, e, {"MILO_INPUT_LOG=1"});
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    ExpectNoCrash(out);
+    ASSERT_TRUE(WIFEXITED(e.status)) << Tail(out);
+    EXPECT_EQ(WEXITSTATUS(e.status), 0) << Tail(out);
+    EXPECT_TRUE(Contains(out, "DC3_EXIT: how=main_loop_returned detail=quit_key code=0"))
+        << Tail(out);
+    EXPECT_FALSE(Contains(out, "button=2 (LB)")) << "Ctrl+Q also pressed LB\n" << Tail(out);
 }
 
 #endif // __linux__ (window tests)
