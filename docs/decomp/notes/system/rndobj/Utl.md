@@ -402,6 +402,19 @@ Above the definition (was lines 1358-1459):
 //     arm at the very end), so it is an aligner artifact, not kept.
 ```
 
+Added by lane w-low-rndobj, 2026-11-13:
+
+```text
+BEHAVIOUR VERDICT: AGREES (71.49 / 71.34, unchanged).  res=0 first; bmp/png
+stricmp pair; movie arm MovieExtension(ext, platform) -> MakeString('%s/%s.%s',
+path, base, movieExt) else res=kCacheUnknownExtension(1)/null; PS3 (4) _xbox ->
+_ps3 rewrite with the same offsets (idx, idx+4, xboxStr+5); gen path argument
+order path/base/ext/PlatformSymbol(thisPlatform); Holmes result stored to res,
+null when > 0 (signed).  Residual: block placement + the single String dtor.
+Side note: ps3File is block-scoped yet aliased by 'localized' after the block
+(UB in the source; only reachable on a PS3 platform, never on native).
+```
+
 
 ## `?ComputeFaceTangentBasis@@YAXPAVRndMesh@@HAAVMatrix3@Hmx@@@Z`
 
