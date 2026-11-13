@@ -26,6 +26,7 @@
 #include <cfloat>
 #ifdef HX_NATIVE
 inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #else
@@ -41,11 +42,13 @@ static WorldCrowd *gParent = nullptr;
 #ifdef HX_NATIVE
 // Native-only crowd draw counters (PLAN H-6), off unless DC3_CROWD_STATS is
 // set. Value N > 0 prints one line every N render frames:
-//   DC3_CROWD: frame=F draws3d=D impostors=I pose=P
+//   DC3_CROWD: frame=F draws3d=D impostors=I pose=P ms=T
 // draws3d counts Draw3DChars' curChar->Draw() calls (one per 3D crowd member),
 // impostors counts DrawShowing's renders of a character into gImpostorTex, and
 // pose is a checksum of the local transforms of every transformable inside
-// each Character drawn that frame, so it moves when the crowd animates. Read by
+// each Character drawn that frame, so it moves when the crowd animates; ms is
+// the wall time spent inside WorldCrowd::DrawShowing that frame (CPU-side
+// recording of the crowd's draws, less the checksum walk). Read by
 // native/tests/test_native_crowd.cpp; draws nothing and changes nothing.
 namespace {
     struct NativeCrowdStats {
@@ -54,6 +57,7 @@ namespace {
         int draws3d = 0;
         int impostors = 0;
         double pose = 0;
+        double ms = 0;
         bool any = false;
 
         bool On() {
@@ -71,20 +75,23 @@ namespace {
                 if (frame % (unsigned int)every == 0) {
                     fprintf(
                         stderr,
-                        "DC3_CROWD: frame=%u draws3d=%d impostors=%d pose=%.6f\n",
+                        "DC3_CROWD: frame=%u draws3d=%d impostors=%d pose=%.6f ms=%.3f\n",
                         frame,
                         draws3d,
                         impostors,
-                        pose
+                        pose,
+                        ms
                     );
                 }
                 draws3d = impostors = 0;
-                pose = 0;
+                pose = ms = 0;
             }
             frame = now;
             any = true;
         }
         void AddPose(Character *c) {
+            // Its own cost is taken back out of ms.
+            auto t0 = std::chrono::steady_clock::now();
             // Weighted by position in the walk so a swap of two bones moves it.
             int n = 1;
             for (ObjDirItr<RndTransformable> it(c, true); it; ++it, ++n) {
@@ -96,6 +103,10 @@ namespace {
                     * (x.v.x + x.v.y + x.v.z + x.m.x.x + x.m.x.y + x.m.x.z + x.m.y.x
                        + x.m.y.y + x.m.y.z + x.m.z.x + x.m.z.y + x.m.z.z);
             }
+            ms -= std::chrono::duration<double, std::milli>(
+                      std::chrono::steady_clock::now() - t0
+            )
+                      .count();
         }
         void On3DDraw(Character *c) {
             if (!On())
@@ -112,6 +123,25 @@ namespace {
             AddPose(c);
         }
     } sNativeCrowdStats;
+
+    // Times one WorldCrowd::DrawShowing into sNativeCrowdStats.ms.
+    struct NativeCrowdDrawTimer {
+        bool on;
+        std::chrono::steady_clock::time_point start;
+        NativeCrowdDrawTimer() : on(sNativeCrowdStats.On()) {
+            if (on)
+                start = std::chrono::steady_clock::now();
+        }
+        ~NativeCrowdDrawTimer() {
+            if (!on)
+                return;
+            sNativeCrowdStats.Roll();
+            sNativeCrowdStats.ms += std::chrono::duration<double, std::milli>(
+                                        std::chrono::steady_clock::now() - start
+            )
+                                        .count();
+        }
+    };
 }
 #endif
 
@@ -1140,6 +1170,9 @@ void WorldCrowd::DrawShowing() {
     //
     // Lane history (28 lines moved): docs/decomp/notes/system/world/Crowd.md
     START_AUTO_TIMER("crowd_draw");
+#ifdef HX_NATIVE
+    NativeCrowdDrawTimer nativeCrowdTimer;
+#endif
     if (!mPlacementMesh) return;
     Draw3DChars();
     if (Rnd::kDrawOcclusionDepth == TheRnd.DrawMode()) return;
