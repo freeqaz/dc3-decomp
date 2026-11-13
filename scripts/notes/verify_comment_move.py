@@ -40,8 +40,9 @@ USAGE
 
 `compare` also refuses to be vacuous: every .cpp the working tree changed since
 the snapshot's HEAD must map to an object that was rewritten AFTER the
-snapshot (ninja actually recompiled it), and report.json must be newer than the
-snapshot.  A gate that compared yesterday's objects with yesterday's objects
+snapshot (ninja actually recompiled it), every object whose compile read a
+changed header must be too (`ninja -t deps`, plus every PCH user for a header
+the PCH read), and report.json must be newer than the snapshot.  A gate that compared yesterday's objects with yesterday's objects
 would always pass.
 
 Exit codes: 0 identical   1 DIFFERENT (refuse the move)   2 could not verify
@@ -264,6 +265,54 @@ def unit_objects(root):
     return m
 
 
+def pch_users(root):
+    """Objects whose compile edge takes the PCH as an input (from build.ninja)."""
+    text = re.sub(r"\$\n\s*", " ", (Path(root) / "build.ninja").read_text())
+    users = set()
+    for line in text.splitlines():
+        if not line.startswith("build ") or ".obj:" not in line:
+            continue
+        outs, _, ins = line[len("build "):].partition(":")
+        if re.search(r"(^|\s)\S*/pch/\S+\.pch(\s|$)", ins):
+            users.update(o for o in outs.split() if o.endswith(".obj") and "/pch/" not in o)
+    return users
+
+
+def dependents(root, rels):
+    """Changed files that are not a unit's own source (headers, #included .cpp)
+    -> the objects whose compile read them, from ninja's dependency log.
+
+    MSVC omits PCH-contained headers from /showIncludes, so a header the PCH
+    read (`ninja -t deps` of the PCH object) is charged to every PCH user too.
+    """
+    p = subprocess.run(["ninja", "-t", "deps"], cwd=root, capture_output=True, text=True)
+    if p.returncode != 0:
+        raise RuntimeError(f"ninja -t deps failed: {p.stderr.strip()[:200]}")
+    norm = lambda x: os.path.normpath(os.path.join(str(root), x))  # noqa: E731
+    want = {norm(r): r for r in rels}
+    out = {r: set() for r in rels}
+    pch_read = set()
+    target = None
+    for line in p.stdout.splitlines():
+        if not line.strip():
+            continue
+        if not line[0].isspace():
+            target = line.split(":", 1)[0].strip()
+            continue
+        r = want.get(norm(line.strip()))
+        if r is None or target is None:
+            continue
+        if "/pch/" in target:
+            pch_read.add(r)
+        elif target.endswith(".obj"):
+            out[r].add(target)
+    if pch_read:
+        users = pch_users(root)
+        for r in pch_read:
+            out[r] |= users
+    return out
+
+
 def cmd_snapshot(a, root):
     if not a.no_build:
         r = subprocess.run(["ninja"], cwd=root)
@@ -352,16 +401,33 @@ def cmd_compare(a, root):
     stale = []
     rebuilt = 0
     for sp in changed:
-        if not sp.endswith((".cpp", ".c", ".cc")):
-            continue
         obj = u2o.get(sp)
         if obj is None:
-            continue  # not a unit (e.g. #included .cpp); its includer is covered by the sweep
+            continue
         p = Path(root) / obj
         if not p.exists() or p.stat().st_mtime < meta["time"]:
             stale.append(obj)
         else:
             rebuilt += 1
+    # A header (or #included .cpp) has no object of its own: every object whose
+    # compile READ it must be new, or a header move would be compared against
+    # objects ninja never rebuilt -- which always passes.
+    others = [sp for sp in changed if sp not in u2o]
+    dep_objs, uncompiled = set(), []
+    if others:
+        try:
+            deps = dependents(root, others)
+        except (RuntimeError, OSError) as e:
+            print(f"CANNOT VERIFY: {e}", file=sys.stderr)
+            return 2
+        for sp in others:
+            if not deps[sp]:
+                uncompiled.append(sp)
+            dep_objs |= deps[sp]
+        for obj in sorted(dep_objs):
+            p = Path(root) / obj
+            if not p.exists() or p.stat().st_mtime < meta["time"]:
+                stale.append(f"{obj} (reads a changed header)")
     rep_path = Path(root) / "build" / VERSION / "report.json"
     if rep_path.stat().st_mtime < meta["time"] and changed:
         stale.append(str(rep_path.relative_to(root)) + " (report not regenerated)")
@@ -390,8 +456,13 @@ def cmd_compare(a, root):
     tsyms = sum(len(after[o]["symbols"]) for o in touched_units if o in after)
     print(f"byte-identical: {len(after)} objects / {nsym} symbols compared; "
           f"{len(changed)} changed source file(s), {rebuilt} recompiled unit(s) "
-          f"carrying {tsyms} symbols; report.json identical "
-          f"({len(rep_before.get('units', []))} units)")
+          f"carrying {tsyms} symbols"
+          + (f", {len(dep_objs)} object(s) recompiled for {len(others) - len(uncompiled)} "
+             f"changed header(s)" if others else "")
+          + f"; report.json identical ({len(rep_before.get('units', []))} units)")
+    if uncompiled:
+        print(f"note: {len(uncompiled)} changed file(s) are read by NO object in this build "
+              f"(nothing here can measure them): " + ", ".join(uncompiled[:10]))
     return 0
 
 

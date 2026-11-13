@@ -187,3 +187,59 @@ def test_a_label_does_not_hide_the_function_bytes_after_it(tmp_path):
     a = gate.fingerprint_object_bytes(labelled(1))
     b = gate.fingerprint_object_bytes(labelled(1, fn_bytes=b"\x38\x60\x00\x01\x4e\x80\x00\x21"))
     assert a["symbols"]["foo"] != b["symbols"]["foo"]
+
+
+def header_case(tmp_path, deps_target, rebuild, pch_edge=False):
+    """A changed HEADER (no unit of its own).  A fake `ninja` on PATH answers
+    `ninja -t deps` with `deps_target` reading src/a.h."""
+    root = tree(tmp_path, obj())
+    (root / "src" / "a.h").write_text("int foo();\n")
+    subprocess.run(["git", "-C", str(root), "add", "src/a.h"], check=True)
+    subprocess.run(["git", "-C", str(root), "-c", "user.email=t@t", "-c", "user.name=t",
+                    "commit", "-qm", "hdr"], check=True)
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    fake = bindir / "ninja"
+    fake.write_text("#!/bin/sh\ncat <<'X'\n"
+                    f"{deps_target}: #deps 2, deps mtime 1 (VALID)\n    src/a.h\n    src/b.h\n\n"
+                    "X\n")
+    fake.chmod(0o755)
+    o = f"build/{gate.VERSION}/src/a.obj"
+    (root / "build.ninja").write_text(
+        f"build {o}: {'msvc_pch' if pch_edge else 'msvc'} src/a.cpp"
+        + (f" | build/{gate.VERSION}/pch/system.pch\n" if pch_edge else "\n"))
+    env = dict(os.environ, PATH=f"{bindir}:{os.environ['PATH']}")
+    rc, out = run(root, "snapshot", "--no-build", "--out", str(tmp_path / "snap"))
+    assert rc == 0, out
+    time.sleep(0.05)
+    (root / "src" / "a.h").write_text("// moved a comment\nint foo();\n")
+    now = time.time() + 1
+    if rebuild:
+        os.utime(root / o, (now, now))
+    os.utime(root / "build" / gate.VERSION / "report.json", (now, now))
+    p = subprocess.run([sys.executable, str(TOOL), "--repo", str(root), "-j", "2", "compare",
+                        "--no-build", "--before", str(tmp_path / "snap")],
+                       capture_output=True, text=True, timeout=120, env=env)
+    return p.returncode, p.stdout + p.stderr
+
+
+def test_changed_header_whose_reader_was_not_rebuilt_is_vacuous(tmp_path):
+    # measured 2026-11-13: the header batch printed "0 recompiled unit(s)" and
+    # PASSED -- headers had no unit, so nothing asserted any reader was rebuilt
+    rc, out = header_case(tmp_path, f"build/{gate.VERSION}/src/a.obj", rebuild=False)
+    assert rc == 2, out
+    assert "reads a changed header" in out
+
+
+def test_changed_header_whose_reader_was_rebuilt_passes(tmp_path):
+    rc, out = header_case(tmp_path, f"build/{gate.VERSION}/src/a.obj", rebuild=True)
+    assert rc == 0, out
+    assert "1 object(s) recompiled for 1 changed header(s)" in out
+
+
+def test_pch_header_is_charged_to_every_pch_user(tmp_path):
+    # MSVC omits PCH headers from a TU's /showIncludes: only the PCH lists it
+    rc, out = header_case(tmp_path, f"build/{gate.VERSION}/pch/decomp_pch.obj",
+                          rebuild=False, pch_edge=True)
+    assert rc == 2, out
+    assert "reads a changed header" in out
