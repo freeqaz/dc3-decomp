@@ -232,7 +232,11 @@ class SyntheticKinect:
         elbow towards the body over `duration` seconds, hold the end for
         SWIPE_HOLD_S, then drop the arm to the side (the "stand" arm).
         ArcDetector reads the sweep as a swipe: the highlighted item is
-        selected.  Seconds are sensor seconds (now())."""
+        selected.  Seconds are sensor seconds (now()).  Measured working:
+        duration 0.3 s, sweep 110 degrees after a >= 0.6 s hover (the hover
+        drops ArcDetector's threshold from 0.1 to 0.03), the engine paced so
+        the sweep spans ~9 sensor frames (scripts/gesture_menu_flow.py).  A
+        sweep that arrives as <= 2 path nodes caps at 0.5 and never selects."""
         with self.lock:
             self.poses[person] = ("swipe", side, float(height), self.now(),
                                   float(duration), float(sweep))
@@ -256,7 +260,9 @@ class SyntheticKinect:
         with it, so the skeleton's elapsed ms, the gesture animations and the
         engine's UI clock are one time base.  The engine never waits for the
         sensor: it reads the newest packet, like a camera slower than the
-        game loop."""
+        game loop -- so pace it (DC3_HTTP_PACE_FPS / PUT /api/pace, e.g. 120)
+        whenever a gesture has to be seen frame by frame; unpaced, a GPU-less
+        engine runs ~3000 fps and one packet covers several frames."""
         if self.follow_thread:
             return
         self.follow_stop.clear()
