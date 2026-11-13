@@ -401,7 +401,7 @@ void RhythmBattle::PlayMindControlVO(Symbol s) {
 void RhythmBattle::UpdateFinaleVO(int &i) {
     if (!mFinaleVOQueue.empty() && i > 500) {
         UIPanel *game_panel = TheUI->FocusPanel();
-        MILO_ASSERT(game_panel != NULL, 0x708);
+        MILO_ASSERT_IF(game_panel != NULL, 0x708)
         Symbol first = mFinaleVOQueue.front();
         mFinaleVOQueue.erase(mFinaleVOQueue.begin());
         static Message play_finale_vo("play_finale_vo", 0);
@@ -704,7 +704,7 @@ static inline int JustEnteredZone(const RhythmBattlePlayer *p) {
 }
 
 void RhythmBattle::OnBeat() {
-    MILO_ASSERT(mActive, 0x290);
+    MILO_ASSERT_IF(mActive, 0x290)
     static Symbol playing("playing");
     UIPanel *focusPanel = TheUI->FocusPanel();
     bool goofy = GetGoofy();
@@ -905,7 +905,7 @@ void RhythmBattle::OnBeat() {
                     } else if (jacker->InTheZone()) {
                         jackee = jacker;
                     }
-                    MILO_ASSERT(jackee->InTheZone(), 0x398);
+                    MILO_ASSERT_IF(jackee->InTheZone(), 0x398)
                     b40 = true;
                     mJackCooldown = 4;
                 }
@@ -1099,21 +1099,18 @@ void RhythmBattle::OnBeat() {
             i6d8 = 8000;
             if (i27 && b6f0) {
                 i6d8 = 6000;
-                if (mCommandLabel) {
+                if (mCommandLabel)
                     mCommandLabel->SetTextToken(rhythmbattle_off_beat_p1p2);
-                }
                 static Message msg("rhythm_battle_no_groove_p1p2");
                 TheHamProvider->Handle(msg, false);
             } else if (i27) {
-                if (mCommandLabel) {
+                if (mCommandLabel)
                     mCommandLabel->SetTextToken(rhythmbattle_off_beat_p1);
-                }
                 static Message msg("rhythm_battle_no_groove_p1");
                 TheHamProvider->Handle(msg, false);
             } else {
-                if (mCommandLabel) {
+                if (mCommandLabel)
                     mCommandLabel->SetTextToken(rhythmbattle_off_beat_p2);
-                }
                 static Message msg("rhythm_battle_no_groove_p2");
                 TheHamProvider->Handle(msg, false);
             }
@@ -1124,21 +1121,18 @@ void RhythmBattle::OnBeat() {
             play_vo[0] = new_groove;
             if (i27 && b6f0) {
                 i6d8 = 5000;
-                if (mCommandLabel) {
+                if (mCommandLabel)
                     mCommandLabel->SetTextToken(rhythmbattle_nice_moves_p1p2);
-                }
                 static Message msg("rhythm_battle_fresh_moves_p1p2");
                 TheHamProvider->Handle(msg, false);
             } else if (i27) {
-                if (mCommandLabel) {
+                if (mCommandLabel)
                     mCommandLabel->SetTextToken(rhythmbattle_nice_moves_p1);
-                }
                 static Message msg("rhythm_battle_fresh_moves_p1");
                 TheHamProvider->Handle(msg, false);
             } else {
-                if (mCommandLabel) {
+                if (mCommandLabel)
                     mCommandLabel->SetTextToken(rhythmbattle_nice_moves_p2);
-                }
                 static Message msg("rhythm_battle_fresh_moves_p2");
                 TheHamProvider->Handle(msg, false);
             }
@@ -1146,44 +1140,33 @@ void RhythmBattle::OnBeat() {
         }
         case 2: {
             if (i27 && b6f0) {
-                if (mCommandLabel) {
-                    mCommandLabel->SetTextToken(
-                        rhythmbattle_lemme_see_something_different_p1p2
-                    );
-                }
+                if (mCommandLabel)
+                    mCommandLabel->SetTextToken(rhythmbattle_lemme_see_something_different_p1p2);
                 static Message msg("rhythm_battle_switch_it_up_p1p2");
                 TheHamProvider->Handle(msg, false);
             } else if (i27) {
-                if (mCommandLabel) {
-                    mCommandLabel->SetTextToken(
-                        rhythmbattle_lemme_see_something_different_p1
-                    );
-                }
+                if (mCommandLabel)
+                    mCommandLabel->SetTextToken(rhythmbattle_lemme_see_something_different_p1);
                 static Message msg("rhythm_battle_switch_it_up_p1");
                 TheHamProvider->Handle(msg, false);
             } else {
-                if (mCommandLabel) {
-                    mCommandLabel->SetTextToken(
-                        rhythmbattle_lemme_see_something_different_p2
-                    );
-                }
+                if (mCommandLabel)
+                    mCommandLabel->SetTextToken(rhythmbattle_lemme_see_something_different_p2);
                 static Message msg("rhythm_battle_switch_it_up_p2");
                 TheHamProvider->Handle(msg, false);
             }
             break;
         }
         case 3: {
-            if (mCommandLabel) {
+            if (mCommandLabel)
                 mCommandLabel->SetTextToken(rhythmbattle_synchronized1);
-            }
             static Message msg("rhythm_battle_synchronized");
             TheHamProvider->Handle(msg, false);
             break;
         }
         case 4: {
-            if (mCommandLabel) {
+            if (mCommandLabel)
                 mCommandLabel->SetTextToken(rhythmbattle_synchronized2);
-            }
             static Message msg("rhythm_battle_synchronized");
             TheHamProvider->Handle(msg, false);
             break;
@@ -1191,9 +1174,8 @@ void RhythmBattle::OnBeat() {
         case 5: {
             i6d8 = 0;
             play_vo[0] = stole_congrats;
-            if (mCommandLabel) {
+            if (mCommandLabel)
                 mCommandLabel->SetTextToken(rhythmbattle_swagjackeddd1);
-            }
             static Message msg("rhythm_battle_swagjackeddd");
             TheHamProvider->Handle(msg, false);
             break;
@@ -1201,9 +1183,8 @@ void RhythmBattle::OnBeat() {
         case 6: {
             i6d8 = 0;
             play_vo[0] = stole_congrats;
-            if (mCommandLabel) {
+            if (mCommandLabel)
                 mCommandLabel->SetTextToken(rhythmbattle_swagjackeddd2);
-            }
             static Message msg("rhythm_battle_swagjackeddd");
             TheHamProvider->Handle(msg, false);
             break;
@@ -1438,7 +1419,7 @@ void RhythmBattle::OnBeat() {
                         focusPanel->HandleType(game_outro_mind_control);
                     }
                 } else if (mFinalePhaseIndex == 4) {
-                    MILO_ASSERT(mFinale, 0x66C);
+                    MILO_ASSERT_IF(mFinale, 0x66C)
                     static Message game_outro_finale("game_outro_finale");
                     focusPanel->HandleType(game_outro_finale);
                 }
