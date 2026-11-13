@@ -225,6 +225,14 @@ sort-vs-search key, RandomShuffle RNG draw, StandardStream forward-jump stall, R
 mirrored y, ...). Write-up, the tool's blind spots and the 10-point drift recognizer:
 **[native-shadow-bodies-are-unmeasured.md](native-shadow-bodies-are-unmeasured.md)**.
 
+### The inverse: a native fix written WITHOUT a guard leaks into the Xbox build
+
+A native crash guard (`if (!p) return;`) left unguarded compiles into the PPC build and
+costs a few instructions that read as residual noise (`HamIKSkeleton::SetBone`, guarded in
+`866ba1082`). `scripts/analysis/native_guard_leak_scan.py` finds candidates; objdiff's
+`insert` count is **not** a discriminator, and only the target prologue settles a hit:
+**[native-guard-leak-scan.md](native-guard-leak-scan.md)**.
+
 ### An offset diff on an iterator step may be a DIRECTION bug, not a wrong field
 
 `HamCamShot::SetPreFrame` rewound its camera-shot list with `++` because
