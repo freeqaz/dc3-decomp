@@ -75,6 +75,8 @@ NOTE_RE = re.compile(
 COMMENT_RE = re.compile(r"^\s*(//|/\*|\*)")
 
 SIDECAR_HEADING_RE = re.compile(r"^## `([^`]+)`\s*$")
+# Section for blocks that sat above no function definition (scripts/notes/migrate_notes.py).
+FILE_LEVEL = "(file-level)"
 
 
 def sidecar_path(src_path, notes_root=None):
@@ -383,6 +385,27 @@ def main():
     if notes_path:
         state = "exists" if os.path.exists(notes_path) else "absent"
         print(f"sidecar: {notes_path}  ({state}, {len(side)} block(s) for this function)")
+    # File-level sidecar blocks were "near" every function before the move;
+    # show them as CONTEXT, but they are not this function's notes and never
+    # turn a 1 into a 0 (that would manufacture a refutation).
+    file_level = []
+    if notes_path and os.path.exists(notes_path) and not any(k == FILE_LEVEL for k, *_ in side):
+        file_level = [(FILE_LEVEL, s, e, t)
+                      for s, e, t in parse_sidecar(notes_path).get(FILE_LEVEL, [])]
+
+    def show_file_level():
+        if not file_level:
+            return
+        print(f"{len(file_level)} file-level sidecar block(s) in this unit "
+              "(context only -- not attributed to this function):\n")
+        for sym, start, end, text in file_level:
+            body = text if args.max_chars in (0, None) else text[: args.max_chars]
+            print(f"--- {notes_path}:{start}-{end} [{sym}] " + "-" * 20)
+            print(body)
+            if args.max_chars and len(text) > args.max_chars:
+                print(f"... [{len(text) - args.max_chars} chars truncated; --max-chars 0]")
+            print()
+
     if not hits and not side:
         print(
             "NO LANE NOTES FOUND near this function or in its sidecar -- "
@@ -391,6 +414,7 @@ def main():
             "(e.g. src/system/obj/ObjPtr_p.h for ObjPtrVec<T>::erase), so re-run with "
             "--file on that header. Also check docs/decomp/patterns/."
         )
+        show_file_level()
         return 1
 
     total = sum(e - s + 1 for s, e, _ in hits) + sum(e - s + 1 for _, s, e, _ in side)
@@ -412,6 +436,7 @@ def main():
         if args.max_chars and len(text) > args.max_chars:
             print(f"... [{len(text) - args.max_chars} chars truncated; --max-chars 0]")
         print()
+    show_file_level()
     return 0
 
 
