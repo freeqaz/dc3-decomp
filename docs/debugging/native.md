@@ -334,7 +334,7 @@ variables are value-parsed: `0`/`false`/`off`/`no` disable.
 | `DC3_SCORING_DEBUG` | off | `Dc3EnvFlag`. Once-per-second scoring liveness counters | `native/src/platform/GestureMgr_Native.cpp`, `src/lazer/game/Game.cpp` |
 | `DC3_POSE` | unset | Provider select. `off`: no pose server, the stand-in skeleton. Any other value (conventionally `external`) only overrides the headless skip: in headless runs the pose provider is skipped unless this is set | `native/src/platform/GestureMgr_Native.cpp` |
 | `DC3_POSE_CAMERA` | `0` | Camera index | `native/src/platform/GestureMgr_Native.cpp` |
-| `DC3_POSE_MODEL` | `native/models/pose_landmarker_full.task` | MediaPipe model passed to the spawned server | `native/src/platform/GestureMgr_Native.cpp` |
+| `DC3_POSE_MODEL` | `<tree>/native/models/pose_landmarker_full.task`, found from the executable, not the cwd | MediaPipe model passed to the spawned server | `native/src/platform/GestureMgr_Native.cpp` |
 | `DC3_DUMMY_PLAYERS` | auto | `1` or `2`: how many standing stand-ins the sensor shows when no pose provider runs. Unset: one, two in two-player modes (`requires_2_players` / `is_in_party_mode`). Ignored while a provider runs | `native/src/platform/GestureMgr_Native.cpp` |
 | `DC3_POSE_SOCKET` | `/tmp/dc3_pose.sock` | Unix socket shared with the pose server | `native/src/platform/GestureMgr_Native.cpp` |
 | `DC3_POSE_NO_SPAWN` | unset | Presence. Connect to an already-running pose server instead of forking `pose_server.py` | `native/src/platform/Skeleton_Native.cpp` |
