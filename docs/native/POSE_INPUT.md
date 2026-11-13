@@ -103,6 +103,7 @@ scripts/web/make_pose_fixtures.sh /tmp/fx         # dance/still/empty .y4m + par
 node scripts/web/pose_parity.mjs geometry /tmp/fx/ref.json                 # JS geometry on Python's landmarks
 node scripts/web/pose_parity.mjs browser /tmp/fx/ref.json --port 8432 --no-gpu   # whole JS pipeline
 node scripts/web/pose-gameplay.mjs --port 8432 --camera /tmp/fx/dance.y4m --out /tmp/run   # GPU
+#   --difficulty easy|medium|expert|beginner (default easy); --song-index 2 = Better Off Alone
 ```
 
 `pose-gameplay.mjs` drives Chromium's fake camera
@@ -124,11 +125,10 @@ build), one run per input, player 0 score from `window.dc3PoseGame`:
 - Joints reach the game: provider running, player 0's bound skeleton tracked,
   camera-space hands moving (σ ≈ 0.15–0.22 m per axis while dancing, 0 at
   display precision while still), root depth ≈ 3.1–3.7 m.
-- **`DetectFrac` is `branch=no-move-key keys=0` on every beat in all four runs**,
-  so `move_passed` carries frac 0 and the frame-based (ham2) scorer never runs on
-  this path; ratings and score come from the async move detectors. Whether that
-  is the difficulty this Enter-only flow lands on or a web-specific gap is not
-  yet known (the desktop `pose_scoring_gate.sh` flow asserts on `ham2` samples).
+- ~~`DetectFrac` is `branch=no-move-key keys=0` on every beat~~ — **the
+  difficulty, not the web** (`np-web-movekey`, below). Those runs played
+  Beginner and The Hustle; the table above is kept as measured.
+
 - JS vs Python: on identical landmarks the geometry agrees to 1.8e-15 m with
   identical track ids; the whole web pipeline (tasks-vision 1.0.0 in the worker)
   vs desktop `MediaPipeBackend` (mediapipe 1.0.0) on the same 150 frames at the
@@ -144,6 +144,61 @@ build), one run per input, player 0 score from `window.dc3PoseGame`:
   117 ms against the dancing run's 60 / 28 / 35; the empty and no-camera runs
   shared the GPU with other lanes. Treat timings as upper bounds.
 
+### DetectFrac on web vs desktop (`np-web-movekey`, 2026-11-13)
+
+**Cause of `no-move-key`:** `multiuser_screen`'s difficulty list opens on
+`beginner`, and the Enter-only driver confirmed it. `MoveDir::ResetDetectFrames`
+builds **no move keys for Beginner** — the image skips it (`cmpwi r15, 3; beq`
+at `0x82505714`), so Beginner is rated by the async detectors alone and every
+per-beat `DetectFrac` reads `branch=no-move-key keys=0`. That is the game's
+behaviour on every platform: the desktop flow with its one `down` removed reads
+`no-move-key` on 40/40 probe lines with `diff=beginner`. The desktop flow
+(`betteroffalone.txt`) always pressed Down for Easy, which is why desktop
+"worked". Nothing on the web side was missing — no asset, no wasm32 lookup.
+
+The probe line now carries `diff=<difficulty>`, and `pose-gameplay.mjs` takes
+`--difficulty` (default `easy`) and exits non-zero unless the probe agrees with
+it (see its header: 0 pass, 1 check failed, 2 song not played through).
+`--recheck DIR` re-applies that check to a finished run without a browser. On the
+np-web-pose runs it reports what they were: `--recheck …/np-web-pose-runs/dance
+--difficulty easy` → exit 1, 40/40 `no-move-key`, no `diff=` (old engine). Also
+fixed there: the probe pattern was `branch=(\w+) ` and never matched the
+hyphenated branches, so `summary.json` never held a `no-move-key` sample — the
+claim came from the console log alone.
+Sabotage, live: `--difficulty easy --no-select-difficulty` (the old Enter-only
+driver) played Beginner (`diff=beginner`, 40/40 `no-move-key`) and **exited 1**;
+the same command without the flag exited 0 with 35 `ham2` samples.
+
+Better Off Alone, Easy, same fake-camera fixtures, player 0, `ham2` samples
+from the probe (its first 40 lines = measures 0–39; the first 5 are
+`async-empty-range` on both, before the first detect frame):
+
+| Input | Web (Chromium, `--song-index 2`) | Desktop (`pose_server.py --video`, same .y4m) |
+|---|---|---|
+| dance clip | n 35, mean **0.239**, 0.050–0.760, score 25,492 | n 35, mean **0.267**, 0.092–0.774 |
+| person standing still | n 35, mean **0.267**, 0.016–0.918, score 18,037 | n 35, mean **0.315**, 0.175–0.913 |
+| empty frame | game pauses (*stand in front of the Kinect*), no probe line, exit 2 | pauses before the song starts (`songMs` −3995), no probe line |
+| dance clip, **Beginner** | `no-move-key` 40/40, `diff=beginner` (score 34,995 from the async detectors) | `no-move-key` 40/40, `diff=beginner` |
+
+- Web and desktop agree. The still input is the same frame every frame, so it
+  is the one comparison that does not depend on where the video loop sits
+  against song time: for measures 12–39, 26 of 28 agree within 0.02
+  (0.23 0.17 0.19 0.19 0.19 0.28 … on both; the outliers are measures 38–39).
+  The dance clip loops unsynchronised with the song on both sides, so its
+  per-measure values differ (6 of 28 within 0.02) while the means agree.
+- **DetectFrac does not separate this dance clip from standing still — on
+  either platform.** The clip (`taye01_stand_dance`) is not Better Off Alone's
+  choreography, so neither input is doing the moves; the still person even
+  scores higher on the first measures (0.91, intro moves that are close to
+  standing). Only empty (no person → pause) is distinguished. That is scoring
+  calibration (P-7), not transport; the input that should score high is the
+  routine itself, which only desktop can feed today
+  (`synthetic_kinect.py --perform`, `pose_scoring_gate.sh`).
+- One run per cell; load average 30–40 on 32 cores during them (other lanes),
+  web pose inference p50 up to ~140 ms in the dance run. The still input's
+  measures 7–8 read 0.24/0.20 on web and 0.91/0.84 on desktop — likely when the
+  first tracked frames arrived, not scoring.
+
 ## Gaps
 
 | # | Gap | Size | Platform |
@@ -156,7 +211,7 @@ build), one run per input, player 0 score from `window.dc3PoseGame`:
 | P-6 | Remove the dead ncnn/YOLO path and its tracked weights; fix the log line. | S | all |
 | P-7 | Scoring believability: calibrate against a recorded human, expose a latency knob. | M | all |
 | P-8 | macOS: `/proc/self/exe` → `_NSGetExecutablePath`; camera permission goes to the Python child. See [MACOS.md](MACOS.md). | S–M | mac |
-| P-9 | ~~Web pose~~ **Done in `np-web-pose`** (see [Web](#web)). Left: never run on a real webcam/permission prompt; `DetectFrac` reads `no-move-key` on the web flow; GPU delegate and the lite model unmeasured on an idle box; no camera preview inside the game (P-4). | — | web |
+| P-9 | ~~Web pose~~ **Done in `np-web-pose`** (see [Web](#web)). Left: never run on a real webcam/permission prompt; GPU delegate and the lite model unmeasured on an idle box; no camera preview inside the game (P-4). | — | web |
 
 ## Testing without a webcam
 
