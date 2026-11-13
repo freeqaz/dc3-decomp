@@ -115,6 +115,15 @@ Inside the body (was lines 156-183):
         // forcing the x store drags the TheRnd load off row 4 either way.
 ```
 
+lane C / w-low-gesture-char (2026-11-13):
+
+```text
+// Behaviour re-check (94.417 canonical): NOT A BUG.  Same loads/stores (rect
+// x/y/w from DrawUtlVec3, h = scale*0.75*w), same Width/Height ratio, same
+// fsel min(vz, 1.3333/scale) under `scale > 1.3333`.  The 4 rows are the
+// rect.x store placement only (see w7-av / w21-bk).
+```
+
 
 ## `?UpdateBufferTex@@YA_NPAVLiveCameraInput@@PAVRndTex@@W4BufferType@1@PAVGestureMgr@@@Z`
 
