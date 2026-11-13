@@ -108,11 +108,22 @@ else()
     list(APPEND DC3_DECOMP_FLAGS -w)
 endif()
 
-# MSVC STL compat: shadow libc++'s __wrap_iter with a patched version that
-# adds implicit conversion to the underlying pointer type. This makes
-# vector::begin()/end() results implicitly convertible to T*, matching
-# Xbox 360 MSVC's old STL behavior and fixing 600+ call sites.
+# Vendored single-header libraries (httplib, cgltf, stb).
 include_directories(BEFORE SYSTEM ${CMAKE_SOURCE_DIR}/include)
+
+# MSVC STL compat: shadow the host library's vector iterator header
+# (libstdc++ bits/stl_iterator.h or libc++ __iterator/wrap_iter.h) with a copy
+# that adds an implicit conversion to the underlying pointer, matching Xbox 360
+# MSVC's STL where vector::begin()/end() are T* (600+ call sites). The copy is
+# GENERATED from this toolchain's own header -- a checked-in copy of one
+# version's header is what broke CI on GCC 14 and libc++ 23; see
+# cmake/HostStlShim.cmake. Non-SYSTEM and BEFORE so it precedes every other
+# -I, including the engine's own include/ copy (re-prepended on milo-engine
+# below, after add_subdirectory).
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+include(HostStlShim)
+dc3_generate_host_stl_shim("${CMAKE_BINARY_DIR}/host_stl_shim" DC3_HOST_STL_SHIM_DIR)
+include_directories(BEFORE ${DC3_HOST_STL_SHIM_DIR})
 
 if(EMSCRIPTEN)
     # Emscripten provides its own threading, WebGPU (emdawnwebgpu), and GLFW shim
@@ -358,6 +369,12 @@ if(EMSCRIPTEN)
         ImGuiBackend_Web.cpp)
 endif()
 add_subdirectory(${MILO_ENGINE_PATH} ${CMAKE_BINARY_DIR}/milo-engine)
+# The engine prepends its own checked-in STL shim (include/) with BEFORE PUBLIC,
+# which would win over the directory-level generated shim for the engine's own
+# TUs. Prepend the generated one again so the engine and dc3 compile against
+# the same, toolchain-matched header. (Consumers already get it first from the
+# directory property; this is PRIVATE so it does not duplicate there.)
+target_include_directories(milo-engine BEFORE PRIVATE ${DC3_HOST_STL_SHIM_DIR})
 if(EMSCRIPTEN)
     # dc3-web TUs compile with HX_WEB=1 and link libmilo-engine.a; the engine's
     # StreamReceiver_Native.h and audio/AudioDevice.h change class layout under
@@ -2102,12 +2119,19 @@ if(BUILD_TESTS)
         endif()
     endforeach()
     if(MILO_TEST_ASSET_DIR STREQUAL "")
-        # No assets found; fall back to the source-relative dir so the path is
-        # at least stable. Asset-backed tests will SKIP/FAIL loudly, not silently.
-        get_filename_component(MILO_TEST_ASSET_DIR "${CMAKE_SOURCE_DIR}/../orig-assets" ABSOLUTE)
+        # No assets found. The working directory must still EXIST: it is also
+        # where gtest_discover_tests runs `milo-tests --gtest_list_tests` as a
+        # POST_BUILD step, and a missing directory fails that step ("Result: no
+        # such file or directory") and with it the whole milo-tests build. That
+        # is exactly how the GitHub native-build job died once the runner image
+        # could compile the tree (no orig-assets in CI). Use an empty dir in the
+        # build tree; asset-backed tests SKIP/FAIL loudly on their own.
+        set(MILO_TEST_ASSET_DIR "${CMAKE_CURRENT_BINARY_DIR}/no-orig-assets")
+        file(MAKE_DIRECTORY "${MILO_TEST_ASSET_DIR}")
         message(WARNING "milo-tests: orig-assets/gen/main_xbox.hdr not found; "
-                        "asset-backed tests will fail. Looked under "
-                        "${CMAKE_SOURCE_DIR}/../orig-assets and the main-repo path.")
+                        "asset-backed tests will fail or skip. Looked under "
+                        "${CMAKE_SOURCE_DIR}/../orig-assets and the main-repo path. "
+                        "Tests run in ${MILO_TEST_ASSET_DIR}.")
     else()
         message(STATUS "milo-tests asset dir (ctest WORKING_DIRECTORY): ${MILO_TEST_ASSET_DIR}")
     endif()

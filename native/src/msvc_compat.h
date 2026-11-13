@@ -1,7 +1,8 @@
 // MSVC STL Compatibility Shims for Native Port
 //
-// Iterator fix: patched libc++ __wrap_iter.h in native/include/ adds
-// implicit conversion from __wrap_iter<T*> to T*.
+// Iterator fix: native/cmake/HostStlShim.cmake generates a copy of the host
+// library's iterator header (libstdc++ __normal_iterator / libc++ __wrap_iter)
+// that adds an implicit conversion to T*.
 //
 // This file provides additional compat shims for C++ features that
 // differ between MSVC's old STL and modern libc++.
