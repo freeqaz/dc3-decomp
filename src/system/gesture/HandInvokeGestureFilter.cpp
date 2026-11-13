@@ -29,12 +29,7 @@ bool HandInvokeGestureFilter::UpdateBodyPlane(const Skeleton &skel, float dt) {
     Subtract(leftShoulder.mJointPos[0], rightShoulder.mJointPos[0], shoulderVec);
 
     bool _result = false;
-    // The squared-length test is spelled z + x + y on purpose: for a three-term
-    // sum of products A + B + C this compiler emits `fmuls B; fmadds C; fmadds A`
-    // (measured on four permutations, w7-bv), and the image at 0x82DFDED8 is
-    // `fmuls f30,f30` (x) / `fmadds f28` (y) / `fmadds f29` (z).  The natural
-    // `LengthSquared(shoulderVec)` and `x*x + y*y + z*z` are 100.0 canonical
-    // but leave a 2-row f28/f30 swap; this order is byte-identical (117/117).
+    // Lane history (6 lines moved): docs/decomp/notes/system/gesture/HandInvokeGestureFilter.md
     bool valid = skel.ShoulderJoint(kSkeletonLeft).mJointConf != kConfidenceNotTracked
         && skel.ShoulderJoint(kSkeletonRight).mJointConf != kConfidenceNotTracked
         && shoulderVec.z * shoulderVec.z + shoulderVec.x * shoulderVec.x
@@ -50,12 +45,7 @@ bool HandInvokeGestureFilter::UpdateBodyPlane(const Skeleton &skel, float dt) {
         Normalize(bodyNormal, bodyNormal);
         unk4.Smooth(bodyNormal, dt, true);
 
-        // Body "side" vector = Cross(yAxis, smoothedBodyNormal), with Value()'s
-        // result consumed as an UNNAMED temporary argument: that is what makes
-        // MSVC read the components through the returned sret pointer
-        // (`mr r11, r3` at 0x82DFDF54, `lfs 0x8/0x4/0x0(r11)`) and hoist
-        // &unk40 into r31 before the call.  A named `Vector3` or a named
-        // `const Vector3 &` both read the slot through r1 instead (w7-ap).
+        // Lane history (6 lines moved): docs/decomp/notes/system/gesture/HandInvokeGestureFilter.md
         Cross(yAxis, unk4.Value(), unk40);
         Normalize(unk40, unk40);
 
@@ -70,40 +60,15 @@ bool HandInvokeGestureFilter::UpdateBodyPlane(const Skeleton &skel, float dt) {
     }
     return _result;
 }
-// w21-ao: the image sums both elevation dot products as x + (y + z), the z
-// product first (0x82DFE234-0x82DFE260: `fmuls` uz*rz, `fmadds` y, `fnmadds` x;
-// left arm 0x82DFE268-0x82DFE2A8).  The engine Dot() compiled to y + (x + z) for the right
-// arm -- /fp:fast re-sorts a flat sum per context -- which is a different
-// rounding on every target.  This helper pins the image's association; it
-// takes references like Dot(), so MSVC still materialises the dead &unk40
-// (`addi r11, r30, 0x40`).  The name is mine.
+// Lane history (7 lines moved): docs/decomp/notes/system/gesture/HandInvokeGestureFilter.md
 static inline float DotZYX(const Vector3 &a, const Vector3 &b) {
     return (a.z * b.z + a.y * b.y) + a.x * b.x;
 }
 
-// w20-p branch-landing row 292 (image `bne` onto `li r11, 0x1`, ours one row
-// past it): ARTIFACT -- jump threading; on that edge r11 already holds 1.
-// w21-n (99.02 canonical, unchanged): every value re-checked against the image
-// (both elevations/forwards, the -0.0 atan2 denominators, GetBend's
-// shoulder/elbow/hand args, the tilt acos) -- same operands, register and
-// component order only.  The residual is ONE 16-byte frame slot (image 0x130,
-// ours 0x120): the image never lets a later unk4.Value() temporary reuse a
-// named slot (temps at 0x80/0x90; ours 0x70, 0x80, 0x80, 0x50).  Measured:
-// naming only the 4th Value() result restores the 0x130 frame and the
-// 0x80/0x90 temps but reads it through r1 (98.9); naming the 1st/2nd/3rd
-// instead is 95.2-95.7; declaring `lateral` early (three placements) is
-// inert; building the spine in `lateral` is 98.53 fuzzy (worse).
-// w21-ao (99.0368 canonical after the DotZYX fidelity fix, 37 of 327 rows):
-// still the 16-byte frame slot (image temps 0x80/0x90/0x90/0x80 for the
-// spine/forward Value() calls; ours 0x70/0x80/0x80/0x50 -- MSVC packs our
-// temps into lateral's not-yet-live slot and rightArmDir's dead one), plus
-// the inner-pair pick of the FORWARD dots and the left elevation (image
-// rounds the y product first in both forwards and the z product in the left
-// elevation; ours z, z, y -- no text order of the inner pair moved it, MSVC
-// canonicalises it) and the tilt-test bool tail.  Measured in a real-flag
-// probe, none better: spine built in `lateral`, `lateral` declared before
-// the spine, `lateral = spine; lateral -= proj`, a DotZYX-style helper on the
-// forwards (57 vs 20 probe rows), Dot argument order on the forwards.
+// Lane history (23 lines moved): docs/decomp/notes/system/gesture/HandInvokeGestureFilter.md
+// > The residual is ONE 16-byte frame slot (image 0x130, ours 0x120): the image never
+// > lets a later unk4.Value() temporary reuse a named slot (temps at 0x80/0x90; ours
+// > 0x70, 0x80, 0x80, 0x50). (w21-n)
 bool HandInvokeGestureFilter::CalcInPose(const Skeleton &skel, float dt) {
     // 0x82DFE038 `li r25, 0x0` seeds the result in a callee-saved register and
     // 0x82DFE514 `mr r3, r25` returns it -- one result variable, not two
@@ -219,16 +184,10 @@ bool HandInvokeGestureFilter::CalcInPose(const Skeleton &skel, float dt) {
     // set up before it -- the positive `&&` chain, not an initialise-true /
     // conditionally-clear pair (which inverts all five branch polarities).
     //
-    // w27-m (2026-11-02), census row STRUCTURAL:opcode addi:3/stwu:1 vs
-    // addi:3/clrlwi:1/stwu:1: adjudicated behaviour-equivalent.  The
-    // instruction STREAMS are identical (327 vs 327); every diff_arg row is a
-    // stack-slot or FPR number, and the frame difference (0x130 image vs 0x120
-    // here) is the same five-vs-four 16-byte Vector3 slot allocation described
-    // at the top of the function -- no instruction computes a value the other
-    // side does not.  The one charged opcode, the image's extra
-    // `clrlwi r10, r11, 24` before the tilt test, exists only because the image
-    // parks leftInPose in r10 and tiltOk in r11 while we do the reverse; both
-    // paths AND together the same three bools.
+    // Lane history (10 lines moved): docs/decomp/notes/system/gesture/HandInvokeGestureFilter.md
+    // > The one charged opcode, the image's extra `clrlwi r10, r11, 24` before the tilt
+    // > test, exists only because the image parks leftInPose in r10 and tiltOk in r11
+    // > while we do the reverse; both paths AND together the same three bools. (w27-m)
     bool rightInPose = rightAngle1 < 155.0f * DEG2RAD
         && rightAngle1 > 115.0f * DEG2RAD && rightAngle2 < 110.0f * DEG2RAD
         && rightAngle2 > 70.0f * DEG2RAD && rightBend < 35.0f * DEG2RAD;

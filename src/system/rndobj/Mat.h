@@ -47,12 +47,7 @@ struct MatShaderOptions {
         shader_struct.mHasBones = bones;
     }
 
-    // w26-r: the `shader_struct.mHasAOCalc = 0;` line that used to precede the
-    // assignment was decompilation-added.  It is dead on a 1-bit bitfield
-    // (assigning 0 then the bool is the same value), but it cost a live
-    // `mr r10, r9` in Utl.cpp's GetDefaultMatShaderOpts arm -- the zero store
-    // forced the byte into the inlined parameter's register.  Same setter, one
-    // statement, and the call sites compile to the image's code.
+    // Lane history (6 lines moved): docs/decomp/notes/system/rndobj/Mat.md
     void SetHasAOCalc(bool calc) { shader_struct.mHasAOCalc = calc; }
 };
 

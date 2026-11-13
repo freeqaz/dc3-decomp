@@ -875,13 +875,9 @@ D3DBaseTexture *D3DDevice_CreateTexture(
     UINT Pool,
     D3DRESOURCETYPE D3DType
 );
-// The XDK's inline IDirect3DDevice9::CreateTexture wrapper: stores the new
-// texture through ppTexture and turns a null result into E_OUTOFMEMORY.
-// DxRnd::InitBuffers (w7-br) needs this exact shape: with a destructible
-// local in scope (EH state), MSVC gives the `&member` out-pointer a dead
-// home-slot store before the call (`stw r11, 0x58(r31)` at 0x826193DC),
-// which no spelling of `member = (D3DTexture *)D3DDevice_CreateTexture(...)`
-// plus DX_ASSERT reproduces.
+// Lane history (7 lines moved): docs/decomp/notes/xdk/d3d9i/d3d9.md
+// > The XDK's inline IDirect3DDevice9::CreateTexture wrapper: stores the new texture
+// > through ppTexture and turns a null result into E_OUTOFMEMORY.
 inline HRESULT IDirect3DDevice9_CreateTexture(
     D3DDevice *pDevice,
     UINT Width,

@@ -109,11 +109,9 @@ void DingoJob::CleanUp(bool success) {
     }
 }
 
-// w14-e (96.2, 3 rows): the image schedules the `response = nullptr` store
-// between `li r6, 0` and the two argument `addi`s; we put `addi r5` first.
-// Declaring `response` above the converter reorders the frame (90.2).
-// w18-e: still 96.2.  Inert: a separate `int *version = nullptr` local for
-// the third argument.
+// Lane history (5 lines moved): docs/decomp/notes/system/net/DingoJob.md
+// > w14-e (96.2, 3 rows): the image schedules the `response = nullptr` store between `li
+// > r6, 0` and the two argument `addi`s; we put `addi r5` first.
 bool DingoJob::CheckReqResult() {
     JsonConverter converter;
     JsonObject *response = nullptr;

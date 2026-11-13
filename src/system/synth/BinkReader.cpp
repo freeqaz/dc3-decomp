@@ -67,13 +67,7 @@ BinkReader::~BinkReader() {
     BinkClose(mBink);
 }
 
-// w18-e (98.05): BinkOpenTrack(mBink, (int)i) is inert -- the cast was
-// truncated straight back by the old `unsigned char` prototype; w21-ay fixed
-// the PROTOTYPE (U32, as in bink.h) and that closed the function.
-// w20-t (98.1, branch-scan row 298 adjudicated ARTIFACT): the BinkOpenTrack
-// loop's back-edge lands on `mr r4, r28` in the image and past it in ours,
-// because ours carries i into r4 on the back-edge (clrlwi r4) and in the
-// preheader; r4 == i at every BinkOpenTrack call on both sides.
+// Lane history (7 lines moved): docs/decomp/notes/system/synth/BinkReader.md
 void BinkReader::Poll(float) {
     START_AUTO_TIMER("bink_audio");
 
@@ -166,11 +160,7 @@ void BinkReader::Poll(float) {
             unsigned char *mem = (unsigned char *)MemAlloc(
                 hBinkTrack->MaxSize, __FILE__, 0x78, "Bink Audio", 0x80
             );
-            // w21-ay (98.05 -> 100): with BinkOpenTrack's u32 prototype the
-            // r10/r11 naming lined up and left only the (0x14,0x24) offset swap,
-            // which this Buffers-then-Offsets order closes.  (w7-aa's note that
-            // the swap "only adds an offset swap" was measured under the old
-            // unsigned-char prototype.)
+            // Lane history (5 lines moved): docs/decomp/notes/system/synth/BinkReader.md
             mPCMBuffers[i] = mem;
             mPCMOffsets[i] = mem;
         }

@@ -140,13 +140,10 @@ const DataNode &DataNode::Evaluate() const {
         MILO_ASSERT(gDataThis, 0x7A);
         const DataNode *n = gDataThis->Property(mValue.array, true);
 #ifdef HX_NATIVE
-        // PLATFORM (w25-n1 audit): Property(fail=true) returns null only after
-        // MILO_FAIL_DTA (Object.cpp, FindArray(propKey, fail) / "property %s not
-        // found"). The image derefs it bare (Property at 0x8259D5DC feeds UseQueue
-        // at 0x8259D5E0, no test) because its fail never returns there: inside
-        // MILO_TRY it throws, outside it halts. Native throws inside a try too
-        // (w23-dta), so this arm is reached only from a native fail outside a
-        // try, which warns and returns -- the stand-in for the image's halt.
+        // Lane history (7 lines moved): docs/decomp/notes/system/obj/DataNode.md
+        // > The image derefs it bare (Property at 0x8259D5DC feeds UseQueue at
+        // > 0x8259D5E0, no test) because its fail never returns there: inside MILO_TRY it
+        // > throws, outside it halts. (w25-n1)
         if (!n) {
             MILO_WARN("DataNode::Evaluate: property lookup returned null on %s", PathName(gDataThis));
             static DataNode sNullNode(0);
@@ -715,12 +712,7 @@ bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
             if (secondType != kDataObject)
                 warn = false;
         }
-        // w21-s: spelled on the fields (first.mType / second.mType), not the
-        // firstType/secondType locals -- same values.  With the locals MSVC
-        // jump-threads the Int/Object/Symbol arms' fall-outs past the
-        // `firstType == 6` test; the image does not (its bne at 0x8259EBE4,
-        // 0x8259EC70, 0x8259ECB0 all land on 0x8259ED08, the first test), and
-        // the field spelling also gives the image's type registers (r9/r10).
+        // Lane history (6 lines moved): docs/decomp/notes/system/obj/DataNode.md
         if (first.mType == kDataUnhandled || second.mType == kDataUnhandled) {
             warn = false;
         }

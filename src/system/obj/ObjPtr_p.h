@@ -309,24 +309,9 @@ void ObjPtrVec<T1, T2>::operator=(const ObjPtrVec &other) {
         // Node(this) must NOT go through ObjRefConcrete(T1 *), even with a
         // literal nullptr: see the protected default ctor in obj/Object.h.
         //
-        // Why (w12-o, 2026-10-02): this compiler does intra-TU interprocedural
-        // escape analysis. It knows push_back(const Node &) only READS its
-        // argument, so as long as newNode never escapes, neither push_back nor
-        // Set can modify it, the ctor's mObject = 0 reaches the destructor, and
-        // ~ObjRefConcrete's `if (mObject) Release` folds away -- leaving only
-        // the base-vptr reset, which is exactly the image. But the escape
-        // analysis evidently runs before the ctor's dead `if (mObject) AddRef(this)`
-        // branch is folded, and AddRef stores `this` into the referent's ring,
-        // so ObjRefConcrete(nullptr) marks newNode escaped and the check (plus
-        // the ring unlink, rows 69-77, 87.83784%) comes back. Scratch-TU proof
-        // of the IPA: a callee that only reads `const S &` lets a later
-        // `if (s.a)` fold; a callee that passes &s to an extern does not.
-        //
-        // Measured negatives under the old ctor (all 13 instantiations):
-        //   `const Node newNode(this);`      byte-inert, 87.83784
-        //   `mNodes.push_back(Node(this));`  85.09460
-        //   explicit `mObject = 0` after Set 98.64865 (adds a store the image
-        //       lacks; it was the clue that the image knew mObject was null)
+        // Lane history (18 lines moved): docs/decomp/notes/system/obj/ObjPtr_p.md
+        // > Why (w12-o, 2026-10-02): this compiler does intra-TU interprocedural escape
+        // > analysis.
         Node newNode(this);
         mNodes.push_back(newNode);
         Set(--end(), *it);
@@ -777,14 +762,7 @@ Hmx::Object *ObjPtrList<T1, T2>::Node::RefOwner() const {
     return list->Owner();
 }
 
-// -- ObjPtrVec Xbox template implementations --
-// w24-pch (B4, open): whether erase<T> inlines Set<T> follows COMDAT compile
-// order per TU (w21-d rule; image inlines for Font RndMat, LightPreset
-// Spotlight, CharClipGroup; calls for FlowManager FlowNode and LightPreset
-// E/L/SD).  Defining erase BEFORE Set in this header is inert on all of them
-// (per-object probe: erase<Spotlight> 83.12, erase<FlowNode> 80.58, control
-// erase<RndMat> 100, unchanged).  Definition order is not the input; the open
-// question is what reference makes the front end queue Set<T> ahead of erase<T>.
+// Lane history (8 lines moved): docs/decomp/notes/system/obj/ObjPtr_p.md
 
 template <class T1, class T2>
 typename ObjPtrVec<T1, T2>::iterator

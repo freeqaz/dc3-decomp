@@ -35,13 +35,10 @@ void URLEncode(char const *input, String &output, bool escapeUnsafe) {
             || c > '~') {
             output += "%";
 
-            // Nothing is assigned back to `c` here -- each arm APPENDS its
-            // second character, and all three paths cross-jump into the one
-            // `mr r3, r29 / bl String::operator+=(char)` tail at 0x827EF59C.
-            // NEGATIVE RESULT (w7-al, 2026-09-14): collapsing the two arms into
-            // `if (escapeUnsafe && ...) c = ' ';` plus one unconditional pair of
-            // appends scores 93.4 -- MSVC then materialises `li r31, 0x20` where
-            // the image has `lbz r4, 0x2(r30)`.
+            // Lane history (7 lines moved): docs/decomp/notes/system/utl/UrlEncode.md
+            // > Nothing is assigned back to `c` here -- each arm APPENDS its second
+            // > character, and all three paths cross-jump into the one `mr r3, r29 / bl
+            // > String::operator+=(char)` tail at 0x827EF59C.
             if (escapeUnsafe && (c < ' ' || c > '~')) {
                 output += hexmap[2];
                 output += hexmap[0];

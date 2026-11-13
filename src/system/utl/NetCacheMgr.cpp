@@ -393,17 +393,7 @@ NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *name, RefType type, NetLoade
 
     if (!pNetLoaderRef) {
         switch ((unsigned int)type) {
-        // w14-d: 97.17 -> 100. Three levers, all behaviour-neutral:
-        // (1) Create/NetCacheLoader take `name` by IMPLICIT conversion -- that,
-        //     not a named local, is what makes the image re-address the String
-        //     temp (`addi r3, r31, 0x58` / `addi r5, r31, 0x68`) instead of
-        //     consuming the ctor's return register;
-        // (2) NetLoaderRef has an inline (String, refcount, net, cache) ctor and
-        //     a zeroing default ctor: a named aggregate `tmp` made MSVC share
-        //     the two arms' `s` slot (0x58) where the image gives each arm its
-        //     own (0x60 / 0x70, frame 0x160 not 0x150);
-        // (3) the "Found loader" MakeString takes `type` itself (its param home
-        //     0x184 is the int& the image passes), not an `(int)type` temp.
+        // Lane history (11 lines moved): docs/decomp/notes/system/utl/NetCacheMgr.md
         case 0: {
             NetCacheLoader *ncl = new NetCacheLoader(mCache, name);
             String s(name);

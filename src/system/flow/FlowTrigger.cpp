@@ -215,16 +215,9 @@ DataArray *FlowTrigger::GetEventEditorDef(Symbol s) {
             return a;
     }
     return nullptr;
-    // Each arm computes `->Array(1)` ITSELF and MSVC cross-jumps the four
-    // identical FindArray/Node/Array tails into .L_82424B20 (w7-bn, 99.35 ->
-    // 100.0).  That makes `a` a phi of four definitions at 82424B38, and a
-    // phi'd null test is `cmplwi cr6`; a single-def call result tested by an
-    // `if` is `cmplwi r3` (cr0), which is what a shared `eval->Array(1)`
-    // after the chain produced.  Same rule closed XboxContentMgr::
-    // StartRefresh.  Refuted at 99.35 (bg + bn, full ninja each): a separate
-    // `found` local, `if (a && (a = ...))`, a bool temp, reusing the
-    // multi-def `eval` for the tail, a second separate `if (a)`; flattened
-    // early returns / `return a` / `found ? found : nullptr` -> 98.5.
+    // Lane history (10 lines moved): docs/decomp/notes/system/flow/FlowTrigger.md
+    // > Each arm computes `->Array(1)` ITSELF and MSVC cross-jumps the four identical
+    // > FindArray/Node/Array tails into .L_82424B20 (w7-bn, 99.35 -> 100.0).
 }
 
 void FlowTrigger::RegisterEvents() {

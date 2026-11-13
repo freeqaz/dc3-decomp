@@ -70,27 +70,9 @@ float RndOverlay::Draw(float topY) {
     }
     Hmx::Rect rect(0, topY, 1, Height());
     TheRnd.DrawRectScreen(rect, mBackColor, TheRnd.OverlayMat(), nullptr, nullptr);
-    // Residual (w25-fb, fuzzy 99.94, 1 row): the image emits this fadds as
-    // `topY + sDrawFloats[1]` (fadds f0, f31, f0), ours `sDrawFloats[1] + topY`.
-    // Both operands are colour candidates: topY is the formal (id 3, f31) and the
-    // sDrawFloats[1] load is a promoted static-memory symbol (k07, id 18, f0).
-    // c2 lists the higher candidate id first, and a formal's id is fixed at 3
-    // (arena order: k0d, this, formals, locals, memory symbols), so no local
-    // spelling can put topY ahead.  Measured inert (~100 variants): source
-    // operand order, `pos.y += topY` / `pos.y = topY; pos.y += ...`, a pointer to
-    // the array, named x/y/height/now/mat/bottom locals.  Hypothesis: in the
-    // original topY reaches this add through a later-minted symbol (a k03 temp
-    // or split piece); open question is which IL shape does that.
-    // w26-f14 (c2rs tap, `CQT cqlo3`): the use-list keys are V34{0x10440} (the
-    // promoted static-memory element, sid 34) and V2{0x10040} (the formal), so
-    // the element sorts first.  topY can only lead if the element leaves the
-    // variable-leaf class -- a memory leaf on a base with sid%4 == 0 keys
-    // 0x10008 -- or if topY arrives as a subexpression (SU<<24 beats every leaf);
-    // a formal's key is fixed and no local can outrank sid 34.  Re-measured inert
-    // (exact, per-object + patch chain): the static as a `Vector2` object,
-    // pointer-to-array and pointer-to-element aliases, a scalar reference to the
-    // element, a reference to the formal, `pos.y = topY; pos.y += sDrawFloats[1]`,
-    // and a named intermediate.
+    // Lane history (21 lines moved): docs/decomp/notes/system/rndobj/Overlay.md
+    // > Residual (w25-fb, fuzzy 99.94, 1 row): the image emits this fadds as `topY +
+    // > sDrawFloats[1]` (fadds f0, f31, f0), ours `sDrawFloats[1] + topY`.
     Vector2 pos(sDrawFloats[0], sDrawFloats[1] + topY);
     if (mCursorChar > -1 && !mLines.empty()) {
         String str4c;

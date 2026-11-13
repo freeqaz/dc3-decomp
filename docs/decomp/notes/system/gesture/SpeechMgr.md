@@ -78,3 +78,38 @@ Added after the move (lane w-five-clean):
 // on native, so the loop is unreachable there without new injection plumbing.
 // Renamed event/cur/res -> events/event/hr: byte-identical.
 ```
+
+## `?AddDynamicRuleWord@SpeechMgr@@QAAXVSymbol@@PBD1PAPAX2@Z`
+
+`SpeechMgr::AddDynamicRuleWord` -- moved verbatim from `src/system/gesture/SpeechMgr.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of 89d252553)
+
+Inside the body (was lines 593-603):
+
+```text
+        // BUG FIX (w15-a): c3 is the transition's SEMANTIC VALUE.  The image
+        // converts it into its own wide buffer and points the
+        // NUI_SPEECH_SEMANTIC passed as the last argument at it:
+        //   0x8243B5B4  bl   mbstowcs_s            ; r4 = r31+0x80
+        //   0x8243B5B8  addi r11, r31, 0x80
+        //   0x8243B5C0  stw  r11, 0x58(r31)        ; s.pcwszValue = semantic
+        //   ...
+        //   0x8243B5E8  addi r10, r31, 0x58        ; pSemantic = &s
+        //   0x8243B600  bl   NuiSpeechAddWordTransition
+        // We converted c3 and then never used it, handing the recognizer an
+        // uninitialised pcwszValue.
+```
+
+## `(file-level)`
+
+Not attributed to one function -- moved verbatim from `src/system/gesture/SpeechMgr.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)
+
+File-level (was lines 43-48; nearest following definition: `SpeechMgr::Grammar::operator==`):
+
+```text
+    // VoiceInputPanel reads mOverlay as an LVALUE (`TheSpeechMgr->mOverlay->
+    // Print(MakeString(...))`): MSVC re-derives `this` from the global after
+    // the argument call and keeps only the vptr across it (0x82957BCC), which
+    // the rvalue `Overlay()` accessor cannot produce (it homes the pointer in
+    // a callee-saved register).  Byte-identical with the member, 93.4 with the
+    // accessor.  -- w7-bv
+```

@@ -15,15 +15,8 @@
 #include "synth\Utl.h"
 #include "utl\Std.h"
 
-// Two SCALAR consts, not `const float sSpeedCaps[2]` (w21-af; the names are
-// ours). The image anchors them as base + 4 (lbl_820B6C60 / lbl_820B6C64), which
-// an array also gives, but MSVC treats a global ARRAY as aliased by any store
-// through a pointer and a scalar as not (standalone cl.exe probe): with the
-// array, Sound::SetSpeed's `mSpeed = clamped` store killed the clamp's caps
-// loads, so the else-loop could not reuse them on entry and the whole register
-// assignment shifted (91.17).
-// Two scalars reproduce the image's guarded loop entry that jumps past the caps
-// reloads, and SetSpeed goes to 100. Same values, same .rdata layout.
+// Lane history (9 lines moved): docs/decomp/notes/system/synth/Sound.md
+// > Two SCALAR consts, not `const float sSpeedCaps[2]` (w21-af; the names are ours).
 const float sSpeedCapMin = 0.00390625f;
 const float sSpeedCapMax = 4.0f;
 
@@ -528,17 +521,7 @@ DataNode Sound::OnPlay(DataArray *a) {
 
 SynthSample *Sound::Sample() { return mSynthSample; }
 
-// It is the `speed` PARAMETER that gets clamped, not the fader transpose. The
-// target saves f1 into f31 across the GetTranspose/CalcSpeedFromTranspose calls
-// purely so the fsel chain can consume it; a version that clamps
-// CalcSpeedFromTranspose(mFaders.GetTranspose()) instead ignores the argument
-// entirely and still scores ~90%.
-// w14-e/w20-r chased the else-loop entry and the register shift as loop-shape
-// and scheduling artifacts; both were the caps being an array (see the comment
-// on sSpeedCapMin). w21-af: 100 normalized, fuzzy 99.87 -- one commutative row,
-// the obj-branch `fmuls f12, f30, f31` (image: transpose * clamped) where ours
-// emits the operands the other way round. Both source orders of the product
-// emit ours; `speed = Clamp(...)` too. Register-only, same product.
+// Lane history (11 lines moved): docs/decomp/notes/system/synth/Sound.md
 void Sound::SetSpeed(float speed, Hmx::Object *obj) {
     float speedTranspose = CalcSpeedFromTranspose(mFaders.GetTranspose());
     // Clamp into the parameter rather than a new local: the operands of

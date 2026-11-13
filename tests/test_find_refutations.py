@@ -242,3 +242,19 @@ def test_explicit_notes_root(tmp_path):
     sc.write_text(f"## `{SYM}`\n\n```text\n// w4-root: via --notes-root\n```\n")
     rc, out = run(SYM, "--file", str(f), "--notes-root", str(elsewhere))
     assert rc == 0 and "w4-root" in out, out
+
+
+def test_file_level_blocks_print_as_context_but_do_not_change_the_exit(tmp_path):
+    """migrate_notes.py files blocks that sat above no definition under
+    `(file-level)`.  They were "near" every function before the move, so they
+    are shown -- but they are not this function's notes: exit stays 1."""
+    f = tu(tmp_path, "void Foo::Bar() {\n    y = 2;\n}\n")
+    sidecar(tmp_path, {"(file-level)": ["// w6-fl: about the include order"]})
+    rc, out = run(SYM, "--file", str(f))
+    assert rc == 1, out
+    assert "w6-fl" in out and "context only" in out
+    # and with the function's own section too: 0, own block first
+    sidecar(tmp_path, {SYM: ["// w6-own: mine"], "(file-level)": ["// w6-fl: context"]})
+    rc, out = run(SYM, "--file", str(f))
+    assert rc == 0, out
+    assert out.index("w6-own") < out.index("w6-fl")

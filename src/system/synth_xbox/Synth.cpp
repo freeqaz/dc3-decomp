@@ -125,14 +125,9 @@ void ReverbConvertI3DL2ToNative(
             gain = -8;
         pNative->LowEQGain = (gain < 0) ? gain + 8 : 8;
         pNative->HighEQGain = 8;
-        // The remaining 5 mismatches live here: the target loads DecayHFRatio before
-        // DecayTime and emits `fmuls f0, f13, f0`. Operand swap and a lifted temp are
-        // both byte-inert -- MSVC canonicalises this. Backend floor.
-        // Re-confirmed 2026-09-14 (lane w7-o) with a third spelling the note did
-        // not cover: TWO named temps, one per operand, declared in the image's
-        // load order and multiplied in the image's operand order.  Byte-inert as
-        // well -- still 5 rows, 99.989.  Three independent spellings now agree,
-        // so this is the backend and not the source.
+        // Lane history (8 lines moved): docs/decomp/notes/system/synth_xbox/Synth.md
+        // > The remaining 5 mismatches live here: the target loads DecayHFRatio before
+        // > DecayTime and emits `fmuls f0, f13, f0`.
         pNative->DecayTime = pI3DL2->DecayTime * pI3DL2->DecayHFRatio;
     } else {
         int gain = (int)((float)log10(pI3DL2->DecayHFRatio) * 4.0);
@@ -556,29 +551,9 @@ int Synth360::GetNextAvailableMicID() const {
 }
 
 void Synth360::SetupHeadsetSubmixes() {
-    // w7-bu: 89.8 -> 99.99.  The w7-ab RESIDUAL note that stood here filed the
-    // two engine-call clusters as scheduling floors; they were the spelling.
-    // The calls were raw vtable-slot function-pointer casts through an
-    // `int *pEngine` local (pre-dating this TU's IXAudio2 declaration), which
-    // let MSVC float `lwz r3, 0xec(r24)` to the top of each block.  As real
-    // virtual calls the engine load is evaluated as the `this` argument and
-    // lands where the image has it, last before `lwz r11, 0x0(r3)`: 98.9.
-    // Then, each measured alone against that (the old note had only stacked
-    // them on the 84.3 declaration-order variant): `buffer.Flags = 0` above
-    // the memset (image `stw r28, 0xa0(r31)` before `bl memset`) 99.9;
-    // wBitsPerSample before nBlockAlign, and the XAUDIO2_BUFFER assignment
-    // order below (the ready-zero stores emit as a rotation of source order
-    // starting at the 5th of 8, the li-fed ones keep source order) 99.99.
-    //
-    // RESIDUAL 2 rows: `stw r26, 0x84(r31)` (nSamplesPerSec) and
-    // `stw r25, 0x6c(r31)` (voiceSends.pSends) emit in the other order.
-    // Inert: voiceSends before/after format, pSends before SendCount,
-    // nAvgBytesPerSec spelled as nSamplesPerSec * nBlockAlign (folds).
-    // Worse: nSamplesPerSec first in the format block (99.4, it then emits
-    // first overall); the two voiceSends stores interleaved into the format
-    // block (97.9).
-    // Ensure mHeadsetSubmixes has exactly 4 entries. resize() already contains the
-    // shrink-with-erase branch; spelling the outer test by hand emits it twice.
+    // Lane history (23 lines moved): docs/decomp/notes/system/synth_xbox/Synth.md
+    // > RESIDUAL 2 rows: `stw r26, 0x84(r31)` (nSamplesPerSec) and `stw r25, 0x6c(r31)`
+    // > (voiceSends.pSends) emit in the other order. (w7-ab)
     std::vector<IXAudio2SubmixVoice *> &submixes = mHeadsetSubmixes;
     submixes.resize(4, 0);
 
@@ -745,14 +720,7 @@ ULONG CXAPOBase::Release() {
     return count;
 }
 
-// w8-d: AddRef was DECLARED in xdk/xaudio2/xapobase.h:46,89 and defined nowhere
-// in the tree -- only the `WCA@` adjustor thunk was ever emitted.  The body is
-// at 0x82E2D4F8, sandwiched between ?Release@CXAPOBase@@ (0x82E2D520) and
-// ?QueryInterface@CXAPOParametersBase@@ (0x82E2D598) in Synth.obj's carve, and
-// is the same interrupt-masked reservation idiom as Release with the counter
-// address formed up front: `addi r11, r3, 0x1c` (m_lReferenceCount) / mfmsr r9 /
-// mtmsrd r13,1 / lwarx / addi r10,r10,1 / stwcx. / mtmsrd r9,1 / bne, returning
-// the POST-increment value in r10.
+// Lane history (8 lines moved): docs/decomp/notes/system/synth_xbox/Synth.md
 ULONG CXAPOBase::AddRef() {
     return _InterlockedIncrement((long volatile *)&m_lReferenceCount);
 }
@@ -766,11 +734,7 @@ ULONG CXAPOBase::AddRef() {
 // body, not to a separate forwarder.
 ULONG CXAPOParametersBase::AddRef() { return CXAPOBase::AddRef(); }
 
-// w8-d: the CXAPOBase frame-count pair, both `return n;`.  The target body at
-// 0x82E2D590 is literally `mr r3, r4` / `blr`, and ham_xbox_r.map prints BOTH
-// ?CalcInputFrames@CXAPOBase@@UAAII@Z and ?CalcOutputFrames@CXAPOBase@@UAAII@Z
-// at that one address from synth_xbox:Synth.obj -- so the two fold into each
-// other and symbols.txt can bind only one of the pair.
+// Lane history (5 lines moved): docs/decomp/notes/system/synth_xbox/Synth.md
 UINT32 CXAPOBase::CalcInputFrames(UINT32 outputFrameCount) { return outputFrameCount; }
 
 UINT32 CXAPOBase::CalcOutputFrames(UINT32 inputFrameCount) { return inputFrameCount; }

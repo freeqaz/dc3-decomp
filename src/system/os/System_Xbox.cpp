@@ -38,15 +38,9 @@ namespace {
     }
 }
 
-// Open residual (w7-r, 2026-09-14): the image and we disagree about which of the
-// two incoming pointers gets a home slot. The image spills the by-value param
-// (`stw r4, 0x11c(r31)`) and keeps the hidden sret pointer in callee-saved r26,
-// so every `s = <sym>` arm loads into scratch r11 and branches to one merge
-// point; we spill the sret pointer (`stw r3, 0x114(r31)`) and keep `s` itself in
-// callee-saved r17, so the arms load into r17 and branch to a different merge.
-// Everything else in the 61 rows is a straight permutation of the callee-saved
-// registers holding the 17 function-local `static Symbol`s (r17..r29), which the
-// canonical ruler already forgives -- hence 98.48 with 61 raw rows.
+// Lane history (9 lines moved): docs/decomp/notes/system/os/System_Xbox.md
+// > Open residual (w7-r, 2026-09-14): the image and we disagree about which of the two
+// > incoming pointers gets a home slot.
 Symbol GetSystemLanguage(Symbol s) {
     static Symbol eng("eng");
     static Symbol fre("fre");
@@ -88,23 +82,9 @@ Symbol GetSystemLanguage(Symbol s) {
     //    .L_825E0B94 is `lwz r11, 0x0(r15)` = esl).  We left `s` untouched
     //    there, returning the caller's fallback instead of Spanish.
     //
-    // w20-m (normalized 100, fuzzy 99.84): 10 diff_arg rows are a 3-way
-    // callee-saved rotation {hidden return ptr, &dan, &cht} = image r26/r24/r25,
-    // ours r24/r25/r26. Every row carries the same value on both sides; all
-    // branch targets agree (constant +0x208 bias) and the language jump table
-    // (jumptable_8207D4C0) maps each XC_LANGUAGE to the arm the source names.
-    // Tried: dropping `default:` from the locale switch, `default: return s;`
-    // in the language switch -- both inert.
-    //
-    // w26-f11 (2026-11-02): the c2-rs candidate dump names the three numbers
-    // that hold the rotation. The hidden return pointer is candidate id 2
-    // (sym 1/k05, arena#1) at pri -25 / tie 8, ben 58, ref 39; the two
-    // local-symbol candidates that rank above it are id 53 (sym 27/k03) at
-    // pri -23 / tie 218 and id 59 (sym 33/k03) at pri -25 / tie 173. Priority
-    // is fed by the benefit/reference counts, so the sret can only move if a
-    // spelling gives IT more references; the arms already return out of both
-    // switches (which is what produced ben 58), and every other arm spelling
-    // leaves those three triples identical.
+    // Lane history (17 lines moved): docs/decomp/notes/system/os/System_Xbox.md
+    // > w20-m (normalized 100, fuzzy 99.84): 10 diff_arg rows are a 3-way callee-saved
+    // > rotation {hidden return ptr, &dan, &cht} = image r26/r24/r25, ours r24/r25/r26.
     switch (locale) {
     case XC_LOCALE_SWEDEN:
         if (IsSupportedLanguage(swe, false))

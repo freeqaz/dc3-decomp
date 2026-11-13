@@ -149,12 +149,7 @@ void DataEventList::Compact() {
     }
 }
 
-// w21-bg: 99.912 -> 100.  The frame (0xb0, `str` at 0x58, `event`/`d` at
-// 0x60) is decided by how `str` is printed into: `str << node` goes through
-// the inline `operator<<(TextStream &, const DataNode &)` (obj/Data.h), which
-// forwards `str` and so PINS it to its own slot (docs/decomp/patterns/
-// stack-slot-sharing.md, m_fwd); a direct `node.Print(str, false, 0)` lets
-// MSVC pack str onto event's slot (the old 0xa0 frame).  Same call either way.
+// Lane history (6 lines moved): docs/decomp/notes/system/midi/DataEventList.md
 void DataEventList::InsertEvent(float start, float end, const DataNode &node, int idx) {
     if (mElement < 0) {
         if (mSize == 0)

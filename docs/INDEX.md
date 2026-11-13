@@ -52,6 +52,7 @@ Tool-specific deep docs live in subdirectories:
 | [decomp/TECHNICAL_NOTES.md](decomp/TECHNICAL_NOTES.md) | Compiler quirks, codegen patterns, Xbox 360 specifics — including why a header edit is a TU-wide inlining event |
 | [decomp/OBJECT_MATCHING.md](decomp/OBJECT_MATCHING.md) | What "matching" means at the object level — COMDATs, sections, symbols; the mechanics behind the percentage |
 | [decomp/MSVC_X360_REGALLOC.md](decomp/MSVC_X360_REGALLOC.md) | MSVC's PPC register-allocation model — the machinery behind most "regswap" verdicts |
+| `decomp/notes/<path under src/>.md` | **Per-function lane history** (what each lane tried and measured), one `` ## `<mangled>` `` section per function, moved verbatim out of `src/` comments 2026-11-13. Read with `scripts/find_refutations.py '<mangled>'`; write new notes here, not in the source (see REMAINING_WORK.md) |
 | [decomp/patterns/INDEX.md](decomp/patterns/INDEX.md) | Fixable/unfixable codegen patterns catalog — start at its **Corrections** section, which supersedes older rows. **Do not move this directory** (see banner) |
 | [decomp/RB3_REFERENCE.md](decomp/RB3_REFERENCE.md) | Rock Band 3 decomp reference (shared Milo engine) — directory compatibility matrix; header progress numbers carry a dated correction |
 | [decomp/UPSTREAM_PORT_WORKFLOW.md](decomp/UPSTREAM_PORT_WORKFLOW.md) | Porting from a related decomp tree (RB3, og-dc3-decomp) when their function is at 100 % and ours isn't |

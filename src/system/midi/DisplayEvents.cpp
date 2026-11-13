@@ -28,15 +28,10 @@ float DisplayEvents(DataEventList *events, float f1, float f2) {
         if (min < events->Size() - 1) {
             MinEq(start150, ((events->Event(min + 1).start - f2) * 200.0f + sLeftEdge) - 1.0f);
         }
-        // ONE Rect for the whole function (w7-bn, 98.96 -> 100.0): the image's
-        // 0x80..0x8c is stored both inside the loop and after it because it
-        // is the same function-scope local, not two sibling-scope temps being
-        // overlaid.  `min++` lives in the for-increment so it lands after the
-        // String/DataEvent dtors (82552C6C), and the tail assigns the four
-        // fields in x, w, y, h order -- that order is what schedules the
-        // image's `stfs f31, 0x88` ahead of `stfs f13, 0x84` at 82552C8C/94.
-        // (Named `auto eventRect`/`cursorRect` in sibling scopes: 98.96;
-        //  block-scoping the tail: inert; `rect = Hmx::Rect(...)`: 94.2.)
+        // Lane history (9 lines moved): docs/decomp/notes/system/midi/DisplayEvents.md
+        // > ONE Rect for the whole function (w7-bn, 98.96 -> 100.0): the image's
+        // > 0x80..0x8c is stored both inside the loop and after it because it is the same
+        // > function-scope local, not two sibling-scope temps being overlaid.
         rect.Set(start14c, f1 + 2.0f, Max(1.0f, start150 - start14c), 12.0f);
         TheRnd.DrawRect(
             rect,

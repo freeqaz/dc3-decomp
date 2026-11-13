@@ -134,19 +134,9 @@ public:
 // address and their own callers in ham_xbox_r.map -- so the attribute restores
 // the shipped inline boundary without giving up the linkage.
 //
-// w8-g 2026-09-15: all four counters were stuck one instruction short -- the
-// target carries a DEAD `addi r11, r31, 0xc` (the address of the count field)
-// that r11 being volatile makes useless across the second check_index call, and
-// which MSVC then re-derives as a `0xc(r31)` displacement.  We did not emit it
-// because every read went through `node`, so `cf` was never needed in a register
-// at all and was folded away before it could be spilled.  Routing BOTH reads
-// through `cf` -- `GetDupCount(*cf)` and `SiblingCountVia(cf)` instead of
-// `CountField(node)` / `SiblingCount(node)` -- gives the pointer a use ahead of
-// the call and reproduces the addi at the exact target index (10, 10, 9, 9).
-// Same addresses, same loads (`lbz 0xf(r31)`), no behaviour change.
-//   inc_count 95.00 -> 100, dec_count 95.00 -> 100,
-//   inc_dup_count 95.24 -> 100, dec_dup_count 95.24 -> 100  (+328 B)
-// Measured by full ninja; store and remove did not move.
+// Lane history (13 lines moved): docs/decomp/notes/system/utl/trie.md
+// > We did not emit it because every read went through `node`, so `cf` was never needed
+// > in a register at all and was folded away before it could be spilled. (w8-g)
 
 __declspec(noinline) inline void Trie::inc_count(unsigned int index) {
     check_index(index);

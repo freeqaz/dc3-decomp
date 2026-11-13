@@ -159,17 +159,8 @@ extern const char *kAssertStr;
 
 #define MILO_FAIL(...) TheDebugFailer << MakeString(__VA_ARGS__)
 #define MILO_WARN(...) TheDebugWarner << MakeString(__VA_ARGS__)
-// DTA runtime errors (DataNode "Data %s is not Int" etc.). The image routes
-// them through TheDebugFailer: inside MILO_TRY that throws the message to the
-// MILO_CATCH (FlowMathOp::Apply keeps result = val, Cheats/Console/Watcher
-// report the bad script); outside it is the fatal modal.
-// Native: the same failer. Debug::Fail throws under the image's conditions
-// inside MILO_TRY, and outside it native fails are non-fatal (platform choice,
-// see Debug::Fail) and print `FAIL:`. Native used to downgrade the outside-TRY
-// case to a warning because boot hit platform absences there (net_cache_mgr,
-// skeleton_identifier); both objects exist natively now, and a probe of every
-// MILO_FAIL_DTA reached outside MILO_TRY over the --all-gates suite and a
-// 1500-frame headless boot found none but DtaTypeErrorTest's own (w25-pch2).
+// Lane history (11 lines moved): docs/decomp/notes/system/os/Debug.md
+// > DTA runtime errors (DataNode "Data %s is not Int" etc.).
 #define MILO_FAIL_DTA(...) TheDebugFailer << MakeString(__VA_ARGS__)
 #define MILO_NOTIFY(...) TheDebugNotifier << MakeString(__VA_ARGS__)
 #define MILO_NOTIFY_BETA(...) DebugBeta() << MakeString(__VA_ARGS__)
@@ -244,32 +235,7 @@ extern DebugNotifyOncePrinter TheDebugNotifyOncePrinter;
 #define MILO_PRINT_ONCE(...) TheDebugNotifyOncePrinter << MakeString(__VA_ARGS__)
 
 namespace {
-    // RESIDUAL (w9-c 2026-09-30): this function has exactly ONE instantiation in
-    // the whole binary (`default/system/char/CharFaceServo`, via
-    // DebugNotifyOncer::operator<<), and it is that unit's only sub-100 row:
-    // 96.552 canonical / 96.552 fuzzy, 2 of 59 instructions, 232 B both sides.
-    // The two rows are the SAME store moved: the image writes `it`'s home slot
-    // with begin() BEFORE the emptiness branch (`stw r11, 0x50(r31)` between the
-    // `cmplw` and the `beq`), MSVC SINKS it past the `count > 0x10` early return
-    // and emits it immediately before the second loop instead.  Both count loops,
-    // both compare loops, the String ctor, the insert and the dtor are all equal.
-    // Refuted, one full ninja each (this is a PCH-reached header, so each probe
-    // rebuilds 574 TUs):
-    //   96.552 (inert)  declaring `it` ahead of `count`
-    //   93.103 (WORSE)  giving the counting loop its own iterator and declaring
-    //                   `it` once at the top
-    //   94.828 (WORSE)  replacing the counting loop with `strings.size() > 0x10`
-    //                   -- stlport's size() is an O(n) distance loop, but it does
-    //                   not inline to the image's four instructions
-    // Declaration order does not move the store, which is consistent with
-    // docs/decomp/patterns/lexical-scope-controls-msvc-stack-slots: the slot SET
-    // is already right (objdiff reports 1 PERMUTED slot, not a missing one) and
-    // only the initialising store's placement differs.
-    // CLOSED (w17-c): 96.552 -> 100.  The count is `strings.size()` AND the
-    // compare loop owns its own for-scoped iterator.  The 0x50 store the image
-    // makes before the emptiness branch appears to be the begin() temporary of size()'s
-    // inlined distance(); the 94.828 probe above still shared one `it` between
-    // the size() test and the loop, which rotated the loop's pre-test away.
+    // Lane history (26 lines moved): docs/decomp/notes/system/os/Debug.md
     inline bool AddToStrings(const char *name, std::list<String> &strings) {
         if (strings.size() > 0x10)
             return false;

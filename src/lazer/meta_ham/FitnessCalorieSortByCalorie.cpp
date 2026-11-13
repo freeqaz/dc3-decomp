@@ -61,9 +61,4 @@ NavListItemNode *FitnessCalorieSortByCalorie::NewItemNode(void *p1) const {
     return new FitnessCalorieSortNode(cmp, *i);
 }
 
-// w10-e: both New*Node closed 99.973 -> 100 by scoping `s` in its own block.
-// The image's EH temp for `new NavList*Node` reuses `s`'s slot (stw r3, 0x54(r31))
-// while `calories` keeps 0x50 -- i.e. `s` is dead (its block closed) and the
-// calories slot is still in scope.  With `s` at function scope MSVC reused the
-// calories slot instead.  `Symbol token;` costs nothing: its default store is
-// dead and is dropped before `token = s`.
+// Lane history (6 lines moved): docs/decomp/notes/lazer/meta_ham/FitnessCalorieSortByCalorie.md

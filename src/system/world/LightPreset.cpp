@@ -1264,11 +1264,7 @@ static float ComputeSpotBlend(int i, float f) {
         return Min(Max((f - min * (1.0f / 5.0f)) * 5.0f, 0.0f), 1.0f);
 }
 
-// w20-h / w25-gt: the six address adds in loops 2-4 (`add rD, iv, base`) are
-// c2's commutative operand sort (C2RS-BRIDGE 8.7): the vector-begin load is a
-// memory leaf keyed by its base temp's sid mod 4, the strength-reduced offset a
-// temp leaf (~0x15000).  Loop 1's base temps sit at sid 4k+1/4k+2 (ptr/state);
-// loops 2-4 needed theirs moved by 2, which the two extra loop-1 counters do.
+// Lane history (5 lines moved): docs/decomp/notes/system/world/LightPreset.md
 void LightPreset::Animate(float f) {
     if (f < 1.1920929E-7f)
         return;

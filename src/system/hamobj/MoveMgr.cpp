@@ -24,11 +24,7 @@ MoveMgr *TheMoveMgr;
 #include <climits>
 
 #ifndef HX_NATIVE
-// w8-b: orphan-instantiation anchor.  ham_xbox_r.map line 42162 puts
-// ??$MakeString@HPBDPBD@@YAPBDPBDABHABQBD2@Z at 0x8245F500 in hamobj:MoveMgr.obj
-// with no surviving caller -- the odr-use was compiled here and then dropped by
-// /OPT:REF.  An unreferenced EXTERNAL function reinstates the instantiation;
-// `static` does not (MSVC discards it before instantiating).  100% -> 0% without.
+// Lane history (5 lines moved): docs/decomp/notes/system/hamobj/MoveMgr.md
 const char *Dc3W8bMoveMgrProbe(int a, const char *b, const char *c) {
     return MakeString("%d %s %s", a, b, c);
 }
@@ -912,11 +908,7 @@ void MoveMgr::ComputeLoadedMoveSet() {
     }
 }
 
-// w25-gi: the two "keep the preferred variant, else the neighbour's" stores
-// are ternaries. As if/assign pairs (same code) the extra join blocks moved
-// three callee-saved pairs: &mRoutineMeasures[player] r27 / prevPair r26,
-// &mMoveParents[player] r25 / prevParent r24 and routinePair r21 / measure*4
-// r20, each the other way round in the image.
+// Lane history (5 lines moved): docs/decomp/notes/system/hamobj/MoveMgr.md
 void MoveMgr::FillInRoutineAt(int player, int measure) {
     const MoveParent *curParent = mMoveParents[player][measure];
     if (!curParent) {

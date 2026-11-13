@@ -591,11 +591,7 @@ int HolmesClientDelete(const char *cc) {
 const char *HolmesFileShare() { return gShareName; }
 
 void HolmesSetFileShare(const char *machine, const char *share) {
-    // w8-g: the target anchors ONE base register on gShareName here and reaches
-    // gMachineName backwards from it (`subi r3, r31, 0x40` at 0x825c4bd4), the
-    // mirror image of the HolmesClientInitOpcode case documented above.  Two
-    // plain symbol names make MSVC materialize two independent addresses, so
-    // the machine-name site has to be spelled relative to gShareName.
+    // Lane history (5 lines moved): docs/decomp/notes/system/os/HolmesClient.md
     strncpy(HOLMES_MACHINE_NAME, machine, NETBIOS_NAME_MAX);
     strncpy(gShareName, share, NETBIOS_NAME_MAX);
 }
@@ -656,15 +652,10 @@ bool HolmesClientOpen(const char *filename, int mode, unsigned int &fileSize, in
     } else {
         BeginCmd(Holmes::kOpenFile, true);
         unsigned char val = 3;
-        // All four flag bits are extracted up front and parked in callee-saved
-        // registers -- the image's four consecutive `extrwi` at 0x825F1E4C..58
-        // (bits 1, 8, 9 and 18, in that order) sit BEFORE the `bl Write` that
-        // lowers `<< val`, so the declarations have to precede that statement
-        // in the source.  The extraction is UNSIGNED -- `extrwi`, not the
-        // `srawi`+mask an `int` shift produces.
-        // FIXED (w12-d): the w7-ar r29/r30 residual came from chaining
-        // `<< val << filename`; the image reloads gStreamBuffer for the
-        // filename, i.e. two statements.
+        // Lane history (9 lines moved): docs/decomp/notes/system/os/HolmesClient.md
+        // > FIXED (w12-d): the w7-ar r29/r30 residual came from chaining `<< val <<
+        // > filename`; the image reloads gStreamBuffer for the filename, i.e. two
+        // > statements.
         unsigned int umode = mode;
         unsigned char isWriteMode = (umode >> 1) & 1;
         unsigned char writeFlag = (umode >> 8) & 1;
@@ -889,27 +880,8 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
 
     u8 fileInfo[0x20];
     int attrResult = GetFileAttributesExA(arg0, (GET_FILEEX_INFO_LEVELS)0, fileInfo);
-    // RESIDUAL (w7-ar, 94.83 canonical): 6 of 119 rows, pure scheduling. The image
-    // emits `lis r11, gLastCachedResource@ha` at 0x825F2588 -- two slots earlier
-    // than we do -- and the operator== argument setup (`addi r4, r11, 0x4` /
-    // `addi r3, r31, 0x58`, 0x825F259C/0x825F25A0) three slots earlier, straddling
-    // the writeTime `std` instead of following it. Refuted: declaring writeTime
-    // before fileExists (inert, same 6 rows). Also refuted (w12-d): a typed
-    // WIN32_FILE_ATTRIBUTE_DATA with `*(s64 *)&fileInfo.ftLastWriteTime` (inert).
-    // w18-d: `attrResult != 0` (equal semantics) is byte-inert, same 6 rows.
-    // w31-b (2026-11-03): MEASURED AS A PLACEMENT RESIDUAL, not a work item.
-    // Both sides are 116 instructions and the opcode+immediate multiset is
-    // IDENTICAL -- the only keys present on one side and not the other are the
-    // six branch displacements, which move because the block itself moves.
-    // Everything the body computes agrees with the image: `subic r8,r3,1` +
-    // `subfe r28,r8,r9` is exactly `(attrResult - 1) != -1`, i.e.
-    // attrResult != 0; writeTime is `ld` from fileInfo+0x14 into the s64 slot
-    // and written with `li r5,8`; the four `stw r11,0/4/8/0xc(r29)` tail is the
-    // dst[0..3] reorder; fileInfo is at r1+0x80 and the s64 at r1+0x60, the
-    // same slots the image uses. What differs is only WHERE c2 schedules the
-    // `lis gLastCachedResource` (1 slot) and the operator== argument setup
-    // (3 slots) relative to the writeTime `std`: the image straddles the std,
-    // we sink both below it. No source handle was found for a sched0 slot.
+    // Lane history (21 lines moved): docs/decomp/notes/system/os/HolmesClient.md
+    // > RESIDUAL (w7-ar, 94.83 canonical): 6 of 119 rows, pure scheduling.
     bool fileExists = (attrResult - 1) != (-1);
     // `==` is correct here and is NOT the rb3-xenon drift bug it looks like.
     // rb3-xenon spells this `!=`; dc3's target settles it. The target calls

@@ -145,22 +145,7 @@ void UIScreen::LoadPanels() {
 
 void UIScreen::UnloadPanels() {
 #ifdef HX_NATIVE
-    // w23-g10: the image does NOT clear any task timeline here.  Native used
-    // to wipe the whole kTaskSeconds and kTaskUISeconds timelines on every
-    // screen unload, on the premise that the native cascade skipped
-    // ReplaceRefs so an AnimTask holding a dying panel object outlived it.
-    // That premise is gone: since 2026-08-20 ~Object runs NullifyAllRefs in a
-    // cascade, which steps every OWNER-CONTROL holder (AnimTask among them,
-    // Object.cpp "Owner-control holders during the native cascade") through
-    // its Replace(nullptr) exactly as the image's ReplaceRefs does.  The wipe
-    // also killed every unrelated seconds/UI-seconds task (DTA-scheduled
-    // MessageTasks, other screens' anims) at each transition, which the image
-    // keeps running.
-    //
-    // Suppress FlushDeferredFrees between panel cascades. Without this,
-    // panel A's cascade frees memory, then panel B's NullifyAllRefs walks
-    // ring nodes in that freed memory → heap corruption. Deferring the
-    // flush keeps all memory valid until every panel is destroyed.
+    // Lane history (16 lines moved): docs/decomp/notes/system/ui/UIScreen.md
     ObjectDir::BeginBatchDelete();
 #endif
     FOREACH_REVERSE(it, mPanelList) {

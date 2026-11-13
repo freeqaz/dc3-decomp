@@ -263,25 +263,7 @@ bool ObjDirPtr<C>::IsLoaded() const {
     return mObject != nullptr || (mLoader != nullptr && mLoader->IsLoaded());
 }
 
-// w8-j 2026-09-15: this used to be a DECLARATION with no definition anywhere in a
-// header, so no TU ever emitted the COMDAT and every ObjDirPtr<T> stream-out was
-// an undefined external resolved from link_glue.cpp.  The body link_glue carries
-// is already byte-exact -- all 36 instructions equal the target at 0x82793CA8 --
-// but it is in the WRONG TRANSLATION UNIT: ham_xbox_r.map contributes that COMDAT
-// from ui:UILabel.obj, and objdiff scores link_glue's copy as 36 `delete`s
-// against a 0-byte target while UILabel's row reads 0.0% with a 144-byte target
-// and a 0-byte base.  Defining the primary template here lets each using TU emit
-// its own COMDAT, which is what the image does.
-//
-// A saved ObjDirPtr is a PATH the loader can reopen, not a name; GetFile() above
-// is the mObject->Loader()->LoaderFile() / mLoader->LoaderFile() /
-// mObject->StoredFile() / FilePath::sNull chain the target inlines here, and
-// FilePath's own BinStream operator<< (utl/FilePath.h:32) supplies the
-// FileRelativePath(FilePath::Root().c_str(), ...) the listing ends with.
-//
-// This body is now compiled natively too. The native build used to write
-// dir->Name() instead, so a native save/load round trip handed the reader
-// (operator>> below: FilePath, then LoadFile) a bare object name.
+// Lane history (19 lines moved): docs/decomp/notes/system/obj/Dir.md
 template <class C>
 BinStream &operator<<(BinStream &bs, const ObjDirPtr<C> &ptr) {
     bs << ptr.GetFile();

@@ -4,13 +4,7 @@
 #include "rndobj/MultiMesh.h"
 #include "rndobj\Poll.h"
 
-// w21-bh: 84.93 -> 100.  The w7-bl/w7-br "scheduling" residual (home stores
-// of the inlined ObjPtr ctors bunched after every vtable `lis`) was the
-// PartOverride ctor's LINKAGE: the retail map lists ??0PartOverride@@QAA@XZ as
-// `f i` (inline/COMDAT, kept from Part.obj), so it was an inline header ctor
-// that MSVC declines to inline here, not an out-of-line `throw()` ctor in
-// Part.cpp.  Defining it in Part.h closes every row; Part.obj's copy and
-// ??__EgNoPartOverride stay at 100.
+// Lane history (7 lines moved): docs/decomp/notes/system/rndobj/PartLauncher.md
 RndPartLauncher::RndPartLauncher()
     : mPart(this, 0), mTrans(this, 0), mMeshEmitter(this, 0), mNumParts(0),
       mEmitRate(0.0f, 0.0f), mEmitCount(0.0f)

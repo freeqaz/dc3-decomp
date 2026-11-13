@@ -104,11 +104,10 @@ BEGIN_COPYS(RhythmBattlePlayer)
     END_COPYING_MEMBERS
 END_COPYS
 
-// w15-r: the image's .rdata for this TU is [0.6f @0x8204DAF4, gRev, gAltRev];
-// UpdateState loads the 0.6 from that named slot (`lfs f0, lbl_8204DAF4@l` at
-// 0x824D5F54).  With gRev off offset 0 MSVC anchors Load's ASSERT_REVS pair on
-// gAltRev like the image -- this closes the 98.35 "anchor pick" residual that
-// used to be documented here (the gRevs[4] array lead is moot).
+// Lane history (5 lines moved): docs/decomp/notes/system/hamobj/RhythmBattlePlayer.md
+// > With gRev off offset 0 MSVC anchors Load's ASSERT_REVS pair on gAltRev like the image
+// > -- this closes the 98.35 "anchor pick" residual that used to be documented here (the
+// > gRevs[4] array lead is moot). (w15-r)
 const float kFreshZoneThreshold = 0.6f;
 
 INIT_REVS(1, 0)
@@ -224,18 +223,7 @@ void RhythmBattlePlayer::Poll() {
             if (ratingFrac > 1.0f) {
                 ratingFrac = 1.0f;
             }
-            // BEHAVIOURAL FIX 2026-09-14 (w7-q): this used to read
-            //     4.0f - mWindowElapsedTime - f17
-            // which subtracts the frame delta TWICE -- `mWindowElapsedTime`
-            // was already advanced by f17 on the line above.  The image
-            // issues exactly ONE fsubs against the just-stored accumulator
-            // (RhythmBattlePlayer.s):
-            //     fadds f0, f11, f31        ; mWindowElapsedTime + f17
-            //     stfs  f0, 0x258(r30)      ; mWindowElapsedTime =
-            //     lfs   f13, __real@40800000@l(r11)   ; 4.0f
-            //     fsubs f0, f13, f0         ; 4.0f - mWindowElapsedTime
-            // The extra term made the phrase-meter countdown handed to
-            // SetRatingFrac run one frame-delta short every frame.
+            // Lane history (12 lines moved): docs/decomp/notes/system/hamobj/RhythmBattlePlayer.md
             float f16 = 4.0f - mWindowElapsedTime;
             if (mPhraseMeter) {
                 f16 = Max(f16, 0.0f);
@@ -675,32 +663,10 @@ void RhythmBattlePlayer::UpdateAnimations(Hmx::Object *handler) {
     }
 }
 
-// w21-ad: behaviour re-read against the image (824D9DD0..824DA4E0): every
-// branch, constant and store target agrees (ShouldAutoPass inlined twice,
-// unk14 > 1.0f, min/max foot Y, the four accumulator clears, SetRatingFrac(0,-1),
-// kDataInt test). Stopped at 99.554 normalized / fuzzy 98.41: the charged rows
-// are the li 1/li 0 order at 824D9E90 (ours materialises the i10 zero first)
-// and the autotrick addi one slot ahead of the 0x27c store. Measured spellings:
-// `int i10 = 0;` at function top 99.0 (fixes the this=r30 cascade but hoists
-// the li 0 above the mStealPart test), after the mStealPart block 99.1, after
-// skelIdx 99.1, just before `if (mTrickSymbol == none)` 99.3 (zero and i10
-// split, extra mr); ShouldAutoPass as if/return true/return false: identical.
-// w21-bl: `int i10 = 0;` declared just before `mTrickSymbol = none;` (after
-// the static Symbol block) closes the li 1/li 0 order, the this=r30 cascade and
-// the autotrick addi slot at once (99.554 -> 100.000 normalized, i.e. 100
-// modulo register permutation) -- 15 rows left, all one f29<->f30 swap: the
-// image keeps 1.0f in f29 and -1.0f in f30, ours the reverse. Same values, same
-// uses. Tried: explicit 1.0f/-1.0f literals (identical); Min/Max helpers are
-// fsel shapes the image does not have.
-// w26-f11 (2026-11-02): the 15 residual rows are that swap and nothing else --
-// 453 instructions, 15 mismatched, all f29<->f30 (image 1.0f in f29, -1.0f in
-// f30; ours the reverse). The c2-rs candidate dump shows the three k03 float
-// constants at pri -14 / -16 / -26 with ben 12 / 3 / 10, i.e. their order is
-// decided by benefit/reference counts, not by a leaf key. Measured spellings
-// that leave those three triples unchanged: naming each constant, literal vs
-// static spelling, and moving the SetRatingFrac(0, -1) call. The open question
-// is what statement arrangement gives one of the two constants one more
-// reference than the other.
+// Lane history (26 lines moved): docs/decomp/notes/system/hamobj/RhythmBattlePlayer.md
+// > w26-f11 (2026-11-02): the 15 residual rows are that swap and nothing else -- 453
+// > instructions, 15 mismatched, all f29<->f30 (image 1.0f in f29, -1.0f in f30; ours the
+// > reverse).
 void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
     mFramesSinceLastTrigger++;
     if (mStealPart) {
@@ -758,12 +724,9 @@ void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
     int i10 = 0;
     mTrickSymbol = none;
     mMoveConsistencyScore = mMovePresenceAccumulator / mWindowElapsedTime;
-    // REFUTED (w7-i): hoisting `none` into a local read before the division and
-    // storing mTrickSymbol after it -- the RhythmBattle::Begin lever -- is
-    // byte-identical here, and swapping these two statements costs 0.75pp (the
-    // division's fdivs/stfs pair moves out of the static-guard block). The
-    // residual is one slot of the rematerialised `autotrick` anchor addi, which
-    // stays ahead of the mTrickSymbol store where the image has it after.
+    // Lane history (6 lines moved): docs/decomp/notes/system/hamobj/RhythmBattlePlayer.md
+    // > The residual is one slot of the rematerialised `autotrick` anchor addi, which
+    // > stays ahead of the mTrickSymbol store where the image has it after. (w7-i)
     static Symbol autotrick(OptionStr("autotrick", "none"));
     if ((mMoveConsistencyScore < 0.5f || autotrick == pose) && mRhythmBattle->CanTrick(pose)) {
         mTrickSymbol = rhythmbattle_trickpose;

@@ -59,11 +59,7 @@ void CharMirror::Poll() {
 
     mBones.ScaleDown(*mServo, 1.0f - w);
     MirrorOp *curMirrorOp = &mOps[0];
-    // w21-q: 98.61 -> 100 with rb3-xenon's shape -- the section bounds read
-    // through CharBones' Start()/ScaleOffset()/... accessors.  The image starts
-    // the POS loop at mStart itself (`extsw r10, r11`, no mOffsets[TYPE_POS]
-    // load; the ctor, ClearBones and RecomputeSizes all keep that offset 0 and
-    // AddBoneInternal only bumps later sections, so this is the same address).
+    // Lane history (5 lines moved): docs/decomp/notes/system/char/CharMirror.md
     for (Vector3 *it = (Vector3 *)mBones.Start(); it < (Vector3 *)mBones.ScaleOffset();
          curMirrorOp++, it++) {
         *it = *(Vector3 *)curMirrorOp->ptr;

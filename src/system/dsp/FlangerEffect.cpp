@@ -143,11 +143,7 @@ void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
     float depthStep = depthDelta / rampSteps1;
     float rateStep = rateDelta / rampSteps2;
 
-    // w15-b (90.78 -> 91.7): a plain for loop, not the hand-rotated
-    // `if (numSamples > 0) do {...} while` -- same trip count.  Left: the
-    // f21/f22 naming of the two step quotients and the scheduling of the two
-    // `% 9600` read indices (idx 137-183); swapping the step statements is
-    // worse (84.6 instr-level).
+    // Lane history (5 lines moved): docs/decomp/notes/system/dsp/FlangerEffect.md
     for (int frame = 0; frame < numSamples; frame++) {
         float delay = (float)mDelaySamples;
         int writeIdx = (mWritePos + frame) % 9600;

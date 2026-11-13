@@ -86,16 +86,7 @@ bool PropSync(Vector3 &vec, DataNode &node, DataArray *prop, int i, PropOp op) {
     }
 }
 
-// w8-l: 99.979004 normalized, the only function short of 100% in this unit
-// (11/12).  12 charged rows out of 381: four fmuls with their two operands
-// exchanged ([186] f11/f13, [197] f13/f12, [314] and [371] f12/f0) and six
-// lfs's reading the sibling component (+4/-8), all inside the y_scale and
-// z_scale arms.  The x_scale arm, which is spelled component-wise
-// (_m.x.x/_m.x.y/_m.x.z), already matches.
-// Refuted: spelling y_scale and z_scale component-wise too, to mirror x_scale,
-// is a large REGRESSION -- 99.979004 -> 98.745410.  The image really does use
-// the whole-vector `_m.y *= ratio` / `_m.z *= ratio` form for those two arms
-// and the per-component form only for x; the asymmetry below is deliberate.
+// Lane history (10 lines moved): docs/decomp/notes/system/obj/PropSync.md
 bool PropSync(Hmx::Matrix3 &_m, DataNode &_val, DataArray *_prop, int _i, PropOp _op) {
     MILO_ASSERT(_i == _prop->Size() - 1 && (_op & (kPropSet|kPropGet|kPropInsert)), 0x4F);
     Symbol sym = _prop->Sym(_i);
@@ -129,19 +120,7 @@ bool PropSync(Hmx::Matrix3 &_m, DataNode &_val, DataArray *_prop, int _i, PropOp
         {
             static Symbol x_scale("x_scale");
             if (sym == x_scale) {
-                // w18-d: the three lengths are spelled out rather than through
-                // Length(): the extra inline level made MSVC lead the sum with z
-                // (y/z_scale) instead of the image's y-first schedule. 99.979 ->
-                // 99.995; x_scale still loads z before x (0x825BDD80/84), and the
-                // y.y/z.y products of Scale() and of `_m.y *= ratio` keep the
-                // other operand order (4 commutative rows); per-component
-                // `_m.y.x *= ratio` loses the r29 = &_m.y binding (97.8).
-                // w22-a25: the image sums (y*y + x*x) + z*z (0x825BDD74..
-                // 0x825BDD9C: fmuls y*y, fmadds x, fmadds z); the flat spelling
-                // let /fp:fast build (y*y + z*z) + x*x instead. The parens keep
-                // the image's association (normalized 99.890 -> 99.995); only
-                // which of x*x / y*y is fused remains. Native (no fast-math,
-                // no FMA) computes (x*x + y*y) + z*z either way.
+                // Lane history (13 lines moved): docs/decomp/notes/system/obj/PropSync.md
                 float len = std::sqrt((_m.x.x * _m.x.x + _m.x.y * _m.x.y) + _m.x.z * _m.x.z);
                 float oldLen = len;
                 ret = PropSync(len, _val, _prop, _i + 1, _op);

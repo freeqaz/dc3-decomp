@@ -68,15 +68,7 @@ void HamLabel::PostLoad(BinStream &bs) {
 }
 
 void HamLabel::Count(int i1, int i2, float f3, Symbol s) {
-    // w21-at: 99.96 -> 100 (fuzzy 100).  ONE Key<float> local, reused for both
-    // pushes, with the second frame formed by `+= f3` on the stored first
-    // frame.  The image's f30/f31 assignment, its frame-before-value store
-    // order into 0x54/0x50(r1) for BOTH keys, and `fadds f0, f31, f30` all
-    // follow from that; two temporaries (named or not), a hoisted sum, or a
-    // reused key assigned `f1 + f3` from a separate local all kept the
-    // allocator swap that w7-ak/w8-i/w9-a recorded as a floor.  Same values:
-    // the default ctor's zeroes are dead stores, and frame + f3 is the same
-    // single add.
+    // Lane history (9 lines moved): docs/decomp/notes/system/hamobj/HamLabel.md
     mCountKeys.clear();
     Key<float> key;
     key.frame = TheTaskMgr.UISeconds() * 1000;

@@ -98,27 +98,7 @@ void WavReader::Poll(float dt) {
                     mInputBuffers[0][i] = (s << 8) | (s >> 8);
                 }
             } else {
-                // w25-gj stop note: the image emits both stores below as sthx (index,
-                // base); we emit (base, index), while the mono loop above is (base,
-                // index) in both builds. c2's commutative-operand sort (C2RS-BRIDGE 8.7,
-                // cqlo3) puts the &mInputBuffers[k] address add as M6[base V338 or V342]
-                // key 0x18008 (sid 2 mod 4) ahead of the strength-reduced index temp V492
-                // (0x17b00); the mono loop's index V475 (0x176c0) loses to the same V338.
-                // One shared V338 cannot sit on both sides, so the image either has a
-                // separate base temp here or index temp sids past 512 (21+ more temps).
-                // Open: what splits the CSE of this+0x28 across the two loops. Inert:
-                // pointer arithmetic, (*mInputBuffers)[i], named out pointers,
-                // EndianSwap/SwapBytes.
-                // w26-f12: four more spellings measured on the same two rows, all
-                // inert at 99.868 -- `*(mRawInputBuffer + i * 2)` reads,
-                // `*(mInputBuffers[k] + i)` stores, a named `int j = i * 2`, and
-                // hoisting the doubled index.  Reading both halves before storing
-                // either changes the code (89.662).  Worth recording: the mono loop's
-                // store is (base, index) in BOTH builds (`sthx r9, r8, r11`), while
-                // the stereo loop's is (index, base) only in the image, so what is
-                // being re-keyed is the base/index pair inside the indexed operand,
-                // which is not the 8.7 use-list sort and did not follow any of the
-                // spellings that move a use-list key.
+                // Lane history (21 lines moved): docs/decomp/notes/system/synth/WavReader.md
                 for (int i = 0; i < mBufNumSamples; i++) {
                     unsigned short s0 = mRawInputBuffer[i * 2];
                     mInputBuffers[0][i] = (s0 << 8) | (s0 >> 8);

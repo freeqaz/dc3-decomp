@@ -80,11 +80,7 @@ private:
     SongPos mSongPos; // 0x60
     SongPos mPrevSongPos; // 0x78
     std::vector<int> mSubmixIdxs; // 0x90
-    // w13-b: 0x9c is a constructed 8-byte object, not two floats.  The ctor
-    // stores its address to the in-construction EH slot right after the 0x9c
-    // and 0xa0 stores (`addi r9, r30, 0x9c` ... `stw r9, 0x50(r31)`), as it does
-    // for every other constructed member.  Vector3 is wrong (it moves 0xa8);
-    // Vector2 + float is 100.
+    // Lane history (5 lines moved): docs/decomp/notes/system/hamobj/HamMaster.md
     Vector2 unk9c; // 0x9c
     float unka4; // 0xa4
     std::list<Vector2> mLevelHistory; // 0xa8

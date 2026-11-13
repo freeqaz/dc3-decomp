@@ -226,23 +226,9 @@ bool WordWrap_CanBreakLineAt(const wchar_t *cur, const wchar_t *start) {
     if (cur == start)
         return false;
 
-    // w39-g (2026-11-06): `ch` and `prev` are NOT named locals in the original,
-    // and that is what the old residual here was.  Hoisting `*cur` / `cur[-1]`
-    // into `wchar_t` locals gives c1 a value whose 16-bit-ness it can prove
-    // from the single `lhz` definition, so the `(unsigned short)c` truncation
-    // inside CantStartLine/CantEndLine folds away -- and the image still emits
-    // it (`clrlwi r6, r31, 16` on ch, `clrlwi r6, r4, 16` on prev).  Reading
-    // the character at each use keeps the value 32-bit-typed at the call site,
-    // the truncation survives, and the whole residual closes: 97.575760 ->
-    // 100.000000 canonical, 96.454544 -> 99.969696 fuzzy, body 163 -> 165
-    // instructions and 652 -> 660 bytes, exactly the image's 165 / 660.
-    // `cur` is a parameter this function never advances, so re-reading it is
-    // the same value every time -- behaviour is unchanged.  This also removes
-    // the `mr r5, r3` entry copy (`cur` stays in r3 for the function's life, as
-    // in the image) and flips `prev` back into r4 with its `mr r10, r4` copy.
-    // Refuted here, so they are not retried: `unsigned int ch` alone 87.96,
-    // `unsigned int prev` alone 96.61, both together 86.99, the helpers taking
-    // `unsigned int c` 93.33, and dropping the `(unsigned short)` casts 97.58.
+    // Lane history (17 lines moved): docs/decomp/notes/system/rndobj/wordwrap.md
+    // > `cur` is a parameter this function never advances, so re-reading it is the same
+    // > value every time -- behaviour is unchanged. (w39-g)
     unsigned int option = g_uOption;
 
     // If current char is whitespace, check if next char can't start a line

@@ -85,11 +85,7 @@ void XboxContent::Poll() {
         }
         mOverlapped = new XOVERLAPPED;
         memset(mOverlapped, 0, sizeof(XOVERLAPPED));
-        // `= {0}` (w11-b): zeroes HighPart through the frame and LowPart
-        // through a precomputed address, then `ld`s it for the by-value
-        // argument -- the image's `addi r11,r1,0x64` / `stw r29,0x60(r1)` /
-        // `stw r29,0x0(r11)` / `ld r10,0x60(r1)` at 825EA4FC-825EA528.
-        // `contentSize.QuadPart = 0` let MSVC SROA the union away.
+        // Lane history (5 lines moved): docs/decomp/notes/system/os/ContentMgr_Xbox.md
         ULARGE_INTEGER contentSize = {0};
         if (XContentCrossTitleCreate(
                 pad,
@@ -244,15 +240,7 @@ void XboxContentMgr::StartRefresh() {
         for (int i = 0; i < kNumberOfBuffers; i++) {
             if ((i >= 4 || ThePlatformMgr.IsSignedIn(i))
                 && (i != 5 || mEnumerateSaveGameExports)) {
-                // ONE enumerator call PER ARM (w7-bn, 99.12 -> 100.0).  bg's two
-                // "unreachable" residuals -- the shared `li r3, 0xff` hosted at
-                // the end of the i==5 arm with i==6 branching BACK to it
-                // (825EC040/825EC058), and the result tested in cr6 (825EC084)
-                // -- are one cause: the image has four call sites that MSVC
-                // cross-jumps into the single `bl` at 825EC080, so the tested
-                // value is a phi (cr6), not a direct call result (cr0).  With
-                // param/flags/handle locals and one call: 99.12; a named DWORD
-                // result on that one call: INERT; a switch: 92.7.
+                // Lane history (9 lines moved): docs/decomp/notes/system/os/ContentMgr_Xbox.md
                 DWORD result;
                 if (i == 4) {
                     result = XContentCreateCrossTitleEnumerator(
@@ -494,14 +482,7 @@ void XboxContentMgr::PollRefresh() {
                             gIgnoredContent.begin(), gIgnoredContent.end(), xdata->szFileName
                         );
                         char *filename = xdata->szFileName;
-                        // BEHAVIOURAL (w20-p): BREAK, not `continue`.  The image's
-                        // hit arm leaves the per-item loop entirely:
-                        //     825EB95C  cmplw cr6, r3, r11       ; found vs end()
-                        //     825EB960  bne   cr6, .L_825EBABC   ; -> memset(...)
-                        // and .L_825EBABC is the post-loop memset/XEnumerateCrossTitle
-                        // block, not the `j++` at 825EBAA8.  The first ignored
-                        // item stops discovery of every item after it in the
-                        // batch.  We had `continue`, which skipped only that item.
+                        // Lane history (8 lines moved): docs/decomp/notes/system/os/ContentMgr_Xbox.md
                         if (found != gIgnoredContent.end())
                             break;
 

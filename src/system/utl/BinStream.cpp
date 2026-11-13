@@ -272,23 +272,9 @@ bool BinStream::WaitUntilReady(int sleepMs) {
 }
 #endif
 
-// w21-af: 94.74 -> 100. The vector is built from a NAMED allocator local.
-// With `new std::vector<ObjVersion>()` the allocator comes from STLport's
-// default argument (`const allocator_type& __a = allocator_type()`), a
-// temporary created inside the new-expression's conditional construct arm;
-// StlNodeAlloc has a user-declared destructor, and MSVC zero-inits a 4-byte
-// temp ahead of the `if` (the dead `stw r30, 0x50(r31)` w7-az found, which also
-// pulled `li r30, 0x0` up) -- most likely the conditional-destruction flag for
-// that temporary. A named local is constructed unconditionally and needs none.
-// Still 94.74: the temp spelled at the call site,
-// `new std::vector<ObjVersion>(std::vector<ObjVersion>::allocator_type())`.
-// Refuted on the way (one full ninja, whole binary): deleting
-// `~StlNodeAlloc() {}` from utl/StlAlloc.h also closes this function but costs
-// 65 others (DOWN 65 / UP 1), so the destructor is real. Earlier inert
-// spellings (w7-az, w9-b): `new std::vector<ObjVersion>` without `()`, a named
-// vector-pointer local, a named ObjVersion temp, deleting `~ObjVersion() {}`.
-// (w9-b's split-_VECTOR_IMPL-ctor experiment in stl/_vector.h was never
-// measured and is now unnecessary.)
+// Lane history (17 lines moved): docs/decomp/notes/system/utl/BinStream.md
+// > (w9-b's split-_VECTOR_IMPL-ctor experiment in stl/_vector.h was never measured and is
+// > now unnecessary.)
 void BinStream::PushRev(int revs, Hmx::Object *obj) {
     if (!mRevStack) {
         std::vector<ObjVersion>::allocator_type alloc;

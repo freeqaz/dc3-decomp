@@ -154,12 +154,7 @@ const char *MidiParserMgr::StripEndBracket(char *c1, const char *cc2) {
     return c1;
 }
 
-// w17-d: 99.983604 -> 100. The image's catch funclet copies mFilename into a
-// frame temp (lwz r11,0x54(r11); stw r11,0x50(r31); addi r4,r31,0x50) before
-// binding it to MakeString's `const char *const &` -- the argument was an
-// RVALUE (an accessor call), not the member lvalue. That temp is what pooled
-// with the assert-line int at 0x50 and pushed `parsed` to 0x54. A same-type
-// `(const char *)` cast is folded back to the lvalue and is inert.
+// Lane history (6 lines moved): docs/decomp/notes/system/midi/MidiParserMgr.md
 DataArray *MidiParserMgr::ParseText(const char *str, int tick) {
     MILO_ASSERT(strlen(str) < 256, 0xF3);
     char buf[256];

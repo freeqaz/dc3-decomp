@@ -149,15 +149,7 @@ BinStream &operator<<(BinStream &bs, const TransformCrowd &c) {
     return bs;
 }
 
-// w10-e: 100.0, and the template operator<<(BinStream&, vector<TransformCrowd>)
-// with it (72.115 -> 100.0, Save is no longer inlined there).  The image loads
-// mCrowdRotate BEFORE the first call (`lwz r31, 0x14(r11)` at 0x824AC144, into a
-// callee-save), and stores it into the WriteEndian home slot only AFTER that call
-// (0x824AC14C), then writes through the RETURNED stream (r3 carried into
-// WriteEndian).  That is exactly a value read up front plus a write through the
-// returned reference.  Chained `bs << mCrowd << mCrowdRotate` let MSVC sink the
-// home store above the call (no callee-save, 77.39) and made Save small enough to
-// inline into the vector template; two plain statements lose the r3 reuse (71.0).
+// Lane history (9 lines moved): docs/decomp/notes/system/hamobj/HamCamTransform.md
 void TransformCrowd::Save(BinStream &bs) const {
     CrowdRotate rotate = mCrowdRotate;
     BinStream &out = bs << mCrowd;

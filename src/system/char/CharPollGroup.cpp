@@ -118,18 +118,7 @@ void CharPollGroup::SortPolls() {
     }
     sorter.Sort(polls);
     mPolls.clear();
-    // 100% (w7-br, from 89.03).  w7-ak and w7-bl correctly located the whole
-    // residual at one MSVC decision -- the image re-derives polls._M_start /
-    // _M_finish from 0x60/0x64(r31) after every `insert` (0x823A8B44-58) where
-    // we hoisted them into r23/r25 -- and correctly found that no spelling of
-    // this loop (reference element, materialised iterator, explicit
-    // insert(end())) moves it.  It was not the loop: this TU also DEFINED
-    // CharPollableSorter::Sort (a duplicate of Character.cpp's, where the
-    // image has it), so MSVC could see that Sort never retains &polls, `polls`
-    // never escaped, and hoisting across the opaque insert was legal.  With
-    // Sort external, as in the image, polls escapes through `sorter.Sort(polls)`
-    // and the reload -- and the homed operator[] reference at 0x54, and
-    // __savegprlr_25 -- all follow.
+    // Lane history (12 lines moved): docs/decomp/notes/system/char/CharPollGroup.md
     for (int i = 0; i < polls.size(); i++) {
         mPolls.push_back(dynamic_cast<CharPollable *>(polls[i]));
     }

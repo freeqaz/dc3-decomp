@@ -159,19 +159,7 @@ int OSCMessenger::MakeOSCAddress(String str, char *buf) {
     return len - rem + 4;
 }
 
-// Same shape as GetInt above, and the same lever: the flag store is written
-// first so c2 colours the loaded value onto fValue's own pseudo-register and
-// can tail-merge the two returns, which reproduces the image's shared exit
-// (0x827E7E08..0x827E7E18, branch back at 0x827E7E68). Behaviourally
-// identical -- mHasNewValue (0x89) and buffer (0x8) are disjoint.
-// Spelling matters only as a pair, so record what was refuted here at 36.5
-// when the lever was still missing: the single tail return (w7-ar) and the
-// placeholder arm written first, `if (!val) {...; return fValue;}` (flips the
-// branch to `bne` and inlines the placeholder arm); `if (val == nullptr) {...}`
-// first; an explicit `if (!val) goto add; ...; add: {...}` (MSVC re-lays the
-// goto target as the fall-through); two separate ifs (byte-identical); and
-// adding a `return` to the found arm WITHOUT the store reorder, which
-// introduces an r28<->r29 swap and stays at 36.5.
+// Lane history (13 lines moved): docs/decomp/notes/system/utl/OSCMessenger.md
 float OSCMessenger::GetFloat(String str, float fValue) {
     OSCValue *val = GetValue(str);
     if (val) {

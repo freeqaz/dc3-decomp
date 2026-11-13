@@ -220,14 +220,9 @@ void CampaignPerformer::OnMovePassed(int player, HamMove *move, int i3, float f4
                 CampaignEra *pEra = TheCampaign->GetCampaignEra(mEra);
                 MILO_ASSERT(pEra, 0x2F6);
                 bool found = false;
-                // `songname` is a TEMPORARY bound to a const reference, not a
-                // named Symbol local (w7-bn, 99.98 -> 100.0).  The image builds
-                // GetSongName's result straight into the generic temp slot at
-                // 0x54 (828F1118), the same slot the MakeString/assert temps
-                // and moveVariantName use; a named `Symbol songname` is pinned
-                // to its own slot (0x60) and pushes the found-block GetSong()
-                // temp to 0x64 (bg's 6 rows).  Refuted by bg: unnamed temp in
-                // the `if` -> 99.69, `Symbol songname;` hoisted -> 99.08.
+                // Lane history (8 lines moved): docs/decomp/notes/lazer/meta_ham/CampaignPerformer.md
+                // > `songname` is a TEMPORARY bound to a const reference, not a named
+                // > Symbol local (w7-bn, 99.98 -> 100.0).
                 for (int i = 0; i < pEra->GetNumSongs(); i++) {
                     const Symbol &songname = pEra->GetSongName(i);
                     if (GetSong() == songname) {

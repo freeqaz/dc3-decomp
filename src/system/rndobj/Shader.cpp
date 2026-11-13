@@ -59,13 +59,7 @@ void SetColorWriteMask(const ShaderOptions &, RndMat *);
 void CheckShadow();
 void CheckExtrude();
 
-// w19-a (76.82 -> 100): the 38 stores are independent, but MSVC schedules them
-// from the SOURCE order, so the statement order is what the image encodes.  The
-// image's store order (sShaders[0], [2], [27], [1], [5], [4], [6], [3], ...) is
-// reproduced by putting BloomGlare right after Bloom and DownsampleDepth ahead
-// of Downsample/Downsample4x; everything else stays in enum order.  Found by a
-// local search over statement orders (each slot is still assigned exactly once,
-// with the same value).
+// Lane history (7 lines moved): docs/decomp/notes/system/rndobj/Shader.md
 void RndShader::Init() {
     sShaders[kBloomShader] = &gShaderSimple;
     sShaders[kBloomGlareShader] = &gShaderSimple;
@@ -176,16 +170,8 @@ bool RndShader::MatShaderFlagsOK(RndMat *mat, ShaderType s) {
     sMatShadersOK = true;
     RndShader *curShader = sShaders[s];
     bool b1824 = mat->UseEnviron() && RndEnviron::Current()->NumLights_Real() != 0;
-    // BEHAVIOURAL FIX (w12-a): both fadeout warnings are gated on CheckError(0).
-    // The image's `beq` after that call (idx 44) jumps past BOTH arms to the
-    // CheckError(1) test; the old `CheckError(0) && !FadeOut() ... else if
-    // (FadeOut())` spelling warned "fadeout unchecked" for shaders that do
-    // not check fadeout at all.
-    // BEHAVIOURAL FIX (w12-a): both fadeout warnings are gated on CheckError(0).
-    // The image's `beq` straight after that call (idx 44) jumps past BOTH arms
-    // to the CheckError(1) test; the old `CheckError(0) && !FadeOut() ... else
-    // if (FadeOut())` spelling warned "fadeout unchecked" for shaders that do
-    // not check fadeout at all.
+    // Lane history (10 lines moved): docs/decomp/notes/system/rndobj/Shader.md
+    // > BEHAVIOURAL FIX (w12-a): both fadeout warnings are gated on CheckError(0).
     if (curShader->CheckError((MatFlagErrorType)0)) {
         if (!mat->FadeOut() && EnvFadesOut(curEnv)) {
             WarnMatProp("fadeout checked", (NgMat *)mat, curEnv, s);

@@ -107,24 +107,7 @@ void CamShotVOData(
                     s1 = lose_camp_char;
                     if (subStrings.size() > 2) {
                         charSym = StrToCharacterSym(subStrings[2]);
-                        // String(Symbol), NOT String(const char *) -- REFUTED
-                        // 2026-09-14 (w7-q).  objdiff's "Function Call Diff"
-                        // reports `??0String@@QAA@VSymbol@@@Z` as base-only and
-                        // `??0String@@QAA@PBD@Z` as target-2/base-1, which reads
-                        // exactly like a wrong-callee bug.  It is not: the two
-                        // constructors are ICF-FOLDED.
-                        //   build/373307D9/icf_aliases.map:1875-1876
-                        //     ??0String@@QAA@PBD@Z        827CE9E8
-                        //     ??0String@@QAA@VSymbol@@@Z  827CE9E8
-                        // dtk names the single body after the PBD symbol, so the
-                        // listing can never distinguish the two spellings here.
-                        // Measured anyway, full ninja, report.json canonical:
-                        //   String s2Str(charSym)        97.42986 (fuzzy 96.77376)
-                        //   String s2Str(charSym.Str())  97.12820 (fuzzy 96.41177)
-                        //   Symbol c = ...; String s2Str(c.Str())  97.0 -- the
-                        //     named local takes a frame word and shifts every
-                        //     stack slot in the function by 8.
-                        // Keep the Symbol overload.
+                        // Lane history (18 lines moved): docs/decomp/notes/system/hamobj/CamShotCatVO.md
                         String s2Str(charSym);
                         if (s2Str.contains("robot")) {
                             charSym = all;
@@ -149,33 +132,7 @@ void CamShotVOData(
                     charSym = all;
                 }
             } else {
-                // BUG FIX (w7-bv): the win-level / character block below is
-                // INSIDE this final else, not after the chain.  Every earlier
-                // arm exits straight to the vector destructor at 0x82519524 in
-                // the image -- BATTLE `b 0x825194FC` (at 0x82519118, via the
-                // shared `lwz r11, 0(r3); stw r11, 0(r10)` tail), WIN
-                // `b 0x82519500` (0x82519174), LOSE `b 0x82519524` (0x8251920C)
-                // and HYPE (0x825192F0) -- and only the DLG/MOV arm and the
-                // no-match case (`ble cr6, 0x8251937C` at 0x82519310) reach the
-                // `subStrings.size() > 1` test at 0x82519378.  We used to fall
-                // into it from every arm, which notified "Couldn't find win
-                // level" / "Couldn't find character" for every BATTLE/CAMP/HYPE
-                // category and overwrote charSym with subStrings[3] on any
-                // four-part BATTLE name.  97.43 -> 100.0 canonical (99.95 raw);
-                // the whole r23/r25 and TheDebug-in-r14 cascade that w7-q
-                // recorded as a register-allocator floor was downstream of
-                // this control flow.  Residual 6 rows: the low/med/high statics
-                // mangle as scope `?FG@` in the image and `?FI@` here (MSVC's
-                // per-function scope ordinal -- two more numbered scopes reach
-                // this block in our spelling), a class the canonical ruler
-                // folds.  w20-g: the image-side ?FG@ names are not image
-                // data -- symbols.txt took them from a build of the earlier
-                // spelling (58bfcfcfb), where this block sat OUTSIDE the
-                // else chain (two fewer enclosing scopes).  Not a value or
-                // control-flow difference; all operands/branches re-checked.
-                // w25-ha: symbols.txt now names them ?FI@, this spelling's
-                // ordinal (every other static's name already agreed), since
-                // the image carries no static names to contradict it.
+                // Lane history (27 lines moved): docs/decomp/notes/system/hamobj/CamShotCatVO.md
                 if (subStrings.size() > 2) {
                     // One address for the two comparisons: the target computes
                     // `addi r29, r3, 0x10` once and reuses it (`mr r3, r29`

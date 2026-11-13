@@ -375,11 +375,7 @@ void CharacterTest::PlayNew() {
 void CharacterTest::Poll() {
     if (Clips() && mClip1) {
         if (!gClick) {
-            // w13-c: 99.386 -> 100.  FileSystemRoot() is passed uncast (the
-            // image calls MakeString<const char *>, not <char *>), and the
-            // FilePath is a NAMED local in its own block: the image re-derives
-            // `addi r3, r31, 0x58` for LoadObjects instead of forwarding the
-            // ctor's return, and destroys the path straight after the call.
+            // Lane history (5 lines moved): docs/decomp/notes/system/char/CharacterTest.md
             ObjectDir *clickdir;
             {
                 FilePath clickPath(MakeString("%s/char/chartest.milo", FileSystemRoot()));

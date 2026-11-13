@@ -131,15 +131,7 @@ void ShellInput::Init() {
 void ShellInput::Draw() { mCursorPanel->Draw(); }
 
 void ShellInput::Poll() {
-    // Both builds run the image body (0x82902CC0). Since w23-sk ShellInput::Init
-    // creates every member read here natively too (both gesture filters, the
-    // DepthBuffer, the SkeletonIdentifier, the SkeletonChooser, the
-    // SkeletonExtentTracker; mWrongHandPosAnim is a fail=true Find), so the old
-    // native arm's null tests were dead. It also polled the SkeletonChooser only
-    // while NumTrackedSkeletons() > 0; the image polls it unconditionally
-    // (`lwz r3,0xd0(r22); bl SkeletonChooser::Poll` at 0x82903454, no test), and
-    // the chooser body is written for an empty sensor -- Kinect with nobody in
-    // view is its ordinary state.
+    // Lane history (9 lines moved): docs/decomp/notes/lazer/meta_ham/ShellInput.md
     static Symbol is_in_shell_pause("is_in_shell_pause");
     static Symbol is_in_party_mode("is_in_party_mode");
     static Symbol is_in_infinite_party_mode("is_in_infinite_party_mode");

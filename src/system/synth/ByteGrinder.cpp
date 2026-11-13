@@ -207,19 +207,9 @@ DataNode op5(DataArray *msg) {
     return DataNode(kDataInt, u8(ret));
 }
 
-// op6 stop note (w25-ga2, c2rs 8.7 commutative key): the image emits
-// `xor r11, r10, r11`, u8(operand) first. Ours is the other way round. At the
-// last sort (cqlo3) the !w side is the eq-0 compare with the Int(2) call
-// folded in (SU+7, key 0x100e040f) and u8(operand) is zext of the saved
-// Int(1) result (0x00030098). The u8(operand) side can never outrank a tree
-// that holds a call, so the image's compare must see a LEAF (key 0x1xxxx), as
-// op0's zext does once `w` is narrowed at its declaration. No 32-bit-exact
-// spelling found that keeps the call out of the compare. Tried: named
-// bool/u8/u32 results of !w and of `== 0`, a const ref to the result, int vs
-// u32 vs unsigned long for both locals, `w == 0` and `w < 1`, explicit
-// DataNode(kDataInt, ...), and inline-call orders (which swap the two Int
-// calls). Narrowing w itself changes the semantics: !w tests all 32 bits
-// (cntlzw on r3).
+// Lane history (13 lines moved): docs/decomp/notes/system/synth/ByteGrinder.md
+// > op6 stop note (w25-ga2, c2rs 8.7 commutative key): the image emits `xor r11, r10,
+// > r11`, u8(operand) first.
 DataNode op6(DataArray *msg) {
     u32 operand = msg->Int(1);
     u32 w = msg->Int(2);
@@ -693,12 +683,10 @@ DataNode op58(DataArray *msg) {
 }
 
 DataNode op59(DataArray *msg) {
-    // BEHAVIOUR FIX (w11-d): the image computes ((w >> 2) ^ 0x0F) |
-    // (((w & 3) << 6) ^ 0x19) -- `extrwi r9,r11,8,22; xori r9,r9,0xf` and
-    // `clrlslwi r11,r11,30,6; xori r11,r11,0x19` at 0x8276C938.  The previous
-    // spelling had the two xor constants swapped between the halves
-    // ((w ^ 0x65) | ((w << 8) ^ 0x3C)) >> 2, which differs on 224 of 256 byte
-    // values; this form also agrees with the native nop59 for all 256.
+    // Lane history (6 lines moved): docs/decomp/notes/system/synth/ByteGrinder.md
+    // > BEHAVIOUR FIX (w11-d): the image computes ((w >> 2) ^ 0x0F) | (((w & 3) << 6) ^
+    // > 0x19) -- `extrwi r9,r11,8,22; xori r9,r9,0xf` and `clrlslwi r11,r11,30,6; xori
+    // > r11,r11,0x19` at 0x8276C938.
     unsigned long operand = msg->Int(1);
     unsigned long w = u8(msg->Int(2));
     unsigned long a = (w >> 2) ^ 0xF;
@@ -1151,18 +1139,6 @@ void ByteGrinder::Init() {
     }
 }
 
-// w8-j 2026-09-15 -- FLOOR at 99.933% for ?op59@@YA?AVDataNode@@PAVDataArray@@@Z
-// (120 B, 28 of 30 instructions equal).  The two residual rows are one swapped
-// pair:
-//     target   xori r9, r9, 0xf    /  xori r11, r11, 0x19
-//     ours     xori r9, r9, 0x19   /  xori r11, r11, 0xf
-// MSVC distributed the `>> 2` over the OR, so 0x3C>>2 = 0xf is the
-// `(w << 8) ^ 0x3C` half and 0x65>>2 = 0x19 is the `w ^ 0x65` half.  The image
-// evaluates the shifted half into r9 and the plain half into r11; we do the
-// reverse.  Both operand-order levers are REFUTED, one full ninja each:
-//   (a) `(working3 | working2) >> 2` instead of `(working2 | working3) >> 2`
-//       -- byte identical, MSVC canonicalises the commutative OR.
-//   (b) swapping the DECLARATION order of working2 and working3 as well
-//       -- byte identical again.
-// The value is correct either way (the final u8 truncation makes the halves
-// interchangeable); only the register assignment differs.  Do not re-derive.
+// Lane history (15 lines moved): docs/decomp/notes/system/synth/ByteGrinder.md
+// > The image evaluates the shifted half into r9 and the plain half into r11; we do the
+// > reverse. (w8-j)

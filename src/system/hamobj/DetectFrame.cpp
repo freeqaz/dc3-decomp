@@ -30,16 +30,7 @@ void DetectFrame::Reset(
     const ErrorNode *const *nodes = fv->mErrorNodes;
     if (fv->mType == kFilterVersionHam1) {
         for (int i = 0; i < MoveFrame::kNumHam1Nodes; i++) {
-            // w8-i: the `Vector3 &w` hoist is load-bearing, and it is a SCHEDULING
-            // lever, not a codegen-size one -- the 47 instructions were already
-            // identical apart from the two induction-variable bumps, emitted in the
-            // opposite order (image: `addi r31,r31,0x10` then `addi r30,r30,0x4`;
-            // ours: r30 first).  Subscripting mNodeComponentWeights[i] three times
-            // makes the weights pointer a strength-reduction result DERIVED inside
-            // the body, so MSVC sinks its bump below the nodes[] bump; binding the
-            // element to a reference at the top of the body makes it an induction
-            // variable in its own right, created in source order, and the two bumps
-            // come out in the image's order.  99.96 -> 100.0 (188 B).
+            // Lane history (10 lines moved): docs/decomp/notes/system/hamobj/DetectFrame.md
             Vector3 &w = mNodeComponentWeights[i];
             w.y = 1;
             Vector3 v;
@@ -108,20 +99,10 @@ float DetectFrame::LimbPSNR(const FilterVersion *filter_version, int i2) const {
         // mask is tested even when i2 == -1 (beq lands on the Type() load).
         if ((i2 == -1 || _tmp0 & i2) && curErrorNode->Type() & typeMask) {
             const Vector3 &nodeWeight = mMoveFrame->NodeWeight(i, mMirror);
-            // The image's dot product is ((err.z*w.z + err.x*w.x) + err.y*w.y)
-            // (82531984 `fmuls f0, err.z, w.z`, then `fmadds` x, then y); the
-            // parentheses give native the same association (w21-at).
-            //
-            // The weight components are named, z first, for the Length sum
-            // (w25-mc). c2 sorts the three squares of that flat sum by a key
-            // (c2rs W-STAGETAP-11, C2RS-BRIDGE 8.7) built from each operand's
-            // sid, and emits the list's SECOND entry innermost. Reading
-            // nodeWeight inline left three CSE temps minted in the dot's
-            // z, x, y order (sids 267, 272, 281), so the key order was
-            // y > x > z and we squared w.x first. Named in z, y, x order the
-            // keys run x > y > z and the image's (y*y + x*x) + z*z follows,
-            // with w.y loaded first (lfs f11, 4(r3)). Native value unchanged:
-            // the sum is still (x*x + y*y) + z*z, exactly Length()'s.
+            // Lane history (14 lines moved): docs/decomp/notes/system/hamobj/DetectFrame.md
+            // > The image's dot product is ((err.z*w.z + err.x*w.x) + err.y*w.y)
+            // > (82531984 `fmuls f0, err.z, w.z`, then `fmadds` x, then y); the
+            // > parentheses give native the same association (w21-at).
             const Vector3 &err = mBestNodeErrors[i];
             float wz = nodeWeight.z;
             float wy = nodeWeight.y;

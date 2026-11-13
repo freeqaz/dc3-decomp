@@ -120,23 +120,10 @@ bool CDReadExternal(void *&v, int i, u64 u) {
         return false;
     } else {
         v = gExternalArkFiles[i];
-        // The local the high-dword pointer points at is 64 bits wide, not a
-        // truncated LONG: 0x82602C9C is `std r29, 0x50(r1)`, a full 8-byte store
-        // of the offset, and r5 (= r1+0x50) is what SetFilePointer gets as
-        // lpDistanceToMoveHigh.  On big-endian that pointer lands on the HIGH
-        // dword of the offset, which is what the API wants.  Written as
-        // `LONG l = u;` we stored the truncated LOW 32 bits there instead and
-        // handed the API the low half twice.  The `u64` parameter is also homed
-        // (`std r5, 0xa0(r1)`) and the LONG argument reloaded out of it
-        // (`lwz r4, 0xa4(r1)`) -- w8-g CLOSED (88.46 -> 100.0).  w7-az was right
-        // that an explicit `(LONG)` cast is byte-inert: on PPC64 the low dword of
-        // `u` is already the low half of its register, so MSVC truncates with a
-        // no-op `clrrwi` and never homes the parameter.  Spelling the truncation
-        // as the big-endian LOAD of that dword -- `((const LONG *)&u)[1]` -- takes
-        // the parameter's address, which is what forces `std r5, 0xa0(r1)` and
-        // makes the argument come back as `lwz r4, 0xa4(r1)`.  It also flips the
-        // r29/r30 assignment order to the image's.  Same value on big-endian;
-        // native gets the plain cast.
+        // Lane history (17 lines moved): docs/decomp/notes/system/os/CDReader.md
+        // > The local the high-dword pointer points at is 64 bits wide, not a truncated
+        // > LONG: 0x82602C9C is `std r29, 0x50(r1)`, a full 8-byte store of the offset,
+        // > and r5 (= r1+0x50) is what SetFilePointer gets as lpDistanceToMoveHigh.
         u64 offset = u;
 #ifdef HX_NATIVE
         LONG low = (LONG)u;

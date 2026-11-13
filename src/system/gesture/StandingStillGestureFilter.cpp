@@ -33,21 +33,7 @@ void StandingStillGestureFilter::RestoreDefaultForwardFacingCutoff() {
     mForwardFacingCutoff = 0.4f;
 }
 
-// 100% canonical (w7-bm, 2026-09-15; was 96.6). The image tail-merges every
-// state store: the not-tracked site (state 2) at 0x8c is the cross-jump body
-// holder and states 3..9 are each `li r9,k; b 0x8c`, so every site below is
-// written as the full store/reset/return tail rather than as one `int state`
-// chain with a single store after it (that chain puts the join after the
-// last site and leaves the state-2 site as a separate store: 96.6; the
-// r30/r31 this/skeleton rotation and the 0x50..0x90 slot permutation were
-// downstream of that join placement). The dotR test must `goto` a label
-// INSIDE the dotL block: any spelling that makes the state-9 tail the
-// function's fall-through (`dotR > t || dotL > t`, or `if (dotR <= t) {..}`
-// followed by the tail) makes it the body holder and moves the whole block
-// to the end (94.2). Residual: 4 register-only rows (r9/r11, value vs address
-// registers in the 16-byte `unk38 = skeleton.GetUnkab0()` copy); hoisting
-// `pos` above the `if` and copying from it drops the dead source-address
-// addi the image has (99.6).
+// Lane history (15 lines moved): docs/decomp/notes/system/gesture/StandingStillGestureFilter.md
 void StandingStillGestureFilter::Update(const Skeleton &skeleton, int ms) {
     // Two file-local mutable floats, read from memory rather than folded as
     // literals: .data 0x2c/0x30 of this TU.  The first is a DISTANCE (0.5),
@@ -160,20 +146,7 @@ void StandingStillGestureFilter::Update(const Skeleton &skeleton, int ms) {
     }
 
 StandingStillLogic:
-    // w25-rl stop note (c2rs regasg tap): the r9/r11 swap in this 16-byte
-    // copy is not a colour decision. All three values (the first word's lwz,
-    // the dead src/dst `addi` addresses) are regasg temps, and regasg sees
-    // lwz, addi src, addi dst in sched3 order, so first fit gives the word
-    // r11 (r10 holds mRaisedMs). The image's r9 word means r11 was blocked
-    // at the lwz: the src addi came first in sched3, or was a colour
-    // candidate (memcpy makes the DST addi one, but reloads mRaisedMs).
-    // Inert: GetUnkab0Padded() casts, a named `cur` ref, `!mRaisedMs`,
-    // Vector3 temp, savedPos split. w26-f13 also measured inert: a named
-    // `const Vector3 &` for the call result, and a named `const Vector3 *`
-    // src for the same; a named `Vector3 &`/`Vector3 *` DESTINATION moves the
-    // dst addi into a k04 but costs 0.63 fuzzy / 0.36 canonical, so the copy
-    // body itself is what has to move. Open question: which IL shape orders
-    // the copy's src address ahead of its first load in sched3.
+    // Lane history (14 lines moved): docs/decomp/notes/system/gesture/StandingStillGestureFilter.md
     if (mRaisedMs == 0) {
         unk38 = skeleton.GetUnkab0();
     }

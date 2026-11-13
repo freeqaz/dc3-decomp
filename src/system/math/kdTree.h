@@ -189,19 +189,10 @@ public:
             mData.index = splitAxis;
 
             double fsum = 0.0;
-            // The image tests begin() != end() with the iterator it then walks
-            // (lwz r29, 0x0(r25); cmplw r29, r25); `!items.empty()` + FOREACH
-            // loads begin twice-over through r11 and adds a mr.
-            // w26-c: the two EDGE vectors are named references.  The image
-            // orders every component sum by descending displacement (x: 0x10
-            // then 0x0, y: 0x14 then 0x4, z: 0x18 then 0x8); with the frame
-            // read inline, c2's post-lowering commutative sort keys bound
-            // `origin.x + frame.x.x` off the *temp* it mints for `cur`, and
-            // only the x pair (disp 0x0 vs 0x10) came out ascending.  Naming
-            // the edges gives the memory operands a variable base, whose real
-            // address hash (not just the temp sid mod 4) puts all three pairs
-            // in the same order.  w14-a's 4-row residual, closed; swapping the
-            // source operands stays inert, as does ::Add(origin, frame, v).
+            // Lane history (13 lines moved): docs/decomp/notes/system/math/kdTree.md
+            // > The image tests begin() != end() with the iterator it then walks (lwz
+            // > r29, 0x0(r25); cmplw r29, r25); `!items.empty()` + FOREACH loads begin
+            // > twice-over through r11 and adds a mr.
             std::list<Triangle *>::const_iterator it = items.begin();
             if (it != items.end()) {
                 for (; it != items.end(); ++it) {

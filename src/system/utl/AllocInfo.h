@@ -64,14 +64,7 @@ TextStream &operator<<(TextStream &, const AllocInfo &);
 class AllocInfoVec {
 public:
     AllocInfoVec() : mStart(0), mEnd(0), mEndOfStorage(0) {}
-    // STLport-shaped: `allocate(size, size)` hands the byte count back as an
-    // element count through the reference (see Allocate). In the shipped
-    // MemTracker::MemTracker that write-back is visible as `clrlwi r5, r27, 2`
-    // (y & 0x3fffffff = (y*4)/4 unsigned, 827DB768) spilled to a frame temp
-    // (`stw r5, 0x54(r31)`, 827DB788) that nothing reads; the plain
-    // `DebugHeapAlloc(size * sizeof(AllocInfo *))` init could not produce
-    // either. Must stay __forceinline: without it MSVC emits an out-of-line
-    // ??0AllocInfoVec call (measured, w7-bu).
+    // Lane history (8 lines moved): docs/decomp/notes/system/utl/AllocInfo.md
     __forceinline AllocInfoVec(unsigned int size)
         : mStart(Allocate(size, size)), mEnd(mStart), mEndOfStorage(mStart + size) {}
     // NO destructor.  The shipped MemTracker::DiffDump carries pdata flag

@@ -8,12 +8,7 @@
 #include "os\Friend.h"
 #include "stl\_vector.h"
 
-// w8-g: the message name has no `_msg` suffix in the image.  The string COMDAT
-// PlatformMgrOpCompleteMsg::Type() references is `??_C@_0BJ@...` -- 0x19 = 25
-// bytes with the NUL, i.e. 24 characters, which is exactly
-// "platform_mgr_op_complete"; ours was `??_C@_0BN@...` (0x1D = 28 characters).
-// Proving site: os/PlatformMgr_Xbox, ?Type@PlatformMgrOpCompleteMsg@@SA?AVSymbol@@XZ
-// indices 13 and 15 (`lis`/`addi` of the literal).
+// Lane history (6 lines moved): docs/decomp/notes/lazer/net_ham/FriendsListJobs.md
 DECLARE_MESSAGE(PlatformMgrOpCompleteMsg, "platform_mgr_op_complete")
 PlatformMgrOpCompleteMsg(bool success) : Message(Type(), success) {}
 bool Success() const { return mData->Int(2) != 0; }

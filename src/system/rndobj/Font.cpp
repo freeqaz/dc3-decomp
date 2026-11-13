@@ -13,18 +13,9 @@
 #include "utl\FilePath.h"
 #include "utl\MakeString.h"
 
-// w8-e 2026-09-15: ??$PropSync@VRndMat@@@@YA_NAAPAVRndMat@@... (240 B, 0%) is a
-// real same-TU gap.  ham_xbox_r.map shows FOUR PropSync<RndMat> instantiations
-// in the image, discriminated only by the container they sync:
-//   AAV?$ObjPtr@VRndMat@@       824987b0  hamobj:CharFeedback.obj
-//   AAPAVRndMat@@  (raw ptr)    82703fd8  rndobj:Font.obj   <-- this row
-//   AAV?$ObjPtrVec@VRndMat@@    82707210  rndobj:Font.obj   (we do emit this)
-//   AAV?$ObjPtrList@VRndMat@@   827ab310  ui:UIFontImporter.obj
-// So the image PropSyncs a BARE `RndMat *` here, not an ObjPtr<RndMat>.  Our
-// Font.cpp only ever syncs the ObjPtrVec form, so the raw-pointer overload is
-// never instantiated and the row reads 0.0%.  The lever is a PROPERTY that holds
-// a plain RndMat* (not an ObjPtr) reached through SyncProperty/PropSync here.
-// Not investigated further; left open.
+// Lane history (12 lines moved): docs/decomp/notes/system/rndobj/Font.md
+// > Our Font.cpp only ever syncs the ObjPtrVec form, so the raw-pointer overload is never
+// > instantiated and the row reads 0.0%. (w8-e)
 #include "utl\UTF8.h"
 #include <cmath>
 
@@ -76,25 +67,9 @@ void KerningTable::Save(BinStream &bs) {
     }
 }
 
-// w15-i1 (99.978 canonical, 2 rows): the image reloads mFirstChar (lhz 0x0) then
-// mSecondChar (lhz 0x2) for the table index; we load them the other way round.
-// Byte-inert: xor is commutative and the result is masked by 0x1F, so both
-// orders compute the same index.
-// Mechanism (c2-rs §8.7): this is the COMMUTATIVE OPERAND-ORDER key, not a
-// register-assignment row.  Both operands arrive at the last sort (cqlo3) as
-// folded single-use temps of the same shape, and that sort is descending by key
-// and stable, so their order is fixed by the key of the tuple each temp was
-// folded out of.  Measured inert (one rebuild each, all exactly 90/92 rows):
-// swapping the two TableIndex arguments, inlining the xor in both operand
-// orders, naming mFirstChar first, naming mSecondChar first, and naming both
-// before the `Key` call.  That is §8.3's finding -- c1 canonicalises the
-// operand list of a commutative tuple in the IL, before the second driver ever
-// sorts it, so the two temps keep the mint order c1 gave them.  Flipping this
-// needs a change of IL NODE for one operand (a different expression producing
-// it), not a change of operand position.
-// w16-a: re-subscripting `info[i].mSecondChar, info[i].mFirstChar` for the
-// table index (instead of curInfo) does not change the load order and costs a
-// callee-saved renumbering (97.8).
+// Lane history (19 lines moved): docs/decomp/notes/system/rndobj/Font.md
+// > Mechanism (c2-rs §8.7): this is the COMMUTATIVE OPERAND-ORDER key, not a
+// > register-assignment row. (w15-i1)
 void KerningTable::SetKerning(
     const std::vector<RndFont::KernInfo> &info, RndFontBase *font
 ) {
@@ -742,34 +717,9 @@ RndTex *RndFont::ValidTexture(int idx) const {
         return nullptr;
 }
 
-// w7-al (95.9 canonical then, 95.6 at w26-b): 34 rows, and 24 of them are one
-// consistent callee-saved permutation.  The image ranks the nine live values
-// cursor > left > right > info > this > bmap > top > bottom > pos (r31..r23);
-// we get left > right > cursor > info > top > bottom > this > pos > bmap.
-// Every instruction is otherwise in the same order with the same opcode.
-// Mechanism (c2-rs candidate tap, fn 368): this is COLOR's pop order, which is
-// priority descending then tie descending.  Our worklist pops
-// id13(pri 21, sym 11/k04), id7(pri 21, sym 7/k04), id10(pri 18, sym 9/k04),
-// id14(pri 17, sym 11/k04 second live range), id11(pri 12, sym 9), id8(pri 10,
-// sym 7) -- i.e. the two live ranges of each of the three scan variables sit
-// next to each other, which is why `left`/`right` outrank `cursor`.  Priority
-// is refs_in_block x pressure, so closing this means moving references between
-// basic blocks (§6 lever 2), not reordering declarations.  Merging the two
-// cursors into one (which is what the image does) moved the structure but not
-// the ranking.  The last rows are the scheduler placing bmap.Width()'s `lhz`
-// before the cursor's `extsw` instead of between the `fcfid` and the `frsp`,
-// which duplicates one `frsp` and one `lfs pos.x` out of the cross-jumped tail.
-// NOT a template mismatch: objdiff's call diff names the image's `_M_find`
-// instantiated over `pair<const unsigned short, RndFont::CharInfo>` where ours
-// is over `RndFont3d::CharInfo *`.  Checked in the target object directly: the
-// image loads a POINTER out of the map node at 0x14 and dereferences 0x10/0x20/
-// 0x30 through it, so its map value is a pointer too; the name is the linker's
-// ICF survivor (every unsigned-short-keyed `_M_find` folds to one body).  The
-// `MakeString` in the trailing MILO_ASSERT differs the same way and is the same
-// kind of artefact: the target object contains only
-// MakeString<char const[19], int, char const[5]> and passes it the 21-byte
-// "info->charWidth >= 0" literal and the 9-byte "Font.cpp" literal, which no
-// single translation unit can type-check -- it is a merged COMDAT name.
+// Lane history (28 lines moved): docs/decomp/notes/system/rndobj/Font.md
+// > Mechanism (c2-rs candidate tap, fn 368): this is COLOR's pop order, which is priority
+// > descending then tie descending. (w26-b)
 void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, int page) {
     info->mPage = page;
     if (mMonospace) {
@@ -778,14 +728,7 @@ void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, i
         info->charWidth = 1.0f;
         info->mU = pos.x / (float)width;
     } else {
-        // w26-z (2026-11-02): declaration order is measured inert on this row.
-        // `int col;` declared before the bounds, `left/right` ahead of
-        // `top/bottom`, and `top/bottom` ahead of `left/right` are all exactly
-        // 95.600. The residual is the nonvolatile-GPR priority order (image:
-        // cursor > left > right > info > this > bmap > top > bottom > pos;
-        // ours: left > right > cursor > info > top > bottom > this > pos >
-        // bmap), i.e. priority = refs-in-block x local pressure, together with
-        // the stack-slot shaping of the two cross-jumped tails.
+        // Lane history (8 lines moved): docs/decomp/notes/system/rndobj/Font.md
         int left = (int)pos.x;
         int top = (int)pos.y;
         int right = (int)(mCellSize.x + pos.x);
@@ -795,15 +738,10 @@ void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, i
         // `mr r31, r29` for the right one), which is why it outranks `left`
         // and `right` for the top callee-saved register.
         int col = left;
-        // The first compare in each scan is against the RAW bound, not the
-        // cursor (0x82703688 `cmpw r30, r29` is left vs right, while the loop
-        // latch at 0x827036C4 is the cursor vs right).
-        // BEHAVIOURAL FIX (w12-a): ColumnNonTransparent is re-called for every
-        // column -- the latch `bne cr6, .L_82703690` at 0x827036C8 jumps back to
-        // the argument setup before the `bl` at 0x827036A4 (same at 0x8270372C
-        // for the right scan).  The previous spelling evaluated it ONCE into a
-        // temp, so a transparent first column walked the cursor straight to
-        // the far bound without testing any other column.
+        // Lane history (9 lines moved): docs/decomp/notes/system/rndobj/Font.md
+        // > The first compare in each scan is against the RAW bound, not the cursor
+        // > (0x82703688 `cmpw r30, r29` is left vs right, while the loop latch at
+        // > 0x827036C4 is the cursor vs right).
         if (left != right) {
             int dummy;
             do {
@@ -909,9 +847,5 @@ bool RndFont::CharWidthAdvanceCoords(
     return false;
 }
 
-// w8-k: the raw-pointer PropSync<RndMat> COMDAT at 0x82703FD8 (ham_xbox_r.map,
-// rndobj:Font.obj) is an orphan instantiation -- retail inlined its call site and
-// still emitted the COMDAT, exactly as Waypoint.cpp:249 documents for
-// PropSync<Waypoint>(Waypoint *&, ...).  Explicit instantiation is the lever;
-// the ObjPtrVec spelling beside it (0x82707210) already reads 100%.
+// Lane history (5 lines moved): docs/decomp/notes/system/rndobj/Font.md
 template bool PropSync<RndMat>(RndMat *&, DataNode &, DataArray *, int, PropOp);

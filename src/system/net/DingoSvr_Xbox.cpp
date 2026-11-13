@@ -148,26 +148,9 @@ void DingoSvrXbox::Poll() {
             String svc("dingo");
             found = ThePlatformMgr.GetServiceID(svc, (unsigned int &)mDingoServiceId);
         }
-        // NEGATIVE RESULT (w7-ar, 2026-09-14): this arm is BEHAVIOURALLY correct
-        // and scores LOWER; keep it. Both messages below reach ?Notify@Debug@@ in
-        // the image -- there is no ?Warn@Debug@@ anywhere in the target's Poll --
-        // and the image cross-jumps them into ONE MakeString/Notify tail that
-        // lives at the FIRST message's site (.L_825569B0 = 0x825569B0), with the
-        // second message's block doing `addi r3, <str2>` / `b .L_825569B0`
-        // BACKWARD into it (0x825569DC).
-        //
-        // MSVC merges the same two tails for us but puts the tail at the SECOND
-        // site and branches forward from the first, which costs 5.5pp: 94.57
-        // canonical for the unfaithful spelling (MILO_WARN on the second message,
-        // no cross-jump at all) vs 89.11 for this one. Measured twice, by two
-        // lanes. The residual is exactly those 14 rows -- the shared tail's
-        // position, nothing else; every test, every branch condition and both
-        // string operands already match.
-        //
-        // Refuted: swapping the two tests (changes which string goes with which
-        // condition -- not a spelling of the same program); hoisting both
-        // messages to one `const char *msg` site after the chain (produces one
-        // tail plus a null test, which is a different shape from a cross-jump).
+        // Lane history (20 lines moved): docs/decomp/notes/system/net/DingoSvr_Xbox.md
+        // > NEGATIVE RESULT (w7-ar, 2026-09-14): this arm is BEHAVIOURALLY correct and
+        // > scores LOWER; keep it.
         if (found) {
             if (*mXLSPFilter.c_str() == '\0') {
                 MILO_NOTIFY("DingoSvrXbox: Empty XLSP filter string.");
