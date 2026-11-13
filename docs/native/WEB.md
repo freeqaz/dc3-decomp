@@ -115,7 +115,7 @@ pass on the frame target). Something later in the frame called
 `BeginFramePass(false)` (SavePreBuffer, ComposeTexBlend, a point test or
 `MakeDrawTarget` resumes the frame pass); that reopened the **MSAA** main pass,
 whose resolve at the end of the frame overwrote the frame target, overlay
-draws included. Engine fix (np-web3 branch `27abf99`): a resume after the
+draws included. Engine fix (np-web3 branch `e030a36`): a resume after the
 flush reopens the overlay pass instead. With it the movie and its help bar /
 SKIP overlay show, `attract-movie.mjs` passes (mean luma 22 and 31, 29% of
 sampled pixels change in 2 s), and `gesture-menus.mjs --skip-attract` leaves
@@ -136,8 +136,8 @@ within 10 ms, each logged once per stream (3–4×), and song time moved both
 ways. On web it now reads `StreamReceiverNative::HeardBytes()`: every
 `RenderAudio` call records which mix frames it filled and the cursor before
 and after, and `HeardBytes` interpolates at the frames the worklet has
-consumed (`AudioDevice::MixFramesConsumed`; engine np-web3 `a0b3146`,
-`061f53b`). `GetRawTime` keeps its match (100%, 26/26, `name_check`); the
+consumed (`AudioDevice::MixFramesConsumed`; engine np-web3 `7404fb3`,
+`0a283f5`). `GetRawTime` keeps its match (100%, 26/26, `name_check`); the
 block is `HX_WEB` only.
 
 thehustle, Easy, no camera, release, `pose-gameplay.mjs`:
