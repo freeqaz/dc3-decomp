@@ -159,3 +159,31 @@ def test_unreadable_snapshot_is_2(tmp_path):
     root = tree(tmp_path, obj())
     rc, out = run(root, "compare", "--no-build", "--before", str(tmp_path / "nope"))
     assert rc == 2, out
+
+
+def labelled(num, at=4, fn_bytes=b"\x38\x60\x00\x01\x4e\x80\x00\x20"):
+    """foo with a compiler-numbered label `$M<num>` at offset `at`, and an
+    .rdata table whose relocation points at that label (an EH table)."""
+    secs = [(".text", fn_bytes, [], CODE | COMDAT),
+            (".rdata", b"\x00\x00\x00\x00", [(0, 3, 2)], 0x40000040)]
+    syms = [(".text", 0, 1, 3, True), ("foo", 0, 1, 2, False), (f"$M{num}", at, 1, 6, False),
+            (".rdata", 0, 2, 3, True), ("tbl", 0, 2, 3, False)]
+    # raw: 0 .text +1 aux, 2 foo, 3 $M, 4 .rdata +5 aux, 6 tbl -> reloc targets raw idx 3
+    return coff(secs, syms)
+
+
+def test_renumbered_compiler_labels_are_not_a_difference(tmp_path):
+    # measured on Font/Mesh/MatAnim.obj: a comment move renumbers $M/$T/__unwind$
+    assert gate.fingerprint_object_bytes(labelled(60594)) == \
+        gate.fingerprint_object_bytes(labelled(62026))
+
+
+def test_a_label_that_moves_is_a_difference(tmp_path):
+    assert gate.fingerprint_object_bytes(labelled(1, at=4)) != \
+        gate.fingerprint_object_bytes(labelled(1, at=0))
+
+
+def test_a_label_does_not_hide_the_function_bytes_after_it(tmp_path):
+    a = gate.fingerprint_object_bytes(labelled(1))
+    b = gate.fingerprint_object_bytes(labelled(1, fn_bytes=b"\x38\x60\x00\x01\x4e\x80\x00\x21"))
+    assert a["symbols"]["foo"] != b["symbols"]["foo"]

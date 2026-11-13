@@ -24,9 +24,10 @@ TESTS = ["tests/test_migrate_notes.py", "tests/test_verify_comment_move.py"]
 # (label, file, [(old, new), ...], [test names, any of which must fail])
 MUTATIONS = [
     ("G1 relocations ignored (a wrong callee with identical bytes passes)", VG,
-     [('rel = sorted((va, typ, _target(symbols, sections, si)) for va, si, typ in s["relocs"])',
+     [("rel = sorted((va, typ, _target(symbols, sections, si, names))\n"
+       "                     for va, si, typ in s[\"relocs\"])",
        "rel = []"),
-      ("rel = sorted((va - lo, typ, _target(symbols, sections, si))\n"
+      ("rel = sorted((va - lo, typ, _target(symbols, sections, si, names))\n"
        "                         for va, si, typ in sec[\"relocs\"] if lo <= va < hi)",
        "rel = []")],
      ["test_wrong_callee_same_bytes_is_refused"]),
@@ -47,6 +48,17 @@ MUTATIONS = [
      [('print(f"CANNOT VERIFY: snapshot unreadable: {e}", file=sys.stderr)\n        return 2',
        'print(f"CANNOT VERIFY: snapshot unreadable: {e}", file=sys.stderr)\n        return 0')],
      ["test_unreadable_snapshot_is_2"]),
+    ("G7 numbered labels keyed by raw name (a renumbering reads as a change)", VG,
+     [("        m = NUMBERED_LABEL_RE.match(s[\"name\"]) if s[\"sec\"] > 0 and s[\"cls\"] != 2 else None",
+       "        m = None")],
+     ["test_renumbered_compiler_labels_are_not_a_difference"]),
+    ("G8 labels cut function ranges (bytes after a label escape the function)", VG,
+     [('starts = sorted({s["value"] for s in lst if not s["key"].startswith("<")})',
+       'starts = sorted({s["value"] for s in lst})')],
+     ["test_a_label_does_not_hide_the_function_bytes_after_it"]),
+    ("G9 label identity ignores its offset", VG,
+     [("|{_h(sec['data'])}+{s['value']:#x}>\")", "|{_h(sec['data'])}>\")")],
+     ["test_a_label_that_moves_is_a_difference"]),
 
     ("M1 lane tag not required (documentation saying 'inert' is moved)", MN,
      [("or not LANE_HISTORY_RE.search(", "or not True or LANE_HISTORY_RE.search(")],

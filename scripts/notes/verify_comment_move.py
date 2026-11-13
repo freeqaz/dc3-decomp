@@ -48,6 +48,7 @@ Exit codes: 0 identical   1 DIFFERENT (refuse the move)   2 could not verify
 """
 
 import argparse
+import re
 import hashlib
 import json
 import os
@@ -132,7 +133,40 @@ def parse_coff(data):
     return sections, symbols
 
 
-def _target(symbols, sections, idx):
+# Compiler-numbered local labels: `$M60594`, `$T62274`, `$LN12`, `__unwind$61996`,
+# `__catch$4021`.  The number is a per-TU counter that moves when the compiler
+# visits functions in a different order -- measured 2026-11-13: a comment-only
+# move renumbered 150 of them across Font/Mesh/MatAnim/HiResScreen/Spline.obj
+# with report.json identical.  The names never reach the linked image, so a
+# label is identified by WHERE it is (prefix, owning symbol of its section,
+# that section's bytes, offset) and every relocation to it by the same key.
+NUMBERED_LABEL_RE = re.compile(r"^(\$[A-Za-z]+|__[a-z]+\$)\d+$")
+
+
+def _canon_names(symbols, sections):
+    owner = {}
+    for s in symbols:
+        if s is None or s["is_section"] or s["sec"] <= 0 or NUMBERED_LABEL_RE.match(s["name"]):
+            continue
+        cur = owner.get(s["sec"])
+        if cur is None or (s["value"], s["name"]) < cur:
+            owner[s["sec"]] = (s["value"], s["name"])
+    names = []
+    for s in symbols:
+        if s is None:
+            names.append(None)
+            continue
+        m = NUMBERED_LABEL_RE.match(s["name"]) if s["sec"] > 0 and s["cls"] != 2 else None
+        if m:
+            sec = sections[s["sec"] - 1]
+            own = owner.get(s["sec"], (0, ""))[1]
+            names.append(f"<{m.group(1)}@{own}|{sec['name']}|{_h(sec['data'])}+{s['value']:#x}>")
+        else:
+            names.append(s["name"])
+    return names
+
+
+def _target(symbols, sections, idx, names):
     s = symbols[idx] if 0 <= idx < len(symbols) else None
     if s is None:
         return ("bad", idx)
@@ -141,7 +175,7 @@ def _target(symbols, sections, idx):
         return ("sec", sec["name"], _h(sec["data"]))
     if s["sec"] <= 0:
         return ("ext", s["name"])
-    return ("sym", s["name"])
+    return ("sym", names[idx])
 
 
 def fingerprint_object(path):
@@ -151,31 +185,39 @@ def fingerprint_object(path):
 
 def fingerprint_object_bytes(data):
     sections, symbols = parse_coff(data)
+    names = _canon_names(symbols, sections)
     sec_fps = []
     for s in sections:
-        rel = sorted((va, typ, _target(symbols, sections, si)) for va, si, typ in s["relocs"])
+        rel = sorted((va, typ, _target(symbols, sections, si, names))
+                     for va, si, typ in s["relocs"])
         sec_fps.append(_h(repr((s["name"], s["size"], s["ch"], s["sel"], _h(s["data"]), rel)).encode()))
     sec_fps.sort()
 
     by_sec = {}
-    for s in symbols:
+    for i, s in enumerate(symbols):
         if s is None or s["is_section"] or s["sec"] <= 0:
             continue
-        by_sec.setdefault(s["sec"], []).append(s)
+        by_sec.setdefault(s["sec"], []).append(dict(s, key=names[i]))
     syms = {}
     for secnum, lst in by_sec.items():
         sec = sections[secnum - 1]
-        starts = sorted({s["value"] for s in lst})
+        # numbered labels sit INSIDE functions; they must not cut a function's
+        # range short (its own bytes would then escape its fingerprint).  A
+        # label's identity already encodes its section bytes and offset.
+        starts = sorted({s["value"] for s in lst if not s["key"].startswith("<")})
         for s in lst:
+            if s["key"].startswith("<"):
+                syms.setdefault(s["key"], []).append("label")
+                continue
             lo = s["value"]
             later = [v for v in starts if v > lo]
             hi = later[0] if later else sec["size"]
             body = sec["data"][lo:hi]
-            rel = sorted((va - lo, typ, _target(symbols, sections, si))
+            rel = sorted((va - lo, typ, _target(symbols, sections, si, names))
                          for va, si, typ in sec["relocs"] if lo <= va < hi)
             fp = _h(repr((s["cls"], s["type"], sec["name"], sec["ch"], sec["sel"],
                           hi - lo, _h(body), rel)).encode())
-            syms.setdefault(s["name"], []).append(fp)
+            syms.setdefault(s["key"], []).append(fp)
     for v in syms.values():
         v.sort()
     return {"symbols": syms, "sections": sec_fps}
