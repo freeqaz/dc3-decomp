@@ -38,10 +38,10 @@ the wrong code.
    - `milo-tests`: GTest suite (only when `BUILD_TESTS=ON`, the default)
    - `milo2gltf`, `milo-tex-export`, `milo-mat-export`: export tools
 
-   Do **not** build `wgpu-window-test`. It has not compiled since `GpuDevice.h`
-   moved into the shared engine, so a bare `cmake --build native/build` (target
-   `all`) fails. `dc3-web` exists only in an Emscripten build; build it with
-   `scripts/web/build.sh`, never in `native/build`.
+   (`wgpu-window-test` was deleted on 2026-11-13; it had not compiled since
+   `GpuDevice.h` moved into the shared engine.) `dc3-web` exists only in an
+   Emscripten build; build it with `scripts/web/build.sh`, never in
+   `native/build`.
 
 2. **Configure if `native/build` has no `CMakeCache.txt`.** Do not run a bare
    `cmake -S native -B native/build -G Ninja`: it cannot find Dawn.

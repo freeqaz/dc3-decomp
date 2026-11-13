@@ -12,10 +12,8 @@
 # std::vector iterator-as-pointer C-casts) — a native compile smoke in CI
 # would have caught both immediately.
 #
-# EXCLUDED: `wgpu-window-test` — this target is stale (its gfx headers moved
-# to the milo-native-engine repo) and is NOT a dependency of dc3-native or
-# milo-tests. Chasing it would be misleading: the real GPU test coverage lives
-# in the engine repo's own test suite.
+# (`wgpu-window-test`, which never compiled after the gfx move to the engine,
+# was deleted on 2026-11-13; render-test and milo-viewer cover headless GPU.)
 #
 # PERFORMANCE: incremental builds when the tree is clean take <1 s (ninja no-op).
 # A dirty build (after a header touch) is bounded by the TU count that changed.
