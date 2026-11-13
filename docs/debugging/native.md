@@ -279,7 +279,7 @@ The engine also keeps a classified registry of its own flags in
 
 | Variable | Default | Effect | Read in |
 |----------|---------|--------|---------|
-| `MILO_HEADLESS` | unset | Presence. No GLFW window; the GPU renders offscreen. Also skips audio output (see `MILO_AUDIO`) and, unless `DC3_POSE` is set, the pose provider (a dummy skeleton is used) | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp`, `../milo-native-engine/src/audio/AudioDevice.cpp`, `native/src/platform/GestureMgr_Native.cpp` |
+| `MILO_HEADLESS` | unset | Presence. No GLFW window; the GPU renders offscreen. Also skips audio output (see `MILO_AUDIO`) and, unless `DC3_POSE` or a valid `DC3_POSE_PERFORM` mode is set, the pose provider (a dummy skeleton is used; an unknown `DC3_POSE_PERFORM` value is named in the log) | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp`, `../milo-native-engine/src/audio/AudioDevice.cpp`, `native/src/platform/GestureMgr_Native.cpp` |
 | `MILO_NORENDER` | unset | Presence. No GPU at all (logic only, fastest). GPU rendering is **on by default** | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
 | `MILO_RENDER` | unset | Legacy. Presence forces GPU init even over `MILO_NORENDER` — note `MILO_RENDER=0` also forces it on | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
 | `MILO_WIDTH` / `MILO_HEIGHT` | `1280` / `720` | Render target size | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
@@ -291,6 +291,7 @@ The engine also keeps a classified registry of its own flags in
 | `DC3_SAVE_DIR` | `$HOME/.local/share/dc3/saves` | Memory-card / save directory | `native/src/platform/MemcardMgr_Stub.cpp` |
 | `DC3_FAST_BOOT` | `0` | Non-zero: the boot screens (attract → autosave warning → title → main) are force-advanced after 10 frames each. Off: no forced advance; the screens progress as the image's flow drives them. Web: `?fast_boot=1` | `src/system/ui/UI.cpp` |
 | `DC3_SHOW_SPLASH` | shown | `0` skips the splash. Never shown on web | `src/App.cpp` |
+| `DC3_DEV_OPTIONS` | off | `Dc3EnvFlag`. Shows the native overlay's developer rows (Camera Blend, the debug panel) in Options → Gameplay; off, the page has the retail rows only (`{native_settings dev_options}`, PLAN G-20) | `src/App.cpp`, `native/dta/ui/options/options_gameplay.dta` |
 | `DC3_FAST_TIME` | unset | Presence. Song time advances per frame instead of on the wall clock (see [Fast Time Mode](#fast-time-mode)) | `src/lazer/game/LiveInput.cpp` |
 | `DC3_HEARTBEAT_S` | `60` | Seconds between `DC3_HEARTBEAT: uptime_s=… rss_kb=…` lines on stderr; `0` disables | `native/src/main_native.cpp` |
 | `DC3_TAG_MODALS` | desktop `0`, **web `1`** | Every `MILO_WARN`/`MILO_NOTIFY` (desktop also `MILO_FAIL`) printed as one `MILO_<KIND>: <msg>` line. Desktop: stderr, plus a backtrace for each new message. Web: the browser devtools console only (`console.warn`, not the page's console), each distinct message's first 5 repeats then every power of ten (W-9); `?env=DC3_TAG_MODALS=0` turns it off. Without it a notify at `notify_level` 1 goes to `cheat_display` and is never printed | `src/system/os/Debug.cpp` |
@@ -335,7 +336,7 @@ variables are value-parsed: `0`/`false`/`off`/`no` disable.
 | `DC3_REAL_MOVE_PASSED` | on | `Dc3EnvFlag`. The image's `move_passed` path | `src/lazer/game/Game.cpp` |
 | `DC3_POSE_SELFTEST` | off | `Dc3EnvFlag`. Feed the choreography's own reference pose as the player | `native/src/platform/GestureMgr_Native.cpp`, `src/App.cpp`, `src/system/hamobj/FilterQueue.cpp` |
 | `DC3_SCORING_DEBUG` | off | `Dc3EnvFlag`. Once-per-second scoring liveness counters | `native/src/platform/GestureMgr_Native.cpp`, `src/lazer/game/Game.cpp` |
-| `DC3_POSE` | unset | Provider select. `off`: no pose server, the stand-in skeleton. Any other value (conventionally `external`) only overrides the headless skip: in headless runs the pose provider is skipped unless this is set | `native/src/platform/GestureMgr_Native.cpp` |
+| `DC3_POSE` | unset | Provider select. `off`: no pose server, the stand-in skeleton. Any other value (conventionally `external`) only overrides the headless skip: in headless runs the pose provider is skipped unless this or a valid `DC3_POSE_PERFORM` mode is set | `native/src/platform/GestureMgr_Native.cpp` |
 | `DC3_POSE_CAMERA` | `0` | Camera index | `native/src/platform/GestureMgr_Native.cpp` |
 | `DC3_POSE_MODEL` | `<tree>/native/models/pose_landmarker_full.task`, found from the executable, not the cwd | MediaPipe model passed to the spawned server | `native/src/platform/GestureMgr_Native.cpp` |
 | `DC3_DUMMY_PLAYERS` | auto | `1` or `2`: how many standing stand-ins the sensor shows when no pose provider runs. Unset: one, two in two-player modes (`requires_2_players` / `is_in_party_mode`). Ignored while a provider runs | `native/src/platform/GestureMgr_Native.cpp` |

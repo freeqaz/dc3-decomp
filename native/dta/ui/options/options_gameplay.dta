@@ -1,4 +1,5 @@
-;; DC3 Native overlay — adds Camera Blend toggle to Gameplay Settings.
+;; DC3 Native overlay — adds the Camera Blend and Debug Overlay toggles to
+;; Gameplay Settings in developer builds (DC3_DEV_OPTIONS=1); retail rows otherwise.
 ;; This file shadows the archive version via the overlay engine.
 {new
    HamPanel
@@ -44,14 +45,20 @@
             {speech_mgr is_speech_supportable}}
          {$this set provider provider.hnp}
          {$this set provider provider_no_voice.hnp}}
-      ;; Append the native-only toggles (camera blend, debug overlay) to the
-      ;; chosen provider.  options_gameplay.milo, and with it the providers,
-      ;; is loaded afresh on every visit (measured: a second visit still
-      ;; shows 6 rows with no once-only guard), so this appends unconditionally.
-      ;; HamNavProvider has no `num_data` handler -- it is not in its handler
-      ;; chain -- so the row count is the `nav_items` property's size.
-      {$this append_native_option option_camera_blend}
-      {$this append_native_option option_debug_panel})
+      ;; Developer builds only (DC3_DEV_OPTIONS=1, PLAN G-20): append the
+      ;; native-only toggles (camera blend, debug overlay) to the chosen
+      ;; provider.  A player sees the retail rows only -- provider_no_voice.hnp's
+      ;; four, as on a 360 -- and still reaches both settings through the
+      ;; debug panel (` key) and /api/settings.
+      ;; options_gameplay.milo, and with it the providers, is loaded afresh on
+      ;; every visit (measured: a second visit still shows 6 rows with no
+      ;; once-only guard), so this appends unconditionally.  HamNavProvider has
+      ;; no `num_data` handler -- it is not in its handler chain -- so the row
+      ;; count is the `nav_items` property's size.
+      {if
+         {native_settings dev_options}
+         {$this append_native_option option_camera_blend}
+         {$this append_native_option option_debug_panel}})
    (append_native_option
       ($token)
       {[provider] append_nav_item}
@@ -206,14 +213,16 @@
             option_voice
             {!
                {profile_mgr get_disable_voice}}}}
-      {[provider]
-         set_checked
-         option_camera_blend
-         {native_settings get_camera_blend}}
-      {[provider]
-         set_checked
-         option_debug_panel
-         {native_settings get_debug_panel}})
+      {if
+         {native_settings dev_options}
+         {[provider]
+            set_checked
+            option_camera_blend
+            {native_settings get_camera_blend}}
+         {[provider]
+            set_checked
+            option_debug_panel
+            {native_settings get_debug_panel}}})
    (update_description
       ($name)
       {switch

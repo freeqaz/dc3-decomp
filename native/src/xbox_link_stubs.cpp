@@ -161,11 +161,33 @@ HRESULT NuiIdentityEnroll(DWORD, int, DWORD, NUI_IDENTITY_CALLBACK *, VOID *) {
 // generated stubs (which are compiled out under __EMSCRIPTEN__) so web links a
 // definition too: ShellInput::Init now builds the SkeletonIdentifier, whose
 // Poll reaches Skeleton::RequestIdentity -> NuiIdentityIdentify, and
-// GestureMgr::SetIdentificationEnabled can reach NuiIdentityAbort.  Same
-// return as before (0): Identify "completes" synchronously with no
-// enrollment, which IdentityInfo::PostUpdate reports as unidentified.
-HRESULT NuiIdentityIdentify(DWORD, DWORD, NUI_IDENTITY_CALLBACK *, VOID *) {
+// GestureMgr::SetIdentificationEnabled can reach NuiIdentityAbort.
+//
+// Identify completes synchronously (S_OK) with the answer a 360 gives for a
+// person nobody enrolled: a COMPLETE message, enrollment index UNKNOWN (-2),
+// no profile match.  The callback has to run: Skeleton::IdentityCallback is
+// what records that index on the slot, and the slot's index is what
+// Skeleton::NeedIdentify reads (-1 "call identify" or -5 "failure" mean ask
+// again).  Returning S_OK without it left every slot at -1 for good, and
+// SkeletonIdentifier::Poll's one-tracking-ID timeout cannot hold two people:
+// with two on the sensor it identified them alternately, once a frame, each
+// failure re-posting the "Raise both hands to change Profile" bubble for as
+// long as they stood there (dc3 PLAN G-18).  With the index recorded, each
+// person is identified once, as on a 360.
+HRESULT NuiIdentityIdentify(DWORD dwTrackingID, DWORD, NUI_IDENTITY_CALLBACK *pfnIdentityCallback,
+                            VOID *pvContext) {
     HX_STUB_TRACE("NuiIdentityIdentify");
+    if (pfnIdentityCallback) {
+        NUI_IDENTITY_MESSAGE message;
+        std::memset(&message, 0, sizeof(message));
+        message.MessageId = NUI_IDENTITY_MESSAGE_ID_COMPLETE;
+        message.OperationId = NUI_IDENTITY_OPERATION_ID_IDENTIFY;
+        message.dwTrackingID = dwTrackingID;
+        message.Data.Complete.hrResult = 0;
+        message.Data.Complete.dwEnrollmentIndex = (DWORD)-2; // NUI_IDENTITY_ENROLLMENT_INDEX_UNKNOWN
+        message.Data.Complete.bProfileMatched = 0;
+        pfnIdentityCallback(pvContext, &message);
+    }
     return 0;
 }
 

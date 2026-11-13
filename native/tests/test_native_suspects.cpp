@@ -4,6 +4,9 @@
 // "Suspect pass" in docs/decomp/patterns/native-shadow-bodies-are-unmeasured.md.
 #include "test_helpers.h"
 
+#include "gesture/GestureMgr.h"
+#include "gesture/IdentityInfo.h"
+#include "gesture/Skeleton.h"
 #include "meta_ham/HamUI.h"
 #include "meta_ham/PassiveMessenger.h"
 #include "meta_ham/SkeletonIdentifier.h"
@@ -180,6 +183,65 @@ TEST_F(NativeSuspectsTest, TimelineResetRefusedWhileAPassiveMessageIsQueued) {
            "image's HasMessages / HasRecentlyDismissedMessage / help-bar terms";
     delete made;
     delete callback;
+}
+
+// G-18.  NuiIdentityIdentify (native/src/xbox_link_stubs.cpp) is the native
+// stand-in for the Kinect identity service.  It returned S_OK without calling
+// the completion callback, so Skeleton::IdentityCallback never recorded the
+// result on the slot and the slot's enrollment index stayed -1 ("call
+// identify") for good: Skeleton::NeedIdentify stayed true after every
+// identification.  SkeletonIdentifier::Poll's timeout holds one tracking ID,
+// so with two people on the sensor it identified them alternately once a
+// frame (measured: ~160,000 Identify calls in 30 s, against 2 with one person),
+// each failure re-posting the "Raise both hands to change Profile" bubble.  A
+// 360 answers an unenrolled person UNKNOWN (-2), which NeedIdentify reads as
+// done; each person is identified once.
+TEST_F(NativeSuspectsTest, IdentifiedSkeletonNoLongerNeedsIdentifying) {
+    if (!TheGestureMgr)
+        GestureMgr::Init();
+    ASSERT_NE(TheGestureMgr, nullptr);
+    const int slot = 4;
+    SkeletonFrame *frame = new SkeletonFrame();
+    memset(frame, 0, sizeof(*frame));
+    frame->mFloorNormal.Set(0.0f, 1.0f, 0.0f);
+    frame->mFloorClipPlane.Set(0.0f, 1.0f, 0.0f, 0.0f);
+    SkeletonData &data = frame->mSkeletonDatas[slot];
+    data.mTracking = kSkeletonTracked;
+    data.mTrackingID = 4242;
+    data.mClippedFlags = -1; // a person the sensor has not identified yet
+    for (int j = 0; j < kNumJoints; j++) {
+        data.mJointPositions[j] = Vector3(0.1f * (j % 3), 0.1f * j, 2.5f);
+        data.mRawPositions[j] = data.mJointPositions[j];
+    }
+    Skeleton *skel = new Skeleton();
+    skel->Poll(slot, *frame);
+    ASSERT_TRUE(skel->IsTracked());
+    ASSERT_TRUE(skel->NeedIdentify()) << "precondition: a new person needs identifying";
+
+    const bool savedInProgress = GestureMgr::sIdentityOpInProgress;
+    GestureMgr::sIdentityOpInProgress = false;
+    ASSERT_TRUE(skel->RequestIdentity());
+    EXPECT_FALSE(GestureMgr::sIdentityOpInProgress) << "Identify completes synchronously";
+    EXPECT_EQ(skel->GetEnrollmentIndex(), -2)
+        << "the identity answer never reached the slot (NUI_IDENTITY_ENROLLMENT_INDEX_UNKNOWN "
+           "expected for an unenrolled person)";
+    EXPECT_FALSE(skel->NeedIdentify())
+        << "a person already identified still needs identifying: SkeletonIdentifier asks "
+           "again, and with two people re-posts the failure bubble every frame";
+    EXPECT_FALSE(skel->ProfileMatched());
+
+    // The next sensor frame carries the slot's index back (GestureMgr_Native's
+    // FinishTrackedSlot), as NUI's skeleton data does on a 360.
+    data.mClippedFlags = TheGestureMgr->GetIdentityInfo(slot)->EnrollmentIndex();
+    skel->Poll(slot, *frame);
+    EXPECT_FALSE(skel->NeedIdentify());
+
+    // Leave the shared slot as a fresh one, and the result unposted.
+    TheGestureMgr->GetIdentityInfo(slot)->SetIdentified(false);
+    TheGestureMgr->GetIdentityInfo(slot)->SetEnrollmentIndex(-1);
+    GestureMgr::sIdentityOpInProgress = savedInProgress;
+    delete skel;
+    delete frame;
 }
 
 // ----------------------------------------------------------------------------

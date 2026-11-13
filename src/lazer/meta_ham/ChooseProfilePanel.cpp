@@ -60,6 +60,16 @@ void ChooseProfilePanel::UpdateProfiles() {
             }
         }
     }
+#ifdef HX_NATIVE
+    // PLAN G-22: the -1 row is "Sign Into a Gamer Profile", which opens the
+    // Xbox guide's sign-in blade (SignInUsers -> XShowSigninUI) so another
+    // profile can join.  A PC has no such UI -- native SignInUsers does
+    // nothing -- so the row is offered only when no profile is signed in at
+    // all, where it is the image's sole row.  With the local profile signed
+    // in (native pad 0, xdk_shims XUserGetSigninState) the list is that
+    // profile alone.
+    if (mPadNums.empty())
+#endif
     mPadNums.push_back(-1);
     static Message cRefreshMsg("refresh_ui");
     Handle(cRefreshMsg, true);
@@ -69,9 +79,19 @@ BEGIN_HANDLERS(ChooseProfilePanel)
     HANDLE_EXPR(profile_selected, ProfileSelected(_msg->Int(2)))
     HANDLE_EXPR(get_profile, GetProfile(_msg->Int(2)))
     HANDLE_ACTION(show_signin, ThePlatformMgr.SignInUsers(1, 0x1000000))
+#ifdef HX_NATIVE
+    HANDLE_EXPR(num_profiles, NumData() - (HasSignInRow() ? 1 : 0))
+#else
     HANDLE_EXPR(num_profiles, NumData() - 1)
+#endif
     HANDLE_MESSAGE(SigninChangedMsg)
     HANDLE_SUPERCLASS(HamPanel)
 END_HANDLERS
 
 bool ChooseProfilePanel::ProfileSelected(int idx) const { return mPadNums[idx] != -1; }
+
+#ifdef HX_NATIVE
+bool ChooseProfilePanel::HasSignInRow() const {
+    return !mPadNums.empty() && mPadNums.back() == -1;
+}
+#endif

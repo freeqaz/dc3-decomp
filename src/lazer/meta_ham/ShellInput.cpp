@@ -408,7 +408,18 @@ void ShellInput::ExitControllerMode(bool b) {
         // arm: on the 360 the helpbar is gone for the whole song. Take the
         // helpbar (only) out of controller mode there; Poll puts it back when
         // focus leaves the gameplay panel. HelpBarPanel.h has the details.
-        if (TheUI->FocusPanel() == TheGamePanel && !TheUIEventMgr->HasActiveDialogEvent())
+        // Not during a screen transition (PLAN G-19): leaving the results,
+        // perform_complete_screen hands focus back to game_screen for the
+        // frames of its transition to meta_loading_continue_screen, and the
+        // image's arm exits controller mode there too.  Taken out and put
+        // straight back, the helpbar's exit_controller_mode_immediate.flow was
+        // still running when the restore activated controller_mode.flow, so
+        // the exit won and the shell came back gesture-styled after every
+        // song.  The song itself is never in a transition (measured), and Poll
+        // calls this every frame while the gameplay panel has focus, so a
+        // transition only delays the exit.
+        if (TheUI->FocusPanel() == TheGamePanel && !TheUIEventMgr->HasActiveDialogEvent()
+            && !TheUI->InTransition())
             NativeForcedHelpbarExitForGameplay(b);
         return;
     }

@@ -94,6 +94,12 @@ public:
     NativeSettingsObject() {}
     virtual DataNode Handle(DataArray *msg, bool rev) {
         Symbol sym = msg->Sym(1);
+        // Developer rows in Options > Gameplay (PLAN G-20): off for players,
+        // who see the retail rows only.
+        if (sym == "dev_options") {
+            extern bool Dc3EnvFlag(const char *, bool);
+            return DataNode(Dc3EnvFlag("DC3_DEV_OPTIONS", false) ? 1 : 0);
+        }
         if (sym == "get_camera_blend") return DataNode(NativeSettings::Get().cameraBlend ? 1 : 0);
         if (sym == "toggle_camera_blend") {
             NativeSettings::Get().cameraBlend = !NativeSettings::Get().cameraBlend;
@@ -1297,7 +1303,10 @@ void App::RunWithoutDebugging() {
 
         TheRnd.EndDrawing();
 #ifdef DC3_HTTP_SERVER
-        if (TheHttpServer) TheHttpServer->ProcessScreenshots();
+        // Screenshots are read in the renderer's frame-ready callback (between
+        // the frame's submit and present, the only time a windowed frame is
+        // readable; PLAN H-13).  This answers them when nothing renders.
+        if (TheHttpServer) TheHttpServer->ProcessScreenshotsWithoutFrame();
 #endif
 
         frameCount++;
