@@ -142,17 +142,25 @@ _try_dawn_prefix() {
 _try_dawn "${Dawn_DIR:-}" \
     || _try_dawn "${DAWN_DIR:-}" \
     || _try_dawn_prefix "${DAWN_PREFIX:-}" \
-    || _try_dawn "$REPOS_ROOT/dc3-decomp-deps/dawn/lib/cmake/Dawn" \
-    || _try_dawn "$MAIN_CHECKOUT-deps/dawn/lib/cmake/Dawn" \
-    || _try_dawn "$REPO_ROOT/../dc3-decomp-deps/dawn/lib/cmake/Dawn" \
     || true
 if [ -z "$dawn_dir" ] && [ "$PLATFORM" = "Darwin" ]; then
-    # The March 2026 Mac build used a Metal Dawn at ~/dc3-deps/dawn; Homebrew
-    # has no Dawn formula, so these are the only conventional spots.
-    _try_dawn_prefix "${HOME:-/nonexistent}/dc3-deps/dawn" \
-        || _try_dawn_prefix "$REPOS_ROOT/dawn-prebuilt" \
+    # scripts/mac/bootstrap.sh unpacks Google's macOS prebuilt to
+    # <parent>/dawn-prebuilt. The March 2026 Mac build used a Metal Dawn at
+    # ~/dc3-deps/dawn; Homebrew has no Dawn formula.
+    #
+    # dc3-decomp-deps is NOT probed here: its dawn/ is the LINUX prebuilt (ELF
+    # objects). Found first, as it used to be, a Mac that had run
+    # setup-deps.sh would configure against it and fail at link with errors
+    # that never mention Dawn.
+    _try_dawn_prefix "$REPOS_ROOT/dawn-prebuilt" \
+        || _try_dawn_prefix "${HOME:-/nonexistent}/dc3-deps/dawn" \
         || _try_dawn_prefix "/opt/homebrew/opt/dawn" \
         || _try_dawn_prefix "/usr/local/opt/dawn" \
+        || true
+elif [ -z "$dawn_dir" ]; then
+    _try_dawn "$REPOS_ROOT/dc3-decomp-deps/dawn/lib/cmake/Dawn" \
+        || _try_dawn "$MAIN_CHECKOUT-deps/dawn/lib/cmake/Dawn" \
+        || _try_dawn "$REPO_ROOT/../dc3-decomp-deps/dawn/lib/cmake/Dawn" \
         || true
 fi
 
@@ -166,11 +174,14 @@ if [ -z "$dawn_dir" ]; then
     for p in "${dawn_probed[@]}"; do echo "         $p" >&2; done
     echo >&2
     echo "       Fix, either:" >&2
-    echo "         scripts/dev-setup/setup-deps.sh     # clones dc3-decomp-deps" >&2
+    if [ "$PLATFORM" != "Darwin" ]; then
+        echo "         scripts/dev-setup/setup-deps.sh     # clones dc3-decomp-deps" >&2
+    fi
     echo "         DAWN_DIR=/path/to/dawn/lib/cmake/Dawn scripts/native_configure.sh" >&2
     echo "         DAWN_PREFIX=/path/to/unpacked/Dawn-...-Release scripts/native_configure.sh" >&2
     if [ "$PLATFORM" = "Darwin" ]; then
-        echo "       macOS: download Dawn-<hash>-macos-latest-Release.tar.gz from" >&2
+        echo "       macOS: scripts/mac/bootstrap.sh --fix downloads it, or by hand:" >&2
+        echo "       download Dawn-<hash>-macos-latest-Release.tar.gz from" >&2
         echo "       https://github.com/google/dawn/releases (tag v20260423.175430)," >&2
         echo "       unpack it, and pass DAWN_PREFIX. See docs/native/MACOS.md." >&2
     fi
