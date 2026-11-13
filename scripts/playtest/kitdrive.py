@@ -249,7 +249,11 @@ class Kit:
         itself (as a Kinect does); with none, it needs a press."""
         got = self.wait_screen(("title_screen", "main_screen"), 240)
         if got == "title_screen" and not self.wait_screen("main_screen", 8):
-            self.press("confirm")
+            # By row, not by a bare confirm: the highlight follows the
+            # person's hand, and the title's second row is Start the Party
+            # (a bare confirm once landed the soak in infinite party mode).
+            if not self.choose("title_screen_menu"):
+                self.press("confirm")
         self.need("main_screen")
 
     def perform(self, song, difficulty, mode="perform"):

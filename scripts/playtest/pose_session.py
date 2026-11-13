@@ -151,13 +151,21 @@ def compare(source, replayed):
             mismatched.append(f.frame_id)
         lags.append(f.song - source[k].song)
     lags.sort()
+    # Frames after the last one replayed were never due: the replay ended (its
+    # song clock stopped at the results) before reaching them.  Up to a second
+    # of song time is allowed for that; anything earlier missing is a drop.
+    reached = max(seen) if seen else -1
+    tail = len(source) - 1 - reached
+    tail_s = source[-1].song - source[reached].song if seen else float("inf")
     return {"source_frames": len(source), "replayed": len(seen),
-            "missing": len(source) - len(seen), "mismatched": len(mismatched),
+            "missing": reached + 1 - len(seen), "not_reached": tail,
+            "not_reached_s": round(tail_s, 3), "mismatched": len(mismatched),
             "first_mismatch": mismatched[0] if mismatched else None,
             "unknown_ids": unknown, "out_of_order": out_of_order,
             "lag_min": lags[0] if lags else None, "lag_max": lags[-1] if lags else None,
             "lag_median": lags[len(lags) // 2] if lags else None,
-            "identical": bool(source) and len(seen) == len(source) and not mismatched
+            "identical": bool(source) and reached + 1 == len(seen) and tail_s < 1.0
+            and not mismatched
             and not out_of_order and not unknown and (not lags or lags[0] >= -1e-6)}
 
 
@@ -166,6 +174,7 @@ def cmd_compare(a):
     _, rep = load(a.replayed)
     r = compare(src, rep)
     print(f"{r['replayed']} of {r['source_frames']} frames replayed, {r['missing']} missing, "
+          f"{r['not_reached']} at the end not reached ({r['not_reached_s']} s), "
           f"{r['mismatched']} differ, {r['out_of_order']} out of order, {r['unknown_ids']} "
           f"not in the source; song-time lag {r['lag_min']}..{r['lag_max']} s "
           f"(median {r['lag_median']})")
