@@ -78,13 +78,7 @@ DataNode XboxPurchaser::OnMsg(UIChangedMsg const &msg) {
             static Symbol ui_changed("ui_changed");
             ThePlatformMgr.RemoveSink(this, ui_changed);
             mState = kSuccess;
-            // w25-gc: a return per arm adds references to the hidden sret
-            // pointer, lifting its colour priority (-3 -> 19) above the
-            // RemoveSink temp and `this`, which gives the image's r30 (sret),
-            // r29 (temp), r28 (this). MSVC cross-jumps the two returns back
-            // into one tail after colouring, so the emitted code is unchanged;
-            // the tail's mType-before-mValue store order comes out right with
-            // `return 0` in both arms.
+            // Lane history (7 lines moved): docs/decomp/notes/system/meta/StorePurchaser.md
             return 0;
         }
     }
@@ -165,13 +159,7 @@ DataNode XboxMultipleItemsPurchaser::OnMsg(UIChangedMsg const &msg) {
             static Symbol ui_changed("ui_changed");
             ThePlatformMgr.RemoveSink(this, ui_changed);
             mState = kSuccess;
-            // w25-gc: a return per arm adds references to the hidden sret
-            // pointer, lifting its colour priority (-3 -> 19) above the
-            // RemoveSink temp and `this`, which gives the image's r30 (sret),
-            // r29 (temp), r28 (this). MSVC cross-jumps the two returns back
-            // into one tail after colouring, so the emitted code is unchanged;
-            // the tail's mType-before-mValue store order comes out right with
-            // `return 0` in both arms.
+            // Lane history (7 lines moved): docs/decomp/notes/system/meta/StorePurchaser.md
             return 0;
         }
     }

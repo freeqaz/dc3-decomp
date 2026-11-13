@@ -9,11 +9,7 @@ void BitCrushEffect::SetParameters(BitCrushEffect::Params const &params) {
     mHoldPeriod = params.unk4;
 }
 
-// w19-d: fuzzy 98.45 -> 100 (byte-identical).  A plain indexed loop; the
-// image's `addi r10, r10, 0x8` right-channel walker is MSVC folding
-// numChans == 2 into `f[i * numChans + 1]` inside the stereo test, not a
-// hand-written pointer pair (the old two-pointer do/while rotated the
-// callee-saved homes of this/f/numSamples).
+// Lane history (5 lines moved): docs/decomp/notes/system/dsp/BitCrushEffect.md
 void BitCrushEffect::Process(float *f, int numSamples, int numChans) {
     do {
         if (!(numChans <= 2)) {

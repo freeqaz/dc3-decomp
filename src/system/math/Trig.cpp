@@ -6,13 +6,7 @@
 
 float gBigSinTable[0x200];
 
-// w19-c (98.72 -> 100): a plain INDEX loop.  The image's signed pointer test
-// (`cmpw cr6, r30, r11` against `addi r11, r29, 0x7fc` recomputed in the loop)
-// is MSVC's own linear-function-test replacement of `i < 256` onto the
-// strength-reduced &gBigSinTable[i * 2 - 1] cursor -- it keeps the signedness
-// of the int compare it replaced, which is why no hand-written pointer loop
-// (cmplw), cast (a fourth GPR) or j-stepped index loop (wrong cursor) reached
-// it.  The final half-iteration (the delta slot 511) is peeled after the loop.
+// Lane history (7 lines moved): docs/decomp/notes/system/math/Trig.md
 void TrigTableInit() {
     int i;
     for (i = 0; i < 256; i++) {

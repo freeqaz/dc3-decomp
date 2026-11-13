@@ -118,14 +118,8 @@ void EQEffect::SetParameters(EQEffect::Params const &params) {
 // time constant. The target inlines it; it is not a named static.
 #define kSmoothBase 0.368f
 
-// w14-d (95.65, 12 rows): the residual is the crossover inner loop only.  The
-// image hoists `xover + 0x97` (the output-delay base) out of the tap loop but
-// forms the input index as `(xover + tap) + 0x5b` inside it, and moves xover
-// between r4 and r11 around the stage loop; we hoist both bases.  INERT:
-// `tap + xover` on the input subscript.  WORSE: input store first (95.64);
-// `tap++, xover++` with plain [xover] subscripts (86.2, a pointer walk).
-// w18-d (95.65): per-channel indexing `[chan][(stage * 2 + pass) * 5 + tap]`
-// with no flat counter is worse (91.2).
+// Lane history (8 lines moved): docs/decomp/notes/system/dsp/EQEffect.md
+// > w14-d (95.65, 12 rows): the residual is the crossover inner loop only.
 void EQEffect::Reset() {
     // Zero every per-channel filter delay line.  The crossover delay lines are
     // walked with a single flat index that keeps counting across channels
@@ -173,16 +167,8 @@ void EQEffect::Reset() {
     }
 }
 
-// w26-j (2026-11-01) behaviour verdict: unicorn records EQUIVALENT for this
-// symbol (harness v4, high confidence), and the name_check listing agrees -- no
-// wrong field (every offset row resolves to a frame slot or a different base
-// register) and no wrong constant (every __real@ that pairs differently is a
-// one-row slot shift).  The loud row, target `fneg f12,f12` + `fmadds f12,f10,f11,f12`
-// (0x82E592A4 region) against our `fmsubs f12,f10,f11,f12` + `fadds f12,f12,f9`,
-// is the SAME value by two instruction selections -- the FMADD forms are
-// interchangeable here and the target's own `-(x*b0) + ...` algebra is what
-// makes MSVC pick one or the other.  Not a bug; see the inline note at the
-// band-1 chain below for the spellings already measured against it.
+// Lane history (10 lines moved): docs/decomp/notes/system/dsp/EQEffect.md
+// > Verdicts: Not a bug (w26-j)
 void EQEffect::Process(float *samples, int numSamples, int numChans) {
     if (mBand4Q != 0.0f) {
         // Crossover filter path.  Three Butterworth sections (low / band /
@@ -204,34 +190,7 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
                     float *c2 = mXoverCoeffs[2];
                     float *s = &samples[chan];
                     for (int i = 0; i < numSamples; i++) {
-                        // NEGATIVE RESULTS (w7-ba): the image has a second dead
-                        // `addi r5, r11, 0x25c` beside xd's (82E58ECC), i.e. a
-                        // `yd = &mXoverOutputDelay[chan][0]` local folded onto the
-                        // this+chan*0x78 walker; declaring it here makes MSVC keep
-                        // xd as the walker and yd in its own spilled register
-                        // (88.9 vs 91.2).  Swapping the two middle c1[] terms of
-                        // the bandpass chains to chase the image's 3,2,1,0 product
-                        // order reorders the whole load block instead (87.5), and
-                        // `-x * b0` in band 1 still fuses to fmsubs, not the
-                        // image's fmuls/fneg/fmadds at 82E592A4.
-                        //
-                        // w26-r2: oracle verdict for the whole function is
-                        // EQUIVALENT (unicorn harness 4, high confidence), and
-                        // every "target-only"/"base-only" displacement delta in
-                        // the aligned listing is base-REGISTER-relative -- the
-                        // image addresses one delay line off r9 as 0x8/0x4/0x0
-                        // while ours addresses it off r10 as -0x4/-0x8/0x0 --
-                        // rather than pointing at a different slot.  What is left is FP register
-                        // permutation and fma-slot reassociation (the image
-                        // fuses the 0x44 term of `*s = mBand2B2*fVar3 +
-                        // fVar2*mBand0B2 + fVar4*mBand1A1`, ours the 0x64).
-                        // The one row that is not register permutation --
-                        // diff 67, `fmuls f8, f8, f7` vs `fmuls f8, f7, f8` --
-                        // is a section 8.7 commutative key over two MEMORY
-                        // leaves, whose key is hash(base)<<8 | disp.  The
-                        // operands are 0x13c(r31=this) and 0x25c(r11=walker),
-                        // so the order follows those two base symbols and not
-                        // the expression's spelling.
+                        // Lane history (28 lines moved): docs/decomp/notes/system/dsp/EQEffect.md
                         float *xd = &mXoverInputDelay[chan][0];
 
                         // Stage 0 (lowpass), pass 1
@@ -350,17 +309,9 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
                             float zn1 = mBand1DelayZ1[chan];
                             mBand1DelayXn[chan] = *s;
                             mBand1DelayZ1[chan] = zn;
-                            // Retail negates x*b0 up front (fneg f12 at
-                            // 0x82E592A4) and subtracts zn*cosCoeff with
-                            // fnmsubs.  Written as one expression the double
-                            // negation makes MSVC build the inner sum with the
-                            // opposite sign and fix it up at the fmadds;
-                            // accumulating into a named local pins the
-                            // association across the statements, so the fneg
-                            // survives and the chain ends fnmsubs.
-                            // w27-m named only the negated product and
-                            // re-scheduled the delay-line loads/stores for
-                            // -2.1pp; the accumulator form does not.
+                            // Lane history (11 lines moved): docs/decomp/notes/system/dsp/EQEffect.md
+                            // > Retail negates x*b0 up front (fneg f12 at 0x82E592A4) and
+                            // > subtracts zn*cosCoeff with fnmsubs.
                             float y = -(x * b0);
                             y += xn * cosCoeff;
                             y += xn2;
@@ -444,19 +395,7 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
     }
 }
 
-// w27-m adjacency notes (row measured 99.335 canonical / 99.214 fuzzy, 523 of
-// 542 instructions equal).  Everything left is allocation, not semantics:
-//  - the `default:` MakeString is named W4_D3DFORMAT in the image and H (int)
-//    here.  Both are passed by reference from the SAME stack home (r1+0x10fc,
-//    the switch subject) and both format as an integer, so this is the
-//    /OPT:ICF instantiation-naming artifact, not a wrong argument type.
-//  - rows 368-376 and 426-434 are the pair of constants -0.05f and 1/24000
-//    reaching r10/r11 in the opposite order in the two bandpass blocks, which
-//    only swaps which FPR holds mBandNQ vs mBandNGain.  MEASURED AND REFUTED:
-//    writing `double invGain = pow(...)` before `float wcF = ...` in band 3
-//    only, in both bands, and with band 4's `k + half` named, each re-schedules
-//    the whole block (98.0 / 96.2 vs 99.335).  The image's order is produced by
-//    the scheduler, not by the statement order.
+// Lane history (13 lines moved): docs/decomp/notes/system/dsp/EQEffect.md
 void EQEffect::SetParameter(int param, float value) {
     bool updateBand0 = false;
     bool updateBand1 = false;

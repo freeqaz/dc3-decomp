@@ -120,13 +120,7 @@ MovieInternalBuffers *MovieInternalBuffers::New(std::vector<BINK *> binks) {
         if (cur) {
             memset(&curBuffers, 0, sizeof(BINKFRAMEBUFFERS));
             BinkGetFrameBuffersInfo(cur, &curBuffers);
-            // w16-e: 99.978 -> 100.  `curBuffers` is declared at function
-            // scope, not inside the loop.  With the block-scoped declaration
-            // MSVC loaded curBuffers.X before ret->mBuffers.X in the four
-            // unsigned Max() calls (8 rows, which w7-m/w7-aa measured as a
-            // scheduler tie); at function scope the image's acc-first load
-            // order falls out.  Behaviour is unchanged: it is memset and
-            // refilled by BinkGetFrameBuffersInfo on every iteration.
+            // Lane history (7 lines moved): docs/decomp/notes/system/moviebink/BinkMovieImpl.md
             ret->mBuffers.TotalFrames =
                 Max(curBuffers.TotalFrames, ret->mBuffers.TotalFrames);
             ret->mBuffers.YABufferWidth =
@@ -704,12 +698,10 @@ void BinkMovieImpl::DiscContentionCheck(Loader *l) {
     }
 }
 
-// RESIDUAL (w12-b, 99.0 canonical): register-only. The image keeps `this` in
-// r30 (&mThreadId in r29) and later reuses r30 for the iterator (`mr r30, r11`
-// after `lwz r11, 0xc4(r30)`); we put `this` in r29 and fold it into
-// &unkbc. All six orders of {first, count, str} measured: (str, first, count)
-// fixes first/count = r28/r29 but sinks their `li`s below String(); none
-// moves `this` to r30.
+// Lane history (6 lines moved): docs/decomp/notes/system/moviebink/BinkMovieImpl.md
+// > The image keeps `this` in r30 (&mThreadId in r29) and later reuses r30 for the
+// > iterator (`mr r30, r11` after `lwz r11, 0xc4(r30)`); we put `this` in r29 and fold it
+// > into &unkbc. (w12-b)
 void BinkMovieImpl::DiscContentionPublish() {
     CHECK_THREAD;
     bool first = true;

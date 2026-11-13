@@ -8,11 +8,7 @@ static Licenses sLicense("system/src/math/SHA1.h", Licenses::kRequirementNotific
 
 // shoutouts to clibs' implementation of sha1: https://github.com/clibs/sha1
 
-// w22-a01: retail is Dominik Reichl's CSHA1, whose ROL32 is MSVC's _rotl
-// intrinsic under _MSC_VER (rb3-xenon c0254f3cf took Transform to 100 with this
-// spelling, the SHABLK operand order below and natural a..e / pState[0..4]
-// order).  _rotl and the shift-or idiom compute the same 32-bit rotate; the
-// intrinsic only changes MSVC's register allocation.  Native keeps shift-or.
+// Lane history (5 lines moved): docs/decomp/notes/system/math/SHA1.md
 #ifdef HX_NATIVE
 #define rol(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))
 #else
@@ -57,14 +53,7 @@ static inline unsigned int Sha1Bswap32(unsigned int v) {
     z += (w ^ x ^ y) + blk(i) + 0xCA62C1D6 + rol(v, 5);                                  \
     w = rol(w, 30);
 
-// w22-a01 (2026-10-08): 61.99 -> 100 (1464/1464 rows equal) with rb3-xenon's
-// shape -- the _rotl intrinsic above, SHABLK operand order, natural a..e and
-// pState[0..4] order.  This REFUTES the earlier "floor certificate" (w8-o)
-// that put the 57 extra `mr` copies down to unreachable register allocation:
-// they come from the intrinsic.  Behaviour was already exact (unicorn, 2026-08-19:
-// SHA-1("abc") = a9993e36 4706816a ba3e2571 7850c26c 9cd0d89d on both sides);
-// the native arm was re-checked on a host harness against the FIPS 180 vectors
-// ("abc", "", the 448-bit message, one million 'a').
+// Lane history (8 lines moved): docs/decomp/notes/system/math/SHA1.md
 void CSHA1::Transform(unsigned int *pState, const unsigned char *pBuffer) {
 #ifdef HX_NATIVE
     // `unsigned long` is 64-bit on the LP64 host, so rol()/blk() would not wrap

@@ -524,11 +524,7 @@ void DataArray::Save(BinStream &bs) const {
     }
 }
 
-// w15-b (97.863 -> 100): every MemPushTemp/Resize/MemPopTemp triple is a
-// MemDoTempAllocations scope.  w7-r traced the residual to seven missing dead
-// stores of node.Type() into the address-escaping 0x58 temp (and 0x10 of
-// frame); with the RAII scopes the function carries an EH state and MSVC keeps
-// all fourteen stores, exactly as the image does.
+// Lane history (5 lines moved): docs/decomp/notes/system/obj/DataArray.md
 void DataArray::Load(BinStream &bs) {
     mFile = gFile;
     short size;
@@ -565,14 +561,8 @@ void DataArray::Load(BinStream &bs) {
             }
             continue;
         }
-        // This chain must stay an if/else-if chain in SOURCE ORDER. The target
-        // tests 0x24, 0x20, 0x25, 0x7, 0x23, 0x8, 0x9, 0x21, 0x22 in exactly that
-        // sequence, which is declaration order, not numeric order.
-        // REFUTED (w7-l, 2026-09-14): rewriting this as `switch (node.Type())`
-        // with the same case order -- the shape ../og-dc3-decomp and ../rb3 both
-        // use -- makes MSVC sort the cases and emit a binary search (`bgt` on
-        // 0x21 first). 97.863 -> 55.5 canonical, 10 mismatch rows -> 172. Do not
-        // retry.
+        // Lane history (8 lines moved): docs/decomp/notes/system/obj/DataArray.md
+        // > Verdicts: Do not retry (w7-l)
         if (node.Type() == kDataAutorun) {
             DataNode command;
             bs >> command;
