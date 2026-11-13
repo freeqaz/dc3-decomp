@@ -263,6 +263,47 @@ WIBO_PATH_MAP='' ~/code/milohax/wibo/build/release/wibo \
 strings -a /tmp/cal.obj | grep -o '?a@?[^ ]*@4US@@A' | sort -u
 ```
 
+## Spellings that move the count without moving a byte (2026-11-13, w-rb-ordinal)
+
+Measured on `RhythmBattle::OnBeat` (4,128 instructions) by hashing the
+function's COMDAT bytes plus its relocation list with scope ordinals masked --
+a per-target rebuild reproduces the full-build hash exactly, so it is a
+seconds-long neutrality check. Re-confirmed with `run_objdiff(name_check)`.
+
+| spelling change | count | instruction-neutral? |
+|---|---:|---|
+| `if (a && b) { X }` -> `if (a) { if (b) { X } }` | +3 | yes (4 sites) |
+| `} else if (c) { X } else { Y }` -> `} else { if (c) { X } else { Y } }` | +1 | yes (3 sites) |
+| `if (p) { stmt; }` -> `if (p) stmt;` | -1 | yes (20 sites) |
+| redundant bare block wrapping a whole `else` arm, removed | -1 | yes |
+| wrapping `if (x != -1) { body }` -> `if (x == -1) return; body` | -1 | yes (`RhythmBattlePlayer::UpdateAnimations`) |
+| a `MILO_ASSERT_IF(p)` whose `p` was null-checked-and-returned above | +3 | **yes -- the optimizer deletes it** |
+| `if (b42 && b43) A; else if (b42) B; else C;` -> `if (b42) { if (b43) A; else B; } else C;` | +1 | no (section 21564 -> 21548 B) |
+| `x = c ? k1 : k2` -> `x = k2; if (c) x = k1;` | +2 | no (the `subfic/subfe/rlwinm` select becomes a branch) |
+| `i = p ? load : -1` -> `i = -1; if (p) i = load;` | +2 | no |
+| `v = c ? (p ? A : -1) : (q ? B : -1)` -> nested if/else | +15 | no (regalloc cascade) |
+
+Two consequences. First, a scope ordinal is a **count**, so a region with a
+mismatch is fixed by any neutral spelling with the right total; which constructs
+carry it is generally not recoverable from the image, and a commit should say so.
+Second, the provably-true-assert row means an original assert can hide in a
+count with no instruction to show for it -- and its condition string need not
+survive either, so its absence from the string pool proves nothing. (The image's
+string-pool *order* is no help either: our own object emits the same order,
+including the five OnBeat literals that look out of place.)
+
+**File-wide assert spelling.** `RhythmBattle.cpp` and `RhythmBattlePlayer.cpp`
+are both if-form (`MILO_ASSERT_IF`, cost 3): `UpdateFinaleVO`'s only static sits
+at the map's `?7?` (8) = body 2 + `if` 3 + assert 3, and `UpdateAnimations`'
+`groove_passed` at `?6?` (7) = 2 + early return 2 + assert 3, which no brace
+arrangement around a do/while assert reaches.
+
+**The target side, again.** Where `symbols.txt` names a function's statics but
+`ham_xbox_r.map` names none of them, those names were synthesised from an old
+build of ours; renaming them to what a map-consistent TU emits is metadata
+correction (precedent `f88e9c1ba`; here `AccomplishmentOneShot::AreOneShotConditionsMet`
+and `RhythmBattlePlayer::UpdateAnimations`).
+
 ## Compute the brace-only floor FIRST
 
 Before hunting for a construct, work out the **minimum index any legal source
