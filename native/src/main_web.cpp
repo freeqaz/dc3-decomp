@@ -28,6 +28,7 @@
 
 extern void NativeSetDataDir(const char *);
 extern WgpuRnd *gWgpuRnd;
+extern void WebPoseStatusTick(int engineFrame); // platform/PoseInput_Web.cpp
 
 // ============================================================================
 // Boot state machine
@@ -259,6 +260,7 @@ static void mainLoop() {
         sFrameCount++;
         sApp->RunOneFrame();
         WebScreenBundleHook();
+        WebPoseStatusTick(sFrameCount);
         EM_ASM({ window.dc3FrameCount = $0; }, sFrameCount);
         break;
     }

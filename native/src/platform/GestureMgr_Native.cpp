@@ -162,6 +162,17 @@ void GestureMgr_NativeInit() {
     }
 #endif
 
+#ifdef __EMSCRIPTEN__
+    // Web: nothing to spawn or connect to.  The provider is created idle; the
+    // page's camera pipeline starts it with its first dc3_pose_push
+    // (PoseInput_Web.cpp) and stops it when the camera goes away.  Until then
+    // BuildSensorFrame feeds the dummy, exactly as with no provider.
+    (void)camIdx;
+    if ((!poseMode || strcmp(poseMode, "off") != 0) && !TheSkeletonProvider) {
+        TheSkeletonProvider = new NativeSkeletonProvider();
+        printf("Native: web pose provider ready (waiting for dc3_pose_push)\n");
+    }
+#else
     // Fall back to external Python pose server
     if (!poseMode || strcmp(poseMode, "off") != 0) {
         if (!TheSkeletonProvider) {
@@ -185,6 +196,7 @@ void GestureMgr_NativeInit() {
             }
         }
     }
+#endif
 
 pose_ready:
 
