@@ -27,11 +27,13 @@
 // did, and why they read "DetectFrac 0 on web". The default is now Easy (one
 // Down), the same as scripts/dc3-input-flows/betteroffalone.txt on desktop.
 //
-// Exit status (the regression check): 0 = the run reached gameplay and the
+// Exit status (the regression check): 0 = the song played through and the
 // DetectFrac probe agrees with the difficulty -- on a non-Beginner difficulty,
 // player 0 has ham2 samples, every one finite, and the engine reports that
 // difficulty; on Beginner, every p0 sample is no-move-key. 1 = that check
-// failed. 2 = the run never reached gameplay. --no-select-difficulty keeps the
+// failed. 2 = the song was not played through to the results screen (e.g. the
+// empty-frame control, which the game pauses before the first beat -- no
+// DetectFrac is taken at all, on desktop either). --no-select-difficulty keeps the
 // old Enter-only driver (lands on Beginner) while still asserting the requested
 // difficulty: it is the sabotage control and must exit 1.
 import { chromium } from 'playwright';
@@ -216,7 +218,7 @@ const summary = {
 };
 // The regression check (see the header): does DetectFrac agree with the difficulty?
 const fails = [];
-const reachedGame = /^left_gameplay_/.test(result) || inGameSamples.length > 0;
+const reachedGame = /^left_gameplay_/.test(result);
 if (!p0All.length) fails.push('no DC3 DETECTFRAC lines for player 0 (probe off, or no gameplay)');
 const engDiffs = summary.difficultyEngine;
 if (p0All.length && !engDiffs.length) fails.push('probe lines carry no diff= field (engine predates the probe change)');
@@ -231,6 +233,6 @@ if (difficulty === 'beginner') {
 summary.check = { pass: reachedGame && !fails.length, reachedGame, fails };
 writeFileSync(`${out}/summary.json`, JSON.stringify(summary, null, 1));
 console.log(`RESULT ${result} camera=${camera} difficulty=${difficulty}${selectDifficulty ? '' : '(not selected)'} engine=${engDiffs.join(',') || '?'} score=${summary.finalScoreP0} detectFrac(p0) n=${fr.length} mean=${mean && mean.toFixed(4)} min=${summary.detectFracP0.min} max=${summary.detectFracP0.max} branches=${JSON.stringify(summary.detectFracP0.branches)} ratings=${ratings.join('>')} tracked ${summary.gameSecondsTracked}/${summary.gameSeconds}s wasmMax=${summary.wasmMBMax}MB errors=${errors.length}`);
-console.log(summary.check.pass ? 'CHECK PASS' : `CHECK FAIL: ${reachedGame ? fails.join('; ') : 'never reached gameplay'}`);
+console.log(summary.check.pass ? 'CHECK PASS' : `CHECK FAIL: ${reachedGame ? fails.join('; ') : `song not played through (${result})`}`);
 try { await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 5000))]); } catch {}
 process.exit(!reachedGame ? 2 : fails.length ? 1 : 0);
