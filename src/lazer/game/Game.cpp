@@ -475,6 +475,34 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
                     move_passed[2] = frac;
                     move_passed[3] = b3;
                     TheGamePanel->Handle(move_passed, false);
+                    // DC3_MOVE_RATING_LOG=1: one line per passed move with the
+                    // rating perform.dta just gave it (provider `rating`, from
+                    // `last_detector_result`) -- the measurement the scoring
+                    // matrix in docs/native/POSE_INPUT.md is built from.
+                    if (Dc3EnvFlag("DC3_MOVE_RATING_LOG", false)) {
+                        static Symbol ratingSym("rating");
+                        static Symbol scoreSym("score");
+                        Hmx::Object *prov = player_data->Provider();
+                        const DataNode *r = prov ? prov->Property(ratingSym, false) : nullptr;
+                        const DataNode *sc = prov ? prov->Property(scoreSym, false) : nullptr;
+                        float last = -1.0f;
+                        MoveAsyncDetector *async = mMoveDir->GetAsyncDetector();
+                        const MoveDetector *det =
+                            async ? async->NativeFindDetector(current) : nullptr;
+                        if (det && det->NativeActive())
+                            last = det->LastDetectFrac(i1);
+                        MILO_LOG(
+                            "DC3 MOVE_RATING p=%d measure=%d move=%s rating=%s lastfrac=%.4f "
+                            "score=%d diff=%s\n",
+                            i1,
+                            i5,
+                            current->Name(),
+                            (r && r->Type() == kDataSymbol) ? r->Sym().Str() : "-",
+                            last,
+                            (sc && sc->Type() == kDataInt) ? sc->Int() : -1,
+                            DifficultyToSym(player_data->GetDifficulty()).Str()
+                        );
+                    }
                     // Observed-trigger evidence for the default-on runtime gate:
                     // move_passed must be seen firing, not inferred (G5).
                     if (Dc3EnvFlag("DC3_SCORING_DEBUG", false)) {

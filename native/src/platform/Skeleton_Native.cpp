@@ -8,6 +8,7 @@
 #include <vector>
 #include <sys/wait.h> // WIFEXITED & co. for DescribeServerExit (also on web)
 #ifndef __EMSCRIPTEN__
+#include "PosePerformer_Native.h"
 #include "platform/ExecutablePath.h"
 #include <unistd.h>
 #include <signal.h>
@@ -227,6 +228,14 @@ bool NativeSkeletonProvider::Start(
     const std::string &socketPath, const std::string &modelPath, int cameraIndex
 ) {
     if (mRunning) return true;
+
+    // DC3_POSE_PERFORM: frames come from the in-process performer (Poll pumps
+    // it), not from a socket.  See PosePerformer_Native.h.
+    if (Dc3PosePerformerEnabled()) {
+        printf("DC3_POSE_PERFORM: in-process synthetic performer\n");
+        mRunning = true;
+        return true;
+    }
 
     mSocketPath = socketPath;
     mCameraIndex = cameraIndex;
@@ -557,6 +566,10 @@ void NativeSkeletonProvider::PublishFrame(
 }
 
 void NativeSkeletonProvider::Poll() {
+#ifndef __EMSCRIPTEN__
+    if (mRunning && mSocketFd < 0 && Dc3PosePerformerEnabled())
+        Dc3PosePerformerPump(this); // publishes; latched below
+#endif
     std::lock_guard<std::mutex> lock(mSwapMutex);
     memcpy(mPersons, mBack, sizeof(mPersons));
     mNumPersons = mNumPersonsBack;

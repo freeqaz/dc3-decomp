@@ -1228,6 +1228,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/DataParser_Native.cpp
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/HttpServer.cpp>
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/PoseTarget_Native.cpp>
+    $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/PosePerformer_Native.cpp>  # DC3_POSE_PERFORM
     src/platform/DtaEvalSupport.cpp   # DTA eval state guard + result serializer (unit-tested)
     src/engine_stubs_generated.cpp
     src/StubTrace.cpp
