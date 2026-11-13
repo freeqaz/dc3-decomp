@@ -100,6 +100,67 @@ static void NativeModalTap(const char *kind, const char *msg) {
     fflush(stderr);
 }
 #define NATIVE_MODAL_TAP(kind, msg) NativeModalTap(kind, msg)
+#elif defined(HX_NATIVE) && defined(HX_WEB)
+#include <emscripten/console.h>
+#include <cstdlib>
+#include <string>
+#include <unordered_map>
+// W-9: the web build's tap. Without it a web run printed no notify at all: at
+// notify_level 1 DebugModal hands a notify to cheat_display, which nobody sees,
+// and the desktop tap above was compiled out here. So a failure that a desktop
+// log shows as MILO_NOTIFY (the preload bounce, a missing localization) left no
+// trace in the browser.
+//
+// ON by default (DC3_TAG_MODALS=0 turns it off, `?env=DC3_TAG_MODALS=0`), and
+// written straight to the browser's devtools console with console.warn -- NOT
+// through Module.print/printErr, which feed the page's own console (the ?dev
+// harness, capped at 500 lines) and its status detection. The player page
+// therefore stays quiet; a developer opens devtools. Same `MILO_<KIND>: <msg>`
+// line as the desktop tap, so the two logs grep alike. No backtraces (no
+// dladdr/backtrace on wasm). FAIL is not tapped: Debug::Fail already prints
+// `FAIL: <msg>` to stderr, which reaches console.error.
+//
+// Rate limit: each distinct message prints its first kTapRepeats occurrences,
+// then once more at every power of ten with the running count, so a message
+// repeated every frame cannot bury the console.
+static void NativeModalTap(const char *kind, const char *msg) {
+    static int sEnabled = -1;
+    if (sEnabled == -1) {
+        const char *env = getenv("DC3_TAG_MODALS");
+        sEnabled = (env && *env && atoi(env) == 0) ? 0 : 1;
+    }
+    if (!sEnabled)
+        return;
+    std::string esc(kind ? kind : "?");
+    esc += ": ";
+    for (const char *p = msg ? msg : "(null)"; *p; p++) {
+        if (*p == '\n')
+            esc += "\\n";
+        else
+            esc += *p;
+    }
+    static const int kTapRepeats = 5;
+    static std::unordered_map<std::string, long> sCounts;
+    long n = ++sCounts[esc];
+    bool show = n <= kTapRepeats;
+    long pow10 = 10;
+    while (!show && pow10 <= n) {
+        if (pow10 == n)
+            show = true;
+        pow10 *= 10;
+    }
+    if (!show)
+        return;
+    std::string line = "MILO_" + esc;
+    if (n > kTapRepeats)
+        line += " [repeat " + std::to_string(n) + "]";
+    emscripten_console_warn(line.c_str());
+}
+#define NATIVE_MODAL_TAP(kind, msg)                                                      \
+    do {                                                                                 \
+        if (strcmp(kind, "FAIL") != 0)                                                   \
+            NativeModalTap(kind, msg);                                                   \
+    } while (0)
 #else
 #define NATIVE_MODAL_TAP(kind, msg)
 #endif

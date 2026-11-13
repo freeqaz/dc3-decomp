@@ -4,6 +4,7 @@
 #include <csetjmp>
 #include <unistd.h>
 #include "telemetry\GameplayTelemetry.h"
+#include "NativeQuit.h"
 #if !defined(__EMSCRIPTEN__)
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -1115,6 +1116,10 @@ bool IsUselessLoad(const char *file) {
 // binary linking App.cpp resolves it — milo-tests links App.cpp but supplies its
 // own main() and never sees main_native.cpp.
 const char *gDc3ExitReason = nullptr;
+// H-9 quit requests (native/src/NativeQuit.h): defined here for the same reason.
+std::atomic<const char *> gDc3QuitRequest{nullptr};
+std::atomic<int> gDc3QuitCode{0};
+bool (*gDc3WindowLostPoll)() = nullptr;
 #endif
 
 void App::Run() { RunWithoutDebugging(); }
@@ -1197,6 +1202,19 @@ void App::RunWithoutDebugging() {
         }
 #endif
 
+        // H-9: stop at a frame boundary when something asked to quit (a
+        // terminating signal, see main_native.cpp) or the X window is gone.
+        // Checked BEFORE BeginDrawing, whose first X request on a destroyed
+        // window is the BadWindow that used to reach Xlib's default handler
+        // and exit() through the static destructors. Saves are written
+        // synchronously inside the poll above, so none is cut in half.
+        if (gDc3WindowLostPoll)
+            gDc3WindowLostPoll();
+        if (const char *quit = gDc3QuitRequest.load()) {
+            gDc3ExitReason = quit;
+            break;
+        }
+
         // Draw: BeginDrawing → UI panels (venue + HUD + menus) → EndDrawing.
         // During gameplay, the venue renders through world_panel → HamDirector.
         TheRnd.BeginDrawing();
@@ -1250,6 +1268,13 @@ void App::RunWithoutDebugging() {
 
         frameCount++;
 
+        // A request raised during this frame's drawing (the X error handler's
+        // backstop for a window destroyed mid-frame) ends the loop now rather
+        // than drawing one more frame into a dead window.
+        if (const char *quit = gDc3QuitRequest.load()) {
+            gDc3ExitReason = quit;
+            break;
+        }
         if (windowed) {
             if (glfwWindowShouldClose(gNativeWindow)) {
                 gDc3ExitReason = "window_closed";

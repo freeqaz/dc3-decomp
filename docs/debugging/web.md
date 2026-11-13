@@ -253,6 +253,9 @@ grep -E "AsyncFile opening|fetched on-demand|FAILED" log.txt
 # Errors
 grep -E "PAGE_ERROR|function signature|memory access|stub|ASSERT" log.txt
 
+# MILO_NOTIFY / MILO_WARN (devtools console only, on by default; W-9)
+grep -E "^MILO_(NOTIFY|WARN):" log.txt
+
 # Rendering state
 grep -E "BeginDrawing|frame acquisition|mesh draw calls" log.txt
 

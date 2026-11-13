@@ -1626,11 +1626,23 @@ else() # NOT EMSCRIPTEN — native targets
 add_executable(dc3-native
     ${DC3_ENGINE_SOURCES}
     src/main_native.cpp
+    src/platform/WindowLoss_X11.cpp  # H-9: a destroyed X window ends the loop, not the process
     ${DC3_NATIVE_CORE_SOURCES_ENGINE}
     src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
     src/platform/DebugPanel.cpp   # deferred glue (pairs with HttpServer/DC3_HTTP_SERVER)
     # gfx set + ImGuiBackend.cpp now provided by milo-engine
 )
+# WindowLoss_X11.cpp includes Xlib (via glfw3native.h) and no decomp header:
+# Xlib's macros collide with the decomp PCH, and it needs no MSVC compat.
+set_source_files_properties(
+    ${CMAKE_SOURCE_DIR}/src/platform/WindowLoss_X11.cpp
+    PROPERTIES SKIP_PRECOMPILE_HEADERS ON
+               COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility;-fno-delayed-template-parsing"
+)
+if(NOT APPLE)
+    find_package(X11 REQUIRED)
+    target_link_libraries(dc3-native PRIVATE X11::X11)
+endif()
 
 target_compile_options(dc3-native PRIVATE
     ${DC3_MSVC_COMPAT_FLAGS}
@@ -1960,6 +1972,7 @@ if(BUILD_TESTS)
         tests/test_loader_thread_stack.cpp
         tests/test_bone_ground_truth.cpp
         tests/test_headless_boot.cpp
+        tests/test_native_exit.cpp
         tests/test_loading_panel.cpp
         tests/test_milo_viewer_screenshot.cpp
         tests/test_object_lifetime.cpp
@@ -2064,6 +2077,18 @@ if(BUILD_TESTS)
     target_precompile_headers(milo-tests PRIVATE
         "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
     )
+    # H-9 exit tests: Xlib (a second X client acting on the engine's window)
+    # and no decomp header, so no PCH and no MSVC compat.
+    set_source_files_properties(
+        ${CMAKE_SOURCE_DIR}/tests/test_native_exit.cpp
+        TARGET_DIRECTORY milo-tests
+        PROPERTIES SKIP_PRECOMPILE_HEADERS ON
+                   COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility;-fno-delayed-template-parsing"
+    )
+    if(NOT APPLE)
+        find_package(X11 REQUIRED)
+        target_link_libraries(milo-tests PRIVATE X11::X11)
+    endif()
     include(GoogleTest)
 
     # Ensure the tmp directory exists for ASSERT_EXIT tests (GTest needs writable TMPDIR)
