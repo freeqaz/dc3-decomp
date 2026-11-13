@@ -273,14 +273,7 @@ bool SkeletonClip::PrevSkeleton(
     if (skeleton.SkeletonIndex() == 0) {
         int frameIdx, loopCount;
         if (CurRecordedFrame(frameIdx, loopCount)) {
-            // The image does not dereference the pointer CurRecordedFrame
-            // returned: it recomputes the element from the vector base and the
-            // out-param index -- `lwz r8,0x50(r31)` / `mulli r10,r8,0x1c8` /
-            // `lwz r11,0x0(r3)` / `add r11,r10,r11` / `lfs f10,0x1c4(r11)` at
-            // 825??? (idx 21/36/44/49/52 of the listing).  Spelling it that way
-            // makes our object exactly the target's size (320 == 320).  The
-            // slot colouring that kept this at 71.0 (w7-am) was the second
-            // call's out-params, below.
+            // Lane history (8 lines moved): docs/decomp/notes/system/gesture/SkeletonClip.md
             const std::vector<RecordedFrame> &frames = *mRecordedFrames;
             float curTime = frames.back().mSongSeconds * loopCount
                 + frames[frameIdx].mSongSeconds;
@@ -374,17 +367,7 @@ BEGIN_COPYS(SkeletonClip)
     END_COPYING_MEMBERS
 END_COPYS
 
-// w21-bm: 99.991 -> 100.  INIT_REVS at FILE scope, right here.  The image's
-// rev pair (lbl_82251B80: 0x0009,pad,0x0001,pad) is the FIRST object of this
-// TU's .rdata (splits.txt starts SkeletonClip's .rdata at 0x82251C08, but
-// 0x82251B80..0x82251C08 holds this pair plus DateTimeStr/IsFailClip unwind
-// tables, i.e. SkeletonClip's own .rdata), so per the w15-r rule above
-// INIT_REVS in obj/Object.h gRev is the lis/addi anchor and gAltRev is
-// reached as anchor+4 (`addi r7, r27, 0x4`), scheduled before &d.altRev.
-// Replaces w11-d's `static const unsigned short gRevs[4] = {9,0,1,0}` (2 rows:
-// &d.altRev set up before &gRevs[2]); w16-c had measured an INIT_REVS spelling
-// at 98.0 (placement not recorded).  Same values, same reads.  The rev checks
-// stay hand-written: the image remaps rev 10 to 9/alt 1 before them.
+// Lane history (11 lines moved): docs/decomp/notes/system/gesture/SkeletonClip.md
 INIT_REVS(9, 1)
 
 BEGIN_LOADS(SkeletonClip)

@@ -1,0 +1,49 @@
+# Lane notes: `src/system/synth_xbox/IPP_basicmath_xbox.cpp`
+
+Sidecar for lane history that used to sit as comment walls in the source.
+Each `## \`<mangled symbol>\`` section holds that function's notes VERBATIM,
+one fenced block per original comment block.  `scripts/find_refutations.py`
+reads this file (exact mangled-symbol match, then short-name fallback) and
+prints these blocks first.  The source keeps only a short mechanism comment.
+
+Add new lane notes to the function's section here, not to the source.
+
+## `?Add_InPlace@IPP@@YAXIPBMPAM@Z`
+
+`IPP::Add_InPlace` -- moved verbatim from `src/system/synth_xbox/IPP_basicmath_xbox.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of 89d252553)
+
+Above the definition (was lines 4-34):
+
+```text
+// w8-j 2026-09-15 -- FLOOR at 83.333% (match_percent_normalized) for both
+// Add_InPlace and Mul_InPlace, 48 B each, 9 of 13 instructions equal.  The whole
+// residual is the ISSUE ORDER of the two loads, and nothing else:
+//     target   lfs  f0, 0x0(r11)   /  lfsx f13, r10, r11 /  fadds f0, f13, f0
+//     ours     lfsx f0, r10, r11   /  lfs  f13, 0x0(r11) /  fadds f0, f0,  f13
+// Both compute f1[i] + f2[i] and store to f2[i]; only which register each load
+// lands in differs, so objdiff scores it 1 insert + 1 delete + 2 diff_arg.
+//
+// REFUTED, do not re-derive -- three source spellings, three full ninja builds,
+// all 83.333%, and `run_diff_inspect mode=mismatches` returns the SAME four rows
+// every time, i.e. MSVC canonicalises them to identical code:
+//   (a) f2[i] += f1[i];                       (the form below)
+//   (b) f2[i] = f1[i] + f2[i];                source operand order src-first
+//   (c) f2[i] = f2[i] + f1[i];                source operand order dst-first
+//   (d) float acc = f2[i]; f2[i] = f1[i]*acc; explicit temp to force the dst load
+// (d) is the interesting one: an explicit temp naming the dst load does not even
+// move it ahead of the indexed load.
+//
+// The calibration is Mul() below, which is at 100.0%: for `f3[i] = f1[i]*f2[i]`
+// MSVC loads the LEFT operand first (`lfsx f0` = f1[i]) and emits
+// `fmuls f0, f0, f13`, i.e. issue order and operand order both follow the source.
+// The in-place pair breaks that rule in the image -- it loads the dst (the plain
+// `lfs 0(r11)`, which is also the store target) first but places it SECOND in the
+// fadds/fmuls.  No source operand order can express "first in issue order, second
+// in operand order", which is why (b) and (c) are indistinguishable here.  This
+// is scheduler state, not source; it is permuter territory if anything.
+// w16-e: eleven more spellings measured, none moves the load order: no
+// `size == 0` guard (inert), dst/src named temps in either order (inert),
+// `f2[i] = f2[i] + f1[i]` (inert), an inline AddTo(float&, const float&) /
+// Sum(a, b) helper (inert), a const-ref / pointer to f2[i] (inert); pointer
+// walkers (`while (size--) *f2++ += *f1++;`) 70.0, signed `int i` 77.9.
+```

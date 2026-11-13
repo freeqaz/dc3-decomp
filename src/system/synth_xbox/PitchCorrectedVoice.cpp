@@ -14,13 +14,7 @@ DSP::Synapse::PitchCorrectedVoice::PitchCorrectedVoice()
       mProximityEffect(0.0f), mProximityFocus(0.5f), mField_0x28(0.0f), mFreqCounter(0.0f),
       mPrevFreq(0.0f), mAbsPitchDeviation(0.0f) {}
 
-// w17-e (97.73, 26 rows): the non-register difference is that the image
-// RELOADS mSmoothedCorrection (`lfs f0, 0x8(r31)`) after the `mPrevFreq =
-// mFreqCounter` store, where we reuse the value loaded for the attack/release
-// test; the rest is the FPR renaming that follows.  Not chased further.
-// w20-s: branch row 100 lands on the image's `stfs f12,0x30(r31); lfs f0,
-// 0x8(r31)` vs our fmsubs -- the w17-e reload above, reached on both arms on
-// both sides; mSmoothedCorrection = (f28*f27 - s)*coef + s either way.  ARTIFACT.
+// Lane history (7 lines moved): docs/decomp/notes/system/synth_xbox/PitchCorrectedVoice.md
 float DSP::Synapse::PitchCorrectedVoice::GetCorrection() {
     // Interval between the two target frequencies, in semitones.
     float interval = Util::Log<float>(mFreq1) - Util::Log<float>(mFreq0);

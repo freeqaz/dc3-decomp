@@ -59,11 +59,7 @@ GranularSynth::GranularSynth(const FloatVec &input, unsigned int numVoices, unsi
 
         for (unsigned int j = 0; j < window.size(); j++) {
             static const float sPi = 3.1415927410125732f;
-            // w15-b (98.65 -> 100): the value is computed into a local BEFORE
-            // the store -- assigning straight into window[j] makes MSVC form the
-            // element address first and pin _M_start across `bl cos`, where the
-            // image reloads it after the call -- and the size is converted
-            // before j (image: size to 0x88(r31), j to 0x90(r31)).
+            // Lane history (5 lines moved): docs/decomp/notes/system/synth_xbox/GranularSynth.md
             float size = (float)window.size();
             float angle = ((float)j + 0.5f) * sPi;
             float value = ((float)cos(angle / size) + 1.0f) * 0.5f;
@@ -123,38 +119,8 @@ void GranularSynth::ExtractGranules() {
             gr.mStartOffset = mBlock;
             gr.mPhase = (float)((double)mFrame - gr.mStartTime + gr.mOffset);
 
-            // RESIDUAL (ExtractGranules, 92.2 canonical / 91.6 raw).  The
-            // placement of this local is load-bearing and already tuned:
-            // HERE = 92.2; before the gr.mGain store = 91.5 (adds an
-            // `fmr f0, f13`); after the window loop with the 0.7 compare on
-            // gr.mLength = 87.3; removed entirely = 87.3.  The last row of
-            // this cluster is the image's `lfs f0, 0x8(r11)` feeding BOTH the
-            // fsel and the fadds out of one register where we still emit a
-            // copy.
-            //
-            // w7-bu NEGATIVE (still 92.2).  Six more spellings, each measured
-            // alone against the base:
-            //   - `length` hoisted above the gr.mGain store AND feeding
-            //     gr.mFadeIn (one load for both, like the image's `lfs f0`
-            //     at 82E4B3AC): 89.1 -- the constant-pool hoist (f4-f8 at
-            //     82E4B1xx) re-registers and 44 rows swap;
-            //   - `length` declared just before gr.mFadeIn and feeding it:
-            //     89.1, identical rows;
-            //   - `float startOffset = (float)(unsigned)gr.mStartOffset`
-            //     hoisted above `rounded` (the image gives that conversion
-            //     the EARLIER temp, `std r8, -0x48(r1)` 82E4B494, and
-            //     `rounded`'s fctidz the later one, `stfd f0, -0x40(r1)`
-            //     82E4B4B4; ours are -0x40/-0x48): inert, slots unchanged;
-            //   - the rounding inlined into the `delay` expression: inert;
-            //   - `gr.mWindowLen + span` for the `add r10, r30, r10` at
-            //     82E4B510: inert (the allocator canonicalises the order);
-            //   - `unsigned windowLen` local stored then reused (the image
-            //     stores 0x28(r11) at 82E4B4BC before the startOffset
-            //     conversion): 87.6, 13 inserts;
-            //   - `rounded` computed before the window loop: 86.5.
-            // The -0x48/-0x40 temp-slot order does not follow source order
-            // of the two conversions; with the r9/r10 and f0/f13 swaps that
-            // is the whole residual (22 diff_arg + 17 insert/delete rows).
+            // Lane history (32 lines moved): docs/decomp/notes/system/synth_xbox/GranularSynth.md
+            // > RESIDUAL (ExtractGranules, 92.2 canonical / 91.6 raw).
             float length = gr.mLength;
             // Pick the largest window that still fits inside 0.7 of the grain.
             gr.mWindow = mWindows.size() - 1;

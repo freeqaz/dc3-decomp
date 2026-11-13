@@ -590,17 +590,8 @@ void SpeechMgr::AddDynamicRuleWord(
         }
     }
     if (createSuccess) {
-        // BUG FIX (w15-a): c3 is the transition's SEMANTIC VALUE.  The image
-        // converts it into its own wide buffer and points the
-        // NUI_SPEECH_SEMANTIC passed as the last argument at it:
-        //   0x8243B5B4  bl   mbstowcs_s            ; r4 = r31+0x80
-        //   0x8243B5B8  addi r11, r31, 0x80
-        //   0x8243B5C0  stw  r11, 0x58(r31)        ; s.pcwszValue = semantic
-        //   ...
-        //   0x8243B5E8  addi r10, r31, 0x58        ; pSemantic = &s
-        //   0x8243B600  bl   NuiSpeechAddWordTransition
-        // We converted c3 and then never used it, handing the recognizer an
-        // uninitialised pcwszValue.
+        // Lane history (11 lines moved): docs/decomp/notes/system/gesture/SpeechMgr.md
+        // > BUG FIX (w15-a): c3 is the transition's SEMANTIC VALUE.
         NUI_SPEECH_SEMANTIC s;
         wchar_t semantic[1024];
         wchar_t word[1024];

@@ -57,14 +57,7 @@ void SkeletonExtentTracker::Poll() {
 Hmx::Rect SkeletonExtentTracker::GetViewBox() const {
     if (mMin.x != FLT_MIN && mMin.x != FLT_MAX && mMin.y != FLT_MIN && mMin.y != FLT_MAX) {
         float val = Min(mMax.y - mMin.y, 1.0f);
-        // w8-i BUG FIX: the y component is mMin.y, not mMax.y.  0x82DFE79C loads
-        // `lfs f0, 0x30(r4)` (mMin.y) for the FLT_MIN/FLT_MAX guards and the image
-        // stores that same f0 into the rect at 0x82DFE7BC (`stfs f0, 0x4(r3)`);
-        // mMax.y (0x38, loaded at 0x82DFE7B0) is consumed only by the
-        // `fsubs f12, f12, f0` height on the next line and never stored.  We
-        // passed mMax.y, so every view box sat at the TOP of the tracked extent
-        // instead of the bottom -- a full box-height offset on the mesh UVs that
-        // ApplyToMeshVerts lays out.
+        // Lane history (8 lines moved): docs/decomp/notes/system/gesture/SkeletonExtentTracker.md
         return Hmx::Rect(((mMax.x + mMin.x) / 2.0f) - (val / 2.0f), mMin.y, val, val);
     } else {
         return Hmx::Rect(0, 0, 1, 1);
