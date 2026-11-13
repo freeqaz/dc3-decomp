@@ -16,7 +16,7 @@ not exist on web. macOS last ran in March and would not build today.
 
 | Area | State | How measured |
 |---|---|---|
-| Test gate | `scripts/native_test.sh`: 654 registered / 584 executed / 584 passed / 0 failed / 70 skipped (budget 70), exit 0 | ran |
+| Test gate | `scripts/native_test.sh`: 654 registered / 584 executed / 584 passed / 0 failed / 70 skipped (budget 70), exit 0. On `np-songs` (main `cf2482488` + `PreloadBudgetTest` ×2 + `LargestSongFlowTest`): 706 / 636 / 636 / 0 / 70 (budget 70), exit 0 | ran |
 | Gameplay gate | `--all-gates`: all 48 `GameplayTelemetryTest` pass, including feet-above-floor and no-bone-garbage. Each test is its own 51–89 s engine run, so the gate takes ~50 min. | ran (stopped at test 402 by a timeout, 0 failures) |
 | Perform | Boot → title → song select → multiuser → tutorial (fresh profile) → loading → gameplay → results → song select → main, on YMCA / Better Off Alone / Give It Up in three venues; two songs back to back. **Every quickplay song (45) plays whole to the results**, none bounces, hangs or crashes; the largest, omg, is a test (`LargestSongFlowTest`). See [Every song](#every-song) | headless GPU runs; no-GPU sweep of all 45, 2026-11-13 (`np-songs`) |
 | Save | `profile_0_save.dat` written at endgame; reloaded after restart; tutorial skipped and score shown | ran |
