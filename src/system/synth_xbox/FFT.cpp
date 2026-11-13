@@ -591,9 +591,8 @@ int fft_recursive(float* data, unsigned long size, long sign, float* context) {
     return ret;
 }
 
-// Lane history (63 lines moved): docs/decomp/notes/system/synth_xbox/FFT.md
-// > RESIDUAL (w8-f, 46.934383 canonical / 42.465878 fuzzy, 866 emitted against 762 in the
-// > image, 282 delete / 104 insert).
+// Lane history: docs/decomp/notes/system/synth_xbox/FFT.md.  Stage loop re-derived
+// from the listing 2026-11-13 (lane F): the old one was not a correct FFT for N >= 32.
 int fft_altivec(float* a, float* b, unsigned long size, long sign, float* twiddle) {
     XMVECTORU32 sel_odd = { 0x00000000, 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF };
     XMVECTORU32 perm_sin_fwd = { 0x04050607, 0x14151617, 0x0C0D0E0F, 0x1C1D1E1F };
@@ -722,22 +721,134 @@ int fft_altivec(float* a, float* b, unsigned long size, long sign, float* twiddl
     }
 
     // ---- stage loop -------------------------------------------------------
+    // Each radix-4 butterfly pairs x0 with x2 and x1 with x3 (inputs a
+    // quarter-transform apart) and is unrolled two vectors per iteration.
+    // Outputs: f0 -> o0, twiddled e0 -> o1 (+blk*4), f1 -> o2 (+blk*2),
+    // twiddled e1 -> o3 (+blk*6).
+#define FFT_RADIX4_BODY(IC, INS, ISA, ICA, OC, OS, SCALE_STORE)                  \
+    {                                                                            \
+        XMVECTOR x2 = __lvx(q2p, 0);                                             \
+        q2p += 4;                                                                \
+        XMVECTOR x3 = __lvx(q3p, 0);                                             \
+        q3p += 4;                                                                \
+        XMVECTOR x0 = __lvx(q0p, 0);                                             \
+        q0p += 4;                                                                \
+        XMVECTOR x1 = __lvx(q1p, 0);                                             \
+        XMVECTOR d02 = __vsubfp(x0, x2);                                         \
+        XMVECTOR d13 = __vsubfp(x1, x3);                                         \
+        q1p += 4;                                                                \
+        XMVECTOR s02 = __vaddfp(x0, x2);                                         \
+        XMVECTOR x2b = __lvx(q2p, 0);                                            \
+        XMVECTOR s13 = __vaddfp(x1, x3);                                         \
+        XMVECTOR x3b = __lvx(q3p, 0);                                            \
+        XMVECTOR x0b = __lvx(q0p, 0);                                            \
+        q0p += 4;                                                                \
+        XMVECTOR s02b = __vaddfp(x0b, x2b);                                      \
+        q2p += 4;                                                                \
+        XMVECTOR x1b = __lvx(q1p, 0);                                            \
+        q1p += 4;                                                                \
+        XMVECTOR s13b = __vaddfp(x1b, x3b);                                      \
+        q3p += 4;                                                                \
+        XMVECTOR sd02 = __vperm(d02, d02, perm_swap.v);                          \
+        XMVECTOR m0 = __vmaddfp(d02, IC, v_zero);                                \
+        XMVECTOR sd13 = __vperm(d13, d13, perm_swap.v);                          \
+        XMVECTOR m1 = __vmaddfp(d13, INS, v_zero);                               \
+        XMVECTOR d02b = __vsubfp(x0b, x2b);                                      \
+        XMVECTOR d13b = __vsubfp(x1b, x3b);                                      \
+        XMVECTOR e0 = __vsubfp(s02, s13);                                        \
+        XMVECTOR f0 = __vaddfp(s02, s13);                                        \
+        XMVECTOR f0b = __vaddfp(s02b, s13b);                                     \
+        XMVECTOR c0 = __vmaddfp(sd02, ISA, m0);                                  \
+        XMVECTOR c1 = __vmaddfp(sd13, ICA, m1);                                  \
+        XMVECTOR m0b = __vmaddfp(d02b, IC, v_zero);                              \
+        XMVECTOR sd02b = __vperm(d02b, d02b, perm_swap.v);                       \
+        XMVECTOR m1b = __vmaddfp(d13b, INS, v_zero);                             \
+        XMVECTOR sd13b = __vperm(d13b, d13b, perm_swap.v);                       \
+        XMVECTOR e0b = __vsubfp(s02b, s13b);                                     \
+        XMVECTOR se0 = __vperm(e0, e0, perm_swap.v);                             \
+        SCALE_STORE(f0, o0);                                                     \
+        XMVECTOR g0 = __vmaddfp(OC, e0, v_zero);                                 \
+        o0 += 4;                                                                 \
+        XMVECTOR c0b = __vmaddfp(sd02b, ISA, m0b);                               \
+        XMVECTOR c1b = __vmaddfp(sd13b, ICA, m1b);                               \
+        XMVECTOR g0b = __vmaddfp(OC, e0b, v_zero);                               \
+        XMVECTOR se0b = __vperm(e0b, e0b, perm_swap.v);                          \
+        XMVECTOR e1 = __vsubfp(c0, c1);                                          \
+        XMVECTOR f1 = __vaddfp(c0, c1);                                          \
+        XMVECTOR h0 = __vmaddfp(OS, se0, g0);                                    \
+        XMVECTOR se1 = __vperm(e1, e1, perm_swap.v);                             \
+        XMVECTOR g1 = __vmaddfp(OC, e1, v_zero);                                 \
+        XMVECTOR e1b = __vsubfp(c0b, c1b);                                       \
+        SCALE_STORE(h0, o1);                                                     \
+        SCALE_STORE(f1, o2);                                                     \
+        XMVECTOR h0b = __vmaddfp(OS, se0b, g0b);                                 \
+        XMVECTOR f1b = __vaddfp(c0b, c1b);                                       \
+        o1 += 4;                                                                 \
+        o2 += 4;                                                                 \
+        XMVECTOR h1 = __vmaddfp(OS, se1, g1);                                    \
+        XMVECTOR g1b = __vmaddfp(OC, e1b, v_zero);                               \
+        XMVECTOR se1b = __vperm(e1b, e1b, perm_swap.v);                          \
+        SCALE_STORE(h1, o3);                                                     \
+        o3 += 4;                                                                 \
+        SCALE_STORE(f0b, o0);                                                    \
+        o0 += 4;                                                                 \
+        XMVECTOR h1b = __vmaddfp(OS, se1b, g1b);                                 \
+        SCALE_STORE(h0b, o1);                                                    \
+        SCALE_STORE(f1b, o2);                                                    \
+        o1 += 4;                                                                 \
+        o2 += 4;                                                                 \
+        SCALE_STORE(h1b, o3);                                                    \
+        o3 += 4;                                                                 \
+    }
+#define FFT_STORE_PLAIN(v, p) __stvx(v, p, 0)
+#define FFT_STORE_SCALED(v, p) __stvx(__vmaddfp(v, scale, v_zero), p, 0)
+
     int stages = (power - 2) / 2;
     float* rd = b;
     float* wr = a;
     int blk = 4;
 
     while (stages > 0) {
-        unsigned int step = (unsigned int)blk >> 2;
         float* q0p = rd;
-        float* q1p = rd + half;
         float* q2p = rd + size;
+        float* q1p = rd + half;
         float* q3p = rd + half + size;
 
         if (stages == 1 && (power & 1) == 0) {
-            break;
+            // ---- last radix-4 stage (power even): group 0 only, scaled by
+            // 1/size for the inverse; in place when (power & 3) == 2.
+            if ((power & 3) == 2) {
+                wr = rd;
+            }
+            XMVECTOR w = __lvx(twiddle, 0);
+            XMVECTOR ws = __vspltw(w, 1);
+            XMVECTOR wc = __vspltw(w, 0);
+            XMVECTOR wsa = __vmaddfp(ws, alt, v_zero);
+            XMVECTOR wca = __vmaddfp(wc, alt, v_zero);
+            XMVECTOR nws = __vsubfp(v_zero, ws);
+            float* o0 = wr;
+            float* o1 = wr + blk * 4;
+            float* o2 = wr + blk * 2;
+            float* o3 = wr + blk * 6;
+            if (sign > 0) {
+                float inv_n = 1.0f / (float)(double)(long long)(unsigned int)size;
+                XMVECTORF32 sv;
+                sv.f[0] = inv_n;
+                XMVECTOR scale = __vspltw(sv.v, 0);
+                int n = blk / 4;
+                for (int k = 0; k < n; ++k) {
+                    FFT_RADIX4_BODY(wc, nws, wsa, wca, wc, wsa, FFT_STORE_SCALED)
+                }
+            } else {
+                int n = blk / 4;
+                for (int k = 0; k < n; ++k) {
+                    FFT_RADIX4_BODY(wc, nws, wsa, wca, wc, wsa, FFT_STORE_PLAIN)
+                }
+            }
+            return 0;
         }
 
+        int n = blk / 4;
         {
             // group 0: twiddle is (1, 0)
             XMVECTOR w = __lvx(twiddle, 0);
@@ -746,112 +857,47 @@ int fft_altivec(float* a, float* b, unsigned long size, long sign, float* twiddl
             XMVECTOR wsa = __vmaddfp(ws, alt, v_zero);
             XMVECTOR wca = __vmaddfp(wc, alt, v_zero);
             XMVECTOR nws = __vsubfp(v_zero, ws);
-
             float* o0 = wr;
-            float* o1 = wr + blk * 2;
-            float* o2 = wr + blk * 4;
+            float* o1 = wr + blk * 4;
+            float* o2 = wr + blk * 2;
             float* o3 = wr + blk * 6;
-            for (unsigned int k = 0; k < step; ++k) {
-                XMVECTOR x0 = __lvx(q0p, 0);
-                q0p += 4;
-                XMVECTOR x1 = __lvx(q1p, 0);
-                q1p += 4;
-                XMVECTOR x2 = __lvx(q2p, 0);
-                q2p += 4;
-                XMVECTOR x3 = __lvx(q3p, 0);
-                q3p += 4;
-
-                XMVECTOR d02 = __vsubfp(x2, x0);
-                XMVECTOR d13 = __vsubfp(x3, x1);
-                XMVECTOR s02 = __vaddfp(x2, x0);
-                XMVECTOR s13 = __vaddfp(x3, x1);
-
-                XMVECTOR m0 = __vmaddfp(d02, wc, v_zero);
-                XMVECTOR m1 = __vmaddfp(d13, nws, v_zero);
-                XMVECTOR c0 = __vmaddfp(__vperm(d02, d02, perm_swap.v), wsa, m0);
-                XMVECTOR c1 = __vmaddfp(__vperm(d13, d13, perm_swap.v), wca, m1);
-
-                XMVECTOR e0 = __vsubfp(s02, s13);
-                XMVECTOR f0 = __vaddfp(s02, s13);
-                XMVECTOR e1 = __vsubfp(c0, c1);
-                XMVECTOR f1 = __vaddfp(c0, c1);
-
-                XMVECTOR g0 = __vmaddfp(wc, e0, v_zero);
-                XMVECTOR g1 = __vmaddfp(wc, e1, v_zero);
-                __stvx(f0, o0, 0);
-                o0 += 4;
-                __stvx(f1, o1, 0);
-                o1 += 4;
-                __stvx(__vmaddfp(wsa, __vperm(e0, e0, perm_swap.v), g0), o2, 0);
-                o2 += 4;
-                __stvx(__vmaddfp(wsa, __vperm(e1, e1, perm_swap.v), g1), o3, 0);
-                o3 += 4;
+            for (int k = 0; k < n; ++k) {
+                FFT_RADIX4_BODY(wc, nws, wsa, wca, wc, wsa, FFT_STORE_PLAIN)
             }
         }
 
         {
-            float* t1p = twiddle + blk * 2;
-            float* t2p = twiddle + blk;
-            float* o0 = wr + blk * 8;
-            float* o1 = wr + blk * 10;
-            float* o2 = wr + blk * 12;
-            float* o3 = wr + blk * 14;
+            float* t1p = twiddle + blk * 4;
+            float* t2p = twiddle + blk * 2;
+            float* go0 = wr + blk * 8;
+            float* go1 = wr + blk * 12;
+            float* go2 = wr + blk * 10;
+            float* go3 = wr + blk * 14;
             for (unsigned int g = (unsigned int)blk * 2; g < half; g += (unsigned int)blk * 2) {
                 XMVECTOR w1 = __lvx(t1p, 0);
                 XMVECTOR w2 = __lvx(t2p, 0);
-                XMVECTOR s1 = __vspltw(w1, 1);
-                XMVECTOR s2 = __vspltw(w2, 1);
-                XMVECTOR c2 = __vspltw(w2, 0);
-                XMVECTOR c1 = __vspltw(w1, 0);
-                XMVECTOR ns1 = __vsubfp(v_zero, s1);
-                XMVECTOR s2a = __vmaddfp(s2, alt, v_zero);
-                XMVECTOR ns2 = __vsubfp(v_zero, s2);
-                XMVECTOR c2a = __vmaddfp(c2, alt, v_zero);
-                XMVECTOR s1sel = __vsel(s1, ns1, sel);
-
-                for (unsigned int k = 0; k < step; ++k) {
-                    XMVECTOR x0 = __lvx(q0p, 0);
-                    q0p += 4;
-                    XMVECTOR x1 = __lvx(q1p, 0);
-                    q1p += 4;
-                    XMVECTOR x2 = __lvx(q2p, 0);
-                    q2p += 4;
-                    XMVECTOR x3 = __lvx(q3p, 0);
-                    q3p += 4;
-
-                    XMVECTOR d02 = __vsubfp(x2, x0);
-                    XMVECTOR d13 = __vsubfp(x3, x1);
-                    XMVECTOR s02 = __vaddfp(x2, x0);
-                    XMVECTOR s13 = __vaddfp(x3, x1);
-
-                    XMVECTOR m0 = __vmaddfp(d02, c2, v_zero);
-                    XMVECTOR m1 = __vmaddfp(d13, ns2, v_zero);
-                    XMVECTOR b0 = __vmaddfp(__vperm(d02, d02, perm_swap.v), s2a, m0);
-                    XMVECTOR b1 = __vmaddfp(__vperm(d13, d13, perm_swap.v), c2a, m1);
-
-                    XMVECTOR e0 = __vsubfp(s02, s13);
-                    XMVECTOR f0 = __vaddfp(s02, s13);
-                    XMVECTOR e1 = __vsubfp(b0, b1);
-                    XMVECTOR f1 = __vaddfp(b0, b1);
-
-                    XMVECTOR g0 = __vmaddfp(c1, e0, v_zero);
-                    XMVECTOR g1 = __vmaddfp(c1, e1, v_zero);
-                    __stvx(f0, o0, 0);
-                    o0 += 4;
-                    __stvx(f1, o1, 0);
-                    o1 += 4;
-                    __stvx(__vmaddfp(s1sel, __vperm(e0, e0, perm_swap.v), g0), o2, 0);
-                    o2 += 4;
-                    __stvx(__vmaddfp(s1sel, __vperm(e1, e1, perm_swap.v), g1), o3, 0);
-                    o3 += 4;
+                float* o0 = go0;
+                float* o1 = go1;
+                float* o2 = go2;
+                float* o3 = go3;
+                XMVECTOR tw1s_raw = __vspltw(w1, 1);
+                XMVECTOR tw2s = __vspltw(w2, 1);
+                XMVECTOR tw2c = __vspltw(w2, 0);
+                XMVECTOR tw1c = __vspltw(w1, 0);
+                XMVECTOR tw1ns = __vsubfp(v_zero, tw1s_raw);
+                XMVECTOR tw2sa = __vmaddfp(tw2s, alt, v_zero);
+                XMVECTOR tw2ns = __vsubfp(v_zero, tw2s);
+                XMVECTOR tw2ca = __vmaddfp(tw2c, alt, v_zero);
+                XMVECTOR tw1s = __vsel(tw1s_raw, tw1ns, sel);
+                for (int k = 0; k < n; ++k) {
+                    FFT_RADIX4_BODY(tw2c, tw2ns, tw2sa, tw2ca, tw1c, tw1s, FFT_STORE_PLAIN)
                 }
-
-                t1p += blk * 4;
                 t2p += blk * 2;
-                o0 += blk * 8;
-                o1 += blk * 8;
-                o2 += blk * 8;
-                o3 += blk * 8;
+                t1p += blk * 4;
+                go2 += blk * 8;
+                go0 += blk * 8;
+                go1 += blk * 8;
+                go3 += blk * 8;
             }
         }
 
@@ -863,111 +909,9 @@ int fft_altivec(float* a, float* b, unsigned long size, long sign, float* twiddl
         stages -= 1;
         blk *= 4;
     }
-
-    // ---- last radix-4 stage (power even) ----------------------------------
-    if (stages == 1 && (power & 1) == 0) {
-        float* q0p = rd;
-        float* q1p = rd + half;
-        float* q2p = rd + size;
-        float* q3p = rd + half + size;
-        if ((power & 3) == 2) {
-            wr = rd;
-        }
-        XMVECTOR w = __lvx(twiddle, 0);
-        XMVECTOR ws = __vspltw(w, 1);
-        XMVECTOR wc = __vspltw(w, 0);
-        XMVECTOR wsa = __vmaddfp(ws, alt, v_zero);
-        XMVECTOR wca = __vmaddfp(wc, alt, v_zero);
-        XMVECTOR nws = __vsubfp(v_zero, ws);
-
-        float* o0 = wr;
-        float* o1 = wr + blk * 4;
-        float* o2 = wr + blk * 2;
-        float* o3 = wr + blk * 6;
-        unsigned int step = (unsigned int)blk >> 2;
-
-        if (sign > 0) {
-            float inv_n = 1.0f / (float)(double)(long long)(unsigned int)size;
-            XMVECTORF32 sv;
-            sv.f[0] = inv_n;
-            XMVECTOR scale = __vspltw(sv.v, 0);
-            for (unsigned int k = 0; k < step; ++k) {
-                XMVECTOR x0 = __lvx(q0p, 0);
-                q0p += 4;
-                XMVECTOR x1 = __lvx(q1p, 0);
-                q1p += 4;
-                XMVECTOR x2 = __lvx(q2p, 0);
-                q2p += 4;
-                XMVECTOR x3 = __lvx(q3p, 0);
-                q3p += 4;
-
-                XMVECTOR d02 = __vsubfp(x1, x0);
-                XMVECTOR s02 = __vaddfp(x1, x0);
-                XMVECTOR d13 = __vsubfp(x2, x3);
-                XMVECTOR s13 = __vaddfp(x2, x3);
-
-                XMVECTOR m0 = __vmaddfp(d02, wc, v_zero);
-                XMVECTOR m1 = __vmaddfp(d13, nws, v_zero);
-                XMVECTOR c0 = __vmaddfp(__vperm(d02, d02, perm_swap.v), wsa, m0);
-                XMVECTOR c1 = __vmaddfp(__vperm(d13, d13, perm_swap.v), wca, m1);
-
-                XMVECTOR f0 = __vaddfp(s02, s13);
-                XMVECTOR e0 = __vsubfp(s02, s13);
-                XMVECTOR f1 = __vaddfp(c0, c1);
-                XMVECTOR e1 = __vsubfp(c0, c1);
-
-                __stvx(__vmaddfp(f0, scale, v_zero), o0, 0);
-                o0 += 4;
-                __stvx(__vmaddfp(f1, scale, v_zero), o1, 0);
-                o1 += 4;
-                XMVECTOR g0 = __vmaddfp(wc, e0, v_zero);
-                XMVECTOR g1 = __vmaddfp(wc, e1, v_zero);
-                __stvx(__vmaddfp(__vmaddfp(wsa, __vperm(e0, e0, perm_swap.v), g0), scale, v_zero), o2, 0);
-                o2 += 4;
-                __stvx(__vmaddfp(__vmaddfp(wsa, __vperm(e1, e1, perm_swap.v), g1), scale, v_zero), o3, 0);
-                o3 += 4;
-            }
-        } else {
-            for (unsigned int k = 0; k < step; ++k) {
-                XMVECTOR x0 = __lvx(q0p, 0);
-                q0p += 4;
-                XMVECTOR x1 = __lvx(q1p, 0);
-                q1p += 4;
-                XMVECTOR x2 = __lvx(q2p, 0);
-                q2p += 4;
-                XMVECTOR x3 = __lvx(q3p, 0);
-                q3p += 4;
-
-                XMVECTOR d02 = __vsubfp(x1, x0);
-                XMVECTOR s02 = __vaddfp(x1, x0);
-                XMVECTOR d13 = __vsubfp(x2, x3);
-                XMVECTOR s13 = __vaddfp(x2, x3);
-
-                XMVECTOR m0 = __vmaddfp(d02, wc, v_zero);
-                XMVECTOR m1 = __vmaddfp(d13, nws, v_zero);
-                XMVECTOR c0 = __vmaddfp(__vperm(d02, d02, perm_swap.v), wsa, m0);
-                XMVECTOR c1 = __vmaddfp(__vperm(d13, d13, perm_swap.v), wca, m1);
-
-                XMVECTOR f0 = __vaddfp(s02, s13);
-                XMVECTOR e0 = __vsubfp(s02, s13);
-                XMVECTOR f1 = __vaddfp(c0, c1);
-                XMVECTOR e1 = __vsubfp(c0, c1);
-
-                __stvx(f0, o0, 0);
-                o0 += 4;
-                __stvx(f1, o1, 0);
-                o1 += 4;
-                XMVECTOR g0 = __vmaddfp(wc, e0, v_zero);
-                XMVECTOR g1 = __vmaddfp(wc, e1, v_zero);
-                __stvx(__vmaddfp(wsa, __vperm(e0, e0, perm_swap.v), g0), o2, 0);
-                o2 += 4;
-                __stvx(__vmaddfp(wsa, __vperm(e1, e1, perm_swap.v), g1), o3, 0);
-                o3 += 4;
-            }
-        }
-        return 0;
-    }
-
+#undef FFT_RADIX4_BODY
+#undef FFT_STORE_PLAIN
+#undef FFT_STORE_SCALED
     // ---- odd power: one extra RADIX-2 stage -------------------------------
     if ((power & 1) == 0) {
         return 0;

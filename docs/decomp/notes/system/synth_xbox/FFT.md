@@ -282,6 +282,31 @@ Above the definition (was lines 348-418):
 
 ## `?fft_altivec@@YAHPAM0KJ0@Z`
 
+### Lane F (w-low-xbox), 2026-11-13 -- BEHAVIOUR FIX
+
+The w8-f reconstruction below was **not a correct FFT**.  Measured with a
+target-listing PPC/VMX128 interpreter (it runs the image's own `FFT.s` and
+reproduces a correct DFT for N = 2..2^17: forward e^-i, inverse e^+i scaled
+1/N) and an x86 build of our source with emulated intrinsics: every complex
+transform with N >= 16 (all of `fft_pingpong`'s AltiVec path, hence every
+`FFTComplex` / `FFTRealForward` of 32+ real samples) returned garbage
+(rel. error 0.9 - 1e3) and wrote past the ping-pong scratch.  Three defects
+in the stage loop, all read off the listing (0x82E4F058-0x82E4F740):
+  * butterfly sign: the image computes `x0 - x2` / `x1 - x3`
+    (`vsubfp128 v11, v63, v62`), we had `x2 - x0` / `x3 - x1`; the last
+    radix-4 stage also paired x0 with x1 instead of x0 with x2;
+  * every inner loop is unrolled TWO vectors per iteration with trip count
+    `blk / 4`; ours did one vector, so half of each group was never computed;
+  * group twiddles start at `twiddle + blk*4` (final) and `twiddle + blk*2`
+    (inner) -- `add r21, r27, r7` / `add r22, r26, r7` at 0x82E4F23C -- not
+    `blk*2` / `blk`; and the last stage writes f1 to `+blk*2`, twiddled e0 to
+    `+blk*4`, which we had swapped.
+The first pass and both radix-2 tails were already right.  After the fix our
+MSVC object, run in the same interpreter with only this function swapped in,
+equals the image bit-for-bit-close (rel. err < 1e-5) on N = 16..4096, both
+signs.  46.93 -> 62.5 canonical.
+
+
 `fft_altivec` -- moved verbatim from `src/system/synth_xbox/FFT.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of 89d252553)
 
 Above the definition (was lines 800-862):
