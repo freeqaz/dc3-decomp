@@ -108,3 +108,14 @@ Inside the body (was lines 69-160):
     // a shortened-body artifact.  No behaviour defect.  The remaining handle
     // would have to be the regasg first-fit order, not source.
 ```
+
+lane C / w-low-gesture-char (2026-11-13):
+
+```text
+// Behaviour re-check (93.669 canonical / 92.015 fuzzy): NOT A BUG.  Traced the
+// target block (r31 parentxfm, r30 handxfm): cross.y = py.z*hz.x - py.x*hz.z,
+// cross.z = py.x*hz.y - py.y*hz.x, cross.x = py.y*hz.z - py.z*hz.y,
+// dot(py,hz), dot(px,cross); clamps by fsel to [-1,1]; atan2(clamp2, clamped);
+// mOffset (0x38) and mBias (0x3c) * DEG2RAD; 0.33333 rot; Interp ratio
+// twist2.local.v.x / hand.local.v.x.  Everything outside rows 33-70 is equal.
+```

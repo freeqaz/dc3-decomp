@@ -193,6 +193,15 @@ Above the definition (was lines 210-282):
 // call, so the charged rows are placement alone.
 ```
 
+lane C / w-low-gesture-char (2026-11-13):
+
+```text
+// Behaviour re-check (89.868 canonical): NOT A BUG.  Same stores both sides
+// (mTracking 0 -> 0xaa0, -1 -> 0xaac, 0.0f -> 0xac4, 0 -> 0xac8/0xacc/0xad0,
+// &0xad0 spill to 0x50(r31)), same 0x13-iteration PaddedJointPos array ctor
+// (target names it OnlyReturns: ICF), same Init() call; only the order differs.
+```
+
 
 ## `?Poll@Skeleton@@QAAXHABUSkeletonFrame@@@Z`
 
@@ -352,4 +361,20 @@ File-level (was lines 143-157; no definition follows it):
 // group in scripts/symbol_aliases.json on body-test evidence (both bodies are the
 // single word 4e800020, blr; record under that group's "body_extended").  This
 // ctor now reads 100.0 normalized and fuzzy; ??0Skeleton@@QAA@XZ 89.605 -> 89.868.
+```
+
+
+## `?Create@SkeletonFrame@@QAAXABU_NUI_SKELETON_FRAME@@H@Z`
+
+lane C / w-low-gesture-char (2026-11-13):
+
+```text
+// Behaviour audit (name_check listing, 74.048 canonical / 72.364 fuzzy): NOT A BUG.
+// Loop 1: r9 5..145 step 28 (cmplwi 0xad, six skeletons), positions at
+// nui+0x50+16*(28s+j), transformed[20s+j]; Z*r2+r3, Y*r1, X*r0 on both sides.
+// Loop 2: sTrackingMap[eTrackingState] -> +0x0, mQualityFlags <- nui+0x1b0,
+// raw z/y/x <- SkeletonPositions[src] (0x28/0x24/0x20), joint y/x/z <-
+// transformed[20s+src], tracking <- sJointTrackingMap[state[src]] (nui+0x160)
+// into +0x284+4*dst; trackingID <- +4, mClippedFlags <- +8; hip from +0x10.
+// Residual is the cross-loop CSE of the four matrix rows (see w21-f) only.
 ```

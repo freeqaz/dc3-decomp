@@ -90,3 +90,19 @@ Inside the body (was lines 281-313):
                 // Adding one named reference renumbers these non-uniformly and
                 // changes code.
 ```
+
+
+## `?Multiply@@YAXABVMatrix3@Hmx@@0AAV12@@Z`
+
+lane C / w-low-gesture-char (2026-11-13):
+
+```text
+// Behaviour audit (84.424 canonical / 77.865 fuzzy; body in PCH-reached
+// math/Mtx.h, not edited): NOT A BUG.  Image branches on `&b == &out` only
+// (cmplw r4, r5).  Non-alias arm: rows x, y, z in order, each out.r.c =
+// a.r.x*b.x.c + a.r.y*b.y.c + a.r.z*b.z.c (checked term by term for row x).
+// Alias arm: every a/b load precedes the first out store, vx -> -0x80,
+// vy -> -0x70, vz -> -0x70 after vy is copied, then copied to out.x/y/z.
+// So a == out and a == b == out are both safe on both sides.  Residual is FP
+// scheduling/colouring, as w21-an / w24-c2 say.
+```

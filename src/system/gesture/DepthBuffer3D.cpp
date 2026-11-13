@@ -764,12 +764,8 @@ void DepthBuffer3D::DrawShowing() {
     texZoomParams[2] = texZoomParams[2] + widthSpan * d51;
     texZoomParams[1] = texZoomParams[3] - depthSpan * d51;
     texZoomParams[3] = texZoomParams[3] + depthSpan * d51;
-    if (texZoomParams[2] <= texZoomParams[0]) {
-        MILO_ASSERT(texZoomParams[0] < texZoomParams[2], 700);
-    }
-    if (texZoomParams[3] <= texZoomParams[1]) {
-        MILO_ASSERT(texZoomParams[1] < texZoomParams[3], 0x2bd);
-    }
+    MILO_ASSERT(texZoomParams[0] < texZoomParams[2], 700);
+    MILO_ASSERT(texZoomParams[1] < texZoomParams[3], 0x2bd);
     Vector4 texZoom(texZoomParams[0], texZoomParams[1], texZoomParams[2], texZoomParams[3]);
     TheShaderMgr.SetVConstant((VShaderConstant)0x46, texZoom);
 
@@ -782,9 +778,7 @@ void DepthBuffer3D::DrawShowing() {
     } else {
         playerSel = slotParams.x;
     }
-    if (depthZoomParams[1] <= depthZoomParams[0]) {
-        MILO_ASSERT(depthZoomParams[0] < depthZoomParams[1], 0x2ce);
-    }
+    MILO_ASSERT(depthZoomParams[0] < depthZoomParams[1], 0x2ce);
     Vector4 depthZoom(depthZoomParams[0], depthZoomParams[1], playerSel, d45);
     TheShaderMgr.SetVConstant((VShaderConstant)0x47, depthZoom);
 

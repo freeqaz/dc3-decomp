@@ -157,6 +157,17 @@ Inside the body (was lines 745-757):
                 // EQUIVALENT (unicorn harness 4, high confidence).
 ```
 
+lane C / w-low-gesture-char (2026-11-13):
+
+```text
+// Behaviour re-check (92.470 canonical / 91.877 fuzzy): NOT A BUG.  ROTX frac
+// != 0 arm: image v0 = src, v1 = srcNext, (v1 - v0)*frac + v0, then *1/1638.4
+// in the shared tail (0x3a200000); ours computes the same with the two lha
+// loads in the other order.  Vects frac != 0 arm traced slot by slot: sv0 =
+// {x0,y0,z0} at 0x60, sv1 = {x1,y1,z1} at 0xa0, Interp(sv0, sv1, frac, dest)
+// on both sides; the 0x3d228145 scale is shared.  Quat arms identical.
+```
+
 
 ## `(file-level)`
 
