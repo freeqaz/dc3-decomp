@@ -136,6 +136,9 @@ The GitHub `native-build` job has no `orig-assets`. It runs
     `NT_EXECUTED`, `NT_SKIPPED`, `NT_NO_DATA_SKIPS`, …) to the build dir. The workflow copies it into the job
     summary.
 
+`.github/workflows/native-macos.yml` (`macos-14`, arm64) runs the same mode
+against the same floor; it has not run yet ([MACOS.md](MACOS.md#checking-from-linux)).
+
 The workflow gates on the wrapper's exit status. It also runs its own
 `LastTest.log` checks: no log, any `[  FAILED  ]`, and nothing passed.
 

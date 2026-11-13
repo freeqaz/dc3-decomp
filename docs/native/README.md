@@ -28,6 +28,9 @@ scripts/dc3-agent-test.sh --windowed         # play: HTTP debug server on :9090,
 scripts/dc3-agent-test.sh --headless         # agent/CI runs; drive with /api/input/press
 ```
 
+macOS: `scripts/mac/bootstrap.sh --fix` checks and installs the prerequisites,
+builds and launches; see [MACOS.md](MACOS.md).
+
 Keyboard: arrows = D-pad, Enter = A, Esc = B, Space = Start, Tab = Back,
 Q/E = LB/RB. A GLFW gamepad gets the full Xbox layout. Saves go to
 `DC3_SAVE_DIR` (default `~/.local/share/dc3/saves`).
