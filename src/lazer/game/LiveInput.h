@@ -20,5 +20,8 @@ protected:
     int unk44; // 0x40
 #ifdef HX_NATIVE
     mutable float mFastTimeMs; // synthetic time counter for DC3_FAST_TIME
+    // DC3_FAST_TIME: the song stream is stopped by CurrentMs because it ran
+    // ahead of the synthetic clock (FastTimeAudio.h), not by a game pause.
+    mutable bool mFastTimeHeld;
 #endif
 };
