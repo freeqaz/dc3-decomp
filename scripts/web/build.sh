@@ -25,15 +25,20 @@
 #   scripts/web/build.sh --reconfigure  # force a fresh cmake configure
 #   scripts/web/build.sh --opt O2       # release -O level (default O3)
 #
+# The page (index.html, favicon, audio-worklet.js, pose/) is deployed FIRST,
+# whatever happens to the builds, so a failed variant never leaves the deploy
+# dir without a page. A variant that fails to build keeps its previous
+# artifacts (if any) and the script exits 1 naming it, after trying the other.
+#
 # Output:
 #   native/build-web/         — emcc build dir for debug   (DC3_WEB_RELEASE=OFF)
 #   native/build-web-release/ — emcc build dir for release (DC3_WEB_RELEASE=ON)
 #   native/web/build/
-#     index.html, audio-worklet.js          — shared, served from the root
+#     index.html, audio-worklet.js, pose/   — shared, served from the root
 #     release/{dc3-web.js,.wasm,.br,.gz}     — cached (immutable)
 #     debug/{dc3-web.js,.wasm,.gz}           — no-store
 #
-# audio-worklet.js is POST_BUILD-copied to web/build/ root by
+# audio-worklet.js is also POST_BUILD-copied to web/build/ root by
 # milo_engine_apply_web_target_options() (it loads via a document-relative
 # addModule(), so it must sit at the root for BOTH builds).
 set -euo pipefail
@@ -54,7 +59,7 @@ while [ $# -gt 0 ]; do
         --reconfigure) FORCE_RECONFIGURE=1 ;;
         --opt)         shift; OPT_LEVEL="$1" ;;
         --opt=*)       OPT_LEVEL="${1#--opt=}" ;;
-        -h|--help)     sed -n '/^# Usage:/,/^# Output:/p' "$0" | sed '$d'; exit 0 ;;
+        -h|--help)     sed -n '/^# Usage:/,/^# The page/p' "$0" | sed '$d'; exit 0 ;;
         *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
     shift
@@ -109,12 +114,63 @@ mkdir -p "$DEPLOY_DIR"
 rm -f "$DEPLOY_DIR"/dc3-web.js "$DEPLOY_DIR"/dc3-web.js.* \
       "$DEPLOY_DIR"/dc3-web.wasm "$DEPLOY_DIR"/dc3-web.wasm.*
 
+# ---------------------------------------------------------------------------
+# Page assets: deployed BEFORE either build, so a failed variant (or both)
+# still leaves a page that loads whichever wasm is deployed and says so if none
+# is (W-4: index.html used to be copied only after both builds succeeded).
+# ---------------------------------------------------------------------------
+deploy_page() {
+    # Shared, served from the root. index.html picks release/ or debug/ at runtime.
+    cp "$NATIVE_DIR/web/index.html" "$DEPLOY_DIR/index.html"
+    touch "$DEPLOY_DIR/favicon.ico"
+    # The engine also copies this POST_BUILD; doing it here keeps audio working
+    # on a page whose wasm came from an earlier build.
+    local worklet="$MILO_ENGINE_PATH/src/platform/web/assets/audio-worklet.js"
+    [ -f "$worklet" ] && cp "$worklet" "$DEPLOY_DIR/audio-worklet.js"
+
+    # Pose input (webcam -> MediaPipe -> dc3_pose_push; docs/native/POSE_INPUT.md).
+    # The page code is ours; tasks-vision (Apache-2.0) is vendored from
+    # scripts/web/node_modules (pinned in scripts/web/package.json, `npm ci
+    # --prefix scripts/web`) and the .task models from native/models, so the page
+    # needs no CDN and sits inside its own COOP/COEP origin. Anything missing here
+    # makes pose_input.js fall back to jsdelivr / storage.googleapis.com.
+    local POSE_DIR="$DEPLOY_DIR/pose" TV_DIR f m src
+    mkdir -p "$POSE_DIR/vendor/tasks-vision/wasm" "$POSE_DIR/models"
+    cp "$NATIVE_DIR"/web/pose/*.js "$POSE_DIR/"
+    TV_DIR="$REPO_ROOT/scripts/web/node_modules/@mediapipe/tasks-vision"
+    if [ -f "$TV_DIR/vision_bundle.mjs" ]; then
+        cp "$TV_DIR/vision_bundle.mjs" "$TV_DIR/package.json" "$POSE_DIR/vendor/tasks-vision/"
+        cp "$TV_DIR/wasm/vision_wasm_module_internal.js" "$TV_DIR/wasm/vision_wasm_module_internal.wasm" \
+           "$POSE_DIR/vendor/tasks-vision/wasm/"
+        for f in "$POSE_DIR/vendor/tasks-vision/wasm/vision_wasm_module_internal".{js,wasm}; do
+            if [ ! -f "$f.gz" ] || [ "$f" -nt "$f.gz" ]; then
+                if command -v brotli >/dev/null 2>&1; then brotli -q 9 -f -k -o "$f.br" "$f"; fi
+                gzip -9 -k -f "$f"
+            fi
+        done
+        echo "==> pose: tasks-vision $(sed -n 's/.*"version": "\(.*\)".*/\1/p' "$TV_DIR/package.json") vendored"
+    else
+        echo "==> pose: WARNING tasks-vision not installed (npm ci --prefix scripts/web); the page will use the CDN"
+    fi
+    for m in lite full; do
+        src="$NATIVE_DIR/models/pose_landmarker_$m.task"
+        if [ -f "$src" ]; then
+            cp -L "$src" "$POSE_DIR/models/"
+        else
+            echo "==> pose: WARNING $src missing; the page will fetch it from storage.googleapis.com"
+        fi
+    done
+    echo "==> page deployed: $DEPLOY_DIR/index.html (+ audio-worklet.js, pose/)"
+}
+deploy_page
+FAILED=()
+
 # Build one configuration (mode = release | debug) into its own emcc build dir
 # and deploy it to web/build/<mode>/. Each build dir is pinned to its mode via
 # DC3_WEB_RELEASE + CMAKE_BUILD_TYPE (+ DC3_WEB_OPT_LEVEL for release), so we
 # only reconfigure when the cache is missing, one of those drifted (e.g. a dir
 # configured before the W-3 fix, or an old single-dir build), or --reconfigure
-# was passed.
+# was passed. Runs in a subshell with errexit (see the callers below).
 build_one() {
     local mode="$1"
     local release_flag bdir ddir build_type
@@ -180,7 +236,7 @@ build_one() {
 
     if [ ! -f "$bdir/dc3-web.wasm" ]; then
         echo "ERROR: [$mode] build output not found at $bdir/dc3-web.wasm" >&2
-        exit 1
+        return 1
     fi
     cp "$bdir/dc3-web.js" "$bdir/dc3-web.wasm" "$ddir/"
 
@@ -200,44 +256,18 @@ build_one() {
     done
 }
 
-[ "$BUILD_RELEASE" = "1" ] && build_one release
-[ "$BUILD_DEBUG" = "1" ]   && build_one debug
-
-# Shared, served from the root. index.html picks release/ or debug/ at runtime.
-cp "$NATIVE_DIR/web/index.html" "$DEPLOY_DIR/index.html"
-touch "$DEPLOY_DIR/favicon.ico"
-
-# Pose input (webcam -> MediaPipe -> dc3_pose_push; docs/native/POSE_INPUT.md).
-# The page code is ours; tasks-vision (Apache-2.0) is vendored from
-# scripts/web/node_modules (pinned in scripts/web/package.json, `npm ci
-# --prefix scripts/web`) and the .task models from native/models, so the page
-# needs no CDN and sits inside its own COOP/COEP origin. Anything missing here
-# makes pose_input.js fall back to jsdelivr / storage.googleapis.com.
-POSE_DIR="$DEPLOY_DIR/pose"
-mkdir -p "$POSE_DIR/vendor/tasks-vision/wasm" "$POSE_DIR/models"
-cp "$NATIVE_DIR"/web/pose/*.js "$POSE_DIR/"
-TV_DIR="$REPO_ROOT/scripts/web/node_modules/@mediapipe/tasks-vision"
-if [ -f "$TV_DIR/vision_bundle.mjs" ]; then
-    cp "$TV_DIR/vision_bundle.mjs" "$TV_DIR/package.json" "$POSE_DIR/vendor/tasks-vision/"
-    cp "$TV_DIR/wasm/vision_wasm_module_internal.js" "$TV_DIR/wasm/vision_wasm_module_internal.wasm" \
-       "$POSE_DIR/vendor/tasks-vision/wasm/"
-    for f in "$POSE_DIR/vendor/tasks-vision/wasm/vision_wasm_module_internal".{js,wasm}; do
-        if [ ! -f "$f.gz" ] || [ "$f" -nt "$f.gz" ]; then
-            command -v brotli >/dev/null 2>&1 && brotli -q 9 -f -k -o "$f.br" "$f"
-            gzip -9 -k -f "$f"
-        fi
-    done
-    echo "==> pose: tasks-vision $(sed -n 's/.*"version": "\(.*\)".*/\1/p' "$TV_DIR/package.json") vendored"
-else
-    echo "==> pose: WARNING tasks-vision not installed (npm ci --prefix scripts/web); the page will use the CDN"
-fi
-for m in lite full; do
-    src="$NATIVE_DIR/models/pose_landmarker_$m.task"
-    if [ -f "$src" ]; then
-        cp -L "$src" "$POSE_DIR/models/"
-    else
-        echo "==> pose: WARNING $src missing; the page will fetch it from storage.googleapis.com"
-    fi
+# Each variant runs in its own errexit subshell: a failure stops THAT variant at
+# the failing command, the other variant still builds, and the script exits 1
+# naming every variant that failed. (A plain `if build_one` would run the
+# function with errexit suppressed and carry on past a failed cmake.)
+for mode in release debug; do
+    [ "$mode" = release ] && [ "$BUILD_RELEASE" != "1" ] && continue
+    [ "$mode" = debug ] && [ "$BUILD_DEBUG" != "1" ] && continue
+    set +e
+    ( set -e; build_one "$mode" )
+    rc=$?
+    set -e
+    [ "$rc" -eq 0 ] || FAILED+=("$mode")
 done
 
 echo ""
@@ -248,3 +278,16 @@ echo ""
 echo "  Serve:  python3 native/web/server.py --port 8420"
 echo "  Play:   http://localhost:8420/            (release, cached — fast reloads)"
 echo "  Debug:  http://localhost:8420/?debug=true (debug, no-store)"
+if [ "${#FAILED[@]}" -gt 0 ]; then
+    echo "" >&2
+    echo "================================================================" >&2
+    for mode in "${FAILED[@]}"; do
+        if [ -f "$DEPLOY_DIR/$mode/dc3-web.wasm" ]; then
+            echo "BUILD FAILED: $mode -- $DEPLOY_DIR/$mode/ still holds the PREVIOUS build" >&2
+        else
+            echo "BUILD FAILED: $mode -- nothing deployed for it" >&2
+        fi
+    done
+    echo "================================================================" >&2
+    exit 1
+fi
