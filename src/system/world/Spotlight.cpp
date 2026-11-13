@@ -1580,12 +1580,12 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
             int base = row + 1 + col * n;
             int uBaseN = base + n - 1;
             unsigned short uPrev = base - 1;
-            if (iFace & 2) {
-                faces[iFace++].Set(uBaseN, uPrev, base + n);
-                faces[iFace++].Set(base + n, uPrev, base);
-            } else {
+            if (!(iFace & 2)) {
                 faces[iFace++].Set(uPrev, base, uBaseN);
                 faces[iFace++].Set(uBaseN, base, base + n);
+            } else {
+                faces[iFace++].Set(uBaseN, uPrev, base + n);
+                faces[iFace++].Set(base + n, uPrev, base);
             }
         }
     }

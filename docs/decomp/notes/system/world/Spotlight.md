@@ -690,3 +690,11 @@ Inside the body (was lines 2026-2062):
     // because the literal's live range is spilt by a wider one, not because
     // the literal is spelled differently.
 ```
+
+w-low-world (lane B, 2026-11-13): face-loop arms swapped to `if (!(iFace & 2))
+{ else-arm } else { if-arm }` -- same twelve halfwords, same condition, only the
+block order changes.  90.63071 -> 91.4 canonical, fuzzy 87.33195 -> 88.12033;
+equal 131 -> 131, insert/delete 11/10 -> 10/9, total rows 252 -> 251 (target
+251-ish), one new beq/bne diff_op at the branch itself.  Found by decomp-synth
+`brpol_0` (hill_climb); its FACT_AGREED validator flagged 5/6, so it was
+re-applied by hand and checked arm by arm against the listing.
