@@ -69,19 +69,26 @@ window.dc3PoseSummary = summary;
 
 // ---------------------------------------------------------------- UI panel
 const css = `
-#pose-panel { position:absolute; left:10px; bottom:10px; width:200px; z-index:10;
-  font:12px/1.3 'Segoe UI',system-ui,sans-serif; color:#eee; pointer-events:auto; }
-#pose-view { position:relative; width:200px; height:150px; background:#000c;
+/* Bottom centre, inside the game's bottom helpbar band (the lowest ~12% of
+   the 16:9 frame), whose left and right ends carry the hand menus' back and
+   help items; sized from the game frame (cq units), not the window (W-13). */
+#canvas-container { container-type:size; }
+#pose-panel { position:absolute; left:50%; bottom:1.2cqh; transform:translateX(-50%);
+  display:flex; align-items:flex-end; gap:0.8cqh; max-width:48cqw; z-index:10;
+  font:clamp(10px, 1.65cqh, 15px)/1.3 'Segoe UI',system-ui,sans-serif; color:#eee;
+  pointer-events:auto; }
+#pose-view { position:relative; flex:none; height:10cqh; aspect-ratio:4/3; background:#000c;
   border:1px solid #444; border-radius:6px; overflow:hidden; display:none; }
 #pose-view video, #pose-view canvas { position:absolute; inset:0; width:100%; height:100%;
   object-fit:cover; transform:scaleX(-1); }
 #pose-view video { opacity:0.55; }
-#pose-status { margin-top:4px; padding:3px 7px; border-radius:4px; background:#000b;
-  border:1px solid #444; }
+#pose-side { display:flex; flex-direction:column; align-items:flex-start; gap:0.5cqh; min-width:0; }
+#pose-status { box-sizing:border-box; max-width:38cqw; padding:3px 7px; border-radius:4px;
+  background:#000b; border:1px solid #444; overflow-wrap:anywhere; }
 #pose-status.ok { border-color:#3c6; color:#9f9; }
 #pose-status.warn { border-color:#c93; color:#fc6; }
 #pose-status.err { border-color:#c44; color:#f99; }
-#pose-btn { margin-top:4px; display:none; background:#1a1a1a; color:#ccc; border:1px solid #555;
+#pose-btn { display:none; background:#1a1a1a; color:#ccc; border:1px solid #555;
   border-radius:4px; padding:3px 10px; cursor:pointer; font:inherit; }
 `;
 let ui = null;
@@ -93,7 +100,7 @@ function buildUi() {
     const panel = document.createElement('div');
     panel.id = 'pose-panel';
     panel.innerHTML = '<div id="pose-view"><video muted playsinline></video><canvas width="320" height="240"></canvas></div>' +
-        '<div id="pose-status">Camera: starting…</div><button id="pose-btn">Use camera</button>';
+        '<div id="pose-side"><div id="pose-status">Camera: starting…</div><button id="pose-btn">Use camera</button></div>';
     host.appendChild(panel);
     ui = {
         view: panel.querySelector('#pose-view'), video: panel.querySelector('video'),
