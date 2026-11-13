@@ -17,7 +17,7 @@
 # Options:
 #   --fix            install / download what is missing (see above)
 #   --no-launch      stop after the build
-#   --smoke          after the build, run a headless no-GPU YMCA flow first
+#   --smoke          after the build, run the headless YMCA flow first
 #                    (same check as scripts/mac/libcxx_proxy_build.sh --smoke)
 #   --assets PATH    game data: a directory holding gen/main_xbox.hdr (linked as
 #                    <repo>/orig-assets), or an orig-assets.tar.xz (unpacked
@@ -385,22 +385,29 @@ fi
 
 # ---- 9. optional headless smoke -------------------------------------------
 if [ "$SMOKE" = "1" ]; then
-    step "Smoke: headless no-GPU YMCA flow (8000 frames)"
+    step "Smoke: headless YMCA flow, DtaFlowTest's environment (8000 frames)"
     smoke_dir="$LOG_DIR/smoke"
     if [ "$DRY" = "1" ]; then
-        say "    DRY RUN: MILO_HEADLESS=1 MILO_NORENDER=1 DC3_TEL=1 DC3_FAST_TIME=1 MILO_MAX_FRAMES=8000 ... $BUILD_DIR/dc3-native"
+        say "    DRY RUN: MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1 DC3_TEL=1 DC3_TEL_INTERVAL=1 MILO_MAX_FRAMES=8000 ... $BUILD_DIR/dc3-native"
     else
+        # An EMPTY private cache and save dir, as DtaFlowTest uses: ymca.txt
+        # drives the first-run move tutorial, so ~/.local/share/dc3 (or a
+        # cache that has seen the tutorial) would stall it at multiuser_screen.
+        # GPU on: under MILO_NORENDER frames run far faster than the script's
+        # waits and it stops at tutorial_perform_it_screen.
         mkdir -p "$smoke_dir/cache" "$smoke_dir/saves"
-        ( cd "$REPO_ROOT" && env MILO_HEADLESS=1 MILO_NORENDER=1 DC3_TEL=1 DC3_FAST_TIME=1 \
-            MILO_MAX_FRAMES=8000 DC3_POSE=off DC3_CACHE_DIR="$smoke_dir/cache" DC3_SAVE_DIR="$smoke_dir/saves" \
-            MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt "$BUILD_DIR/dc3-native" ) \
+        ( cd "$REPO_ROOT" && env DC3_DATA="${DC3_DATA:-$DATA}" MILO_HEADLESS=1 MILO_FATAL_FAILS=0 \
+            DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1 DC3_TEL=1 DC3_TEL_INTERVAL=1 \
+            MILO_MAX_FRAMES=8000 DC3_CACHE_DIR="$smoke_dir/cache" DC3_SAVE_DIR="$smoke_dir/saves" \
+            MILO_INPUT_SCRIPT="$REPO_ROOT/scripts/dc3-input-flows/ymca.txt" "$BUILD_DIR/dc3-native" ) \
             > "$smoke_dir/run.log" 2>&1
         src=$?
         playing=$(grep -c 'DC3_TEL: .* state=playing screen=game_screen' "$smoke_dir/run.log")
         exit_line="$(grep 'DC3_EXIT:' "$smoke_dir/run.log" | tail -1)"
         say "    exit $src; frames playing on game_screen: $playing"
         say "    ${exit_line:-no DC3_EXIT line}"
-        if [ "$src" -ne 0 ] || [ "$playing" -eq 0 ]; then
+        if [ "$src" -ne 0 ] || [ "$playing" -eq 0 ] \
+           || ! printf '%s\n' "$exit_line" | grep -q 'detail=frame_cap_reached code=0'; then
             say "SMOKE FAILED: $smoke_dir/run.log"
             exit 8
         fi

@@ -13,8 +13,9 @@
 #   scripts/mac/libcxx_proxy_build.sh [--smoke] [--jobs N] [build-dir] [extra cmake args...]
 #
 #   build-dir   default <repo>/native/build-libcxx (gitignored: native/build*/)
-#   --smoke     after the build, run a headless no-GPU YMCA flow (needs
-#               orig-assets) and require it to reach state=playing on
+#   --smoke     after the build, run the headless YMCA flow DtaFlowTest runs
+#               (needs orig-assets and a GPU; wrap the script in the GPU lock
+#               on a shared box) and require it to reach state=playing on
 #               game_screen and end at the frame cap with code 0
 #   --jobs N    ninja -j (default: ninja's own)
 #
@@ -138,11 +139,19 @@ if [ ! -f "$DATA/gen/main_xbox.hdr" ]; then
 fi
 run_dir="$(mktemp -d -t dc3-libcxx-smoke.XXXXXX)"
 mkdir -p "$run_dir/cache" "$run_dir/saves"
-echo "==> smoke: headless no-GPU YMCA flow, log $run_dir/run.log"
-( cd "$REPO_ROOT" && env DC3_DATA="$DATA" MILO_HEADLESS=1 MILO_NORENDER=1 \
-    DC3_TEL=1 DC3_FAST_TIME=1 MILO_MAX_FRAMES=8000 \
+# The environment DtaFlowTest.GameplayReachesPlayingState uses
+# (native/tests/test_dta_flow.cpp RunDtaFlow), and an EMPTY private cache:
+# ymca.txt drives the first-run move tutorial, so a cache that has seen it
+# stalls the script at multiuser_screen. GPU on (no MILO_NORENDER): under
+# NORENDER frames run ~40x faster than the flow's waits were measured at and
+# it stops on tutorial_perform_it_screen. On a shared box, run this script
+# under the GPU lock.
+echo "==> smoke: headless YMCA flow (GPU), log $run_dir/run.log"
+( cd "$REPO_ROOT" && env DC3_DATA="$DATA" MILO_HEADLESS=1 MILO_FATAL_FAILS=0 \
+    DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1 DC3_TEL=1 DC3_TEL_INTERVAL=1 \
+    MILO_MAX_FRAMES=8000 \
     DC3_CACHE_DIR="$run_dir/cache" DC3_SAVE_DIR="$run_dir/saves" \
-    MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
+    MILO_INPUT_SCRIPT="$REPO_ROOT/scripts/dc3-input-flows/ymca.txt" \
     timeout 600 "$BUILD_DIR/dc3-native" ) > "$run_dir/run.log" 2>&1
 smoke_rc=$?
 playing=$(grep -c 'DC3_TEL: .* state=playing screen=game_screen' "$run_dir/run.log")
