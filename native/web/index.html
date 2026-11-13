@@ -3,32 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DC3 — WebGPU</title>
+    <title>Dance Central 3</title>
     <style>
+        /* Two layouts (W-8). Default: the player page -- the game canvas fills
+           the window at 16:9, the pose panel sits on it (pose/pose_input.js),
+           and a loading/error card shows until the first screen. ?dev (or
+           ?debug=true) adds the developer harness: status bar, key help,
+           pause/step and the engine console, under an 80vh canvas. */
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; }
         body {
-            background: #0a0a0a;
+            background: #000;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
+            overflow: hidden;
             font-family: 'Segoe UI', system-ui, sans-serif;
             color: #ccc;
         }
         #canvas-container {
             position: relative;
+            /* Largest 16:9 box that fits the window. */
+            width: min(100vw, calc(100vh * 16 / 9));
+            height: min(100vh, calc(100vw * 9 / 16));
+        }
+        #dc3-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            outline: none;
+        }
+        #loading {
+            position: absolute;
+            inset: 0;
+            z-index: 5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            background: #000;
+            color: #aaa;
+            font-size: 16px;
+            text-align: center;
+            padding: 24px;
+            transition: opacity 0.4s ease-out;
+        }
+        #loading.hidden { opacity: 0; pointer-events: none; }
+        #loading .spinner {
+            width: 28px; height: 28px; border-radius: 50%;
+            border: 3px solid #333; border-top-color: #c0f;
+            animation: dc3spin 0.9s linear infinite;
+        }
+        #loading.error { color: #f99; }
+        #loading.error .spinner { display: none; }
+        #loading-text { max-width: 760px; line-height: 1.5; }
+        #loading-text code { color: #fc6; }
+        @keyframes dc3spin { to { transform: rotate(360deg); } }
+        .dev-only { display: none; }
+
+        /* ---- developer harness (?dev / ?debug=true) ---- */
+        html.dev body { background: #0a0a0a; overflow: auto; }
+        html.dev #canvas-container {
             /* Height-first: fill 80% of viewport height, derive width from 16:9 */
             height: 80vh;
             width: min(100vw, calc(80vh * 16 / 9));
             max-width: 100vw;
         }
-        #dc3-canvas {
-            outline: 1px solid #333;
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
+        html.dev #dc3-canvas { outline: 1px solid #333; }
+        html.dev .dev-only { display: block; }
+        html.dev #toolbar.dev-only { display: flex; }
+        html.dev #loading { display: none; }
         #status {
             margin-top: 12px;
             font-size: 14px;
@@ -52,7 +99,6 @@
         }
         #toolbar {
             margin-top: 8px;
-            display: flex;
             gap: 8px;
         }
         #toolbar button {
@@ -83,6 +129,15 @@
         }
         #console .err { color: #c66; }
     </style>
+    <script>
+        // ?dev (any value but 0/false/off) or ?debug=true -> developer harness.
+        (function() {
+            var q = new URLSearchParams(location.search);
+            function on(v) { return v !== null && v !== '0' && v !== 'false' && v !== 'off'; }
+            window.dc3DevPage = on(q.get('dev')) || (on(q.get('debug')) && q.get('dev') === null);
+            if (window.dc3DevPage) document.documentElement.classList.add('dev');
+        })();
+    </script>
     <script>
         // Path-prefix shim (2026-07-31): lets this exact build be served
         // unmodified either at the server root (localhost:8420, the app
@@ -160,9 +215,10 @@
                style="position:absolute;top:0;left:0;width:100%;height:100%;
                       object-fit:contain;z-index:2147483647;background:#000;
                       pointer-events:none;transform:translateZ(0);"></video>
+        <div id="loading"><div class="spinner"></div><div id="loading-text">Loading…</div></div>
     </div>
-    <div id="status">Initializing...</div>
-    <div id="controls">
+    <div id="status" class="dev-only">Initializing...</div>
+    <div id="controls" class="dev-only">
         <span>Arrows/WASD</span> navigate &nbsp;
         <span>Enter</span> confirm &nbsp;
         <span>Esc</span> back &nbsp;
@@ -171,22 +227,47 @@
         <span>Q/E</span> LB/RB &nbsp;
         <span>Gamepad</span> auto-detected
     </div>
-    <div id="toolbar">
+    <div id="toolbar" class="dev-only">
         <button id="btn-pause" title="Pause/resume engine loop (P)">Pause</button>
         <button id="btn-step" title="Advance one frame while paused (.)">Step</button>
     </div>
-    <div id="console"></div>
+    <div id="console" class="dev-only"></div>
 
     <script>
         const status = document.getElementById('status');
         const logDiv = document.getElementById('console');
+        const loading = document.getElementById('loading');
+        const loadingText = document.getElementById('loading-text');
+        const DEV = window.dc3DevPage;
 
+        // Dev console only, capped: the engine prints thousands of lines a song.
+        const CONSOLE_MAX_LINES = 500;
         function log(text, isErr) {
+            if (!DEV) return;
             const line = document.createElement('div');
             line.textContent = text;
             if (isErr) line.className = 'err';
             logDiv.appendChild(line);
+            while (logDiv.childElementCount > CONSOLE_MAX_LINES) logDiv.firstChild.remove();
             logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // One status for both layouts: the dev status bar, and the player's
+        // loading card (hidden once the first screen is entered; an error stays).
+        function setStatus(html, cls) {
+            status.innerHTML = html;
+            status.className = 'dev-only ' + (cls || '');
+            loadingText.innerHTML = html;
+            if (cls === 'error') {
+                loading.classList.add('error');
+                loading.classList.remove('hidden');
+                var sv = document.getElementById('splash-video');
+                if (sv) sv.remove();  // it sits above everything
+            }
+        }
+        function gameRunning() {
+            if (loading.classList.contains('error')) return;
+            loading.classList.add('hidden');
         }
 
         // Hard stop if WebGPU isn't available — without it the canvas is just
@@ -201,10 +282,10 @@
                 : isChromium
                 ? 'Chrome/Chromium on Linux: launch with <code>--enable-unsafe-webgpu --enable-features=Vulkan</code>, or toggle <code>chrome://flags/#enable-unsafe-webgpu</code>.'
                 : 'Use a Chromium-based browser with WebGPU enabled, or Firefox Nightly with <code>dom.webgpu.enabled</code>.';
-            status.innerHTML =
+            setStatus(
                 '<strong>WebGPU not available in this browser.</strong><br>' +
-                '<span style="color:#aaa">DC3 needs WebGPU to render. ' + browserHelp + '</span>';
-            status.className = 'error';
+                '<span style="color:#aaa">DC3 needs WebGPU to render. ' + browserHelp + '</span>',
+                'error');
             status.style.maxWidth = '900px';
             status.style.textAlign = 'center';
             log('WebGPU not available — refusing to boot engine (would render black)', true);
@@ -215,8 +296,7 @@
             throw new Error('WebGPU unavailable');
         }
         {
-            status.textContent = 'Loading WASM...';
-            status.className = 'loading';
+            setStatus('Loading…', 'loading');
 
             var wasmReady = false;
             var Module = {
@@ -224,24 +304,23 @@
                 onRuntimeInitialized: function() {
                     wasmReady = true;
                     console.log('RUNTIME_INIT_OK');
-                    status.textContent = 'Downloading assets...';
-                    status.className = 'loading';
+                    setStatus('Downloading game data…', 'loading');
                 },
                 print: function(text) {
                     console.log(text);
                     log(text);
                     // Update status based on engine output
-                    if (text.includes('downloads complete')) {
-                        status.textContent = 'Assets loaded, initializing GPU...';
-                        status.className = 'loading';
+                    if (text.includes('downloads complete') || text.includes('assets ready')) {
+                        setStatus('Starting…', 'loading');
                     }
                     if (text.includes('GPU ready')) {
-                        status.textContent = 'Rendering';
-                        status.className = 'ok';
+                        setStatus('Rendering', 'ok');
+                    }
+                    if (text.includes("will enter '")) {
+                        gameRunning();
                     }
                     if (text.includes('GPU init failed')) {
-                        status.textContent = 'GPU not available (headless mode)';
-                        status.className = 'error';
+                        setStatus('GPU not available (headless mode)', 'error');
                     }
                 },
                 printErr: function(text) {
@@ -252,8 +331,9 @@
                     if (text.includes('adapter request failed') ||
                         text.includes('device request failed') ||
                         text.includes('device lost')) {
-                        status.textContent = 'GPU error — see console';
-                        status.className = 'error';
+                        setStatus(DEV ? 'GPU error — see console'
+                                      : 'Graphics error (WebGPU). Reload the page; if it keeps happening, restart the browser.',
+                                  'error');
                         var sv = document.getElementById('splash-video');
                         if (sv) sv.remove();
                     }
@@ -268,12 +348,14 @@
             splashVid.play().catch(function() {});
             function dismissSplash() {
                 if (!splashVid) return;
-                splashVid.style.transition = 'opacity 0.4s ease-out';
-                splashVid.style.opacity = '0';
-                setTimeout(function() {
-                    splashVid.remove();
-                    splashVid = null;
-                }, 500);
+                // Detach now: a second dismiss inside the fade (video 'ended'
+                // plus a key press) used to find splashVid already nulled by
+                // the first timer and throw "reading 'remove'" (a page error).
+                var v = splashVid;
+                splashVid = null;
+                v.style.transition = 'opacity 0.4s ease-out';
+                v.style.opacity = '0';
+                setTimeout(function() { v.remove(); }, 500);
             }
             splashVid.addEventListener('ended', dismissSplash);
             // Unmute on first interaction (autoplay requires muted)
@@ -353,8 +435,8 @@
                         return;
                     }
                     console.error('WASM_JS_ERROR: ' + e);
-                    status.textContent = 'No build deployed — run scripts/web/build.sh';
-                    status.className = 'error';
+                    setStatus(DEV ? 'No build deployed — run scripts/web/build.sh'
+                                  : 'The game could not be loaded from this server.', 'error');
                 };
                 document.body.appendChild(script);
             }
@@ -387,8 +469,7 @@
                 Module.resumeMainLoop();
                 btnPause.textContent = 'Pause';
                 btnPause.classList.remove('active');
-                status.textContent = 'Rendering';
-                status.className = 'ok';
+                setStatus('Rendering', 'ok');
             }
         }
 
@@ -401,9 +482,17 @@
             }, 0);
         }
 
+        // Player page: double-click the game for fullscreen (the pose panel is
+        // inside the same container, so it comes along).
+        document.getElementById('dc3-canvas').addEventListener('dblclick', function() {
+            var c = document.getElementById('canvas-container');
+            if (!DEV && !document.fullscreenElement && c.requestFullscreen) c.requestFullscreen().catch(function() {});
+        });
+
         btnPause.addEventListener('click', togglePause);
         btnStep.addEventListener('click', stepFrame);
         document.addEventListener('keydown', function(e) {
+            if (!DEV) return;  // P / . are developer keys
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
             if (e.key === 'p' || e.key === 'P') { e.preventDefault(); togglePause(); }
             if (e.key === '.' && paused) { e.preventDefault(); stepFrame(); }

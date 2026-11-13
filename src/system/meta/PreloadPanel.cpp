@@ -35,6 +35,17 @@ END_HANDLERS
 void PreloadPanel::SetTypeDef(DataArray *d) {
     UIPanel::SetTypeDef(d);
     d->FindData("max_cache_size", mMaxCacheSize, false);
+#ifdef HX_NATIVE
+    // loading.dta budgets 16 MiB for barks.milo + <song>.milo + <song>.mid in
+    // ON-DISC bytes: the 360 reads the compressed .milo_xbox (largest song,
+    // omg, ~10 MiB). Native reads the inflated extraction (extract_ark.sh
+    // --inflate), 2.2-2.6x larger, and 34 of the 57 song dirs no longer fit:
+    // FileCache::DumpOverSize evicts the song milo, CheckFileCached fails,
+    // on_preload_failed -> data_error -> back to the title screen (iceicebaby,
+    // takeovercontrol, omg, ...). Scale the budget by the inflate ratio's
+    // ceiling so it means what it meant on disc.
+    mMaxCacheSize *= 4;
+#endif
     CheckTypeDef("song_mgr");
     CheckTypeDef("current_song");
     CheckTypeDef("on_preload_ok");

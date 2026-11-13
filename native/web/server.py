@@ -13,9 +13,9 @@ API endpoints:
   GET /api/bundle/screen/<name>  — per-screen dependency bundle from
                                    native/web/screen-<name>.manifest (missing
                                    manifest → harmless empty bundle)
-  GET /api/bundle/sfx_pcm        — every .ogg kXMA SFX sidecar in one bundle
-                                   (walks <assets>/sfx/gen/xma_pcm dynamically;
-                                   see scripts/web/gen_sfx_ogg.py)
+  GET /api/bundle/sfx_pcm        — the boot set of .ogg kXMA SFX sidecars in
+                                   one bundle (keys in native/web/sfx_bundle.keys;
+                                   see scripts/web/gen_sfx_sidecars.sh)
   GET /                          — index.html (build artifacts)
   GET /dc3-web.{js,wasm}         — WASM build output
 """
@@ -41,6 +41,15 @@ BUILD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "build")
 SCREEN_MANIFEST_DIR = os.path.dirname(os.path.abspath(__file__))
 _SCREEN_NAME_RE = re.compile(r"^[a-z0-9_]+$")
 ASSETS_DIR = None  # Set via --assets-dir, DC3_ASSETS env, or auto-detect
+
+# kXMA SFX sidecars (W-7). scripts/web/gen_sfx_sidecars.sh writes an .ogg for
+# every key in native/web/sfx_sidecars.manifest into the deploy dir; requests
+# for sfx/gen/xma_pcm/<file> are answered from there first, then from
+# <assets>/sfx/gen/xma_pcm (the older, partial set desktop runs wrote). The
+# boot bundle carries only the keys in sfx_bundle.keys.
+SFX_SIDECAR_REL = "sfx/gen/xma_pcm"
+SFX_SIDECAR_DIR = os.path.join(BUILD_DIR, "sfx_sidecars")
+SFX_BUNDLE_KEYS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sfx_bundle.keys")
 
 # On-demand wire compression for /api/file (ported from rb3's R5/W5 work —
 # rb3/docs/native/web-perf-roadmap/R5-wire-compression.md). The big .milo_xbox
@@ -541,30 +550,46 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
         self._emit_bundle(entries, cache_name=f"screen-{name}")
 
     def _serve_sfx_bundle(self):
-        """Every .ogg kXMA SFX sidecar as one compressed bundle (the format
-        _emit_bundle produces). The web XmaPcmSidecar bridge otherwise pays one
-        blocking per-key sync XHR per distinct SFX as its bank loads (measured:
-        514 fetches / 82.8 MB raw PCM during one boot->song_select run); the
-        boot state machine async-prefetches this instead.
+        """The boot set of .ogg kXMA SFX sidecars as one compressed bundle (the
+        format _emit_bundle produces). The web XmaPcmSidecar bridge otherwise
+        pays one blocking per-key sync XHR per distinct SFX as its bank loads
+        (measured: 514 fetches / 82.8 MB raw PCM during one boot->song_select
+        run); the boot state machine async-prefetches this instead.
 
-        Walks the sidecar dir dynamically — the .ogg set is DERIVED, gitignored
-        content (scripts/web/gen_sfx_ogg.py over a native run's .pcm output), so
-        a checked-in manifest would only go stale. An absent/empty dir emits an
-        empty bundle; the per-key sync fetch remains the backstop."""
+        Which keys: native/web/sfx_bundle.keys. Before W-7 this walked the
+        sidecar dir, which was fine while the dir held only what desktop runs
+        had decoded (1035 keys, ~29 MB); with the complete set (4760 keys) a walk
+        would triple the boot download, so the old set is frozen in that file
+        and everything else is fetched per key on demand. Each key comes from
+        the generated dir first, then <assets>/sfx/gen/xma_pcm. No keys file:
+        the old walk of both dirs."""
         if not ASSETS_DIR:
             self._json_error(503, "No assets directory configured")
             return
-        side_rel = "sfx/gen/xma_pcm"
-        side_dir = os.path.join(ASSETS_DIR, side_rel)
+        side_rel = SFX_SIDECAR_REL
+        dirs = [SFX_SIDECAR_DIR, os.path.join(ASSETS_DIR, side_rel)]
+        keys = None
+        if os.path.isfile(SFX_BUNDLE_KEYS):
+            with open(SFX_BUNDLE_KEYS) as fh:
+                keys = sorted({ln.split()[0] for ln in fh
+                               if ln.strip() and not ln.startswith("#")})
+        else:
+            keys = sorted({f[:-4] for d in dirs if os.path.isdir(d)
+                           for f in os.listdir(d) if f.endswith(".ogg")})
         entries = []
-        if os.path.isdir(side_dir):
-            for fname in sorted(os.listdir(side_dir)):
-                if not fname.endswith(".ogg"):
-                    continue
-                with open(os.path.join(side_dir, fname), "rb") as fh:
-                    entries.append((f"{side_rel}/{fname}", fh.read()))
+        missing = 0
+        for key in keys:
+            for d in dirs:
+                path = os.path.join(d, key + ".ogg")
+                if os.path.isfile(path):
+                    with open(path, "rb") as fh:
+                        entries.append((f"{side_rel}/{key}.ogg", fh.read()))
+                    break
+            else:
+                missing += 1
         total = sum(len(d) for _r, d in entries)
-        self.log_message("sfx-bundle: %d oggs, %.1f MB", len(entries), total / 1e6)
+        self.log_message("sfx-bundle: %d oggs, %.1f MB (%d listed keys missing)",
+                         len(entries), total / 1e6, missing)
         self._emit_bundle(entries, cache_name="sfx_pcm")
 
     def _emit_bundle(self, entries, cache_name=None):
@@ -705,6 +730,10 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
             return
 
         full_path = os.path.join(ASSETS_DIR, safe)
+        if os.path.dirname(safe) == SFX_SIDECAR_REL:
+            generated = os.path.join(SFX_SIDECAR_DIR, os.path.basename(safe))
+            if os.path.isfile(generated):
+                full_path = generated
 
         # Prefer AI-upscaled _high variant for video files when available.
         # e.g., videos/intro.webm -> videos/intro_high.webm

@@ -7,30 +7,45 @@
 #
 # DUAL BUILD: produces TWO deployable builds you switch between at runtime via a
 # URL param (?debug=true), each from its OWN cmake build dir + cmake config:
-#   - release/  — DC3_WEB_RELEASE=ON: debug-info stripped (-g0) for the size win,
-#                 brotli/gzip precompressed. Served `immutable` + version-busted
-#                 by server.py, so http://localhost:8420/ RELOADS ARE FAST (the
+#   - release/  — DC3_WEB_RELEASE=ON, CMAKE_BUILD_TYPE=Release: -O3 (--opt to
+#                 change), -g0 with function names kept, brotli/gzip
+#                 precompressed. Served `immutable` + version-busted by
+#                 server.py, so http://localhost:8420/ RELOADS ARE FAST (the
 #                 browser reuses the cached + already-compiled wasm).
-#   - debug/    — DC3_WEB_RELEASE=OFF: full -O0 -g2 wasm (DWARF), gzip only.
-#                 Served `no-store`. Loaded by http://localhost:8420/?debug=true.
+#   - debug/    — DC3_WEB_RELEASE=OFF, CMAKE_BUILD_TYPE=Debug: -O0, linked -g2
+#                 (function names), gzip only. Served `no-store`. Loaded by
+#                 http://localhost:8420/?debug=true.
+# (Until 2026-11-13 these were swapped: both dirs were configured Release, so
+# "debug" was -O3 and "release" -O0. docs/native/WEB.md, PLAN W-3.)
 #
 # Usage:
 #   scripts/web/build.sh                # build BOTH release + debug (default)
 #   scripts/web/build.sh --release      # release only
 #   scripts/web/build.sh --debug        # debug only (fast iteration loop)
 #   scripts/web/build.sh --reconfigure  # force a fresh cmake configure
-#   scripts/web/build.sh --opt Os       # higher -O for release (opt-in; -O>0 is
-#                                       # risky for the matched-fork — defaults O0)
+#   scripts/web/build.sh --opt O2       # release -O level (default O3)
+#   scripts/web/build.sh --no-sfx       # skip the kXMA SFX sidecars (below)
+#
+# kXMA SFX sidecars: scripts/web/gen_sfx_sidecars.sh fills
+# native/web/build/sfx_sidecars/ with an .ogg for every key in
+# native/web/sfx_sidecars.manifest (first run ~1 min; then a cheap check). It
+# needs ffmpeg, libav headers and orig-assets; a failure is reported like a
+# failed variant.
+#
+# The page (index.html, favicon, audio-worklet.js, pose/) is deployed FIRST,
+# whatever happens to the builds, so a failed variant never leaves the deploy
+# dir without a page. A variant that fails to build keeps its previous
+# artifacts (if any) and the script exits 1 naming it, after trying the other.
 #
 # Output:
 #   native/build-web/         — emcc build dir for debug   (DC3_WEB_RELEASE=OFF)
 #   native/build-web-release/ — emcc build dir for release (DC3_WEB_RELEASE=ON)
 #   native/web/build/
-#     index.html, audio-worklet.js          — shared, served from the root
+#     index.html, audio-worklet.js, pose/   — shared, served from the root
 #     release/{dc3-web.js,.wasm,.br,.gz}     — cached (immutable)
 #     debug/{dc3-web.js,.wasm,.gz}           — no-store
 #
-# audio-worklet.js is POST_BUILD-copied to web/build/ root by
+# audio-worklet.js is also POST_BUILD-copied to web/build/ root by
 # milo_engine_apply_web_target_options() (it loads via a document-relative
 # addModule(), so it must sit at the root for BOTH builds).
 set -euo pipefail
@@ -41,17 +56,19 @@ DEPLOY_DIR="$NATIVE_DIR/web/build"  # pure deploy dir — what server.py serves
 
 BUILD_DEBUG=1
 BUILD_RELEASE=1
-OPT_LEVEL=""
+OPT_LEVEL="O3"   # release -O level; debug is always -O0
 FORCE_RECONFIGURE=0
+BUILD_SFX=1
 while [ $# -gt 0 ]; do
     case "$1" in
         --release)     BUILD_DEBUG=0; BUILD_RELEASE=1 ;;
         --debug)       BUILD_DEBUG=1; BUILD_RELEASE=0 ;;
         --both|--all)  BUILD_DEBUG=1; BUILD_RELEASE=1 ;;
         --reconfigure) FORCE_RECONFIGURE=1 ;;
+        --no-sfx)      BUILD_SFX=0 ;;
         --opt)         shift; OPT_LEVEL="$1" ;;
         --opt=*)       OPT_LEVEL="${1#--opt=}" ;;
-        -h|--help)     sed -n '17,23p' "$0"; exit 0 ;;
+        -h|--help)     sed -n '/^# Usage:/,/^# The page/p' "$0" | sed '$d'; exit 0 ;;
         *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
     shift
@@ -106,18 +123,76 @@ mkdir -p "$DEPLOY_DIR"
 rm -f "$DEPLOY_DIR"/dc3-web.js "$DEPLOY_DIR"/dc3-web.js.* \
       "$DEPLOY_DIR"/dc3-web.wasm "$DEPLOY_DIR"/dc3-web.wasm.*
 
+# ---------------------------------------------------------------------------
+# Page assets: deployed BEFORE either build, so a failed variant (or both)
+# still leaves a page that loads whichever wasm is deployed and says so if none
+# is (W-4: index.html used to be copied only after both builds succeeded).
+# ---------------------------------------------------------------------------
+deploy_page() {
+    # Shared, served from the root. index.html picks release/ or debug/ at runtime.
+    cp "$NATIVE_DIR/web/index.html" "$DEPLOY_DIR/index.html"
+    touch "$DEPLOY_DIR/favicon.ico"
+    # The engine also copies this POST_BUILD; doing it here keeps audio working
+    # on a page whose wasm came from an earlier build.
+    local worklet="$MILO_ENGINE_PATH/src/platform/web/assets/audio-worklet.js"
+    [ -f "$worklet" ] && cp "$worklet" "$DEPLOY_DIR/audio-worklet.js"
+
+    # Pose input (webcam -> MediaPipe -> dc3_pose_push; docs/native/POSE_INPUT.md).
+    # The page code is ours; tasks-vision (Apache-2.0) is vendored from
+    # scripts/web/node_modules (pinned in scripts/web/package.json, `npm ci
+    # --prefix scripts/web`) and the .task models from native/models, so the page
+    # needs no CDN and sits inside its own COOP/COEP origin. Anything missing here
+    # makes pose_input.js fall back to jsdelivr / storage.googleapis.com.
+    local POSE_DIR="$DEPLOY_DIR/pose" TV_DIR f m src
+    mkdir -p "$POSE_DIR/vendor/tasks-vision/wasm" "$POSE_DIR/models"
+    cp "$NATIVE_DIR"/web/pose/*.js "$POSE_DIR/"
+    TV_DIR="$REPO_ROOT/scripts/web/node_modules/@mediapipe/tasks-vision"
+    if [ -f "$TV_DIR/vision_bundle.mjs" ]; then
+        cp "$TV_DIR/vision_bundle.mjs" "$TV_DIR/package.json" "$POSE_DIR/vendor/tasks-vision/"
+        cp "$TV_DIR/wasm/vision_wasm_module_internal.js" "$TV_DIR/wasm/vision_wasm_module_internal.wasm" \
+           "$POSE_DIR/vendor/tasks-vision/wasm/"
+        for f in "$POSE_DIR/vendor/tasks-vision/wasm/vision_wasm_module_internal".{js,wasm}; do
+            if [ ! -f "$f.gz" ] || [ "$f" -nt "$f.gz" ]; then
+                if command -v brotli >/dev/null 2>&1; then brotli -q 9 -f -k -o "$f.br" "$f"; fi
+                gzip -9 -k -f "$f"
+            fi
+        done
+        echo "==> pose: tasks-vision $(sed -n 's/.*"version": "\(.*\)".*/\1/p' "$TV_DIR/package.json") vendored"
+    else
+        echo "==> pose: WARNING tasks-vision not installed (npm ci --prefix scripts/web); the page will use the CDN"
+    fi
+    for m in lite full; do
+        src="$NATIVE_DIR/models/pose_landmarker_$m.task"
+        if [ -f "$src" ]; then
+            cp -L "$src" "$POSE_DIR/models/"
+        else
+            echo "==> pose: WARNING $src missing; the page will fetch it from storage.googleapis.com"
+        fi
+    done
+    echo "==> page deployed: $DEPLOY_DIR/index.html (+ audio-worklet.js, pose/)"
+}
+deploy_page
+FAILED=()
+if [ "$BUILD_SFX" = "1" ]; then
+    "$REPO_ROOT/scripts/web/gen_sfx_sidecars.sh" || FAILED+=("sfx-sidecars")
+fi
+
 # Build one configuration (mode = release | debug) into its own emcc build dir
 # and deploy it to web/build/<mode>/. Each build dir is pinned to its mode via
-# DC3_WEB_RELEASE, so we only reconfigure when the cache is missing, the flag
-# drifted (e.g. an old single-dir build), or --reconfigure was passed.
+# DC3_WEB_RELEASE + CMAKE_BUILD_TYPE (+ DC3_WEB_OPT_LEVEL for release), so we
+# only reconfigure when the cache is missing, one of those drifted (e.g. a dir
+# configured before the W-3 fix, or an old single-dir build), or --reconfigure
+# was passed. Runs in a subshell with errexit (see the callers below).
 build_one() {
     local mode="$1"
-    local release_flag bdir ddir
+    local release_flag bdir ddir build_type
     if [ "$mode" = "release" ]; then
         release_flag=ON
+        build_type=Release
         bdir="$NATIVE_DIR/build-web-release"
     else
         release_flag=OFF
+        build_type=Debug
         bdir="$NATIVE_DIR/build-web"
     fi
     ddir="$DEPLOY_DIR/$mode"
@@ -125,11 +200,11 @@ build_one() {
 
     local cmake_args=(
         -DMILO_ENGINE_PATH="$MILO_ENGINE_PATH"
-        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_BUILD_TYPE="$build_type"
         -DBUILD_TESTS=OFF
         -DDC3_WEB_RELEASE="$release_flag"
     )
-    [ -n "$OPT_LEVEL" ] && cmake_args+=(-DDC3_WEB_OPT_LEVEL="$OPT_LEVEL")
+    [ "$mode" = "release" ] && cmake_args+=(-DDC3_WEB_OPT_LEVEL="$OPT_LEVEL")
     # imgui is a FetchContent git clone (full history) at configure time, and
     # concurrent clones from GitHub can crawl for many minutes. Reuse a checkout
     # that is already at the pinned commit -- $DC3_IMGUI_SOURCE_DIR, or the main
@@ -151,11 +226,12 @@ build_one() {
     if [ ! -f "$bdir/CMakeCache.txt" ] || [ "$FORCE_RECONFIGURE" = "1" ]; then
         need_configure=1
     else
-        local cached_release cached_opt
+        local cached_release cached_opt cached_type
         cached_release="$(grep -E '^DC3_WEB_RELEASE:BOOL=' "$bdir/CMakeCache.txt" 2>/dev/null | cut -d= -f2 || echo OFF)"
         cached_opt="$(grep -E '^DC3_WEB_OPT_LEVEL:STRING=' "$bdir/CMakeCache.txt" 2>/dev/null | cut -d= -f2 || echo O0)"
-        if [ "$cached_release" != "$release_flag" ] \
-           || { [ -n "$OPT_LEVEL" ] && [ "$cached_opt" != "$OPT_LEVEL" ]; }; then
+        cached_type="$(grep -E '^CMAKE_BUILD_TYPE:STRING=' "$bdir/CMakeCache.txt" 2>/dev/null | cut -d= -f2 || true)"
+        if [ "$cached_release" != "$release_flag" ] || [ "$cached_type" != "$build_type" ] \
+           || { [ "$mode" = "release" ] && [ "$cached_opt" != "$OPT_LEVEL" ]; }; then
             echo "==> [$mode] build flags changed; reconfiguring + relinking"
             rm -f "$bdir/dc3-web.wasm" "$bdir/dc3-web.js"
             need_configure=1
@@ -163,7 +239,7 @@ build_one() {
     fi
 
     if [ "$need_configure" = "1" ]; then
-        echo "==> [$mode] configuring ($bdir, DC3_WEB_RELEASE=$release_flag)"
+        echo "==> [$mode] configuring ($bdir, DC3_WEB_RELEASE=$release_flag, $build_type)"
         emcmake cmake -S "$NATIVE_DIR" -B "$bdir" "${cmake_args[@]}"
     fi
 
@@ -172,7 +248,7 @@ build_one() {
 
     if [ ! -f "$bdir/dc3-web.wasm" ]; then
         echo "ERROR: [$mode] build output not found at $bdir/dc3-web.wasm" >&2
-        exit 1
+        return 1
     fi
     cp "$bdir/dc3-web.js" "$bdir/dc3-web.wasm" "$ddir/"
 
@@ -192,44 +268,18 @@ build_one() {
     done
 }
 
-[ "$BUILD_RELEASE" = "1" ] && build_one release
-[ "$BUILD_DEBUG" = "1" ]   && build_one debug
-
-# Shared, served from the root. index.html picks release/ or debug/ at runtime.
-cp "$NATIVE_DIR/web/index.html" "$DEPLOY_DIR/index.html"
-touch "$DEPLOY_DIR/favicon.ico"
-
-# Pose input (webcam -> MediaPipe -> dc3_pose_push; docs/native/POSE_INPUT.md).
-# The page code is ours; tasks-vision (Apache-2.0) is vendored from
-# scripts/web/node_modules (pinned in scripts/web/package.json, `npm ci
-# --prefix scripts/web`) and the .task models from native/models, so the page
-# needs no CDN and sits inside its own COOP/COEP origin. Anything missing here
-# makes pose_input.js fall back to jsdelivr / storage.googleapis.com.
-POSE_DIR="$DEPLOY_DIR/pose"
-mkdir -p "$POSE_DIR/vendor/tasks-vision/wasm" "$POSE_DIR/models"
-cp "$NATIVE_DIR"/web/pose/*.js "$POSE_DIR/"
-TV_DIR="$REPO_ROOT/scripts/web/node_modules/@mediapipe/tasks-vision"
-if [ -f "$TV_DIR/vision_bundle.mjs" ]; then
-    cp "$TV_DIR/vision_bundle.mjs" "$TV_DIR/package.json" "$POSE_DIR/vendor/tasks-vision/"
-    cp "$TV_DIR/wasm/vision_wasm_module_internal.js" "$TV_DIR/wasm/vision_wasm_module_internal.wasm" \
-       "$POSE_DIR/vendor/tasks-vision/wasm/"
-    for f in "$POSE_DIR/vendor/tasks-vision/wasm/vision_wasm_module_internal".{js,wasm}; do
-        if [ ! -f "$f.gz" ] || [ "$f" -nt "$f.gz" ]; then
-            command -v brotli >/dev/null 2>&1 && brotli -q 9 -f -k -o "$f.br" "$f"
-            gzip -9 -k -f "$f"
-        fi
-    done
-    echo "==> pose: tasks-vision $(sed -n 's/.*"version": "\(.*\)".*/\1/p' "$TV_DIR/package.json") vendored"
-else
-    echo "==> pose: WARNING tasks-vision not installed (npm ci --prefix scripts/web); the page will use the CDN"
-fi
-for m in lite full; do
-    src="$NATIVE_DIR/models/pose_landmarker_$m.task"
-    if [ -f "$src" ]; then
-        cp -L "$src" "$POSE_DIR/models/"
-    else
-        echo "==> pose: WARNING $src missing; the page will fetch it from storage.googleapis.com"
-    fi
+# Each variant runs in its own errexit subshell: a failure stops THAT variant at
+# the failing command, the other variant still builds, and the script exits 1
+# naming every variant that failed. (A plain `if build_one` would run the
+# function with errexit suppressed and carry on past a failed cmake.)
+for mode in release debug; do
+    [ "$mode" = release ] && [ "$BUILD_RELEASE" != "1" ] && continue
+    [ "$mode" = debug ] && [ "$BUILD_DEBUG" != "1" ] && continue
+    set +e
+    ( set -e; build_one "$mode" )
+    rc=$?
+    set -e
+    [ "$rc" -eq 0 ] || FAILED+=("$mode")
 done
 
 echo ""
@@ -240,3 +290,18 @@ echo ""
 echo "  Serve:  python3 native/web/server.py --port 8420"
 echo "  Play:   http://localhost:8420/            (release, cached — fast reloads)"
 echo "  Debug:  http://localhost:8420/?debug=true (debug, no-store)"
+if [ "${#FAILED[@]}" -gt 0 ]; then
+    echo "" >&2
+    echo "================================================================" >&2
+    for mode in "${FAILED[@]}"; do
+        if [ "$mode" = sfx-sidecars ]; then
+            echo "FAILED: sfx sidecars -- see scripts/web/gen_sfx_sidecars.sh output above (--no-sfx skips)" >&2
+        elif [ -f "$DEPLOY_DIR/$mode/dc3-web.wasm" ]; then
+            echo "BUILD FAILED: $mode -- $DEPLOY_DIR/$mode/ still holds the PREVIOUS build" >&2
+        else
+            echo "BUILD FAILED: $mode -- nothing deployed for it" >&2
+        fi
+    done
+    echo "================================================================" >&2
+    exit 1
+fi
