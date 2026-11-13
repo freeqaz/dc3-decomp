@@ -164,6 +164,16 @@ Inside the body (was lines 1125-1136):
             // inlined DecodeDxt3Alpha (88.5).
 ```
 
+Added by lane w-low-rndobj, 2026-11-13:
+
+```text
+BEHAVIOUR VERDICT: AGREES (92.86 / 92.02, unchanged).  dxt = mOrder(0xc) & 0x38;
+block = (mWidth(u16 0x4) >> 2) * (y/4) + x/4 with signed div/mod; DXT1 (8):
+block*8, DecodeDxtColor(..., true, r,g,b,a); else block*16, colour from +8 with
+a scratch alpha, then DXT3 (0x10) nibble-masked alpha replicated, or
+DecodeDxt5Alpha(block, xr, yr, a).
+```
+
 
 ## `?LoadDIB@RndBitmap@@QAA_NPAVBinStream@@I@Z`
 
