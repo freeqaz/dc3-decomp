@@ -7,8 +7,8 @@ page is a dated snapshot, and [PLAN.md](PLAN.md) is where open work lives.
 ## One-line answer
 
 With a controller, the Linux desktop build is playable: Perform mode runs from
-boot to the results screen and back, and saves persist. The web build plays a
-whole song too. **Neither can be played by dancing yet**: the webcam path has
+boot to the results screen and back, for all 45 quickplay songs, and saves
+persist. The web build plays a whole song too, and every song reaches gameplay. **Neither can be played by dancing yet**: the webcam path has
 never run against a real camera, crashes when the player holds still, and does
 not exist on web. macOS last ran in March and would not build today.
 
@@ -139,6 +139,120 @@ party winner screens are white (PLAN P-4). Without a camera there is nothing to
 photograph; with camera frames the snapshot target now renders the crew photo
 (alpha 0, see POSE_INPUT.md *Player on screen*), but no run has reached a
 results screen showing one yet.
+
+### Every song
+
+`np-songs`, 2026-11-13. Every quickplay song (the 45 song rows of song select;
+the other song dirs are campaign/minigame/mocap content: `blackandtan*`,
+`dcimindcontrol`, `hb_camp_*`, `mocapbpm*`) through the real menus, Perform,
+Easy:
+
+- **Desktop, whole songs** (`scripts/native_song_sweep.py --no-gpu`):
+  controller-driven menus, in-process `choreo` performer
+  (`DC3_POSE_PERFORM=choreo`), `DC3_FAST_TIME`, the venue the game picks.
+  45/45 reach gameplay and the results; no bounce, hang, crash, assert or
+  `Debug::Fail`. Ratings: all perfect on 43 (macarena and chingaling are in
+  the pose table below). Peak RSS 429–510 MB, 14–52 s wall per song.
+  Each song's picked row was checked against the log. Each venue's NOTIFY set
+  is the same for all its songs, plus one per song:
+  `DataNode::Equal ... game_modes.dta`, where `$just_practiced_song` (never set
+  before a practice) is compared with the song. That is the image's
+  `MILO_NOTIFY_ONCE`, not a native fault. Per song, the only file lines not
+  shared by the venue are the loading-music `.mid` (PLAN H-11) and the
+  song-select preview movies passed on the way (PLAN H-10).
+- **Desktop, GPU** (`--song-seconds 40`, gameplay screenshot at beat 48):
+  45/45 reach gameplay with venue, dancers and HUD drawn; ratings all
+  perfect to 40 s except macarena (`So_Fly` again). Peak RSS 627–851 MB. The
+  "awesome" post-process static covers most frames once the player is flawless
+  (the `np-postproc` lane's G-14, an engine fix). 7 of 45 single shots came
+  back all black (aroundtheworld, boyfriend, chingaling, omg and
+  teachmehowtodougie in dci; stereolove in dclive; supersonic in streetside),
+  as did omg in throneroom. Rerun with two shots each (same song and venue), all 10 frames drew. So it is transient and not
+  explained (a screenshot race, or a real black frame). **Venues:** omg in
+  each of the six venues (`--venue`, which sets `meta_performer
+  set_venue_pref`; throneroom included, although quickplay locks it) reaches
+  gameplay, all perfect, 732–849 MB. **Results screen:** ymca whole song on
+  GPU reached the results with the right card, stars and score (one run;
+  the whole-song no-GPU runs reach the results for all 45). The single
+  results shot predates the H-9 diagnosis: it read 62/0/0/5, the dropout,
+  because the GPU run passed ~3 min of wall clock.
+- **Web** (`scripts/web/song-sweep.mjs`, release build of this branch,
+  Chromium, fresh page per song, gameplay + 30 s): 45/45 reach `game_screen`
+  and stay 30 s. Every chain after song select is
+  `multiuser → loading → preloading → real_loading → game_screen`, with no
+  bounce. That includes **Ice Ice Baby and In Da Club, which bounced
+  to the title on `09586f7d9`**. 0 page errors. The same three 404s on every
+  song: `watches.dta` (`Watcher`), `devkit:/dancers.dta` (`HamPlayerData`) and
+  `devkit:/locale/eng/locale_keep.dta`, all optional debug reads. Load
+  (`loading_screen` → `game_screen`) took 2.5–12.4 s. The wasm heap
+  (byteLength, geometric growth, so a reservation) was 363–523 MB; omg and
+  youmakemefeeldc reach 522.6 MB, past the old 512 MB cap and inside the
+  1024 MB one. The first try of chingaling picked iamthebest: a dropped
+  ArrowDown at 400 ms gaps. At `--gap 800` it plays.
+- **Preload bug (PLAN W-6) was web-only.** Desktop reads the ark's compressed
+  `.milo_xbox`: the largest set (barks + milo + mid) is mocapbpm93_v3 at
+  13.22 MiB, inside loading.dta's 16 MiB. With the ×4 removed, `dc3-native`
+  plays omg to gameplay (no `Could not cache`). Web reads the inflated
+  extraction: 34 sets are over 16 MiB, and the largest is omg at 25.20 MiB.
+  Guards: `PreloadBudgetTest.DesktopReadsTheArk` (every set through the real
+  `PreloadPanel::sCache`, plus a control one byte under the largest that must
+  evict) and `.WebReadsInflatedFiles` (milo-tests), and
+  `LargestSongFlowTest.OmgPreloadsAndReachesGameplay` (`DC3_DTA_FLOW_TESTS`,
+  ~18 s). With the ×4 removed, the web test fails on 34 songs. With the
+  budget divided by 4, the flow test fails, and the log shows
+  `preloading_screen → meta_loading_uisink_default_screen → title_screen`.
+
+Per song (desktop: whole song, no GPU, `choreo` performer, Easy; GPU: to 40 s;
+web: to gameplay + 30 s, stand-in player; the venue is the game's random pick
+and differs between runs):
+
+| song | venue (desktop run) | ratings P/A/O/B | score | peak RSS MB, no GPU | peak RSS MB, GPU | web load s | web heap MB |
+|---|---|---|---|---|---|---|---|
+| 12step | dclive | 54/0/0/0 | 1,844,900 | 438 | 633 | 6.1 | 435.5 |
+| aint2proud2beg | houseparty | 66/0/0/0 | 2,311,620 | 450 | 730 | 3 | 435.5 |
+| aroundtheworld | dci | 65/0/0/0 | 2,289,900 | 478 | 738 | 7.2 | 435.5 |
+| bassdownlow | dci | 57/0/0/0 | 2,050,980 | 493 | 764 | 8.9 | 435.5 |
+| betteroffalone | dci | 77/0/0/0 | 2,680,860 | 475 | 753 | 4.1 | 435.5 |
+| bewareoftheboys | streetside | 50/0/0/0 | 1,758,020 | 450 | 723 | 5.6 | 383.3 |
+| boomboompow | dclive | 69/0/0/0 | 2,418,058 | 437 | 644 | 3.2 | 377.8 |
+| boyfriend | dci | 57/0/0/0 | 2,050,980 | 495 | 770 | 11.2 | 435.5 |
+| calabria | dclive | 69/0/0/0 | 2,486,812 | 446 | 710 | 3 | 435.5 |
+| chingaling | dci | 60/0/0/1 | 2,068,050 | 483 | 733 | 3.4 | 435.5 |
+| cupidshuffle | dclive | 77/0/0/0 | 2,811,180 | 436 | 633 | 2.9 | 435.5 |
+| dabutt | streetside | 57/0/0/0 | 1,936,950 | 456 | 740 | 9.2 | 435.5 |
+| discoinferno | rollerrink | 64/0/0/0 | 2,219,310 | 460 | 736 | 3.1 | 435.5 |
+| electricboogie | streetside | 61/0/0/0 | 2,134,908 | 451 | 736 | 2.6 | 435.5 |
+| everybody | houseparty | 58/0/0/0 | 2,137,860 | 444 | 733 | 2.6 | 435.5 |
+| firework | dclive | 73/0/0/0 | 2,578,458 | 447 | 712 | 3.2 | 435.5 |
+| getlow | dclive | 65/0/0/0 | 2,282,375 | 443 | 733 | 2.7 | 435.5 |
+| giveituptome | dclive | 49/0/0/0 | 1,680,611 | 429 | 627 | 2.8 | 362.9 |
+| hello | streetside | 77/0/0/0 | 2,811,180 | 457 | 726 | 5.3 | 457.1 |
+| iamthebest | dci | 67/0/0/0 | 2,398,500 | 487 | 737 | 11.5 | 455.8 |
+| iceicebaby | streetside | 61/0/0/0 | 2,202,537 | 459 | 774 | 3.2 | 435.5 |
+| indaclub | dclive | 49/0/0/0 | 1,711,424 | 439 | 630 | 3.6 | 435.5 |
+| iwillsurvive | rollerrink | 65/0/0/0 | 2,241,030 | 470 | 750 | 3.1 | 435.5 |
+| letthemusicplay | streetside | 73/0/0/0 | 2,593,980 | 461 | 809 | 8.2 | 457.9 |
+| macarena | houseparty | 49/4/0/0 | 1,706,653 | 441 | 783 | 4.8 | 382.7 |
+| moveslikejagger | streetside | 87/0/0/0 | 3,093,540 | 468 | 817 | 10.8 | 460.5 |
+| mrsaxobeat | dci | 78/0/0/0 | 2,832,218 | 493 | 785 | 3.3 | 435.5 |
+| nowthatwefoundlove | houseparty | 57/0/0/0 | 1,985,689 | 442 | 725 | 2.8 | 380.9 |
+| omg | dci | 81/0/0/0 | 2,891,441 | 510 | 847 | 4.4 | 522.6 |
+| onthefloor | dci | 76/0/0/0 | 2,653,940 | 490 | 754 | 11.6 | 459.9 |
+| sambadejaneiro | streetside | 74/0/0/0 | 2,614,692 | 457 | 736 | 2.5 | 457.9 |
+| scream | dci | 66/0/0/0 | 2,441,940 | 498 | 766 | 5 | 459.3 |
+| sexyandiknowit | dci | 73/0/0/0 | 2,593,980 | 499 | 851 | 4.3 | 460.5 |
+| starships | dci | 73/0/0/0 | 2,593,980 | 496 | 759 | 10.3 | 435.5 |
+| stereolove | dclive | 68/0/0/0 | 2,305,616 | 439 | 686 | 4.9 | 435.5 |
+| supersonic | streetside | 75/0/0/0 | 2,571,517 | 460 | 751 | 4.7 | 435.5 |
+| takeovercontrol | dci | 73/0/0/0 | 2,593,980 | 483 | 805 | 7.1 | 459.3 |
+| teachmehowtodougie | dci | 41/0/0/0 | 1,442,820 | 493 | 788 | 3.3 | 435.5 |
+| thehustle | rollerrink | 59/0/0/0 | 2,224,740 | 457 | 731 | 2.6 | 435.5 |
+| turnthebeataround | rollerrink | 77/0/0/0 | 2,811,180 | 460 | 739 | 2.7 | 435.5 |
+| whatdoesntkillyou | houseparty | 82/0/0/0 | 2,919,780 | 450 | 802 | 3.8 | 435.5 |
+| wildones | dclive | 78/0/0/0 | 2,765,866 | 435 | 657 | 2.6 | 385 |
+| ymca | rollerrink | 67/0/0/0 | 2,398,500 | 454 | 734 | 3.4 | 383.3 |
+| yougotittherightstuff | streetside | 69/0/0/0 | 2,393,070 | 454 | 735 | 2.9 | 435.5 |
+| youmakemefeeldc | dci | 73/0/0/0 | 2,522,663 | 502 | 835 | 4.1 | 522.6 |
 
 ## Pose input — see [POSE_INPUT.md](POSE_INPUT.md)
 
