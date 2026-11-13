@@ -323,7 +323,11 @@ For example, if capture + MediaPipe + socket is 150 ms slower than the Kinect, u
 each packet. Recorded footage cannot stand in for that, and
 [Video calibration](#video-calibration-np-video-calib-2026-11-13) explains why.
 That run did measure how much accuracy the knob needs: the score curve is
-flat to ~4% over ±50 ms around its peak.
+flat to ~4% over ±50 ms around its peak. `DC3_POSE_LATENCY_LOG` now prints the
+capture → game part of the delay, and the live fake-camera grid (np-tracking)
+is in [Latency on the live path](#latency-on-the-live-path-l-4). That grid
+prefers 0, for reasons a real webcam does not share, so the default still
+stays unset.
 
 ### Running the matrix
 
@@ -730,6 +734,230 @@ scratch):
   `mFloorNormal` not stored, roll ignored, fixed pitch ignored, first
   estimate blended, a 1 s window, blend = 1. Plus the Python flag sabotage.
 
+## Detection dropouts and re-acquired dancers (P-12, W-10, `np-tracking`)
+
+**State (2026-11-13).** A dancer MediaPipe loses for up to ~2 s no longer
+pauses the song, and a dancer it finds again as someone new is bound and
+scored. A player who really leaves still pauses.
+
+### What a Kinect and the image do
+
+A Kinect keeps one tracking id for a person in view; joints it cannot see are
+reported INFERRED, not dropped. A new id means the person was really lost.
+The image is built for that:
+
+- `SkeletonRecoverer` (`GestureMgr::sMaxRecoveryTime` 1.0 s,
+  `sMinRecoveryTime` 0.7 s, `sMaxRecoveryDistance` 0.3 m) keeps a lost id bound
+  for up to 1 s and moves the player to a new skeleton that appears near
+  where she was.
+- After that, `SkeletonChooser::SetPlayerSkeletonNavData` unbinds her
+  (`HamPlayerData::IsPlaying` is tracking id > 0), and
+  `Game::CheckForSkeletonLoss` pauses when fewer players are playing than the
+  mode needs. perform.dta's `pause_on_skeleton_loss` arms from
+  first_move_beat − 8, outside freestyle.
+
+### P-12: the mid-song pause with the dancer in view
+
+**Cause (MEASURED).** np-dogfood3's Cupid Shuffle clip
+(`cupidshuffle_p2.mp4`): MediaPipe lost the dancer at song 42.00 s and found
+her again at 43.43 s, 1.43 s later, under a new id. The 1 s recovery ran out
+and the game paused at 43.25 s. Two things were short of a Kinect:
+
+- `CentroidTracker` forgot an id after 15 frames (0.5 s), so she came back
+  as a new person.
+- The C++ slot layer dropped her the frame she was lost.
+
+The dogfood's "0.7 s" gap was measured on a different recording, which is
+also why the replay control did not pause. Over the 18 songs of
+np-video-calib's stream fixtures: 50 in-song dropouts, the longest 1.2 s,
+7 longer than 1.0 s. That is the "0-person frames paused 3 songs" noted there.
+
+**Fix.**
+
+- **Tracker memory 2 s** (`max_missing` 15 → 60 frames,
+  `native/scripts/pose_mediapipe.py`, same in `native/web/pose/pose_geometry.js`).
+  That is the 1 s hold plus the image's 1 s recovery. The filter age-out moved
+  from 60 to 90 frames to match.
+- **Dropout hold** (`GestureMgr_Native.cpp` `AssignSlots` / `FillPersonSlots`,
+  `DC3_POSE_HOLD_MS`, default 1000). A person the detector loses keeps her
+  slot and tracking id for that much sensor time. Every joint is reported at
+  its last pose with confidence capped at INFERRED, the Kinect's own word for
+  "not seen". Then the slot is released and the image's recovery gives its own
+  1 s. Exceptions:
+  - Not for someone seen for under 500 ms (a false detection).
+  - Ended early when a new id appears within 0.3 m of the held hip (she is
+    back under another id).
+  - `0` turns it off. Capped at 5 s.
+
+**Before / after (MEASURED, live `pose_server`, same clip and driver).**
+Before: paused at 43.25 s with 21 moves rated. After: no pause, the whole
+song, 85 moves rated, 507,276.
+
+### W-10: the unscored song (the auto-assign fought the chooser)
+
+**Reproduced on desktop (MEASURED).** Boyfriend through the live
+`pose_server`, np-video-calib footage. Two runs out of two scored 0 with
+no move cards, and "New player detected! Raise your hand to join." was on
+screen. The fake camera's cut from its held first frame to the song frame
+moved her hip by 0.25 of the frame. She came back under a new id, and for two
+frames MediaPipe reported her twice. With the old id held, the game saw two
+skeletons for about a second.
+
+**Mechanism.** The image's chooser round-robins an unbound skeleton for a
+raised hand (in a song; standing still in the menus). While it waits,
+`UpdatePlayerSkeletonNavData` drops that skeleton's id from the player ids, so
+`SetPlayerSkeletonNavData` unbinds whoever holds it. `NativeAutoAssignPlayers`,
+the native policy that binds a player with no skeleton, bound her back on
+every sensor frame: **634 re-binds in one song**. Each unbind is an Overshell
+`player_quit` (perform.dta `on_player_quit`: `start_score_move_index 1000`,
+flash cards cleared). Each rebind is a `player_join` that restarts the drop-in
+grace. So nothing was ever scored. The auto-assign also bound player 2 to the
+extra skeleton in Perform, and the chooser switched its active player back and
+forth (the slot binding swapped every ~10 frames).
+
+**Fix (`GestureMgr_Native.cpp`, `SkeletonChooser.h`).**
+
+1. A skeleton the auto-assign binds stops being the chooser's candidate
+   (`SkeletonChooser::NativeSkeletonBound`, an `HX_NATIVE` inline in the
+   header; `UpdatePlayerSkeletonNavData` is still 100.0% under `name_check`).
+   The image clears the candidate the same way when its own filter fires.
+2. Player 2 is auto-assigned only in a mode that needs two players
+   (`requires_2_players` / `is_in_party_mode`, the predicate the stand-in count
+   already used). Anywhere else, a second person joins the image's way, by
+   raising a hand.
+
+**Before / after (MEASURED, Boyfriend, same clip and driver):**
+
+| Build | Score | Moves rated | Re-binds |
+|---|---|---|---|
+| before | 0 | 0 | — |
+| rule 2 only | 0 | 0 | 634 |
+| both rules | 1,129,261 | 65 (90% passed) | 2 |
+
+The original's card is 1,803,226. A later grid run of the same song read
+545,236 while other lanes loaded the box (pose age up to 340 ms, below).
+
+**Web (INFERRED).** The dogfood's web second song ran the same code, the
+same auto-assign and chooser, over a looping mjpeg whose loop point is the
+same kind of cut. The tracker change is ported (parity test below). A local
+web rerun of two songs is in PLAN W-10.
+
+### Tests
+
+- `tests/test_pose_tracker.py` (ctest `PoseTracker.Python`):
+  - a 1.43 s dropout keeps the id; past 2 s is a new person; the bound is
+    exactly 60 frames;
+  - two people keep their ids through one dropping out, in either detection
+    order;
+  - `TrackerWebParity`: `pose_geometry.js` under node gives the same ids on
+    every sequence.
+- `native/tests/test_native_pose_socket.cpp` `PoseSensorHoldTest` (6): the
+  hold keeps slot and id with joints inferred at the last pose; it is bounded;
+  `0` is off; a 3-frame detection is not held; a new id where she stood ends it;
+  a newcomer elsewhere does not.
+- `native/tests/test_native_pose_dropout.cpp` (`DC3_DTA_FLOW_TESTS`, real time,
+  since the recoverer counts UI seconds):
+  - `PoseDropoutTest`: two 1.43 s dropouts in YMCA, no pause;
+  - `PoseDropoutHoldOffTest`: the same with the hold off pauses at 21.2 s,
+    which shows the dropouts land where a pause is possible;
+  - `PoseExitTest`: she leaves at 20 s, paused at 22.1 s.
+- `native/tests/test_native_second_person.cpp` (`DC3_DTA_FLOW_TESTS`,
+  `scripts/synthetic_kinect.py --jump-at` / `--second-person-from`):
+  - `ReacquiredDancerTest`: at 20 s she reappears 0.6 m away under a new
+    id. She is on the new id in every later sample, re-bound at most 6 times,
+    and scored to the end;
+  - `SecondPersonPerformTest`: a second person walks in at 20 s and never
+    raises a hand. Player 2 is never bound, player 1 keeps her id, and the song
+    is scored.
+- **Sabotage, all caught:**
+  - C++ hold: off, presence gate removed, bound removed, re-acquire check
+    removed, inferred flag removed (5 of 5).
+  - Python and JS `max_missing` back to 15.
+  - Flow, hold disabled in code: paused at 21.16 s.
+  - Candidate rule removed: 6,059 re-binds.
+  - Player-2 rule removed: player 2 bound in every sample, and the re-acquired
+    dancer's scoring stops at the jump (112,944 → 147,696).
+  - `TwoPlayer` / `OnePerson` / `NoCamera` battle tests still pass with the
+    fix.
+
+### Latency on the live path (L-4)
+
+**What "default" is.** `DC3_POSE_LATENCY_MS` unset means `scoring.dta`'s
+`latency_offset`, 100 ms (`MoveDir::LoadScoring` → `Dc3SensorLatencySeconds`).
+At 0 the scorer compares the skeleton at song time S with the choreography at
+S itself.
+
+**What the fake camera's delay is (MEASURED).** `DC3_POSE_LATENCY_LOG=1` prints
+the age of each pose frame when the game takes it, from `pose_server.py`'s
+capture stamp. On an unloaded box it was 61–67 ms median (p10 ~30, p90 ~70).
+Other lanes' builds pushed it to 100–340 ms for minutes at a time. Every row
+below gives its median and the share of 5 s windows over 100 ms.
+
+**Grid (MEASURED, 2026-11-13).** Six songs at Medium through the live
+`pose_server` on np-video-calib's footage, a fake camera that picks each frame
+by the game's song clock (`fake_cam_pose_server.py`), and the original's own
+results card as the yardstick. Cupid is a different recording from its card,
+so read its column across, not down.
+
+| song | card | 100 | 100 again | 50 | 0 | 0 again |
+|---|---|---|---|---|---|---|
+| macarena | 1,985,201 | 0.65 | 0.65 | 0.62 (18%) | 0.79 (11%) | 0.60 (44%) |
+| cupidshuffle | 3,045,166 | 0.18 | 0.15 | 0.20 (19%) | 0.35 (14%) | 0.10 (68%) |
+| starships | 2,153,727 | 0.95 | 0.90 | 0.67 (20%) | 0.73 | 0.32 (63%) |
+| indaclub | 2,013,394 | 0.60 | 0.57 | 0.70 | 0.85 | 0.62 (38%) |
+| 12step | 2,128,773 | 0.29 (20%) | 0.36 | 0.48 | 0.63 | 0.40 (24%) |
+| boyfriend | 1,803,226 | 0.30 (34%) | 0.49 | 0.77 | 0.88 | 0.61 (22%) |
+| **mean** | | **0.49** | **0.52** | **0.57** | **0.70** | **0.44** |
+| *median pose age, ms* | | *61–66* | *66–73* | *66–69* | *65–67* | ***78–120*** |
+
+Each cell is the score as a share of the card; a percentage in brackets is the share of 5 s windows whose pose age was over 100 ms (shown when it is at least 10%).
+
+With the box quiet (pose age 61–67 ms), 0 beat the default on 5 of 6 songs,
+with a mean of 0.70 of the card against 0.49 and 0.52 at the default. That
+extends the dogfood's Macarena result (0.56 → 0.83) to five more songs. Two
+caveats come out of the same grid:
+
+- **The best knob moves with the real delay.** The "0 again" round ran while
+  other lanes loaded the box, and the median pose age rose to 78–120 ms. At 0
+  its mean fell to **0.44, below the default**. The two songs with the highest
+  age read lowest: Cupid at 120 ms scored 0.10, Starships at 117 ms scored
+  0.32. INFERRED from that: setting the knob below the true delay is the
+  costly mistake, so a default should err high.
+- **Repeats are noisy.** At the default, the two runs agree within 0.05 on
+  Macarena, Cupid, Starships and Indaclub. 12 Step and Boyfriend differ by
+  0.07 and 0.19, and in both cases the low run had the higher pose age (20%
+  and 34% of windows over 100 ms). Boyfriend at the default read 545,236 in
+  one run and 892,382 in the other. A single run per cell cannot separate
+  knobs closer than about 0.1.
+
+**Why that does not set a webcam's default (INFERRED).** The knob is the whole
+delay from the player's movement to the scorer, on the song clock. The fake
+camera has only part of it:
+
+- the capture → game age above (~63 ms);
+- no camera exposure or capture buffering: the frame is a decoded file, and
+  `pose_server.py` stamps it when it reads it;
+- no audio output latency: a real player moves to what she hears, which lags
+  the song clock by the output buffer;
+- the footage's dancer has her own timing: np-video-calib found the score
+  peaks with a shared lead of −50 ms.
+
+A real webcam adds the two missing terms, each typically tens of ms. That puts
+a live setup near the image's 100, and the original's 100 was tuned for a
+Kinect, whose own pipeline is of the same order. **Decision: the default stays
+unset (100) for a live webcam.** For the fake-camera harness, pass
+`DC3_POSE_LATENCY_MS=0`. Scores taken at the default on that harness (the
+dogfood's live-path numbers) read about 30% low.
+
+**For the owner's session (L-5):** run with `DC3_POSE_LATENCY_LOG=1` and note
+the age. Play one song three times, at `DC3_POSE_LATENCY_MS` 50, 100 and 150,
+and keep the best. Do not assume the curve is flat. The replay curve is
+within 4% over −100..0, but on this live grid, with the box quiet, 50 ms off
+the best cost 19% (0.70 → 0.57 mean), so the sweep is worth the three songs.
+Close other GPU work first. A pose age that climbs during the sweep moves the
+optimum (the "0 again" column), so a run whose logged age differs from the
+others is not comparable to them.
+
 ## Player on screen (P-4)
 
 **State (2026-11-13, `np-player-view`):** the player's silhouette is drawn by
@@ -1013,9 +1241,10 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
 | P-4 | Player on screen. **Silhouette done** (`np-player-view`): protocol v3 / `dc3_camera_push` carry the picture and a person mask, a `LiveCameraInput` stand-in feeds the decompiled `StreamRenderer`, and the cursor and gameplay boxes draw the player ([Player on screen](#player-on-screen-p-4)). Left: photo moments, `DepthBuffer3D`'s draw, the `pose_flash` / `preview.mesh` entries (not camera), a live webcam. | M | all |
 | P-5 | ~~Tests~~ **Done** (`np-pose-desk`): ctests `PoseSocketReaderTest`, `PoseCocoMappingTest`, `PoseSensorSlotTest` (no GPU, no game data); keypoint fixture + `PoseFixture.Python`; the gate runs the whole song and judges means, final scores and per-move distances (above). Open: standing still out-scores a different dance (P-7). | — | all |
 | P-6 | ~~Remove the dead ncnn/YOLO path~~ **Done** (`np-pose-desk`). | — | all |
-| P-7 | Scoring believability. **Answered** (`np-scoring`, [above](#scoring-believability-p-7-np-scoring)): the leniency is the original's. Real Kinect data (UTD-MHAD) scores like our inputs, and the scoring code is 100% matched. Added: the 30 Hz in-process performer + matrix, and the `DC3_POSE_LATENCY_MS` knob. **Video calibration** (`np-video-calib`, [above](#video-calibration-np-video-calib-2026-11-13)): 16 story-mode songs from a stream, replayed at Medium against the original's own results cards, 1162 = 1162 moves. Perfect+awesome 0.91 vs 0.96, but perfect 0.54 vs 0.79; score 74% of the original's (78% with a 10° camera-pitch correction). Still-body jitter ~1.7 mm (VIDEO mode). A causal One Euro filter costs 13–26% of the score, so there is no smoothing. Knob default stays unset: a recording cannot measure a live pipeline, and the score curve is flat over ±50 ms. Left: a live webcam's latency from `pose_server.py`'s capture stamps (P-2); camera-pitch auto-levelling (whole-body lean +6.9° ± 1.4° over the reference on this camera); the perfect/awesome gap (arms carry the limb error). | S | all |
+| P-7 | Scoring believability. **Answered** (`np-scoring`, [above](#scoring-believability-p-7-np-scoring)): the leniency is the original's. Real Kinect data (UTD-MHAD) scores like our inputs, and the scoring code is 100% matched. Added: the 30 Hz in-process performer + matrix, and the `DC3_POSE_LATENCY_MS` knob. **Video calibration** (`np-video-calib`, [above](#video-calibration-np-video-calib-2026-11-13)): 16 story-mode songs from a stream, replayed at Medium against the original's own results cards, 1162 = 1162 moves. Perfect+awesome 0.91 vs 0.96, but perfect 0.54 vs 0.79; score 74% of the original's (78% with a 10° camera-pitch correction). Still-body jitter ~1.7 mm (VIDEO mode). A causal One Euro filter costs 13–26% of the score, so there is no smoothing. Knob default stays unset: a recording cannot measure a live pipeline, and the score curve is flat over ±50 ms. Left: a live webcam's latency (P-2, L-5; `DC3_POSE_LATENCY_LOG` prints the capture → game part, and the fake-camera grid is in [Latency on the live path](#latency-on-the-live-path-l-4)); camera-pitch auto-levelling (whole-body lean +6.9° ± 1.4° over the reference on this camera); the perfect/awesome gap (arms carry the limb error). | S | all |
 | P-8 | macOS: `/proc/self/exe` → `_NSGetExecutablePath`; camera permission goes to the Python child. See [MACOS.md](MACOS.md). | S–M | mac |
 | P-9 | ~~Web pose~~ **Done in `np-web-pose`** (see [Web](#web)). Left: never run on a real webcam/permission prompt; GPU delegate and the lite model unmeasured on an idle box; no camera preview inside the game (P-4). | — | web |
+| P-12 | ~~Mid-song pause with the dancer in view~~ **Done (`np-tracking`)**: a 1 s dropout hold plus 2 s tracker memory; a re-acquired dancer is bound and scored (W-10). See [Detection dropouts](#detection-dropouts-and-re-acquired-dancers-p-12-w-10-np-tracking). Left: a live webcam. | — | all |
 
 ## Gesture menus
 
