@@ -54,7 +54,7 @@ window.dc3PoseSummary = summary;
 
 // ---------------------------------------------------------------- UI panel
 const css = `
-#pose-panel { position:absolute; right:10px; bottom:10px; width:200px; z-index:10;
+#pose-panel { position:absolute; left:10px; bottom:10px; width:200px; z-index:10;
   font:12px/1.3 'Segoe UI',system-ui,sans-serif; color:#eee; pointer-events:auto; }
 #pose-view { position:relative; width:200px; height:150px; background:#000c;
   border:1px solid #444; border-radius:6px; overflow:hidden; display:none; }
