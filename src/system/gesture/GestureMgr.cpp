@@ -47,7 +47,7 @@ extern bool Dc3ControllerModeForced();
 GestureMgr::GestureMgr()
     : mLiveCamInput(LiveCameraInput::sInstance), mPauseOnSkeletonLossMode(2), mIDEnabled(1),
 #ifdef HX_NATIVE
-      // forced (default): boot in controller mode, no Kinect; faithful: the
+      // forced (and `auto`, which reads forced until GestureMgr_NativeInit sees a pose provider): boot in controller mode; faithful: the
       // image's 0.  Controller mode policy, docs/debugging/native.md.
       mInControllerMode(Dc3ControllerModeForced()),
 #else
@@ -429,7 +429,7 @@ void GestureMgr::SetIdentificationEnabled(bool enabled) {
 void GestureMgr::SetInControllerMode(bool mode) {
 #ifdef HX_NATIVE
     // Controller mode policy (DC3_CONTROLLER_MODE, docs/debugging/native.md):
-    // forced (default) pins controller mode on -- no Kinect gesture input, and
+    // forced (and `auto` without a pose provider) pins controller mode on -- no Kinect gesture input, and
     // DTA calls exit_controller_mode during screen transitions with nothing to
     // call enter back; faithful stores the argument, as the image does.
     mInControllerMode = Dc3ControllerModeForced() ? true : mode;
