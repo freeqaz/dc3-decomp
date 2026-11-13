@@ -193,6 +193,15 @@ Above the definition (was lines 210-282):
 // call, so the charged rows are placement alone.
 ```
 
+lane C / w-low-gesture-char (2026-11-13):
+
+```text
+// Behaviour re-check (89.868 canonical): NOT A BUG.  Same stores both sides
+// (mTracking 0 -> 0xaa0, -1 -> 0xaac, 0.0f -> 0xac4, 0 -> 0xac8/0xacc/0xad0,
+// &0xad0 spill to 0x50(r31)), same 0x13-iteration PaddedJointPos array ctor
+// (target names it OnlyReturns: ICF), same Init() call; only the order differs.
+```
+
 
 ## `?Poll@Skeleton@@QAAXHABUSkeletonFrame@@@Z`
 
