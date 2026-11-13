@@ -8,9 +8,17 @@ page is a dated snapshot, and [PLAN.md](PLAN.md) is where open work lives.
 
 With a controller, the Linux desktop build is playable: Perform mode runs from
 boot to the results screen and back, for all 45 quickplay songs, and saves
-persist. The web build plays a whole song too, and every song reaches gameplay. **Neither can be played by dancing yet**: the webcam path has
-never run against a real camera, crashes when the player holds still, and does
-not exist on web. macOS last ran in March and would not build today.
+persist. The web build plays a whole song too, and every song reaches gameplay.
+
+**By dancing (updated 2026-11-13 at `4b14849bc`, from lane reports):** recorded
+footage of a real dancer, sent through the live `pose_server` path, plays a
+whole song to the results card, with menus driven by gesture and the player's
+silhouette on screen; the web build tracks a fake camera and scores. The
+hold-still crash is fixed. **No real webcam has driven the game yet**, and a
+live player would hit a mid-song "stand in front of the sensor" pause when
+tracking drops for ~0.7 s (PLAN P-12). What stands between here and a live
+playtest is [PLAN track L](PLAN.md#track-l--live-playtest-readiness). macOS is
+prepared from Linux and has not been built on a Mac since March.
 
 ## Linux desktop
 
