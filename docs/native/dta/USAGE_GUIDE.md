@@ -137,7 +137,7 @@ Quick reference for patterns used in overlay files:
 
 At startup:
 1. `NativeDetectDataDir()` finds the game data (typically `orig-assets/`)
-2. `NativeDetectOverlayDir()` looks for `native/dta/` relative to the data dir or repo root
+2. `NativeDetectOverlayDir()` takes the executable's own tree first (`<exe dir>/../dta`, i.e. `native/build/dc3-native` → `native/dta`), then falls back to `native/dta/` relative to the data dir or repo root. The fallback alone picked the MAIN checkout's overlay in a worktree (its `orig-assets` is a symlink to main's), including under ctest
 3. Both run before `SystemPreInit()` and archive initialization
 
 The overlay dir is optional — if not found, the engine logs a message and continues normally.
@@ -152,7 +152,7 @@ cmake --build native/build --target dc3-native -- -j$(nproc)
 ./native/build/dc3-native
 
 # Verify overlay is picked up (check startup log)
-# Should see: "DC3 Native: overlay dir=orig-assets/../native/dta"
+# Should see: "DC3 Native: overlay dir=/abs/path/to/this/tree/native/dta (next to the executable)"
 
 # Negative test: rename overlay, verify original behavior
 mv native/dta/ui/options/options_gameplay.dta native/dta/ui/options/options_gameplay.dta.bak

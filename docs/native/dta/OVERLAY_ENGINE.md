@@ -25,7 +25,9 @@ The intercept happens in two functions in the shared engine's
 `../milo-native-engine/src/platform/File_Native.cpp` — that is the copy every native target links;
 DC3's own `native/src/platform/File_Native.cpp` is removed from the engine-linking source list in
 `native/CMakeLists.txt` and is not built. The overlay directory itself is found at startup by
-`NativeDetectOverlayDir()` in `native/src/platform/System_Native.cpp`, which passes it to the
+`NativeDetectOverlayDir()` in `native/src/platform/System_Native.cpp` -- the executable's own tree
+(`<exe dir>/../dta`) first, so a worktree build reads its own `native/dta` and not main's through the
+`orig-assets` symlink (guard: `NativeOptionsTest.OverlayIsThisTreesNativeDta`) -- which passes it to the
 engine's `NativeSetOverlayDir()`.
 
 **`FileIsLocal(filename)`** — determines whether a file is on disk or in the archive.
