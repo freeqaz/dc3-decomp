@@ -532,5 +532,45 @@ class RealScriptTest(unittest.TestCase):
         self.assertLess(secs, ps.FIRST_FRAME_TIMEOUT_S + 3.0)
 
 
+class NoAudioImportTest(unittest.TestCase):
+    """mediapipe 1.0.0 imports sounddevice eagerly; on a PipeWire + rtkit box
+    that made Python's main thread SCHED_FIFO under an RLIMIT_RTTIME budget,
+    and the kernel SIGKILLed the server during the model load (the GPD
+    playtest box, exit 137, every run). MediaPipeBackend must import
+    mediapipe without the sound system (pose_mediapipe.block_audio_import)."""
+
+    PROBE = (
+        "import sys; sys.path.insert(0, %r)\n"
+        "import pose_mediapipe as pm\n"
+        "%s\n"
+        "try:\n"
+        "    pm.MediaPipeBackend('/nonexistent/model.task')\n"
+        "except Exception:\n"
+        "    pass\n"
+        "import mediapipe\n"
+        "print('SD', type(sys.modules.get('sounddevice')).__name__)\n")
+
+    def probe(self, sabotage=""):
+        code = self.PROBE % (os.path.join(REPO, "native", "scripts"), sabotage)
+        p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120)
+        line = [l for l in p.stdout.splitlines() if l.startswith("SD ")]
+        self.assertTrue(line, p.stderr[-800:])
+        return line[0].split()[1]
+
+    def test_constructing_the_backend_does_not_import_sounddevice(self):
+        try:
+            import importlib.util
+            if importlib.util.find_spec("mediapipe") is None:
+                self.skipTest("mediapipe not installed for this python")
+            have_sd = importlib.util.find_spec("sounddevice") is not None
+        except ImportError:
+            self.skipTest("mediapipe not importable")
+        self.assertEqual(self.probe(), "NoneType")   # blocked, never loaded
+        if have_sd:
+            # Control: with the guard disabled the same probe loads it, so the
+            # assertion above is not vacuous on this python.
+            self.assertEqual(self.probe("pm.block_audio_import = lambda: None"), "module")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
