@@ -128,9 +128,12 @@ replaces Bink entirely.
   when not building with Emscripten (`if(ENABLE_FFMPEG AND NOT EMSCRIPTEN)`) and defines `HX_FFMPEG`.
 - **Video:** `BinkMovieSys::CreateMovieImpl()` in `src/system/moviebink/BinkMovieSys.cpp` returns
   `new FFmpegMovieImpl()` under `#ifdef HX_FFMPEG`, else `BinkMovieImpl`. Bink SDK init in that file
-  is guarded `#ifndef HX_FFMPEG`. The definition that runs is the DC3-local
-  `native/src/platform/FFmpegMovieImpl.cpp` (measured: its `sound closed` line is what a run
-  prints); `../milo-native-engine/src/platform/FFmpegMovieImpl.cpp` is an older copy.
+  is guarded `#ifndef HX_FFMPEG`. The definition that runs is the engine's
+  `../milo-native-engine/src/platform/FFmpegMovieImpl.cpp`. DC3's own copy was deleted when the
+  pin moved to `4e738fe` (H-5). The movie-sound work below is on the engine branch `np-media`
+  (private clone `/home/free/tmp/claude-1000/np-media-engine`, commit `dedfdfb`). It is not
+  landed yet, and `MovieAudio.*` compiles only against an engine that has it
+  (`MILO_MOVIE_AUDIO_SOURCE`).
 - **Movie sound (G-15, `np-media`).** The image plays a movie's sound through Bink's own XAudio2
   output (`BinkSetSoundSystem(BinkOpenXAudio2)`, `BinkMovieSys_Xbox.cpp`), so it is the movie's
   clock. `BinkMovieImpl::BeginFromFile(path, volume, noSound, loop, preload, fillWidth, track, …)`:
@@ -169,7 +172,7 @@ replaces Bink entirely.
 |---|---|---|
 | `BinkFFmpeg.*` (OpenBikFile, DecodeFirstVideoFrame, DecodeAudioTrack, SeekAndDecode) | `native/tests/test_bink_ffmpeg.cpp` | `MILO_TEST_BIK` |
 | `FFmpegIntegration.*`, `FFmpegMovieImplError.BadFile` | `native/tests/test_bink_integration.cpp` | `MILO_TEST_BIK` |
-| `MovieAudio.*` (the track is the file's, sample-exact; `noSound`; loop is the 4th flag; localized track; picture follows the sound clock; fader volume), `MovieAudioSourceRing.*` | `native/tests/test_movie_audio.cpp` | game assets |
+| `MovieAudio.*` (the track is the file's, sample-exact; `noSound`; loop is the 4th flag; localized track; picture follows the sound clock; fader volume), `MovieAudioSourceRing.*` | `native/tests/test_movie_audio.cpp` | game assets; an engine with `MILO_MOVIE_AUDIO_SOURCE` |
 | Audio device / receiver / synth tests | `native/tests/test_audio.cpp` | audio device for some; `MILO_TEST_BIK` for the bik cases |
 | Mid-song seek: `VorbisReader::DoRawSeek` re-keys AES-CTR; the counter word must land little-endian on a little-endian host | `native/tests/test_native_audioseek.cpp` | game assets (see the file header) |
 
