@@ -24,9 +24,9 @@ for cfg in "$@"; do
     fi
     [ -n "${GRID_EVAL:-}" ] && args+=(--eval "$GRID_EVAL")
     [ -f "$out/$name/summary.json" ] && { echo "[grid] $name: done already"; continue; }
-    timeout 1500 python3 "$here/scripts/native_song_sweep.py" --out "$out/$name" --songs "$songs" \
+    timeout 2400 python3 "$here/scripts/native_song_sweep.py" --out "$out/$name" --songs "$songs" \
         --no-gpu --jobs "$jobs" --port-base "$port" --difficulty medium \
         --performer "replay:$fx/{song}.dc3pose" --env DC3_POSE_PERFORM_REPLAY_SYNC=song \
-        --stall 60 "${args[@]}" > "$out/$name.log" 2>&1
+        --stall 60 --timeout 420 "${args[@]}" > "$out/$name.log" 2>&1
     echo "[grid] $name: exit $?"
 done

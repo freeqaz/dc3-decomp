@@ -11,10 +11,15 @@
              the camera would have seen had the picture been flipped.  Use it
              to test which way a recording faces.
   --shift S  add S seconds to every timestamp.
+  --pitch D  rotate every joint about the camera's x axis by D degrees
+             (y' = y cos - z sin, z' = y sin + z cos): positive D undoes a
+             camera that looks DOWN at the player, whose feet then read
+             farther away than the head.
 
   python3 -I scripts/video_calib/fixture_transform.py IN OUT [--hold] [--mirror] [--shift 0.1]
 """
 import argparse
+import math
 import sys
 
 # DC3 joint order (native/scripts/pose_mediapipe.py DC3_JOINT_NAMES)
@@ -31,6 +36,16 @@ def mirror(vals):
     return [v for jj in out for v in jj]
 
 
+def pitch(vals, deg):
+    c, s = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+    out = list(vals)
+    for i in range(20):
+        y, z = vals[i * 4 + 1], vals[i * 4 + 2]
+        out[i * 4 + 1] = y * c - z * s
+        out[i * 4 + 2] = y * s + z * c
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("inp")
@@ -38,6 +53,7 @@ def main():
     ap.add_argument("--hold", action="store_true")
     ap.add_argument("--mirror", action="store_true")
     ap.add_argument("--shift", type=float, default=0.0)
+    ap.add_argument("--pitch", type=float, default=0.0)
     a = ap.parse_args()
 
     header, frames = [], []
@@ -52,6 +68,8 @@ def main():
         vals = [float(v) for v in p[2:]] if p[1] == "1" else None
         if vals is not None and a.mirror:
             vals = mirror(vals)
+        if vals is not None and a.pitch:
+            vals = pitch(vals, a.pitch)
         frames.append([t, vals])
     held = 0
     if a.hold:
@@ -66,7 +84,7 @@ def main():
     with open(a.out, "w") as o:
         for h in header:
             o.write(h + "\n")
-        o.write(f"# fixture_transform.py hold={int(a.hold)} mirror={int(a.mirror)} shift={a.shift} "
+        o.write(f"# fixture_transform.py hold={int(a.hold)} mirror={int(a.mirror)} shift={a.shift} pitch={a.pitch} "
                 f"held={held}\n")
         for t, v in frames:
             if v is None:
