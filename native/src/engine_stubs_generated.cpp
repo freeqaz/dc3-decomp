@@ -95,9 +95,9 @@ int NuiFitnessStopTracking() { HX_STUB_TRACE("NuiFitnessStopTracking"); return 0
 // NuiIdentityAbort: typed definition in xbox_link_stubs.cpp (desktop + web).
 // NuiIdentityGetEnrollmentInformation: typed definition in xbox_link_stubs.cpp.
 // NuiIdentityIdentify: typed definition in xbox_link_stubs.cpp (desktop + web).
-int NuiImageStreamGetNextFrame() { HX_STUB_TRACE("NuiImageStreamGetNextFrame"); return 0; }
-int NuiImageStreamOpen() { HX_STUB_TRACE("NuiImageStreamOpen"); return 0; }
-int NuiImageStreamReleaseFrame() { HX_STUB_TRACE("NuiImageStreamReleaseFrame"); return 0; }
+// NuiImageStreamGetNextFrame / NuiImageStreamOpen / NuiImageStreamReleaseFrame:
+// typed definitions in platform/CameraStream_Native.cpp (desktop + web), the
+// webcam stand-in for the Kinect colour and depth streams (PLAN P-4).
 int NuiInitialize() { HX_STUB_TRACE("NuiInitialize"); return 0; }
 int NuiShutdown() { HX_STUB_TRACE("NuiShutdown"); return 0; }
 int NuiSkeletonTrackingDisable() { HX_STUB_TRACE("NuiSkeletonTrackingDisable"); return 0; }

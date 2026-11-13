@@ -298,6 +298,201 @@ class ServerLoopTest(unittest.TestCase):
         self.assertTrue(all(b > a for a, b in zip(mp_ts, mp_ts[1:])))
 
 
+def _have_cv2_numpy():
+    try:
+        import cv2  # noqa: F401
+        import numpy  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def read_raw_packets(sock, n, timeout=10.0):
+    """Whole packet bodies (after the length prefix)."""
+    sock.settimeout(timeout)
+    buf, out = b"", []
+    while len(out) < n:
+        chunk = sock.recv(1 << 20)
+        if not chunk:
+            break
+        buf += chunk
+        while len(buf) >= 4:
+            (length,) = struct.unpack_from("<I", buf)
+            if len(buf) < 4 + length:
+                break
+            out.append(buf[4:4 + length])
+            buf = buf[4 + length:]
+    return out
+
+
+def split_v3(body):
+    """(header, persons, camera block) of a v3 body."""
+    hdr = struct.unpack_from("<IIIdHHBBH", body)
+    off = struct.calcsize("<IIIdHHBBH")
+    persons = []
+    for _ in range(hdr[2]):
+        (tid,) = struct.unpack_from("<i", body, off)
+        off += 4 + hdr[6] * 16
+        persons.append(tid)
+    w, h, rf, mf, _pad = struct.unpack_from("<HHBBH", body, off)
+    off += 8
+    rgb = body[off:off + w * h * 3]
+    mask = body[off + w * h * 3:off + w * h * 4]
+    return hdr, persons, (w, h, rf, mf, rgb, mask, len(body) - off - w * h * 4)
+
+
+class CameraFramesTest(unittest.TestCase):
+    """Protocol v3 (--frames, PLAN P-4): the camera picture + person mask."""
+
+    def test_frames_flag_parses_and_rejects_nonsense(self):
+        self.assertEqual(ps.parse_args(["--frames", "320x240"]).frames_size, (320, 240))
+        self.assertIsNone(ps.parse_args([]).frames_size)
+        with self.assertRaises(SystemExit):
+            ps.parse_args(["--frames", "big"])
+
+    def test_without_frames_the_packet_is_v2_byte_for_byte(self):
+        persons = [(7, [(0.1, 0.2, 2.5, 0.9)] * 20)]
+        v2 = ps.pack_frame(3, 1.5, 640, 480, 20, 1, persons)
+        self.assertEqual(struct.unpack_from("<I", v2, 4)[0], ps.PROTOCOL_MAGIC)
+        self.assertEqual(len(v2), 4 + 28 + 4 + 20 * 16)
+
+    def test_v3_appends_the_block_and_an_empty_block_means_no_picture(self):
+        persons = [(7, [(0.1, 0.2, 2.5, 0.9)] * 20)]
+        rgb, mask = bytes(range(6)) * 2, bytes([0, 1, 1, 0])
+        body = ps.pack_frame(3, 1.5, 640, 480, 20, 1, persons, (rgb, mask, 2, 2))[4:]
+        hdr, tids, (w, h, rf, mf, prgb, pmask, rest) = split_v3(body)
+        self.assertEqual(hdr[0], ps.PROTOCOL_MAGIC_V3)
+        self.assertEqual(tids, [7])
+        self.assertEqual((w, h, rf, mf, prgb, pmask, rest), (2, 2, 1, 1, rgb, mask, 0))
+        empty = ps.pack_frame(3, 1.5, 640, 480, 20, 1, [], ())[4:]
+        _, _, (w, h, _, _, _, _, rest) = split_v3(empty)
+        self.assertEqual((w, h, rest), (0, 0, 0))
+
+    @unittest.skipUnless(_have_cv2_numpy(), "needs cv2 + numpy")
+    def test_mask_names_the_most_confident_person_above_threshold(self):
+        import cv2
+        import numpy as np
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        frame[:, :, 2] = 200                       # BGR red
+        a = np.zeros((480, 640), np.float32)
+        b = np.zeros((480, 640), np.float32)
+        a[:, :320] = 0.9                            # person 1: left half
+        b[:, 200:] = 0.7                            # person 2: right part
+        b[:, 200:320] = 0.95                        # ... and wins the overlap
+        a[:240, 500:] = 0.4                         # below threshold: ignored
+        rgb, mask, w, h = ps.camera_block(frame, [a, b], (320, 240), cv2, np)
+        self.assertEqual((w, h, len(rgb), len(mask)), (320, 240, 320 * 240 * 3, 320 * 240))
+        m = np.frombuffer(mask, np.uint8).reshape(240, 320)
+        self.assertEqual(m[120, 10], 1)
+        self.assertEqual(m[120, 130], 2)            # overlap -> higher confidence
+        self.assertEqual(m[120, 300], 2)
+        self.assertEqual(m[60, 290], 2)             # 0.4 never beats threshold or b
+        px = np.frombuffer(rgb, np.uint8).reshape(240, 320, 3)
+        self.assertEqual(tuple(px[10, 10]), (200, 0, 0))   # RGB order on the wire
+        # A missing mask (None) is nobody, not a crash.
+        _, mask2, _, _ = ps.camera_block(frame, [None, b], (320, 240), cv2, np)
+        self.assertNotIn(1, set(mask2))
+
+    def test_outbox_never_interleaves_a_partial_packet(self):
+        class Trickle:
+            """A socket that takes 1000 bytes per send, then would block."""
+            def __init__(self):
+                self.data = b""
+                self.budget = 0
+
+            def send(self, b):
+                if self.budget <= 0:
+                    raise BlockingIOError()
+                n = min(len(b), self.budget, 1000)
+                self.budget -= n
+                self.data += b[:n]
+                return n
+
+        sock = Trickle()
+        box = ps.Outbox(sock)
+        p1 = struct.pack("<I", 2500) + b"a" * 2500
+        p2 = struct.pack("<I", 10) + b"b" * 10
+        sock.budget = 1000
+        self.assertTrue(box.offer(p1))          # queued, 1000 bytes out
+        self.assertFalse(box.offer(p2))         # still in flight: dropped whole
+        sock.budget = 10**6
+        self.assertTrue(box.offer(p2))          # rest of p1, then all of p2
+        self.assertEqual(sock.data, p1 + p2)
+        self.assertEqual((box.sent_packets, box.dropped_packets), (2, 1))
+
+    @unittest.skipUnless(_have_cv2_numpy(), "needs cv2 + numpy")
+    def test_stream_carries_picture_and_mask_for_the_packets_persons(self):
+        import numpy as np
+        clock = FakeClock()
+
+        class RealFrameCapture(FakeCapture):
+            def read(self):
+                ok, _ = super().read()
+                if not ok:
+                    return False, None
+                f = np.zeros((480, 640, 3), np.uint8)
+                f[:, :, 1] = 150                       # green
+                return True, f
+
+        class MaskBackend(FakeBackend):
+            def process(self, frame, ts_ms):
+                out = super().process(frame, ts_ms)
+                m = np.zeros(frame.shape[:2], np.float32)
+                m[100:400, 200:440] = 1.0
+                self.last_masks = [m]
+                return out
+
+        cap = RealFrameCapture(clock, frames=20, real_delay=0.004)
+        with tempfile.TemporaryDirectory() as d:
+            model = os.path.join(d, "m.task")
+            open(model, "w").close()
+            sock_path = os.path.join(d, "s.sock")
+            a = args_for(socket=sock_path, model=model)
+            a.frames, a.frames_size = "160x120", (160, 120)
+            th = threading.Thread(target=lambda: self._serve(a, cap, clock, MaskBackend()),
+                                  daemon=True)
+            th.start()
+            deadline = time.monotonic() + 10
+            while not os.path.exists(sock_path) and time.monotonic() < deadline:
+                time.sleep(0.005)
+            c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            c.connect(sock_path)
+            bodies = read_raw_packets(c, 5)
+            c.close()
+            th.join(20)
+        self.assertGreaterEqual(len(bodies), 5)
+        for body in bodies:
+            hdr, tids, (w, h, rf, mf, rgb, mask, rest) = split_v3(body)
+            self.assertEqual((hdr[0], tids, w, h, rest), (ps.PROTOCOL_MAGIC_V3, [7], 160, 120, 0))
+            m = np.frombuffer(mask, np.uint8).reshape(120, 160)
+            self.assertEqual(m[60, 80], 1)          # inside the person
+            self.assertEqual(m[5, 5], 0)            # background
+            self.assertEqual(tuple(np.frombuffer(rgb, np.uint8)[:3]), (0, 150, 0))
+
+    @staticmethod
+    def _serve(a, cap, clock, backend):
+        try:
+            ps.run(a, cv2=_RealCv2WithCapture(cap), make_backend=lambda _a: (backend, 20, 1),
+                   clock=clock, sleep=clock.sleep)
+        except ps.ServerExit:
+            pass
+
+
+class _RealCv2WithCapture:
+    """Real cv2 (resize / cvtColor for the camera block) with a fake camera."""
+
+    def __init__(self, capture):
+        import cv2
+        self._cv2 = cv2
+        self._capture = capture
+
+    def VideoCapture(self, source):
+        return self._capture
+
+    def __getattr__(self, name):
+        return getattr(self._cv2, name)
+
+
 @unittest.skipUnless(sys.platform.startswith("linux"), "camera index probing is Linux-specific")
 class RealScriptTest(unittest.TestCase):
     """The actual script, as the game spawns it, on a camera that cannot exist."""

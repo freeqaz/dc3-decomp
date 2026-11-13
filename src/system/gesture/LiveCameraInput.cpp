@@ -618,6 +618,70 @@ LiveCameraInput::LiveCameraInput()
     SetColorCameraProperty(NUI_CAMERA_PROPERTY_AE_AWB_MODE, 1);
 }
 
+#ifdef HX_NATIVE
+// PLATFORM (PLAN P-4): see the header.  The member initialisation is the
+// image's constructor's; what is left out is everything that talks to the
+// Kinect as a device (NuiInitialize, SpeechMgr, NuiAudioCreate,
+// NuiSkeletonTrackingEnable) and SkeletonUpdate::Init, which the native sensor
+// already ran (GestureMgr_NativePreInit).  The two streams open exactly as in
+// the image, against the native NuiImageStream* entry points.  Never deleted:
+// the image's destructor would SkeletonUpdate::Terminate and NuiShutdown.
+LiveCameraInput::LiveCameraInput(NativeStandIn)
+    : mConnected(true), mColorPolled(0), mDepthPolled(0), mColorReceived(0),
+      mDepthReceived(0), mSpeechMgr(0) {
+    mAudioInitialized = 0;
+    mAudioHandle = nullptr;
+    unk11dc = 0;
+    mBeamAngle = 0;
+    mBeamConfidence = 0;
+    mColorStreamTex = 0;
+    mDepthStreamTex = 0;
+    mDebugDepthTex = 0;
+    mNumSnapshots = 0;
+    mMaxTextures = 0;
+    mNumStoredTextures = 0;
+    for (int i = 0; i < kBufferNum; i++) {
+        Buffer &cur = mStreams[i];
+        cur.mHandle = nullptr;
+        cur.mFrames[0] = nullptr;
+        cur.mFrames[1] = nullptr;
+        cur.mWriteIdx = 0;
+        cur.mReadIdx = 1;
+        cur.mMat = nullptr;
+    }
+    if (FAILED(NuiImageStreamOpen(
+            NUI_IMAGE_TYPE_COLOR_YUV, NUI_IMAGE_RESOLUTION_640x480, 0, 2, nullptr,
+            &mStreams[kBufferColor].mHandle
+        ))) {
+        MILO_NOTIFY("NuiImageStreamOpen color failed");
+    }
+    mStreams[kBufferColor].mMat = CreateCameraBufferMat(640, 480, RndTex::kScratch);
+    if (FAILED(NuiImageStreamOpen(
+            NUI_IMAGE_TYPE_DEPTH_AND_PLAYER_INDEX_IN_COLOR_SPACE,
+            NUI_IMAGE_RESOLUTION_320x240, 0, 2, nullptr, &mStreams[kBufferDepth].mHandle
+        ))) {
+        MILO_NOTIFY("NuiImageStreamOpen depth failed");
+    }
+    mStreams[kBufferDepth].mMat = CreateCameraBufferMat(320, 240, RndTex::kScratch);
+    mStreams[kBufferPlayer].mMat = CreateCameraBufferMat(320, 240, RndTex::kScratch);
+    mStreams[kBufferPlayerColor].mMat = CreateCameraBufferMat(640, 480, RndTex::kScratch);
+    mMaxSnapshots = 1;
+    DataArray *kinectArr = SystemConfig()->FindArray("kinect", false);
+    DataArray *cameraArr = kinectArr ? kinectArr->FindArray("camera", false) : nullptr;
+    DataArray *maxArr = cameraArr ? cameraArr->FindArray("max_snapshots", false) : nullptr;
+    if (maxArr) {
+        mMaxSnapshots = maxArr->Int(1);
+    } else {
+        MILO_NOTIFY("Could not find max_snapshots in SystemConfig");
+    }
+    mSnapshotBatches.reserve(6);
+}
+
+LiveCameraInput *LiveCameraInput::NativeCreate() {
+    return new LiveCameraInput(NativeStandIn());
+}
+#endif
+
 LiveCameraInput::~LiveCameraInput() {
     SkeletonUpdate::Terminate();
     for (int i = 0; i < 4; i++) {
@@ -1211,6 +1275,10 @@ void LiveCameraInput::StoreDepthBufferClip(
 RndTex *LiveCameraInput::GetStreamTex(BufferType type) const {
     MILO_ASSERT(type == kBufferColor || type == kBufferDepth, 0x1EA);
     void *bufferData = StreamBufferData(type);
+#ifdef HX_NATIVE
+    // PLATFORM (PLAN P-4): no DxTex natively; the stand-in wraps the frame.
+    return NativeStreamTex(type, bufferData);
+#endif
     DxTex *tex;
     if (type == kBufferColor) {
         tex = mColorStreamTex;

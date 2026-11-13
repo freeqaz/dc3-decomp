@@ -104,8 +104,36 @@ public:
 
     friend class FreestyleMoveRecorder;
     friend class DepthBuffer3D;
+#ifdef HX_NATIVE
+    // The image's StreamRenderer::DrawToTexture reads the polled/received flags
+    // at raw offsets (0x11e9..0x11ec); the native body names them.
+    friend class StreamRenderer;
+#endif
     friend void CameraDump(const char *);
     friend void CameraDumpUnique(const char *);
+
+#ifdef HX_NATIVE
+    /** PLATFORM (PLAN P-4): the webcam stand-in for the NUI device's image
+     *  half.  The image's only constructor initialises the whole Kinect
+     *  (NuiInitialize, speech, audio beam, skeleton tracking, DxTex stream
+     *  wrappers); natively skeletons come from the native sensor and none of
+     *  the rest exists, so this builds just the colour/depth streams
+     *  (NuiImageStreamOpen -> native/src/platform/CameraStream_Native.cpp), the
+     *  four display mats and the snapshot budget.  It is NOT sInstance:
+     *  SkeletonUpdate and SkeletonDir fall back to sInstance as their skeleton
+     *  source, which natively is the native sensor.  GestureMgr_Native.cpp
+     *  creates it once the webcam publishes a frame and hands it to
+     *  GestureMgr; with no camera it never exists. */
+    static LiveCameraInput *NativeCreate();
+    /** The stream as an RndTex whose TexelsLock exposes the latched frame
+     *  (pitch included) -- GetStreamTex's DxTex::SetDeviceTex wrapper has no
+     *  native counterpart.  Defined in CameraStream_Native.cpp. */
+    static RndTex *NativeStreamTex(BufferType, void *bufferData);
+
+protected:
+    struct NativeStandIn {};
+    LiveCameraInput(NativeStandIn);
+#endif
 
 protected:
     LiveCameraInput();

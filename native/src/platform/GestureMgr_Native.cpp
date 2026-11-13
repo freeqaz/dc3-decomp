@@ -1,6 +1,8 @@
 #ifdef HX_NATIVE
 
 #include "Skeleton_Native.h"
+#include "CameraStream_Native.h"
+#include "gesture/LiveCameraInput.h"
 #include "NativeSettings.h" // Dc3EnvFlag, Dc3ControllerModeForced
 #include "platform/JoypadScriptHook.h"
 #include "gesture/CameraInput.h"
@@ -547,9 +549,46 @@ const SkeletonFrame *NativeSensorCameraInput::PollNewFrame() {
     return BuildSensorFrame();
 }
 
+// The skeleton slot a tracking id holds this frame, -1 if none: the camera
+// stream (CameraStream_Native.cpp) turns a segmented person into the NUI
+// player index slot + 1 with it.
+int NativeSlotForTrackId(int trackId) {
+    if (trackId == -1) // the free-slot marker, never a person
+        return -1;
+    for (int s = 0; s < NUM_SKELETONS; s++) {
+        if (sSlotTrackId[s] == trackId)
+            return s;
+    }
+    return -1;
+}
+
+// PLAN P-4: the LiveCameraInput stand-in.  Created the first time the webcam
+// publishes a frame (pose server protocol v3 on desktop, dc3_camera_push on
+// web) and handed to GestureMgr, which the image binds to the NUI device at
+// construction.  With no camera it is never created, so every
+// GetLiveCameraInput() consumer keeps its null path.
+static LiveCameraInput *sCameraStandIn = nullptr;
+
+static void NativeCameraPoll(GestureMgr *mgr) {
+    if (!sCameraStandIn) {
+        if (!NativeCamera::Active())
+            return;
+        sCameraStandIn = LiveCameraInput::NativeCreate();
+        mgr->SetNativeLiveCameraInput(sCameraStandIn);
+        printf("Native: camera stream live -> LiveCameraInput stand-in attached\n");
+    }
+    NativeCamera::Latch(NativeSlotForTrackId);
+    // The image's LiveCameraInput is the SkeletonUpdate camera input, and its
+    // PollTracking (clear the polled/received flags, poll the colour stream)
+    // runs once per skeleton update.  Natively the sensor is that input, so the
+    // stand-in is ticked here instead, once per frame.
+    sCameraStandIn->PollTracking();
+}
+
 // Called each frame by GestureMgr::Poll().  The skeleton pipeline no longer runs
 // here -- it is SkeletonUpdate's, driven from App's skeleton_post_update step.
 void GestureMgr_NativePoll(GestureMgr *mgr) {
+    NativeCameraPoll(mgr);
     // NATIVE POLICY (pre-existing, not image behaviour): seed the active
     // skeleton id so GetActiveSkeletonTrackingID() is valid and HamNavList::Poll
     // finds a skeleton; the image gets it from the Kinect shell flow.

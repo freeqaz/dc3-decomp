@@ -24,6 +24,17 @@ Protocol v2 (little-endian):
              external COCO-17 source.
   layout 1 = DC3-20, camera-space metres (what this server sends)
 
+Protocol v3 (--frames WxH; PLAN P-4, the player view): v2 with magic
+0x44503303 and, after the persons, a camera block:
+  [uint16 w] [uint16 h] [uint8 rgb_format = 1] [uint8 mask_format = 1] [uint16 pad]
+  [w*h*3 bytes RGB888, top row first] [w*h bytes person mask]
+  The mask byte is 0 for nobody, k for the k-th person of THIS packet (MediaPipe's
+  per-pose segmentation, the most confident person > 0.5 wins). w = h = 0 means
+  no picture this frame. The game asks for v3 by passing --frames; without it
+  this server sends v2 exactly as before, so an older game is unaffected, and
+  the C++ reader still accepts v1/v2 from older servers. Reader:
+  native/src/platform/CameraStream_Native.cpp (ParseWireBlock).
+
 Protocol v1 (legacy, still accepted by the C++ reader; pose_server_synthetic.py
 emits it) had no magic and packed [frame_id][num_persons][ts] then per person
 [track_id] + 17 × (x, y, conf). The reader distinguishes them by testing the
@@ -69,6 +80,10 @@ import time
 # Protocol v2 magic. Chosen large so it cannot collide with a v1 packet, whose
 # first field is a small incrementing frame_id.
 PROTOCOL_MAGIC = 0x44503302
+PROTOCOL_MAGIC_V3 = 0x44503303   # v2 + camera block (--frames)
+WIRE_RGB888 = 1
+WIRE_MASK_ORDINAL = 1
+MASK_THRESHOLD = 0.5
 
 # Exit codes the game turns into a message (NativeSkeletonProvider::ServerExit
 # in native/src/platform/Skeleton_Native.h -- keep in sync).
@@ -161,21 +176,98 @@ def backend_kwargs(args):
     kwargs = {"num_poses": min(args.max_persons, 2), "min_conf": args.conf}
     if args.hfov is not None:
         kwargs["hfov_deg"] = args.hfov
+    if getattr(args, "frames", None):
+        kwargs["segmentation"] = True
     return kwargs
 
 
-def pack_frame(frame_id, timestamp, frame_w, frame_h, num_landmarks, layout, persons):
-    """One length-prefixed protocol-v2 packet (see module docstring)."""
+def parse_frames(value):
+    """--frames WxH -> (w, h); raises argparse-friendly ValueError."""
+    try:
+        w, h = (int(v) for v in value.lower().split("x"))
+    except Exception:
+        raise ValueError(f"--frames wants WxH, got {value!r}")
+    if not (1 <= w <= 1920 and 1 <= h <= 1920):
+        raise ValueError(f"--frames {value}: each side must be 1..1920")
+    return w, h
+
+
+def camera_block(frame_bgr, masks, size, cv2, np):
+    """(rgb_bytes, mask_bytes, w, h) for the v3 camera block: the frame scaled
+    to `size` as RGB888, and one byte per pixel naming the most confident
+    person (1-based, in `masks` order) whose mask passes MASK_THRESHOLD."""
+    w, h = size
+    rgb = cv2.cvtColor(cv2.resize(frame_bgr, (w, h), interpolation=cv2.INTER_AREA),
+                       cv2.COLOR_BGR2RGB)
+    ordinal = np.zeros((h, w), dtype=np.uint8)
+    best = np.full((h, w), MASK_THRESHOLD, dtype=np.float32)
+    for k, m in enumerate(masks, start=1):
+        if m is None:
+            continue
+        m = cv2.resize(np.asarray(m, dtype=np.float32), (w, h),
+                       interpolation=cv2.INTER_LINEAR)
+        win = m > best
+        ordinal[win] = k
+        best[win] = m[win]
+    return np.ascontiguousarray(rgb).tobytes(), ordinal.tobytes(), w, h
+
+
+def pack_frame(frame_id, timestamp, frame_w, frame_h, num_landmarks, layout, persons,
+               image=None):
+    """One length-prefixed packet (see module docstring): protocol v2, or v3
+    when `image` is given -- (rgb_bytes, mask_bytes, w, h), or () for a v3
+    packet with no picture this frame."""
     packet = struct.pack(
         "<IIIdHHBBH",
-        PROTOCOL_MAGIC, frame_id, len(persons), timestamp,
+        PROTOCOL_MAGIC if image is None else PROTOCOL_MAGIC_V3,
+        frame_id, len(persons), timestamp,
         int(frame_w), int(frame_h), num_landmarks, layout, 0,
     )
     for tid, kpts in persons:
         packet += struct.pack("<i", tid)
         for x, y, z, c in kpts:
             packet += struct.pack("<ffff", x, y, z, c)
+    if image is not None:
+        if image:
+            rgb, mask, w, h = image
+            packet += struct.pack("<HHBBH", w, h, WIRE_RGB888, WIRE_MASK_ORDINAL, 0)
+            packet += rgb + mask
+        else:
+            packet += struct.pack("<HHBBH", 0, 0, WIRE_RGB888, WIRE_MASK_ORDINAL, 0)
     return struct.pack("<I", len(packet)) + packet
+
+
+class Outbox:
+    """Whole packets to a non-blocking client. A v3 packet is ~300 KB, more
+    than a socket buffer, so a send can stop part-way; the remainder goes out
+    on later calls. While anything is pending a new packet is DROPPED, never
+    interleaved -- the stream stays framed, and the game sees a skipped frame
+    rather than a stale queue (a slow reader gets the newest frame next)."""
+
+    def __init__(self, sock):
+        self.sock = sock
+        self.pending = b""
+        self.sent_packets = 0
+        self.dropped_packets = 0
+
+    def flush(self):
+        while self.pending:
+            try:
+                n = self.sock.send(self.pending)
+            except BlockingIOError:
+                return False
+            self.pending = self.pending[n:]
+        return True
+
+    def offer(self, packet):
+        """Queue `packet` unless one is still in flight; then try to send."""
+        if not self.flush():
+            self.dropped_packets += 1
+            return False
+        self.pending = packet
+        self.sent_packets += 1
+        self.flush()
+        return True
 
 
 def parse_args(argv=None):
@@ -201,7 +293,18 @@ def parse_args(argv=None):
     parser.add_argument("--conf", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--max-persons", type=int, default=6, help="Max tracked persons")
     parser.add_argument("--show", action="store_true", help="Show debug visualization window")
-    return parser.parse_args(argv)
+    parser.add_argument("--frames", default=None, metavar="WxH",
+                        help="Also send the camera picture and a person mask at WxH "
+                             "(protocol v3, the in-game player view; PLAN P-4)")
+    args = parser.parse_args(argv)
+    if args.frames:
+        try:
+            args.frames_size = parse_frames(args.frames)
+        except ValueError as e:
+            parser.error(str(e))
+    else:
+        args.frames_size = None
+    return args
 
 
 def _default_backend(args):
@@ -271,6 +374,11 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
     print(f"Listening on {sock_path}", file=sys.stderr)
 
     client = None
+    outbox = None
+    frames_size = getattr(args, "frames_size", None)
+    np = None
+    if frames_size:
+        import numpy as np  # noqa: F811 -- only the v3 path needs it
     try:
         backend, num_landmarks, layout = make_backend(args)
 
@@ -286,6 +394,7 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
                 try:
                     client, _ = server.accept()
                     client.setblocking(False)
+                    outbox = Outbox(client)
                     print("Client connected", file=sys.stderr)
                 except socket.timeout:
                     pass
@@ -354,16 +463,23 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
                         break
                     persons.append((tid, joints))
 
-            # Pack and send (protocol v2 — see module docstring)
+            # Pack and send (protocol v2, or v3 with --frames — see module docstring)
             if client is not None:
+                image = None
+                if frames_size:
+                    image = ()
+                    if frame is not None:
+                        masks = list(getattr(backend, "last_masks", []) or [])[:len(persons)]
+                        image = camera_block(frame, masks, frames_size, cv2, np)
                 msg = pack_frame(frame_id, timestamp, frame_w, frame_h,
-                                 num_landmarks, layout, persons)
+                                 num_landmarks, layout, persons, image)
                 try:
-                    client.sendall(msg)
-                except (BrokenPipeError, ConnectionResetError, BlockingIOError):
+                    outbox.offer(msg)
+                except (BrokenPipeError, ConnectionResetError, OSError):
                     print("Client disconnected", file=sys.stderr)
                     client.close()
                     client = None
+                    outbox = None
 
             if args.show and frame is not None:
                 cv2.imshow("DC3 Pose Server", frame)

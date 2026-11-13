@@ -253,7 +253,7 @@ class MediaPipeBackend:
     DEFAULT_HFOV_DEG = 58.51
 
     def __init__(self, model_path, num_poses=2, hfov_deg=DEFAULT_HFOV_DEG,
-                 min_conf=0.5, delegate="cpu"):
+                 min_conf=0.5, delegate="cpu", segmentation=False):
         import mediapipe as mp
         from mediapipe.tasks import python as mpp
         from mediapipe.tasks.python import vision
@@ -269,8 +269,15 @@ class MediaPipeBackend:
             min_pose_detection_confidence=min_conf,
             min_pose_presence_confidence=min_conf,
             min_tracking_confidence=min_conf,
-            output_segmentation_masks=False,
+            # PLAN P-4: one person mask per pose, for the player view
+            # (pose_server.py --frames). Off otherwise: it costs inference time.
+            output_segmentation_masks=bool(segmentation),
         )
+        self.segmentation = bool(segmentation)
+        # process()'s masks, aligned with its return value: one HxW float32
+        # array in [0,1] per returned person (None when segmentation is off or
+        # MediaPipe gave no mask for that pose).
+        self.last_masks = []
         self._landmarker = vision.PoseLandmarker.create_from_options(opts)
         self._tracker = CentroidTracker()
         self._root_z_filters = {}  # track id -> OneEuroFilter on root depth
@@ -414,9 +421,11 @@ class MediaPipeBackend:
         mp_img = self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=rgb)
         res = self._landmarker.detect_for_video(mp_img, int(timestamp_ms))
 
+        self.last_masks = []
         if not res.pose_world_landmarks:
             self._tracker.update([])
             return []
+        seg = getattr(res, "segmentation_masks", None) or []
 
         people, centroids = [], []
         for pi, wlms in enumerate(res.pose_world_landmarks):
@@ -434,7 +443,12 @@ class MediaPipeBackend:
                 continue
 
             joints, confs = self._remap(world, vis, root)
-            people.append((joints, confs, float(root[2])))
+            mask = None
+            if self.segmentation and pi < len(seg):
+                mask = np.asarray(seg[pi].numpy_view(), dtype=np.float32)
+                if mask.ndim == 3:
+                    mask = mask[:, :, 0]
+            people.append((joints, confs, float(root[2]), mask))
             hip_c = (image_xy[L_HIP] + image_xy[R_HIP]) * 0.5
             centroids.append((float(hip_c[0]), float(hip_c[1])))
 
@@ -442,7 +456,8 @@ class MediaPipeBackend:
         self._frame_count += 1
         t_s = timestamp_ms / 1000.0
         out = []
-        for (joints, confs, root_z), tid in zip(people, ids):
+        for (joints, confs, root_z, mask), tid in zip(people, ids):
+            self.last_masks.append(mask)
             # Filter the root DEPTH per persistent track and shift the whole
             # skeleton by the correction -- root noise is a rigid z offset, so
             # every joint moves together and the pose shape is untouched.
