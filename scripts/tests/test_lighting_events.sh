@@ -27,7 +27,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUILD_DIR="$REPO_ROOT/native/build"
 BINARY="$BUILD_DIR/dc3-native"
-PORT=7790
+PORT=""   # the engine binds a free port (DC3_HTTP_PORT=0) and writes it to PORT_FILE
+PORT_FILE="${TMPDIR:-/tmp}/test_lighting_events_$$.port"
 ENGINE_PID=""
 LOG_FILE="${TMPDIR:-/tmp}/test_lighting_events_$$.log"
 PASS_COUNT=0
@@ -175,11 +176,6 @@ done
 
 [ -x "$BINARY" ] || die "Binary not found: $BINARY (run 'ninja dc3-native' in native/build/)"
 
-# Check port is free
-if ss -tln 2>/dev/null | grep -q ":$PORT "; then
-    die "Port $PORT is already in use. Is another test running?"
-fi
-
 # --- Launch engine ---
 
 echo "=========================================="
@@ -187,10 +183,11 @@ echo " Lighting Event Chain Integration Test"
 echo "=========================================="
 echo ""
 
-info "Launching engine on port $PORT..."
+info "Launching engine (HTTP port picked by the engine)..."
 
 export DC3_HTTP=1
-export DC3_HTTP_PORT=$PORT
+export DC3_HTTP_PORT=0
+export DC3_HTTP_PORT_FILE="$PORT_FILE"
 export DC3_FAST_BOOT=1
 export DC3_TEL=1
 export DC3_SHOW_SPLASH=0
@@ -213,7 +210,8 @@ info "Engine PID: $ENGINE_PID"
 info "Waiting for HTTP server..."
 HTTP_UP=0
 for i in $(seq 1 30); do
-    if curl -sf --max-time 2 "http://localhost:$PORT/api/health" >/dev/null 2>&1; then
+    [ -s "$PORT_FILE" ] && PORT=$(cat "$PORT_FILE")
+    if [ -n "$PORT" ] && curl -sf --max-time 2 "http://localhost:$PORT/api/health" >/dev/null 2>&1; then
         HTTP_UP=1
         break
     fi

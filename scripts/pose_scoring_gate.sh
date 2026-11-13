@@ -63,7 +63,7 @@ FIXTURE="native/tests/data/pose/taye01_stand_dance.dc3pose"
 POSE_MODEL="native/models/pose_landmarker_full.task"
 ONLY="selftest,dummy,sensor,replay,still,video"
 OUT="${TMPDIR:-/tmp}/pose_gate_$$"
-PORT_BASE=$((9400 + $$ % 400))
+PORT_BASE=0   # 0: each engine binds a free port and writes it to $OUT/NAME.port
 CONFIG_WALL_LIMIT=1500   # seconds; a run that cannot finish the song in this is stuck
 
 while [ $# -gt 0 ]; do
@@ -108,13 +108,20 @@ COMMON_ENV=(
 want() { case ",$ONLY," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 
 # run_cfg NAME PORT [socket-args for synthetic_kinect | -] [extra env...]
+#   PORT 0 (the default): the engine binds a free port (DC3_HTTP_PORT=0) and
+#   writes it to $OUT/NAME.port, which the sensor waits for
+#   (--perform-port-file).  A port picked here and passed in could be taken
+#   by any process before the engine binds it (scripts/engine_http_port.py).
 #   Starts synthetic_kinect.py (as a sensor on a socket, or with "-" as a pure
 #   score recorder), runs the engine until the song ends (endgame screen) or the frame cap,
 #   then stops both. Writes $OUT/NAME.log and $OUT/NAME.json.
 run_cfg() {
     local name="$1" port="$2" kin="$3"; shift 3
     local log="$OUT/$name.log" rec="$OUT/$name.json"
-    local kargs=(--perform "http://127.0.0.1:$port/api" --record "$rec")
+    local pfile="$OUT/$name.port"
+    rm -f "$pfile"
+    local kargs=(--perform-port-file "$pfile" --record "$rec")
+    [ "$port" != 0 ] && kargs=(--perform "http://127.0.0.1:$port/api" --record "$rec")
     local sock=""
     if [ "$kin" != "-" ]; then
         sock="$OUT/$name.sock"
@@ -127,7 +134,7 @@ run_cfg() {
         for _ in $(seq 1 50); do [ -S "$sock" ] && break; sleep 0.1; done
         set -- DC3_POSE=external DC3_POSE_NO_SPAWN=1 "DC3_POSE_SOCKET=$sock" "$@"
     fi
-    env "${COMMON_ENV[@]}" "DC3_HTTP_PORT=$port" "$@" "$BIN" >"$log" 2>&1 &
+    env "${COMMON_ENV[@]}" "DC3_HTTP_PORT=$port" "DC3_HTTP_PORT_FILE=$pfile" "$@" "$BIN" >"$log" 2>&1 &
     local epid=$!
     local start=$SECONDS stopped=""
     while kill -0 "$epid" 2>/dev/null; do
@@ -148,11 +155,13 @@ run_cfg() {
 echo "=== native move-scoring differential gate (whole song, DC3_FAST_TIME, cap ${FRAMES} frames, $(basename "$FLOW")) ==="
 echo "    out: $OUT"
 
-want selftest && run_cfg selftest $((PORT_BASE + 0)) - DC3_POSE_SELFTEST=1
-want dummy    && run_cfg dummy    $((PORT_BASE + 1)) -
-want sensor   && run_cfg sensor   $((PORT_BASE + 2)) ""
-want replay   && run_cfg replay   $((PORT_BASE + 3)) "--replay $FIXTURE"
-want still    && run_cfg still    $((PORT_BASE + 4)) "--replay $FIXTURE --replay-still"
+# port: 0 = engine-picked; --port N pins N, N+1, ... (one per config)
+cfg_port() { [ "$PORT_BASE" = 0 ] && echo 0 || echo $((PORT_BASE + $1)); }
+want selftest && run_cfg selftest "$(cfg_port 0)" - DC3_POSE_SELFTEST=1
+want dummy    && run_cfg dummy    "$(cfg_port 1)" -
+want sensor   && run_cfg sensor   "$(cfg_port 2)" ""
+want replay   && run_cfg replay   "$(cfg_port 3)" "--replay $FIXTURE"
+want still    && run_cfg still    "$(cfg_port 4)" "--replay $FIXTURE --replay-still"
 
 if want video && [ -n "$VIDEO" ] && [ -f "$VIDEO" ]; then
     VSOCK="$OUT/video_server.sock"
@@ -160,7 +169,7 @@ if want video && [ -n "$VIDEO" ] && [ -f "$VIDEO" ]; then
         --socket "$VSOCK" --model "$POSE_MODEL" >"$OUT/video_server.log" 2>&1 &
     SERVER_PID=$!
     for _ in $(seq 1 60); do [ -S "$VSOCK" ] && break; sleep 1; done
-    run_cfg video $((PORT_BASE + 5)) - DC3_POSE=external DC3_POSE_NO_SPAWN=1 "DC3_POSE_SOCKET=$VSOCK"
+    run_cfg video "$(cfg_port 5)" - DC3_POSE=external DC3_POSE_NO_SPAWN=1 "DC3_POSE_SOCKET=$VSOCK"
     kill "$SERVER_PID" 2>/dev/null
 fi
 
