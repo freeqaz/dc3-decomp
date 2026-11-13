@@ -467,5 +467,8 @@
             window.addEventListener('resize', resizeCanvas);
         })();
     </script>
+    <!-- Webcam pose input: camera panel + MediaPipe worker -> dc3_pose_push
+         (native/web/pose/, docs/native/POSE_INPUT.md). ?pose=off disables. -->
+    <script type="module" src="pose/pose_input.js"></script>
 </body>
 </html>

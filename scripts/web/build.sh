@@ -130,6 +130,22 @@ build_one() {
         -DDC3_WEB_RELEASE="$release_flag"
     )
     [ -n "$OPT_LEVEL" ] && cmake_args+=(-DDC3_WEB_OPT_LEVEL="$OPT_LEVEL")
+    # imgui is a FetchContent git clone (full history) at configure time, and
+    # concurrent clones from GitHub can crawl for many minutes. Reuse a checkout
+    # that is already at the pinned commit -- $DC3_IMGUI_SOURCE_DIR, or the main
+    # checkout's native build -- and only clone when there is none.
+    local imgui_tag imgui_src main_root
+    imgui_tag="$(sed -n '/FetchContent_Declare(imgui/,/)/s/.*GIT_TAG *\([0-9a-f]\{40\}\).*/\1/p' "$NATIVE_DIR/CMakeLists.txt")"
+    main_root="$(cd "$(git -C "$REPO_ROOT" rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd || true)"
+    for imgui_src in "${DC3_IMGUI_SOURCE_DIR:-}" "$NATIVE_DIR/build/_deps/imgui-src" \
+                     "${main_root:+$main_root/native/build/_deps/imgui-src}"; do
+        [ -n "$imgui_src" ] && [ -n "$imgui_tag" ] || continue
+        if [ "$(git -C "$imgui_src" rev-parse HEAD 2>/dev/null)" = "$imgui_tag" ]; then
+            cmake_args+=(-DFETCHCONTENT_SOURCE_DIR_IMGUI="$imgui_src")
+            echo "==> [$mode] imgui: reusing $imgui_src (${imgui_tag:0:9})"
+            break
+        fi
+    done
 
     local need_configure=0
     if [ ! -f "$bdir/CMakeCache.txt" ] || [ "$FORCE_RECONFIGURE" = "1" ]; then
@@ -182,6 +198,39 @@ build_one() {
 # Shared, served from the root. index.html picks release/ or debug/ at runtime.
 cp "$NATIVE_DIR/web/index.html" "$DEPLOY_DIR/index.html"
 touch "$DEPLOY_DIR/favicon.ico"
+
+# Pose input (webcam -> MediaPipe -> dc3_pose_push; docs/native/POSE_INPUT.md).
+# The page code is ours; tasks-vision (Apache-2.0) is vendored from
+# scripts/web/node_modules (pinned in scripts/web/package.json, `npm ci
+# --prefix scripts/web`) and the .task models from native/models, so the page
+# needs no CDN and sits inside its own COOP/COEP origin. Anything missing here
+# makes pose_input.js fall back to jsdelivr / storage.googleapis.com.
+POSE_DIR="$DEPLOY_DIR/pose"
+mkdir -p "$POSE_DIR/vendor/tasks-vision/wasm" "$POSE_DIR/models"
+cp "$NATIVE_DIR"/web/pose/*.js "$POSE_DIR/"
+TV_DIR="$REPO_ROOT/scripts/web/node_modules/@mediapipe/tasks-vision"
+if [ -f "$TV_DIR/vision_bundle.mjs" ]; then
+    cp "$TV_DIR/vision_bundle.mjs" "$TV_DIR/package.json" "$POSE_DIR/vendor/tasks-vision/"
+    cp "$TV_DIR/wasm/vision_wasm_module_internal.js" "$TV_DIR/wasm/vision_wasm_module_internal.wasm" \
+       "$POSE_DIR/vendor/tasks-vision/wasm/"
+    for f in "$POSE_DIR/vendor/tasks-vision/wasm/vision_wasm_module_internal".{js,wasm}; do
+        if [ ! -f "$f.gz" ] || [ "$f" -nt "$f.gz" ]; then
+            command -v brotli >/dev/null 2>&1 && brotli -q 9 -f -k -o "$f.br" "$f"
+            gzip -9 -k -f "$f"
+        fi
+    done
+    echo "==> pose: tasks-vision $(sed -n 's/.*"version": "\(.*\)".*/\1/p' "$TV_DIR/package.json") vendored"
+else
+    echo "==> pose: WARNING tasks-vision not installed (npm ci --prefix scripts/web); the page will use the CDN"
+fi
+for m in lite full; do
+    src="$NATIVE_DIR/models/pose_landmarker_$m.task"
+    if [ -f "$src" ]; then
+        cp -L "$src" "$POSE_DIR/models/"
+    else
+        echo "==> pose: WARNING $src missing; the page will fetch it from storage.googleapis.com"
+    fi
+done
 
 echo ""
 echo "Deployed to $DEPLOY_DIR"

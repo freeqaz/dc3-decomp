@@ -379,6 +379,10 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
             return "text/plain"
         if path.endswith(".webm"):
             return "video/webm"
+        if path.endswith(".mjs"):  # pose/vendor/tasks-vision (module script)
+            return "application/javascript"
+        if path.endswith(".task"):  # pose/models (MediaPipe model bundle)
+            return "application/octet-stream"
         return super().guess_type(path)
 
     def do_GET(self):
