@@ -1968,6 +1968,7 @@ if(BUILD_TESTS)
         tests/test_native_exit.cpp
         tests/test_loading_panel.cpp
         tests/test_preload_budget.cpp
+        tests/test_persistent_filecache.cpp
         tests/test_milo_viewer_screenshot.cpp
         tests/test_object_lifetime.cpp
         tests/test_manual_repro.cpp

@@ -26,10 +26,6 @@
 static HamMaster *sLoadingMaster; // DAT_8311A440
 static SongDB *sSongDB; // DAT_8311A444 i think, def a SongDB
 
-#ifdef HX_NATIVE
-static bool sSkipLoadingMusicReadyGate = false;
-#endif
-
 LoadingPanel::LoadingPanel() : mSongInfo(0), mTempoMap(), mBeatMap(0) { sSongDB = new SongDB(); }
 
 LoadingPanel::~LoadingPanel() {
@@ -63,6 +59,21 @@ void LoadingPanel::Unload() {
         SetTheBeatMap(mBeatMap);
     }
 
+#ifdef HX_NATIVE
+    // Native-only trace (PLAN H-11): how far the loading music streamed, so a
+    // headless run (no audio device) can show the music played.
+    {
+        Stream *stream = sLoadingMaster && sLoadingMaster->GetHxAudio()
+            ? sLoadingMaster->GetHxAudio()->GetSongStream()
+            : nullptr;
+        static DataNode &music = DataVariable("loading_music_mogg");
+        MILO_LOG(
+            "LoadingPanel: loading music %s streamed %.0f ms\n",
+            music.Type() == kDataString ? music.Str() : "?",
+            stream ? stream->GetTime() : -1.0f
+        );
+    }
+#endif
     delete sLoadingMaster;
     UIPanel::Unload();
 }
@@ -70,9 +81,6 @@ void LoadingPanel::Unload() {
 void LoadingPanel::Load() {
     UIPanel::Load();
     sLoadingMaster = new HamMaster(sSongDB->SongData(), nullptr);
-#ifdef HX_NATIVE
-    sSkipLoadingMusicReadyGate = false;
-#endif
     PlayLoadingMusic();
     sLoadingMaster->SetMaps();
 }
@@ -83,19 +91,8 @@ bool LoadingPanel::IsLoaded() const {
         MILO_NOTIFY("missing audio object!\n");
     }
 
-#ifdef HX_NATIVE
-    bool audioReady = !pAudio || pAudio->Fail() || pAudio->IsReady();
-    if (sSkipLoadingMusicReadyGate) {
-        // Loading music is unavailable (MIDI not found); skip both the audio
-        // readiness gate and the ContentMgr refresh gate since no content
-        // discovery runs in the native/test harness when music is absent.
-        return UIPanel::IsLoaded();
-    }
-    return TheContentMgr.RefreshDone() && UIPanel::IsLoaded() && audioReady;
-#else
     return TheContentMgr.RefreshDone() && UIPanel::IsLoaded()
         && (!pAudio || pAudio->Fail() || pAudio->IsReady());
-#endif
 }
 
 bool LoadingPanel::Exiting() {
@@ -108,30 +105,14 @@ bool LoadingPanel::Exiting() {
 void LoadingPanel::Enter() {
     UIPanel::Enter();
     TheTaskMgr.SetSecondsAndBeat(0, 0, true);
-#ifdef HX_NATIVE
-    // Loading music stream may not be ready on native (DTA variable not set)
-    if (sLoadingMaster->GetHxAudio()->IsReady()) {
-        Stream *stream = sLoadingMaster->GetHxAudio()->GetSongStream();
-        if (stream) {
-            stream->SetJump(Stream::kStreamEndMs, 0.0f, nullptr);
-            stream->Play();
-        }
-    }
-#else
     Stream *stream = sLoadingMaster->GetHxAudio()->GetSongStream();
     MILO_ASSERT(sLoadingMaster->GetHxAudio()->IsReady(), 0x6a);
     stream->SetJump(Stream::kStreamEndMs, 0.0f, nullptr);
     stream->Play();
-#endif
 }
 
 void LoadingPanel::Poll() {
     UIPanel::Poll();
-#ifdef HX_NATIVE
-    if (sSkipLoadingMusicReadyGate) {
-        return;
-    }
-#endif
 
     Stream *pStream = sLoadingMaster->GetHxAudio()->GetSongStream();
     MILO_ASSERT(pStream && pStream->IsPlaying(), 0x46);
@@ -174,15 +155,7 @@ void LoadingPanel::PlayLoadingMusic() {
     {
         String filePath = MakeString("sfx/samples/shell/%s.mid", fileBase);
         File *f = FileCache::GetFileAll(filePath.c_str());
-#ifdef HX_NATIVE
-        if (!f) {
-            MILO_WARN("LoadingPanel: loading music MIDI not found: %s", filePath.c_str());
-            sSkipLoadingMusicReadyGate = true;
-            return;
-        }
-#else
         MILO_ASSERT(f != NULL, 0xb7);
-#endif
         delete f;
     }
 
