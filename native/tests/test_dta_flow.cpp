@@ -1169,3 +1169,30 @@ TEST_F(LargestSongFlowTest, OmgPreloadsAndReachesGameplay) {
         << "omg reached game_screen but never started playing";
     EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }
+
+// PLAN H-11: the loading screen plays its loading music.  The image finds the
+// era's .mid only in the persistent file cache App::App builds at boot
+// (config/persistent_filecache.dta); without it native loaded every song in
+// silence ("loading music MIDI not found", 45 of 45 songs).  The proof it
+// played is the stream's own clock at LoadingPanel::Unload (HX_NATIVE trace):
+// a headless run has no audio device to listen to.
+TEST_F(LargestSongFlowTest, LoadingMusicStreams) {
+    const std::string &out = sResult.output;
+    ASSERT_NE(out.find("Screen 'loading_screen' Enter"), std::string::npos)
+        << "precondition: the run never reached loading_screen";
+    EXPECT_EQ(out.find("MIDI not found"), std::string::npos);
+    EXPECT_EQ(out.find("LoadingPanel.cpp Line:"), std::string::npos)
+        << "a LoadingPanel MILO_ASSERT fired (the .mid lookup, IsReady at Enter, or "
+           "the stream not playing in Poll)";
+    EXPECT_NE(out.find("making file from cache file sfx/samples/shell/loadingmusic_"),
+              std::string::npos)
+        << "the loading-music .mid was not served from the persistent file cache";
+    const std::string tag = "LoadingPanel: loading music sfx/samples/shell/loadingmusic_";
+    size_t at = out.find(tag);
+    ASSERT_NE(at, std::string::npos) << "no LoadingPanel::Unload loading-music trace";
+    size_t streamed = out.find(" streamed ", at);
+    ASSERT_NE(streamed, std::string::npos);
+    const double ms = atof(out.c_str() + streamed + strlen(" streamed "));
+    printf("[loading-music] %s\n", out.substr(at, out.find('\n', at) - at).c_str());
+    EXPECT_GT(ms, 100.0) << "the loading music stream did not advance while loading";
+}

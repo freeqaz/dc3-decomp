@@ -44,6 +44,7 @@ bool gDrawJmpBufSet = false;
 #include "ui\UILabel.h"
 #include "platform\Rnd_Wgpu.h"
 #include "platform\NativeSettings.h"
+#include "platform\PersistentFileCache.h"
 #include "utl\Locale.h"
 
 // Lane history (11 lines moved): docs/decomp/notes/App.md
@@ -445,6 +446,34 @@ App::App(int argc, char **argv) {
 
     AccomplishmentManager::Init(SystemConfig("accomplishment_info"));
     MetagameRank::Init();
+
+    // The persistent file cache, as the image builds it here (the #else
+    // branch below, between MetagameRank::Init and $extra_songs):
+    // config/persistent_filecache.dta = a byte budget then ~100 paths (the
+    // 29 loading-music .mid, world.milo, chars.milo, fonts, visemes...).
+    // NewFile serves those paths from it, and LoadingPanel::PlayLoadingMusic
+    // finds its .mid ONLY there (FileCache::GetFileAll). Native left it out
+    // until 2026-11-13, so no song ever had loading music (PLAN H-11).
+    // The budget is the image's on desktop and scaled on web, which reads
+    // inflated files (NativePersistentFileCacheBudget).
+    DataArray *cacheCfg = SystemConfig("persistent_filecache");
+    if (cacheCfg) {
+#ifdef __EMSCRIPTEN__
+        const bool readsInflatedFiles = true;
+#else
+        const bool readsInflatedFiles = false;
+#endif
+        gPersistentCache = new FileCache(
+            NativePersistentFileCacheBudget(cacheCfg->Int(1), readsInflatedFiles), kLoadFront,
+            false, true
+        );
+        gPersistentCache->StartSet(0);
+        for (int i = 2; i < cacheCfg->Size(); i++) {
+            gPersistentCache->Add(cacheCfg->Str(i), 1, "");
+        }
+        gPersistentCache->EndSet();
+        gPersistentCache->PollUntilLoaded();
+    }
 
     // $extra_songs, as the image sets it before TheUI->Init (ContentMgr's
     // refresh reads it to decide how many content alt dirs to enumerate;

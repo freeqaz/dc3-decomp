@@ -4,12 +4,14 @@
 #include "meta_ham\ProfileMgr.h"
 #include "obj/Task.h"
 #ifdef HX_NATIVE
+#include "platform/FastTimeAudio.h"
+#include "synth/Stream.h"
 #include <cstdlib>
 #endif
 
 LiveInput::LiveInput(HamAudio &audio) : mAudio(audio), mTimeOffset(0)
 #ifdef HX_NATIVE
-    , mFastTimeMs(0.0f)
+    , mFastTimeMs(0.0f), mFastTimeHeld(false)
 #endif
 {
     mTimer.Restart();
@@ -30,6 +32,25 @@ float LiveInput::CurrentMs(bool b1) const {
     if (sFastTime) {
         mFastTimeMs += 1000.0f / 120.0f;
         toAdd = mFastTimeMs + mTimeOffset;
+        // Keep the wall-clock stream from running out ahead of the song
+        // (PLAN H-10, native/src/platform/FastTimeAudio.h).
+        Stream *stream = mAudio.GetSongStream();
+        if (stream) {
+            switch (FastTimeAudio::StreamAction(
+                stream->IsPlaying(), mFastTimeHeld, mAudio.GetTime(), toAdd
+            )) {
+            case FastTimeAudio::kHold:
+                mAudio.SetPaused(true);
+                mFastTimeHeld = true;
+                break;
+            case FastTimeAudio::kRelease:
+                mAudio.SetPaused(false);
+                mFastTimeHeld = false;
+                break;
+            default:
+                break;
+            }
+        }
     } else
 #endif
     if (b1) {
@@ -45,6 +66,9 @@ float LiveInput::GetSongToTaskMgrMs() const {
 }
 
 void LiveInput::SetPaused(bool b1) {
+#ifdef HX_NATIVE
+    mFastTimeHeld = false; // the game's pause owns the stream now
+#endif
     if (b1) {
         mAudio.SetPaused(true);
     } else if (!TheGamePanel->IsGameOver() && mAudio.IsReady()) {
