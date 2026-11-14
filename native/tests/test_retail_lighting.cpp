@@ -422,3 +422,64 @@ TEST_F(RetailLightingTest, NgLightRenderShadowsDrawsNoCastersOnNative) {
     EXPECT_EQ(light.mViewports, 0);
     EXPECT_EQ(light.mBlurs, 0);
 }
+
+// The spotlight list lasts one frame (np-gfx spot lane, round 1). Every frame
+// each drawn Spotlight appends itself to SpotlightDrawer::sLights
+// (Spotlight::DrawShowing -> DrawLight), the drawer's EndWorld folds the list
+// into RndEnviron::sGlobalLighting (UpdateBoxMap -> ApplyLightingApprox), and
+// on the NG path NgSpotlightDrawer::DoPost -> RenderScene empties it
+// (ClearPostProc; NgSpotlightDrawer::ClearPostDraw clears only sNeedDraw).
+// The native RenderScene used to be an empty stub, so the list never emptied:
+// the same two lights landed in the box map once per frame drawn so far, up to
+// its 50 spot slots, and hiding the spots removed nothing. That is the
+// houseparty floor (native 64-74 luma vs the original's 11-20).
+// Sabotage: restoring the empty native RenderScene in SpotlightDrawer_NG.cpp
+// makes the box map hold 4, 6, ... spots from the second frame and keep them
+// after the spots are hidden.
+#include "world/Spotlight.h"
+#include "world/SpotlightDrawer_NG.h"
+
+namespace {
+class InspectableSpotDrawer : public NgSpotlightDrawer {
+public:
+    static size_t Lights() { return sLights.size(); }
+};
+struct GlobalLightingProbe : public RndEnviron {
+    static unsigned QueuedSpots() { return sGlobalLighting.NumQueuedLights(); }
+};
+} // namespace
+
+TEST_F(RetailLightingTest, SpotlightListAndBoxMapHoldOnlyThisFramesLights) {
+    InspectableSpotDrawer *drawer = new InspectableSpotDrawer();
+    drawer->SetProperty("light_influence", 0.2f);   // houseparty's SpotlightDrawer.sd
+    drawer->SetShowing(true);
+    Spotlight *spots[2];
+    for (Spotlight *&s : spots) {
+        s = Hmx::Object::New<Spotlight>();
+        s->SetColorIntensity(Hmx::Color(0.94f, 0.6f, 0.55f), 0.78f);
+        s->SetShowing(true);
+    }
+    // One frame as Rnd drives it: the drawer's DrawShowing (Select), the
+    // spotlights' draws, then Rnd::DoWorldEnd and Rnd::DoPostProcess.
+    auto frame = [&](unsigned &boxSpots, size_t &listAfterPost) {
+        drawer->Select();
+        for (Spotlight *s : spots) SpotlightDrawer::DrawLight(s);
+        drawer->EndWorld();
+        boxSpots = GlobalLightingProbe::QueuedSpots();
+        drawer->DoPost();
+        listAfterPost = InspectableSpotDrawer::Lights();
+    };
+    unsigned boxSpots = 0;
+    size_t listAfterPost = 0;
+    for (int i = 0; i < 30; i++) {
+        frame(boxSpots, listAfterPost);
+        EXPECT_EQ(boxSpots, 2u) << "frame " << i << ": the box map holds this frame's two spots";
+        EXPECT_EQ(listAfterPost, 0u) << "frame " << i << ": DoPost ends the list's frame";
+    }
+    for (Spotlight *s : spots) s->SetShowing(false);
+    frame(boxSpots, listAfterPost);
+    EXPECT_EQ(boxSpots, 0u) << "hidden spotlights leave the box map on the next frame";
+    for (Spotlight *s : spots) delete s;   // ~Spotlight -> RemoveFromLists
+    drawer->DeSelect();
+    delete drawer;
+}

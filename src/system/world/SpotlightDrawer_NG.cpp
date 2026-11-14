@@ -136,7 +136,21 @@ void NgSpotlightDrawer::RenderBeams(const Hmx::Matrix4 &) {}
 bool NgSpotlightDrawer::CheckCam() { return true; }
 void NgSpotlightDrawer::BlurRT(float, float) {}
 void NgSpotlightDrawer::SetupForPostProcess() {}
-void NgSpotlightDrawer::RenderScene() {}
+// RenderScene (DoPost) is where the image ends the spotlight list's frame:
+// every path through it calls ClearPostProc -- directly when there are no
+// lights or the drawer cannot render, otherwise as the last step of
+// SetupForPostProcess. NgSpotlightDrawer::ClearPostDraw clears only sNeedDraw,
+// so on the NG path nothing else empties sLights between frames.  Native
+// renders none of the beam work, but it still owes the clear: the empty stub
+// this replaced let sLights grow by every drawn spotlight every frame, so
+// UpdateBoxMap fed the same lights (and lights hidden long ago) into
+// RndEnviron::sGlobalLighting until its 50 spot slots were full -- houseparty's
+// two floor spots landed ~25 times over -- and DrawWorld drew their flares and
+// lenses once per stale copy.
+void NgSpotlightDrawer::RenderScene() {
+    sActiveFrame = false;
+    ClearPostProc();
+}
 #endif
 
 #ifndef HX_NATIVE
