@@ -190,6 +190,22 @@ public:
             prev = next = nullptr;
             ref = 0;
             return -1;
+#ifdef HX_NATIVE
+        // A NaN frame fails both range tests below, so it fell through to the
+        // interpolating branch: KeyLessEq(NaN) walks to the LAST key and
+        // `next` became one past the end (with one key, [1] of a size-1
+        // vector).  The image takes the same read -- it has no NaN test here
+        // -- and on 32-bit Xenon it lands in heap memory; on LP64 a Symbol
+        // key read from there became DataGetMacro(garbage) == null and
+        // SymbolKeys::SetFrame died reading 0x10 (PLAN H-60, P-1).  The NaN
+        // reaches here from RhythmDetector's AnalyzeData, whose zero-variance
+        // z-score is 0 * (1/0) exactly as on the image.  Answer it as the
+        // frame before the first key; every finite frame is unchanged.
+        } else if (frame != frame) {
+            prev = next = &front();
+            ref = 0;
+            return -1;
+#endif
         } else if (frame < front().frame) {
             prev = next = &front();
             ref = 0;
