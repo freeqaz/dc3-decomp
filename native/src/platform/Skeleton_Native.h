@@ -54,8 +54,20 @@ public:
     };
 
     // The problem the server's exit says it had.  `waitStatus` is waitpid's
-    // status word; `cameraIndex` names the camera in the message.
-    static Problem DescribeServerExit(int waitStatus, int cameraIndex);
+    // status word; `camera` (pose_server.py --camera: auto, an index, a path or
+    // a /dev/v4l/by-id name) names the camera in the message.
+    static Problem DescribeServerExit(int waitStatus, const std::string &camera);
+    static Problem DescribeServerExit(int waitStatus, int cameraIndex) {
+        return DescribeServerExit(waitStatus, std::to_string(cameraIndex));
+    }
+
+    // While the server has no camera (pose_server.py FLAG_NO_CAMERA: the
+    // camera vanished mid-session -- a USB camera re-enumerating -- and the
+    // server is looking for it again), these notices are up: one when it goes,
+    // one when it is back.  The camera-lost one stays (corner line) until then.
+    static Problem CameraLostProblem();
+    static Problem CameraBackNotice();
+    bool CameraMissing() const { return mNoCamera; }
 
     // Why the last Start() failed, or why a running server stopped (the reader
     // posts it when the socket closes).  Thread-safe copy.
@@ -68,9 +80,16 @@ public:
     // cwd-relative default only ever worked from the repo root (PLAN P-10).
     static std::string DefaultModelPath();
 
+    // `camera` is passed to pose_server.py --camera as is: "auto" (the first
+    // V4L2 video-capture device, re-resolved whenever the server reopens it),
+    // an index, a /dev/videoN path or a /dev/v4l/by-id name.
     bool Start(const std::string &socketPath = "/tmp/dc3_pose.sock",
                const std::string &modelPath = DefaultModelPath(),
-               int cameraIndex = 0);
+               const std::string &camera = "auto");
+    bool Start(const std::string &socketPath, const std::string &modelPath,
+               int cameraIndex) {
+        return Start(socketPath, modelPath, std::to_string(cameraIndex));
+    }
     void Stop();
     bool IsRunning() const { return mRunning; }
 
@@ -183,7 +202,8 @@ private:
     int mSocketFd = -1;
     pid_t mServerPid = -1;
     bool mSpawned = false; // this provider launched the server (not DC3_POSE_NO_SPAWN)
-    int mCameraIndex = 0;
+    std::string mCamera = "auto";
+    volatile bool mNoCamera = false; // the last packet carried FLAG_NO_CAMERA
     int mMaxRestarts = 3;
     int mRestartBackoffMs = 1000;
     volatile int mRestarts = 0;

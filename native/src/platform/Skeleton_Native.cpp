@@ -92,7 +92,7 @@ static const char *kStandIn =
     " The game is using a stand-in skeleton, so your dancing is not scored.";
 
 NativeSkeletonProvider::Problem NativeSkeletonProvider::DescribeServerExit(
-    int waitStatus, int cameraIndex
+    int waitStatus, const std::string &camera
 ) {
     Problem p;
     char buf[512];
@@ -108,14 +108,15 @@ NativeSkeletonProvider::Problem NativeSkeletonProvider::DescribeServerExit(
     switch (code) {
     case kExitNoCamera:
         snprintf(buf, sizeof(buf),
-            "No camera found (camera %d) - pose tracking is off.%s Connect a webcam"
+            "No camera found (camera %s) - pose tracking is off.%s Connect a webcam"
             " and restart, or pick another camera with DC3_POSE_CAMERA.",
-            cameraIndex, kStandIn);
+            camera.c_str(), kStandIn);
         p.brief = "No camera: pose tracking off";
         break;
     case kExitCameraLost:
         snprintf(buf, sizeof(buf),
-            "The camera stopped sending pictures - pose tracking is off.%s",
+            "The camera stopped sending pictures and did not come back - pose"
+            " tracking is off.%s",
             kStandIn);
         p.brief = "Camera lost: pose tracking off";
         break;
@@ -153,6 +154,21 @@ NativeSkeletonProvider::Problem NativeSkeletonProvider::DescribeServerExit(
         break;
     }
     p.text = buf;
+    return p;
+}
+
+NativeSkeletonProvider::Problem NativeSkeletonProvider::CameraLostProblem() {
+    Problem p;
+    p.text = "The camera disconnected - looking for it again. Pose tracking is"
+             " paused until it is back.";
+    p.brief = "No camera: looking for it";
+    return p;
+}
+
+NativeSkeletonProvider::Problem NativeSkeletonProvider::CameraBackNotice() {
+    Problem p;
+    p.text = "The camera is back - pose tracking resumed.";
+    // No short form: a banner for a few seconds, then nothing in the corner.
     return p;
 }
 
@@ -247,6 +263,7 @@ enum COCOKeypoint {
 
 // v2/v3 header flag bits (native/scripts/pose_server.py FLAG_*).
 static const uint16_t kFlagUnlevelled = 1u << 0;
+static const uint16_t kFlagNoCamera = 1u << 1;  // camera gone; the server is reopening it
 
 // Wire layout ids (see native/scripts/pose_server.py protocol v2).
 enum PoseLayout {
@@ -303,7 +320,7 @@ static NativeSkeletonProvider::Problem StartTimeoutProblem() {
 }
 
 bool NativeSkeletonProvider::Start(
-    const std::string &socketPath, const std::string &modelPath, int cameraIndex
+    const std::string &socketPath, const std::string &modelPath, const std::string &camera
 ) {
     if (mRunning) return true;
 
@@ -317,7 +334,8 @@ bool NativeSkeletonProvider::Start(
 
     mSocketPath = socketPath;
     mModelPath = modelPath;
-    mCameraIndex = cameraIndex;
+    mCamera = camera.empty() ? std::string("auto") : camera;
+    mNoCamera = false;
     mStopRequested = false;
     mRestarts = 0;
     {
@@ -349,7 +367,7 @@ bool NativeSkeletonProvider::Start(
         mReaderThread = std::thread(&NativeSkeletonProvider::ReaderThread, this);
         return true;
     case kServerExited:
-        ReportProblem(DescribeServerExit(status, cameraIndex));
+        ReportProblem(DescribeServerExit(status, mCamera));
         Stop();
         return false;
     case kTimedOut:
@@ -375,7 +393,7 @@ bool NativeSkeletonProvider::LaunchServer() {
         "python3", NativeTreePath("scripts/pose_server.py"),
         "--socket", mSocketPath,
         "--model",  mModelPath,
-        "--camera", std::to_string(mCameraIndex),
+        "--camera", mCamera,
     };
     const char *hfov = getenv("DC3_POSE_HFOV");
     if (hfov && *hfov) {
@@ -492,6 +510,7 @@ bool NativeSkeletonProvider::ServerGone() {
         close(mSocketFd);
         mSocketFd = -1;
     }
+    mNoCamera = false; // a new server (or none) starts over; its notice replaces this one
 
     Problem streamStopped;
     streamStopped.text = std::string("The pose stream stopped - pose tracking is off.") + kStandIn;
@@ -513,7 +532,7 @@ bool NativeSkeletonProvider::ServerGone() {
         ReportProblem(streamStopped);
         return false;
     }
-    Problem problem = exited ? DescribeServerExit(status, mCameraIndex) : streamStopped;
+    Problem problem = exited ? DescribeServerExit(status, mCamera) : streamStopped;
     if (!exited && mServerPid > 0) {
         // It closed the socket but did not exit: replace it.
         NativeSpawner::Kill(mServerPid, SIGTERM);
@@ -572,7 +591,7 @@ bool NativeSkeletonProvider::ServerGone() {
             return true;
         case kServerExited:
             exited = true;
-            problem = DescribeServerExit(status, mCameraIndex);
+            problem = DescribeServerExit(status, mCamera);
             break;
         case kTimedOut:
             exited = false;
@@ -773,6 +792,21 @@ void NativeSkeletonProvider::ReaderThread() {
 
         if (v3 && !truncated)
             ParseCameraBlock(p, end, newBack, (int)numPersons, timestamp);
+
+        // FLAG_NO_CAMERA: one notice when the camera goes, one when it is
+        // back (edges only -- the server repeats the flag every 0.1 s).
+        const bool noCamera = v2 && (flags & kFlagNoCamera) != 0;
+        if (noCamera != mNoCamera) {
+            mNoCamera = noCamera;
+            if (noCamera) {
+                fprintf(stderr, "Pose server: camera lost, it is looking for it again\n");
+                NativeNotice::Post(kPoseNoticeKey, CameraLostProblem().text,
+                    CameraLostProblem().brief, 20.0f);
+            } else {
+                fprintf(stderr, "Pose server: camera is back\n");
+                NativeNotice::Post(kPoseNoticeKey, CameraBackNotice().text, "", 5.0f);
+            }
+        }
 
         PublishFrame(newBack, (int)numPersons, frameId, timestamp, (flags & kFlagUnlevelled) != 0);
     }
