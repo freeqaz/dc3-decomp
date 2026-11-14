@@ -86,7 +86,18 @@ HamNavList::HamNavList()
 HamNavList::~HamNavList() {
 #ifdef HX_NATIVE
     if (ObjectDir::InDeleteObjects()) {
-        mListWidgets.clear();
+        // Delete the widgets on this path too, exactly as below. They are
+        // never in a dir -- UIListDir::CreateElements makes each one with
+        // NewObject + ResourceCopy and keeps it only in this vector -- so no
+        // DeleteObjects Phase 1 will ever destroy them, and the clear() that
+        // used to stand here (c6dad61c8, which took them for dir-owned) leaked
+        // every list's widgets and their elements whenever a screen's dir was
+        // torn down: ~450 objects / ~1.9 MB per song_select visit, the
+        // HamLabel/Mesh/StarsDisplay/UIList* rows of PLAN H-24. UIList's own
+        // destructor deletes the same widget types unguarded in the same
+        // cascade. Phase 0 has already nullified every ref the widgets hold
+        // into the dying dir.
+        DeleteAll(mListWidgets);
         // SkeletonUpdate is a global singleton, not a sibling in the dying
         // dir, so unregistering is safe mid-cascade -- and skipping it left a
         // dangling callback whenever a list was torn down while still entered.
