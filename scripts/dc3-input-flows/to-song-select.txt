@@ -17,10 +17,22 @@ wait_screen attract_screen
 +28 wake
 +30 confirm
 
+# title_screen: with DC3_FAST_BOOT it advances by itself (the confirm then
+# lands on a screen that ignores it); without, it waits for this confirm.
+wait_screen title_screen
++43 wake
++45 confirm
+
+# A HamNavList ignores buttons while its enter animation runs (the image's
+# HamNavList::OnMsg(ButtonDownMsg) checks IsAnimating()): the old ten-frame
+# confirm was dropped and the flow sat on main_screen (TIMEOUT waiting for
+# 'choose_mode_screen').  +45, with its wake 2 frames ahead, as ymca.txt.
 # main_screen: select "gameplay"
 wait_screen main_screen
-+10 confirm
++43 wake
++45 confirm
 
 # choose_mode_screen: select "perform"
 wait_screen choose_mode_screen
-+10 confirm
++43 wake
++45 confirm

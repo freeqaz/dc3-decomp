@@ -64,9 +64,25 @@
 #   wait_screen choose_mode_screen
 #   +30 confirm
 #
+# First-run tutorials (fresh profile):
+#   A fresh DC3_CACHE_DIR has seen no tutorial, so the first song goes from
+#   multiuser_screen to tutorial_perform_it_screen_0 (ui/global.dta
+#   enter_gameplay), and a flow that does not step through it -- every one but
+#   ymca.txt -- waits there until the frame cap (omg.txt: 15,000 frames, 0
+#   MOVE_RATING lines).  For a standalone run set DC3_TUTORIALS_SEEN=1: every
+#   tutorial reads as seen (nothing is saved), and the flow goes straight to
+#   loading.  The flow tests seed a profile instead (SeedGlobalOptions in
+#   native/tests/test_dta_flow.cpp).  E.g.
+#     MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_FAST_BOOT=1 DC3_TUTORIALS_SEEN=1 \
+#       DC3_CACHE_DIR=$(mktemp -d) DC3_SAVE_DIR=$(mktemp -d) MILO_MAX_FRAMES=8000 \
+#       MILO_INPUT_SCRIPT=scripts/dc3-input-flows/omg.txt native/build/dc3-native
+#
 # Timing notes:
 #   - Each button is active for exactly 1 frame
 #   - Space relative offsets 30+ frames apart (scrolls need ~10 frames to complete)
+#   - A screen's first press: +45 after its wait_screen (a wake at +43).  A
+#     HamNavList drops presses during its enter animation; +10 was dropped
+#     on main_screen (to-song-select.txt sat there until 2026-11-14)
 #   - Absolute frame numbers still work (backwards compatible)
 #
 # Requires: HamNavList IsAnimating() bypass (#ifdef HX_NATIVE in HamNavList.cpp)

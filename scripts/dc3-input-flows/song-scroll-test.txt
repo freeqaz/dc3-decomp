@@ -7,16 +7,34 @@
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/song-scroll-test.txt \
 #     timeout 120 native/build/dc3-native 2>&1 | grep "DC3"
 
+# attract_screen: skip the intro movie (see to-song-select.txt).
+wait_screen attract_screen
++28 wake
++30 confirm
+
+# title_screen: with DC3_FAST_BOOT it advances by itself (the confirm then
+# lands on a screen that ignores it); without, it waits for this confirm.
+wait_screen title_screen
++43 wake
++45 confirm
+
+# A HamNavList ignores buttons while its enter animation runs (the image's
+# HamNavList::OnMsg(ButtonDownMsg) checks IsAnimating()): the old ten-frame
+# confirm was dropped and the flow sat on main_screen (TIMEOUT waiting for
+# 'choose_mode_screen').  +45, with its wake 2 frames ahead, as ymca.txt.
 # main_screen: select "gameplay"
 wait_screen main_screen
-+10 confirm
++43 wake
++45 confirm
 
 # choose_mode_screen: select "perform"
 wait_screen choose_mode_screen
-+10 confirm
++43 wake
++45 confirm
 
 # song_select_screen: scroll down 8 times (should move past 5 visible items)
 wait_screen song_select_screen
++48 wake
 +50 down
 +100 down
 +150 down

@@ -44,6 +44,12 @@
 #                      (without either, the dev profile mounts <data>/dlc when
 #                      it exists, DC3_DLC=1; the check counts it then too)
 #   --fast-boot        skip the intro and title (straight to the main menu)
+#   --overlays         draw the debug build's on-screen notices (cheat_display:
+#                      every MILO_NOTIFY, the quick-cheat fps/stats) top-left,
+#                      as dc3-native's dev profile does.  Without it they only
+#                      go to engine.log (`DC3 OVERLAY [...]` lines), so a
+#                      player sees the game, not developer messages
+#                      (DC3_RND_OVERLAYS=log; set DC3_RND_OVERLAYS=1 for the same)
 #   --home DIR         saves, settings cache and sessions (default
 #                      ~/.local/share/dc3/playtest; $DC3_PLAYTEST_HOME)
 #   --session-dir DIR  put this session's files in DIR (default
@@ -55,6 +61,8 @@
 #   --headless         no window (automation; implies no sound device)
 #   --no-pack          do not make the .tar.gz at the end
 #   -- ARGS            passed to dc3-native
+#
+# $DC3_PLAY_BINARY names the dc3-native to run (default native/build/dc3-native).
 #
 # Any DC3_*/MILO_* variable already set in the environment wins over the
 # defaults below (see docs/debugging/native.md for the table).
@@ -70,7 +78,7 @@ MAIN_CHECKOUT="${COMMON:+$(dirname "$COMMON")}"
 CHECK=0; NO_PERSON=0; CAMERA="${DC3_POSE_CAMERA:-auto}"; VIDEO=""; FULLSCREEN=0; SIZE=""
 NO_POSE=0; FAST_BOOT=0; HOME_DIR="${DC3_PLAYTEST_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/dc3/playtest}"
 SESSION=""; REPLAY=""; REPLAY_SYNC="song"; HEADLESS=0; PACK=1; ENGINE_ARGS=()
-VIDEO_PRE=8; VIDEO_LOOP=0; WAYLAND=0; DLC="${DC3_DLC_DIR:-}"; DLC_DEFAULT=0
+VIDEO_PRE=8; VIDEO_LOOP=0; WAYLAND=0; DLC="${DC3_DLC_DIR:-}"; DLC_DEFAULT=0; OVERLAYS=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1 ;;
@@ -87,6 +95,7 @@ while [ $# -gt 0 ]; do
                else DLC=""; DLC_DEFAULT=1; fi ;;
         --no-dlc) DLC=""; DLC_DEFAULT=0; NO_DLC=1 ;;
         --fast-boot) FAST_BOOT=1 ;;
+        --overlays) OVERLAYS=1 ;;
         --home) HOME_DIR="$2"; shift ;;
         --session-dir) SESSION="$2"; shift ;;
         --replay) REPLAY="$(realpath "$2")"; shift ;;
@@ -100,7 +109,9 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-BINARY="$REPO/native/build/dc3-native"
+# $DC3_PLAY_BINARY: run another build of the game (e.g. a build dir configured
+# against an engine branch; np-soak3 soaked native/build-eng this way).
+BINARY="${DC3_PLAY_BINARY:-$REPO/native/build/dc3-native}"
 DATA="${DC3_DATA:-$REPO/orig-assets}"
 MODEL="${DC3_POSE_MODEL:-$REPO/native/models/pose_landmarker_full.task}"
 [ "$DLC_DEFAULT" = 1 ] && DLC="$DATA/dlc"
@@ -157,6 +168,10 @@ elif [ "${NO_DLC:-0}" = 1 ]; then export DC3_DLC_DIR="" DC3_DLC=0; fi
 # (loopback only), gesture menus while the tracker runs and the per-move
 # rating log; the session summary reads that log.
 setdef DC3_TAG_MODALS 1              # every notify / fail / assert, with a backtrace
+# The debug build's on-screen notices (cheat_display: every MILO_NOTIFY, e.g.
+# "<shot> creating target cache for ...") are for developers: logged, not drawn over
+# the picture, unless --overlays (or the caller's DC3_RND_OVERLAYS) says so.
+if [ "$OVERLAYS" = 1 ]; then export DC3_RND_OVERLAYS=1; else setdef DC3_RND_OVERLAYS log; fi
 setdef DC3_PERF_LOG 1                # game fps + pose fps every 5 s (PLAN L-3)
 setdef DC3_POSE_STATS 1              # the tracker's own rate and inference time
 setdef DC3_HTTP_PORT 0               # any free port, written to the session folder

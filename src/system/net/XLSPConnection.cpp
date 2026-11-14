@@ -227,7 +227,14 @@ void XLSPConnection::Poll() {
 void XLSPConnection::StartEnumeration() {
     DWORD res = XTitleServerCreateEnumerator(mServerInfo.c_str(), 8, &mEnumBufferSize, &mEnumHandle);
     if (res != ERROR_SUCCESS) {
+#ifndef HX_NATIVE
         MILO_NOTIFY("XTitleServerCreateEnumerator failed with error %d", res);
+#else
+        // Native has no Xbox LIVE: the call is a stub that always fails
+        // (native/src/xbox_link_stubs.cpp), so the notice says nothing and
+        // only reached the screen (cheat_display) on every boot.
+        (void)res;
+#endif
         SetState((State)4);
     } else {
         mEnumBuffer = _MemAllocTemp(mEnumBufferSize, __FILE__, 0x1CB, "XLSPConnection", 0);
