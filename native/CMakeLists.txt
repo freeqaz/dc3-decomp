@@ -2114,7 +2114,9 @@ if(BUILD_TESTS)
     # worktrees. Add a file here when it starts using the macro.
     set_property(SOURCE
             tests/test_native_options.cpp
+            tests/test_native_tree_paths.cpp
             tests/test_null_this_guards.cpp
+            tests/test_object_lifetime.cpp
             tests/test_pose_scoring.cpp
         APPEND PROPERTY COMPILE_DEFINITIONS
             "DC3_DECOMP_SRC_DIR=\"${CMAKE_SOURCE_DIR}/../src\"")

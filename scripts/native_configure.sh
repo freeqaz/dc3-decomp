@@ -227,11 +227,17 @@ fi
 #                          to the build dir, identical in every worktree; the
 #                          engine, deps and system paths stay absolute and are
 #                          identical anyway. (Consequence: __FILE__ is relative
-#                          under ccache. Code must not locate files from it.)
+#                          under ccache. Code must not locate files from it;
+#                          use a per-file define, see DC3_DECOMP_SRC_DIR.)
 #   hash_dir=false         -g puts the cwd in DWARF; do not hash it. A hit may
 #                          carry another worktree's DW_AT_comp_dir.
 #   pch_external_checksum  hash <pch>.sum (written by native_ccache_launcher.sh)
 #                          instead of the .pch, which differs per tree.
+#   depend_mode=true       take the include list from clang's own .d instead of
+#                          running the preprocessor. Without it, 22 decomp files
+#                          with `#line N "e:\\lazer_build_gmc1\\..."` (Bitmap.h is
+#                          one, so most TUs) disable direct mode, and every
+#                          lookup -- hit or miss -- paid a full extra -E pass.
 #   sloppiness             pch_defines,time_macros: what ccache requires to cache
 #                          PCH users at all; include_file_m/ctime: fresh
 #                          worktree files are all "too new" otherwise.
@@ -275,7 +281,7 @@ if [ -n "$ccache_bin" ]; then
     # (whose bytes embed this tree's absolute paths); see its header.
     _launcher="$REPO_ROOT/scripts/native_ccache_launcher.sh;$ccache_bin"
     _launcher="$_launcher;cache_dir=$ccache_dir;max_size=${MILO_CCACHE_MAXSIZE:-16G}"
-    _launcher="$_launcher;base_dir=$REPO_ROOT;hash_dir=false;pch_external_checksum=true"
+    _launcher="$_launcher;base_dir=$REPO_ROOT;hash_dir=false;pch_external_checksum=true;depend_mode=true"
     _launcher="$_launcher;sloppiness=pch_defines,time_macros,include_file_mtime,include_file_ctime"
     [ -n "$cc_check" ] && _launcher="$_launcher;$cc_check"
     LAUNCHER_ARGS=(-DCMAKE_C_COMPILER_LAUNCHER="$_launcher" -DCMAKE_CXX_COMPILER_LAUNCHER="$_launcher")
