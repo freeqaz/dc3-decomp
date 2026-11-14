@@ -18,6 +18,11 @@
 #include "world\Spotlight.h"
 #include "world\SpotlightDrawer.h"
 #include <math.h>
+#ifdef HX_NATIVE
+#include "platform/SpotBeamHook.h"
+#include <cstring>
+#include <vector>
+#endif
 
 NgSpotlightDrawer::SpotlightResources *NgSpotlightDrawer::sSharedResources;
 // Target: SpotlightDrawer_NG.obj .bss:0x4 (0x8311692C) = 0, right after sSharedResources.
@@ -140,15 +145,101 @@ void NgSpotlightDrawer::SetupForPostProcess() {}
 // every path through it calls ClearPostProc -- directly when there are no
 // lights or the drawer cannot render, otherwise as the last step of
 // SetupForPostProcess. NgSpotlightDrawer::ClearPostDraw clears only sNeedDraw,
-// so on the NG path nothing else empties sLights between frames.  Native
-// renders none of the beam work, but it still owes the clear: the empty stub
-// this replaced let sLights grow by every drawn spotlight every frame, so
+// so on the NG path nothing else empties sLights between frames.  The empty
+// stub this replaced let sLights grow by every drawn spotlight every frame, so
 // UpdateBoxMap fed the same lights (and lights hidden long ago) into
 // RndEnviron::sGlobalLighting until its 50 spot slots were full -- houseparty's
 // two floor spots landed ~25 times over -- and DrawWorld drew their flares and
 // lenses once per stale copy.
+//
+// The beam work itself (RenderBeams into SR().unk8, BlurRT, and the
+// postprocess.ps option bit 51 SetupForPostProcess arms) is the backend's:
+// each beam RenderBeams would draw goes to the engine's NativeSpotBeamRenderer
+// (platform/SpotBeamHook.h, gfx/SpotBeamPass), which draws them against the
+// world's depth ahead of the DC3 composite and adds them there. Without a
+// renderer (rb3-xenon's backend, MILO_NO_SPOT_BEAMS aside) only the clear runs.
 void NgSpotlightDrawer::RenderScene() {
     sActiveFrame = false;
+    NativeSpotBeamRenderer *renderer = GetNativeSpotBeamRenderer();
+    if (renderer && !sLights.empty() && Showing()) {
+        static std::vector<NativeSpotBeam> sBeams;   // reused frame to frame
+        sBeams.clear();
+        for (SpotlightEntry &entry : sLights) {
+            Spotlight *sl = entry.mSpotlight;
+            const Spotlight::BeamDef &def = sl->mBeam;
+            RndMesh *mesh = def.mBeam;
+            // RenderBeams: mLength > 0; the Render* arms draw it with
+            // DrawShowing.
+            if (!(def.mLength > 0.0f) || !mesh || !mesh->Showing()) continue;
+            NativeSpotBeam b;
+            memset(&b, 0, sizeof(b));
+            b.mesh = mesh;
+            b.xsection = def.mXSection.Ptr();   // null: kDefaultTex_WhiteTransparent
+            const Transform &mx = mesh->WorldXfm();
+            const Vector3 *rows[4] = { &mx.m.x, &mx.m.y, &mx.m.z, &mx.v };
+            for (int r = 0; r < 4; r++) {
+                b.meshXfm[r * 3 + 0] = rows[r]->x;
+                b.meshXfm[r * 3 + 1] = rows[r]->y;
+                b.meshXfm[r * 3 + 2] = rows[r]->z;
+            }
+            b.shape = def.mShape;
+            Vector3 lightPos;
+            GetLightPosition(sl, lightPos);
+            b.lightPos[0] = lightPos.x;
+            b.lightPos[1] = lightPos.y;
+            b.lightPos[2] = lightPos.z;
+            const Transform &sx = sl->WorldXfm();
+            b.axis[0] = sx.m.y.x;   // RenderConeDefs / RenderSphere
+            b.axis[1] = sx.m.y.y;
+            b.axis[2] = sx.m.y.z;
+            b.sheetDir[0] = sx.m.z.x;   // RenderSheet's c91
+            b.sheetDir[1] = sx.m.z.y;
+            b.sheetDir[2] = sx.m.z.z;
+            Vector2 radii = def.NGRadii();
+            b.ngRadii[0] = radii.x;
+            b.ngRadii[1] = radii.y;
+            b.topRadius = def.mTopRadius;
+            b.length = def.mLength;
+            b.brighten = def.mBrighten;
+            const Spotlight *owner = sl->mColorOwner;
+            b.color[0] = owner->mColor.red;
+            b.color[1] = owner->mColor.green;
+            b.color[2] = owner->mColor.blue;
+            b.color[3] = owner->mColor.alpha;
+            b.intensity = owner->mIntensity;
+            b.matColor[0] = b.matColor[1] = b.matColor[2] = b.matColor[3] = 1.0f;
+            if (!sl->mAnimateColorFromPreset && def.mMat) {
+                const Hmx::Color &mc = def.mMat->GetColor();
+                b.matColor[0] = mc.red;
+                b.matColor[1] = mc.green;
+                b.matColor[2] = mc.blue;
+                b.matColor[3] = mc.alpha;
+            }
+            sBeams.push_back(b);
+        }
+        if (!sBeams.empty()) {
+            // CheckCam's choice of camera (EndWorld copies it into mSpotCam).
+            RndCam *cam;
+            if (TheLoadMgr.EditMode()) {
+                cam = RndCam::Current();
+            } else if (TheWorld && TheWorld->Cam()) {
+                cam = TheWorld->Cam();
+            } else if (RndCam::Current()) {
+                cam = RndCam::Current();
+            } else {
+                cam = TheRnd.GetDefaultCam();
+            }
+            NativeSpotBeamFrame f;
+            memset(&f, 0, sizeof(f));
+            f.camera = cam;
+            f.intensity = mParams.mIntensity;           // SetupForPostProcess c91.x
+            f.baseIntensity = mParams.mBaseIntensity;   // SetupFogDensityMap c127
+            f.smokeIntensity = mParams.mSmokeIntensity;
+            f.fogTexture = mParams.mTexture.Ptr();      // CheckFogTexture
+            f.hasProxy = mParams.mProxy.Ptr() != nullptr;
+            renderer->SubmitSpotBeams(f, &sBeams[0], (int)sBeams.size());
+        }
+    }
     ClearPostProc();
 }
 #endif
