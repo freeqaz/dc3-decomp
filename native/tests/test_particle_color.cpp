@@ -316,15 +316,19 @@ TEST_F(ParticleColorTest, OtherShapesKeepTheOldBillboard) {
 // billboard: sparks, fire, throneroom's god_rays and DCI's timeMachine_rays
 // came out as round puffs instead of streaks.
 //
-// Sabotage tried (np-gfx-blend residual round 3), each caught:
-//   call site ignores billboard.aligned         -> the render test
-//   stretch term dropped (L = size)             -> Stretched..., Aspect..., Relative...
-//   width axis sign flipped (A X - B S Z)       -> Unstretched..., Stretched...
-//   lead along -velocity (centre = P - up)      -> every pure test with a velocity, render
-//   rel used directly instead of inverted       -> RelativeSpace...
-//   perspective path uses the screen length     -> Perspective...
-//   constant area not applied                   -> ConstantArea...
-//   Part.h AlignWithVelocity() renamed          -> DC3ShapeReadsVelocityAlign..., render
+// Sabotage tried (np-gfx-blend residual round 3), each caught (measured; log
+// lanes/residual/round3/sabotage_item1.log):
+//   call site ignores billboard.aligned         -> the render test only
+//   stretch term dropped (L = size)             -> Stretched, ConstantArea, Aspect,
+//                                                  RelativeSpace, render
+//   width axis sign flipped (A X - B S Z)       -> Unstretched, Stretched, ConstantArea,
+//                                                  Perspective, RelativeSpace
+//   trail instead of lead (centre = P - up)     -> Unstretched, Stretched, Perspective,
+//                                                  render
+//   rel used directly instead of inverted       -> RelativeSpace
+//   perspective path uses the screen length     -> Perspective, RelativeSpace
+//   constant area not applied                   -> ConstantArea, Perspective
+//   Part.h AlignWithVelocity() renamed          -> DC3ShapeReadsVelocityAlign, render
 
 namespace {
 const float kIdentityRel[9] = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
