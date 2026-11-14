@@ -33,3 +33,8 @@ Inside the body (was lines 229-245):
     // `unsigned int prev` alone 96.61, both together 86.99, the helpers taking
     // `unsigned int c` 93.33, and dropping the `(unsigned short)` casts 97.58.
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.970, 1 non-equal row(s): One
+BRANCHDEST row (idx 106): the `!= 0x2d` edge returns false through the image's masked
+`li r11, 0 / clrlwi r3` tail and through our `li r3, 0` block -- same value, tail-merge
+choice. NOT A BUG.
