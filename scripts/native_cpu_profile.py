@@ -173,8 +173,12 @@ def sample(eng, pid, seconds, perf_out=None):
             main_pct = pct
             continue
         by_name[comm] = by_name.get(comm, 0.0) + pct
+    frames = max(1, f1 - f0)
     return {
         "fps": (f1 - f0) / dt,
+        # Main-thread CPU per frame: the load-robust number to compare builds
+        # by (fps on a shared machine moves with everyone else's work).
+        "main_ms_per_frame": main_pct / 100.0 * dt / frames * 1000.0,
         "main_pct": main_pct,
         "other_pct": sum(by_name.values()),
         "threads": {k: round(v, 1) for k, v in sorted(by_name.items(), key=lambda kv: -kv[1])
@@ -243,8 +247,9 @@ def main():
             r = sample(eng, proc.pid, a.seconds, perf_out)
             r["screen"] = eng.screen()
             results[name] = r
-            print("%-11s fps %6.1f  main %5.1f%%  other %5.1f%%  %s %s" % (
-                name, r["fps"], r["main_pct"], r["other_pct"], r["threads"], r["watts"]),
+            print("%-11s fps %6.1f  main %5.1f%% (%.2f ms/frame)  other %5.1f%%  %s %s" % (
+                name, r["fps"], r["main_pct"], r["main_ms_per_frame"], r["other_pct"],
+                r["threads"], r["watts"]),
                 file=sys.stderr)
 
         # Boot -> main menu (fast boot auto-advances attract/title).
