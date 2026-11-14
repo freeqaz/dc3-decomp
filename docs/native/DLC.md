@@ -191,6 +191,33 @@ at load average 40-210 (other lanes), so wall times are upper bounds:
 - **What "64 disc songs" counts.** The disc's `songs/` has 64 directories: 62 songs plus `gen` and `updates`. Its `songs.dta` has 62 entries: 45 that perform lists, 1 locked by rank (`blackandtan`, listed with `--unlock-all`, the image's own `{toggle_unlock_all}` cheat) and 16 `is_fake` rows (`hb_camp_*`, `mocapbpm*`, `blackandtan_ktbfinale`, `dcimindcontrol`) that perform never lists and that were not swept.
 
 
+## Web (D-7, W-23..W-28, lane `np-webdlc`)
+
+The web build lists and plays the same packages as desktop, from the same
+`orig-assets/dlc`, which the asset server serves in place (nothing is copied).
+
+- **Discovery.** `server.py` finds the DLC root (`--dlc-dir`, else `DC3_DLC_ASSETS`, else `<assets>/../dlc`, i.e. `orig-assets/dlc`). `/api/bundle/dlc` carries every package's `songs/*.dta` as `dlc/<package>/songs/<file>`. With DLC on, `main_web.cpp` fetches it at `BOOT_INIT` beside the config bundle, inside the same wait, so `ContentMgr_Native` finds `/data/dlc/<package>/songs/` in MEMFS and runs the desktop path unchanged. `DC3_DLC` is a dev-profile default on web as well as desktop (`System_Native.cpp`); `?profile=release` or `?env=DC3_DLC=0` turn it off, and then the bundle is not fetched.
+- **Files on demand.** Mounting maps `cntNNNNNNNN:` to `/data/dlc/<package>` in the engine's `File_Web.cpp` (the drive table is shared with `File_Native.cpp`: `platform/NativeDrives.h`). A file a song opens is not in MEMFS, so the existing `AsyncFile` → `WebAssetsFetchSync` path fetches `/api/file/dlc/<package>/<path>`. Nothing per song is in the boot download.
+- **Previews.** `scripts/web/gen_dlc_web_assets.sh` (run by `scripts/web/build.sh`) writes a `<song>_prev.webm` next to each package's `_prev.bik`, as the disc has, and `WebMovieImpl` qualifies the drive path before its `.bik` → `.webm` rewrite. It also encodes the 5 kXMA sidecar keys the packages' barks have that the disc set lacks. `--check` exits 1 if a preview or a sidecar is missing.
+- **Memory.** Entering song select or the main menu unlinks every file under `/data/dlc/<package>/songs/<song>/` (`DC3 Web: DLC song files dropped at <screen>: N files, X MB`); the songs `.dta` stay. `?env=DC3_WEB_DLC_KEEP=1` keeps them. A dropped file is fetched again if it is opened again.
+- **Deploy.** `dc3-web.service` runs `server.py` with no `--dlc-dir`, so it finds `orig-assets/dlc` in the main checkout. `scripts/web/deploy.sh` builds (which generates the previews and sidecars) and its smoke test checks the packages are listed, `/api/bundle/dlc` and one preview answer, and `gen_dlc_web_assets.sh --check` passes.
+
+**Disk written** (once per box, shared by every checkout): 76 previews, 169.2 MB, inside `orig-assets/dlc/<package>/songs/<song>/`, plus `orig-assets/dlc/web-video-manifest.json`; 5 sidecar `.ogg` (0.1 MB) in `native/web/build/sfx_sidecars/`; the server's wire-compression cache grows by the DLC files it has brotli'd.
+
+### Measured (np-webdlc, 2026-11-14)
+
+WEB_DLC_MEASURED
+
+### Reproducing
+
+```bash
+scripts/web/build.sh --release                 # also runs gen_dlc_web_assets.sh
+python3 native/web/server.py --port 8463       # finds orig-assets/dlc
+# GPU: outside the sandbox
+node scripts/web/dlc-songs.mjs --port 8463 --out /tmp/dlc --songs milkshake,hotinherre,sandstorm,thehustle
+node scripts/web/dlc-songs.mjs --port 8463 --out /tmp/boot --boot-only
+```
+
 ## Not done
 
 See PLAN Track D.
