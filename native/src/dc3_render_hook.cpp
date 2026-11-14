@@ -94,17 +94,13 @@ public:
         return p;
     }
 
-    // UI colour (PLAN G-24). The Xbox 360 renderer is gamma space end to end:
-    // the frame is D3DFMT_A8R8G8B8 (CreateBackBuffers, 100%), bitmaps fetch
-    // with no gamma sign (DxRnd::D3DFormatForBitmap, 100%), and the shipped
-    // standard pixel shaders multiply the stored texel (the prelit textured
-    // permutation is `tfetch2D r0` then `mul oC0, r0, r2`; no log/exp touches
-    // a colour). The engine's dc3 shader instead treats texel * colour as
-    // linear and sRGB-encodes the result, which lifted every UI colour: the
-    // move cards' deep purple (front-buffer ~ 80,20,75) drew as a washed pink
-    // (~ 164,83,165). The world before EndWorld stays on the shader's linear
-    // model (lane np-gfx-light owns it); everything drawn after it is UI.
-    bool UiShadesInGammaSpace() override { return true; }
+    // UI colour (PLAN G-24): the Xbox 360 renderer is gamma space end to end
+    // (A8R8G8B8 frame, no gamma sign on bitmaps, shaders multiply stored
+    // values). That used to be a hook here, UiShadesInGammaSpace; since the
+    // retail light model (np-gfx-light) the engine's DC3 render shape shades
+    // every draw that way, world and UI (rndshape::kGammaSpaceShading), so the
+    // hook was retired in round 3. NativeUiMaterialTerms.OverlayPhaseTakes-
+    // RetailTerms still pins the UI's gamma-space shading.
 
     // UI lighting (PLAN G-24). DxRnd shades a UI mesh like any other: a lit
     // material takes the environ selected when it draws. The score digits are

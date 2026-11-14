@@ -39,6 +39,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <vector>
 
 class RetailLightingTest : public EngineTestFixture {
 protected:
@@ -239,6 +240,68 @@ TEST_F(RetailLightingTest, ProjectedShadowLightDrawsItsCastersWhereTheReceiversL
     delete caster;
 }
 
+// Houseparty holds two projected lights with shadow objects in one frame
+// (np-gfx-light round 3 probe): a2_spotlight.lit (default_environment.env,
+// blend 0, a gobo shadowed by five objects) and ShadowDirLight01.lit
+// (Shadows.env, blend 1, the floor shadow). Retail gives each NgLight its own
+// target. Native gives each its own tile of the caster atlas; the receivers
+// find their light's tile in shadowEnabled = 2 + tile. With the single map
+// this replaced, the second environ's light read shadowEnabled 0 every frame.
+// Sabotage: keeping only the first light per frame (frameCount capped at 1)
+// fails the s2b expectation and the two-set count.
+TEST_F(RetailLightingTest, TwoShadowLightsInOneFrameEachGetATile) {
+    RndLight *spotA = MakeLight(RndLight::kFakeSpot, Vector3(0.0f, 0.0f, 300.0f));
+    spotA->SetProjectedBlend(1);
+    RndMesh *casterA = Hmx::Object::New<RndMesh>();
+    ObjPtrList<RndDrawable> listA(spotA);
+    listA.push_back(casterA);
+    spotA->SetShadowOverride(&listA);
+
+    RndEnviron *envB = Hmx::Object::New<RndEnviron>();
+    RndLight *spotB = Hmx::Object::New<RndLight>();
+    spotB->SetLightType(RndLight::kFakeSpot);
+    spotB->SetColor(Hmx::Color(0.6f, 0.6f, 0.6f));
+    spotB->SetLocalPos(Vector3(100.0f, 0.0f, 300.0f));
+    spotB->SetProjectedBlend(1);
+    envB->LightsReal().push_back(spotB);
+    RndMesh *casterB = Hmx::Object::New<RndMesh>();
+    ObjPtrList<RndDrawable> listB(spotB);
+    listB.push_back(casterB);
+    spotB->SetShadowOverride(&listB);
+
+    // Frame 1: both environs draw; neither map exists yet.
+    mEnv->RndEnviron::Select(nullptr);
+    EXPECT_EQ(Write().shadowEnabled, 0.0f);
+    envB->RndEnviron::Select(nullptr);
+    EXPECT_EQ(Write().shadowEnabled, 0.0f);
+    std::vector<rndshape::ProjShadowCasters> sets;
+    ASSERT_EQ(rndshape::CollectProjShadowCasterSets(sets), 2);
+    EXPECT_EQ(sets[0].tile, 0);
+    EXPECT_EQ(sets[1].tile, 1);
+    ASSERT_EQ(sets[0].meshes.size(), 1u);
+    ASSERT_EQ(sets[1].meshes.size(), 1u);
+    EXPECT_EQ(sets[0].meshes[0], casterA);
+    EXPECT_EQ(sets[1].meshes[0], casterB);
+
+    // Frame 2, environs in the other order: each reads its own tile.
+    envB->RndEnviron::Select(nullptr);
+    SceneUniforms s2b = Write();
+    mEnv->RndEnviron::Select(nullptr);
+    SceneUniforms s2a = Write();
+    EXPECT_EQ(s2a.shadowEnabled, 2.0f) << "the first light's tile, 0";
+    EXPECT_EQ(s2b.shadowEnabled, 3.0f) << "the second light's tile, 1: it used to read no map";
+    ASSERT_EQ(rndshape::CollectProjShadowCasterSets(sets), 2);
+    EXPECT_EQ(sets[0].meshes[0], casterB) << "this frame published B first";
+
+    rndshape::CollectProjShadowCasterSets(sets);
+    spotA->SetShadowOverride(nullptr);
+    spotB->SetShadowOverride(nullptr);
+    delete casterA;
+    delete casterB;
+    delete spotB;
+    delete envB;
+}
+
 TEST_F(RetailLightingTest, GoboLightIsTheAdditiveFormWithItsTexture) {
     // projected_blend 0 (FREE SKATE's mirrorball_spotlight_*): standard.ps
     // 0x10030011 adds (1 - coverage) * tf10 * c69 * sat(c65 . N) to the box
@@ -309,4 +372,53 @@ TEST_F(RetailLightingTest, MaterialWithoutEnvironIsUnlit) {
     EXPECT_FALSE(rndshape::MatUnlit(mat));
     EXPECT_FALSE(rndshape::MatPrelitAmbient(mat));
     delete mat;
+}
+
+// NgLight::RenderShadows on native (np-gfx-light round 3): DC3's own shadow
+// render drew every caster in kDrawOcclusion into a 256x256 target and blurred
+// it, and the only reader of that target is SetPConstant(PShaderConstant,
+// RndTex *), which the native renderer leaves empty. The receivers read the
+// engine's caster map (ShadowPass::RenderCasters). So with both targets
+// present, RenderShadows must draw nothing, set no viewport and blur nothing.
+// Sabotage: deleting the native `return;` after the null-target guard in
+// Lit_NG.cpp makes this test count the caster's draw, the viewport and the blur.
+#include "rndobj/Lit_NG.h"
+
+namespace {
+class CountingCaster : public RndDrawable {
+public:
+    int mDraws = 0;
+    void DrawShowing() override { mDraws++; }
+};
+class InspectableNgLight : public NgLight {
+public:
+    int mViewports = 0;
+    int mBlurs = 0;
+    void ArmTargets() {
+        mShadowRT = Hmx::Object::New<RndTex>();
+        unk188 = Hmx::Object::New<RndTex>();
+    }
+    void UseOverride(RndDrawable *d) {
+        mShadowObjects.push_back(d);
+        mShadowOverride = &mShadowObjects;   // CheckShadowMap's temporary override
+    }
+    void Render(std::vector<RndDrawable *> &casters) { RenderShadows(casters); }
+    bool Armed() const { return mShadowRT && unk188; }
+    void SetAndClearShadowViewport() override { mViewports++; }
+    void BlurShadowRT() override { mBlurs++; }
+};
+} // namespace
+
+TEST_F(RetailLightingTest, NgLightRenderShadowsDrawsNoCastersOnNative) {
+    InspectableNgLight light;
+    light.SetLightType(RndLight::kFakeSpot);
+    CountingCaster caster;
+    light.UseOverride(&caster);
+    light.ArmTargets();
+    ASSERT_TRUE(light.Armed()) << "both targets must exist, or the null guard alone returns";
+    std::vector<RndDrawable *> casters{&caster};
+    light.Render(casters);
+    EXPECT_EQ(caster.mDraws, 0) << "DC3's shadow target has no reader on native";
+    EXPECT_EQ(light.mViewports, 0);
+    EXPECT_EQ(light.mBlurs, 0);
 }
