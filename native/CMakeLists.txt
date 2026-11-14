@@ -45,6 +45,17 @@ if(ENABLE_ASAN)
     add_link_options(-fsanitize=address)
 endif()
 
+# Compiler cache (ccache) — set by scripts/native_configure.sh as
+# CMAKE_<LANG>_COMPILER_LAUNCHER; see docs/native/BUILD_CACHE.md. Clang stamps
+# the mtime of every header into a .pch, which makes every PCH unique and every
+# TU that uses one a guaranteed cache miss. -fno-pch-timestamp drops the stamp
+# (ninja's depfiles, not clang's mtime check, are what keep a PCH current here).
+# Directory scope, before add_subdirectory(milo-native-engine), so the engine's
+# PCH gets it too.
+if(CMAKE_CXX_COMPILER_LAUNCHER MATCHES "ccache")
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:SHELL:-Xclang -fno-pch-timestamp>")
+endif()
+
 # MSVC compatibility flags — applied per-target, not globally.
 set(DC3_MSVC_COMPAT_FLAGS
     -fms-extensions          # __declspec support (xdk headers)
@@ -346,7 +357,16 @@ set(MILO_ENGINE_DECOMP_INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/../include)
 set(MILO_ENGINE_DECOMP_COMPAT_FLAGS
     ${DC3_MSVC_COMPAT_FLAGS} ${DC3_ATOMIC_COMPAT_FLAGS} ${DC3_DECOMP_FLAGS})
-set(MILO_ENGINE_DECOMP_PCH ${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h)
+# The PCH header is named in ANGLE-BRACKET form, found through the targets'
+# include path (../src/system), on purpose: CMake writes the header's name
+# verbatim into the generated cmake_pch.hxx that every PCH user includes. A full
+# path there is a different file in every worktree, so no TU that uses the PCH
+# could ever be a ccache hit from another worktree (measured: the only
+# difference between two trees' hash inputs was that 2-byte-longer line).
+# $<ANGLE-R>, not '>': every use wraps this in $<$<COMPILE_LANGUAGE:CXX>:...>,
+# and a bare '>' would close that genex early (C TUs then got `#include ">"`).
+set(DC3_PCH_HEADER "<decomp_pch.h$<ANGLE-R>")
+set(MILO_ENGINE_DECOMP_PCH "${DC3_PCH_HEADER}")
 # GPU backend flavor: DC3's WgpuRnd : NgRnd + the rndobj-coupled gfx TUs. This is
 # the engine's default when a consumer names no backend, but set it explicitly
 # (the engine now also ships a `rb3` BandRnd flavor — see the engine CMakeLists
@@ -1559,7 +1579,7 @@ target_link_libraries(dc3-web PRIVATE milo-engine imgui)
 # MILO_ENGINE_DECOMP_PLATFORM_EXCLUDE note above: the PCH locks <sys/stat.h>'s
 # st_mtime macro state).
 target_precompile_headers(dc3-web PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 set_source_files_properties(${DC3_WEB_LIFTED_ENGINE_SOURCES}
     PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
@@ -1761,7 +1781,7 @@ set_source_files_properties(
 # Covers Object.h, Debug.h and their heavy transitive includes (Data.h, BinStream,
 # Symbol, STL containers). Applies to all engine targets.
 target_precompile_headers(dc3-native PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # ============================================================================
@@ -1823,7 +1843,7 @@ target_link_libraries(milo-viewer PRIVATE
     $<$<BOOL:${ENABLE_FFMPEG}>:${FFMPEG_LIBRARIES}>
 )
 target_precompile_headers(milo-viewer PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # ============================================================================
@@ -1870,7 +1890,7 @@ target_link_libraries(render-test PRIVATE
     ${DC3_PLATFORM_LIBS}
 )
 target_precompile_headers(render-test PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # ============================================================================
@@ -1922,7 +1942,7 @@ target_include_directories(milo-tex-export PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
 target_link_options(milo-tex-export PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
 target_link_libraries(milo-tex-export PRIVATE ${DC3_EXPORT_TOOL_LIBS})
 target_precompile_headers(milo-tex-export PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # --- milo-mat-export ---
@@ -1940,7 +1960,7 @@ target_include_directories(milo-mat-export PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
 target_link_options(milo-mat-export PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
 target_link_libraries(milo-mat-export PRIVATE ${DC3_EXPORT_TOOL_LIBS})
 target_precompile_headers(milo-mat-export PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # --- milo2gltf ---
@@ -1958,7 +1978,7 @@ target_include_directories(milo2gltf PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
 target_link_options(milo2gltf PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
 target_link_libraries(milo2gltf PRIVATE ${DC3_EXPORT_TOOL_LIBS})
 target_precompile_headers(milo2gltf PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # ============================================================================
@@ -2086,11 +2106,22 @@ if(BUILD_TESTS)
         MILO_DEBUG=1
         _DEBUG=1
         $<$<BOOL:${ENABLE_FFMPEG}>:HX_FFMPEG=1>
-        # Absolute path to the decomp source tree. ctest runs the binary with
-        # WORKING_DIRECTORY=orig-assets, so a test that needs to read decomp
-        # SOURCE (rather than assets) cannot get there by a relative path.
-        "DC3_DECOMP_SRC_DIR=\"${CMAKE_SOURCE_DIR}/../src\""
     )
+    # Absolute path to the decomp source tree. ctest runs the binary with
+    # WORKING_DIRECTORY=orig-assets, so a test that needs to read decomp
+    # SOURCE (rather than assets) cannot get there by a relative path.
+    # Per FILE, not per target: an absolute worktree path in a target-wide
+    # define puts that path on all ~900 milo-tests compile lines, and ccache
+    # (docs/native/BUILD_CACHE.md) can then never share one of them between
+    # worktrees. Add a file here when it starts using the macro.
+    set_property(SOURCE
+            tests/test_native_options.cpp
+            tests/test_native_tree_paths.cpp
+            tests/test_null_this_guards.cpp
+            tests/test_object_lifetime.cpp
+            tests/test_pose_scoring.cpp
+        APPEND PROPERTY COMPILE_DEFINITIONS
+            "DC3_DECOMP_SRC_DIR=\"${CMAKE_SOURCE_DIR}/../src\"")
     target_include_directories(milo-tests PRIVATE
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/../src
@@ -2112,7 +2143,7 @@ if(BUILD_TESTS)
         ${FFMPEG_LIBRARIES}
     )
     target_precompile_headers(milo-tests PRIVATE
-        "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+        "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
     )
     # H-9 exit tests: Xlib (a second X client acting on the engine's window)
     # and no decomp header, so no PCH and no MSVC compat.
@@ -2304,7 +2335,9 @@ if(BUILD_TESTS)
         OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/milo_test_asset_dir.txt"
         CONTENT "${MILO_TEST_ASSET_DIR}\n")
 
-    target_compile_definitions(milo-tests PRIVATE
+    # Only test_gates.cpp reads these, and two of them are absolute paths of
+    # this build dir; per file for the same ccache reason as DC3_DECOMP_SRC_DIR.
+    set_property(SOURCE tests/test_gates.cpp APPEND PROPERTY COMPILE_DEFINITIONS
         "MILO_TEST_GATES_ON_STR=\"${_gates_on_str}\""
         "MILO_TEST_GATES_OFF_STR=\"${_gates_off_str}\""
         "MILO_TEST_GATE_PROBES_STR=\"${_gate_probes_str}\""
