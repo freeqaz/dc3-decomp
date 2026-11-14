@@ -28,6 +28,7 @@
 #if defined(__linux__) || defined(__APPLE__)
 
 #if defined(__linux__)
+#include <X11/Xatom.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #endif
@@ -42,6 +43,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
 #include <climits>
 #include <cstdio>
@@ -394,11 +396,29 @@ TEST_F(NativeExitTest, HealthUptimeIsWallClockNotSongTime) {
 #if defined(__linux__)
 namespace {
 
+// The next Xvfb's screen (WxHxDepth) and X resources (the RESOURCE_MANAGER
+// property, as xrdb sets it). A test that changes them restores them
+// (ScopedXvfbSetup).
+std::string sXvfbScreen = "1280x720x24";
+std::string sXResources;
+
+struct ScopedXvfbSetup {
+    ScopedXvfbSetup(const char *screen, const char *resources = "") {
+        sXvfbScreen = screen;
+        sXResources = resources;
+    }
+    ~ScopedXvfbSetup() {
+        sXvfbScreen = "1280x720x24";
+        sXResources.clear();
+    }
+};
+
 // A private X server. Skips (via `available`) when Xvfb is not installed.
 struct Xvfb {
     pid_t pid = -1;
     std::string display;
     bool available = false;
+    Display *resourceClient = nullptr; // holds sXResources on the server
 
     Xvfb() {
         if (system("command -v Xvfb >/dev/null 2>&1") != 0) return;
@@ -413,7 +433,7 @@ struct Xvfb {
                 dup2(devnull, STDERR_FILENO);
             }
             std::string fd = std::to_string(fds[1]);
-            execlp("Xvfb", "Xvfb", "-displayfd", fd.c_str(), "-screen", "0", "1280x720x24",
+            execlp("Xvfb", "Xvfb", "-displayfd", fd.c_str(), "-screen", "0", sXvfbScreen.c_str(),
                    "-nolisten", "tcp", (char *)nullptr);
             _exit(127);
         }
@@ -430,9 +450,24 @@ struct Xvfb {
         if (total > 0) {
             display = ":" + std::string(buf, strcspn(buf, "\n"));
             available = true;
+            if (!sXResources.empty()) {
+                // The property xrdb writes; GLFW reads Xft.dpi from it for the
+                // content scale. The connection stays open: when its last
+                // client goes, an X server resets, and the reset drops the
+                // root window's properties (as xrdb's own docs warn).
+                if ((resourceClient = XOpenDisplay(display.c_str()))) {
+                    Atom rm = XInternAtom(resourceClient, "RESOURCE_MANAGER", False);
+                    XChangeProperty(resourceClient, DefaultRootWindow(resourceClient), rm,
+                                    XA_STRING, 8, PropModeReplace,
+                                    (const unsigned char *)sXResources.data(),
+                                    (int)sXResources.size());
+                    XSync(resourceClient, False);
+                }
+            }
         }
     }
     ~Xvfb() {
+        if (resourceClient) XCloseDisplay(resourceClient);
         if (pid > 0) {
             kill(pid, SIGTERM);
             waitpid(pid, nullptr, 0);
@@ -687,6 +722,281 @@ TEST_F(NativeExitTest, WindowedDefaultPortFallsBackWhen9090IsTaken) {
     EXPECT_TRUE(Contains(out, "(loopback only)")) << Tail(out);
     ASSERT_TRUE(WIFEXITED(e.status)) << Tail(out);
     EXPECT_EQ(WEXITSTATUS(e.status), 0) << Tail(out);
+    ExpectNoCrash(out);
+}
+
+// ===========================================================================
+// H-18: the window shows the whole frame at any size; H-33: a window that
+// cannot be drawn into stops the game instead of spinning.
+//
+// The frame is the Rnd virtual resolution (1280x720), scaled into the window
+// with its aspect kept and black bars where the window's shape differs
+// (engine gfx/PresentScale). These read the window's pixels back from the X
+// server (XGetImage): bars must be exactly black, and the picture must reach
+// the window's right and bottom edges -- the old corner picture left
+// everything right of x=1280 and below y=720 black.
+// ===========================================================================
+namespace {
+
+struct WindowShot {
+    int w = 0, h = 0;
+    std::vector<uint32_t> px; // 0xRRGGBB
+
+    bool Grab(Display *dpy, Window win) {
+        XWindowAttributes a;
+        if (!XGetWindowAttributes(dpy, win, &a)) return false;
+        XImage *img = XGetImage(dpy, win, 0, 0, a.width, a.height, AllPlanes, ZPixmap);
+        if (!img) return false;
+        w = a.width;
+        h = a.height;
+        px.resize((size_t)w * h);
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) px[(size_t)y * w + x] = (uint32_t)XGetPixel(img, x, y) & 0xFFFFFF;
+        XDestroyImage(img);
+        return true;
+    }
+    // Fraction of pixels in [x0,x1) x [y0,y1) brighter than near-black.
+    double Lit(int x0, int y0, int x1, int y1) const {
+        long lit = 0, n = 0;
+        for (int y = std::max(0, y0); y < std::min(h, y1); y++)
+            for (int x = std::max(0, x0); x < std::min(w, x1); x++, n++) {
+                uint32_t p = px[(size_t)y * w + x];
+                if (((p >> 16) & 0xFF) > 8 || ((p >> 8) & 0xFF) > 8 || (p & 0xFF) > 8) lit++;
+            }
+        return n ? (double)lit / n : 0.0;
+    }
+    // Every pixel in the region is pure black (a bar).
+    bool Black(int x0, int y0, int x1, int y1) const {
+        for (int y = std::max(0, y0); y < std::min(h, y1); y++)
+            for (int x = std::max(0, x0); x < std::min(w, x1); x++)
+                if (px[(size_t)y * w + x] != 0) return false;
+        return true;
+    }
+};
+
+// The fitted picture for a 1280x720 frame (gfx/PresentScale's FitPresentRect).
+struct Fit {
+    int x, y, w, h;
+};
+Fit FitFrame(int winW, int winH) {
+    Fit f;
+    if ((long long)winW * 720 > (long long)winH * 1280) {
+        f.h = winH;
+        f.w = (int)(((long long)winH * 1280 + 360) / 720);
+    } else {
+        f.w = winW;
+        f.h = (int)(((long long)winW * 720 + 640) / 1280);
+    }
+    f.x = (winW - f.w) / 2;
+    f.y = (winH - f.h) / 2;
+    return f;
+}
+
+// Waits (up to 20 s) for the window to be winW x winH with the frame fitted in
+// it: bars black, picture lit along its right and bottom edges. "" on
+// success, else what was wrong with the last look.
+std::string WaitForFittedPicture(Display *dpy, Window win, int winW, int winH) {
+    std::string why = "never grabbed";
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    do {
+        XSync(dpy, False);
+        WindowShot s;
+        if (!s.Grab(dpy, win)) {
+            why = "XGetImage failed";
+        } else if (s.w != winW || s.h != winH) {
+            why = "window is " + std::to_string(s.w) + "x" + std::to_string(s.h) + ", want " +
+                  std::to_string(winW) + "x" + std::to_string(winH);
+        } else {
+            Fit f = FitFrame(winW, winH);
+            const int strip = std::max(16, f.w / 12);
+            double right = s.Lit(f.x + f.w - strip, f.y, f.x + f.w, f.y + f.h);
+            double bottom = s.Lit(f.x, f.y + f.h - f.h / 8, f.x + f.w, f.y + f.h);
+            bool bars = s.Black(0, 0, winW, f.y) && s.Black(0, f.y + f.h, winW, winH) &&
+                        s.Black(0, 0, f.x, winH) && s.Black(f.x + f.w, 0, winW, winH);
+            char buf[256];
+            snprintf(buf, sizeof buf,
+                     "picture %dx%d+%d+%d: right-edge strip %.1f%% lit, bottom strip %.1f%% lit, "
+                     "bars %s",
+                     f.w, f.h, f.x, f.y, right * 100, bottom * 100, bars ? "black" : "NOT black");
+            why = buf;
+            if (bars && right > 0.01 && bottom > 0.01) return "";
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    } while (std::chrono::steady_clock::now() < deadline);
+    return why;
+}
+
+class NativeWindowTest : public NativeExitTest {};
+
+// Waits for the engine to exit on its own (no window); false on timeout.
+bool WaitOwnExit(Engine &e, int seconds) { return e.WaitExit(seconds); }
+
+} // namespace
+
+// A window larger than the frame, and of another shape: the frame fills its
+// width with bars above and below. Then resized wider than 16:9 (bars left and
+// right) and taller (bars above and below again), as a person or a tiling
+// desktop does.
+TEST_F(NativeWindowTest, TheFrameIsScaledToFitTheWindow) {
+    if (!HaveXdotool()) GTEST_SKIP() << "xdotool not installed";
+    ScopedXvfbSetup setup("1920x1200x24");
+    Engine e;
+    std::string atStart, wide, tall;
+    RunWindowed(mRunDir, [&](Display *dpy, Window w) {
+        atStart = WaitForFittedPicture(dpy, w, 1600, 1000);
+        ASSERT_TRUE(Xdotool("windowsize " + std::to_string(w) + " 1800 700"));
+        wide = WaitForFittedPicture(dpy, w, 1800, 700);
+        ASSERT_TRUE(Xdotool("windowsize " + std::to_string(w) + " 1000 900"));
+        tall = WaitForFittedPicture(dpy, w, 1000, 900);
+        SendWmDeleteWindow(dpy, w);
+    }, e, {"MILO_WIDTH=1600", "MILO_HEIGHT=1000"});
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_EQ(atStart, "") << "1600x1000 window\n" << Tail(out);
+    EXPECT_EQ(wide, "") << "resized to 1800x700\n" << Tail(out);
+    EXPECT_EQ(tall, "") << "resized to 1000x900\n" << Tail(out);
+    EXPECT_TRUE(Contains(out, "frame scaled to fit")) << Tail(out);
+    ExpectNoCrash(out);
+}
+
+// F11 and Alt+Enter toggle fullscreen (the window takes the whole screen, the
+// frame letterboxed in it) and back to the window's size. Alt+Enter is not
+// also an A press: the keyboard pad reports nothing while Alt is held.
+TEST_F(NativeWindowTest, F11AndAltEnterToggleFullscreen) {
+    if (!HaveXdotool()) GTEST_SKIP() << "xdotool not installed";
+    ScopedXvfbSetup setup("1920x1200x24");
+    Engine e;
+    std::string full1, back1, full2, back2;
+    RunWindowed(mRunDir, [&](Display *dpy, Window w) {
+        ASSERT_TRUE(Xdotool("key F11"));
+        full1 = WaitForFittedPicture(dpy, w, 1920, 1200);
+        ASSERT_TRUE(Xdotool("key F11"));
+        back1 = WaitForFittedPicture(dpy, w, 1280, 720);
+        // Alt held across the Enter, as a person presses it.
+        ASSERT_TRUE(Xdotool("keydown alt sleep 0.2 key Return sleep 0.2 keyup alt"));
+        full2 = WaitForFittedPicture(dpy, w, 1920, 1200);
+        ASSERT_TRUE(Xdotool("keydown alt sleep 0.2 key Return sleep 0.2 keyup alt"));
+        back2 = WaitForFittedPicture(dpy, w, 1280, 720);
+        SendWmDeleteWindow(dpy, w);
+    }, e, {"MILO_INPUT_LOG=1"});
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_EQ(full1, "") << "F11\n" << Tail(out);
+    EXPECT_EQ(back1, "") << "F11 again\n" << Tail(out);
+    EXPECT_EQ(full2, "") << "Alt+Enter\n" << Tail(out);
+    EXPECT_EQ(back2, "") << "Alt+Enter again\n" << Tail(out);
+    EXPECT_FALSE(Contains(out, "(A) action")) << "Alt+Enter also pressed A\n" << Tail(out);
+    ExpectNoCrash(out);
+}
+
+// MILO_FULLSCREEN=1 starts fullscreen (scripts/play.sh --fullscreen).
+TEST_F(NativeWindowTest, MiloFullscreenStartsFullscreen) {
+    ScopedXvfbSetup setup("1920x1080x24");
+    Engine e;
+    std::string full;
+    RunWindowed(mRunDir, [&](Display *dpy, Window w) {
+        full = WaitForFittedPicture(dpy, w, 1920, 1080);
+        SendWmDeleteWindow(dpy, w);
+    }, e, {"MILO_FULLSCREEN=1"});
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_EQ(full, "") << Tail(out);
+    EXPECT_TRUE(Contains(out, "GpuDevice: fullscreen 1920x1080")) << Tail(out);
+    ExpectNoCrash(out);
+}
+
+// HiDPI on X11: at a content scale of 2 (Xft.dpi 192) the window opens at
+// twice the size in pixels, and the frame fills it at exactly 2x.
+TEST_F(NativeWindowTest, AnX11ContentScaleSizesTheWindow) {
+    ScopedXvfbSetup setup("2560x1600x24", "Xft.dpi:\t192\n");
+    Engine e;
+    std::string hidpi;
+    RunWindowed(mRunDir, [&](Display *dpy, Window w) {
+        hidpi = WaitForFittedPicture(dpy, w, 2560, 1440);
+        SendWmDeleteWindow(dpy, w);
+    }, e);
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_EQ(hidpi, "") << Tail(out);
+    EXPECT_TRUE(Contains(out, "surface 2560x1440")) << Tail(out);
+    ExpectNoCrash(out);
+}
+
+// H-33: a window whose surface cannot be presented to on any window system is
+// a named exit (97), not a silent fall back to an invisible headless run.
+// MILO_SURFACE_FAULT=init makes every surface probe fail.
+TEST_F(NativeWindowTest, AnUnusableSurfaceIsANamedExit) {
+    Xvfb x;
+    if (!x.available) GTEST_SKIP() << "Xvfb not installed";
+    Engine e;
+    Start(e, mRunDir, {"MILO_HEADLESS", "DISPLAY=" + x.display, "MILO_SURFACE_FAULT=init"});
+    ASSERT_TRUE(WaitOwnExit(e, 180)) << "still running\n" << Tail(e.Output());
+    std::string out = e.Output();
+    if (GpuUnavailable(out)) GTEST_SKIP() << "GPU unavailable";
+    ASSERT_TRUE(WIFEXITED(e.status)) << Tail(out);
+    EXPECT_EQ(WEXITSTATUS(e.status), 97) << Tail(out);
+    EXPECT_TRUE(Contains(out, "DC3 Native: FATAL - the window cannot be presented to")) << Tail(out);
+    EXPECT_TRUE(Contains(out, "detail=window_surface_unusable code=97")) << Tail(out);
+    EXPECT_FALSE(Contains(out, "falling back to headless")) << Tail(out);
+    EXPECT_FALSE(Contains(out, "Entering main loop")) << Tail(out);
+    ExpectNoCrash(out);
+}
+
+// H-33: the fallback re-opens the window (on X11: XWayland). Exercised here by
+// MILO_SURFACE_FAULT=init-once, which fails the first window's probe only and
+// lets the fallback run once even on X11: the second window must come up,
+// draw and close normally.
+TEST_F(NativeWindowTest, AnUnusableFirstSurfaceReopensTheWindow) {
+    Engine e;
+    std::string pic;
+    RunWindowed(mRunDir, [&](Display *dpy, Window w) {
+        pic = WaitForFittedPicture(dpy, w, 1280, 720);
+        SendWmDeleteWindow(dpy, w);
+    }, e, {"MILO_SURFACE_FAULT=init-once"});
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_TRUE(Contains(out, "cannot be presented to: MILO_SURFACE_FAULT says so (test hook); "
+                              "opening it again through X11"))
+        << Tail(out);
+    EXPECT_EQ(pic, "") << Tail(out);
+    ASSERT_TRUE(WIFEXITED(e.status)) << Tail(out);
+    EXPECT_EQ(WEXITSTATUS(e.status), 0) << Tail(out);
+    ExpectNoCrash(out);
+}
+
+// H-33: a surface that never hands out a frame. The loop must not spin (on the
+// GPD it ran 6,000-7,000 iterations a second drawing nothing): each failed
+// acquire waits a frame period, and after 5 s without a single frame the game
+// stops with exit 97. The engine's own count of failed acquires over that time
+// is the loop's rate.
+TEST_F(NativeWindowTest, ASurfaceThatGivesNoFramesStopsWithoutSpinning) {
+    Xvfb x;
+    if (!x.available) GTEST_SKIP() << "Xvfb not installed";
+    Engine e;
+    // The frame cap off (DC3_FPS_CAP=0, and rb3 has none): the cap alone
+    // would also hold this loop near 60/s and hide a spin in the acquire.
+    Start(e, mRunDir, {"MILO_HEADLESS", "DISPLAY=" + x.display, "MILO_SURFACE_FAULT=acquire",
+                       "DC3_FPS_CAP=0"});
+    ASSERT_TRUE(WaitOwnExit(e, 300)) << "still running\n" << Tail(e.Output());
+    std::string out = e.Output();
+    if (GpuUnavailable(out)) GTEST_SKIP() << "GPU unavailable";
+    ASSERT_TRUE(WIFEXITED(e.status)) << Tail(out);
+    EXPECT_EQ(WEXITSTATUS(e.status), 97) << Tail(out);
+    EXPECT_TRUE(Contains(out, "detail=window_surface_unusable code=97")) << Tail(out);
+    // "... has not given a single frame in 5 s (312 attempts, last status Error)"
+    size_t at = out.find("has not given a single frame in ");
+    ASSERT_NE(at, std::string::npos) << Tail(out);
+    double secs = 0;
+    long long attempts = 0;
+    ASSERT_EQ(sscanf(out.c_str() + at, "has not given a single frame in %lf s (%lld attempts",
+                     &secs, &attempts), 2)
+        << out.substr(at, 120);
+    ASSERT_GE(secs, 5.0);
+    const double rate = attempts / secs;
+    // A frame period of sleep per attempt caps it near 60/s (fewer on a loaded
+    // box); a spinning loop is in the thousands.
+    EXPECT_LT(rate, 120.0) << attempts << " acquires in " << secs << " s\n" << Tail(out);
+    EXPECT_GT(attempts, 0);
     ExpectNoCrash(out);
 }
 

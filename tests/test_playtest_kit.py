@@ -270,6 +270,8 @@ class AssetManifestTest(unittest.TestCase):
         return rc, out.getvalue()
 
     def test_ok_missing_short_and_capitals(self):
+        # Capitals in the data path are fine since PLAN H-17 was fixed (the
+        # game keeps a host directory's spelling); the check used to refuse it.
         base = tempfile.mkdtemp(prefix="playtest_assets_")
         good = os.path.join(base, "good")
         mp = self.make_box(good)
@@ -289,8 +291,8 @@ class AssetManifestTest(unittest.TestCase):
         caps = os.path.join(base, "Caps")
         mp3 = self.make_box(caps)
         rc, out = self.check(caps, mp3)
-        self.assertEqual(rc, 4)
-        self.assertIn("H-17", out)
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn("capital", out)
 
 
 class KitDriveTest(unittest.TestCase):

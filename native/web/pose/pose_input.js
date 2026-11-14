@@ -22,6 +22,10 @@
 //   pose_persons=1|2    MediaPipe numPoses (default 2; pose_server.py
 //                       --max-persons). 1 is ~40% less inference but finds
 //                       one player only (POSE_INPUT.md#performance)
+//   pose_probe=<s>      with pose_persons=2: numPoses 1 on every frame, and a
+//                       numPoses 2 probe every <s> seconds that switches to 2
+//                       when it sees a second person (pose_mediapipe.py
+//                       --probe-second-person; 0 = off, numPoses 2 every frame)
 //   pose_slow=STAGE:MS  instrument check: busy work in one worker stage
 //                       (scripts/pose_bench/web_pose_fps.mjs)
 //
@@ -50,6 +54,7 @@ const opt = {
     // way). 1 skips the per-frame person detector that 2 runs while fewer
     // than 2 people are tracked, but a second player is never found.
     persons: Math.min(2, Math.max(1, parseInt(params.get('pose_persons') || '2', 10) || 2)),
+    probeSec: Math.max(0, parseFloat(params.get('pose_probe') || '0') || 0),
 };
 
 function parseFrames(v) {
@@ -231,6 +236,7 @@ function onWorkerMessage(ev) {
         if (msg.count > 0) stats.framesWithPerson++;
         ring(stats.inferMs, msg.inferMs + msg.geomMs);
         stats.numPoses = msg.numPoses;
+        if (msg.probe) stats.probe = msg.probe;
         const stageRing = (k, v) => ring(stats.stageMs[k] || (stats.stageMs[k] = []), v);
         if (msg.stages) for (const [k, v] of Object.entries(msg.stages)) stageRing(k, v);
         if (msg.postedAt) stageRing('xfer', performance.timeOrigin + t0 - msg.postedAt);
@@ -239,8 +245,14 @@ function onWorkerMessage(ev) {
             stats.fps = +(0.9 * (stats.fps || 1 / dt) + 0.1 / dt).toFixed(1);
         }
         lastPoseT = t0;
-        const pushed = pushToEngine(msg.floats, msg.count, msg.captureSec);
-        if (pushed && msg.camera) pushCameraToEngine(msg);
+        // Test hook: window.dc3PoseHold(true) sends the engine empty frames
+        // (nobody in view) until dc3PoseHold(false), so a driver can work the
+        // menus with the keyboard while a fake camera dances: the dancer's
+        // hand cursor otherwise picks menu items on its own
+        // (scripts/web/pose-gameplay.mjs).
+        const pushed = hold ? pushToEngine(new Float32Array(0), 0, msg.captureSec)
+            : pushToEngine(msg.floats, msg.count, msg.captureSec);
+        if (pushed && msg.camera && !hold) pushCameraToEngine(msg);
         drawOverlay(msg.image2d, msg.numPoses);
         if (!pushed) setStateOnce('waiting', 'Camera ready — waiting for the game…', 'warn');
         else if (msg.count === 0) setStateOnce('noperson', 'No one in view — step into the camera', 'warn');
@@ -259,6 +271,8 @@ function onWorkerMessage(ev) {
 }
 function setStateOnce(state, text, cls) { if (stats.state !== state) setState(state, text, cls, false); }
 
+let hold = false;
+window.dc3PoseHold = (on) => { hold = !!on; stats.held = hold; };
 let frameCb = null;
 export function onPose(cb) { frameCb = cb; }
 
@@ -272,7 +286,7 @@ export async function createWorker(sources) {
         w.addEventListener('message', h);
     });
     w.postMessage({ type: 'init', ...sources, delegate: opt.delegate, hfovDeg: opt.hfov, numPoses: opt.persons,
-        frames: opt.frames, slow: opt.slow });
+        frames: opt.frames, slow: opt.slow, probeSec: opt.probeSec });
     return { worker: w, ready };
 }
 
@@ -286,7 +300,9 @@ async function start() {
         // 640x480 like the desktop server's request; the geometry is
         // aspect-correct (one focal length from the horizontal FOV) either way.
         stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } },
+            // facingMode 'user': a phone's front camera, which faces the
+            // player (a laptop's one camera satisfies it either way).
+            video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 }, facingMode: { ideal: 'user' } },
             audio: false,
         });
     } catch (e) {

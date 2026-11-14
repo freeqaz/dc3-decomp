@@ -100,6 +100,14 @@ static const Dc3ProfileDefault kDc3DevDefaults[] = {
      "a DC3 MOVE_RATING line per scored move"},
     {"MILO_PERF", "1", false, "a [PERF] fps/frame-time line every 5 s",
      "a [PERF] frame-time line every 5 s", true},
+    // Installed content, as on a 360 with packages on its drive: the original
+    // lists every installed package's songs, so this is the original's
+    // behaviour for the content present, not a change to it.  A box without
+    // <data>/dlc is unaffected; ctest pins DC3_DLC=0 (MILO_TEST_ENV).
+    {"DC3_DLC", "1", true,
+     "every DLC package under <data>/dlc mounted (orig-assets/dlc, made by "
+     "scripts/dlc/import.sh; DC3_DLC_DIR names other roots)",
+     "downloadable songs from orig-assets/dlc, when it exists"},
 };
 
 const Dc3ProfileDefault *Dc3ProfileDevDefaults(int *count) {

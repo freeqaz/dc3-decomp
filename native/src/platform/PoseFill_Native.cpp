@@ -252,6 +252,20 @@ double Filler::MedianInterval() const {
     return v[mNumIntervals / 2];
 }
 
+double Filler::RateInterval() const {
+    if (mNumIntervals < kMinIntervals)
+        return 0.0;
+    double v[kWindow];
+    for (int i = 0; i < mNumIntervals; i++)
+        v[i] = mIntervals[i];
+    std::sort(v, v + mNumIntervals);
+    const int trim = mNumIntervals / 5;
+    double sum = 0.0;
+    for (int i = trim; i < mNumIntervals - trim; i++)
+        sum += v[i];
+    return sum / (mNumIntervals - 2 * trim);
+}
+
 void Filler::Drop(int n) {
     if (n <= 0)
         return;
@@ -304,12 +318,13 @@ bool Filler::Push(const Source &src) {
     mBuf[mCount++] = src;
 
     double med = MedianInterval();
+    double rate = RateInterval();
     if (mMode == kOff) {
         mEngaged = false;
-    } else if (!mEngaged && med > 1.0 / kEngageHz) {
+    } else if (!mEngaged && rate > 1.0 / kEngageHz) {
         mEngaged = true;
         mDelay = 0.0;
-    } else if (mEngaged && med > 0.0 && med < 1.0 / kReleaseHz) {
+    } else if (mEngaged && rate > 0.0 && rate < 1.0 / kReleaseHz) {
         mEngaged = false;
     }
     if (mEngaged && mMode == kInterp) {

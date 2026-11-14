@@ -100,8 +100,94 @@ two `-O0` runs alone differ by 2x. At similar load the two builds agree: `-O3`
 | whole song | yes, 5 of 6 venues (throneroom is locked in quickplay; W-6) | yes |
 | wasm heap peak, one song | 399–472 MB of a 1024 MB cap (table below) | same code, same data |
 
-fps is pinned by `requestAnimationFrame`, so it says nothing about headroom on a
-slower machine. Video plays from `.webm` transcodes (all 142 `.bik` have one;
+fps is pinned by `requestAnimationFrame` (and capped at 60, below), so it says
+nothing about headroom on a slower machine.
+
+### Frame cap on high-refresh displays (H-34, np-web4)
+
+`main_web.cpp` ran one game frame per `requestAnimationFrame`, and rAF fires
+at the display's rate, so a 120/144 Hz browser ran the game at 120/144 fps
+where the desktop caps at 60 (H-29). The rAF loop now asks `dc3RafGate(ts)`
+first (`Dc3RafGate`, `native/src/platform/FramePacer_Native.cpp`):
+
+- it estimates the display rate from the **one-refresh gaps** among the last
+  64 rAF gaps (first decision after 16): the gaps up to 1.5× the 25th
+  percentile, and their median. The first version took the median of all
+  gaps, which is wrong: a gap after a frame that ran holds the frame's cost,
+  and only a gap after a skipped rAF (or a frame shorter than one refresh) is
+  one clean refresh. With most frames a little over one refresh, the median
+  read half the panel's rate and turned the cap off (MEASURED in Chromium on
+  an emulated 144 Hz rAF: off at "48 Hz", then on again; in the unit test
+  the game ran 89 fps on 144 Hz with the median put back);
+- it passes that estimate to the same `Dc3FrameCapDecide` the desktop uses, so
+  the cap snaps the same way: 144 Hz → every 2nd rAF (72 fps), 120 → 60,
+  240 → 60, 165 → 82.5, and 60 Hz or slower runs every rAF. A re-estimate
+  within 5% of the cap in force keeps it (the estimate wobbles ~1–2% with
+  timestamp jitter; the first version logged a new "frame cap 72.00 fps" line
+  for each wobble, hiding the real flip among them);
+- a rAF runs the frame when it is no earlier than half a refresh before the
+  frame is due, so jitter does not drop frames. An on-time frame makes the
+  next due one period after this rAF (an estimate a fraction off, 143.6 vs
+  144 Hz, never drifts into a drop); a late frame (ran past its refresh)
+  makes the next due one period after it was *due*, so the lost refresh is
+  made up on the next one, with at most one period of debt;
+- `?env=DC3_FPS_CAP=N` caps at N (snapped), `DC3_FPS_CAP=0` turns it off, as on
+  desktop.
+
+A game slower than the cap leaves no one-refresh gap (nothing is skipped and
+every frame outlasts a refresh), so the gate reads the game's own rate and
+turns the cap off. That is correct (there is nothing to cap) and the cap comes
+back once frames are short again.
+
+It logs `DC3 Web: frame cap … (display ~N Hz from rAF)` when the decision
+changes, and `window.dc3FrameCap` holds the estimate, the cap, and rAFs run and
+skipped. Tests: `RafGate.*` in `test_frame_pacer.cpp` drive the gate with a
+simulated rAF grid where a frame that runs long holds the next rAF to the
+first refresh after it (144/120/240/165/500 Hz, 60 Hz, a game slower than the
+display, frames longer than one refresh, late frames, ±0.5 ms jitter on 120
+and 144 Hz with every gap between frames checked, env overrides). Sabotages
+(MEASURED, each in a standalone build of the gate and the RafGate tests):
+
+| sabotage | fails |
+|---|---|
+| median of all gaps (the first version) | `FramesLongerThanOneRefreshDoNotHideThePanel`: 89.3 / 74.8 game fps on 144 / 120 Hz, cap off |
+| bare 25th percentile (no one-refresh cluster) | `JitterDoesNotDropFrames`: estimate 149.7 Hz |
+| exact cap comparison (no 5%) | `JitterDoesNotDropFrames`: 14 decisions; `FramesLonger…`: flipped |
+| no half-refresh tolerance | `JitterDoesNotDropFrames`: gaps of 1 and 3 refreshes |
+| period from the last frame that ran (no make-up) | `ALateFrameIsMadeUpOnTheNextRefresh`: 60 fps (68.9 with it; uncapped ~80) |
+| due grid never re-anchored to the rAF | `JitterDoesNotDropFrames`: gaps of 1 and 3 refreshes |
+| run on every rAF | every capped case |
+
+In the browser, `scripts/web/frame-cap.mjs --hz N` replaces
+`requestAnimationFrame` before any page script with an N Hz grid scheduler
+(a callback that runs long misses grid points, as on a real panel; Chromium's
+`--disable-frame-rate-limit --disable-gpu-vsync`, the first version of the
+probe, made every game frame ~70 ms on this box and could not say anything;
+`--hz 0` keeps it). It fails above cap + 3 game frames a second always, and
+needs the gate at the snapped cap with no flip to pass; a game slower than
+the cap on its own is exit 3 (SKIPPED). MEASURED on the rig, attract screen,
+release build, load 28–60 (other lanes and their GPU work: the same command
+gave anywhere from 22 to 101 uncapped game frames a second, so the game rate
+says little; the cap and the skip count are the result):
+
+| run | game/s | gate | result |
+|---|---|---|---|
+| 144 Hz, median build | 61.1 | 5 decisions, off at "48 Hz" once | flip (FAIL under today's check) |
+| 144 Hz | 56.6¹, 53.5, 33.7 | 72 fps, 1 decision, 356–511 rAFs skipped per 10 s | PASS |
+| 120 Hz | 48.7¹, 30.3 | 60 fps, 1 decision | PASS |
+| 165 Hz | 45.9 | 82.5 fps, 1 decision | PASS |
+| 144 Hz, after the rebase onto main `21b966241` (load 25) | 68.2 | 72 fps, 1 decision, 540 skipped; game frame p50/p90/p99 1.1/18.8/51.7 ms | PASS |
+| 144 Hz, game at 16–23/s (load 35–60) | 15.8, 23.0 | turned off, 3 decisions | SKIPPED, correctly |
+| control `DC3_FPS_CAP=0 --expect uncapped`, 144 Hz | 101.1¹, 93.4, 82.7, 68.1 | off, 0 skipped | PASS (21.8 once: SKIPPED) |
+| sabotage: `DC3_FPS_CAP=0` under the capped check | 99.7 (144 Hz), 57.4 (120 Hz) | off | FAIL, FAIL |
+
+¹ An intermediate build (bare 25th percentile, period from the last frame that
+ran); the rest are the final gate.
+
+INFERRED, not measured: a real high-refresh panel. Nothing on this box has
+one; the emulation stands in for it.
+
+Video plays from `.webm` transcodes (all 142 `.bik` have one;
 see [`native/web/VIDEO_ASSETS.md`](../../native/web/VIDEO_ASSETS.md)).
 
 ### Intro movie (W-11)
@@ -158,6 +244,77 @@ and every song scores 0 (measured); dc3 needs the engine branch first.
 `pose-gameplay.mjs --unmute` fails (exit 1) above 0.25 errors a game second
 (`--max-timer-errors-per-s`).
 
+### Frame pacing (W-14/W-15, np-web4)
+
+`pose-gameplay.mjs --pacing` records every game frame and rAF interval, long
+tasks (and long-animation-frame script attribution), every request, audio
+underruns and the engine's per-frame counters (`DC3_FRAME_TRACE`: fetch, texture,
+mesh, unpack, pipeline, DTA, stream ms), and gives each stall over 50 ms one
+cause. It writes `pacing.json` and prints the per-phase table. Phases: menu,
+song_select, loading, game, results.
+
+**Box load decides the numbers on the rig.** Every run below was taken at load
+average 50–190 on 32 cores (other lanes compiling and running flow tests, plus
+this lane's own native gate for part of it), with the macarena loop as a fake
+camera and the pose worker taking 80–175 ms a frame (41–47 ms on a quiet box).
+Game-phase fps was 18.8–23.7 and whole-run p95 frame time 108–130 ms in every run,
+before or after any change; the run-to-run spread is larger than any fix here.
+So the before/after below is measured on the thing that changed, not on the
+whole-run percentiles. A quiet-box or GPD measurement is still owed (the GPD's
+W-14 row on np-gpd-test: p50 53.8 fps, p5 20.6, stalls to 1.37 s).
+
+What the stalls were, two-song runs (MEASURED, menus → Macarena → results →
+Give It Up To Me):
+
+| cause | before1 | after1 | after2 | before2 |
+|---|---|---|---|---|
+| game frame compute (main thread) | 2279 / 191 s | 1584 / 129 s | 2728 / 226 s | 991 / 82 s |
+| browser frame gap (main thread busy elsewhere, compositor) | 971 / 102 s | 1183 / 143 s | 1135 / 123 s | 1985 / 206 s |
+| blocking asset fetch | 110 / 39 s | 47 / 7 s | 157 / 46 s | 60 / 9 s |
+| main-thread task, not a game frame | 183 / 23 s | 146 / 17 s | 254 / 29 s | 128 / 15 s |
+
+(stalls over 50 ms / their total ms). "Before" is `MILO_WEB_BUNDLE_SLICE_MS=0`,
+the old one-task unpack; the devkit fix is in all four.
+
+Fixed:
+
+1. **Screen-bundle unpack in one task** (engine `WebAssets.cpp`). The bundle's
+   fetch callback wrote every file into MEMFS in one go: the boot set (493
+   files), the SFX set (1035), title_flow (25 files, 77.6 MB) and
+   song_select each held the main thread for one task. It now unpacks in
+   ~6 ms slices (`MILO_WEB_BUNDLE_SLICE_MS`, default 6, 0 = the old way),
+   re-posting itself with `emscripten_async_call(…, 0)`, and skips a file
+   already in MEMFS at the same size (a sync fetch that beat the bundle).
+   MEASURED, longest single unpack task:
+
+   | bundle | before (one task) | after (slices, mean per slice) |
+   |---|---|---|
+   | boot (493 files) | 158, 184 ms | 21 slices, 7.4 ms; 19 slices, 7.3 ms |
+   | SFX (1035) | 152, 403 ms | 33 slices, 6.5 ms; 45 slices, 8.0 ms |
+   | title_flow (25, 77.6 MB) | 81, 179 ms | 9 slices, 9.9 ms; 8 slices, 9.5 ms |
+
+   A slice can run over budget by one file (the largest title_flow milo).
+   Total busy time is unchanged; wall time grows because other frames run in
+   between, which is the point.
+2. **`devkit:` reads went to the server** (engine `AsyncFile_Native.cpp`).
+   `devkit:/dancers.dta` and `devkit:/locale/eng/locale_keep.dta` were each a
+   blocking round trip and a 404. They now open as missing without a request
+   (see "Known console lines").
+
+Not fixed (MEASURED, INFERRED where marked):
+
+- **Song art at song select is fetched one file at a time**, blocking:
+  `songs/<s>/gen/<s>_keep.png_xbox`, 174 KB each, as the cursor reaches the
+  song; 11–35 ms each on localhost. INFERRED: over a remote link each is a
+  round trip; a `song_art` screen bundle (66 files, 11.5 MB raw) fired from
+  main_screen would remove them at the cost of the download.
+- **Loading-screen fetches** (song milo, venue, characters, SFX sidecars;
+  up to 620 ms each under this load) are blocking by design of the loader;
+  they land on the loading screen.
+- The two big causes are the game's own frame and main-thread contention,
+  which is what a loaded box does to a single-threaded wasm game plus a pose
+  worker; they need the quiet-box measurement before anything is attributed.
+
 ### Pose frame rate (W-13, L-3)
 
 The page tracked at ~16.6 fps in the dogfood. The cause is serial work in the
@@ -179,6 +336,57 @@ picture work moved out of the inference worker, or two frames in flight. The
 GPU delegate also shares the GPU with the game, and its p95 is worse. The
 defaults are unchanged: CPU `full` is what the desktop `pose_server.py` runs,
 and the tracker is np-tracking's. This is an owner decision (PLAN L-3).
+
+np-web4 added `pose_probe=<s>`, the desktop's second-person probe in the
+worker. It matches `pose_persons=1` with one dancer and finds a second on its
+first probe, but run serially in the one worker it was slower than the
+default on the loaded rig (16.9 vs 18.1 fps, 10.9 vs 11.7), so it stays off;
+numbers in [POSE_INPUT.md](POSE_INPUT.md#web-second-person-probe-np-web4-2026-11-14).
+
+### Pose fill on web (L-8, np-web4)
+
+The desktop's `DC3_POSE_FILL` (default `extrap`) runs on web too: the same
+`GestureMgr_Native.cpp` path, `DC3 POSE FILL: extrap (gain 1.00) engaged at
+song 4.85 s (camera 15.9 frames/s …)` in the console. One-song runs,
+Macarena, macarena mjpeg camera, release build before the fix below,
+interleaved, load 25–76 (MEASURED):
+
+| run | score | detectFrac mean | engage/release lines | game fps | game p50/p95/p99 ms | stalls > 50 ms |
+|---|---|---|---|---|---|---|
+| fill1 | 16,210 | 0.281 | 1 / 0 | 27.8 | 23.1 / 98.3 / 170.5 | 944 |
+| nofill1 (`DC3_POSE_FILL=off`) | 33,648 | 0.400 | — | 51.8 | 16.9 / 38.4 / 75.3 | 236 |
+| nocam1 | 0 | 0.194 | — | 58.0 | 16.7 / 20.2 / 41.4 | 51 |
+| fill2 | 160,521 | 0.419 | 216 / 215 | 58.9 | 16.9 / 20.7 / 29.1 | 28 |
+| nofill2 | 38,121 | 0.358 | — | 58.1 | 16.8 / 21.5 / 39.6 | 53 |
+| nocam2 | 0 | 0.194 | — | 52.0 | 16.8 / 34.6 / 53.7 | 115 |
+| fill3 | 20,603 | 0.357 | 29 / 28 | 57.2 | 16.9 / 25.0 / 39.7 | 29 |
+| nofill3 | 22,446 | 0.369 | — | 50.6 | 17.5 / 37.3 / 62.9 | 173 |
+
+- **The score says nothing either way.** The looping footage is not synced
+  to the song, and one run (fill2, 160,521) is 4–8× every other; fill medians
+  20,603 vs off 33,648. The desktop calibration (8 footage songs, PLAN L-8)
+  is the measurement of the fill's effect; this only shows it runs on web.
+- `nocam` scores 0 on web by design: there is no stand-in performer on the
+  web build, and nobody is in front of the camera. It is the pacing control:
+  the game phase with the pose worker (52–59 fps when the box was quiet) vs
+  without it (52–58) is the same within the box's noise.
+- **Found: the fill flapped.** In fill2 it changed state 349 times inside the
+  song, every two camera frames, with the rate in the log jumping between
+  20.0 and 29.9 frames/s. The web worker delivered ~23 frames/s as a mix of
+  33 and 50 ms intervals, and the median of 15 such intervals jumps from one
+  to the other as each frame enters the window, across both the engage
+  (24 Hz) and release (27 Hz) thresholds. Fixed in `PoseFill_Native.cpp`
+  (shared with desktop): engage/release now read the window's trimmed mean
+  (`RateInterval`, shortest and longest fifth dropped); the median still sets
+  the interp delay and the gap limit. Test
+  `PoseFillScheduleTest.AnAlternatingCameraRateDoesNotFlapTheFill` (33/53 ms
+  alternating: 1 change; with the median put back, 285 changes, FAIL; a
+  33/37 ms mix, ~28.5 Hz, is never engaged).
+- After the fix, same song, camera and build flags (run `fixed1`, MEASURED,
+  load ~30): score 37,671, detectFrac mean 0.377, **1 engage / 0 releases**
+  (camera 22.5 frames/s at engage), game 58.6 fps, p50/p95/p99
+  16.8 / 20.9 / 27.1 ms, 39 stalls > 50 ms. One run: it shows the flap is
+  gone, not that the score moved.
 
 ### Heap per venue (W-6)
 
@@ -323,6 +531,55 @@ route to the title a web run prints the same notifies as a desktop run with
 DataNodes 0.00 and dance_battle ... are not compatible`, not yet traced).
 `scripts/web/notify-console.mjs` checks all of this (exit 1 on a build without
 the tap).
+
+### Phones and touch (W-16, np-web4)
+
+Checked with Playwright's Pixel 7 emulation (viewport, touch, mobile UA) on the
+rig's Chromium, so the GPU and memory are the rig's; no real phone was used.
+
+- **Secure context.** WebGPU, the camera and the audio worklet's
+  SharedArrayBuffer all need https (or localhost). A phone opening the page
+  over plain http from the LAN or a Tailscale IP used to get the "no WebGPU,
+  try these browser flags" card. It now gets "This page needs a secure
+  connection" and the engine does not boot.
+- **No WebGPU on a phone**: Android gets "Chrome 137+, Android 12+, a supported
+  GPU"; iPhone/iPad gets "Safari has WebGPU from iOS 26 but not the JSPI this
+  build needs".
+- **Buttons.** `touch_controls.js` shows a d-pad and A (Enter) / B (Esc) /
+  Start (Space) when the device has no fine pointer (`?touch=1` forces,
+  `?touch=0` hides). They dispatch the keys the engine's document listener
+  maps, so any screen a keyboard drives works. Each press is held at least
+  120 ms: the engine samples the key bitmask once per frame, and the first
+  version's quick tap (keydown and keyup between two frames) did nothing on
+  the title screen. Portrait puts the buttons under the picture and asks to
+  turn the phone; landscape puts them over the lower corners, clear of the
+  pose panel.
+- **Camera.** The page asks for the front camera (`facingMode: user`). A
+  blocked prompt shows "Camera blocked — the game is using a stand-in player"
+  and the retry button.
+
+`scripts/web/phone.mjs --port P` checks all of it (21 checks: layout in both
+orientations, a touchscreen tap on A leaving the title, blocked camera,
+desktop shows no buttons, the LAN address shows the secure card).
+`--sabotage` serves a `touch_controls.js` that dispatches on `window` instead
+of `document`; the tap check then fails, as it must.
+
+Not known without a real phone: the GPU and frame rate with the pose worker,
+and memory (the release peaks at 523 MB of wasm heap). The page must be served
+over https to reach a phone at all.
+
+### Known console lines (np-web4)
+
+A boot to gameplay used to print four lines that look like faults. One is
+fixed, three are the dev build doing what it does:
+
+| line | what it is | verdict |
+|---|---|---|
+| `/api/file/devkit:/dancers.dta` and `devkit:/locale/eng/locale_keep.dta` 404 | `HamPlayerData` and the locale loader read optional files on the Xbox **devkit drive**, a dev kit's local disk. The web `AsyncFile` sent them to the server like any other path. | **Fixed** (engine `AsyncFile_Native.cpp`, branch np-web4): a `devkit:` path is not fetched; it opens as missing, as it does on desktop, where no such file exists either. The other optional reads (`watches.dta`) still go to the server, because nothing marks them as optional and the server is the only one that knows. |
+| `watches.dta` 404 | `Watcher` (`src/system/rndobj/Watcher.cpp`) reads a developer watch list from the game root when it starts. No retail or dev data has one. | Harmless; one request at boot. |
+| `/api/file/ui/image/dc_logo_keep.png` 404 | `config/persistent_filecache.dta` lists the `.png` name. No native renderer runs `Rnd::Init`/`RndUtlInit`, so `ResourceFileCacheHelper` is not registered and the name is not rewritten to `gen/…png_xbox` (PLAN H-11 *Left*). The read falls through to the real `_xbox` file, which the song-select bundle carries. | Harmless, one request. The fix is a renderer init on native, which is shared with desktop; `test_persistent_filecache.cpp` checks both outcomes so it goes stale loudly. Not changed here. |
+| `FAIL: Couldn't resolve holmes_host` | `UI::Init` → `OSCMessenger::Connect` (`src/system/utl/OSCMessenger.cpp`). The dev build connects an OSC (Open Sound Control) socket to the developer's PC whenever it is **not** reading from disc (`!UsingCD()`). Web reads loose files, so `UsingCD()` is false, and `HolmesClient::PlatformResolveIP` `MILO_FAIL`s without a Holmes host. Desktop reads the ark (`UsingCD()` true) and never gets here. | Faithful to the image. `MILO_FAIL` is non-fatal on native; the messenger stays unconnected and `Poll` does nothing. Changing it means changing `UsingCD()` on web, which also picks the file-loading paths, so it is left alone. |
+| `[cheats] XTitleServerCreateEnumerator failed with error 1317` (on screen) | `XLSPConnection::StartEnumeration` calls the Xbox LSP enumerator. Our `xbox_link_stubs` return `ERROR_NO_SUCH_USER` (1317) on purpose (no Xbox LIVE), and the image raises a `MILO_NOTIFY`, which the **dev profile** shows in the `cheat_display` overlay. | Expected in the dev profile, which the web page runs by default (above). `?profile=release` hides it, as it hides every dev overlay. |
 
 ## Automated testing
 

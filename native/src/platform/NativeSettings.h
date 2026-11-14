@@ -1,12 +1,16 @@
 #pragma once
 #include <cstdlib>
 #include <cstdio>
+#include <string>
 
 // Dc3EnvFlag — value-parsed boolean env gate (defined in System_Native.cpp).
 //   unset/empty -> defaultOn; "0"/"false"/"off"/"no" (case-insensitive) -> false;
 //   anything else -> true. Use for native default-on toggles so that DC3_FOO=0
 //   can disable them (plain getenv() truthiness treats DC3_FOO=0 as "set" = on).
 bool Dc3EnvFlag(const char *name, bool defaultOn);
+// The DLC roots this boot mounts, ':'-separated, empty for none: DC3_DLC and
+// DC3_DLC_DIR (ContentMgr_Native.cpp has the table).  Desktop only.
+std::string NativeDlcRoots();
 
 // DC3_PROFILE=dev (default) | release -- the native build's defaults, defined
 // in one table in System_Native.cpp (docs/debugging/native.md "Profiles").
