@@ -290,12 +290,36 @@ class Kit:
         for i, b in enumerate(buttons):
             seq.append({"button": b, "delay": MIN_GAP_FRAMES if (i == 0 and wake) else gap,
                         "hold": HOLD_FRAMES})
+        # The sequence runs over FRAMES, so wait for frames, not for a wall
+        # time that assumes a frame rate.  The old sleep assumed ~30 fps; a
+        # window under Xvfb on a loaded box draws 12-22, so a long run of
+        # presses was still landing when list_select read the highlight,
+        # queued more, and overshot -- soak #8 confirmed Right Thurr for Ice
+        # Ice Baby (the previews flip-flopped between the two adjacent rows).
+        frames = sum(e["delay"] for e in seq) + HOLD_FRAMES + 1
+        f0 = self.frame()
         try:
             self._req("/input/sequence", json.dumps(seq), 10)
         except (urllib.error.URLError, OSError) as e:
             self.log(f"press {buttons} failed: {e}")
-        # the sequence runs over frames; give it wall time to land
-        time.sleep(0.15 + 0.04 * gap * len(buttons) / 1.2)
+            return
+        if f0 is None:
+            time.sleep(0.15 + 0.04 * gap * len(buttons) / 1.2)
+            return
+        # bounded: 0.5 s a frame is 2 fps, far below anything playable
+        end = time.time() + 5.0 + 0.5 * frames
+        while time.time() < end:
+            f = self.frame()
+            if f is None or f >= f0 + frames:
+                return
+            time.sleep(0.05)
+        self.log(f"press {buttons}: {frames} frames did not pass in {5.0 + 0.5 * frames:.0f} s")
+
+    def frame(self):
+        """The game's frame counter (/api/health), or None."""
+        h = self.jget("/health", 2)
+        f = ((h or {}).get("data") or {}).get("frame") if isinstance(h, dict) else None
+        return f if isinstance(f, int) else None
 
     def list_select(self, panel_list, sym, timeout=30):
         """Move a HamNavList's highlight to `sym` with up/down presses."""

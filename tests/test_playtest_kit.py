@@ -429,6 +429,7 @@ class KitDriveOwnershipTest(unittest.TestCase):
         k = self.kit("/nonexistent", None)
         sent = []
         k._req = lambda path, data=None, timeout=10: sent.append(json.loads(data))
+        k.jget = lambda path, timeout=10: None  # no frame counter: the wall-time fallback
         real_sleep, time.sleep = time.sleep, lambda s: None
         try:
             k.press("down", "down", gap=0)
@@ -441,6 +442,88 @@ class KitDriveOwnershipTest(unittest.TestCase):
         holds = [e.get("hold", 1) for seq in sent for e in seq]
         self.assertTrue(all(h >= 2 for h in holds), holds)
         self.assertGreater(kitdrive.MIN_GAP_FRAMES, kitdrive.HOLD_FRAMES)
+
+
+class KitDriveSlowGameTest(unittest.TestCase):
+    """PLAN H-76: presses are queued in FRAMES; the driver must wait for the
+    frames, not for a wall time that assumes a frame rate.  In soak #8 (a
+    1600x1000 window under Xvfb, 12-22 fps) list_select read the highlight
+    while its last run of presses was still landing, queued more, overshot,
+    and the soak confirmed Right Thurr for Ice Ice Baby, the next row.
+
+    A fake game on a fake clock: `fps` frames a second, a 120-row list, the
+    sequence endpoint queueing presses at frame offsets like HttpServer's."""
+
+    class Game:
+        def __init__(self, fps, start=0):
+            self.fps, self.t, self.sel, self.queue = fps, 0.0, start, []
+            self.furthest = start
+
+        def frame(self):
+            return int(self.t * self.fps)
+
+        def settle(self):
+            now = self.frame()
+            for due, d in [q for q in self.queue if q[0] <= now]:
+                self.sel = max(0, min(119, self.sel + d))
+                self.furthest = max(self.furthest, self.sel)
+            self.queue = [q for q in self.queue if q[0] > now]
+
+        def req(self, path, data=None, timeout=10):
+            if path == "/input/sequence":
+                at = self.frame()
+                for e in json.loads(data):
+                    at += e["delay"]
+                    d = {"down": 1, "up": -1}.get(e["button"], 0)
+                    if d:
+                        self.queue.append((at, d))
+            return b"{}"
+
+    def kit_on(self, game, frames=True):
+        k = kitdrive.Kit.__new__(kitdrive.Kit)
+        k.log = lambda *a: None
+        k._req = game.req
+        k.jget = (lambda path, timeout=10: {"ok": True, "data": {"frame": game.frame()}}) \
+            if frames else (lambda path, timeout=10: None)
+
+        def ev(expr, timeout=10):
+            game.settle()
+            if "data_index" in expr:
+                return 100
+            if "get_selected" in expr:
+                return game.sel
+            return None
+        k.eval = ev
+        return k
+
+    def run_slow(self, fps, frames=True):
+        game = self.Game(fps)
+        real = (time.time, time.sleep)
+
+        def sleep(s):
+            game.t += s
+        time.time, time.sleep = (lambda: game.t), sleep
+        try:
+            ok = self.kit_on(game, frames).list_select("{lst}", "song", timeout=30)
+            game.settle()
+            pending = len(game.queue)  # presses still to land under a confirm sent now
+            game.t += 60.0
+            game.settle()
+        finally:
+            time.time, time.sleep = real
+        return ok, game.furthest, pending, game.sel
+
+    def test_a_slow_game_gets_the_row_it_was_asked_for(self):
+        # Not only "ends on row 100": the old driver also ended there in this
+        # fake, after overshooting to the end of the list and coming back, i.e. by luck --
+        # the real game confirmed during such a swing.  So: it never passes
+        # the row, and nothing is still queued when it says it is there.
+        for fps in (12, 20, 60, 1000):
+            ok, furthest, pending, final = self.run_slow(fps)
+            self.assertTrue(ok, f"{fps} fps: list_select gave up")
+            self.assertEqual(furthest, 100, f"{fps} fps: overshot to row {furthest}")
+            self.assertEqual(pending, 0, f"{fps} fps: {pending} presses still queued at the confirm")
+            self.assertEqual(final, 100, f"{fps} fps: ended on row {final}")
 
 
 class FakeCameras:
