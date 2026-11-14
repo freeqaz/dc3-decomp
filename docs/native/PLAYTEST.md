@@ -143,7 +143,7 @@ stand-in skeleton and nothing you do is scored.
 - **G-10** audio has not been judged by ear on this port: tell us how it
   sounds.
 - **G-25** a Battle tie is recorded as lost (the original does the same).
-- **H-23** memory grows about 90 MB a song (measured over 3 songs; longer
+- **H-24** memory grows about 90 MB a song (measured over 3 songs; longer
   is untested). If a long session slows down or quits, say after how many
   songs; quitting and restarting clears it.
 - If a song shows no move cards, or you are paused while in view, say which
