@@ -267,6 +267,17 @@ bool ProfileMgr::IsAutosaveEnabled(HamProfile *p) const {
 }
 
 bool ProfileMgr::HasSeenTutorial(int tutorial) {
+#ifdef HX_NATIVE
+    // DC3_TUTORIALS_SEEN=1 (dev/test switch, off by default): every first-run
+    // tutorial reads as seen, so a scripted flow on a fresh profile goes from
+    // multiuser_screen straight to loading instead of sitting on
+    // tutorial_perform_it_screen_0.  Nothing is marked or saved: the profile
+    // on disk is unchanged.  docs/debugging/native.md, the flows README.
+    extern bool Dc3EnvFlag(const char *, bool);
+    static const bool sAllSeen = Dc3EnvFlag("DC3_TUTORIALS_SEEN", false);
+    if (sAllSeen)
+        return true;
+#endif
     return mTutorialsSeen & tutorial
         || TheProfileMgr.mGlobalOptionsSaveState != kMetaProfileLoaded;
 }
