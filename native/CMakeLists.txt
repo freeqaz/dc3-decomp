@@ -1231,6 +1231,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
+    src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/NuiImageSurface_Native.cpp
     src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
     src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
@@ -1421,6 +1422,7 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
+    src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/NuiImageSurface_Native.cpp
     src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
     src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
@@ -2076,6 +2078,7 @@ if(BUILD_TESTS)
         tests/test_native_posesynth.cpp
         tests/test_pose_scoring.cpp
         tests/test_pose_level.cpp
+        tests/test_pose_fill.cpp
         tests/test_pose_session.cpp
         tests/test_native_twoplayer.cpp
         tests/test_native_pose_dropout.cpp
