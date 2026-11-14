@@ -123,14 +123,13 @@ setdef() { [ -n "${!1+x}" ] || export "$1=$2"; }   # caller's value wins
 export DC3_SAVE_DIR="${DC3_SAVE_DIR:-$HOME_DIR/saves}"
 export DC3_CACHE_DIR="${DC3_CACHE_DIR:-$HOME_DIR/cache}"
 export DC3_DATA="$DATA"
-setdef DC3_CONTROLLER_MODE auto      # menus by gesture while the tracker runs
-setdef DC3_TAG_MODALS 1              # every notify / fail / assert in the log
-setdef DC3_MOVE_RATING_LOG 1         # every move's rating in the log
+# The dev profile (DC3_PROFILE, the default) already turns on the debug API
+# (loopback only), gesture menus while the tracker runs and the per-move
+# rating log; the session summary reads that log.
+setdef DC3_TAG_MODALS 1              # every notify / fail / assert, with a backtrace
 setdef DC3_PERF_LOG 1                # game fps + pose fps every 5 s (PLAN L-3)
 setdef DC3_POSE_STATS 1              # the tracker's own rate and inference time
-setdef DC3_HTTP 1                    # read-only-ish debug API, this machine only:
-setdef DC3_HTTP_HOST 127.0.0.1
-setdef DC3_HTTP_PORT 0
+setdef DC3_HTTP_PORT 0               # any free port, written to the session folder
 export DC3_HTTP_PORT_FILE="$SESSION/http_port"
 setdef MILO_MAX_FRAMES 0
 setdef DC3_SFX_PCM_DIR "$HOME_DIR/cache/sfx_pcm"   # decoded SFX, not into the game data

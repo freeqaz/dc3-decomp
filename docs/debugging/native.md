@@ -437,7 +437,7 @@ variables are value-parsed: `0`/`false`/`off`/`no` disable.
 | `DC3_HTTP` | desktop: dev profile `1`, release `0` | Non-zero: start the HTTP debug server on **127.0.0.1 only** ([tools/HTTP_DEBUG_SERVER.md](../tools/HTTP_DEBUG_SERVER.md); another box: `ssh -L 9090:127.0.0.1:9090`). Only `dc3-native` is built with `DC3_HTTP_SERVER` | `native/src/platform/HttpServer.cpp` (DC3 glue; the engine copy is not compiled) |
 | `DC3_HTTP_PORT` | window: `9090` if free, else kernel-assigned; headless: kernel-assigned | HTTP debug server port; the one in use is printed on stdout as `DC3_HTTP_PORT=<n>`. `0` or `auto`: kernel-assigned. An explicit port is strict: one that cannot be bound exits 98 (see [Stopping the engine](#stopping-the-engine-h-9)) | `native/src/platform/HttpServer.cpp` |
 | `DC3_HTTP_PORT_FILE` | unset | Once the debug server is bound, write its port to this file (temp file + rename). How harnesses learn a `DC3_HTTP_PORT=0` port | `native/src/platform/HttpServer.cpp` |
-| `DC3_HTTP_HOST` | `0.0.0.0` | Address the HTTP debug server binds. The playtest kit binds `127.0.0.1`, so a player laptop does not serve `/api/dta/eval` to its network | `native/src/platform/HttpServer.cpp` |
+| `DC3_HTTP_HOST` | `127.0.0.1` | Address the HTTP debug server binds. Unset is loopback only; set it (e.g. `0.0.0.0`) only to widen that on purpose: the server evaluates any DTA it is sent. The listen line then says `NOT loopback only`; an ssh tunnel is the safer way to reach another box | `native/src/platform/HttpServer.cpp` |
 
 ### Audio
 
