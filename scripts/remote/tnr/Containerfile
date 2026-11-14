@@ -24,7 +24,7 @@ RUN echo "Server=https://archive.archlinux.org/repos/${ARCH_SNAPSHOT}/\$repo/os/
         > /etc/pacman.d/mirrorlist \
  && sed -i -e 's/^#\?DisableSandbox.*/DisableSandbox/' \
            -e 's/^DownloadUser/#DownloadUser/' /etc/pacman.conf \
- && grep -q '^DisableSandbox' /etc/pacman.conf || echo 'DisableSandbox' >> /etc/pacman.conf
+ && { grep -q '^DisableSandbox' /etc/pacman.conf || echo 'DisableSandbox' >> /etc/pacman.conf; }
 
 RUN pacman -Syyuu --noconfirm --needed \
         clang llvm-libs compiler-rt lld openmp cmake ninja \
