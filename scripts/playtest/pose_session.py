@@ -151,9 +151,12 @@ def compare(source, replayed):
             mismatched.append(f.frame_id)
         lags.append(f.song - source[k].song)
     lags.sort()
-    # Frames after the last one replayed were never due: the replay ended (its
-    # song clock stopped at the results) before reaching them.  Up to a second
-    # of song time is allowed for that; anything earlier missing is a drop.
+    # Frames after the last one replayed were not reached: the replay's song
+    # clock stopped first (measured: under DC3_FAST_TIME the clock stops at
+    # the song's end, 165.5 s of macarena, while the live one ran on through
+    # the outro to 167.6 s).  They are reported, not counted as drops -- the
+    # caller judges whether the replay got far enough (replay_proof.py: every
+    # move rated); a frame missing before the last one replayed is a drop.
     reached = max(seen) if seen else -1
     tail = len(source) - 1 - reached
     tail_s = source[-1].song - source[reached].song if seen else float("inf")
@@ -164,8 +167,7 @@ def compare(source, replayed):
             "unknown_ids": unknown, "out_of_order": out_of_order,
             "lag_min": lags[0] if lags else None, "lag_max": lags[-1] if lags else None,
             "lag_median": lags[len(lags) // 2] if lags else None,
-            "identical": bool(source) and reached + 1 == len(seen) and tail_s < 1.0
-            and not mismatched
+            "identical": bool(source) and reached + 1 == len(seen) and not mismatched
             and not out_of_order and not unknown and (not lags or lags[0] >= -1e-6)}
 
 

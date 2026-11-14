@@ -138,14 +138,14 @@ class PoseSessionTest(unittest.TestCase):
         self.assertFalse(r["identical"])
         self.assertEqual(r["missing"], 1)
 
-        # The replay ended before its last frames came due: half a second of
-        # song is allowed, three seconds is not.
+        # The replay's clock stopped before its last frames came due: reported
+        # (how many, how much song), not a drop.
         n = len(src)
-        r = pose_session.compare(src, replayed(lambda k, fl: [] if k >= n - 15 else fl))
-        self.assertTrue(r["identical"], r)
-        self.assertEqual(r["not_reached"], 15)
         r = pose_session.compare(src, replayed(lambda k, fl: [] if k >= n - 90 else fl))
-        self.assertFalse(r["identical"], r)
+        self.assertTrue(r["identical"], r)
+        self.assertEqual(r["not_reached"], 90)
+        self.assertAlmostEqual(r["not_reached_s"], 3.0, places=2)
+        self.assertEqual(r["missing"], 0)
 
         def early(k, fl):
             if k == 300:
