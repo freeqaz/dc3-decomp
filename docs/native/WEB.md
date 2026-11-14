@@ -176,6 +176,7 @@ says little; the cap and the skip count are the result):
 | 144 Hz | 56.6¹, 53.5, 33.7 | 72 fps, 1 decision, 356–511 rAFs skipped per 10 s | PASS |
 | 120 Hz | 48.7¹, 30.3 | 60 fps, 1 decision | PASS |
 | 165 Hz | 45.9 | 82.5 fps, 1 decision | PASS |
+| 144 Hz, after the rebase onto main `21b966241` (load 25) | 68.2 | 72 fps, 1 decision, 540 skipped; game frame p50/p90/p99 1.1/18.8/51.7 ms | PASS |
 | 144 Hz, game at 16–23/s (load 35–60) | 15.8, 23.0 | turned off, 3 decisions | SKIPPED, correctly |
 | control `DC3_FPS_CAP=0 --expect uncapped`, 144 Hz | 101.1¹, 93.4, 82.7, 68.1 | off, 0 skipped | PASS (21.8 once: SKIPPED) |
 | sabotage: `DC3_FPS_CAP=0` under the capped check | 99.7 (144 Hz), 57.4 (120 Hz) | off | FAIL, FAIL |
@@ -381,6 +382,11 @@ interleaved, load 25–76 (MEASURED):
   `PoseFillScheduleTest.AnAlternatingCameraRateDoesNotFlapTheFill` (33/53 ms
   alternating: 1 change; with the median put back, 285 changes, FAIL; a
   33/37 ms mix, ~28.5 Hz, is never engaged).
+- After the fix, same song, camera and build flags (run `fixed1`, MEASURED,
+  load ~30): score 37,671, detectFrac mean 0.377, **1 engage / 0 releases**
+  (camera 22.5 frames/s at engage), game 58.6 fps, p50/p95/p99
+  16.8 / 20.9 / 27.1 ms, 39 stalls > 50 ms. One run: it shows the flap is
+  gone, not that the score moved.
 
 ### Heap per venue (W-6)
 
