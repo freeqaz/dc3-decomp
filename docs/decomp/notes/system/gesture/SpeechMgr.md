@@ -79,6 +79,10 @@ Added after the move (lane w-five-clean):
 // Renamed event/cur/res -> events/event/hr: byte-identical.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
+
 ## `?AddDynamicRuleWord@SpeechMgr@@QAAXVSymbol@@PBD1PAPAX2@Z`
 
 `SpeechMgr::AddDynamicRuleWord` -- moved verbatim from `src/system/gesture/SpeechMgr.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of 89d252553)

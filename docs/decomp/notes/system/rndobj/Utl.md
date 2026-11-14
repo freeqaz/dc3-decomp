@@ -130,6 +130,10 @@ Above the definition (was lines 836-854):
 // identical.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 98.621, 6 non-equal row(s): Two register
+rows are an ASSOCIATION, not a rename: mesh1's distance groups as x+(y+z) here, y+(x+z)
+in the image -- the w26-e trade documented above. Same three squares; last-ulp rounding
+in a sort comparator. NOT A BUG.
 
 ## `?UtilDrawCigar@@YAXABVTransform@@QBM1ABVColor@Hmx@@H@Z`
 
@@ -233,6 +237,10 @@ Inside the body (was lines 1131-1144):
     // statement in the outer loop is contracted under /fp:fast.  95.1 -> 95.3.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stack
+slots 0x70/0x80 swapped; values equal.
+
 
 ## `?UtilDrawPlane@@YAXABVPlane@@ABVVector3@@ABVColor@Hmx@@HM_N@Z`
 
@@ -289,6 +297,8 @@ Inside the body (was lines 1274-1278):
         // literal false dropped it and cost the callee-saved register
         // (93.39474 -> 99.7).
 ```
+
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. The plane-vs-(1,0,0) dot product pairs the same terms on both sides; only the association order differs.
 
 
 ## `?CacheResource@@YAPBDPBDAAW4CacheResourceResult@@@Z`
@@ -908,6 +918,10 @@ Inside the body (was lines 2653-2770):
         // (w27-c, w31-a), so nothing else is left to change from the source.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: store
+order only.
+
 
 ## `?BurnXfm@@YAXPAVRndMesh@@_N@Z`
 
@@ -943,6 +957,8 @@ Inside the body (was lines 2908-2933):
     // Set(...) spellings (in-place 92.99, saved-temps 92.96, per-column 89.38,
     // all 172 insns instead of 168), which lose the loop outright.
 ```
+
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. Each transformed component (0x14, 0x54, 0x58) multiplies the same matrix element by the same vector component on both sides; only the association differs. The differing f3-f8 at Normalize are dead leftovers.
 
 
 ## `?TessellateMesh@@YAXPAVRndMesh@@@Z`
@@ -1038,6 +1054,11 @@ Inside the body (was lines 3003-3086):
     // remainder hangs on the comparator temp above sharing 0x50.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: edge/face
+slots remap 1:1 (e12/e23/e31 and f1..f4 same values, same push order); stack layout
+only.
+
 
 ## `?BuildVisit@@YAXPAVBSPNode@@@Z`
 
@@ -1109,6 +1130,10 @@ Inside the body (was lines 3186-3247):
     // repeated per site rather than hoisted.  94.97321 -> 96.29762 canonical,
     // 1300 -> 1320 B against the image's 1344.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: dead home
+stores of the iterator to 0x60(r31); stores otherwise equal.
 
 
 ## `?BuildFromBSP@@YAXPAVRndMesh@@@Z`

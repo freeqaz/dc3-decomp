@@ -25,6 +25,10 @@ Above the definition (was lines 121-128):
 // with no flat counter is worse (91.2).
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: index
+bias kept in a different register; identical constants and stores.
+
 
 ## `?Process@EQEffect@@QAAXPAMHH@Z`
 

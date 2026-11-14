@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 #include <thread>
+#include <vector>
 #include <mutex>
 // <atomic> not usable with clang + GCC 15 headers; use volatile bool instead
 // #include <atomic>
@@ -54,8 +55,23 @@ public:
     };
 
     // The problem the server's exit says it had.  `waitStatus` is waitpid's
-    // status word; `cameraIndex` names the camera in the message.
-    static Problem DescribeServerExit(int waitStatus, int cameraIndex);
+    // status word; `camera` (pose_server.py --camera: auto, an index, a path or
+    // a /dev/v4l/by-id name) names the camera in the message.
+    // `python` names the interpreter in the notices that are about it (no
+    // packages, cannot start).
+    static Problem DescribeServerExit(int waitStatus, const std::string &camera,
+                                      const std::string &python = "python3");
+    static Problem DescribeServerExit(int waitStatus, int cameraIndex) {
+        return DescribeServerExit(waitStatus, std::to_string(cameraIndex));
+    }
+
+    // While the server has no camera (pose_server.py FLAG_NO_CAMERA: the
+    // camera vanished mid-session -- a USB camera re-enumerating -- and the
+    // server is looking for it again), these notices are up: one when it goes,
+    // one when it is back.  The camera-lost one stays (corner line) until then.
+    static Problem CameraLostProblem();
+    static Problem CameraBackNotice();
+    bool CameraMissing() const { return mNoCamera; }
 
     // Why the last Start() failed, or why a running server stopped (the reader
     // posts it when the socket closes).  Thread-safe copy.
@@ -68,11 +84,68 @@ public:
     // cwd-relative default only ever worked from the repo root (PLAN P-10).
     static std::string DefaultModelPath();
 
+    // `camera` is passed to pose_server.py --camera as is: "auto" (the first
+    // V4L2 video-capture device, re-resolved whenever the server reopens it),
+    // an index, a /dev/videoN path or a /dev/v4l/by-id name.
+    //
+    // The pose server's command line, argv[0] first: the interpreter
+    // (ChoosePosePython), the script, --socket, --model, then --video FILE
+    // --loop when DC3_POSE_VIDEO is set (footage instead of the camera; the
+    // playtest kit's --video) or --camera CAMERA, --hfov (DC3_POSE_HFOV),
+    // --frames (DC3_CAMERA_FRAMES).  LaunchServer() runs it; DC3_POSE_SERVER
+    // replaces the script with a drop-in that takes the same arguments.
+    static std::vector<std::string> ServerCommand(const std::string &scriptPath,
+                                                  const std::string &socketPath,
+                                                  const std::string &modelPath,
+                                                  const std::string &camera);
+    static std::vector<std::string> ServerCommand(const std::string &scriptPath,
+                                                  const std::string &socketPath,
+                                                  const std::string &modelPath, int cameraIndex) {
+        return ServerCommand(scriptPath, socketPath, modelPath, std::to_string(cameraIndex));
+    }
+
+    // The Python the pose server runs under, and why it was chosen.  In order:
+    // DC3_POSE_PYTHON if set; the playtest venv
+    // ${DC3_POSE_VENV:-~/.local/share/dc3/pose-venv}/bin/python3 if it is
+    // there (scripts/playtest/bootstrap.sh --fix makes it); the checkout's
+    // .venv/bin/python3 (in a git worktree, the main checkout's) if it is
+    // there; else python3 from PATH.  `treeRoot` is the checkout (the
+    // directory holding native/); `home` is $HOME.  Before 2026-11-14 the game
+    // always ran bare python3, so a game started outside play.sh on a box
+    // whose packages live in the venv had no tracking (exit 6, cv2 missing:
+    // the GPD, main 9a53ff273).
+    struct PythonChoice {
+        std::string path;
+        std::string why;
+    };
+    static PythonChoice ChoosePosePython(const std::string &treeRoot, const char *home);
+    static PythonChoice ChoosePosePython(); // this process's tree and $HOME
+
     bool Start(const std::string &socketPath = "/tmp/dc3_pose.sock",
                const std::string &modelPath = DefaultModelPath(),
-               int cameraIndex = 0);
+               const std::string &camera = "auto");
+    bool Start(const std::string &socketPath, const std::string &modelPath,
+               int cameraIndex) {
+        return Start(socketPath, modelPath, std::to_string(cameraIndex));
+    }
     void Stop();
     bool IsRunning() const { return mRunning; }
+
+    // Restart-on-death.  When a server this provider launched dies after it
+    // had connected, the reader relaunches it -- at most `maxRestarts` times
+    // per Start(), waiting baseBackoffMs, then twice that, and so on -- with a
+    // one-line notice each time.  An exit that a restart cannot fix (the model
+    // or the Python packages missing, python3 not runnable, a clean exit) is
+    // not retried.  Defaults: 3 restarts, 1000 ms.  Call before Start().
+    void SetRestartPolicy(int maxRestarts, int baseBackoffMs) {
+        mMaxRestarts = maxRestarts;
+        mRestartBackoffMs = baseBackoffMs;
+    }
+    int Restarts() const { return mRestarts; }
+    // pid of the pose_server.py this provider launched, or -1.
+    int ServerPid() const { return (int)mServerPid; }
+    // Whether DescribeServerExit's exit is one a relaunch could fix.
+    static bool ServerExitIsRestartable(int waitStatus);
 
     // Publish one frame of persons into the back buffer; the next Poll() latches
     // it.  This is the provider's whole contract with its transports: the
@@ -83,8 +156,11 @@ public:
     // `unlevelled`: the frame comes from a camera that does not know its own
     // gravity (pose_server.py's header flag, every web push), so the sensor
     // estimates the camera's tilt and levels it (platform/PoseLevel_Native.h).
+    // `declaredLatencyMs`: the source's own scoring latency (pose_server.py
+    // declares 0 for a recorded file), or -1 for none -- see
+    // Dc3SensorLatencySeconds.
     void PublishFrame(const PersonData *persons, int numPersons, uint32_t frameId,
-                      double timestamp, bool unlevelled = false);
+                      double timestamp, bool unlevelled = false, int declaredLatencyMs = -1);
 
 #ifdef __EMSCRIPTEN__
     // Web has no server to spawn or socket to read: the provider is "running"
@@ -144,23 +220,45 @@ public:
     // slot changes occupants, or the incoming person inherits the previous
     // person's held joint positions.
     static void ResetJointHold(int skelIdx);
+    // Restart the sensor noise floor's per-slot frame counters (Skeleton_Native.cpp,
+    // SensorNoiseFloor), so the offsets that follow are those of a fresh
+    // process's first frames.  A session replay calls it when its song starts:
+    // the counters otherwise carry how many frames the menus happened to take.
+    static void ResetSensorNoiseFloor();
 
 private:
     void ReaderThread();
     // Record a problem and show it to the player (NativeNotice key "pose").
     void ReportProblem(const Problem &p);
-    void ReportServerGone(); // reader thread: the socket closed
+    // Reader thread: the socket closed.  Reports why and, for a server this
+    // provider launched, relaunches it per the restart policy.  True when a
+    // relaunched server is connected again (mSocketFd is the new socket).
+    bool ServerGone();
+    // Launch pose_server.py through NativeSpawner; sets mServerPid.
+    bool LaunchServer();
+    enum WaitResult { kConnected, kServerExited, kTimedOut, kStopped };
+    // Wait for the server's socket and connect (mSocketFd).  kServerExited
+    // fills *exitStatus.
+    WaitResult WaitForServer(int timeoutMs, int *exitStatus);
     void MapCOCOToDC3(const float cocoKpts[][3], PersonData &out);
     Vector3 NormalizedToMeters(float nx, float ny) const;
 
     std::string mSocketPath;
+    std::string mModelPath;
     int mSocketFd = -1;
     pid_t mServerPid = -1;
-    int mCameraIndex = 0;
+    bool mSpawned = false; // this provider launched the server (not DC3_POSE_NO_SPAWN)
+    std::string mCamera = "auto";
+    std::string mPython = "python3"; // the interpreter LaunchServer chose (for notices)
+    volatile bool mNoCamera = false; // the last packet carried FLAG_NO_CAMERA
+    int mMaxRestarts = 3;
+    int mRestartBackoffMs = 1000;
+    volatile int mRestarts = 0;
     Problem mProblem; // guarded by mSwapMutex
 
     std::thread mReaderThread;
     volatile bool mRunning = false;
+    volatile bool mStopRequested = false;
 
     // Double-buffered: reader writes to mBack, Poll() swaps to mFront
     std::mutex mSwapMutex;
@@ -178,6 +276,7 @@ private:
     double mTimestampFront = 0.0;
     bool mUnlevelledBack = false;
     bool mUnlevelledFront = false;
+    int mDeclaredLatencyMsBack = -1;
 
     // Coordinate mapping: camera view extent in metres at mViewDepth.
     //
@@ -216,3 +315,17 @@ extern NativeSkeletonProvider *TheSkeletonProvider;
 // The model GestureMgr_NativeInit passes to Start(): $DC3_POSE_MODEL, else
 // NativeSkeletonProvider::DefaultModelPath() (GestureMgr_Native.cpp).
 std::string GestureMgr_NativePoseModelPath();
+
+// Scoring latency (Skeleton_Native.cpp, "Sensor latency"): explicit
+// DC3_POSE_LATENCY_MS beats the source's declaration beats scoring.dta's
+// latency_offset.
+enum Dc3LatencySource { kLatencyDefault = 0, kLatencyDeclared = 1, kLatencyExplicit = 2 };
+// MoveDir::LoadScoring's hook: the latency the scorer should use.
+float Dc3SensorLatencySeconds(float scoringDtaSeconds);
+// The latency in force for `scoringDtaSeconds`, and why (no logging).
+Dc3LatencySource Dc3ResolveSensorLatency(float scoringDtaSeconds, float *seconds);
+const char *Dc3LatencySourceName(Dc3LatencySource source);
+// The pose source declared `ms` (-1 = nothing).  Main thread; applied to the
+// scorer at once if LoadScoring has run.  NativeSkeletonProvider::Poll calls it.
+void Dc3DeclareSourceLatencyMs(int ms);
+int Dc3DeclaredSourceLatencyMs();

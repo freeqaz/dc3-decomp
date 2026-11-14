@@ -1,0 +1,209 @@
+# Three different Perform songs in one process, back to song select after each
+# (PLAN H-24, docs/native/PLAN.md; MemoryFlatSongOverSongTest in
+# native/tests/test_dta_flow.cpp).
+#
+# Same route as song-to-song-select.txt, repeated: song select remembers the
+# highlighted row, so each `down` lands on the next song in the list and the
+# three songs are distinct (a distinct song is the case that raised the heap
+# high-water each time; replaying one song mostly reuses the freed blocks).
+# Run with the move tutorial seen, DC3_FAST_TIME and MILO_NORENDER.  The long
+# waits are the same 1800-frame wait_screen repeated (see song-to-song-select.txt).
+wait_screen title_screen
++43 wake
++45 confirm
+
+wait_screen main_screen
++43 wake
++45 confirm
+
+wait_screen choose_mode_screen
++43 wake
++45 confirm
+
+wait_screen song_select_screen
++43 wake
++45 down
++105 confirm
+
+
+wait_screen multiuser_screen
++38 wake
++40 confirm
++150 confirm
++270 confirm
+
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
++90 confirm
+
+wait_screen perform_complete_screen
++90 confirm
+
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
++43 wake
++45 down
++105 confirm
+
+wait_screen multiuser_screen
++38 wake
++40 confirm
++150 confirm
++270 confirm
+
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
++90 confirm
+
+wait_screen perform_complete_screen
++90 confirm
+
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
++43 wake
++45 down
++105 confirm
+
+wait_screen multiuser_screen
++38 wake
++40 confirm
++150 confirm
++270 confirm
+
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
+wait_screen perform_final_results_screen
++90 confirm
+
+wait_screen perform_complete_screen
++90 confirm
+
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen
+wait_screen song_select_screen

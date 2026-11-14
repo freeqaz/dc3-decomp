@@ -56,6 +56,11 @@ Inside the body (was lines 47-52):
     // change, and is corrected by this one.)
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.479, 13 non-equal row(s): One
+BRANCHDEST row (idx 21, empty-key edge): the image jumps straight to
+inc_dup_count(index); ours goes through `cmpwi r30, 0` with r30 == 1 there, which always
+branches to the same call. Jump threading on a known constant; the 12 register rows are
+pure permutation. NOT A BUG.
 
 ## `?remove@Trie@@QAAXI@Z`
 

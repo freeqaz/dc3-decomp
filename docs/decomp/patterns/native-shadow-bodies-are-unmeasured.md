@@ -1013,3 +1013,24 @@ this branch's `NativeSuspectsTest.MeshDrawShowing*`, and both pass.
 
 After rebasing onto `c131e63ec` (which fixed the DtaFlow route), the branch gate reads
 **623 registered / 554 executed / 554 passed / 0 failed / 69 skipped**, exit 0.
+
+## Second pass p2-shadow-core (2026-11-14): obj, utl, os, math, types.h, net, midi, oggvorbis, flow, meta
+
+- **Fixed:** `DataArray::Remove(const DataNode&)` / `Contains(const DataNode&)` on native compared the
+  whole 8-byte value only for Symbol/Object/>=Array. Var, Func and Ifdef nodes were compared by their low
+  4 bytes (`UncheckedInt()`), so two different pointers could compare equal. They now use the same
+  pointer-type set as `DataNode::Equal`. The PPC object is byte-identical, per-target A/B `5483a892`.
+- **Left, with the reasons:**
+  - FlowQueueable Deactivate/ChildFinished during DeleteObjects clears `mListeners` without
+    `ReleaseListener`, so the image's `on_flow_finished` is not sent. This is kept for cascade safety.
+  - `ValidateThreadId` is always true on native because the shim has no thread-liveness query. It only
+    matters past 6 threads, and "Too many threads" appeared 0 times on the perform route.
+  - ObjPtrVec/ObjPtrList `ReplaceNode` erase tombstone: lane B owns `ObjPtr_p.h`. It fired 0 times on
+    the perform route.
+  - `ObjectDir::HasDirPtrs` reads the counter on native but walks the ring in the image. An env probe
+    over the full perform harvest route (24/24 stages, frame 23346) saw **0 calls outside DeleteObjects
+    cascades**. It is inert as measured, though a stale count through NullifyObj in a cascade is still
+    possible in principle.
+- Everything else in these areas is LEGIT: LP64 widths, endianness, POSIX I/O, guards against
+  image-fatal paths, or equivalent rewrites. One example is `MoviePanel::Draw` skipping `UIPanel::Draw`:
+  no shipped MoviePanel has a `file`, so `mDir` is null and the call would be a no-op.

@@ -80,6 +80,10 @@ Inside the body (was lines 317-362):
     // commutative-only (same association as the image); `normal += v` inert.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: frame is
+0x10 larger on our side (one extra 16-byte temp); all heap/member stores equal.
+
 
 ## `?DrawJoints@SkeletonViz@@AAAXABVBaseSkeleton@@PAVVector3@@1_N@Z`
 

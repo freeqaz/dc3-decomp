@@ -55,3 +55,5 @@ Inside the body (was lines 595-602):
             // fnmsubs with the shared +0.5).  Split, c2 contracts the image's way:
             // `fmadds f30, f0, f13, f31` with a loaded -0.5f.  98.095 -> 99.048.
 ```
+
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. The fade-tail rows 223-228 and 240-242 are an f0/f13 swap: fcmpu(start, fadeStart), (cur - fadeStart)/(start - fadeStart) and dur*halfFade + mEnd come out the same on both sides. The one extra row is the image re-loading mEnd.

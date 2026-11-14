@@ -172,3 +172,9 @@ File-level (was lines 300-359; no definition follows it):
 //     row can only be closed by renaming the address in symbols.txt, which is
 //     a config change outside this lane, not a source fix.
 ```
+
+## `?_M_insert_overflow_aux@?$vector@UBoneOp@CharSignalApplier@@V?$StlNodeAlloc@UBoneOp@CharSignalApplier@@@stlpmtx_std@@@stlpmtx_std@@IAAXPAUBoneOp@CharSignalApplier@@ABU34@ABU__false_type@2@I_N@Z`
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim; regalloc only.

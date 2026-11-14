@@ -76,3 +76,23 @@ Inside the body (was lines 1094-1121):
     // 99.86385 canonical 99.98487 against these report values, so any candidate
     // must be measured on a full ninja.
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.909, 10 non-equal row(s): The 2 SYM
+rows are the `_dw` static's scope ordinal (image ?CK@ = 42, ours ?DG@ = 54; see its
+atexit dtor). lbl_82F19AE4 = sCollideNames, lbl_83116BE0/E4 = the `_t` timer and its
+guard -- forgiven, pairing consistent. The 8 register rows are pure permutation. NOT A
+BUG.
+
+## `?Apply3DCharXfm@WorldCrowd@@QAAXABU?$_List_iterator@UCharData@WorldCrowd@@U?$_Nonconst_traits@UCharData@WorldCrowd@@@stlpmtx_std@@@stlpmtx_std@@HPAVRndCam@@@Z`
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.848, 3 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
+
+## `??__F_dw@?CK@??DrawShowing@WorldCrowd@@UAAXXZ@YAXXZ`
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 96.667, 2 non-equal row(s): The 2 charged
+rows are the static's scope ordinal: image `?_dw@?CK@` (42) vs ours `?_dw@?DG@` (54) --
+DrawShowing numbers 12 more scopes than the image before it. Per-function counter, no
+behaviour. NOT A BUG.

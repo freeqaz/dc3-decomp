@@ -45,3 +45,7 @@ Inside the body (was lines 577-583):
                 // extra `mr r28, r11` that we fold into the `extrwi.` itself.
                 // Moving this assignment above the `*ptr = 0` is byte-inert.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual:
+sCommandLineBuffer is named lbl_82F653B0 on target; one stb uses a different register.

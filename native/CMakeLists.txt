@@ -45,6 +45,17 @@ if(ENABLE_ASAN)
     add_link_options(-fsanitize=address)
 endif()
 
+# Compiler cache (ccache) — set by scripts/native_configure.sh as
+# CMAKE_<LANG>_COMPILER_LAUNCHER; see docs/native/BUILD_CACHE.md. Clang stamps
+# the mtime of every header into a .pch, which makes every PCH unique and every
+# TU that uses one a guaranteed cache miss. -fno-pch-timestamp drops the stamp
+# (ninja's depfiles, not clang's mtime check, are what keep a PCH current here).
+# Directory scope, before add_subdirectory(milo-native-engine), so the engine's
+# PCH gets it too.
+if(CMAKE_CXX_COMPILER_LAUNCHER MATCHES "ccache")
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:SHELL:-Xclang -fno-pch-timestamp>")
+endif()
+
 # MSVC compatibility flags — applied per-target, not globally.
 set(DC3_MSVC_COMPAT_FLAGS
     -fms-extensions          # __declspec support (xdk headers)
@@ -317,7 +328,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "99ee167d82f317fe7d61797d5c489b25828a84bc"
+set(MILO_ENGINE_PIN "570205a7fc1b9ef94bf759c94d2fe0c719976f98"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -346,7 +357,16 @@ set(MILO_ENGINE_DECOMP_INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/../include)
 set(MILO_ENGINE_DECOMP_COMPAT_FLAGS
     ${DC3_MSVC_COMPAT_FLAGS} ${DC3_ATOMIC_COMPAT_FLAGS} ${DC3_DECOMP_FLAGS})
-set(MILO_ENGINE_DECOMP_PCH ${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h)
+# The PCH header is named in ANGLE-BRACKET form, found through the targets'
+# include path (../src/system), on purpose: CMake writes the header's name
+# verbatim into the generated cmake_pch.hxx that every PCH user includes. A full
+# path there is a different file in every worktree, so no TU that uses the PCH
+# could ever be a ccache hit from another worktree (measured: the only
+# difference between two trees' hash inputs was that 2-byte-longer line).
+# $<ANGLE-R>, not '>': every use wraps this in $<$<COMPILE_LANGUAGE:CXX>:...>,
+# and a bare '>' would close that genex early (C TUs then got `#include ">"`).
+set(DC3_PCH_HEADER "<decomp_pch.h$<ANGLE-R>")
+set(MILO_ENGINE_DECOMP_PCH "${DC3_PCH_HEADER}")
 # GPU backend flavor: DC3's WgpuRnd : NgRnd + the rndobj-coupled gfx TUs. This is
 # the engine's default when a consumer names no backend, but set it explicitly
 # (the engine now also ships a `rb3` BandRnd flavor — see the engine CMakeLists
@@ -1207,9 +1227,12 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Keyboard_Native.cpp
     src/platform/Synth_Stub.cpp
     src/platform/Skeleton_Native.cpp
+    src/platform/ProcessSpawner_Native.cpp # pose_server.py launched from a pristine fork (RLIMIT_RTTIME)
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
+    src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
+    src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/NuiImageSurface_Native.cpp
     src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
     src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
@@ -1225,7 +1248,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Cam_Native.cpp
     src/platform/Net_Stub.cpp
     src/platform/Memcard_Stub.cpp
-    src/platform/ContentMgr_Stub.cpp
+    src/platform/ContentMgr_Native.cpp
     src/platform/MapFile_Stub.cpp
     src/platform/VirtualKeyboard_Stub.cpp
     src/platform/Achievements_Stub.cpp
@@ -1245,7 +1268,9 @@ set(DC3_NATIVE_CORE_SOURCES
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/HttpServer.cpp>
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/PoseTarget_Native.cpp>
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/PosePerformer_Native.cpp>  # DC3_POSE_PERFORM
+    $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/PoseSession_Native.cpp>  # DC3_POSE_RECORD, session: replay (PLAN L-1)
     src/platform/DtaEvalSupport.cpp   # DTA eval state guard + result serializer (unit-tested)
+    $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/FramePacer_Native.cpp>  # H-29 frame cap (DC3_FPS_CAP)
     src/engine_stubs_generated.cpp
     src/StubTrace.cpp
     src/native_link_glue.cpp
@@ -1382,6 +1407,8 @@ set(DC3_WEB_CORE_SOURCES
     src/xbox_link_stubs.cpp
     src/telemetry/GameplayTelemetry.cpp
     src/platform/DtaEvalSupport.cpp
+    # Dc3FrameCapDecide + Dc3RafGate: the rAF loop's frame cap (H-34).
+    src/platform/FramePacer_Native.cpp
     # Web stand-ins for the XDK/NUI/XNet entry points (exact XDK signatures).
     # Dropped in 466a3a591 as a "deleted file" -- it was not deleted, and its
     # absence left those symbols as unresolved wasm imports.
@@ -1394,9 +1421,12 @@ set(DC3_WEB_CORE_SOURCES
     # File_Web.cpp / CDReader_Web.cpp / WebAssets.cpp lifted to milo-engine
     # (MILO_BUILD_WEB platform layer, W0).
     src/platform/Skeleton_Native.cpp
+    src/platform/ProcessSpawner_Native.cpp # pose_server.py launched from a pristine fork (RLIMIT_RTTIME)
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
+    src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
+    src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/NuiImageSurface_Native.cpp
     src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
     src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
@@ -1408,7 +1438,7 @@ set(DC3_WEB_CORE_SOURCES
     # DC3_WEB_LIFTED_ENGINE_SOURCES below.
     src/platform/MeshFilter.cpp
     src/platform/Memcard_Stub.cpp
-    src/platform/ContentMgr_Stub.cpp
+    src/platform/ContentMgr_Native.cpp
     src/platform/Achievements_Stub.cpp
     src/platform/MemcardMgr_Stub.cpp
     # Native cache backend (CacheMgrNative/CacheNative/CacheIDNative). Needed
@@ -1557,7 +1587,7 @@ target_link_libraries(dc3-web PRIVATE milo-engine imgui)
 # MILO_ENGINE_DECOMP_PLATFORM_EXCLUDE note above: the PCH locks <sys/stat.h>'s
 # st_mtime macro state).
 target_precompile_headers(dc3-web PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 set_source_files_properties(${DC3_WEB_LIFTED_ENGINE_SOURCES}
     PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
@@ -1759,7 +1789,7 @@ set_source_files_properties(
 # Covers Object.h, Debug.h and their heavy transitive includes (Data.h, BinStream,
 # Symbol, STL containers). Applies to all engine targets.
 target_precompile_headers(dc3-native PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # ============================================================================
@@ -1821,7 +1851,7 @@ target_link_libraries(milo-viewer PRIVATE
     $<$<BOOL:${ENABLE_FFMPEG}>:${FFMPEG_LIBRARIES}>
 )
 target_precompile_headers(milo-viewer PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # ============================================================================
@@ -1868,7 +1898,7 @@ target_link_libraries(render-test PRIVATE
     ${DC3_PLATFORM_LIBS}
 )
 target_precompile_headers(render-test PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # ============================================================================
@@ -1920,7 +1950,7 @@ target_include_directories(milo-tex-export PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
 target_link_options(milo-tex-export PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
 target_link_libraries(milo-tex-export PRIVATE ${DC3_EXPORT_TOOL_LIBS})
 target_precompile_headers(milo-tex-export PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # --- milo-mat-export ---
@@ -1938,6 +1968,26 @@ target_include_directories(milo-mat-export PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
 target_link_options(milo-mat-export PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
 target_link_libraries(milo-mat-export PRIVATE ${DC3_EXPORT_TOOL_LIBS})
 target_precompile_headers(milo-mat-export PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
+)
+
+# --- milo-pp-dump ---
+# Every RndPostProc in a .milo_xbox as JSON lines, loaded through the decomp's
+# own RndPostProc::Load (np-gfx-post usage inventory).
+add_executable(milo-pp-dump
+    src/tools/milo_pp_dump.cpp
+    ${DC3_EXPORT_TOOL_SOURCES}
+)
+target_compile_options(milo-pp-dump PRIVATE
+    ${DC3_MSVC_COMPAT_FLAGS}
+    ${DC3_DECOMP_FLAGS}
+    ${DC3_ATOMIC_COMPAT_FLAGS}
+)
+target_compile_definitions(milo-pp-dump PRIVATE HX_NATIVE=1 MILO_DEBUG=1 _DEBUG=1)
+target_include_directories(milo-pp-dump PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
+target_link_options(milo-pp-dump PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
+target_link_libraries(milo-pp-dump PRIVATE ${DC3_EXPORT_TOOL_LIBS})
+target_precompile_headers(milo-pp-dump PRIVATE
     "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
 )
 
@@ -1956,7 +2006,7 @@ target_include_directories(milo2gltf PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
 target_link_options(milo2gltf PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
 target_link_libraries(milo2gltf PRIVATE ${DC3_EXPORT_TOOL_LIBS})
 target_precompile_headers(milo2gltf PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # ============================================================================
@@ -1996,12 +2046,15 @@ if(BUILD_TESTS)
         tests/test_preload_budget.cpp
         tests/test_persistent_filecache.cpp
         tests/test_fast_time_audio.cpp
+        tests/test_choreo_blend.cpp
+        tests/test_rhythm_scoring_window.cpp
         tests/test_milo_viewer_screenshot.cpp
         tests/test_object_lifetime.cpp
         tests/test_manual_repro.cpp
         tests/test_charclipgroup.cpp
         tests/test_asset_loading.cpp
         tests/test_postproc_noise.cpp
+        tests/test_dc3_retail_post.cpp
         tests/test_merge_scope_parity.cpp
         tests/test_merge_lifecycle.cpp
         tests/test_cascade_ref_invariant.cpp
@@ -2009,6 +2062,14 @@ if(BUILD_TESTS)
         tests/test_archive_enumeration.cpp
         tests/test_mesh_loading.cpp
         tests/test_rndcam_projection.cpp
+        tests/test_particle_color.cpp
+        tests/test_drawrect_color.cpp
+        tests/test_flare_point_test.cpp
+        tests/test_gpu_timers.cpp
+        tests/test_retail_lighting.cpp
+        tests/test_retail_char_shading.cpp
+        tests/test_screen_aligned_texgen.cpp
+        tests/test_proj_shadow_caster_pass.cpp
         tests/test_dta_parser.cpp
         tests/test_movegraph.cpp
         tests/test_dta_flow.cpp
@@ -2049,10 +2110,14 @@ if(BUILD_TESTS)
         tests/test_native_posesynth.cpp
         tests/test_pose_scoring.cpp
         tests/test_pose_level.cpp
+        tests/test_pose_fill.cpp
+        tests/test_pose_session.cpp
         tests/test_native_twoplayer.cpp
         tests/test_native_pose_dropout.cpp
         tests/test_native_second_person.cpp
+        tests/test_native_pad_with_person.cpp  # H-20 pad presses with a person on the sensor
         tests/test_native_pose_socket.cpp
+        tests/test_native_pose_spawner.cpp
         tests/test_native_tree_paths.cpp
         tests/test_movie_audio.cpp
         tests/test_texrenderer_clear.cpp
@@ -2061,12 +2126,18 @@ if(BUILD_TESTS)
         tests/test_native_notables.cpp
         tests/test_lp64_literals.cpp
         tests/test_clamp_fsel_nan.cpp
+        tests/test_keys_nan_frame.cpp  # H-60 Keys::AtFrame(NaN) stays inside the keys
         tests/test_native_memory_lp64.cpp
         tests/test_cache_native.cpp
         tests/test_copy_poll_semantics.cpp
         tests/test_native_options.cpp
+        tests/test_native_profile.cpp
         tests/test_native_glyph_render.cpp
         tests/test_native_ui_material_terms.cpp
+        tests/test_frame_pacer.cpp     # H-29 frame cap + engine CPU-use guards
+        tests/test_bind_group_cache.cpp # H-30/H-31 cached bind groups, staged uniform rings
+        tests/test_host_path_case.cpp  # H-17/H-23 upper-case host directories
+        tests/test_present_scale.cpp  # H-18 fit the frame into the window
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
@@ -2083,11 +2154,27 @@ if(BUILD_TESTS)
         MILO_DEBUG=1
         _DEBUG=1
         $<$<BOOL:${ENABLE_FFMPEG}>:HX_FFMPEG=1>
-        # Absolute path to the decomp source tree. ctest runs the binary with
-        # WORKING_DIRECTORY=orig-assets, so a test that needs to read decomp
-        # SOURCE (rather than assets) cannot get there by a relative path.
-        "DC3_DECOMP_SRC_DIR=\"${CMAKE_SOURCE_DIR}/../src\""
     )
+    # Absolute path to the decomp source tree. ctest runs the binary with
+    # WORKING_DIRECTORY=orig-assets, so a test that needs to read decomp
+    # SOURCE (rather than assets) cannot get there by a relative path.
+    # Per FILE, not per target: an absolute worktree path in a target-wide
+    # define puts that path on all ~900 milo-tests compile lines, and ccache
+    # (docs/native/BUILD_CACHE.md) can then never share one of them between
+    # worktrees. Add a file here when it starts using the macro.
+    set_property(SOURCE
+            tests/test_native_options.cpp
+            tests/test_native_tree_paths.cpp
+            tests/test_null_this_guards.cpp
+            tests/test_object_lifetime.cpp
+            tests/test_pose_scoring.cpp
+        APPEND PROPERTY COMPILE_DEFINITIONS
+            "DC3_DECOMP_SRC_DIR=\"${CMAKE_SOURCE_DIR}/../src\"")
+    # The engine's source tree, for the post chain's no-direct-CreateBindGroup
+    # guard (PLAN H-66). Per file, for the same ccache reason.
+    set_property(SOURCE tests/test_dc3_retail_post.cpp
+        APPEND PROPERTY COMPILE_DEFINITIONS
+            "MILO_ENGINE_SRC_DIR=\"${MILO_ENGINE_PATH}/src\"")
     target_include_directories(milo-tests PRIVATE
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/../src
@@ -2109,7 +2196,7 @@ if(BUILD_TESTS)
         ${FFMPEG_LIBRARIES}
     )
     target_precompile_headers(milo-tests PRIVATE
-        "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+        "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
     )
     # H-9 exit tests: Xlib (a second X client acting on the engine's window)
     # and no decomp header, so no PCH and no MSVC compat.
@@ -2189,6 +2276,17 @@ if(BUILD_TESTS)
     # MILO_TEST_GATE_STATUS is compiled into the binary so a test can check that
     # what CMake decided actually reached the test process (see TestGates below).
     set(MILO_TEST_ENV "TMPDIR=${CMAKE_CURRENT_BINARY_DIR}/tmp")
+    # The dev profile (DC3_PROFILE, the default) starts the HTTP debug server,
+    # and a windowed run prefers port 9090.  A test never takes 9090 from a
+    # developer's running game: kernel-assigned unless the test names a port
+    # (the port-file helpers read the one it got).
+    list(APPEND MILO_TEST_ENV "DC3_HTTP_PORT=0")
+    # The dev profile also mounts every package under <data>/dlc (DC3_DLC=1).
+    # A test mounts DLC only when it names its own DC3_DLC_DIR (the
+    # DC3_DLC_TESTS gate), so a box with imported packages boots the same song
+    # list -- and runs the same tests -- as one without
+    # (ContentMgr_Native.cpp NativeDlcRoots).
+    list(APPEND MILO_TEST_ENV "DC3_DLC=0")
     set(MILO_TEST_GATES_ON "")
     set(MILO_TEST_GATES_OFF "")
     # MILO_TEST_GATE_PROBES records, for every probed gate, the exact path whose
@@ -2234,6 +2332,34 @@ if(BUILD_TESTS)
     else()
         list(APPEND MILO_TEST_GATES_OFF "DC3_DTA_FLOW_TESTS(no game assets)")
     endif()
+
+    # DC3_DLC_TESTS — DlcSongFlowTest (2) + MoggDlcTest (1): Milkshake from the
+    # DC2 DLC megapack, imported with scripts/dlc/import.sh. DLC is game content
+    # that most boxes (CI, the GPD) do not have, so unlike the gates above this
+    # one decides REGISTRATION, not skipping: the tests are compiled in (the
+    # DC3_DLC_TESTS define) only when the package is found here, and a box
+    # without it registers none of them -- its skip count equals a box with it.
+    # The flow tests also need the game assets. DC3_DLC_TEST_DIR names another
+    # root (a dir without the package turns the gate off, which is how to check
+    # the absent case on a box that has it).
+    set(DC3_DLC_TEST_DIR "${MILO_TEST_ASSET_DIR}/dlc" CACHE PATH
+        "Imported DLC root for the DC3_DLC_TESTS gate (scripts/dlc/import.sh)")
+    set(_dlc_probe
+        "${DC3_DLC_TEST_DIR}/dancecentral2dlcmegapack/songs/milkshake/milkshake.mogg")
+    list(APPEND MILO_TEST_GATE_PROBES "DC3_DLC_TESTS=${_dlc_probe}")
+    set(_dlc_tests 0)
+    if(EXISTS "${_dlc_probe}" AND EXISTS "${MILO_TEST_ASSET_DIR}/gen/main_xbox.hdr")
+        set(_dlc_tests 1)
+        list(APPEND MILO_TEST_ENV "DC3_DLC_TESTS=1" "DC3_TEST_DLC_DIR=${DC3_DLC_TEST_DIR}")
+        list(APPEND MILO_TEST_GATES_ON "DC3_DLC_TESTS")
+    else()
+        list(APPEND MILO_TEST_GATES_OFF
+            "DC3_DLC_TESTS(no DC2 DLC megapack under ${DC3_DLC_TEST_DIR} - tests not registered)")
+    endif()
+    # Per source, as for test_gates.cpp below (a value that differs between
+    # boxes stays out of every other TU's ccache key).
+    set_property(SOURCE tests/test_dta_flow.cpp tests/test_mogg_v0xe.cpp APPEND PROPERTY
+        COMPILE_DEFINITIONS "DC3_DLC_TESTS=${_dlc_tests}")
 
     # Deliberately NOT defaulted on, with the reason recorded so the next person
     # does not have to re-derive it:
@@ -2296,7 +2422,9 @@ if(BUILD_TESTS)
         OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/milo_test_asset_dir.txt"
         CONTENT "${MILO_TEST_ASSET_DIR}\n")
 
-    target_compile_definitions(milo-tests PRIVATE
+    # Only test_gates.cpp reads these, and two of them are absolute paths of
+    # this build dir; per file for the same ccache reason as DC3_DECOMP_SRC_DIR.
+    set_property(SOURCE tests/test_gates.cpp APPEND PROPERTY COMPILE_DEFINITIONS
         "MILO_TEST_GATES_ON_STR=\"${_gates_on_str}\""
         "MILO_TEST_GATES_OFF_STR=\"${_gates_off_str}\""
         "MILO_TEST_GATE_PROBES_STR=\"${_gate_probes_str}\""
@@ -2361,6 +2489,14 @@ if(BUILD_TESTS)
         add_test(NAME PoseTracker.Python
             COMMAND ${MILO_PYTHON3_LINK} -B ${CMAKE_SOURCE_DIR}/../tests/test_pose_tracker.py)
         set_tests_properties(PoseTracker.Python PROPERTIES
+            LABELS PoseServer TIMEOUT 120 ENVIRONMENT "${MILO_TEST_ENV}")
+        # PlaytestKit.Python: the playtest kit's own tools (scripts/playtest/:
+        # pose-session cutting, the session summary, the player-box asset check,
+        # the kit driver's null-screen guard) on synthetic files
+        # (tests/test_playtest_kit.py; stdlib only, no game data, no GPU).
+        add_test(NAME PlaytestKit.Python
+            COMMAND ${MILO_PYTHON3_LINK} -B ${CMAKE_SOURCE_DIR}/../tests/test_playtest_kit.py)
+        set_tests_properties(PlaytestKit.Python PROPERTIES
             LABELS PoseServer TIMEOUT 120 ENVIRONMENT "${MILO_TEST_ENV}")
     endif()
 

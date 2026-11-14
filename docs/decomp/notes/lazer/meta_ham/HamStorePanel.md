@@ -29,6 +29,11 @@ Inside the body (was lines 539-550):
     // 99.375 (normalized stays 100.0, so that one was reverted as worse fuzzy).
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.453, 7 non-equal row(s): NOT A BUG.
+Every row is register-only; `scripts/analysis/regperm_equivalence.py` raised 2 lead(s),
+each read by hand against the listing: pure register permutation, no operand swap.
+(CALLARG? leads read by hand: MakeString<const char*, const char*> takes r3-r5; the
+r9/r10 leads are dead leftovers.)
 
 ## `?OnMsg@HamStorePanel@@IAA?AVDataNode@@ABVRCJobCompleteMsg@@@Z`
 

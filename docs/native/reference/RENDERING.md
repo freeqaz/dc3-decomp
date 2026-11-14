@@ -140,9 +140,20 @@ a cached pipeline keyed on material state.
 | `kLighten` 9 | One | One | Max |
 | `kDarken` 10 | One | One | Min |
 
-When `SetAlphaBlendMax` is on, alpha for every blend except `kBlendSrc` uses
-op Max with factors 1, 1. This reproduces retail's destination-alpha state;
-`MapBlend` documents the reasoning.
+Destination alpha: **dc3 follows each draw's own equation** for alpha, with
+the colour factors and op, as `NgMat::SetBasicState` passes them. For example,
+Multiply leaves `dst.a · src.a`. `SetAlphaBlendMax` is **off** for dc3
+(`rndshape::kAlphaBlendMax = !kDC3RetailPost`, engine `ae855ab`, lane
+np-gfx-post).
+- The frame alpha is the retail bloom mask, and DC3's UI stencils it with
+  Multiply "debloom" quads (`frame_debloom.mat`, `game_mode_icon/debloom.mat`).
+  Those quads only work under the equation.
+- Retail hardware footage of the song-select screen refutes MAX (cards burn
+  white, the background hazes).
+- `DxRnd::SetDefaultRenderStates` does set `BlendOpAlpha` 3; why retail
+  nevertheless behaves this way is not established.
+- rb3 and rb3-xenon keep MAX.
+- Evidence: engine `docs/native/dc3-backend-for-rb3-wii.md` section 31.5.
 
 | ZMode | Depth write | Compare |
 |---|---|---|
@@ -278,13 +289,13 @@ these consumers render correctly at runtime is not re-verified here.
 | Pass | What it is |
 |---|---|
 | `ShadowPass` | 1024² `Depth32Float` shadow map (`kShadowMapSize`); static and skinned depth pipelines; `InShadowPass()` drives `DrawMeshShadow` in `Mesh_Wgpu.cpp`. The standard shader samples it with a 3×3 `textureSampleCompare` PCF. |
-| `PostProcPass` | Driven by `RndPostProc`. Contrast and brightness use the retail `RndColorXfm::AdjustContrast` formula. Also saturation, levels, posterize, vignette, chromatic aberration + sharpen, flicker (`StepFlicker`), noise, and the bloom composite. On the pinned engine the noise is procedural ±0.5 static per pixel. The image overlays `mNoiseMap` instead (PLAN G-14; the engine patch is not landed). |
-| `BloomPass` | Bloom extraction and blur, composited by `PostProcPass`. |
+| `PostProcPass` | Driven by `RndPostProc`. **dc3 (engine branch `np-gfx-post`):** it hands off to the retail chain `RB3RetailPost` (`RB3RetailPostDC3.cpp`, parameters from `rndshape/DC3PostChain.cpp`), a port of `NgPostProc::DoPost` from the shipped microcode. The chain is: <ul><li>the per-material pseudo-HDR luma mask in frame alpha (`NgMat::AllowHDR` materials, `bloom_multiplier` scaling, threshold above 1 dividing);</li><li>the plain arm (three 8-bit sets at w/4, w/16, w/64, 15-tap blurs) or the streak arm (two sets, `SetBloomBlurWeightsStreak`);</li><li>a screen-blend composite at `bloomColor · BloomLocFactor · BloomIntensity()` with no clamps;</li><li>the texture-noise overlay;</li><li>the `RndColorXfm` 3×4 matrix scaled by `mColorModulation`;</li><li>vignette, chroma and sharpen.</li></ul>`DC3_RETAIL_POST=0` restores the previous generic composite, which clamps intensity to ≤ 1 and threshold to ≥ 0.7 (kept for rb3-xenon); `raw`, `mask`, `bloom` and `grade` are inspection views. **Round 2 (engine `d81616b`..`4f8f533`):** <ul><li>motion blur (bit 24): the previous frame's pre-UI post output fed back, `out = c + (prev − c)·max(r, c105.rgb)`, held in two ping-pong textures that exist only while a post-proc blurs;</li><li>glare (`bloom_glare.ps` + bit 37's additive composite);</li><li>hue converge (bit 62, `PostProc_Blacklight.pp`), run after the motion-blur mix;</li><li>the post-proc is chosen as `Rnd::DoPostProcess` does: the blacklight override, else `set_postproc_override`, else the registered post-proc (`rndshape::ActivePostProc()`);</li><li>no bloom mask while the current environ fades out (rects excepted).</li></ul>**Round 3 (engine `3d00499`..`167d438`, dc3 `bf112f510`):** <ul><li>the velocity blur (bit 42): `RndVelocityBuffer`'s camera term, a half-resolution RGBA8 target computed from the depth the main pass already wrote (no geometry re-draw; shipped data has no `RndMotionBlur` objects), and the 11-tap composite before the bloom blend. Readiness follows retail's `AdvanceFrame`/`ResetFrame`, so a camera cut draws no blur for two frames. Natively `NgPostProc` never runs (the factory is `RndPostProc`), so `NgRnd::DoPostProcess` does the camera cache and the `DoVelocity` gate itself. Off (blend 0, hi-res screenshot, `toggle_all_postprocs`) adds no pass and no target;</li><li>`Rnd_Wgpu.cpp`'s frame target decides from `rndshape::ActivePostProc()` like the passes, so `set_postproc_override` alone grades the frame;</li><li>`{rnd toggle_all_postprocs}` makes the chain the identity.</li></ul>In shipped gameplay the blur shows only on fast camera moves (the dci song intro: 3–4 px on part of the frame); normal dancing drifts ~0.2 px/frame, under retail's threshold. Views `velocity` and `veldiff`. Not ported: hall of time (no shipped shader permutation draws it). Details and evidence: engine `docs/native/dc3-backend-for-rb3-wii.md` §31–33. |
+| `BloomPass` | Generic bloom extraction and blur for the `DC3_RETAIL_POST=0` path and rb3-xenon. |
 | `DofPass` | Depth of field, ported from retail `NgDOFProc::DoPost`. |
 | `SpotBeamPass` | Volumetric spotlight beams, ported from retail `NgSpotlightDrawer`. |
 | `PointTestPass` | Flare occlusion queries, ported from retail `DxRnd::DoPointTests`. |
 | `TexBlendPass` | `RndTexBlender::DrawShowing`. |
-| `DisplayRamp` | Display gamma ramp on the finished frame. |
+| `DisplayRamp` | Display gamma ramp on the finished frame. dc3 applies retail's scan-out ramp `pow(v, 0.85)`, with `(rnd (gamma 0.85))` taken from `default.dta`. It runs once, after the UI, on every output, headless included, so screenshots and look captures are post-ramp. `DC3_DISPLAY_GAMMA=off` gives the pre-ramp front buffer. |
 | `DrawRect2D` | Screen-space rects. |
 
 `ShippedWgsl.h` / `ShippedWgsl_DC3.cpp` list every WGSL module the dc3 flavor

@@ -8,6 +8,24 @@
 #   Wait for screen:   wait_screen screen_name
 #   Relative offset:   +N button_name       (N frames after last wait satisfied)
 #   Wake:              N wake / +N wake     "the player presses the wake button"
+#   Highlight by name: +N highlight NAME / highlight NAME
+#
+# `highlight NAME` presses down/up (one press per 15 frames, each once the
+# list has settled) until the focused HamNavList's highlighted entry is the
+# data symbol NAME, e.g. `+30 highlight omg` then `+60 confirm`.  A list whose
+# rows move -- downloadable songs (DC3_DLC_DIR) are listed among the disc's,
+# sorted by difficulty -- does not move the flow, where a counted run of downs
+# lands on a different song.  It logs
+#   DC3 Input: highlight 'omg' satisfied at frame F (P presses)
+# and the next relative offset counts from that frame.  If the focused
+# component is not a HamNavList, NAME is not in its data (for 120 frames), or
+# 3600 frames pass,
+# it logs `DC3 Input: TIMEOUT highlight ...` and abandons the rest of the
+# script: a flow that cannot find its song must not confirm a different one.
+# Directive in the engine (milo-native-engine src/platform/Joypad_Native.cpp);
+# the list query is dc3's native/src/platform/JoypadSelect_Native.cpp.  Flows
+# that test scrolling itself (song-select-scroll.txt) and flows shared with
+# the original under Xenia (ymca.txt, xenia-ymca.txt) keep counted presses.
 #
 # `wake` is for flows shared with the original game under Xenia, and for
 # native runs with a pose provider (the default policy auto is then faithful),

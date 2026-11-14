@@ -167,3 +167,11 @@ DataNode(arr, kDataArray=0x10), Release, copy into the sret, temp dtor.  The
 empty arm builds DataArray(1) and stores Symbol() (gNullStr, type 5) at
 Node(0).  Residual is only the EH-state/frame difference recorded above.
 ```
+
+## `??$__adjust_heap@PAVDataArrayPtr@@HV1@UForAllKeyframesSorter@@@stlpmtx_std@@YAXPAVDataArrayPtr@@HHV1@UForAllKeyframesSorter@@@Z`
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.464, 5 non-equal row(s): NOT A BUG.
+Every row is register-only; `scripts/analysis/regperm_equivalence.py` raised 1 lead(s),
+each read by hand against the listing: pure register permutation, no operand swap.
+(CALLARG? leads read by hand: DataArrayPtr::operator= takes r3/r4; the r10 lead is a
+dead leftover.)

@@ -506,3 +506,9 @@ Above the definition (was lines 2092-2106):
 // by 0x10 and changes the callee-save helpers, so it is a step away from the
 // image's prologue -- not kept.
 ```
+
+## `?SquareComplexTransposeVector@@YAXPAMJ@Z`
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.

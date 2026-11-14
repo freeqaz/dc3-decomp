@@ -26,10 +26,11 @@ static bool PathExists(const std::string &p) {
 }
 
 static std::string GetRepoRoot() {
-    // __FILE__ is "<repo>/native/tests/test_object_lifetime.cpp"
-    std::string f(__FILE__);
-    size_t pos = f.rfind("/native/tests/");
-    return pos != std::string::npos ? f.substr(0, pos) : ".";
+    // Not __FILE__: under ccache (docs/native/BUILD_CACHE.md) the compiler is
+    // handed a path relative to the build dir, so __FILE__ is
+    // "../tests/test_object_lifetime.cpp" and has no repo root in it.
+    // DC3_DECOMP_SRC_DIR is <repo>/native/../src, set per file in CMakeLists.
+    return std::string(DC3_DECOMP_SRC_DIR) + "/..";
 }
 
 static std::string GetMiloLibRoot() {

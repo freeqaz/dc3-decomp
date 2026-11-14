@@ -22,19 +22,19 @@ wait_screen main_screen
 wait_screen choose_mode_screen
 +30 confirm
 
-# Song select -- TWO downs, derived from the list (see ymca.txt for the
-# derivation): perform mode opens with the cursor on index 2 and the list reads
+# Song select -- by NAME: `highlight betteroffalone` presses down/up until the
+# list's highlight is on it (engine Joypad_Native.cpp, dc3
+# JoypadSelect_Native.cpp), so the flow plays Better Off Alone whatever rows
+# precede it (downloadable songs, PLAN D-3).  On the disc alone the list reads
 #   0 playlists  1 random_song  2 song_tier_0  3 ymca  4 betteroffalone
-#   5 thehustle  6 song_tier_1  7 starships ...
-# so index 4 is two downs.  The old FIVE downs never selected Better Off
-# Alone: with the invented `- 1` scroll edge (removed on native-navscroll) they
-# jumped the tier header and landed on starships, and without it they land on
-# index 7 -- starships again.  Every run of pose_scoring_gate.sh and
-# test_lighting_events.sh before this fix scored and lit Starships.
+# from the entry focus 2, i.e. two downs.  Counting downs is how this flow
+# went wrong before: the old FIVE downs never selected Better Off Alone (with
+# the invented `- 1` scroll edge they jumped the tier header, without it they
+# landed on index 7), and every run of pose_scoring_gate.sh and
+# test_lighting_events.sh before that fix scored and lit Starships.
 wait_screen song_select_screen
-+30 down
-+60 down
-+120 confirm
++30 highlight betteroffalone
++60 confirm
 
 # multiuser_screen: controller input, as on the 360 (see ymca.txt):
 # difficulty, `play`, `skip_waiting` -> start_game -> enter_gameplay.

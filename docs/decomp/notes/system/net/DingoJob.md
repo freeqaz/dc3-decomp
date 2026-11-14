@@ -21,3 +21,7 @@ Above the definition (was lines 112-116):
 // w18-e: still 96.2.  Inert: a separate `int *version = nullptr` local for
 // the third argument.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.

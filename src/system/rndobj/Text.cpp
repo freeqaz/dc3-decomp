@@ -636,11 +636,16 @@ void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
             // Label text meshes for GPU debug (buffer names + frame capture).
             // Uses a side-table label instead of SetName to avoid registering
             // in ObjectDir, which would cause double-draws during traversal.
+            // MarkTextGlyphMesh tells the renderer this is a glyph page (no
+            // depth test, no culling); every other unnamed mesh keeps its
+            // material's (dc3_render_hook.cpp MarksTextGlyphMeshes).
             {
                 extern void SetMeshDebugLabel(RndMesh*, const char*);
+                extern void MarkTextGlyphMesh(RndMesh*);
                 char label[64];
                 snprintf(label, sizeof(label), "TEXT_%.48s_p%d", text->Name(), i);
                 SetMeshDebugLabel(page.mesh, label);
+                MarkTextGlyphMesh(page.mesh);
             }
 #endif
         }
@@ -2918,6 +2923,17 @@ void RndText::FontMap3d::AllocateMeshes(RndText *text, int fixedLength) {
         do {
             if ((int)i >= (int)oldSize) {
                 mMeshes[i] = Hmx::Object::New<RndMesh>();
+#ifdef HX_NATIVE
+                // A 3D-font glyph mesh is a glyph page too (see AllocateMeshes).
+                {
+                    extern void SetMeshDebugLabel(RndMesh *, const char *);
+                    extern void MarkTextGlyphMesh(RndMesh *);
+                    char label[64];
+                    snprintf(label, sizeof(label), "TEXT3D_%.48s_m%u", text->Name(), i);
+                    SetMeshDebugLabel(mMeshes[i], label);
+                    MarkTextGlyphMesh(mMeshes[i]);
+                }
+#endif
             }
             RndMesh *mesh = mMeshes[i];
             mesh->SetTransParent(text, false);

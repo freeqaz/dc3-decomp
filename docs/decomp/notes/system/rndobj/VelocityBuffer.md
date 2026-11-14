@@ -81,6 +81,10 @@ Inside the body (was lines 103-132):
         // `for` for the index loop (86.9), `idx` declared first (92.6).
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
+
 
 ## `?Draw@RndVelocityBuffer@@QAA_NPAVRndCam@@AAV?$ObjPtrList@VRndDrawable@@VObjectDir@@@@@Z`
 

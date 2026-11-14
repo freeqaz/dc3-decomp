@@ -117,7 +117,65 @@ void FileQualifiedFilename(String &out, const char *in) {
     out = buf;
 }
 
+#ifdef HX_NATIVE
+extern const char *NativeGetOverlayDir();
+
+// The length of `root` when `path` starts with it as whole path components,
+// compared as the Xbox's file system would (case-insensitive, '\\' == '/');
+// 0 otherwise. "." and "" are never a host root: every relative game path
+// would match them.
+static int NativeHostRootPrefix(const char *path, const char *root) {
+    if (!root)
+        return 0;
+    int n = (int)strlen(root);
+    while (n > 1 && (root[n - 1] == '/' || root[n - 1] == '\\'))
+        n--;
+    if (n == 0 || (n == 1 && root[0] == '.'))
+        return 0;
+    for (int i = 0; i < n; i++) {
+        char a = path[i], b = root[i];
+        if (a == '\0')
+            return 0;
+        if (a == '\\')
+            a = '/';
+        if (b == '\\')
+            b = '/';
+        if (tolower((unsigned char)a) != tolower((unsigned char)b))
+            return 0;
+    }
+    const char next = path[n];
+    return (next == '\0' || next == '/' || next == '\\') ? n : 0;
+}
+#endif
+
 void FileNormalizePath(const char *cc) {
+#ifdef HX_NATIVE
+    // PLAN H-17/H-23. The Xbox's file system ignores case, so lower-casing a
+    // whole path cost it nothing; a host file system does not, and the native
+    // file layer roots paths in HOST directories (the data dir, the native/dta
+    // overlay, the system root) whose names are the user's: an upper-case
+    // letter anywhere above the tree (/home/Alice, ~/tmp/np-bi-cacheB,
+    // DC3_DATA=/tmp/mindata.jeHQ) made every file under it unopenable. Such a
+    // prefix keeps the host's spelling (restored even when an earlier pass
+    // already lower-cased it); the game-relative rest is lower-cased as
+    // before, which the extracted data and the overlay are named for.
+    {
+        const char *roots[3] = { NativeGetDataDir(), NativeGetOverlayDir(), gSystemRoot };
+        int best = 0;
+        const char *bestRoot = nullptr;
+        for (int i = 0; i < 3; i++) {
+            int n = NativeHostRootPrefix(cc, roots[i]);
+            if (n > best) {
+                best = n;
+                bestRoot = roots[i];
+            }
+        }
+        char *p = (char *)cc;
+        for (int i = 0; i < best; i++)
+            p[i] = bestRoot[i] == '\\' ? '/' : bestRoot[i];
+        cc = p + best;
+    }
+#endif
     for (char *ptr = (char *)cc; *ptr != '\0'; ptr++) {
         if (*ptr == '\\')
             *ptr = '/';

@@ -24,6 +24,8 @@
 #include "obj/DataUtl.h"
 #include "utl/MemMgr.h"
 #include "utl/MemHeap.h"
+#include "os/Debug.h"
+#include "obj/Dir.h"
 
 #include <string>
 #include <cstring>
@@ -313,4 +315,66 @@ TEST_F(DtaEvalSupportTest, GuardIsIdempotent) {
     EXPECT_EQ(guard.Restore(), first);
     EXPECT_EQ(gCallStackPtr, base + 1);
     gCallStackPtr = base; // leave the interpreter as we found it
+}
+
+// ===========================================================================
+// PLAN H-28: a MILO_FAIL inside a debug eval ends the eval
+// ===========================================================================
+// On native Debug::Fail returns (non-fatal), so before FailScope the eval ran on
+// past a failed check: `{list data_symbol 4}` on a 4-row FitnessProvider raised
+// its range FAIL, read past the vector's end, and the serializer then died on
+// that garbage symbol (the recovered SIGSEGV of soak #5). The script below sets
+// $h28_after only if evaluation continues past the fail.
+
+void DataInitFuncs();
+
+static void EnsureDataFuncs() {
+    // `set`, `fail`, `+` are DataFuncs, looked up after the data dir (which
+    // must exist); this fixture boots only Symbol.
+    static bool sDone = false;
+    if (!sDone) {
+        sDone = true;
+        DataInitFuncs();
+        if (!ObjectDir::Main())
+            ObjectDir::PreInit(0x400, 0x2000); // the main dir, and $this = it
+    }
+}
+
+TEST_F(DtaEvalSupportTest, FailInsideEvalStopsTheScriptAndReportsIt) {
+    EnsureDataFuncs();
+    DataVariable("h28_after") = 0;
+    DataArray *parsed =
+        DataReadString("{set $h28_after 0} {fail \"h28 probe\"} {set $h28_after 1} 7");
+    ASSERT_NE(parsed, nullptr);
+    DataNode result(0);
+    std::string error;
+    bool completed;
+    {
+        DtaEval::FailScope scope;
+        completed = scope.Evaluate(parsed, result, error);
+    }
+    parsed->Release();
+    EXPECT_FALSE(completed);
+    EXPECT_TRUE(Contains(error, "MILO_FAIL")) << error;
+    EXPECT_EQ(DataVariable("h28_after").Int(), 0)
+        << "the script ran on past its MILO_FAIL";
+    // The scope is closed: a FAIL outside any try is the ordinary non-fatal one
+    // again and must not throw (a leaked try would throw here, and Debug::Poll
+    // would raise "TRY conditional not exited" on the next frame).
+    EXPECT_NO_THROW(TheDebug.Fail("h28 outside the scope", nullptr));
+}
+
+TEST_F(DtaEvalSupportTest, FailScopePassesACleanScriptThrough) {
+    EnsureDataFuncs();
+    DataArray *parsed = DataReadString("{set $h28_clean 3} {+ $h28_clean 4}");
+    ASSERT_NE(parsed, nullptr);
+    DataNode result(0);
+    std::string error;
+    DtaEval::FailScope scope;
+    EXPECT_TRUE(scope.Evaluate(parsed, result, error));
+    parsed->Release();
+    EXPECT_TRUE(error.empty());
+    EXPECT_EQ(result.Int(), 7);
+    scope.Close();
+    EXPECT_NO_THROW(TheDebug.Fail("h28 after a clean eval", nullptr));
 }

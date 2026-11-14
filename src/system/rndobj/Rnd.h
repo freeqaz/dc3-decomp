@@ -175,6 +175,10 @@ public:
     void EndWorld();
 #ifdef HX_NATIVE
     virtual void ClearDepthForOverlay() {} // Override in WgpuRnd
+    // The post-process Rnd::DoPostProcess runs: the blacklight override
+    // (set_postproc_blacklight_override), else the override
+    // (set_postproc_override), else the registered post-processors.
+    RndPostProc *GetPostProcBlacklightOverride() const { return mPostProcBlackLightOverride.Ptr(); }
 #endif
     void SetShowTimers(bool, bool);
     void SetProcAndLock(bool);

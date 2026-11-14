@@ -13,6 +13,9 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <dirent.h>
+#include <climits>
+#include <cerrno>
 #include "platform/ExecutablePath.h"
 #include "shell_timeout.h"
 
@@ -72,9 +75,10 @@ static RunResult RunHeadless(
     const char *inputScriptPath = nullptr,
     int timeoutSeconds = 30,
     std::vector<EnvVar> extraEnv = {},
-    const char *cwd = nullptr
+    const char *cwd = nullptr,
+    const std::string &binaryPath = std::string()
 ) {
-    std::string binary = GetDc3NativePath();
+    std::string binary = binaryPath.empty() ? GetDc3NativePath() : binaryPath;
 
     // Build command with env vars piped through
     std::string persist = MakePersistenceRoot();
@@ -278,6 +282,36 @@ TEST_F(HeadlessBootTest, SurvivesMainLoop) {
     bool completed = HasCompletionMarker(result.output);
     printf("Engine completed all frames: %s\n", completed ? "yes" : "no");
     EXPECT_TRUE(completed) << "Expected engine to complete 2000 frames of main loop";
+
+    // H-29: a headless run is never frame-capped by default -- the flow tests
+    // depend on running faster than real time.
+    EXPECT_NE(result.output.find("frame cap: off (headless"), std::string::npos)
+        << "headless runs must stay uncapped unless DC3_FPS_CAP asks";
+}
+
+// H-29: DC3_FPS_CAP caps a headless run when asked, by sleeping (the exit line
+// reports how many frames the pacer held and for how long).
+TEST_F(HeadlessBootTest, FrameCapWhenAsked) {
+    auto result = RunHeadless(150, nullptr, 120, {{"DC3_FPS_CAP", "30"}});
+    PrintOutputTail(result.output);
+    ASSERT_EQ(result.signal, 0) << CrashSummary(result);
+    ASSERT_TRUE(HasCompletionMarker(result.output)) << CrashSummary(result);
+    EXPECT_NE(result.output.find("frame cap: 30.0 fps (headless, DC3_FPS_CAP)"),
+              std::string::npos);
+    long long paced = -1;
+    int frames = -1;
+    double slept = -1.0;
+    size_t pos = result.output.find("frame cap: 30.00 fps, ");
+    ASSERT_NE(pos, std::string::npos) << "no pacer summary at exit";
+    ASSERT_EQ(sscanf(result.output.c_str() + pos,
+                     "frame cap: 30.00 fps, %lld of %d frames paced, %lf s slept", &paced,
+                     &frames, &slept),
+              3);
+    EXPECT_EQ(frames, 150);
+    // Boot frames are long (loading) and are not slept; the menu frames after
+    // them are. 150 frames at 30 fps is 5 s; well over half must have slept.
+    EXPECT_GE(paced, 75) << "the cap held too few frames";
+    EXPECT_GE(slept, 1.0) << "the cap did not sleep";
 }
 
 // Boot with scripted input — press Start after some frames to dismiss title
@@ -321,6 +355,79 @@ TEST_F(HeadlessBootTest, InputReplayStartButton) {
     EXPECT_EQ(result.exitCode, 0);
 }
 
+// ---------------------------------------------------------------------------
+// DC3_PROFILE (docs/debugging/native.md "Profiles"): dev is the default and
+// turns the developer defaults on; release is the player build and turns none
+// of them on.  The unit half (the table, overrides) is test_native_profile.cpp;
+// this is what a real dc3-native does with each.  DC3_PROFILE= (empty) is the
+// unset case: RunHeadless can only add variables, and an empty one resolves
+// exactly as an unset one, so a DC3_PROFILE in the caller's shell cannot leak.
+// The developer variables themselves are blanked the same way, so a value in
+// the caller's environment cannot stand in for the profile's.
+// ---------------------------------------------------------------------------
+// DC3_FAST_BOOT=1 and 3000 frames: the run reaches main_screen, whose
+// preloads raise MILO_NOTIFYs inside the main loop (measured 2026-11-14: ten
+// cheat_display lines by frame 3000; without fast boot a headless run is still
+// on attract_screen at frame 8000 and the only notify is before the loop).
+static const int kProfileFrames = 3000;
+static std::vector<EnvVar> ProfileEnv(const char *profile) {
+    return {{"DC3_PROFILE", profile},     {"DC3_HTTP", ""},       {"DC3_HTTP_PORT", ""},
+            {"DC3_DEV_MENU", ""},         {"DC3_TEL", ""},        {"DC3_TAG_MODALS", ""},
+            {"DC3_RND_OVERLAYS", ""},     {"DC3_DEV_OPTIONS", ""}, {"DC3_FAST_BOOT", "1"}};
+}
+
+static bool Has(const std::string &out, const char *s) {
+    return out.find(s) != std::string::npos;
+}
+
+TEST_F(HeadlessBootTest, DevProfileIsTheDefault) {
+    auto result = RunHeadless(kProfileFrames, nullptr, 180, ProfileEnv(""));
+    const std::string &out = result.output;
+    ASSERT_EQ(result.signal, 0) << CrashSummary(result);
+    ASSERT_TRUE(HasCompletionMarker(out)) << "no frame-cap line\n" << CrashSummary(result);
+    EXPECT_TRUE(Has(out, "DC3 Native: profile=dev (the default;"))
+        << "the default profile is not dev, or is not announced";
+    EXPECT_TRUE(Has(out, "DC3 Native: profile dev defaults: DC3_DEV_OPTIONS=1"));
+    // The banner a person reads: what is on and the switch for each.
+    EXPECT_TRUE(Has(out, "DC3 Native: +-- developer profile (DC3_PROFILE=dev)"))
+        << "no boot banner";
+    EXPECT_TRUE(Has(out, "| on   HTTP debug server")) << "the banner omits a row that is on";
+    EXPECT_TRUE(Has(out, "off: DC3_HTTP=0\n")) << "the banner does not say how to turn it off";
+    EXPECT_TRUE(Has(out, "DC3_PROFILE=release turns all of it off"));
+    // The debug server: on, on loopback, and (headless, port unset) on a
+    // kernel-assigned port -- a test run must not squat 9090.
+    EXPECT_TRUE(Has(out, "DC3_HTTP_PORT=")) << "the HTTP debug server did not start";
+    EXPECT_TRUE(Has(out, "[HttpServer] Listening on 127.0.0.1:"))
+        << "the debug server is not loopback-only";
+    EXPECT_FALSE(Has(out, "DC3_HTTP_PORT=9090\n"))
+        << "a headless run with DC3_HTTP_PORT unset took 9090";
+    EXPECT_TRUE(Has(out, "development menu on (DC3_DEV_MENU)"));
+    EXPECT_TRUE(Has(out, "telemetry sampled for /api/telemetry only"));
+    EXPECT_FALSE(Has(out, "DC3_TEL: frame=")) << "DC3_TEL=api must not print telemetry lines";
+    // Boot raises MILO_NOTIFYs (measured: XTitleServerCreateEnumerator,
+    // localization); the dev tap prints them, rate-limited, with no backtraces,
+    // and the corner overlay shows the cheat_display copy.
+    EXPECT_TRUE(Has(out, "\nMILO_NOTIFY: ")) << "the dev console printed no notify";
+    EXPECT_FALSE(Has(out, "MILO_BT:")) << "the dev tap must not dump backtraces";
+    EXPECT_TRUE(Has(out, "DC3 OVERLAY [cheats] ")) << "cheat_display reached no overlay";
+}
+
+TEST_F(HeadlessBootTest, ReleaseProfileIsThePlayerBuild) {
+    auto result = RunHeadless(kProfileFrames, nullptr, 180, ProfileEnv("release"));
+    const std::string &out = result.output;
+    ASSERT_EQ(result.signal, 0) << CrashSummary(result);
+    ASSERT_TRUE(HasCompletionMarker(out)) << "no frame-cap line\n" << CrashSummary(result);
+    EXPECT_TRUE(Has(out, "DC3 Native: profile=release"));
+    EXPECT_FALSE(Has(out, "profile dev defaults")) << "release applied the dev table";
+    EXPECT_FALSE(Has(out, "developer profile")) << "release printed the dev banner";
+    EXPECT_FALSE(Has(out, "DC3_HTTP_PORT=")) << "release started the HTTP debug server";
+    EXPECT_FALSE(Has(out, "[HttpServer]"));
+    EXPECT_FALSE(Has(out, "development menu on"));
+    EXPECT_FALSE(Has(out, "DC3_TEL:")) << "release enabled telemetry";
+    EXPECT_FALSE(Has(out, "\nMILO_NOTIFY: ")) << "release printed the modal tap";
+    EXPECT_FALSE(Has(out, "DC3 OVERLAY [")) << "release drew the developer overlays";
+}
+
 // Long-running stability test — only runs if MILO_LONG_TEST=1
 TEST_F(HeadlessBootTest, LongRunStability) {
     if (!getenv("MILO_LONG_TEST"))
@@ -351,4 +458,70 @@ TEST_F(HeadlessBootTest, LongRunStability) {
     bool completed = HasCompletionMarker(result.output);
     printf("Long run completed all frames: %s\n", completed ? "yes" : "no");
     EXPECT_TRUE(completed) << "Expected engine to complete 10000 frames";
+}
+
+// PLAN H-17 / H-23: the game runs from host directories with capitals in
+// their names. The decomp's FileNormalizePath lower-cased the whole path,
+// host prefix included, so DC3_DATA=/tmp/mindata.jeHQ died with "AsyncFile:
+// failed to open '.../mindata.jehq/gen/main_xbox.hdr'" and a tree under an
+// upper-case directory could not read its own native/dta overlay
+// (~/tmp/np-bi-cacheB: options_gameplay.dta, then SIGSEGV).
+//
+// Built here as a real tree, not a rename: <bin>/HostCase.XXXXXX/ holds
+// Tree/build/dc3-native (a HARD link, so the executable's own path -- which
+// NativeTreeDir reads -- is under the capitals), Tree/dta (this tree's
+// overlay) and Data/ (one symlink per entry of the game data), and the boot
+// runs with DC3_DATA=.../Data.
+TEST_F(HeadlessBootTest, BootsFromUpperCaseHostDirectories) {
+    char dataReal[PATH_MAX], dtaReal[PATH_MAX];
+    ASSERT_NE(realpath(NativeFindDataDir(), dataReal), nullptr);
+    ASSERT_NE(realpath((GetBinaryDir() + "/../dta").c_str(), dtaReal), nullptr)
+        << "this tree has no native/dta";
+
+    std::string tmpl = GetBinaryDir() + "/HostCase.XXXXXX";
+    std::vector<char> buf(tmpl.begin(), tmpl.end());
+    buf.push_back('\0');
+    ASSERT_NE(mkdtemp(buf.data()), nullptr);
+    const std::string root(buf.data());
+    const std::string tree = root + "/Tree", data = root + "/Data";
+    const std::string exe = tree + "/build/dc3-native";
+    std::vector<std::string> links; // every entry made, removed in reverse
+    std::vector<std::string> dirs;
+    auto cleanup = [&]() {
+        for (auto it = links.rbegin(); it != links.rend(); ++it) unlink(it->c_str());
+        for (auto it = dirs.rbegin(); it != dirs.rend(); ++it) rmdir(it->c_str());
+        rmdir(root.c_str());
+    };
+    for (const std::string &d : {tree, tree + "/build", data}) {
+        ASSERT_EQ(mkdir(d.c_str(), 0755), 0) << d;
+        dirs.push_back(d);
+    }
+    if (link(GetDc3NativePath().c_str(), exe.c_str()) != 0) {
+        cleanup();
+        FAIL() << "cannot hard-link dc3-native into " << tree << ": " << strerror(errno);
+    }
+    links.push_back(exe);
+    ASSERT_EQ(symlink(dtaReal, (tree + "/dta").c_str()), 0);
+    links.push_back(tree + "/dta");
+    if (DIR *d = opendir(dataReal)) {
+        while (dirent *e = readdir(d)) {
+            if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
+            std::string to = data + "/" + e->d_name;
+            if (symlink((std::string(dataReal) + "/" + e->d_name).c_str(), to.c_str()) == 0)
+                links.push_back(to);
+        }
+        closedir(d);
+    }
+
+    auto result = RunHeadless(600, nullptr, 180, {{"DC3_DATA", data}}, nullptr, exe);
+    cleanup();
+    PrintOutputTail(result.output);
+    ASSERT_EQ(result.signal, 0) << CrashSummary(result);
+    EXPECT_NE(result.output.find("data dir from DC3_DATA=" + data), std::string::npos);
+    EXPECT_NE(result.output.find("overlay dir=" + tree + "/dta"), std::string::npos)
+        << "the overlay was not this upper-case tree's";
+    size_t fail = result.output.find("failed to open");
+    EXPECT_EQ(fail, std::string::npos)
+        << result.output.substr(fail == std::string::npos ? 0 : fail, 200);
+    EXPECT_TRUE(HasCompletionMarker(result.output)) << CrashSummary(result);
 }

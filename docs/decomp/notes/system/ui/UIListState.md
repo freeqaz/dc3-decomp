@@ -79,3 +79,7 @@ Inside the body (was lines 471-518):
                 // assignments, `direction != 1` with the arms swapped, and
                 // hoisting `maxFirst` into a ternary above the if.
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.973, 1 non-equal row(s): One
+BRANCHDEST row (idx 148): the two arms' `cmpw` tails reach the same `li 0 / li 1 ->
+clrlwi r30` result either way; cross-jump direction only (w7-ak). NOT A BUG.

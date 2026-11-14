@@ -330,6 +330,36 @@ TEST(JoypadKeyMap, ModifierChordsAreNotPadPresses) {
     EXPECT_EQ(ButtonsFor({GLFW_KEY_LEFT_SHIFT, GLFW_KEY_ENTER}), 1u << kPad_X) << "Shift is not a host chord";
 }
 
+// GLFW sticky keys (how the pad reads the keyboard): a tapped key reads
+// pressed once, and the read is what clears it. A tap inside a host chord must
+// be consumed with the chord, not left to press its button on the first poll
+// after the modifier goes up (Alt+Enter toggled fullscreen, then pressed A).
+namespace {
+struct StickyKeys {
+    std::set<int> held, tapped;
+    static bool Read(int key, void *ctx) {
+        StickyKeys *k = (StickyKeys *)ctx;
+        bool down = k->held.count(key) || k->tapped.count(key);
+        k->tapped.erase(key);
+        return down;
+    }
+};
+} // namespace
+
+TEST(JoypadKeyMap, ATapInsideAChordIsConsumedWithIt) {
+    StickyKeys k;
+    k.held = {GLFW_KEY_LEFT_ALT};
+    k.tapped = {GLFW_KEY_ENTER};
+    EXPECT_EQ(JoypadKeyboardButtons(StickyKeys::Read, &k), 0u) << "Alt+Enter";
+    k.held.clear();
+    EXPECT_EQ(JoypadKeyboardButtons(StickyKeys::Read, &k), 0u)
+        << "the Enter of Alt+Enter pressed A once Alt was let go";
+    // A tap with no chord still lands, once.
+    k.tapped = {GLFW_KEY_ENTER};
+    EXPECT_EQ(JoypadKeyboardButtons(StickyKeys::Read, &k), 1u << kPad_X);
+    EXPECT_EQ(JoypadKeyboardButtons(StickyKeys::Read, &k), 0u);
+}
+
 TEST(JoypadKeyMap, QuitChordIsCtrlQ) {
     auto quit = [](std::set<int> held) { return JoypadKeyboardQuitChordHeld(HeldIn, &held); };
     EXPECT_TRUE(quit({GLFW_KEY_LEFT_CONTROL, GLFW_KEY_Q}));

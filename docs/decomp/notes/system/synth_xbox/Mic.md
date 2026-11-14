@@ -30,3 +30,8 @@ Above the definition (was lines 386-399):
 // pre-colouring candidate set in the block, not another spelling of the same
 // instruction sequence.
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 98.598, 34 non-equal row(s): The 2 SYM
+rows load lbl_82260F30 where we load sMaxSample: that image word is 32767.0 (.rdata,
+defined in FxSendSynapse.s next to a 2700.0), the same value. The 32 register rows are
+pure permutation. NOT A BUG.

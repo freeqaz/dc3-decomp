@@ -32,3 +32,7 @@ Above the definition (was lines 400-415):
 // walk as a while loop, an extra `remaining == delta` test, and Update() +
 // return duplicated into a `node == target` arm.
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.904, 1 non-equal row(s): One
+BRANCHDEST row (idx 31): the delta == 0 edge, where target == node, so both reach
+Update() with no relink (w25-gc). NOT A BUG.

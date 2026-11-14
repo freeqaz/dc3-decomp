@@ -19,6 +19,18 @@
 //                          or DC3_POSE_LEVEL=0, is untouched.
 //   PoseServerStartTest    Start()'s no-camera path: the spawned server's exit
 //                          is noticed at once and becomes a player notice.
+//   PoseSessionTest        DC3_POSE_RECORD / session: replay (PLAN L-1): what a
+//                          live sensor accepted, recorded and replayed, reaches
+//                          the scorer as it did live -- levelled by the tilt
+//                          estimate the live session had built up.
+//   PoseFillSensorTest     DC3_POSE_FILL at the sensor, extrap (the default)
+//                          and interp: a slow camera filled to ~30 Hz, the
+//                          recording holds camera frames only, a dropout
+//                          reaches P-12's hold as with the fill off, a 30 Hz
+//                          camera is untouched.  Sabotaged: interp without its
+//                          same-people guard (hold 8 -> 32 frames), extrap
+//                          filling after a frame with nobody (8 -> 32),
+//                          recording fill frames (49 -> 220 frames).
 //
 // Each case was sabotage-checked against the code it pins (see the commit).
 
@@ -28,6 +40,8 @@
 #include "platform/NativeNotice.h"
 #include "platform/Skeleton_Native.h"
 #include "platform/PoseLevel_Native.h"
+#include "platform/PoseFill_Native.h"
+#include "platform/PoseSession_Native.h"
 #include "gesture/CameraInput.h"
 #include "gesture/GestureMgr.h" // NUM_SKELETONS
 #include "gesture/SkeletonUpdate.h"
@@ -369,6 +383,91 @@ TEST(PoseSocketReaderTest, ADisconnectStopsTheProviderAndTellsThePlayer) {
         << "notice: " << NativeNotice::Text("pose");
     provider.Stop();
     NativeNotice::Clear("pose");
+}
+
+// pose_server.py FLAG_NO_CAMERA (bit 1): the camera vanished mid-session (the
+// GPD's USB camera re-enumerates) and the server is reopening it.  The game
+// keeps the connection, shows one notice while the camera is gone and another
+// when it is back -- once per edge, not once per 0.1 s heartbeat.
+TEST(PoseSocketReaderTest, ACameraThatGoesAndComesBackPostsOneNoticeEach) {
+    const uint16_t kUnlevelled = 1u << 0, kNoCamera = 1u << 1;
+    FakePoseServer server;
+    ASSERT_TRUE(server.ok());
+    NativeSkeletonProvider provider;
+    ASSERT_TRUE(Connect(provider, server));
+    NativeNotice::Clear("pose");
+    ASSERT_TRUE(server.Send(PacketV2(1, 1.0, 640, 480, kNumJoints, 1, { Dc3Person(1, 0.0f) },
+                                     -1, kUnlevelled)));
+    ASSERT_TRUE(WaitForFrame(provider, 1));
+    EXPECT_FALSE(provider.CameraMissing());
+    EXPECT_EQ(NativeNotice::Text("pose"), "");
+
+    // The camera goes: zero-person heartbeats carrying the flag.
+    ASSERT_TRUE(server.Send(PacketV2(2, 1.1, 640, 480, kNumJoints, 1, {}, -1,
+                                     kUnlevelled | kNoCamera)));
+    ASSERT_TRUE(WaitForFrame(provider, 2));
+    EXPECT_TRUE(provider.CameraMissing());
+    EXPECT_TRUE(provider.IsRunning()) << "a missing camera must not drop the server";
+    EXPECT_EQ(provider.NumPersons(), 0);
+    EXPECT_EQ(NativeNotice::Text("pose"), NativeSkeletonProvider::CameraLostProblem().text);
+    NativeNotice::View v;
+    ASSERT_TRUE(NativeNotice::Current(v));
+    EXPECT_TRUE(v.banner);
+    EXPECT_TRUE(provider.LastProblem().empty()) << "paused, not failed";
+
+    // More heartbeats do not post it again.
+    NativeNotice::Clear("pose");
+    for (uint32_t id = 3; id <= 6; id++)
+        ASSERT_TRUE(server.Send(PacketV2(id, 1.0 + id * 0.1, 640, 480, kNumJoints, 1, {}, -1,
+                                         kUnlevelled | kNoCamera)));
+    ASSERT_TRUE(WaitForFrame(provider, 6));
+    EXPECT_EQ(NativeNotice::Text("pose"), "") << "re-posted on every heartbeat";
+
+    // The camera is back.
+    ASSERT_TRUE(server.Send(PacketV2(7, 2.0, 640, 480, kNumJoints, 1, { Dc3Person(1, 0.0f) },
+                                     -1, kUnlevelled)));
+    ASSERT_TRUE(WaitForFrame(provider, 7));
+    EXPECT_FALSE(provider.CameraMissing());
+    EXPECT_EQ(provider.NumPersons(), 1);
+    EXPECT_EQ(NativeNotice::Text("pose"), NativeSkeletonProvider::CameraBackNotice().text);
+    NativeNotice::Clear("pose");
+    ASSERT_TRUE(server.Send(PacketV2(8, 2.1, 640, 480, kNumJoints, 1, { Dc3Person(1, 0.0f) },
+                                     -1, kUnlevelled)));
+    ASSERT_TRUE(WaitForFrame(provider, 8));
+    EXPECT_EQ(NativeNotice::Text("pose"), "");
+    provider.Stop();
+}
+
+// Header flags bit 2 + bits 8..15 (pose_server.py header_flags): the source
+// declares the scoring latency, in 5 ms units.  pose_server.py --video
+// declares 0 (PLAN L-4).  The declaration lands on the main thread's Poll, and
+// a frame that declares nothing (a webcam) takes it back.
+TEST(PoseSocketReaderTest, ASourcesDeclaredLatencyReachesTheScorerAndAWebcamsDoesNot) {
+    FakePoseServer server;
+    ASSERT_TRUE(server.ok());
+    NativeSkeletonProvider provider;
+    ASSERT_TRUE(Connect(provider, server));
+    Dc3DeclareSourceLatencyMs(-1);
+    const uint16_t kUnlevelled = 1u << 0, kNoCamera = 1u << 1, kDeclared = 1u << 2;
+    auto send = [&](uint32_t id, uint16_t flags) {
+        return server.Send(
+            PacketV2(id, id / 30.0, 640, 480, kNumJoints, 1, { Dc3Person(1, 0.0f) }, -1, flags)
+        );
+    };
+    ASSERT_TRUE(send(61, kUnlevelled | kDeclared)); // a recorded file: 0 ms
+    ASSERT_TRUE(WaitForFrame(provider, 61));
+    EXPECT_EQ(Dc3DeclaredSourceLatencyMs(), 0);
+    ASSERT_TRUE(send(62, kUnlevelled | kDeclared | (30u << 8))); // 30 x 5 = 150 ms
+    ASSERT_TRUE(WaitForFrame(provider, 62));
+    EXPECT_EQ(Dc3DeclaredSourceLatencyMs(), 150);
+    // No bit 2: the high byte means nothing, and bit 1 (FLAG_NO_CAMERA) is
+    // not a declaration.
+    ASSERT_TRUE(send(63, kUnlevelled | kNoCamera | (30u << 8)));
+    ASSERT_TRUE(WaitForFrame(provider, 63));
+    EXPECT_EQ(Dc3DeclaredSourceLatencyMs(), -1);
+    provider.Stop();
+    Dc3DeclareSourceLatencyMs(-1);
+    NativeNotice::Clear("pose"); // frame 63's FLAG_NO_CAMERA posted the lost notice
 }
 
 // ===========================================================================
@@ -817,6 +916,418 @@ TEST_F(PoseSensorLevelTest, AFixedPitchLevelsByExactlyThat) {
     EXPECT_FALSE(NativeSensorGravityEstimator().HasEstimate());
 }
 
+// ===========================================================================
+// PoseSessionTest -- record a live sensor session, replay it (PLAN L-1)
+// ===========================================================================
+class PoseSessionTest : public PoseSensorLevelTest {
+protected:
+    struct Seen {
+        Vector3 joints[2][kNumJoints];
+        int track[2];
+        Vector3 floor;
+    };
+    // Both tracked slots of `f`, in tracking-id order (a, b).
+    static bool Capture(const SkeletonFrame *f, int a, int b, Seen &out) {
+        int ids[2] = { a, b };
+        for (int k = 0; k < 2; k++) {
+            int slot = SlotOf(f, ids[k]);
+            if (slot < 0)
+                return false;
+            out.track[k] = ids[k];
+            for (int j = 0; j < kNumJoints; j++) {
+                const PaddedJointPos &p = f->mSkeletonDatas[slot].mJointPositions[j];
+                out.joints[k][j].Set(p.x, p.y, p.z);
+            }
+        }
+        out.floor = f->mFloorNormal;
+        return true;
+    }
+    static std::string TempPath(const char *name) {
+        const char *tmp = getenv("TMPDIR");
+        std::string dir = std::string((tmp && *tmp) ? tmp : "/tmp") + "/dc3_session_XXXXXX";
+        std::vector<char> buf(dir.begin(), dir.end());
+        buf.push_back('\0');
+        EXPECT_NE(mkdtemp(buf.data()), nullptr);
+        return std::string(buf.data()) + "/" + name;
+    }
+};
+
+TEST_F(PoseSessionTest, AReplayedSessionReachesTheScorerAsItDidLive) {
+    const std::string path = TempPath("live.dc3session");
+    Dc3PoseSessionRecordTo(path.c_str());
+    ASSERT_EQ(Dc3PoseSessionRecordPath(), path);
+
+    // Live: two people, a camera pitched 8 degrees, flagged unlevelled, 10 s
+    // at 30 Hz -- long enough that the estimator has an estimate and moves.
+    std::vector<Seen> live;
+    std::vector<uint32_t> ids;
+    for (int k = 0; k < 300; k++) {
+        WirePerson a = Tilted(61, 8.0f), b = Tilted(62, 8.0f);
+        for (int j = 0; j < kNumJoints; j++) {
+            a.values[j * 4 + 0] -= 0.4f;
+            b.values[j * 4 + 0] += 0.4f + 0.01f * std::sin(k * 0.2f); // b sways
+        }
+        uint32_t id = ++sFrameId;
+        ASSERT_TRUE(mServer.Send(PacketV2(id, 100.0 + id / 30.0, 640, 480, kNumJoints, 1, { a, b }, -1, 1)));
+        ASSERT_TRUE(WaitForFrame(mProvider, id));
+        const SkeletonFrame *f = mSensor->PollNewFrame();
+        ASSERT_NE(f, nullptr) << k;
+        Seen s;
+        ASSERT_TRUE(Capture(f, 61, 62, s)) << k;
+        live.push_back(s);
+        ids.push_back(id);
+    }
+    Dc3PoseSessionRecordTo(nullptr);
+    ASSERT_TRUE(NativeSensorGravityEstimator().HasEstimate());
+
+    // The file holds what the sensor accepted, exactly.
+    std::vector<Dc3PoseSession::Frame> frames;
+    std::string err;
+    ASSERT_TRUE(Dc3PoseSession::Load(path.c_str(), frames, &err)) << err;
+    ASSERT_EQ(frames.size(), live.size());
+    for (size_t k = 0; k < frames.size(); k++) {
+        ASSERT_EQ(frames[k].frameId, ids[k]);
+        EXPECT_EQ(frames[k].timestamp, 100.0 + ids[k] / 30.0);
+        EXPECT_TRUE(frames[k].unlevelled);
+        EXPECT_TRUE(frames[k].level);
+        ASSERT_EQ(frames[k].persons.size(), 2u);
+        EXPECT_EQ(frames[k].persons[0].trackId, 61);
+        EXPECT_EQ(frames[k].persons[1].trackId, 62);
+        EXPECT_EQ(frames[k].floorNormal.y, live[k].floor.y) << k;
+        EXPECT_EQ(frames[k].floorNormal.z, live[k].floor.z) << k;
+    }
+    // The estimate MOVED during the session, so a replay that re-estimated
+    // from scratch could not match (the point of recording the floor normal).
+    EXPECT_GT(std::fabs(live.back().floor.z - live.front().floor.z), 0.05f);
+
+    // Give each frame its own song time and replay it, the estimator reset as
+    // in a fresh process that is replaying only this song.
+    for (size_t k = 0; k < frames.size(); k++)
+        frames[k].song = 10.0 + k / 30.0;
+    const std::string replayPath = TempPath("song.dc3session");
+    {
+        FILE *fp = fopen(replayPath.c_str(), "w");
+        ASSERT_NE(fp, nullptr);
+        fputs("# dc3-pose-session v1\n", fp);
+        for (const Dc3PoseSession::Frame &f : frames)
+            fputs(Dc3PoseSession::Format(f).c_str(), fp);
+        fclose(fp);
+    }
+    NativeSensorLevelSetPolicy(NativePoseLevelPolicy());
+    SkeletonFrame::sUpVectorSmoother.ForceValue(Vector3(0, 1, 0));
+    ASSERT_FALSE(NativeSensorGravityEstimator().HasEstimate());
+    ASSERT_TRUE(Dc3PoseSessionReplayLoad(replayPath.c_str()));
+
+    // Before the first frame: the first frame is held (the player stays
+    // tracked through the menus), as a new frame each call.
+    Dc3PoseSessionReplayPumpAt(&mProvider, 5.0);
+    const SkeletonFrame *f = mSensor->PollNewFrame();
+    ASSERT_NE(f, nullptr);
+    EXPECT_GE(SlotOf(f, 61), 0);
+    EXPECT_GE(SlotOf(f, 62), 0);
+
+    for (size_t k = 0; k < frames.size(); k++) {
+        Dc3PoseSessionReplayPumpAt(&mProvider, frames[k].song + 0.001);
+        f = mSensor->PollNewFrame();
+        ASSERT_NE(f, nullptr) << k;
+        EXPECT_EQ(mProvider.FrameId(), ids[k]);
+        EXPECT_EQ(mProvider.Timestamp(), 100.0 + ids[k] / 30.0);
+        Seen s;
+        ASSERT_TRUE(Capture(f, 61, 62, s)) << k;
+        for (int p = 0; p < 2; p++) {
+            for (int j = 0; j < kNumJoints; j++) {
+                // Equal up to the sensor's 1 um noise floor (its counter is
+                // per process, not per frame).
+                ASSERT_NEAR(s.joints[p][j].x, live[k].joints[p][j].x, 1e-5f) << k << " " << p << " " << j;
+                ASSERT_NEAR(s.joints[p][j].y, live[k].joints[p][j].y, 1e-5f) << k << " " << p << " " << j;
+                ASSERT_NEAR(s.joints[p][j].z, live[k].joints[p][j].z, 1e-5f) << k << " " << p << " " << j;
+            }
+        }
+    }
+    // The same song time again is not a new frame; past the end, the last
+    // frame is held.
+    Dc3PoseSessionReplayPumpAt(&mProvider, frames.back().song + 0.001);
+    EXPECT_EQ(mProvider.FrameId(), ids.back());
+    Dc3PoseSessionReplayPumpAt(&mProvider, frames.back().song + 5.0);
+    f = mSensor->PollNewFrame();
+    ASSERT_NE(f, nullptr);
+    EXPECT_NE(mProvider.FrameId(), ids.back());
+    EXPECT_GE(SlotOf(f, 62), 0);
+    Dc3PoseSessionReplayLoad("/nonexistent/none.dc3session"); // clears the replay
+}
+
+// A song cut starts in the count-in (song clock below zero).  The menus' clock
+// runs up from zero, through the song's own times: the replay must hold the
+// first frame there, not play the dance into the menus (where a moving player
+// stole the pad's presses and stranded replay_proof.py on choose_mode_screen),
+// and start when the song clock comes down to the count-in -- every time.
+// Every frame goes out, one per render frame, even when several come due at
+// once (a hitch), as the live session accepted them.
+TEST_F(PoseSessionTest, ASongReplayWaitsForTheCountInNotTheMenuClock) {
+    std::vector<Dc3PoseSession::Frame> frames(300);
+    for (size_t k = 0; k < frames.size(); k++) {
+        Dc3PoseSession::Frame &f = frames[k];
+        f.seq = f.frameId = 7000 + (uint32_t)k;
+        f.wall = k / 30.0;
+        f.song = -5.0 + k / 30.0; // -5 .. +5
+        f.timestamp = 200.0 + k / 30.0;
+        WirePerson w = Tilted(71, 0.0f);
+        NativeSkeletonProvider::PersonData p;
+        p.trackId = 71;
+        p.valid = true;
+        for (int j = 0; j < kNumJoints; j++) {
+            p.joints[j].Set(w.values[j * 4 + 0], w.values[j * 4 + 1], w.values[j * 4 + 2]);
+            p.confidence[j] = kConfidenceTracked;
+        }
+        f.persons.push_back(p);
+    }
+    const std::string path = TempPath("countin.dc3session");
+    {
+        FILE *fp = fopen(path.c_str(), "w");
+        ASSERT_NE(fp, nullptr);
+        fputs("# dc3-pose-session v1\n", fp);
+        for (const Dc3PoseSession::Frame &f : frames)
+            fputs(Dc3PoseSession::Format(f).c_str(), fp);
+        fclose(fp);
+    }
+    ASSERT_TRUE(Dc3PoseSessionReplayLoad(path.c_str()));
+    // Menus: 0 .. 4 s, inside the session's song times, held every call.
+    for (double t = 0.0; t < 4.0; t += 1.0 / 30) {
+        Dc3PoseSessionReplayPumpAt(&mProvider, t);
+        ASSERT_NE(mSensor->PollNewFrame(), nullptr);
+        EXPECT_GE(mProvider.FrameId(), 0x80000000u) << "menu clock " << t << " played a frame";
+    }
+    // The song: count-in, then each frame on time.
+    for (size_t k = 0; k < frames.size(); k++) {
+        Dc3PoseSessionReplayPumpAt(&mProvider, frames[k].song + 0.001);
+        ASSERT_NE(mSensor->PollNewFrame(), nullptr) << k;
+        ASSERT_EQ(mProvider.FrameId(), frames[k].frameId) << k;
+    }
+    // Back to the menus (the clock jumps back to zero): held again, and the
+    // next song's count-in starts the replay again.
+    Dc3PoseSessionReplayPumpAt(&mProvider, 0.5);
+    mSensor->PollNewFrame();
+    EXPECT_GE(mProvider.FrameId(), 0x80000000u);
+    Dc3PoseSessionReplayPumpAt(&mProvider, 1.0);
+    mSensor->PollNewFrame();
+    EXPECT_GE(mProvider.FrameId(), 0x80000000u);
+    // Re-armed by a clock that is already 0.1 s in: it starts from the first
+    // frame and catches up, one frame per call.
+    for (int k = 0; k <= 3; k++) {
+        Dc3PoseSessionReplayPumpAt(&mProvider, frames[3].song + 0.001);
+        mSensor->PollNewFrame();
+        EXPECT_EQ(mProvider.FrameId(), frames[k].frameId) << k;
+    }
+    // A hitch: three frames come due on one render frame.  None is dropped;
+    // they go out one per call, in order (the game accepts one per frame).
+    for (int k = 4; k <= 6; k++) {
+        Dc3PoseSessionReplayPumpAt(&mProvider, frames[6].song + 0.001);
+        mSensor->PollNewFrame();
+        EXPECT_EQ(mProvider.FrameId(), frames[k].frameId) << k;
+    }
+    // Two seconds behind is a seek, not a hitch: it jumps.
+    Dc3PoseSessionReplayPumpAt(&mProvider, frames[66].song + 0.001);
+    mSensor->PollNewFrame();
+    EXPECT_EQ(mProvider.FrameId(), frames[66].frameId);
+    Dc3PoseSessionReplayLoad("/nonexistent/none.dc3session");
+}
+
+// ===========================================================================
+// PoseFillSensorTest -- DC3_POSE_FILL at the sensor (PoseFill_Native.h): a
+// slow camera's frames go through the slots with fill frames between them,
+// the recorder only ever sees the camera's, a dropout reaches P-12's hold
+// exactly as with the fill off, and a 30 Hz camera is untouched.  The game
+// clock is the test's: 1/120 s per PollNewFrame (DC3_FAST_TIME's rate).
+// ===========================================================================
+class PoseFillSensorTest : public PoseSessionTest {
+protected:
+    void SetUp() override {
+        unsetenv("DC3_POSE_HOLD_MS");
+        PoseSessionTest::SetUp();
+        sClock = 50.0;
+        NativePoseFillTestSet(Dc3PoseFill::kInterp, &Clock);
+    }
+    void TearDown() override {
+        Dc3PoseSessionRecordTo(nullptr);
+        NativePoseFillTestSet(-1, nullptr);
+        PoseSessionTest::TearDown();
+    }
+    static double Clock() { return sClock; }
+
+    struct Shown {
+        double song;
+        int slot;       // of `trackId`, -1 if not tracked
+        float hipX;
+        bool tracked;   // the hip joint tracked (not held / inferred)
+    };
+    // `seconds` of game frames; a camera frame every `period` while `present`
+    // says whether person `trackId` (hip at x = 0.1 m/s * song time, so a
+    // fill frame's x says what moment it shows) is in it.  Returns every
+    // frame the sensor delivered.
+    template <class Present>
+    std::vector<Shown> Play(double seconds, double period, int trackId, Present present,
+                            std::vector<uint32_t> *sentIds = nullptr) {
+        std::vector<Shown> out;
+        const double tick = 1.0 / 120.0;
+        double next = sClock;
+        double end = sClock + seconds;
+        while (sClock < end) {
+            sClock += tick;
+            if (sClock + 1e-9 >= next) {
+                std::vector<WirePerson> wire;
+                if (present(sClock))
+                    wire.push_back(Dc3Person(trackId, (float)(0.1 * sClock)));
+                uint32_t id = ++sFrameId;
+                EXPECT_TRUE(mServer.Send(PacketV2(id, sClock, 640, 480, kNumJoints, 1, wire)));
+                EXPECT_TRUE(WaitForFrame(mProvider, id));
+                if (sentIds)
+                    sentIds->push_back(id);
+                next += period;
+            }
+            const SkeletonFrame *f = mSensor->PollNewFrame();
+            if (!f)
+                continue;
+            Shown s;
+            s.song = sClock;
+            s.slot = SlotOf(f, trackId);
+            s.hipX = s.slot >= 0 ? f->mSkeletonDatas[s.slot].mJointPositions[kJointHipCenter].x : NAN;
+            s.tracked = s.slot >= 0
+                && f->mSkeletonDatas[s.slot].mJointTrackingState[kJointHipCenter] == kConfidenceTracked;
+            out.push_back(s);
+        }
+        return out;
+    }
+    static double sClock;
+};
+double PoseFillSensorTest::sClock = 50.0;
+
+static bool Always(double) { return true; }
+
+TEST_F(PoseFillSensorTest, ASlowCameraIsFilledAndOnlyItsOwnFramesAreRecorded) {
+    const std::string path = TempPath("fill.dc3session");
+    Dc3PoseSessionRecordTo(path.c_str());
+    std::vector<uint32_t> sent;
+    std::vector<Shown> shown = Play(6.0, 0.125, 81, Always, &sent);
+    Dc3PoseSessionRecordTo(nullptr);
+
+    const Dc3PoseFill::Filler &fill = NativePoseFiller();
+    ASSERT_TRUE(fill.Engaged());
+    EXPECT_NEAR(fill.Delay(), 0.125 * Dc3PoseFill::Filler::kDelayFactor, 0.01);
+    EXPECT_FLOAT_EQ(Dc3PoseFillDelaySeconds(), (float)fill.Delay()) << "the scorer has it";
+    EXPECT_GT(fill.Fills(), 100u);
+
+    // The last 4 s: ~30 frames a second, each showing the moment Delay()
+    // before it (x = 0.1 * that moment), never ahead of the camera.
+    int n = 0;
+    for (const Shown &s : shown) {
+        if (s.song < sClock - 4.0)
+            continue;
+        n++;
+        ASSERT_GE(s.slot, 0) << "at " << s.song;
+        EXPECT_TRUE(s.tracked) << "at " << s.song;
+        EXPECT_NEAR(s.hipX, 0.1 * (s.song - fill.Delay()), 0.1 * (1.0 / 120.0) + 2e-4)
+            << "at " << s.song;
+        EXPECT_LE(s.hipX, 0.1 * s.song + 2e-4) << "ahead of the camera at " << s.song;
+    }
+    EXPECT_NEAR(n / 4.0, 32.0, 2.0);
+
+    // The recording: every camera frame the sensor accepted, exactly once, in
+    // order, and nothing else -- a replay of it is the camera, not the fill.
+    std::vector<Dc3PoseSession::Frame> frames;
+    std::string err;
+    ASSERT_TRUE(Dc3PoseSession::Load(path.c_str(), frames, &err)) << err;
+    ASSERT_EQ(frames.size(), sent.size());
+    for (size_t k = 0; k < frames.size(); k++)
+        EXPECT_EQ(frames[k].frameId, sent[k]) << k;
+}
+
+TEST_F(PoseFillSensorTest, TheDefaultExtrapFillsASlowCameraNoMoreThanAPeriodAheadAndRecordsOnlyItsFrames) {
+    EXPECT_EQ(Dc3PoseFill::ParseMode(nullptr), Dc3PoseFill::kExtrap) << "the default";
+    NativePoseFillTestSet(Dc3PoseFill::kExtrap, &Clock);
+    const std::string path = TempPath("fill_extrap.dc3session");
+    Dc3PoseSessionRecordTo(path.c_str());
+    std::vector<uint32_t> sent;
+    std::vector<Shown> shown = Play(6.0, 0.125, 82, Always, &sent);
+    Dc3PoseSessionRecordTo(nullptr);
+
+    const Dc3PoseFill::Filler &fill = NativePoseFiller();
+    ASSERT_TRUE(fill.Engaged());
+    EXPECT_EQ(fill.Delay(), 0.0) << "extrap adds no delay";
+    EXPECT_EQ(Dc3PoseFillDelaySeconds(), 0.0f) << "so the scorer's latency is the camera's";
+    EXPECT_GT(fill.Fills(), 100u);
+    int n = 0;
+    for (const Shown &s : shown) {
+        if (s.song < sClock - 4.0)
+            continue;
+        n++;
+        ASSERT_GE(s.slot, 0) << "at " << s.song;
+        EXPECT_TRUE(s.tracked) << "at " << s.song;
+        // Steady motion: the step on from the newest camera frame lands on the
+        // moment shown, never more than one camera period past that frame.
+        EXPECT_NEAR(s.hipX, 0.1 * s.song, 0.1 * (1.0 / 120.0) + 2e-4) << "at " << s.song;
+    }
+    EXPECT_NEAR(n / 4.0, 32.0, 3.0);
+
+    std::vector<Dc3PoseSession::Frame> frames;
+    std::string err;
+    ASSERT_TRUE(Dc3PoseSession::Load(path.c_str(), frames, &err)) << err;
+    ASSERT_EQ(frames.size(), sent.size()) << "camera frames only";
+    for (size_t k = 0; k < frames.size(); k++)
+        EXPECT_EQ(frames[k].frameId, sent[k]) << k;
+}
+
+TEST_F(PoseFillSensorTest, ADropoutReachesTheHoldExactlyAsWithTheFillOff) {
+    // 8 Hz: 2 s of the player, then she is lost.  The hold (1000 ms of sensor
+    // time, P-12) must hold and release her after the same camera frames,
+    // fill on or off, and no fill frame may stand in for her meanwhile.
+    const Dc3PoseFill::Mode modes[3] = { Dc3PoseFill::kOff, Dc3PoseFill::kInterp, Dc3PoseFill::kExtrap };
+    int heldFrames[3] = { -1, -1, -1 };
+    for (int mode = 0; mode < 3; mode++) {
+        NativePoseFillTestSet(modes[mode], &Clock);
+        const int id = 90 + mode;
+        const double lostAt = sClock + 2.0;
+        auto present = [lostAt](double t) { return t < lostAt; };
+        std::vector<Shown> shown = Play(4.0, 0.125, id, present);
+        int held = 0;
+        bool released = false;
+        const Dc3PoseFill::Filler &fill = NativePoseFiller();
+        if (mode > 0)
+            ASSERT_TRUE(fill.Engaged()) << Dc3PoseFill::ModeName(modes[mode]);
+        for (const Shown &s : shown) {
+            if (s.slot >= 0 && !s.tracked) {
+                EXPECT_FALSE(released) << "held again after the release";
+                held++;
+            } else if (s.slot < 0 && held > 0) {
+                released = true;
+            }
+        }
+        EXPECT_TRUE(released) << Dc3PoseFill::ModeName(modes[mode]);
+        heldFrames[mode] = held;
+        // Run on: the next case starts from an empty sensor.
+        Play(1.0, 0.125, id, [](double) { return false; });
+    }
+    EXPECT_EQ(heldFrames[0], 8) << "1000 ms / 125 ms";
+    EXPECT_EQ(heldFrames[1], heldFrames[0]) << "interp: a different hold";
+    EXPECT_EQ(heldFrames[2], heldFrames[0]) << "extrap: a different hold";
+}
+
+TEST_F(PoseFillSensorTest, AThirtyHertzCameraIsTheSameStreamFillOnOrOff) {
+    for (Dc3PoseFill::Mode m : { Dc3PoseFill::kExtrap, Dc3PoseFill::kInterp }) {
+        NativePoseFillTestSet(m, &Clock);
+        std::vector<uint32_t> sent;
+        std::vector<Shown> shown = Play(4.0, 1.0 / 30.0, 95, Always, &sent);
+        EXPECT_FALSE(NativePoseFiller().Engaged()) << Dc3PoseFill::ModeName(m);
+        EXPECT_EQ(NativePoseFiller().Fills(), 0u) << Dc3PoseFill::ModeName(m);
+        EXPECT_EQ(Dc3PoseFillDelaySeconds(), 0.0f);
+        ASSERT_EQ(shown.size(), sent.size()) << "one frame per camera frame";
+        for (const Shown &s : shown) {
+            ASSERT_GE(s.slot, 0);
+            EXPECT_NEAR(s.hipX, 0.1 * s.song, 2e-4) << "at once, at " << s.song;
+        }
+    }
+}
+
+
 TEST(PoseServerExitTest, EachServerExitCodeHasItsOwnMessage) {
     using P = NativeSkeletonProvider;
     auto brief = [](int code) { return P::DescribeServerExit(code << 8, 2).brief; };
@@ -831,6 +1342,75 @@ TEST(PoseServerExitTest, EachServerExitCodeHasItsOwnMessage) {
               std::string::npos);
     EXPECT_EQ(P::DescribeServerExit(11 /* SIGSEGV */, 0).brief,
               "Pose server crashed: pose tracking off");
+    const std::string byId = "usb-SunplusIT_Inc_Integrated_Camera_JX20250923V2-video-index0";
+    EXPECT_NE(P::DescribeServerExit(P::kExitNoCamera << 8, byId).text.find("camera " + byId),
+              std::string::npos);
+    EXPECT_NE(P::DescribeServerExit(P::kExitNoCamera << 8, "auto").text.find("camera auto"),
+              std::string::npos);
+}
+
+// DC3_POSE_CAMERA reaches pose_server.py --camera as given, and unset is
+// "auto" -- never a fixed index, which named a /dev/video node that no longer
+// existed after the GPD's camera re-enumerated.
+TEST(PoseServerStartTest, TheCameraSpecReachesTheServerAsGivenAndDefaultsToAuto) {
+    const char *tmp = getenv("TMPDIR");
+    std::string dir = std::string((tmp && *tmp) ? tmp : "/tmp") + "/dc3_pose_stub_XXXXXX";
+    std::vector<char> buf(dir.begin(), dir.end());
+    buf.push_back('\0');
+    ASSERT_NE(mkdtemp(buf.data()), nullptr);
+    std::string stubDir(buf.data());
+    std::string stub = stubDir + "/python3";
+    std::string argsFile = stubDir + "/args";
+    FILE *f = fopen(stub.c_str(), "w");
+    ASSERT_NE(f, nullptr);
+    fprintf(f, "#!/bin/sh\nprintf '%%s\\n' \"$@\" > '%s'\nexit %d\n", argsFile.c_str(),
+            (int)NativeSkeletonProvider::kExitNoCamera);
+    fclose(f);
+    chmod(stub.c_str(), 0755);
+    const char *oldPath = getenv("PATH");
+    std::string path = stubDir + ":" + (oldPath ? oldPath : "/usr/bin:/bin");
+    ScopedEnv envPath("PATH", path.c_str());
+    ScopedEnv envPy("DC3_POSE_PYTHON", stub.c_str()); // else the game prefers a venv
+    ScopedEnv noSpawn("DC3_POSE_NO_SPAWN", nullptr);
+
+    auto cameraArg = [&]() {
+        std::string out;
+        FILE *a = fopen(argsFile.c_str(), "r");
+        if (!a) return std::string("<no args file>");
+        char line[512];
+        bool next = false;
+        while (fgets(line, sizeof(line), a)) {
+            std::string l(line);
+            if (!l.empty() && l.back() == '\n') l.pop_back();
+            if (next) { out = l; break; }
+            next = (l == "--camera");
+        }
+        fclose(a);
+        unlink(argsFile.c_str());
+        return out;
+    };
+    std::string sock = stubDir + "/never.sock";
+    {
+        NativeSkeletonProvider provider;
+        EXPECT_FALSE(provider.Start(sock, "unused.task"));
+        EXPECT_EQ(cameraArg(), "auto");
+        EXPECT_NE(provider.LastProblem().text.find("camera auto"), std::string::npos);
+    }
+    {
+        NativeSkeletonProvider provider;
+        const std::string byId = "/dev/v4l/by-id/usb-Fake_Camera-video-index0";
+        EXPECT_FALSE(provider.Start(sock, "unused.task", byId));
+        EXPECT_EQ(cameraArg(), byId);
+        EXPECT_NE(provider.LastProblem().text.find(byId), std::string::npos);
+    }
+    {
+        NativeSkeletonProvider provider;
+        EXPECT_FALSE(provider.Start(sock, "unused.task", 2));
+        EXPECT_EQ(cameraArg(), "2");
+    }
+    NativeNotice::Clear("pose");
+    unlink(stub.c_str());
+    rmdir(stubDir.c_str());
 }
 
 // A python3 that behaves like pose_server.py on a box with no camera: it exits
@@ -852,6 +1432,7 @@ TEST(PoseServerStartTest, NoCameraFailsInUnderASecondAndPostsANotice) {
     const char *oldPath = getenv("PATH");
     std::string path = stubDir + ":" + (oldPath ? oldPath : "/usr/bin:/bin");
     ScopedEnv envPath("PATH", path.c_str());
+    ScopedEnv envPy("DC3_POSE_PYTHON", stub.c_str()); // else the game prefers a venv
     ScopedEnv noSpawn("DC3_POSE_NO_SPAWN", nullptr);
     NativeNotice::Clear("pose");
 

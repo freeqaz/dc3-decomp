@@ -99,6 +99,10 @@ Added after the move (lane w-five-clean):
 // test (needs TheGameData + TheHamDirector).  Code unchanged.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: `lwz
+r3,TheHamDirector@l(r30)` vs `lwz r3,0(r30)` after a full lis+addi; same address.
+
 ## `Dc3W8bHollaProbe()`
 
 `Dc3W8bHollaProbe` -- moved verbatim from `src/system/hamobj/HollaBackMinigame.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of 721dc5a22)
@@ -177,6 +181,11 @@ Inside the body (was lines 272-281):
         // locals before the loop (symbol ordinals unchanged).
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.977, 2 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap. Includes `lwzx` index-operand
+order (commutative address).
 
 ## `?SetMoveState@HollaBackMinigame@@QAAXHVSymbol@@@Z`
 

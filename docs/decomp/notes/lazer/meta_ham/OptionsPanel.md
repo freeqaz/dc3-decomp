@@ -44,3 +44,10 @@ Above the definition (was lines 79-106):
 // `error = online ? token_redemption_error : leaderboard_no_net;` is worse
 // (98.814).  Both measured on a full ninja build.
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.661, 22 non-equal row(s): NOT A BUG.
+Every row is register-only; `scripts/analysis/regperm_equivalence.py` raised 1 lead(s),
+each read by hand against the listing: pure register permutation, no operand swap. The
+one JOIN? lead (idx 140, 0xc28) is the case-2 arm loading the token_redemption_too_late
+static through the same renamed register (r29 vs r30) the rest of the function uses -- a
+linear-scan join artifact.

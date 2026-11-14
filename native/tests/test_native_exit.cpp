@@ -28,6 +28,7 @@
 #if defined(__linux__) || defined(__APPLE__)
 
 #if defined(__linux__)
+#include <X11/Xatom.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #endif
@@ -42,6 +43,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
 #include <climits>
 #include <cstdio>
@@ -362,27 +364,48 @@ TEST_F(NativeExitTest, SecondEngineOnAPortExitsInsteadOfSharing) {
 // to song time during play (kRealTime only skips the A/V offset), so in a song
 // it reported the song position.  The test moves that timeline the way a song
 // does ({taskmgr set_seconds}) and reads it back as the control.
+//
+// The game drives that same timeline itself, so the control has to win a
+// race against it unless the engine is held where nothing does.  MetaPanel::
+// Poll sets it from the shell music's stream position on every frame once the
+// boot reaches main_screen, and a headless DC3_FAST_BOOT engine gets there
+// ~0.3 s after its main loop starts (MEASURED np-crash, H-71): with every curl
+// started 0.3 s late (a PATH stand-in for a test process descheduled under
+// load) the read-back was 0.26 instead of 5000, every time.  That was the
+// 1.9 s failure seen once in a loaded gate.  So the engine boots WITHOUT
+// DC3_FAST_BOOT and stays on attract_screen, whose movie (~83 s) leaves the
+// timeline alone; the set and the read-back are one eval; and the timeline is
+// read again after /api/health, so the health read is known to have happened
+// with the song clock at 5000 rather than assumed to.
 TEST_F(NativeExitTest, HealthUptimeIsWallClockNotSongTime) {
     if (!HaveCurl()) GTEST_SKIP() << "curl not installed";
     std::string portFile = mRunDir + "/http_port";
     Engine e;
     auto started = std::chrono::steady_clock::now();
     Start(e, mRunDir, {"MILO_HEADLESS=1", "MILO_NORENDER=1", "DC3_HTTP=1", "DC3_HTTP_PORT=0",
-                       "DC3_HTTP_PORT_FILE=" + portFile});
+                       "DC3_HTTP_PORT_FILE=" + portFile, "DC3_FAST_BOOT"});
     ASSERT_TRUE(e.WaitFor("DC3 Native: Entering main loop", 120)) << Tail(e.Output());
     int port = atoi(ReadAll(portFile).c_str());
     ASSERT_GT(port, 0) << Tail(e.Output());
     std::string api = "http://127.0.0.1:" + std::to_string(port) + "/api";
-    Curl("-X POST --data '{taskmgr set_seconds 5000 FALSE}' " + api + "/dta/eval");
-    std::string clock = Curl("-X POST --data '{taskmgr seconds}' " + api + "/dta/eval");
+    std::string clock = Curl("-X POST --data '{do {taskmgr set_seconds 5000 FALSE} "
+                             "{taskmgr seconds}}' " + api + "/dta/eval");
     std::string health = Curl(api + "/health");
+    std::string after = Curl("-X POST --data '{taskmgr seconds}' " + api + "/dta/eval");
+    std::string screen = Curl("-X POST --data '{ui current_screen}' " + api + "/dta/eval");
     double wall = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
     size_t at = health.find("\"uptime_s\":");
     ASSERT_NE(at, std::string::npos) << "health: " << health;
     double uptime = atof(health.c_str() + at + strlen("\"uptime_s\":"));
     // Control: the song clock really did move (else this test proves nothing).
-    EXPECT_NE(clock.find("5000"), std::string::npos)
+    EXPECT_NE(clock.find("\"value\":5000"), std::string::npos)
         << "{taskmgr seconds} did not read back 5000: " << clock;
+    // ...and it was still there after the health read: nothing reset it in
+    // between, so uptime_s was read while the song timeline said 5000.
+    EXPECT_NE(after.find("\"value\":5000"), std::string::npos)
+        << "the game moved the song timeline between the set and the health "
+           "read, so this run says nothing about uptime_s; screen: " << screen
+        << "\ntimeline after the health read: " << after;
     EXPECT_GE(uptime, 0.0) << health;
     EXPECT_LE(uptime, wall + 1.0)
         << "uptime_s=" << uptime << " after " << wall << " s of wall clock: it is "
@@ -394,11 +417,29 @@ TEST_F(NativeExitTest, HealthUptimeIsWallClockNotSongTime) {
 #if defined(__linux__)
 namespace {
 
+// The next Xvfb's screen (WxHxDepth) and X resources (the RESOURCE_MANAGER
+// property, as xrdb sets it). A test that changes them restores them
+// (ScopedXvfbSetup).
+std::string sXvfbScreen = "1280x720x24";
+std::string sXResources;
+
+struct ScopedXvfbSetup {
+    ScopedXvfbSetup(const char *screen, const char *resources = "") {
+        sXvfbScreen = screen;
+        sXResources = resources;
+    }
+    ~ScopedXvfbSetup() {
+        sXvfbScreen = "1280x720x24";
+        sXResources.clear();
+    }
+};
+
 // A private X server. Skips (via `available`) when Xvfb is not installed.
 struct Xvfb {
     pid_t pid = -1;
     std::string display;
     bool available = false;
+    Display *resourceClient = nullptr; // holds sXResources on the server
 
     Xvfb() {
         if (system("command -v Xvfb >/dev/null 2>&1") != 0) return;
@@ -413,7 +454,7 @@ struct Xvfb {
                 dup2(devnull, STDERR_FILENO);
             }
             std::string fd = std::to_string(fds[1]);
-            execlp("Xvfb", "Xvfb", "-displayfd", fd.c_str(), "-screen", "0", "1280x720x24",
+            execlp("Xvfb", "Xvfb", "-displayfd", fd.c_str(), "-screen", "0", sXvfbScreen.c_str(),
                    "-nolisten", "tcp", (char *)nullptr);
             _exit(127);
         }
@@ -430,9 +471,24 @@ struct Xvfb {
         if (total > 0) {
             display = ":" + std::string(buf, strcspn(buf, "\n"));
             available = true;
+            if (!sXResources.empty()) {
+                // The property xrdb writes; GLFW reads Xft.dpi from it for the
+                // content scale. The connection stays open: when its last
+                // client goes, an X server resets, and the reset drops the
+                // root window's properties (as xrdb's own docs warn).
+                if ((resourceClient = XOpenDisplay(display.c_str()))) {
+                    Atom rm = XInternAtom(resourceClient, "RESOURCE_MANAGER", False);
+                    XChangeProperty(resourceClient, DefaultRootWindow(resourceClient), rm,
+                                    XA_STRING, 8, PropModeReplace,
+                                    (const unsigned char *)sXResources.data(),
+                                    (int)sXResources.size());
+                    XSync(resourceClient, False);
+                }
+            }
         }
     }
     ~Xvfb() {
+        if (resourceClient) XCloseDisplay(resourceClient);
         if (pid > 0) {
             kill(pid, SIGTERM);
             waitpid(pid, nullptr, 0);
@@ -647,5 +703,558 @@ TEST_F(NativeExitTest, ScreenshotWorksWindowed) {
     ExpectNoCrash(out);
 }
 
+// np-defaults: with DC3_HTTP_PORT unset, a window prefers 9090 and falls back
+// to a kernel-assigned port when 9090 is taken (the owner's game, a second
+// engine), instead of exiting 98 -- the debug server is on by default in the
+// dev profile, so a second windowed run must still start.  The first cut
+// exited 98 "cannot bind port 0": a failed bind decommissions a cpp-httplib
+// Server and its next bind returns -1 at once.
+TEST_F(NativeExitTest, WindowedDefaultPortFallsBackWhen9090IsTaken) {
+    int holder = socket(AF_INET, SOCK_STREAM, 0);
+    ASSERT_GE(holder, 0);
+    sockaddr_in addr = {};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons(9090);
+    // Taken by this test, or already by someone else: 9090 is busy either way.
+    if (bind(holder, (sockaddr *)&addr, sizeof(addr)) == 0) {
+        ASSERT_EQ(listen(holder, 1), 0);
+    } else if (errno != EADDRINUSE) {
+        int err = errno;
+        close(holder);
+        GTEST_SKIP() << "cannot bind 127.0.0.1:9090: " << strerror(err);
+    }
+    std::string portFile = mRunDir + "/http_port";
+    Engine e;
+    int port = 0;
+    RunWindowed(mRunDir, [&](Display *dpy, Window w) {
+        port = atoi(ReadAll(portFile).c_str());
+        SendWmDeleteWindow(dpy, w);
+    }, e, {"DC3_HTTP=1", "DC3_HTTP_PORT=", "DC3_HTTP_PORT_FILE=" + portFile});
+    close(holder);
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_FALSE(Contains(out, "detail=http_port")) << "the busy default port was fatal\n"
+                                                    << Tail(out);
+    EXPECT_GT(port, 0) << "no DC3_HTTP_PORT_FILE\n" << Tail(out);
+    EXPECT_NE(port, 9090) << Tail(out);
+    EXPECT_TRUE(Contains(out, "port 9090 is taken")) << "the fallback was not announced\n"
+                                                     << Tail(out);
+    EXPECT_TRUE(Contains(out, "(loopback only)")) << Tail(out);
+    ASSERT_TRUE(WIFEXITED(e.status)) << Tail(out);
+    EXPECT_EQ(WEXITSTATUS(e.status), 0) << Tail(out);
+    ExpectNoCrash(out);
+}
+
+// ===========================================================================
+// H-18: the window shows the whole frame at any size; H-33: a window that
+// cannot be drawn into stops the game instead of spinning.
+//
+// The frame is the Rnd virtual resolution (1280x720), scaled into the window
+// with its aspect kept and black bars where the window's shape differs
+// (engine gfx/PresentScale). These read the window's pixels back from the X
+// server (XGetImage): bars must be exactly black, and the picture must reach
+// the window's right and bottom edges -- the old corner picture left
+// everything right of x=1280 and below y=720 black.
+// ===========================================================================
+namespace {
+
+struct WindowShot {
+    int w = 0, h = 0;
+    std::vector<uint32_t> px; // 0xRRGGBB
+
+    bool Grab(Display *dpy, Window win) {
+        XWindowAttributes a;
+        if (!XGetWindowAttributes(dpy, win, &a)) return false;
+        XImage *img = XGetImage(dpy, win, 0, 0, a.width, a.height, AllPlanes, ZPixmap);
+        if (!img) return false;
+        w = a.width;
+        h = a.height;
+        px.resize((size_t)w * h);
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) px[(size_t)y * w + x] = (uint32_t)XGetPixel(img, x, y) & 0xFFFFFF;
+        XDestroyImage(img);
+        return true;
+    }
+    // Fraction of pixels in [x0,x1) x [y0,y1) brighter than near-black.
+    double Lit(int x0, int y0, int x1, int y1) const {
+        long lit = 0, n = 0;
+        for (int y = std::max(0, y0); y < std::min(h, y1); y++)
+            for (int x = std::max(0, x0); x < std::min(w, x1); x++, n++) {
+                uint32_t p = px[(size_t)y * w + x];
+                if (((p >> 16) & 0xFF) > 8 || ((p >> 8) & 0xFF) > 8 || (p & 0xFF) > 8) lit++;
+            }
+        return n ? (double)lit / n : 0.0;
+    }
+    // Every pixel in the region is pure black (a bar).
+    bool Black(int x0, int y0, int x1, int y1) const {
+        for (int y = std::max(0, y0); y < std::min(h, y1); y++)
+            for (int x = std::max(0, x0); x < std::min(w, x1); x++)
+                if (px[(size_t)y * w + x] != 0) return false;
+        return true;
+    }
+};
+
+// The fitted picture for a 1280x720 frame (gfx/PresentScale's FitPresentRect).
+struct Fit {
+    int x, y, w, h;
+};
+Fit FitFrame(int winW, int winH) {
+    Fit f;
+    if ((long long)winW * 720 > (long long)winH * 1280) {
+        f.h = winH;
+        f.w = (int)(((long long)winH * 1280 + 360) / 720);
+    } else {
+        f.w = winW;
+        f.h = (int)(((long long)winW * 720 + 640) / 1280);
+    }
+    f.x = (winW - f.w) / 2;
+    f.y = (winH - f.h) / 2;
+    return f;
+}
+
+// Waits (up to 20 s) for the window to be winW x winH with the frame fitted in
+// it: bars black, picture lit along its right and bottom edges. "" on
+// success, else what was wrong with the last look.
+std::string WaitForFittedPicture(Display *dpy, Window win, int winW, int winH) {
+    std::string why = "never grabbed";
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    do {
+        XSync(dpy, False);
+        WindowShot s;
+        if (!s.Grab(dpy, win)) {
+            why = "XGetImage failed";
+        } else if (s.w != winW || s.h != winH) {
+            why = "window is " + std::to_string(s.w) + "x" + std::to_string(s.h) + ", want " +
+                  std::to_string(winW) + "x" + std::to_string(winH);
+        } else {
+            Fit f = FitFrame(winW, winH);
+            const int strip = std::max(16, f.w / 12);
+            double right = s.Lit(f.x + f.w - strip, f.y, f.x + f.w, f.y + f.h);
+            double bottom = s.Lit(f.x, f.y + f.h - f.h / 8, f.x + f.w, f.y + f.h);
+            bool bars = s.Black(0, 0, winW, f.y) && s.Black(0, f.y + f.h, winW, winH) &&
+                        s.Black(0, 0, f.x, winH) && s.Black(f.x + f.w, 0, winW, winH);
+            char buf[256];
+            snprintf(buf, sizeof buf,
+                     "picture %dx%d+%d+%d: right-edge strip %.1f%% lit, bottom strip %.1f%% lit, "
+                     "bars %s",
+                     f.w, f.h, f.x, f.y, right * 100, bottom * 100, bars ? "black" : "NOT black");
+            why = buf;
+            if (bars && right > 0.01 && bottom > 0.01) return "";
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    } while (std::chrono::steady_clock::now() < deadline);
+    return why;
+}
+
+class NativeWindowTest : public NativeExitTest {};
+
+// Waits for the engine to exit on its own (no window); false on timeout.
+bool WaitOwnExit(Engine &e, int seconds) { return e.WaitExit(seconds); }
+
+} // namespace
+
+// A window larger than the frame, and of another shape: the frame fills its
+// width with bars above and below. Then resized wider than 16:9 (bars left and
+// right) and taller (bars above and below again), as a person or a tiling
+// desktop does.
+TEST_F(NativeWindowTest, TheFrameIsScaledToFitTheWindow) {
+    if (!HaveXdotool()) GTEST_SKIP() << "xdotool not installed";
+    ScopedXvfbSetup setup("1920x1200x24");
+    Engine e;
+    std::string atStart, wide, tall;
+    RunWindowed(mRunDir, [&](Display *dpy, Window w) {
+        atStart = WaitForFittedPicture(dpy, w, 1600, 1000);
+        ASSERT_TRUE(Xdotool("windowsize " + std::to_string(w) + " 1800 700"));
+        wide = WaitForFittedPicture(dpy, w, 1800, 700);
+        ASSERT_TRUE(Xdotool("windowsize " + std::to_string(w) + " 1000 900"));
+        tall = WaitForFittedPicture(dpy, w, 1000, 900);
+        SendWmDeleteWindow(dpy, w);
+    }, e, {"MILO_WIDTH=1600", "MILO_HEIGHT=1000"});
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_EQ(atStart, "") << "1600x1000 window\n" << Tail(out);
+    EXPECT_EQ(wide, "") << "resized to 1800x700\n" << Tail(out);
+    EXPECT_EQ(tall, "") << "resized to 1000x900\n" << Tail(out);
+    EXPECT_TRUE(Contains(out, "frame scaled to fit")) << Tail(out);
+    ExpectNoCrash(out);
+}
+
+// F11 and Alt+Enter toggle fullscreen (the window takes the whole screen, the
+// frame letterboxed in it) and back to the window's size. Alt+Enter is not
+// also an A press: the keyboard pad reports nothing while Alt is held.
+TEST_F(NativeWindowTest, F11AndAltEnterToggleFullscreen) {
+    if (!HaveXdotool()) GTEST_SKIP() << "xdotool not installed";
+    ScopedXvfbSetup setup("1920x1200x24");
+    Engine e;
+    std::string full1, back1, full2, back2;
+    RunWindowed(mRunDir, [&](Display *dpy, Window w) {
+        ASSERT_TRUE(Xdotool("key F11"));
+        full1 = WaitForFittedPicture(dpy, w, 1920, 1200);
+        ASSERT_TRUE(Xdotool("key F11"));
+        back1 = WaitForFittedPicture(dpy, w, 1280, 720);
+        // Alt held across the Enter, as a person presses it.
+        ASSERT_TRUE(Xdotool("keydown alt sleep 0.2 key Return sleep 0.2 keyup alt"));
+        full2 = WaitForFittedPicture(dpy, w, 1920, 1200);
+        ASSERT_TRUE(Xdotool("keydown alt sleep 0.2 key Return sleep 0.2 keyup alt"));
+        back2 = WaitForFittedPicture(dpy, w, 1280, 720);
+        SendWmDeleteWindow(dpy, w);
+    }, e, {"MILO_INPUT_LOG=1"});
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_EQ(full1, "") << "F11\n" << Tail(out);
+    EXPECT_EQ(back1, "") << "F11 again\n" << Tail(out);
+    EXPECT_EQ(full2, "") << "Alt+Enter\n" << Tail(out);
+    EXPECT_EQ(back2, "") << "Alt+Enter again\n" << Tail(out);
+    EXPECT_FALSE(Contains(out, "(A) action")) << "Alt+Enter also pressed A\n" << Tail(out);
+    ExpectNoCrash(out);
+}
+
+// MILO_FULLSCREEN=1 starts fullscreen (scripts/play.sh --fullscreen).
+TEST_F(NativeWindowTest, MiloFullscreenStartsFullscreen) {
+    ScopedXvfbSetup setup("1920x1080x24");
+    Engine e;
+    std::string full;
+    RunWindowed(mRunDir, [&](Display *dpy, Window w) {
+        full = WaitForFittedPicture(dpy, w, 1920, 1080);
+        SendWmDeleteWindow(dpy, w);
+    }, e, {"MILO_FULLSCREEN=1"});
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_EQ(full, "") << Tail(out);
+    EXPECT_TRUE(Contains(out, "GpuDevice: fullscreen 1920x1080")) << Tail(out);
+    ExpectNoCrash(out);
+}
+
+// HiDPI on X11: at a content scale of 2 (Xft.dpi 192) the window opens at
+// twice the size in pixels, and the frame fills it at exactly 2x.
+TEST_F(NativeWindowTest, AnX11ContentScaleSizesTheWindow) {
+    ScopedXvfbSetup setup("2560x1600x24", "Xft.dpi:\t192\n");
+    Engine e;
+    std::string hidpi;
+    RunWindowed(mRunDir, [&](Display *dpy, Window w) {
+        hidpi = WaitForFittedPicture(dpy, w, 2560, 1440);
+        SendWmDeleteWindow(dpy, w);
+    }, e);
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_EQ(hidpi, "") << Tail(out);
+    EXPECT_TRUE(Contains(out, "surface 2560x1440")) << Tail(out);
+    ExpectNoCrash(out);
+}
+
+// H-33: a window whose surface cannot be presented to on any window system is
+// a named exit (97), not a silent fall back to an invisible headless run.
+// MILO_SURFACE_FAULT=init makes every surface probe fail.
+TEST_F(NativeWindowTest, AnUnusableSurfaceIsANamedExit) {
+    Xvfb x;
+    if (!x.available) GTEST_SKIP() << "Xvfb not installed";
+    Engine e;
+    Start(e, mRunDir, {"MILO_HEADLESS", "DISPLAY=" + x.display, "MILO_SURFACE_FAULT=init"});
+    ASSERT_TRUE(WaitOwnExit(e, 180)) << "still running\n" << Tail(e.Output());
+    std::string out = e.Output();
+    if (GpuUnavailable(out)) GTEST_SKIP() << "GPU unavailable";
+    ASSERT_TRUE(WIFEXITED(e.status)) << Tail(out);
+    EXPECT_EQ(WEXITSTATUS(e.status), 97) << Tail(out);
+    EXPECT_TRUE(Contains(out, "DC3 Native: FATAL - the window cannot be presented to")) << Tail(out);
+    EXPECT_TRUE(Contains(out, "detail=window_surface_unusable code=97")) << Tail(out);
+    EXPECT_FALSE(Contains(out, "falling back to headless")) << Tail(out);
+    EXPECT_FALSE(Contains(out, "Entering main loop")) << Tail(out);
+    ExpectNoCrash(out);
+}
+
+// H-33: the fallback re-opens the window (on X11: XWayland). Exercised here by
+// MILO_SURFACE_FAULT=init-once, which fails the first window's probe only and
+// lets the fallback run once even on X11: the second window must come up,
+// draw and close normally.
+TEST_F(NativeWindowTest, AnUnusableFirstSurfaceReopensTheWindow) {
+    Engine e;
+    std::string pic;
+    RunWindowed(mRunDir, [&](Display *dpy, Window w) {
+        pic = WaitForFittedPicture(dpy, w, 1280, 720);
+        SendWmDeleteWindow(dpy, w);
+    }, e, {"MILO_SURFACE_FAULT=init-once"});
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_TRUE(Contains(out, "cannot be presented to: MILO_SURFACE_FAULT says so (test hook); "
+                              "opening it again through X11"))
+        << Tail(out);
+    EXPECT_EQ(pic, "") << Tail(out);
+    ASSERT_TRUE(WIFEXITED(e.status)) << Tail(out);
+    EXPECT_EQ(WEXITSTATUS(e.status), 0) << Tail(out);
+    ExpectNoCrash(out);
+}
+
+// H-33: a surface that never hands out a frame. The loop must not spin (on the
+// GPD it ran 6,000-7,000 iterations a second drawing nothing): each failed
+// acquire waits a frame period, and after 5 s without a single frame the game
+// stops with exit 97. The engine's own count of failed acquires over that time
+// is the loop's rate.
+TEST_F(NativeWindowTest, ASurfaceThatGivesNoFramesStopsWithoutSpinning) {
+    Xvfb x;
+    if (!x.available) GTEST_SKIP() << "Xvfb not installed";
+    Engine e;
+    // The frame cap off (DC3_FPS_CAP=0, and rb3 has none): the cap alone
+    // would also hold this loop near 60/s and hide a spin in the acquire.
+    Start(e, mRunDir, {"MILO_HEADLESS", "DISPLAY=" + x.display, "MILO_SURFACE_FAULT=acquire",
+                       "DC3_FPS_CAP=0"});
+    ASSERT_TRUE(WaitOwnExit(e, 300)) << "still running\n" << Tail(e.Output());
+    std::string out = e.Output();
+    if (GpuUnavailable(out)) GTEST_SKIP() << "GPU unavailable";
+    ASSERT_TRUE(WIFEXITED(e.status)) << Tail(out);
+    EXPECT_EQ(WEXITSTATUS(e.status), 97) << Tail(out);
+    EXPECT_TRUE(Contains(out, "detail=window_surface_unusable code=97")) << Tail(out);
+    // "... has not given a single frame in 5 s (312 attempts, last status Error)"
+    size_t at = out.find("has not given a single frame in ");
+    ASSERT_NE(at, std::string::npos) << Tail(out);
+    double secs = 0;
+    long long attempts = 0;
+    ASSERT_EQ(sscanf(out.c_str() + at, "has not given a single frame in %lf s (%lld attempts",
+                     &secs, &attempts), 2)
+        << out.substr(at, 120);
+    ASSERT_GE(secs, 5.0);
+    const double rate = attempts / secs;
+    // A frame period of sleep per attempt caps it near 60/s (fewer on a loaded
+    // box); a spinning loop is in the thousands.
+    EXPECT_LT(rate, 120.0) << attempts << " acquires in " << secs << " s\n" << Tail(out);
+    EXPECT_GT(attempts, 0);
+    ExpectNoCrash(out);
+}
+
 #endif // __linux__ (window tests)
+
+#if defined(__linux__)
+// ===========================================================================
+// The pose server dc3-native launches (platform/ProcessSpawner_Native.h).
+//
+// On a PipeWire box without rtkit, opening audio lowers the game's
+// RLIMIT_RTTIME to 0:0, and a pose_server.py fork+exec'd from the game
+// afterwards inherited it and was SIGKILLed at MediaPipe model load.  These
+// tests make that happen on any Linux box: as soon as dc3-native's spawner
+// exists, the test lowers the GAME's limit with prlimit(2) -- after the
+// spawner fork, before the pose server launch, which is where audio init sits
+// -- and a stub "python3" first on PATH records the limits it was given.
+// ===========================================================================
+#include <sys/resource.h>
+
+namespace {
+
+std::string SpawnRealPython() {
+    const char *path = getenv("PATH");
+    std::istringstream ss(path ? path : "/usr/bin:/bin");
+    std::string dir;
+    while (std::getline(ss, dir, ':')) {
+        std::string cand = dir + "/python3";
+        if (!dir.empty() && access(cand.c_str(), X_OK) == 0)
+            return cand;
+    }
+    return std::string();
+}
+
+std::vector<pid_t> ChildrenOf(pid_t pid) {
+    std::string s = ReadAll("/proc/" + std::to_string(pid) + "/task/" + std::to_string(pid) + "/children");
+    std::istringstream ss(s);
+    std::vector<pid_t> out;
+    int c;
+    while (ss >> c)
+        out.push_back(c);
+    return out;
+}
+
+bool PidGone(pid_t pid) {
+    if (kill(pid, 0) != 0 && errno == ESRCH)
+        return true;
+    std::string stat = ReadAll("/proc/" + std::to_string(pid) + "/stat");
+    size_t paren = stat.rfind(')');
+    return stat.empty() || (paren != std::string::npos && paren + 2 < stat.size() && stat[paren + 2] == 'Z');
+}
+
+bool WaitGone(pid_t pid, int ms) {
+    for (int i = 0; i < ms / 50; i++) {
+        if (PidGone(pid))
+            return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    return PidGone(pid);
+}
+
+std::string RtTime(const std::string &limits) {
+    size_t at = limits.find("Max realtime timeout");
+    if (at == std::string::npos)
+        return std::string();
+    size_t eol = limits.find('\n', at);
+    return limits.substr(at, eol == std::string::npos ? std::string::npos : eol - at);
+}
+
+bool RtTimeUnlimited(const std::string &line) {
+    std::istringstream ss(line.size() > 20 ? line.substr(20) : std::string());
+    std::string soft, hard;
+    ss >> soft >> hard;
+    return soft == "unlimited" && hard == "unlimited";
+}
+
+// The pid in "Launched pose_server.py (pid N, via the spawner)", or -1 (also
+// when it was launched without the spawner).
+pid_t SpawnedServerPid(const std::string &out, size_t from = 0) {
+    size_t at = out.find("Launched pose_server.py (pid ", from);
+    if (at == std::string::npos)
+        return -1;
+    size_t eol = out.find('\n', at);
+    if (out.substr(at, eol - at).find("via the spawner") == std::string::npos)
+        return -1;
+    return atoi(out.c_str() + at + strlen("Launched pose_server.py (pid "));
+}
+
+// Records each run's limits, binds the socket and streams empty v1 frames;
+// DC3_STUB_MODE=die-once SIGKILLs the first run 0.5 s after the game connects.
+const char *kEnginePoseStub = R"PY(
+import os, signal, socket, struct, sys, time
+d = os.environ["DC3_STUB_DIR"]
+with open(os.path.join(d, "runs"), "a") as f:
+    f.write("%d\n" % os.getpid())
+run = sum(1 for _ in open(os.path.join(d, "runs")))
+with open("/proc/self/limits") as src, open(os.path.join(d, "limits.%d" % run), "w") as dst:
+    dst.write(src.read())
+path = sys.argv[sys.argv.index("--socket") + 1]
+if os.path.exists(path):
+    os.unlink(path)
+srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+srv.bind(path)
+srv.listen(1)
+c, _ = srv.accept()
+if os.environ.get("DC3_STUB_MODE") == "die-once" and run == 1:
+    time.sleep(0.5)
+    os.kill(os.getpid(), signal.SIGKILL)
+n = 0
+while True:
+    n += 1
+    body = struct.pack("<IId", run * 1000 + n, 0, time.time())
+    c.sendall(struct.pack("<I", len(body)) + body)
+    time.sleep(0.05)
+)PY";
+
+class NativePoseSpawnTest : public NativeExitTest {
+protected:
+    std::string mStub;
+    std::vector<std::string> mEnv;
+
+    void SetUp() override {
+        NativeExitTest::SetUp();
+        if (IsSkipped() || HasFatalFailure())
+            return;
+        std::string py = SpawnRealPython();
+        if (py.empty())
+            GTEST_SKIP() << "no python3 to run the stub pose server";
+        mStub = mRunDir + "/stub";
+        ASSERT_EQ(mkdir(mStub.c_str(), 0755), 0);
+        {
+            std::ofstream f(mStub + "/stub.py");
+            f << kEnginePoseStub;
+        }
+        {
+            std::ofstream f(mStub + "/python3");
+            f << "#!/bin/sh\nexec " << py << " \"$DC3_STUB_DIR/stub.py\" \"$@\"\n";
+        }
+        chmod((mStub + "/python3").c_str(), 0755);
+        const char *path = getenv("PATH");
+        mEnv = {
+            "MILO_HEADLESS=1",
+            "DC3_POSE=external", // headless skips the pose server unless DC3_POSE is set
+            "DC3_POSE_NO_SPAWN",
+            "DC3_POSE_SOCKET=" + mStub + "/pose.sock",
+            "DC3_CAMERA_FRAMES=off",
+            "DC3_STUB_DIR=" + mStub,
+            "PATH=" + mStub + ":" + (path ? path : "/usr/bin:/bin"),
+            "DC3_POSE_PYTHON=" + mStub + "/python3", // else the game prefers a venv
+        };
+    }
+
+    // The engine's spawner (its first child), within `ms`.
+    pid_t WaitForSpawner(const Engine &e, int ms) {
+        for (int i = 0; i < ms; i++) {
+            std::vector<pid_t> kids = ChildrenOf(e.pid);
+            if (!kids.empty())
+                return kids[0];
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return -1;
+    }
+};
+
+} // namespace
+
+// The GPD bug, reproduced on any box: the game's RLIMIT_RTTIME is lowered to
+// 0:0 after startup, and the pose server it launches must not inherit that.
+// Then the game quits, and neither the spawner nor the server outlives it.
+TEST_F(NativePoseSpawnTest, ThePoseServerKeepsTheLimitsTheGameStartedWith) {
+    struct rlimit own;
+    ASSERT_EQ(getrlimit(RLIMIT_RTTIME, &own), 0);
+    if (own.rlim_max != RLIM_INFINITY)
+        GTEST_SKIP() << "the test runs under RLIMIT_RTTIME hard " << own.rlim_max
+                     << ", so dc3-native starts with no limit left to lose";
+    Engine e;
+    Start(e, mRunDir, mEnv);
+    // main() has started (its first line forks the spawner); audio has not.
+    ASSERT_TRUE(e.WaitFor("DC3 Native Port - Starting", 20)) << Tail(e.Output());
+    std::vector<pid_t> kids = ChildrenOf(e.pid);
+    pid_t spawner = kids.empty() ? -1 : kids[0];
+
+    // What PipeWire's module-rt does to the game at audio init.
+    struct rlimit zero = { 0, 0 };
+    ASSERT_EQ(prlimit(e.pid, RLIMIT_RTTIME, &zero, nullptr), 0) << strerror(errno);
+    std::string gameLine = RtTime(ReadAll("/proc/" + std::to_string(e.pid) + "/limits"));
+    ASSERT_FALSE(RtTimeUnlimited(gameLine)) << "control: the game's limit did not drop: " << gameLine;
+    ASSERT_NE(access((mStub + "/limits.1").c_str(), F_OK), 0)
+        << "the pose server ran before the limit dropped; the test proves nothing";
+
+    ASSERT_TRUE(e.WaitFor("Connected to pose server", 120)) << Tail(e.Output());
+    std::string out = e.Output();
+    pid_t server = SpawnedServerPid(out);
+    EXPECT_GT(server, 0) << "the server was not launched through the spawner\n" << Tail(out);
+    std::string serverLine = RtTime(ReadAll(mStub + "/limits.1"));
+    ASSERT_FALSE(serverLine.empty());
+    EXPECT_TRUE(RtTimeUnlimited(serverLine))
+        << "the pose server inherited the game's lowered RLIMIT_RTTIME: " << serverLine;
+    ASSERT_GT(spawner, 0) << "dc3-native forked no spawner\n" << Tail(out);
+
+    ASSERT_TRUE(e.WaitFor("DC3 Native: Entering main loop", 120)) << Tail(e.Output());
+    kill(e.pid, SIGTERM);
+    ASSERT_TRUE(e.WaitExit(30)) << Tail(e.Output());
+    EXPECT_TRUE(WaitGone(spawner, 5000)) << "the spawner outlived the game";
+    if (server > 0)
+        EXPECT_TRUE(WaitGone(server, 5000)) << "the pose server outlived the game";
+    if (!PidGone(spawner)) kill(spawner, SIGKILL);
+    if (server > 0 && !PidGone(server)) kill(server, SIGKILL);
+}
+
+// A pose server SIGKILLed mid-session: the game says it crashed with signal 9,
+// relaunches it, and tracking resumes.  A SIGKILLed game takes both the
+// spawner and the relaunched server with it.
+TEST_F(NativePoseSpawnTest, APoseServerKilledMidSessionIsReportedAndRelaunched) {
+    mEnv.push_back("DC3_STUB_MODE=die-once");
+    Engine e;
+    Start(e, mRunDir, mEnv);
+    pid_t spawner = WaitForSpawner(e, 20000);
+    ASSERT_GT(spawner, 0) << Tail(e.Output());
+    ASSERT_TRUE(e.WaitFor("Pose server restarted (pid", 150)) << Tail(e.Output());
+    std::string out = e.Output();
+    EXPECT_TRUE(Contains(out, "The pose server crashed (signal 9) - restarting it in 1000 ms (restart 1 of 3)"))
+        << Tail(out);
+    pid_t first = SpawnedServerPid(out);
+    size_t second_at = out.find("Launched pose_server.py (pid ", out.find("restart 1 of 3"));
+    pid_t second = SpawnedServerPid(out, second_at);
+    EXPECT_GT(first, 0);
+    ASSERT_GT(second, 0) << Tail(out);
+    EXPECT_NE(first, second);
+    EXPECT_FALSE(PidGone(second)) << "the relaunched server is not running";
+
+    kill(e.pid, SIGKILL);
+    e.WaitExit(10);
+    EXPECT_TRUE(WaitGone(spawner, 5000)) << "the spawner outlived a SIGKILLed game";
+    EXPECT_TRUE(WaitGone(second, 5000)) << "the pose server outlived a SIGKILLed game";
+    if (!PidGone(spawner)) kill(spawner, SIGKILL);
+    if (!PidGone(second)) kill(second, SIGKILL);
+}
+#endif // __linux__ (pose spawner)
+
 #endif // __linux__ || __APPLE__

@@ -11,8 +11,11 @@
 // The performer must therefore emit 30 frames per second of SONG time however
 // fast the game loop runs -- that is what these tests pin.
 //
-// SensorLatencyTest: DC3_POSE_LATENCY_MS replaces scoring.dta's Kinect-tuned
-// latency_offset when MoveDir::LoadScoring runs (HX_NATIVE call there).
+// SensorLatencyTest: what the scorer's latency is, and why.  Explicit
+// DC3_POSE_LATENCY_MS beats a latency the pose source declares (pose_server.py
+// declares 0 for a recorded file, PLAN L-4), which beats scoring.dta's
+// Kinect-tuned latency_offset.  Applied when MoveDir::LoadScoring runs
+// (HX_NATIVE call there) and again when the source declares.
 
 #include <gtest/gtest.h>
 
@@ -30,7 +33,7 @@
 #include <unistd.h>
 #include <vector>
 
-float Dc3SensorLatencySeconds(float scoringDtaSeconds);
+#include "../src/platform/Skeleton_Native.h" // Dc3SensorLatencySeconds & co.
 float Dc3ScoringDtaLatencySeconds(float scorerSeconds);
 
 namespace {
@@ -158,6 +161,12 @@ struct ScopedEnv {
     ~ScopedEnv() { unsetenv(name); }
 };
 
+// The source's declaration is process state: undo it after each test.
+struct ScopedDeclaration {
+    explicit ScopedDeclaration(int ms) { Dc3DeclareSourceLatencyMs(ms); }
+    ~ScopedDeclaration() { Dc3DeclareSourceLatencyMs(-1); }
+};
+
 TEST(SensorLatencyTest, UnsetKeepsTheKinectValue) {
     ScopedEnv e("DC3_POSE_LATENCY_MS", nullptr);
     EXPECT_FLOAT_EQ(Dc3SensorLatencySeconds(0.1f), 0.1f);
@@ -177,6 +186,70 @@ TEST(SensorLatencyTest, NonsenseIsIgnored) {
         ScopedEnv e("DC3_POSE_LATENCY_MS", bad);
         EXPECT_FLOAT_EQ(Dc3SensorLatencySeconds(0.1f), 0.1f) << bad;
     }
+}
+
+TEST(SensorLatencyTest, ARecordedSourceDeclaresZero) {
+    ScopedEnv e("DC3_POSE_LATENCY_MS", nullptr);
+    ScopedDeclaration d(0);
+    float s = -1.0f;
+    EXPECT_EQ(Dc3ResolveSensorLatency(0.1f, &s), kLatencyDeclared);
+    EXPECT_FLOAT_EQ(s, 0.0f);
+    EXPECT_FLOAT_EQ(Dc3SensorLatencySeconds(0.1f), 0.0f);
+    // The performer still models the Kinect's latency (see above).
+    EXPECT_FLOAT_EQ(Dc3ScoringDtaLatencySeconds(0.0f), 0.1f);
+}
+
+TEST(SensorLatencyTest, NoDeclarationIsTheDefault) {
+    ScopedEnv e("DC3_POSE_LATENCY_MS", nullptr);
+    ScopedDeclaration d(-1);
+    float s = -1.0f;
+    EXPECT_EQ(Dc3ResolveSensorLatency(0.1f, &s), kLatencyDefault);
+    EXPECT_FLOAT_EQ(s, 0.1f);
+}
+
+TEST(SensorLatencyTest, ExplicitBeatsTheSourcesDeclaration) {
+    ScopedEnv e("DC3_POSE_LATENCY_MS", "180");
+    ScopedDeclaration d(0);
+    float s = -1.0f;
+    EXPECT_EQ(Dc3ResolveSensorLatency(0.1f, &s), kLatencyExplicit);
+    EXPECT_FLOAT_EQ(s, 0.18f);
+    // ...and explicit 0 is a real choice, not "unset".
+    ScopedEnv zero("DC3_POSE_LATENCY_MS", "0");
+    ScopedDeclaration d150(150);
+    EXPECT_EQ(Dc3ResolveSensorLatency(0.1f, &s), kLatencyExplicit);
+    EXPECT_FLOAT_EQ(s, 0.0f);
+}
+
+TEST(SensorLatencyTest, NonsenseExplicitFallsBackToTheDeclaration) {
+    ScopedEnv e("DC3_POSE_LATENCY_MS", "abc");
+    ScopedDeclaration d(0);
+    float s = -1.0f;
+    EXPECT_EQ(Dc3ResolveSensorLatency(0.1f, &s), kLatencyDeclared);
+    EXPECT_FLOAT_EQ(s, 0.0f);
+}
+
+// The declaration arrives with the source's first frame, long after boot's
+// LoadScoring: it must reach the scorer then, and go away with the source.
+TEST(SensorLatencyTest, ADeclarationAfterLoadScoringReachesTheScorer) {
+    if (!EnsureEngineInit())
+        return;
+    DataArray *cfg = SystemConfig()->FindArray("scoring", false);
+    ASSERT_NE(cfg, nullptr);
+    ScopedEnv e("DC3_POSE_LATENCY_MS", nullptr);
+    Dc3DeclareSourceLatencyMs(-1);
+    MoveDir::LoadScoring(cfg);
+    EXPECT_NEAR(MoveDir::NativeLatencySeconds(), 0.100f, 1e-6f);
+    Dc3DeclareSourceLatencyMs(0);
+    EXPECT_NEAR(MoveDir::NativeLatencySeconds(), 0.0f, 1e-6f);
+    MoveDir::LoadScoring(cfg); // a scoring reload keeps the source's figure
+    EXPECT_NEAR(MoveDir::NativeLatencySeconds(), 0.0f, 1e-6f);
+    {
+        ScopedEnv x("DC3_POSE_LATENCY_MS", "230");
+        Dc3DeclareSourceLatencyMs(150); // explicit still wins at declaration time
+        EXPECT_NEAR(MoveDir::NativeLatencySeconds(), 0.230f, 1e-6f);
+    }
+    Dc3DeclareSourceLatencyMs(-1); // a camera replaced the file
+    EXPECT_NEAR(MoveDir::NativeLatencySeconds(), 0.100f, 1e-6f);
 }
 
 // The knob must reach the scorer: MoveDir::LoadScoring on the game's own

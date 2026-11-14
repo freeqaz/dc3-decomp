@@ -53,3 +53,8 @@ Inside the body (was lines 333-369):
         // re-places the stack slot the note above depends on) and hoisting
         // `fileSize` (92.83).  Fuzzy 99.236115, canonical 100.0.
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.236, 11 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.

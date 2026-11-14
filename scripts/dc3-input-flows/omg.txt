@@ -5,12 +5,13 @@
 # end to end: preloading_screen must reach real_loading_screen and game_screen
 # instead of on_preload_failed -> title_screen.
 #
-# Same route as betteroffalone.txt; omg is the LAST song in song select (the
-# list is sorted by skill with tier headers, scripts/web/song-order.mjs index
-# 51), so 51 downs from the entry focus (index 2).  Downs 15 frames apart, as
-# song-select-scroll.txt.  Assumes a console that has seen the move tutorial
-# (the flow test seeds the global options cache); otherwise the tutorial
-# panels auto-advance after ~1900 frames each.
+# Same route as betteroffalone.txt; the song is picked by NAME
+# (`highlight omg`), so downloadable songs listed before it do not move the
+# flow.  On the disc alone omg is the LAST song in song select (the list is
+# sorted by skill with tier headers, scripts/web/song-order.mjs index 51).
+# Assumes a console that has seen the move tutorial (the flow test seeds the
+# global options cache); otherwise the tutorial panels auto-advance after
+# ~1900 frames each.
 wait_screen title_screen
 +30 confirm
 wait_screen main_screen
@@ -18,58 +19,8 @@ wait_screen main_screen
 wait_screen choose_mode_screen
 +30 confirm
 wait_screen song_select_screen
-+30 down
-+45 down
-+60 down
-+75 down
-+90 down
-+105 down
-+120 down
-+135 down
-+150 down
-+165 down
-+180 down
-+195 down
-+210 down
-+225 down
-+240 down
-+255 down
-+270 down
-+285 down
-+300 down
-+315 down
-+330 down
-+345 down
-+360 down
-+375 down
-+390 down
-+405 down
-+420 down
-+435 down
-+450 down
-+465 down
-+480 down
-+495 down
-+510 down
-+525 down
-+540 down
-+555 down
-+570 down
-+585 down
-+600 down
-+615 down
-+630 down
-+645 down
-+660 down
-+675 down
-+690 down
-+705 down
-+720 down
-+735 down
-+750 down
-+765 down
-+780 down
-+855 confirm
++30 highlight omg
++60 confirm
 wait_screen multiuser_screen
 +40 down
 +110 confirm

@@ -275,8 +275,14 @@ void NgPostProc::RebuildTex() {
 
 #ifdef HX_NATIVE
 void NgPostProc::DoVelocity() {
-    // Post-processing uses hardcoded ILP32 struct offsets throughout — stub on native
-    // Will be reimplemented when the WebGPU renderer is built
+    // Natively the PostProc factory is RndPostProc (NgPostProc::Init is
+    // DxRnd's), so this never runs: NgRnd::DoPostProcess drives retail's gate
+    // and bookkeeping for whichever post-process Rnd::DoPostProcess runs
+    // (RndVelocityBuffer::DoVelocityNative), and the WebGPU backend draws the
+    // velocity pass and bit 42. Kept equivalent should NgPostProc ever be
+    // instantiated natively: nothing here, so a frame is not advanced twice.
+    if (!mMotionBlurDrawList.empty())
+        mMotionBlurDrawList.clear();
 }
 #else
 void NgPostProc::DoVelocity() {

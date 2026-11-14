@@ -10,6 +10,30 @@
 //   --unmute        drop --mute-audio (the audio worklet then runs on the box's
 //                   real output; with it muted Chromium clocks a fake sink)
 //   --camera deny   a fake device but permission refused
+//   --pacing        record frame pacing (scripts/web/lib/pacing.mjs, PLAN W-14):
+//                   game-frame and rAF intervals per phase, long tasks, every
+//                   request, and the engine's per-frame cost counters
+//                   (adds env DC3_FRAME_TRACE=1); writes DIR/pacing.json and
+//                   prints the per-phase table and the worst stalls
+//   --then-song-index N [--then-difficulty D]   after the first song, continue
+//                   through results to song select and play song N too (W-10:
+//                   two songs back to back with the camera, both must score);
+//                   the check then also needs both songs played through and,
+//                   with a camera, a non-zero score on each
+//   --trace FILE [--trace-seconds 90]   a Chrome trace (devtools.timeline, v8 GC,
+//                   gpu) of the first N seconds, for stalls --pacing cannot
+//                   attribute (open it in chrome://tracing or Perfetto)
+//   --env "K=V;K2=V2"   more engine env vars, merged into the page's one ?env=
+//                   (a second &env= in --extra is ignored by the page), e.g.
+//                   --env DC3_POSE_FILL=off
+//   --no-hold       with a camera, the menus are driven by keyboard while the
+//                   page sends the engine empty pose frames (window.dc3PoseHold),
+//                   released once the song is picked: a dancing fake camera's
+//                   hand cursor picks menu items on its own (measured: Party
+//                   Time from the title, Campaign from main). --no-hold keeps
+//                   the camera live throughout
+//   --chrome-args "A B"  extra Chromium flags, e.g. "--disable-frame-rate-limit
+//                   --disable-gpu-vsync" (an unthrottled rAF: H-34)
 //   --max-timer-errors-per-s R   the song-clock check (W-12): exit 1 when more
 //                   than R "timer error is large" lines a game second are
 //                   logged. Default 0.25 with --unmute, off when muted (a muted
@@ -66,6 +90,19 @@ if (!DIFFS.includes(difficulty)) { console.error(`--difficulty must be one of ${
 const selectDifficulty = !argv.includes('--no-select-difficulty');
 const unmute = argv.includes('--unmute');
 const maxTimerErrorsArg = arg('max-timer-errors-per-s', null);
+const pacing = argv.includes('--pacing');
+const holdInMenus = camera !== 'none' && !argv.includes('--no-hold');
+const setHold = async (on) => {
+    if (!holdInMenus) return;
+    try { await page.evaluate((v) => window.dc3PoseHold && window.dc3PoseHold(v), on); } catch (e) {}
+    console.log(`[${el()}s] pose hold ${on ? 'on (menus by keyboard)' : 'off'}`);
+};
+const thenSongIndex = arg('then-song-index', null) === null ? null : +arg('then-song-index');
+const thenDifficulty = arg('then-difficulty', difficulty);
+const traceFile = arg('trace', null);
+const extraEnv = arg('env', '');
+const traceSeconds = +arg('trace-seconds', 90);
+const chromeArgs = (arg('chrome-args', '') || '').split(/\s+/).filter(Boolean);
 
 // One probe line: MoveDir.cpp Dc3DetectFracProbe. Branch names carry hyphens
 // (no-move-key, async-empty-range) -- a \w+ branch pattern silently drops them.
@@ -158,11 +195,17 @@ const browser = await chromium.launch({
         '--disable-sync', '--autoplay-policy=no-user-gesture-required',
         ...(unmute ? [] : ['--mute-audio']),
         ...media,
+        ...chromeArgs,
     ],
 });
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
 if (camera === 'deny') await ctx.clearPermissions();
 const page = await ctx.newPage();
+let pacingLib = null;
+if (pacing) {
+    pacingLib = await import('./lib/pacing.mjs');
+    await pacingLib.installPacing(page);
+}
 await page.addInitScript(() => {
     const grab = (res) => {
         try { const ex = (res.instance || res).exports || {}; for (const k in ex) if (ex[k] instanceof WebAssembly.Memory && !window.__dc3Mem) window.__dc3Mem = ex[k]; } catch (e) {}
@@ -236,33 +279,27 @@ const seen = (n) => screens.some((s) => s.screen === n);
 const waitFor = async (pred, ms) => { const d = Date.now() + ms; while (Date.now() < d) { if (pred()) return true; await new Promise((r) => setTimeout(r, 250)); } return false; };
 
 let result = 'timeout';
-const url = `http://127.0.0.1:${port}/?x=1&env=${encodeURIComponent('DC3_DETECTFRAC_PROBE=1;DC3_SCORING_DEBUG=1')}${extra}`;
-try {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    const deadline = Date.now() + timeoutS * 1000;
-    if (!await waitFor(() => seen('attract_screen'), 120000)) throw new Error('never reached attract_screen');
-    await shot('attract');
-    for (const target of ['title_screen', 'main_screen', 'choose_mode_screen', 'song_select_screen']) {
-        for (let tries = 0; tries < 8 && !seen(target); tries++) {
-            if (await waitFor(() => seen(target), 4000)) break;
-            if (Date.now() > deadline) break;
-            await press('Enter');
-        }
-        if (!seen(target)) throw new Error(`never reached ${target} (current ${cur()})`);
-    }
+const url = `http://127.0.0.1:${port}/?x=1&env=${encodeURIComponent('DC3_DETECTFRAC_PROBE=1;DC3_SCORING_DEBUG=1' + (pacing ? ';DC3_FRAME_TRACE=1' : '') + (extraEnv ? ';' + extraEnv : ''))}${extra}`;
+// One song from song select: index, difficulty, then play it through.
+// Returns 'left_gameplay_to_<screen>' or 'timeout_in_<screen>'.
+const songs = [];
+async function playSong(idx, diff, tag, deadline) {
     await new Promise((r) => setTimeout(r, 3000));
-    for (let i = 0; i < songIndex; i++) { await press('ArrowDown'); await new Promise((r) => setTimeout(r, 400)); }
-    await shot('song_select');
+    for (let i = 0; i < idx; i++) { await press('ArrowDown'); await new Promise((r) => setTimeout(r, 400)); }
+    await shot(`${tag}song_select`);
     await press('Enter');
+    await setHold(false);
     const b2 = screens.length;
+    const song = { tag, index: idx, difficulty: diff, fromScreen: b2, tStart: el() };
+    songs.push(song);
     const inGame = () => screens.slice(b2).some((s) => s.screen === 'game_screen');
     // Difficulty: the seldiff list opens on `beginner`; Down N times, then the
     // Enter loop below confirms it, `play` and `skip_waiting`.
     if (await waitFor(() => screens.slice(b2).some((s) => s.screen === 'multiuser_screen') || inGame(), 30000) && !inGame()) {
         await new Promise((r) => setTimeout(r, 2500));
-        const downs = selectDifficulty ? DIFFS.indexOf(difficulty) : 0;
+        const downs = selectDifficulty ? DIFFS.indexOf(diff) : 0;
         for (let i = 0; i < downs; i++) { await press('ArrowDown'); await new Promise((r) => setTimeout(r, 500)); }
-        console.log(`[${el()}s] multiuser_screen: ${downs} down(s) for ${selectDifficulty ? difficulty : '(not selected: Enter-only driver)'}`);
+        console.log(`[${el()}s] multiuser_screen: ${downs} down(s) for ${selectDifficulty ? diff : '(not selected: Enter-only driver)'}`);
     }
     for (let i = 0; i < 30 && !inGame(); i++) {
         await new Promise((r) => setTimeout(r, 2500));
@@ -270,12 +307,74 @@ try {
     }
     let lastShot = 0;
     const ok = await waitFor(() => {
-        if (cur() === 'game_screen' && Date.now() - lastShot > 20000) { lastShot = Date.now(); shot('ingame'); }
+        if (cur() === 'game_screen' && Date.now() - lastShot > 20000) { lastShot = Date.now(); shot(`${tag}ingame`); }
         const sl = screens.slice(b2);
         const gi = sl.findIndex((s) => s.screen === 'game_screen');
         return gi >= 0 && sl.slice(gi + 1).some((s) => !/game_screen|pause/.test(s.screen));
     }, Math.max(0, deadline - Date.now()));
-    result = ok ? `left_gameplay_to_${cur()}` : `timeout_in_${cur()}`;
+    song.result = ok ? `left_gameplay_to_${cur()}` : `timeout_in_${cur()}`;
+    song.tEnd = el();
+    return song.result;
+}
+let tracing = null;
+if (traceFile) {
+    await browser.startTracing(page, { path: traceFile, screenshots: false,
+        categories: ['devtools.timeline', 'disabled-by-default-devtools.timeline', 'disabled-by-default-devtools.timeline.frame',
+            'v8', 'v8.gc', 'disabled-by-default-v8.gc', 'blink', 'blink.user_timing', 'gpu', 'viz', 'cc', 'toplevel', 'loading', 'netlog'] });
+    tracing = new Promise((r) => setTimeout(r, traceSeconds * 1000)).then(() => browser.stopTracing())
+        .then(() => console.log(`[${el()}s] trace written: ${traceFile}`)).catch((e) => console.log('trace failed: ' + e.message));
+}
+try {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const deadline = Date.now() + timeoutS * 1000;
+    for (let i = 0; i < 40; i++) {
+        if (await page.evaluate(() => typeof window.dc3PoseHold === 'function').catch(() => false)) break;
+        await new Promise((r) => setTimeout(r, 250));
+    }
+    await setHold(true);
+    if (!await waitFor(() => seen('attract_screen'), 120000)) throw new Error('never reached attract_screen');
+    await shot('attract');
+    for (const target of ['title_screen', 'main_screen', 'choose_mode_screen', 'song_select_screen']) {
+        // 20 tries: with a camera on, a first boot can run the party-mode
+        // tutorial (tutorial_party_mode_screen_0..3, Enter each) before main.
+        for (let tries = 0; tries < 20 && !seen(target); tries++) {
+            if (await waitFor(() => seen(target), 4000)) break;
+            if (Date.now() > deadline) break;
+            // The title list is two items (title_screen_menu, start_the_party)
+            // and a dancing camera's hand cursor can leave the highlight on
+            // the second: Enter then starts Party Time and its tutorial
+            // (measured: console `HamNavList ... sym='start_the_party'
+            // selecting=0`). Up puts it back on the first item; the first key
+            // press only switches the list to controller mode (one Up was
+            // measured not to move it), so press it twice.
+            // The same on main_screen (5 items, gameplay first; measured
+            // landing on campaign_mode) and choose_mode (perform first): Up
+            // to the top of the list, which does not wrap (HamNavList).
+            // autosave_warning_screen advances on its own: an Enter sent there
+            // lands on the title list as it appears (measured: base5).
+            if (cur() === 'autosave_warning_screen') continue;
+            const ups = { title_screen: 2, main_screen: 6, choose_mode_screen: 5 }[cur()] || 0;
+            for (let u = 0; u < ups; u++) { await press('ArrowUp'); await new Promise((r) => setTimeout(r, 350)); }
+            await press('Enter');
+        }
+        if (!seen(target)) throw new Error(`never reached ${target} (current ${cur()})`);
+    }
+    result = await playSong(songIndex, difficulty, '', deadline);
+    if (thenSongIndex !== null && /^left_gameplay_/.test(result)) {
+        // Through the results screens back to song select (Enter), then song B.
+        await setHold(true);
+        const back = screens.length;
+        for (let i = 0; i < 14 && !(cur() === 'song_select_screen' && screens.length > back); i++) {
+            await new Promise((r) => setTimeout(r, 3000));
+            await shot(`results_${i}_${cur()}`);
+            if (cur() !== 'song_select_screen') await press('Enter');
+        }
+        if (cur() !== 'song_select_screen') result = `second_song_not_reached (at ${cur()})`;
+        else {
+            const r2 = await playSong(thenSongIndex, thenDifficulty, 'B_', deadline);
+            result = /^left_gameplay_/.test(r2) ? r2 : `second_song_${r2}`;
+        }
+    }
     await new Promise((r) => setTimeout(r, 5000));
     await shot('after_' + cur());
     await new Promise((r) => setTimeout(r, 6000));
@@ -286,6 +385,7 @@ try {
 }
 stop = true;
 await sampler;
+if (tracing) await Promise.race([tracing, new Promise((r) => setTimeout(r, 30000))]);
 
 // Score: the last engine-side reading taken while in gameplay.
 const inGameSamples = samples.filter((s) => s.screen === 'game_screen' && s.game && s.game.players);
@@ -295,6 +395,31 @@ checkClock(chk, timerStats(timerErrors, inGameSamples.length), unmute);
 const ratings = [];
 for (const s of inGameSamples) { const r = s.game.players[0].rating; if (r && (!ratings.length || ratings[ratings.length - 1] !== r)) ratings.push(r); }
 const pageLast = [...samples].reverse().find((s) => s.page);
+// Per-song final score: the last in-game sample between that song's start and end.
+for (const sg of songs) {
+    const inSong = samples.filter((s) => s.t >= sg.tStart && s.t <= (sg.tEnd || 1e9) && s.screen === 'game_screen' && s.game && s.game.players);
+    const lastS = inSong.length ? inSong[inSong.length - 1] : null;
+    sg.finalScoreP0 = lastS ? lastS.game.players[0].score : null;
+    sg.gameSeconds = inSong.length;
+    sg.trackedSeconds = inSong.filter((s) => s.game.players[0].tracked).length;
+}
+if (thenSongIndex !== null) {
+    if (songs.length < 2) { chk.pass = false; chk.code = 2; chk.fails.push('second song not played'); chk.line = `CHECK FAIL: second song not played (${result})`; }
+    else if (camera !== 'none' && songs.some((sg) => !(sg.finalScoreP0 > 0))) {
+        chk.pass = false; chk.code = 1;
+        chk.fails.push(`a song scored 0 with the camera: ${songs.map((sg) => `${sg.tag || 'A_'}${sg.finalScoreP0}`).join(' ')}`);
+        chk.line = `CHECK FAIL: ${chk.fails.join('; ')}`;
+    }
+}
+let pacingReport = null;
+if (pacingLib) {
+    try {
+        const raw = await Promise.race([pacingLib.collectPacing(page), new Promise((_, r) => setTimeout(() => r(new Error('collect timeout')), 20000))]);
+        pacingReport = pacingLib.analyzePacing(raw);
+        writeFileSync(`${out}/pacing.json`, JSON.stringify({ report: pacingReport, raw }, null, 0));
+        console.log(pacingLib.formatPacing(pacingReport));
+    } catch (e) { console.log('PACING collect failed: ' + e.message); }
+}
 const summary = {
     result, camera, url, elapsed: el(), errors,
     finalScoreP0: last ? last.game.players[0].score : null,
@@ -309,12 +434,15 @@ const summary = {
     wasmMBMax: Math.max(...samples.map((s) => s.wasmMB || 0)),
     audio: { unmuted: unmute, ctx: [...samples].reverse().map((s) => s.audio).find(Boolean) || null },
     timerErrors: timerStats(timerErrors, inGameSamples.length),
+    songs: songs.map(({ fromScreen, ...r }) => r),
+    pacing: pacingReport ? { phases: pacingReport.phases, raf: pacingReport.raf, stalls: pacingReport.stalls, causes: pacingReport.causes } : null,
     screens, samples, detect,
 };
 summary.check = { pass: chk.pass, reachedGame: chk.reachedGame, fails: chk.fails };
 writeFileSync(`${out}/summary.json`, JSON.stringify(summary, null, 1));
 console.log(`RESULT ${result} camera=${camera} difficulty=${difficulty}${selectDifficulty ? '' : '(not selected)'} engine=${chk.engine.join(',') || '?'} score=${summary.finalScoreP0} detectFrac(p0) n=${chk.stats.n} mean=${chk.stats.mean && chk.stats.mean.toFixed(4)} min=${chk.stats.min} max=${chk.stats.max} branches=${JSON.stringify(chk.stats.branches)} ratings=${ratings.join('>')} tracked ${summary.gameSecondsTracked}/${summary.gameSeconds}s wasmMax=${summary.wasmMBMax}MB errors=${errors.length}`);
 console.log(`AUDIO unmuted=${unmute} ctx=${JSON.stringify(summary.audio.ctx)} timer errors in game: ${JSON.stringify(summary.timerErrors)}`);
+if (songs.length > 1) console.log(`SONGS ${songs.map((sg) => `${sg.tag || 'A_'}index=${sg.index} ${sg.result} score=${sg.finalScoreP0} tracked ${sg.trackedSeconds}/${sg.gameSeconds}s`).join(' | ')}`);
 console.log(chk.line);
 try { await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 5000))]); } catch {}
 process.exit(chk.code);

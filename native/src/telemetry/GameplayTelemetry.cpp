@@ -41,14 +41,25 @@ extern GamePanel *TheGamePanel;
 
 namespace {
     bool sEnabled = false;
+    bool sPrint = false; // DC3_TEL=api samples for /api/telemetry, prints nothing
     int sInterval = 10; // emit every N frames
     GameplayTelemetry::Snapshot sLastSnapshot;
 }
 
+// DC3_TEL: unset or 0 = off; `api` = sample every interval for the HTTP debug
+// server's GET /api/telemetry but print no DC3_TEL: lines (the dev profile's
+// default, DC3_PROFILE in System_Native.cpp -- a ~2 KB line every 10 frames is
+// for scripts, not a person's terminal); any other non-zero number = sample
+// and print.
 void GameplayTelemetry::Init() {
     const char *env = getenv("DC3_TEL");
-    sEnabled = env && atoi(env) != 0;
-    if (sEnabled) fprintf(stderr, "DC3_TEL: telemetry enabled (interval=%d)\n", sInterval);
+    const bool apiOnly = env && strcmp(env, "api") == 0;
+    sEnabled = apiOnly || (env && atoi(env) != 0);
+    sPrint = sEnabled && !apiOnly;
+    if (sPrint) fprintf(stderr, "DC3_TEL: telemetry enabled (interval=%d)\n", sInterval);
+    else if (sEnabled)
+        fprintf(stderr, "DC3_TEL: telemetry sampled for /api/telemetry only "
+                        "(DC3_TEL=1 prints DC3_TEL: lines)\n");
     const char *intEnv = getenv("DC3_TEL_INTERVAL");
     if (intEnv) sInterval = atoi(intEnv);
     if (sInterval <= 0) sInterval = 10;
@@ -665,6 +676,7 @@ void GameplayTelemetry::Sample(int frame) {
 
     Snapshot s = CaptureSnapshot(frame);
     sLastSnapshot = s;
+    if (!sPrint) return;
 
     fprintf(stderr,
         "DC3_TEL: frame=%d state=%s screen=%s transition=%s uiInTransition=%d "

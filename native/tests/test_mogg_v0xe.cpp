@@ -23,6 +23,8 @@
 #include <cstring>
 #include <vector>
 
+#include "platform/ExecutablePath.h"
+
 extern File *NewFile(const char *, int);
 
 // ============================================================================
@@ -130,6 +132,72 @@ TEST_F(MoggV0xETest, DecodeBoyfriendMogg) {
     // shows up as a stream that never becomes ready -- check that directly.
     EXPECT_TRUE(ready) << "v0xE mogg never became ready after " << polls << " polls";
 }
+
+// ============================================================================
+// DLC: a song mogg from the Dance Central 2 DLC megapack (also v0xE) decodes
+// with the same key path.  The package is game content and never committed
+// (scripts/dlc/import.sh puts it in orig-assets/dlc), so the test exists only
+// in a build whose configure found it (the DC3_DLC_TESTS gate, which also sets
+// DC3_TEST_DLC_DIR); registered but absent fails as a stale configure.  Its own
+// fixture opens no audio device: reaching IsReady() is header parse + key
+// derivation + decrypt, none of which plays a sample, so the DC3_AUDIO_TESTS
+// gate (device contention under ctest -j) has nothing to guard here.
+// ============================================================================
+
+#if DC3_DLC_TESTS
+
+class MoggDlcTest : public EngineTestFixture {
+protected:
+    void SetUp() override {
+        if (!StreamReceiver::sFactory)
+            StreamReceiver::sFactory = StreamReceiverNative::Create;
+        TheSynth->Grinder().Init(); // as MoggV0xETest: the v0xE key path's DTA funcs
+    }
+};
+
+TEST_F(MoggDlcTest, DecodeDlcMilkshakeMogg) {
+    std::string root;
+    if (const char *env = getenv("DC3_TEST_DLC_DIR"); env && *env) {
+        root = env;
+    } else {
+        char exe[4096];
+        ssize_t len = ReadExecutablePath(exe, sizeof(exe) - 1);
+        ASSERT_GT(len, 0);
+        exe[len] = '\0';
+        root = std::string(exe);
+        root = root.substr(0, root.rfind('/')) + "/../../orig-assets/dlc";
+    }
+    std::string path = root + "/dancecentral2dlcmegapack/songs/milkshake/milkshake.mogg";
+    FILE *f = fopen(path.c_str(), "rb");
+    ASSERT_NE(f, nullptr) << "DC3_DLC_TESTS is compiled in but the package is gone: " << path
+                          << " -- reconfigure the build, or re-import the package";
+    std::vector<unsigned char> buffer;
+    unsigned char chunk[65536];
+    size_t n;
+    while ((n = fread(chunk, 1, sizeof(chunk), f)) > 0)
+        buffer.insert(buffer.end(), chunk, chunk + n);
+    fclose(f);
+    ASSERT_GT(buffer.size(), 8u);
+    EXPECT_EQ(buffer[0], 0xE) << "expected a v0xE mogg";
+
+    BufFile *bufFile = new BufFile(buffer.data(), (int)buffer.size());
+    StandardStream stream(bufFile, 0.0f, 0.0f, "mogg", false, true, false);
+    bool ready = false;
+    for (int polls = 0; polls < 500 && !stream.Fail(); polls++) {
+        stream.PollStream();
+        if (stream.IsReady()) {
+            ready = true;
+            break;
+        }
+    }
+    EXPECT_FALSE(stream.Fail());
+    ASSERT_TRUE(ready) << "the DLC mogg never became ready (wrong key?)";
+    printf("  milkshake.mogg: channels=%d sampleRate=%d\n", stream.GetNumChannels(),
+           (int)stream.GetSampleRate());
+    EXPECT_GT(stream.GetNumChannels(), 0);
+    EXPECT_EQ((int)stream.GetSampleRate(), 44100);
+}
+#endif // DC3_DLC_TESTS
 
 // ============================================================================
 // Test 3: Compare v0xB (working) and v0xE (failing) side by side

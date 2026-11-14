@@ -53,6 +53,10 @@ Above the definition (was lines 244-279):
 // is not measured.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.592, 4 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
 
 ## `?CalcError@PositionNode@@UBAXABUErrorFrameInput@@ABUErrorNodeInput@@AAVVector3@@@Z`
 

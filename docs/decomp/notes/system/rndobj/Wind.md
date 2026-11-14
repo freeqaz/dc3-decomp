@@ -74,3 +74,7 @@ Inside the body (was lines 58-115):
             // w21-bf already refuted the reference-binding, scalar-first and
             // Cross/Multiply spellings here; w27-h did not find a new lever.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.

@@ -124,3 +124,8 @@ Inside the body (was lines 297-302):
             // `lwz r11, 0xd4(r28)` at 0x823DF880 (r28 = rightIk), reached from
             // `bne cr6, 0xb88` right after the right.ikfoot Find.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual:
+lbl_82020B54 = 2.0f and SUBSAMPLED_HALF_WIDTH = 40.0f (ICF-pooled) equal our
+__real@40000000/__real@42200000; target re-loads 3.0f instead of keeping it in an FPR.

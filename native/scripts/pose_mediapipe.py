@@ -35,6 +35,7 @@ metres directly bypasses the C++ NormalizedToMeters helper whose hardcoded
 """
 
 import math
+import time
 
 import numpy as np
 
@@ -270,6 +271,84 @@ class CentroidTracker:
         self._tracks.clear()
 
 
+class SecondPersonProbe:
+    """Run MediaPipe with num_poses 1 until a second person turns up (PLAN L-3).
+
+    PoseLandmarker in VIDEO mode re-runs its person detector on every frame
+    while it tracks fewer people than num_poses, so num_poses 2 with one
+    dancer pays for a detector pass every frame (GPD Pocket, full model:
+    43 ms a frame against 26 ms at num_poses 1 -- docs/native/POSE_INPUT.md
+    #performance). This keeps two landmarkers:
+
+      single  num_poses 1: every frame while one person (or nobody) is seen
+      multi   num_poses N: run on a copy of the newest frame every
+              `interval_s` on a background thread (the probe; MediaPipe
+              releases the GIL), and on every frame once the probe -- or
+              multi itself -- has seen two or more people
+
+    and goes back to `single` after multi has seen fewer than two for
+    `hold_s`. The landmarks always come from one landmarker's own result,
+    so the one-player output is what num_poses 1 gives; what it trades is
+    how soon a second player is found (up to interval_s plus one probe).
+    Which person is which is still CentroidTracker's job, downstream."""
+
+    def __init__(self, make, multi_poses, interval_s=0.5, hold_s=1.0):
+        import concurrent.futures
+        self.single = make(1)
+        self.multi = make(multi_poses)
+        self.interval_ms = interval_s * 1e3
+        self.hold_ms = hold_s * 1e3
+        self.mode = "single"
+        self.probes = 0
+        self.switches = 0
+        self._pool = concurrent.futures.ThreadPoolExecutor(1, thread_name_prefix="pose-probe")
+        self._probe = None
+        self._last_probe_ms = None
+        self._few_since_ms = None
+
+    def _run_probe(self, image, ts_ms):
+        return len(self.multi.detect_for_video(image, ts_ms).pose_landmarks)
+
+    def detect_for_video(self, image, ts_ms, make_copy=None):
+        """`image` for this frame; `make_copy()` an independent image of it
+        for the probe thread (only called when a probe starts)."""
+        if self.mode == "single":
+            if self._probe is not None and self._probe.done():
+                found = self._probe.result()
+                self._probe = None
+                if found >= 2:
+                    self.mode, self._few_since_ms = "multi", None
+                    self.switches += 1
+            if self.mode == "single":
+                if self._probe is None and (self._last_probe_ms is None or
+                                            ts_ms - self._last_probe_ms >= self.interval_ms):
+                    self._last_probe_ms = ts_ms
+                    self.probes += 1
+                    self._probe = self._pool.submit(
+                        self._run_probe, make_copy() if make_copy else image, ts_ms)
+                return self.single.detect_for_video(image, ts_ms)
+        if self._probe is not None:      # multi must not run on two threads
+            self._probe.result()
+            self._probe = None
+        res = self.multi.detect_for_video(image, ts_ms)
+        if len(res.pose_landmarks) >= 2:
+            self._few_since_ms = None
+        elif self._few_since_ms is None:
+            self._few_since_ms = ts_ms
+        elif ts_ms - self._few_since_ms >= self.hold_ms:
+            self.mode = "single"
+            self.switches += 1
+            self._last_probe_ms = ts_ms   # just looked: next probe a full interval on
+        return res
+
+    def close(self):
+        if self._probe is not None:
+            self._probe.result()
+        self._pool.shutdown(wait=True)
+        self.single.close()
+        self.multi.close()
+
+
 class MediaPipeBackend:
     """Wraps MediaPipe PoseLandmarker and emits DC3-20 camera-space joints."""
 
@@ -282,7 +361,7 @@ class MediaPipeBackend:
     DEFAULT_HFOV_DEG = 58.51
 
     def __init__(self, model_path, num_poses=2, hfov_deg=DEFAULT_HFOV_DEG,
-                 min_conf=0.5, delegate="cpu", segmentation=False):
+                 min_conf=0.5, delegate="cpu", segmentation=False, probe_s=0.0):
         block_audio_import()
         import mediapipe as mp
         from mediapipe.tasks import python as mpp
@@ -292,23 +371,36 @@ class MediaPipeBackend:
         base_kwargs = {"model_asset_path": model_path}
         if delegate == "gpu":
             base_kwargs["delegate"] = mpp.BaseOptions.Delegate.GPU
-        opts = vision.PoseLandmarkerOptions(
-            base_options=mpp.BaseOptions(**base_kwargs),
-            running_mode=vision.RunningMode.VIDEO,
-            num_poses=num_poses,
-            min_pose_detection_confidence=min_conf,
-            min_pose_presence_confidence=min_conf,
-            min_tracking_confidence=min_conf,
-            # PLAN P-4: one person mask per pose, for the player view
-            # (pose_server.py --frames). Off otherwise: it costs inference time.
-            output_segmentation_masks=bool(segmentation),
-        )
+        def options(n):
+            return vision.PoseLandmarkerOptions(
+                base_options=mpp.BaseOptions(**base_kwargs),
+                running_mode=vision.RunningMode.VIDEO,
+                num_poses=n,
+                min_pose_detection_confidence=min_conf,
+                min_pose_presence_confidence=min_conf,
+                min_tracking_confidence=min_conf,
+                # PLAN P-4: one person mask per pose, for the player view
+                # (pose_server.py --frames). Off otherwise: it costs inference time.
+                output_segmentation_masks=bool(segmentation),
+            )
         self.segmentation = bool(segmentation)
         # process()'s masks, aligned with its return value: one HxW float32
         # array in [0,1] per returned person (None when segmentation is off or
         # MediaPipe gave no mask for that pose).
         self.last_masks = []
-        self._landmarker = vision.PoseLandmarker.create_from_options(opts)
+        # process()'s own stage times in ms, for pose_server.py --profile and
+        # scripts/pose_bench/ (PLAN L-3): BGR->RGB, MediaPipe, geometry
+        # (root + remap + mask copy), tracker + root-depth filter.
+        self.last_timing = {}
+        def make(n):
+            return vision.PoseLandmarker.create_from_options(options(n))
+        # probe_s > 0 with num_poses >= 2: SecondPersonProbe (pose_server.py
+        # --probe-second-person); else one landmarker, every frame at num_poses.
+        self.probe = None
+        if probe_s > 0 and num_poses >= 2:
+            self.probe = self._landmarker = SecondPersonProbe(make, num_poses, interval_s=probe_s)
+        else:
+            self._landmarker = make(num_poses)
         self._tracker = CentroidTracker()
         self._root_z_filters = {}  # track id -> OneEuroFilter on root depth
         self._filter_last_seen = {}  # track id -> last process() call index
@@ -446,14 +538,30 @@ class MediaPipeBackend:
         """Returns list of (track_id, [(x,y,z,conf)] * 20) in camera-space metres."""
         import cv2
 
+        clock = time.perf_counter
+        t0 = clock()
         height, width = frame_bgr.shape[:2]
         rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         mp_img = self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=rgb)
-        res = self._landmarker.detect_for_video(mp_img, int(timestamp_ms))
+        t1, c1 = clock(), time.process_time()
+        if self.probe is not None:
+            res = self.probe.detect_for_video(
+                mp_img, int(timestamp_ms),
+                make_copy=lambda: self._mp.Image(image_format=self._mp.ImageFormat.SRGB,
+                                                 data=rgb.copy()))
+        else:
+            res = self._landmarker.detect_for_video(mp_img, int(timestamp_ms))
+        t2 = clock()
+        # infer_cpu: CPU time of every thread in the process meanwhile, i.e.
+        # MediaPipe's (XNNPACK) threads plus anything else running then.
+        timing = self.last_timing = {"cvt": (t1 - t0) * 1e3, "infer": (t2 - t1) * 1e3,
+                                     "infer_cpu": (time.process_time() - c1) * 1e3,
+                                     "geom": 0.0, "track": 0.0}
 
         self.last_masks = []
         if not res.pose_world_landmarks:
             self._tracker.update([])
+            timing["track"] = (clock() - t2) * 1e3
             return []
         seg = getattr(res, "segmentation_masks", None) or []
 
@@ -482,6 +590,8 @@ class MediaPipeBackend:
             hip_c = (image_xy[L_HIP] + image_xy[R_HIP]) * 0.5
             centroids.append((float(hip_c[0]), float(hip_c[1])))
 
+        t3 = clock()
+        timing["geom"] = (t3 - t2) * 1e3
         ids = self._tracker.update(centroids)
         self._frame_count += 1
         t_s = timestamp_ms / 1000.0
@@ -507,6 +617,7 @@ class MediaPipeBackend:
         for t in stale:
             self._filter_last_seen.pop(t, None)
             self._root_z_filters.pop(t, None)
+        timing["track"] = (clock() - t3) * 1e3
         return out
 
     def _remap(self, world, vis, root):

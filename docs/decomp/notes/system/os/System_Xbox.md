@@ -47,3 +47,10 @@ Inside the body (was lines 91-107):
     // switches (which is what produced ben 58), and every other arm spelling
     // leaves those three triples identical.
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.836, 10 non-equal row(s): The two
+`lis/addi r12` rows objdiff renders as BranchDest are the switch anchor; in
+build/373307D9/asm the image's is `GetSystemLanguage+0x400`, same as ours, and the byte
+tables (jumptable_8207D4C0 vs $T43155) are identical:
+[0,40,48,56,64,124,132,140,148,28,156,164]. The other 8 rows are pure register
+permutation. NOT A BUG.

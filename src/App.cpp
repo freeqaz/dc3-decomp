@@ -6,6 +6,7 @@
 #include "telemetry\GameplayTelemetry.h"
 #include "NativeQuit.h"
 #if !defined(__EMSCRIPTEN__)
+#include "platform/FramePacer_Native.h"
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 sigjmp_buf gDrawJmpBuf;
@@ -861,7 +862,7 @@ void App::RunOneFrame() {
     // w22-ml: the image's per-frame poll sequence (see Dc3NativeFramePoll).
     Dc3NativeFramePoll();
 
-    // Deterministic post-poll foot plant (default ON; opt-out DC3_FEET_POST_PLANT_OFF=1).
+    // Post-poll foot plant: OFF by default (image poll order); see Dc3FeetPostPlant().
     // Same hook as the desktop loop below (App.cpp RunWithoutDebugging): must run after
     // TheTaskMgr.Poll() composes the final leg pose and BEFORE BeginDrawing, or the web
     // build renders the unplanted deep-crouch under-bend (feet in the floor as soon as
@@ -891,11 +892,13 @@ void App::RunOneFrame() {
                 sImGuiReady = true;
             }
         }
+        DebugPanel::PollRndOverlays(); // DC3_RND_OVERLAYS, as on desktop
         if (sImGuiReady && ImGui::GetCurrentContext()) {
             ImGuiBackend::NewFrame();
             if (DebugPanel::IsVisible())
                 DebugPanel::Draw();
             DebugPanel::DrawNotices(); // NativeNotice (no camera, sensor lost)
+            DebugPanel::DrawRndOverlays();
             ImGui::Render();
         }
     }
@@ -1187,6 +1190,22 @@ void App::RunWithoutDebugging() {
     HttpServerInit();
 #endif
 
+    // H-29: the image's frame ceiling (see platform/FramePacer_Native.h).
+    // Windowed runs on a display faster than 60 Hz are capped; headless runs
+    // only when DC3_FPS_CAP asks.
+    Dc3FramePacer framePacer;
+    {
+        double refreshHz = 0.0;
+        if (windowed) {
+            if (GLFWmonitor *mon = glfwGetPrimaryMonitor())
+                if (const GLFWvidmode *mode = glfwGetVideoMode(mon))
+                    refreshHz = mode->refreshRate;
+        }
+        const Dc3FrameCap cap = Dc3FrameCapDecide(getenv("DC3_FPS_CAP"), windowed, refreshHz);
+        framePacer.SetTarget(cap.fps);
+        MILO_LOG("DC3 Native: frame cap: %s\n", cap.why);
+    }
+
     if (windowed) {
         // G-5: Esc is the B button, not quit. Quitting is Ctrl+Q (installed by
         // main_native.cpp) or closing the window.
@@ -1212,8 +1231,8 @@ void App::RunWithoutDebugging() {
         Dc3NativeFramePoll();
 
 #ifdef HX_NATIVE
-        // WAVE 6 LANE A: deterministic post-poll foot plant (default ON; opt-out
-        // DC3_FEET_POST_PLANT_OFF=1). The world poll above (TheTaskMgr.Poll) composes
+        // WAVE 6 LANE A: post-poll foot plant, OFF by default (fallback only under
+        // DC3_POLL_ORDER_FIX=0 or DC3_FEET_POST_PLANT=1). The world poll above (TheTaskMgr.Poll) composes
         // the FINAL leg pose including the dancer's pelvis/root crouch. Re-plant each
         // dancer's foot here, as the genuine LAST world write before the foot is read/
         // drawn, so the plant bakes the leg for the final-crouch root instead of a
@@ -1292,11 +1311,16 @@ void App::RunWithoutDebugging() {
 #ifdef HX_IMGUI
         // ImGui debug overlay — rendered after game UI, before EndDrawing
         // EndDrawing() calls RenderImGuiOverlay() which consumes the draw data
+        // DC3_RND_OVERLAYS: the original's RndOverlays (cheat_display ...),
+        // which WgpuRnd::EndDrawing does not draw; collected with or without
+        // ImGui (it also logs their text), drawn in the ImGui frame below.
+        DebugPanel::PollRndOverlays();
         if (ImGui::GetCurrentContext()) {
             ImGuiBackend::NewFrame();
             if (DebugPanel::IsVisible())
                 DebugPanel::Draw();
             DebugPanel::DrawNotices(); // NativeNotice (no camera, sensor lost)
+            DebugPanel::DrawRndOverlays();
             ImGui::Render();
         }
 #endif
@@ -1342,7 +1366,13 @@ void App::RunWithoutDebugging() {
                 break;
             }
         }
+        // H-29: sleep out the rest of the frame period (no-op when uncapped).
+        framePacer.Pace();
     }
+    if (framePacer.TargetFps() > 0.0)
+        MILO_LOG("DC3 Native: frame cap: %.2f fps, %lld of %d frames paced, %.1f s slept\n",
+                 framePacer.TargetFps(), framePacer.PacedFrames(), frameCount,
+                 framePacer.SleptSeconds());
 #ifdef DC3_HTTP_SERVER
     HttpServerShutdown();
 #endif

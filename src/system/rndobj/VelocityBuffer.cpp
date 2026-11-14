@@ -14,6 +14,10 @@
 #include "rndobj\Shader.h"
 #include "rndobj\Stats_NG.h"
 #include "rnddx9\RenderState.h"
+#ifdef HX_NATIVE
+#include "rndobj/HiResScreen.h"
+#include "rndobj/PostProc.h"
+#endif
 
 RndVelocityBuffer RndVelocityBuffer::sSingleton;
 
@@ -339,3 +343,50 @@ bool RndVelocityBuffer::Draw(RndCam *cam, ObjPtrList<RndDrawable> &drawList) {
     }
     return mFrameAdvanced;
 }
+
+#ifdef HX_NATIVE
+// Draw()'s bookkeeping, step for step, with the two D3D passes left to the
+// WebGPU backend (TakeNativeFrame). Natively there is no PreDepthTexture: the
+// backend reads the world pass's own depth, so readiness is applied
+// unconditionally where Draw() applies it inside `if (depthTex)`.
+//
+// The object list (RndMotionBlur draw lists, kDrawVelocity) is not drawn: no
+// shipped .milo carries a RndMotionBlur (np-gfx-post round 3 sweep of all 5,399
+// .milo_xbox, lanes/post/round3/mbscan), so NgPostProc::mMotionBlurDrawList is
+// always empty in shipped data and retail's velocity buffer holds camera
+// velocity only.
+bool RndVelocityBuffer::DrawNative(RndCam *cam, ObjPtrList<RndDrawable> &drawList) {
+    mFrameAdvanced = false;
+    mNativeDrew = false;
+    float splitMs = mTimer.SplitMs();
+    mTimer.Restart();
+    unk36be8 = Min(2.0f, kVelocityRefFrameMs / (splitMs + 1.0f));
+    if (cam != nullptr && cam == mCam) {
+        memcpy(&unk36bec[mActiveXfmCacheIndex], &mViewProjXfm, 0x40);
+        mFrameAdvanced = AdvanceFrame(cam);
+        if (!drawList.empty()) {
+            MILO_NOTIFY_ONCE("velocity buffer: %d motion-blur objects not drawn natively", drawList.size());
+        }
+        mXfmCaches[mActiveXfmCacheIndex].unk1b580 = 0;
+        mNativeDrew = true;
+        mNativeCam = cam;
+    }
+    return mFrameAdvanced;
+}
+
+void RndVelocityBuffer::DoVelocityNative(RndPostProc *pp, RndCam *worldCam) {
+    static ObjPtrList<RndDrawable> sNoMotionBlurObjects(nullptr);
+    if (pp && pp->GetMotionBlurVelocity() && !TheHiResScreen.IsActive()) {
+        Singleton().DrawNative(worldCam, sNoMotionBlurObjects);
+    }
+}
+
+bool RndVelocityBuffer::TakeNativeFrame(bool &ready, float &scale, RndCam *&cam) {
+    if (!mNativeDrew) return false;
+    mNativeDrew = false;
+    ready = mFrameAdvanced;
+    scale = unk36be8;
+    cam = mNativeCam;
+    return true;
+}
+#endif

@@ -17,6 +17,9 @@
 #include <gtest/gtest.h>
 
 #include "platform/Cache_Native.h"
+#include "test_helpers.h"
+#include "obj/Data.h"
+#include "obj/Object.h"
 #include "utl/Cache.h"
 #include "utl/CacheMgr.h"
 #include "utl/Str.h"
@@ -271,6 +274,76 @@ TEST(CacheNative, DirectoryListingReportsRelativeNamesAndSizes) {
     ASSERT_TRUE(mgr->DeleteAsync(id));
     ASSERT_TRUE(Pump(mgr));
     delete id;
+    delete mgr;
+    TheCacheMgr = nullptr;
+    RemovePath(root);
+}
+
+namespace {
+// SongMgr's song-cache write, as a callback object: SaveMount -> (mount result)
+// SaveWrite -> CacheNative::WriteAsync -> (write result, inline on native)
+// SaveUnmount -> UnmountAsync -> (unmount result).  Every step runs from inside
+// the previous step's Handle, which is how SongMgr::SetState chains them.
+class SongCacheWriter : public Hmx::Object {
+public:
+    CacheMgr *mMgr = nullptr;
+    Cache *mCache = nullptr;
+    std::vector<unsigned char> mPayload;
+    bool mUnmountAccepted = false;
+    int mMountResults = 0, mWriteResults = 0, mUnmountResults = 0;
+    virtual DataNode Handle(DataArray *msg, bool) {
+        Symbol type = msg->Sym(1);
+        if (type == "cache_mgr_mount_result") {
+            mMountResults++;
+            EXPECT_TRUE(mCache->WriteAsync("song_info.bin", mPayload.data(),
+                                           (unsigned int)mPayload.size(), this));
+        } else if (type == "cache_write_result") {
+            mWriteResults++;
+            mUnmountAccepted = mMgr->UnmountAsync(&mCache, this);
+        } else if (type == "cache_mgr_unmount_result") {
+            mUnmountResults++;
+        }
+        return DataNode(0);
+    }
+};
+} // namespace
+
+// PLAN D-8: "UnmountAsync: !IsDone() current op is 3" at main_screen on every
+// boot that wrote the song cache.  The 360's CacheMgrXbox::PollMount clears
+// the op BEFORE it sends cache_mgr_mount_result; native cleared it after, so
+// an unmount started from inside the mount callback (SongMgr's chain, with
+// native's inline write) was refused busy, the cache stayed mounted and SongMgr
+// never left kSongMgr_SaveUnmount.
+class CacheNativeCallbackTest : public SymbolTestFixture {}; // Messages need Symbols
+
+TEST_F(CacheNativeCallbackTest, UnmountFromInsideTheMountCallbackIsAccepted) {
+    std::string root = MakeTempRoot();
+    ASSERT_FALSE(root.empty());
+    CacheMgr *mgr = MakeManager(root);
+    ASSERT_NE(mgr, nullptr);
+    CacheID *id = nullptr;
+    ASSERT_TRUE(mgr->ShowUserSelectUIAsync(nullptr, 0x25800, "d8cache", "d8 test cache", &id));
+    ASSERT_TRUE(Pump(mgr));
+    ASSERT_NE(id, nullptr);
+
+    SongCacheWriter writer;
+    writer.mMgr = mgr;
+    writer.mPayload = {'d', '8', 0, 1, 2, 3};
+    ASSERT_TRUE(mgr->MountAsync(id, &writer.mCache, &writer));
+    ASSERT_NE(writer.mCache, nullptr);
+    ASSERT_TRUE(Pump(mgr));
+    EXPECT_EQ(writer.mMountResults, 1);
+    EXPECT_EQ(writer.mWriteResults, 1);
+    EXPECT_TRUE(writer.mUnmountAccepted)
+        << "UnmountAsync refused while the mount's completion was being delivered "
+           "(CacheMgrNative::Poll must clear the op before the callback, as "
+           "CacheMgrXbox::PollMount does)";
+    EXPECT_EQ(writer.mUnmountResults, 1)
+        << "the nested unmount's own callback was dropped";
+    EXPECT_EQ(writer.mCache, nullptr);
+    EXPECT_TRUE(mgr->IsDone());
+    EXPECT_EQ(ReadRawFile(root + "/d8cache/song_info.bin"), writer.mPayload);
+
     delete mgr;
     TheCacheMgr = nullptr;
     RemovePath(root);

@@ -140,7 +140,7 @@ int SetUnhandledExceptionFilter() { HX_STUB_TRACE("SetUnhandledExceptionFilter")
 // declares them as extern ClassName* and dereferences them as pointers.
 // Function stubs at these symbols would be read as non-null garbage pointers.
 // TheChallengeSortMgr: defined in ChallengeSortMgr.cpp
-// TheContentMgr: provided by ContentMgr_Stub.cpp
+// TheContentMgr: provided by ContentMgr_Native.cpp
 void* TheDebugNotifyOncePrinter = 0;
 // TheDxRnd: DxRnd is Xbox-only (D3D9 renderer), provide zero storage for native
 __attribute__((weak, used)) char TheDxRnd[8192] = {};

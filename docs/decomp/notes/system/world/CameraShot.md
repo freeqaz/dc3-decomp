@@ -58,6 +58,11 @@ Added after the move (lane w-five-clean):
 // fails it).  ret -> cam, `== 0` -> `!cam`: byte-identical.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual:
+savegprlr_26 vs _27 plus frame pointer; DebugNotifyOncer statics named lbl_ on target
+side.
+
 ## `?BuildTransform@CamShotFrame@@QBAXPAVRndCam@@AAVTransform@@_N@Z`
 
 `CamShotFrame::BuildTransform` -- moved verbatim from `src/system/world/CameraShot.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of 3b37567dd)

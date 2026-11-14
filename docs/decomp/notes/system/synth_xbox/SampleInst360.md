@@ -70,3 +70,7 @@ Inside the body (was lines 35-88):
     // icf_aliases.map -- one proven ICF fold, so the row is charged by neither the
     // canonical nor the name_check ruler.  Do not "fix" the callee.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: one dead
+`clrrwi r10,r10,0` on the target side.

@@ -339,6 +339,10 @@ Inside the body (was lines 605-650):
         // walk on BOTH sides, so stride alone does not decide it).
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: struct
+copies equivalent; only copy order differs.
+
 ## `(file-level)`
 
 Not attributed to one function -- moved verbatim from `src/system/gesture/Skeleton.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)

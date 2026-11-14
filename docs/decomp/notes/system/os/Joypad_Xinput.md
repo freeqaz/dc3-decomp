@@ -187,3 +187,11 @@ Inside the body (was lines 343-356):
         // Splitting it into a nested if/else with two calls instead is much
         // worse -- MSVC duplicates the tail rather than merging it (88.9).
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.783, 7 non-equal row(s): NOT A BUG.
+Every row is register-only; `scripts/analysis/regperm_equivalence.py` raised 6 lead(s),
+each read by hand against the listing: pure register permutation, no operand swap. The
+checker's leads at idx 118/145/148 are one consistent r7<->r31 swap (the stick-y
+halfword from 0x6c(r1) vs the clrlwi'd bool) plus the two TranslateStick argument `mr`s
+emitted in the opposite order; the call gets the same (keys, stick, bool, bool) on both
+sides.

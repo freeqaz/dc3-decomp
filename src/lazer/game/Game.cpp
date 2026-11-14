@@ -479,6 +479,20 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
                     // rating perform.dta just gave it (provider `rating`, from
                     // `last_detector_result`) -- the measurement the scoring
                     // matrix in docs/native/POSE_INPUT.md is built from.
+                    //
+                    // songbeat= is the song-position beat this call saw.  0 is
+                    // the usual case: set_cur_move fires on the float beat
+                    // (TaskMgr::Beat) crossing the bar line, and the tick song
+                    // position has crossed with it.  3 means the two disagreed
+                    // by float rounding AT the bar line (PLAN H-52: beat
+                    // 104.000000, tick 49919.9961 < 49920): the song position
+                    // is still in the measure being rated, so the move's async
+                    // detector (polled with MoveDir::MoveIdx = CurrentMeasure)
+                    // has not refreshed, and `lastfrac` is the PREVIOUS
+                    // refresh -- 0 for a move whose detector was just enabled.
+                    // The image does the same; SetHamMove's own `currentBeat
+                    // == 3` arm above shows it expected the lag.
+                    // native_song_sweep.py counts these as known exceptions.
                     if (Dc3EnvFlag("DC3_MOVE_RATING_LOG", false)) {
                         static Symbol ratingSym("rating");
                         static Symbol scoreSym("score");
@@ -493,14 +507,15 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
                             last = det->LastDetectFrac(i1);
                         MILO_LOG(
                             "DC3 MOVE_RATING p=%d measure=%d move=%s rating=%s lastfrac=%.4f "
-                            "score=%d diff=%s\n",
+                            "score=%d diff=%s songbeat=%d\n",
                             i1,
                             i5,
                             current->Name(),
                             (r && r->Type() == kDataSymbol) ? r->Sym().Str() : "-",
                             last,
                             (sc && sc->Type() == kDataInt) ? sc->Int() : -1,
-                            DifficultyToSym(player_data->GetDifficulty()).Str()
+                            DifficultyToSym(player_data->GetDifficulty()).Str(),
+                            currentBeat
                         );
                     }
                     // Observed-trigger evidence for the default-on runtime gate:

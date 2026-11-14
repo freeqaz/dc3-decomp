@@ -249,6 +249,14 @@ Inside the body (was lines 2001-2014):
             // it in r10.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.118, 13 non-equal row(s): NOT A BUG.
+Every row is register-only; `scripts/analysis/regperm_equivalence.py` raised 4 lead(s),
+each read by hand against the listing: pure register permutation, no operand swap. The
+checker's four SRC leads are the success block: the image builds startKey from the
+cached `keys->begin` (r7) and endKey from a reload of it, we do the reverse; both
+pointers get the same values. Measured: writing startKey before endKey lines the two
+stores up but drops fuzzy 99.118 -> 99.059 (canonical stays 100) -- rejected, do not
+retry.
 
 ## `?PoseIconMan@HamDirector@@QAAXPAVCharClip@@MPAVRndTex@@_N0MM@Z`
 
@@ -576,3 +584,10 @@ Inside the body (was lines 3635-3643):
                     // `fmr`.  w7-bp: 98.25 -> 98.5 canonical.  Do not delete it
                     // as dead -- it is the same cross-jump tell as FileLocalize.
 ```
+
+## `?_M_insert_overflow_aux@?$vector@UDancerFrame@@V?$StlNodeAlloc@UDancerFrame@@@stlpmtx_std@@@stlpmtx_std@@IAAXPAUDancerFrame@@ABU3@ABU__false_type@2@I_N@Z`
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: our side
+emits one extra dead home store of the reverse-iterator temp (`stw r5,0x5c(r31)`);
+otherwise regalloc.

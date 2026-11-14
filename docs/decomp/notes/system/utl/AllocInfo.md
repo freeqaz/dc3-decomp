@@ -29,6 +29,10 @@ Inside the body (was lines 35-46):
     // MSVC re-sorts the first four stores (written 0,4,8,c it emits c,8,0,4).
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
+
 ## `AllocInfoVec::AllocInfoVec()`
 
 `AllocInfoVec::AllocInfoVec` -- moved verbatim from `src/system/utl/AllocInfo.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)

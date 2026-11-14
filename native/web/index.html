@@ -282,6 +282,23 @@
             loading.classList.add('hidden');
         }
 
+        // WebGPU, the camera and the audio worklet's SharedArrayBuffer all need a
+        // secure context (https, or http://localhost). Over plain http from
+        // another machine (a phone on the LAN, a bare Tailscale IP) the browser
+        // hides navigator.gpu, and the generic "no WebGPU" advice below would
+        // send the player to browser flags that cannot help.
+        if (!window.isSecureContext) {
+            setStatus(
+                '<strong>This page needs a secure connection.</strong><br>' +
+                '<span style="color:#aaa">WebGPU, the camera and game audio only work over ' +
+                '<code>https://</code> (or on <code>localhost</code>). Open the https address of ' +
+                'this server instead of <code>' + location.origin.replace(/[<>&]/g, '') + '</code>.</span>',
+                'error');
+            log('not a secure context — refusing to boot engine', true);
+            const sv = document.getElementById('splash-video');
+            if (sv) sv.remove();
+            throw new Error('insecure context');
+        }
         // Hard stop if WebGPU isn't available — without it the canvas is just
         // black after the splash, and we'd otherwise download 12MB of assets
         // before that's obvious. Show the user how to enable it instead.
@@ -289,7 +306,12 @@
             const ua = navigator.userAgent;
             const isFirefox = /Firefox/.test(ua);
             const isChromium = /Chrom(e|ium)/.test(ua);
-            const browserHelp = isFirefox
+            const isMobile = /Android|iPhone|iPad|Mobile/.test(ua);
+            const browserHelp = isMobile
+                ? (/iPhone|iPad/.test(ua)
+                    ? 'On iPhone and iPad, Safari has WebGPU from iOS 26 but not the WebAssembly JSPI this build needs, so the game cannot run there yet.'
+                    : 'On Android, use Chrome 137 or newer; WebGPU needs Android 12+ and a supported GPU (chrome://gpu shows "WebGPU: Hardware accelerated").')
+                : isFirefox
                 ? 'Firefox: WebGPU requires Nightly with <code>dom.webgpu.enabled=true</code> in <code>about:config</code>.'
                 : isChromium
                 ? 'Chrome/Chromium on Linux: launch with <code>--enable-unsafe-webgpu --enable-features=Vulkan</code>, or toggle <code>chrome://flags/#enable-unsafe-webgpu</code>.'
@@ -594,5 +616,7 @@
     <!-- Webcam pose input: camera panel + MediaPipe worker -> dc3_pose_push
          (native/web/pose/, docs/native/POSE_INPUT.md). ?pose=off disables. -->
     <script type="module" src="pose/pose_input.js"></script>
+    <!-- On-screen buttons on touch-only devices (?touch=1 forces, ?touch=0 hides). -->
+    <script src="touch_controls.js"></script>
 </body>
 </html>

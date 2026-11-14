@@ -24,6 +24,9 @@
 //               does when the camera sees nobody.
 //               DC3_POSE_PERFORM_REPLAY_SYNC=song plays the frame for the
 //               reference time (as choreo), otherwise it loops on song time.
+//   session:FILE a recorded live session (DC3_POSE_RECORD): every person,
+//               tracking id, timestamp and the recorded floor normal, keyed
+//               on the song clock (PoseSession_Native.h)
 // Perturbations, any mode:
 //   DC3_POSE_PERFORM_LEAD_MS  shift of the reference time (negative = late).
 //                             The performer is a sensor with config/scoring.dta's

@@ -172,6 +172,9 @@ public:
     Cull GetCull() const { return mCull; }
 #ifdef HX_NATIVE
     void SetCull(Cull c) { mCull = c; }
+    // NgMat::SetRegularShaderConst's c5.z: scales the pseudo-HDR bloom mask
+    // this material writes (milo-native-engine rndshape::BloomMaskScale).
+    float GetBloomMultiplier() const { return mBloomMultiplier; }
 #endif
     StencilMode GetStencil() const { return mStencilMode; }
     bool GetAlphaCut() const { return mAlphaCut; }

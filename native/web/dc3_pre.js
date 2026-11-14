@@ -32,7 +32,18 @@ Module.preRun.push(function () {
         // dc3 registers no WebMusicStem; off-main mode breaks the adaptive-latency heartbeat (engine Bug-4) — default off until dc3 ports the stem bridge.
         if (ENV['RB3_WEB_OFFMAIN_MIX'] === undefined) ENV['RB3_WEB_OFFMAIN_MIX'] = '0';
 
-        var spec = new URLSearchParams(self.location.search).get('env');
+        var params = new URLSearchParams(self.location.search);
+        // ?profile=release -> DC3_PROFILE=release: the player defaults (no
+        // developer Options rows, dev menu or overlays). Unset = dev, the
+        // default (native/src/platform/System_Native.cpp, Dc3ProfileApply).
+        // An explicit ?env=DC3_PROFILE=... below still wins.
+        var profile = params.get('profile');
+        if (profile) {
+            ENV['DC3_PROFILE'] = profile;
+            console.log('[dc3-env] DC3_PROFILE=' + profile + ' (?profile)');
+        }
+
+        var spec = params.get('env');
         if (!spec) return;
         spec.split(';').forEach(function (pair) {
             var eq = pair.indexOf('=');

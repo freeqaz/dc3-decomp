@@ -13,9 +13,9 @@ Work items: [PLAN.md](PLAN.md) track P.
 
 | Stage | Code | Gate |
 |---|---|---|
-| Camera frame | `native/scripts/pose_server.py` (`cv2.VideoCapture`: 640×480 @ 30 fps, 1-frame driver buffer), a Python child spawned by `NativeSkeletonProvider::Start` in `native/src/platform/Skeleton_Native.cpp`. Packet timestamp = capture time (the device's `CAP_PROP_POS_MSEC` when it is on our monotonic clock, as V4L2's is; else when `read()` returned). | `DC3_POSE_CAMERA` (index) |
+| Camera frame | `native/scripts/pose_server.py` (`cv2.VideoCapture`: 640×480 @ 30 fps, 1-frame driver buffer), a Python child spawned by `NativeSkeletonProvider::Start` in `native/src/platform/Skeleton_Native.cpp`. Packet timestamp = capture time (the device's `CAP_PROP_POS_MSEC` when it is on our monotonic clock, as V4L2's is; else when `read()` returned). | `DC3_POSE_CAMERA` (default `auto`; also an index, a `/dev/videoN` path or a `/dev/v4l/by-id` name — [camera selection](#which-camera-and-a-camera-that-goes-away)) |
 | 2D + 3D pose | `native/scripts/pose_mediapipe.py` `MediaPipeBackend`: BlazePose world landmarks (metres), absolute root by PnP, one-euro filter on root depth, centroid tracker. Emits DC3's 20 Kinect joints in camera-space metres. | `DC3_POSE_MODEL` (default `native/models/pose_landmarker_full.task` of the executable's tree, gitignored), `DC3_POSE_HFOV` |
-| Wire | Unix socket, protocol v2, layout 1 (20 DC3 joints). The header's u16 after the layout byte is `flags`; bit 0 `FLAG_UNLEVELLED` = "this camera does not know its gravity, estimate it" (`pose_server.py` always sets it). Layout 0 = COCO, remapped by `MapCOCOToDC3`. | `DC3_POSE_SOCKET`, `DC3_POSE_NO_SPAWN=1` (connect to a server you started) |
+| Wire | Unix socket, protocol v2, layout 1 (20 DC3 joints). The header's u16 after the layout byte is `flags`; bit 0 `FLAG_UNLEVELLED` = "this camera does not know its gravity, estimate it" (`pose_server.py` always sets it); bit 1 `FLAG_NO_CAMERA` = "the camera is gone and the server is reopening it" (zero-person heartbeats every 0.1 s). Bit 2 `FLAG_LATENCY_DECLARED` = "score me at bits 8..15 × 5 ms" (`--video` declares 0; see [Who sets the latency](#who-sets-the-latency-np-latency-harness)). Layout 0 = COCO, remapped by `MapCOCOToDC3`. | `DC3_POSE_SOCKET`, `DC3_POSE_NO_SPAWN=1` (connect to a server you started) |
 | Socket → slots | `GestureMgr_Native.cpp`: `BuildSensorFrame` → `FillPersonSlots` / `AssignSlots` / `NativeAutoAssignPlayers`. `FillSkeletonData` holds the last good position of joints under 0.3 confidence. No provider → a jittered standing dummy (two in two-player modes, `DC3_DUMMY_PLAYERS`). Every valid person fills its own slot: two people on the socket or in one `dc3_pose_push` frame are two players. | `DC3_POSE` (`off`, `external`, …), `DC3_NATIVE_SCORING` (default on), `DC3_POSE_SELFTEST` |
 | Gravity (np-pose-tilt) | `PoseLevel_Native.cpp` `NativeSensorLevel`, called by `BuildSensorFrame`: for a camera that does not know its gravity (socket packets with header flag bit 0, web pushes, performer `replay:`) it estimates `vNormalToGravity` from the player's standing posture, then runs `SkeletonFrame::Create`'s own gravity step (`sUpVectorSmoother` → `mFloorNormal` → `NuiTransformMatrixLevel` on every joint; `mRawPositions` stays raw). A Kinect-like source (synthetic modes) is levelled by (0,1,0). [Camera tilt](#camera-tilt-np-pose-tilt-2026-11-13) | `DC3_POSE_LEVEL` (default `auto`; `0` off; degrees = fixed), `DC3_POSE_LEVEL_LOG` |
 | Scoring | Decompiled code: SkeletonUpdate → `Skeleton::Poll` → FilterQueue / MoveDir / async MoveDetectors → `move_passed` | `DC3_REAL_MOVE_PASSED` (default on) |
@@ -67,6 +67,91 @@ data. Caveat: ImGui has no display size in headless runs, so the overlay — lik
 the debug panel — is not in `/api/screenshot` captures; it was verified on a
 windowed boot under Xvfb (screen grab).
 
+### How the server is launched: the spawner, and restart-on-death
+
+`dc3-native` never forks `pose_server.py` from the game process. The first
+line of `main()` forks a small **spawner** (`native/src/platform/
+ProcessSpawner_Native.{h,cpp}`, `dc3-spawner` in `ps`) before audio, graphics
+or any thread exists; the provider sends it argv plus the game's *current*
+environment and working directory, it fork+execs the server, reports the pid
+and relays the exit status back (so "crashed (signal N)" still works).
+
+Why (measured on a GPD Pocket, Arch + PipeWire, no rtkit installed): the
+engine's ALSA audio goes through PipeWire's ALSA plugin, whose
+`libpipewire-module-rt` — with no rtkit to ask — lowers `RLIMIT_RTTIME` to
+soft 0 / hard 0 for the whole game process (`/proc/<pid>/limits`: `Max
+realtime timeout 0 0 us`). A child forked after that inherits the hard 0 and,
+unprivileged, can never raise it; MediaPipe's realtime thread then trips the
+check and the kernel SIGKILLs the server at model load. The spawner keeps the
+limits the game was *started* with. (`6fc29da83` stops mediapipe's
+`sounddevice` import setting the same limit inside the server itself; both are
+needed.)
+
+Lifetime: the spawner exits on EOF of its socket (the kernel closes the game's
+end however the game dies, SIGKILL included) or on `PR_SET_PDEATHSIG`; it then
+SIGTERMs the server, waits up to 2 s, SIGKILLs it and reaps it. The server has
+`PR_SET_PDEATHSIG(SIGTERM)` against the spawner, so even a SIGKILLed spawner
+does not leak it. A process that never calls `NativeSpawner::Init()` (unit
+tests that do not opt in) falls back to a direct fork and says so on stderr.
+
+Restart-on-death: a server the game launched that dies **after it had
+connected** is relaunched by the reader thread, at most **3** times per
+session, after 1 s, 2 s, 4 s, with one line on stderr and one on-screen
+notice per attempt (*"The pose server crashed (signal 9) - restarting pose
+tracking (1 of 3)."*); once it reconnects the notice clears and
+`Pose server restarted (pid N): pose tracking resumed` is printed. Exits a
+relaunch cannot fix — model missing (5), packages missing (6), video
+unreadable (4), python3 not runnable (127), a clean exit (0) — are not
+retried; after the last attempt the usual "pose tracking is off" notice
+stands. A server that fails *before* connecting at boot is not retried (that
+is a missing camera/model/package, reported as before).
+
+Tests: `PoseSpawnerTest.*` (milo-tests, no assets: the RTTIME regression with
+its own negative control, exit-status relay, the signal-9 notice, restart and
+its bound, nothing outliving the game however it ends) and
+`NativePoseSpawnTest.*` (the same against a real `dc3-native`: the test lowers
+the running game's `RLIMIT_RTTIME` with `prlimit(2)` after the spawner fork and
+before the pose launch, which is where audio init sits, and a stub `python3`
+on `PATH` records the limits it got).
+
+### Which camera, and a camera that goes away
+
+The GPD's integrated camera re-enumerates over USB on its own — eight times in
+two hours on 2026-11-13, `/dev/video0` becoming `/dev/video1` with a metadata
+node beside it. A fixed index then named a node that no longer existed
+(`EXIT_NO_CAMERA` at boot) and a mid-song loss (`VIDIOC_REQBUFS` errno 19) was
+exit 7 with no way back.
+
+`pose_server.py --camera` (from `DC3_POSE_CAMERA`, passed as given) is:
+
+| Value | Opens |
+|---|---|
+| `auto` (default; also unset/empty) | the first `/dev/videoN` whose `VIDIOC_QUERYCAP` says video capture; metadata nodes are skipped and named in the log line (`Camera: using /dev/video1 (Integrated Camera) [auto; skipped …]`) |
+| an index `N` | `/dev/videoN` if it exists and is a capture device, else the `auto` scan, with a log line saying why |
+| `/dev/videoN`, `/dev/v4l/by-id/<name>` or a bare by-id name | that device, following the symlink — `usb-SunplusIT_Inc_Integrated_Camera_JX20250923V2-video-index0` names the GPD camera whatever its number |
+
+Off Linux (no V4L2) an index goes to OpenCV as before and `auto` is 0. The
+spec is resolved again on every open.
+
+When frames stop for 2 s mid-run the server keeps the socket, prints
+`CAMERA_LOST`, and sends zero-person packets with `FLAG_NO_CAMERA` every
+0.1 s while it reopens the camera (re-resolving the spec) at 0.5, 1, 2 s, then
+every 4 s. On success it prints `CAMERA_BACK after N s` and tracking resumes on
+the same connection; after 60 s without a camera it exits 7 as before (*"The
+camera stopped sending pictures and did not come back"*). The game posts one
+notice on the flag's rising edge — *"The camera disconnected - looking for it
+again. Pose tracking is paused until it is back."* (banner, then the corner
+line *"No camera: looking for it"* while it lasts) — and one on the falling
+edge, *"The camera is back - pose tracking resumed."* (banner only).
+
+Tests: `tests/test_pose_server.py` `ResolveCameraTest` (both GPD layouts,
+by-id, the fallbacks, the real `VIDIOC_QUERYCAP` on whatever box runs it) and
+`CameraLossTest` (a camera that vanishes and comes back renumbered is found
+and tracking resumes; one that never comes back is exit 7 after the budget,
+with backed-off rescans); milo-tests
+`PoseSocketReaderTest.ACameraThatGoesAndComesBackPostsOneNoticeEach` and
+`PoseServerStartTest.TheCameraSpecReachesTheServerAsGivenAndDefaultsToAuto`.
+
 Env-var reference: [SCORING_ENV_VARS.md](SCORING_ENV_VARS.md) and the master
 table in [../debugging/native.md](../debugging/native.md).
 
@@ -85,7 +170,48 @@ python3 scripts/synthetic_kinect.py --perform    # reads GET /api/pose/target
 
 # Gate (GPU, ~13 min): five configs, each the whole song under DC3_FAST_TIME
 scripts/pose_scoring_gate.sh                      # --only replay,still  --out DIR
+
+# A player's session (docs/native/PLAYTEST.md): camera, gesture menus, session folder
+scripts/play.sh                                   # --video clip.mp4 for footage in step with the song
 ```
+
+### Recording a live session and replaying it (PLAN L-1)
+
+`DC3_POSE_RECORD=FILE` (set by `scripts/play.sh` to `<session>/pose.dc3session`)
+writes every sensor frame the game **accepts**, at the point the scorer gets it
+(`BuildSensorFrame`, after the frame-id gate, before levelling): each person's
+20 joints, confidences and tracking id, the frame id, the sensor timestamp, the
+song time, and the floor normal the gravity estimator had reached. Format
+`dc3-pose-session v1`, one `F` line per frame and one `P` line per person,
+flushed per frame (`native/src/platform/PoseSession_Native.cpp`).
+
+`DC3_POSE=external DC3_POSE_PERFORM=session:FILE` replays it through the same
+`PublishFrame` seam the socket reader uses. With `DC3_POSE_SESSION_SYNC=song`
+(the default) a frame is published when the song clock reaches its recorded
+song time, with its recorded timestamp, and the sensor levels it with its
+recorded floor normal instead of re-estimating one (the estimator is session
+state, so a replay that starts fresh would level differently). A whole session
+holds many songs, each with its own clock; `scripts/playtest/pose_session.py`
+lists the song segments and cuts one out. Under song sync the replay holds the
+first frame until the song clock comes down to the cut's first frame (the
+count-in; the menus' clock runs up from zero through the song's own times, and
+a dance played into the menus took the pad's presses, H-20), then publishes
+every frame on a render frame of its own -- catching up one per frame after a
+hitch, as the live game accepted them -- and restarts the sensor noise floor's
+counters so a replay does not depend on how long the menus took. Tests:
+`PoseSessionFileTest`, `PoseSessionTest.AReplayedSessionReachesTheScorerAsItDidLive`,
+`PoseSessionTest.ASongReplayWaitsForTheCountInNotTheMenuClock`,
+`SensorNoiseFloorTest.AResetRestartsTheOffsets`
+(`native/tests/test_pose_session.cpp`, `test_native_pose_socket.cpp`).
+
+A replay records itself as well, and `pose_session.py compare CUT REPLAYED`
+checks that every frame reached the scorer once, in order and unchanged.
+End to end with the real tracker and footage, `scripts/playtest/replay_proof.py`
+(numbers in STATUS): under `DC3_FAST_TIME` a replay is exact -- the same frames,
+the same rating and detector fraction on every move, the same score, three runs
+out of three. In real time two runs of one input differ on a few borderline
+moves (the scorer samples the skeleton on render frames), and a box that
+renders below 30 fps drops frames, as a live game on that box would.
 
 Run from the repo root: the server script and the model are found relative to the
 working directory when `/proc/self/exe` resolution fails.
@@ -308,7 +434,9 @@ against the choreography at S − `latency_offset`. `latency_offset` is 100 ms i
 `config/scoring.dta`, tuned for the Kinect. `DC3_POSE_LATENCY_MS` replaces it with
 the player's own sensor latency, the same quantity in ms:
 
-- unset: the image's value
+- unset: the pose source's own declaration if it made one (a recorded file
+  declares 0, see [Who sets the latency](#who-sets-the-latency-np-latency-harness)),
+  else the image's value
 - outside 0–1000: ignored, with a warning
 - hook: one `HX_NATIVE` call in `MoveDir::LoadScoring`, still 100.0% `name_check`
 
@@ -326,8 +454,9 @@ That run did measure how much accuracy the knob needs: the score curve is
 flat to ~4% over ±50 ms around its peak. `DC3_POSE_LATENCY_LOG` now prints the
 capture → game part of the delay, and the live fake-camera grid (np-tracking)
 is in [Latency on the live path](#latency-on-the-live-path-l-4). That grid
-prefers 0, for reasons a real webcam does not share, so the default still
-stays unset.
+prefers 0, for reasons a real webcam does not share. So a webcam's default
+stays unset, and recorded footage now declares its own 0
+([Who sets the latency](#who-sets-the-latency-np-latency-harness)).
 
 ### Running the matrix
 
@@ -945,9 +1074,89 @@ camera has only part of it:
 A real webcam adds the two missing terms, each typically tens of ms. That puts
 a live setup near the image's 100, and the original's 100 was tuned for a
 Kinect, whose own pipeline is of the same order. **Decision: the default stays
-unset (100) for a live webcam.** For the fake-camera harness, pass
-`DC3_POSE_LATENCY_MS=0`. Scores taken at the default on that harness (the
+unset (100) for a live webcam; recorded footage scores at 0.** Since
+`np-latency-harness` nobody has to pass `DC3_POSE_LATENCY_MS=0` for that: the
+source declares it (next section). Scores taken at 100 on recorded footage (the
 dogfood's live-path numbers) read about 30% low.
+
+### Who sets the latency (`np-latency-harness`)
+
+The source says what it is, and the engine believes it unless told otherwise.
+`pose_server.py` puts a declared latency in every packet header (flags bit 2,
+bits 8..15 = ms / 5). The engine applies it on the main thread when the first
+frame arrives, and again whenever it changes
+(`NativeSkeletonProvider::Poll` → `Dc3DeclareSourceLatencyMs`,
+`Skeleton_Native.cpp`). Precedence, highest first:
+
+| What | Latency | Engine log reason |
+|---|---|---|
+| `DC3_POSE_LATENCY_MS` set (0–1000) | that value, whatever the source says | `explicit` |
+| `pose_server.py --video` (and anything built on it: the fake camera, `footage_camera.py`, `play.sh --video`, `pose_scoring_gate.sh`'s video mode) | **0** | `declared` |
+| `pose_server.py --source-latency-ms N` (camera or file; e.g. a loopback camera fed from a file) | N | `declared` |
+| `pose_server.py --camera` (a webcam, what the game spawns) | 100, `scoring.dta` `latency_offset` | `default` |
+| `synthetic_kinect.py`, the in-process performer, an older server, the web page | 100 | `default` |
+
+The engine prints one line each time the value or the reason changes:
+
+```
+DC3 POSE LATENCY: scoring at 100 ms -- default, scoring.dta latency_offset (the source declared nothing, as a live camera does; DC3_POSE_LATENCY_MS overrides)
+DC3 POSE LATENCY: scoring at 0 ms -- declared by the pose source (pose_server.py: 0 for a recorded file, or --source-latency-ms; DC3_POSE_LATENCY_MS overrides)
+```
+
+A boot always prints the `default` line (LoadScoring runs before any pose
+frame); the `declared` line follows on the source's first frame. `pose_server.py`
+says on stderr what it declares (`Scoring latency: declaring 0 ms to the game`).
+
+Not covered:
+
+- **`synthetic_kinect.py --replay`.** The fixture is a different dance from
+  the song's, so it has no right latency to measure, and changing it would
+  move the gate's recorded replay/still numbers for no gain.
+- **`--perform`.** It reads the choreography at the scorer's own latency
+  (`/api/pose/target` `refSeconds`), so it is on time whatever the knob says.
+- **The web page.** It declares nothing. Its harness camera is a looping
+  mjpeg that is not synced to the song.
+
+Tests:
+
+- `SensorLatencyTest` pins the precedence, and a declaration that lands after
+  LoadScoring.
+- `PoseSocketReaderTest.ASourcesDeclaredLatencyReachesTheScorerAndAWebcamsDoesNot`
+  pins the wire path.
+- `tests/test_pose_server.py` `SourceLatencyTest` checks that every packet of a
+  `--video` run declares 0 and no camera packet declares anything.
+
+Each was sabotage-checked: four sabotages, each failing 1–3 tests.
+
+**Grid re-check with no override (2026-11-14). The box was not quiet, so this
+does not reproduce the 0.70.** I waited 29 min for the load to drop below 16, and
+it never did: load average 95–200, from other lanes' builds and engines plus
+`while True: pass` burners. All six songs logged both lines, `default` at boot and
+then `declared … 0 ms` during the intro, before song select, with nothing after it.
+`pose_server` printed `declaring 0 ms` six times. So every song was scored at 0
+with no env var. That part is MEASURED.
+
+The scores are not usable as a latency result. They are a measure of load:
+
+| run | pose frames / log window | median capture → game age | score / card, mean |
+|---|---|---|---|
+| explicit 0, earlier grid (quiet) | ~120 | 65–67 ms | **0.70** |
+| unset → declared 0, this run (load ~165) | ~30 | 182–258 ms | **0.04** |
+
+A same-load control, run side by side (macarena twice at once, plus one more
+engine; age about 148 ms in all three):
+
+| run | score / card |
+|---|---|
+| macarena, declared 0 | 0.33 |
+| macarena, explicit `DC3_POSE_LATENCY_MS=0` | 0.22 |
+| indaclub, explicit `DC3_POSE_LATENCY_MS=0` | 0.17 |
+
+Declared 0 scored no worse than explicit 0 under the same load, so the change
+does what the env var did. INFERRED: the gap between 0.33 and 0.22 is
+run-to-run spread, not an effect (one pair). On this harness, scoring falls steeply with
+the pose rate. Re-run the six-song grid (scratch `lat_grid5.sh`, no env) on a
+quiet box to get the number comparable with 0.70.
 
 **For the owner's session (L-5):** run with `DC3_POSE_LATENCY_LOG=1` and note
 the age. Play one song three times, at `DC3_POSE_LATENCY_MS` 50, 100 and 150,
@@ -1257,6 +1466,576 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
   web pose inference p50 up to ~140 ms in the dance run. The still input's
   measures 7–8 read 0.24/0.20 on web and 0.91/0.84 on desktop — likely when the
   first tracked frames arrived, not scoring.
+
+## Performance (L-3, `np-pose-perf`, 2026-11-13)
+
+Where a pose frame's time goes, on both paths, and what moves it. The target
+is 30 fps at the lowest latency on the GPD Pocket (Ryzen AI 9 HX 370,
+Radeon 890M, the playtest box). Every number is MEASURED unless marked
+INFERRED. GPD runs were taken idle (load average 1–3) under
+`flock -x /tmp/gpd-bench.lock`, between 15:36 and 16:05 PST. The rig
+(32 cores) was running other lanes at load average 50–80, so its numbers
+are only used side by side.
+
+### The answer in one paragraph
+
+Model inference is the frame on both paths; everything else together is
+under 2 ms (desktop) or 5 ms (web). On the desktop, `num_poses 2` with one
+dancer runs MediaPipe's person detector on every frame. That costs the GPD
+17 ms of its 45 ms frame (21.7 fps). `--probe-second-person 0.5` tracks at
+`num_poses 1` and looks for a second person off-thread twice a second:
+**35.2 fps** with one dancer, with output identical to `num_poses 1`. Two
+dancers cost 48 ms whatever is set (19.8 fps; 26.7 with `lite`). The web's
+CPU (WASM) inference takes 73 ms on the GPD (12.7 fps). The GPU delegate
+gets **29.1 fps** (**30.1** with `pose_persons=1`). That is the pose pipeline
+alone: the game did not boot in headless Chromium there.
+Its landmarks differ from the desktop's by 22 mm mean, though, so it stays
+opt-in. Defaults are unchanged; both switches are owner decisions (below).
+
+### Desktop stage breakdown (`scripts/pose_bench/stage_bench.py`)
+
+The real `MediaPipeBackend.process` + `camera_block` + `pack_frame` over a
+640×480 30 fps clip, unpaced, `--frames 320x240`, full model, CPU, p50 ms
+(one dancer: 60 s of the np-video-calib stream; two: the playtest kit's
+macarena duo):
+
+| stage | GPD, poses 2 | GPD, poses 1 / probe 0.5 | GPD, two dancers | rig, poses 2 |
+|---|---|---|---|---|
+| decode (`cv2.read`) | 0.40 | 0.40 | 0.41 | 0.35 |
+| BGR→RGB + `mp.Image` | 0.24 | 0.24 | 0.23 | 0.19 |
+| **inference** | **43.2** | **25.6** | **48.1** | **21.8** |
+| geometry (root, remap, mask copy) | 0.65 | 0.66 | 0.90 | 0.37 |
+| tracker + root filter | 0.06 | 0.06 | 0.10 | 0.04 |
+| v3 picture + mask | 0.52 | 0.53 | 0.68 | 0.45 |
+| pack | 0.07 | 0.07 | 0.08 | 0.06 |
+| **total → fps unpaced** | 45.5 → **21.7** | 27.9 → **35.2** | 50.7 → **19.8** | 23.4 → 42 |
+
+The GPD numbers are from two interleaved runs each, which agree to 0.1 ms.
+The socket write is not in the table: `Outbox` is a non-blocking send of
+about 307 KB, and the engine's reader thread takes it in 12–15 ms from
+arrival to texture (P-4).
+
+Model, `num_poses` and the picture, GPD, inference p50 ms (fps unpaced):
+
+| model | poses 2 | poses 1 | poses 2, `--frames` off | poses 1, `--frames` off |
+|---|---|---|---|---|
+| lite | 36.1 (25.6) | 18.5 (47.2) | 34.3 (27.9) | 16.9 (53.6) |
+| full | 43.1 (21.8) | 25.7 (35.2) | 41.7 (22.9) | 23.9 (38.7) |
+| heavy | 100.6 (9.7) | — | — | — |
+
+- The person detector is the lever, not the model. With one dancer, poses
+  2 → 1 saves 17.5 ms (40%), and full → lite saves 7 ms.
+- The segmentation masks (the player view) cost 1.5–2 ms of inference plus
+  0.5 ms for the picture.
+- MediaPipe keeps about 1.4–1.8 cores busy (`infer_cpu` / wall). mediapipe
+  1.0.0's Python `BaseOptions` has no thread count to raise.
+
+### Web stage breakdown (`scripts/pose_bench/web_pose_fps.mjs`)
+
+The page's own per-stage times (`window.dc3PoseSummary().stages`, added in
+this lane). Headless Chromium 156 on the GPD, the macarena clip as a fake
+640×480 30 fps camera, and a 15 s window after 25 s, p50 ms. **The game did
+not boot in headless Chromium on the GPD.** It stays in `waiting` and
+`dc3FrameCount` never advances; getting the game up there is np-gpd-test's
+browser setup. So this table is the pose pipeline alone, with no game
+sharing the GPU or the CPU:
+
+| URL | pose fps | wait | infer | picture (draw / rgb / mask get / mask) | worker busy |
+|---|---|---|---|---|---|
+| (default: full, CPU, persons 2) | 12.7 | 0.1 | 73.5 | 3.8 / 0.32 / 0 / 0.47 | 78.2 |
+| `pose_persons=1` | 17.7 | 0.1 | 51.6 | 3.6 / 0.32 / 0 / 0.48 | 56.1 |
+| `pose_model=lite` | 15.7 | 0.1 | 58.2 | 3.9 / 0.32 / 0 / 0.47 | 63.1 |
+| `pose_model=lite&pose_persons=1` | 24.5 | 0.1 | 35.8 | 3.7 / 0.32 / 0 / 0.48 | 40.4 |
+| `pose_delegate=GPU` | 29.1 | 2.6 | 22.6 | 3.6 / 0.42 / 2.1 / 0.60 | 29.6 |
+| `pose_delegate=GPU&pose_persons=1` | **30.1** | 10.9 | 15.5 | 3.8 / 0.33 / 1.9 / 0.47 | 22.4 |
+
+Notes on the table:
+- Worker → page transfer is 0.2–0.3 ms, and the page's handler (engine push
+  + preview) is 0.1–0.16 ms.
+- At 30.1 fps the worker waits 10.9 ms a frame for the camera: it is
+  camera-bound.
+- Instrument check: `pose_slow=camera:10` moved `draw` from 3.84 to 13.89 ms
+  and `busy` from 78.2 to 88.3 ms. `infer` was unchanged (73.3), and fps fell
+  12.7 → 11.3.
+
+With the game running: not measured yet. The rig A/B
+(`scripts/pose_bench/web_pose_fps.mjs`, which also reports the game's own
+frame rate over the window) needs the exclusive GPU lock, and it was not
+granted within 30 minutes while other lanes held it shared. Run it again on a
+quiet rig before quoting a game-plus-pose number.
+
+### Web second-person probe (`np-web4`, 2026-11-14)
+
+`?pose_probe=<s>` (with the default `pose_persons=2`): the worker keeps a
+numPoses 1 and a numPoses 2 landmarker, runs numPoses 1 on every frame and
+numPoses 2 on one frame every `s` seconds, switches to numPoses 2 on every
+frame once it sees two people and back after 1 s with fewer
+(`pose_worker.js` `detect`; desktop's `SecondPersonProbe`). Off by default.
+
+Parity (`scripts/web/pose_parity.mjs --probe 0.5`, CPU, MEASURED): one dancer,
+150 frames: joint mean 3.26 mm against the desktop reference, the same as
+`pose_persons=1` (10 probes, 0 switches, person count agrees on 150/150). Two
+dancers, 90 frames: it switched on the first probe, joint mean 2.1 mm, person
+count 90/90; `pose_persons=1` on the same frames agrees on 0/90.
+
+Throughput with the game running (`web_pose_fps.mjs`, rig, attract screen,
+`dance.y4m` fake camera, release, two interleaved rounds, load 30–55 with other
+lanes; fps / inference p50 ms):
+
+| URL | round 1 | round 2 |
+|---|---|---|
+| default (persons 2, CPU) | 18.1 / 41.0 | 11.7 / 63.7 |
+| `pose_probe=0.5` | 16.9 / 28.8 (probe pass 51.1) | 10.9 / 51.4 (probe 70.5) |
+| `pose_persons=1` | 25.3 / 30.3 | 12.3 / 50.9 |
+| `pose_delegate=GPU&pose_probe=0.5` | 13.8 / 30.5 | 11.5 / 31.3 |
+| `pose_frames=off&pose_probe=0.5` | 22.5 / 37.8 | 12.2 / 63.7 |
+
+The probe saves ~12 ms on the frames it does not probe (28.8 vs 41.0 ms) and
+still loses overall: the probe frame pays both passes in the one worker, and
+the single pass's p95 rose to 107 ms (69 ms default). INFERRED: on web the
+probe needs its own worker, as desktop runs it on a thread. Round 2's
+whole-row slowdown is the box, not the settings. Nothing here reached 30 fps,
+so the default is unchanged.
+
+### Ranked levers
+
+1. **Desktop: `--probe-second-person 0.5`.** GPD, one dancer:
+   21.7 → 35.2 fps, inference 43.2 → 25.6 ms. Opt-in.
+   `pose_mediapipe.SecondPersonProbe` keeps a 1-pose and a 2-pose
+   landmarker:
+   - With one dancer, the 1-pose landmarker runs every frame. The 2-pose
+     landmarker gets a copy of the newest frame every 0.5 s on a background
+     thread (MediaPipe releases the GIL).
+   - Once two are seen, the 2-pose landmarker runs every frame. When it has
+     seen fewer than two for 1 s, it goes back.
+   - Cost: the probe's CPU, visible only as `infer_cpu` p95 rising from
+     36 to 56 ms in the frames it overlaps.
+   - Join latency: the second player is found up to one interval later. On
+     a synthetic join (half the duo clip blacked out for 3 s) it took 1 and
+     17 frames, against 0 and 1 for `num_poses 2`.
+2. **Web: `pose_delegate=GPU`.** GPD, pose pipeline alone: 12.7 → 29.1
+   fps (30.0 on a repeat; 30.1 with `pose_persons=1`). Accuracy is not free
+   (below), so it stays opt-in. With the game on the same GPU, it was
+   measured on the rig only (table above).
+3. **`pose_persons=1` / `--max-persons 1`.** The same 40% inference cut
+   as lever 1, but a second player is never found. Web CPU: 12.7 → 17.7 fps.
+4. **`lite`.** GPD desktop: 7 ms saved with one dancer; with two dancers,
+   48 → 34 ms (19.8 → 26.7 fps). Accuracy is unmeasured against the scoring
+   grid, so it stays opt-in.
+
+### Accuracy (`scripts/pose_bench/persons_agreement.py`)
+
+The same frames and timestamps went through two backends, and the joints the
+game would receive were compared (one dancer, 600 frames, full model):
+
+| A vs B | person count differs | joint distance p50 / p95 (3D) | image-plane p50 / p95 |
+|---|---|---|---|
+| poses 2 vs poses 2 (control) | 0 | 0.0 / 0.0 mm | 0.0 / 0.0 mm |
+| probe 0.5 vs poses 1 | 0 | 0.0 / 0.0 mm | 0.0 / 0.0 mm |
+| poses 1 vs poses 2 | 0 | 24.7 / 68.6 mm | 14.2 / 40.2 mm |
+
+- The output is different, not worse. With `num_poses 2` the detector's box
+  re-seeds the landmark region on every frame. `num_poses 1` follows its own
+  landmarks.
+- **The scoring calibration (np-video-calib) was recorded at `num_poses 1`**
+  (`scripts/video_calib/record_segment.py`). So the probe gives the live
+  server the input the calibration measured. INFERRED: its one-player
+  scoring is the calibrated one. The grid was not re-run here.
+- Web GPU delegate vs the desktop reference (`scripts/web/pose_parity.mjs
+  browser`, the 150 np-web-pose fixture frames on the rig): 150/150
+  detections agree, joint error mean 22 mm, p95 52 mm, max 269 mm. On CPU it
+  is mean 0.05 mm, p95 0.14 mm. A one-frame-shift sabotage reads 28 mm. The
+  GPU delegate moves the input about as much as a frame of lag. Its effect
+  on the score is not measured.
+
+### Negative results
+
+- **No capture cliff, so no grabber thread.** I expected OpenCV's 1-buffer
+  V4L2 capture to lose a whole camera period whenever processing outlasts it.
+  It does not, measured on the GPD's camera with `scripts/pose_bench/
+  camera_probe.py`. The room light held that camera at 10–12 fps (YUYV,
+  aperture-priority auto exposure, no frame-rate control).
+  - At 120 ms of work, the sequential loop ran at 8.32 fps = 1000/120, and
+    `read()` returned in 0.2 ms with a buffered frame.
+  - The cost is staleness. Frame age at the loop was p50 100 ms sequential
+    vs 77.6 ms with a newest-wins grabber thread (150 ms work: 129 vs 83).
+  - When the work is shorter than a camera period (60 ms at 81 ms), both
+    shapes read 41.5 ms (age p95 56 vs 46).
+  - So a grabber thread only pays when inference outlasts the camera
+    period. Then it saves up to one period of age. INFERRED: about 12 ms
+    mean at the GPD's 45 ms frame on a 30 fps camera. With the probe, the
+    frame is 28 ms, inside the period, so I did not build it.
+- **No GPU delegate in Python.** The PyPI mediapipe 1.0.0 wheel says
+  `ImageCloneCalculator: GPU processing is disabled in build flags`.
+- **The picture's JS loops are not worth optimising.** RGBA→RGB is 0.32 ms
+  and the ordinal mask 0.47 ms. The picture's cost is `drawImage` +
+  `getImageData` (3.6–3.9 ms) and, on the GPU delegate, the mask readback
+  (2 ms). A rewrite with 32-bit reads and lookup tables was written and not
+  kept.
+- **The camera clock adds latency of its own.** The GPD camera's buffers
+  arrive 41–53 ms after their V4L2 timestamp at 10–12 fps. That is exposure
+  plus USB, before any of our code runs.
+- **`lite` alone barely helps with one dancer.** At `num_poses 2`, `lite`
+  still runs the person detector on every frame, so it saves only 7 ms on
+  the GPD (43.1 → 36.1).
+
+### Reproducing
+
+```bash
+# desktop stage table (any clip; the GPD numbers used a 60 s, 640x480 excerpt)
+.venv/bin/python scripts/pose_bench/stage_bench.py --video clip.mp4 --model full --num-poses 2
+.venv/bin/python scripts/pose_bench/stage_bench.py --video clip.mp4 --probe 0.5
+.venv/bin/python scripts/pose_bench/stage_bench.py --video clip.mp4 --slow infer=20   # instrument check
+# accuracy
+.venv/bin/python scripts/pose_bench/persons_agreement.py --video clip.mp4 --a 1 --b 2
+.venv/bin/python scripts/pose_bench/persons_agreement.py --video duo.mp4 --a probe:0.5 --b 2 --blank left --join 3
+# camera capture shapes (opens /dev/video0)
+.venv/bin/python scripts/pose_bench/camera_probe.py --work 0,60,120,150
+# web (serve a build first: python3 native/web/server.py --port 8451)
+node scripts/pose_bench/web_pose_fps.mjs --port 8451 --camera clip.y4m "" "&pose_persons=1" "&pose_delegate=GPU"
+```
+
+## Frame fill (`np-pose-fill`, 2026-11-14)
+
+The scorer was tuned on a 30 Hz Kinect. The GPD's camera delivers ~8.4 pose
+frames a second, and at 8 Hz the same footage scores **0.39** of what it
+scores at 30 Hz (table below). The loss is the scorer's time-error term:
+`DetectFrame::AddError` keeps, per choreography frame, the best sensor frame
+within reach, and at 8 Hz the nearest one is up to 60 ms away. More inference
+speed (L-3) is the real cure. The fill is what the game does with the frames
+it does get.
+
+**Default: `extrap` at gain 1.0, which is deliberately generous.** Owner
+decision, 2026-11-14: *"i would rather over credit and then calibrate
+further. it feels fine to be a bit generous and then dial it back"*. The
+default is therefore the mode that recovers the most score at 8–15 Hz.
+- **It scores above a real 30 Hz camera** on the footage: 1.05–1.10.
+- **The knob to dial it back is `DC3_POSE_FILL_GAIN`** (0..1). The
+  [score-vs-gain table](#calibrating-dc3_pose_fill_gain) is the lookup: at
+  8 Hz, gain 0.75 lands on a real 30 Hz camera's score.
+- **`DC3_POSE_FILL=off|hold|interp|extrap|extrapc`** picks the mode. Unset
+  means `extrap`; an unknown value is logged and the default used.
+- `interp` is the conservative alternative. It never scores above real
+  30 Hz (0.92 at 8 Hz), at the cost of a ~150 ms skeleton delay.
+
+Code:
+- `native/src/platform/PoseFill_Native.{h,cpp}`: the math and the schedule.
+- `GestureMgr_Native.cpp` `BuildSensorFrame`: slots, levelling, recording.
+- `Skeleton_Native.cpp` `Dc3SetPoseFillDelaySeconds`: interp's latency fold.
+
+### What every mode shares
+
+- **Engages only for a slow camera.**
+  - It engages when the trimmed mean of the last 15 camera-frame intervals
+    (shortest and longest fifth dropped), measured in song time, is above
+    1/24 s. It releases below 1/27 s. (The median, until np-web4: a camera
+    between the thresholds delivers a 33/50 ms interval mix, and the median
+    of that jumped across both thresholds on every frame -- 349 changes in
+    one web song. [WEB.md](WEB.md#pose-fill-on-web-l-8-np-web4).)
+  - A 30 Hz source never engages it, so at 30 Hz the stream is the camera's
+    own (measured below).
+  - A slow *game* (song loading, a box at load 150) also reads as a slow
+    camera, because the rate is measured in song time. That is deliberate:
+    what the scorer sees is frames per song second.
+- **Is never recorded.** `DC3_POSE_RECORD` writes camera frames as they
+  arrive, before the fill. Fill frames are not counted in `pose_fps`.
+- **Does not bridge tracking dropouts.** Nothing is filled after a frame
+  with nobody in it. So a detection dropout reaches the slot layer, P-12's
+  1 s dropout hold and the 2 s tracker memory as the camera's own frames,
+  exactly as with the fill off.
+  `PoseFillSensorTest.ADropoutReachesTheHoldExactlyAsWithTheFillOff` counts
+  held frames: 8 off, 8 interp, 8 extrap.
+- **One log line** on engage, release, or an interp delay change ≥ 20 ms:
+  `DC3 POSE FILL: extrap (gain 1.00) engaged at song 12.34 s (camera 8.4 frames/s, stream delay 0 ms added to the scorer's latency)`.
+
+### What `extrap` (the default) does
+
+Each camera frame is delivered the moment it arrives. Until the next one,
+a frame every 1/30 s of song time steps it on by its joints' velocity from
+the frame before, times the gain. It adds no delay, so the scorer's latency
+is the camera's.
+
+The guards are what keep the generosity aimed at the dancer:
+- **Horizon: one source period, then nothing.** The period is the last
+  pair's, but never more than the median interval, since a dropped frame
+  doubles the pair's. After that the stream waits for the camera, so a
+  stall stays a stall. The prototype (a3a9eccf6) held the stepped pose for
+  0.5 s.
+- **Speed clamp.** Each joint's velocity is clamped to 4 m/s. That is p99.6
+  of the np-video-calib footage's joint steps at 8 Hz: p90 0.18 m, p99
+  0.43 m per 125 ms.
+- **Flip guard.** A person is not stepped at all when some L/R pair of the
+  new frame sits closer to the *other* side's joint of the frame before
+  than to its own, by more than half. A tracker's left/right swap is held
+  where the camera put it, never amplified.
+  - Measured on the same footage at 8 Hz, frame pair by frame pair, it
+    fires on 0.1% of real motion (hands crossing) and on 99.7% of
+    synthetic whole-body swaps.
+  - Size alone cannot tell them apart: the L/R separation (median 0.37 m)
+    is an ordinary 8 Hz step.
+- **No guesses.** A joint not tracked in either frame is not moved.
+  Inferred joints are moved.
+- **No velocity across a camera gap** longer than min(2.5 × median, 0.5 s).
+- **A person not in the frame before** is copied, not moved.
+
+### What `interp` does (the conservative mode)
+
+- **Runs D behind the camera.** At song time S the stream shows the moment
+  σ = S − D, with D = 1.2 × the median interval, clamped to [1/30, 0.30] s,
+  with 15 ms hysteresis. At 8 Hz, D ≈ 150 ms.
+  - Every camera frame is delivered exactly, oldest first.
+  - Between two camera frames, a fill frame on the 30 Hz σ-grid is their
+    linear interpolation. So it lies on the segment between two real poses
+    and cannot overshoot.
+  - It fills only between frames with the same people (`SamePeople`), and
+    nothing within half a step of the next camera frame.
+  - The stream is never later than the newest camera frame.
+- **Folds D into latency compensation.** D is added to whichever sensor
+  latency wins `np-latency-harness`'s precedence: explicit
+  `DC3_POSE_LATENCY_MS` > the source's declared latency > `scoring.dta`'s
+  100. The call is `MoveDir::NativeSetLatencySeconds(resolved + D)`.
+- **On release**, buffered camera frames not yet delivered (at most D's
+  worth) are skipped.
+- **Cost.** The skeleton that the gesture cursor, the player box and the
+  `shot` heuristics read runs D behind the camera while engaged. The scorer
+  compensates; they do not.
+
+The other modes:
+- `hold` re-sends the newest frame for up to 0.5 s; it equals
+  `extrap` at gain 0, except for the horizon.
+- `extrapc` is the prototype's step, clamped: half a period, tracked joints
+  only, 10 cm a joint.
+
+### Measured: footage fixtures (`native_song_sweep.py`, no GPU)
+
+**Setup.**
+- 8 songs: macarena, indaclub, boyfriend, 12step, starships, supersonic,
+  scream, cupidshuffle.
+- Medium, freestyle disabled, `DC3_FAST_TIME`, in-process performer
+  replaying the np-video-calib footage (`replay:…/pose_songlead/{song}.dc3pose`,
+  `DC3_POSE_PERFORM_REPLAY_SYNC=song`).
+- `DC3_POSE_PERFORM_HZ` sets the camera rate. `DC3_AUDIO_GAIN=0`.
+- **Box load (1-min) 25–84** across all grids (logged at every config's
+  start and end).
+- Under FAST_TIME the ratings are deterministic up to the scorer's own
+  run-to-run spread: one rating flip, or ≤ 0.02% of score, between two
+  `off` runs.
+
+The tables give score as a fraction of the same footage at a real 30 Hz
+with the fill off (`h30_off`, 14,607k over 8 songs, ratings
+373/156/28/11). All MEASURED.
+
+| camera | off | hold | **extrap g1 (default)** | extrap prototype | extrapc | interp |
+|---|---|---|---|---|---|---|
+| 8 Hz | 0.391 | 0.767 | **1.054** | 1.054 | 0.955 | 0.916 |
+| 10 Hz | 0.557 | 0.854 | **1.098** | 1.101 | 1.029 | 0.940 |
+| 15 Hz | 0.803 | 0.912 | **1.078** | 1.076 | 1.061 | 0.964 |
+| 30 Hz | 1.000 | – | **1.000**, ratings 373/156/28/11 = `off` | – | – | 1.000 |
+
+- **The guards cost nothing on clean footage.** Guarded extrap matches the
+  prototype to 0.003.
+- **Ratings at 8 Hz, default:** 375/164/21/8, against real 30 Hz
+  373/156/28/11.
+- **Per song**, extrap g1 at 8 Hz runs 0.93–1.13.
+- **The 30 Hz runs:**
+  - `h30_x` (default build) 373/156/28/11 and never engaged.
+  - The `off` repeats: 373/156/28/11 and 372/157/28/11.
+  - `h30_interp_c/d`: 372/157/28/11 and 373/156/28/11.
+- **The 30 Hz run with 4 songs:** `h30_x4` had macarena time out on
+  main_screen before gameplay, the same harness navigation flake as an
+  earlier fill-off run (`h15_off`, macarena). The other 3 songs were
+  identical to `off`.
+
+### Calibrating `DC3_POSE_FILL_GAIN`
+
+Score of extrap at each gain as a fraction of real 30 Hz with the fill off
+(8 songs, MEASURED). Gain 0 is a hold of at most one period.
+
+| gain | 8 Hz | ratings p/a/o/b | 10 Hz | 15 Hz | ratings p/a/o/b |
+|---|---|---|---|---|---|
+| (fill off) | 0.391 | 95/297/100/76 | 0.557 | 0.803 | 259/248/39/22 |
+| 0 | 0.767 | 242/250/55/21 | – | 0.909 | 331/186/38/13 |
+| 0.25 | 0.818 | 285/212/54/17 | – | 0.934 | 345/174/38/11 |
+| 0.5 | 0.904 | 321/194/39/14 | 0.977 | 1.004 | 369/159/30/10 |
+| 0.75 | **0.989** | 357/172/29/10 | – | 1.051 | 389/145/26/8 |
+| **1.0 (default)** | **1.054** | 375/164/21/8 | **1.098** | **1.078** | 397/141/23/7 |
+| (real 30 Hz) | 1.000 | 373/156/28/11 | 1.000 | 1.000 | 373/156/28/11 |
+
+- **The score rises monotonically with the gain** at both rates, so "best"
+  means the most score, and that is gain 1.0.
+- **Parity with a real 30 Hz camera** is gain ≈ 0.75 at 8 Hz and ≈ 0.5
+  at 15 Hz. The owner's later calibration down starts there.
+- INFERRED cause of going above 1: the scorer rewards motion energy, and a
+  stepped-on frame overshoots every turn of a limb. The noise rows below
+  show the same property from the other side.
+- **On the owner's real session (concern (c) runs, below)**, the
+  *prototype* extrap scored 1.9× `off`. The guarded default was not
+  re-run on that session.
+
+### Measured: the controls (generous to a dancer, not to anyone else)
+
+Fraction of the **right-dance** real-30 Hz score on the same 4 songs
+(starships, macarena, indaclub, supersonic: 7,537k):
+
+| input | real 30 Hz, fill off | 8 Hz, fill off | **8 Hz extrap (default)** | 15 Hz extrap | 8 Hz interp |
+|---|---|---|---|---|---|
+| **standing still** (`DC3_POSE_PERFORM=stand`) | 0 | 0 | **0** | 0 | – |
+| standing still + NZ noise | 0.026 | 0.001 | **0.024** | – | – |
+| **wrong dance** (`wrongfx`) | 0.011 | 0.005 | **0.019** | 0.017 | 0.009 |
+| wrong dance + NZ noise | 0.049 | – | **0.036** | – | 0.021 |
+
+- **Standing still earns nothing**, with or without the fill: every move
+  rated bad, score 0. The fill steps on motion, and a still body has none.
+- **With noise, standing still at 8 Hz plus extrap stays below the same
+  noise at real 30 Hz** (0.024 vs 0.026).
+- **The wrong dance stays near zero:** 1.9% of the right dance at 8 Hz.
+  That is 1.6× what a real 30 Hz camera gives it (1.1%), against 1.05× for
+  the right dance.
+- **The wrong dance with noise is below the same noise at real 30 Hz**
+  (0.036 vs 0.049).
+- **The scorer's own jitter reward**, with the fill off, matters more than
+  the fill here: noise multiplies a wrong dance's score by 4.3 at 30 Hz
+  and gives a still body 2.6%.
+  - The wrong-dance fixture swaps the footage: starships ↔ macarena,
+    indaclub ↔ supersonic.
+
+**Noise.** The performer injects it.
+- `DC3_POSE_PERFORM_NOISE=sxy,sz,rho,seed` is per-joint jitter (metres,
+  image plane and depth).
+- `DC3_POSE_PERFORM_GLITCH=infer,untracked,flip,drop,seed` gives per-frame
+  probabilities:
+  - a joint marked INFERRED, 5 cm off;
+  - a joint NOT TRACKED, 30 cm off;
+  - the whole body's left and right swapped;
+  - the frame dropped (not published).
+- NZ = `NOISE=0.015,0.04,0,11`, `GLITCH=0.03,0.01,0.01,0.05,13`: 1.5 cm /
+  4 cm jitter, 3% inferred, 1% untracked, 1% flipped, 5% of frames
+  dropped.
+- NL = `NOISE=0.005,0.015,0,11`, `GLITCH=0.01,0.003,0.003,0.02,13`.
+- FLIP = `GLITCH=0,0,0.1,0,13`: 10% of frames body-swapped.
+
+Fraction of the same noise at real 30 Hz, fill off (MEASURED):
+
+| noise | 8 Hz off | **8 Hz extrap** | 15 Hz extrap | 8 Hz interp | 15 Hz interp |
+|---|---|---|---|---|---|
+| NZ (vs n30_off = 19,603k, 8 songs) | 0.241 | **0.827** | 0.992 | 0.757 | 0.920 |
+| NL (vs nl30_off = 17,106k, 8 songs) | 0.338 | **0.954** | – | 0.825 | – |
+| FLIP (vs f30_off = 8,428k, 4 songs) | 0.395 | **0.942** | – | – | – |
+
+- **Noise does not blow up**: under every noise, extrap stays at or below
+  the same noise at a real 30 Hz.
+- **Clean, extrap is at 1.05–1.08.** Under noise it recovers less than it
+  does clean.
+- INFERRED: the clamp and the guess rule take out the outliers' step. Under
+  10% body flips, extrap at 8 Hz scores 0.94, against 1.06–1.13 clean on
+  those songs: the flip guard holds the swapped frames instead of stepping
+  them on.
+- **Noise raises the scorer's 30 Hz score**: NZ is 1.342× the clean
+  footage, NL 1.171× and FLIP 1.12×. That is the scorer's property, not
+  the fill's.
+
+### Measured: concern (c), the owner-session timeouts
+
+Two owner-session fill replays hit the 900 s timeout at load 138. The
+re-run used four replays of `owner_bofa.dc3session` (betteroffalone,
+beginner), run **concurrently**, with:
+- GPU, under the gpu1 flock;
+- `DC3_FAST_TIME`, the kitdrive route, `DC3_PERF_LOG=1`, `DC3_AUDIO_GAIN=0`;
+- box load 50–70.
+
+All four completed: 77 moves, 92 rating lines and 59 PERF windows each.
+These were the builds before the guarded extrap, so `extrap` here is the
+prototype.
+
+| run | score | perfect/awesome/ok/bad | mean fps |
+|---|---|---|---|
+| off | 193,326 | 4/20/7/46 | 82.0 |
+| interp | 245,896 | 7/22/6/42 | 81.3 |
+| hold | 208,335 | 7/17/3/50 | 82.7 |
+| extrap (prototype) | 362,665 | 10/21/4/42 | 80.0 |
+
+- **The timeouts were load, not the fill.** Every fill mode runs at the
+  frame rate of `off`, and the earlier runs managed 18–20 fps at load 138.
+- The filler's cost is negligible: about 10k `Poll` calls run in the 0 ms
+  unit tests.
+
+### Tests
+
+**`native/tests/test_pose_fill.cpp`**: math, schedule and latency, with no
+game or GPU.
+- `PoseFillMathTest`:
+  - the default mode and the gain parse;
+  - interpolation stays on the segment;
+  - people and untracked handling;
+  - `ExtrapolateGuarded`: the gain scales the step, the speed is clamped,
+    a guess is not moved, an inferred joint is, a swap is held, crossing
+    hands are not a swap, a new person is copied;
+  - the prototype and extrapc.
+- `PoseFillScheduleTest`:
+  - 30 Hz is never filled; `off` never fills.
+  - interp at 8 Hz is exact, at the right delay and rate.
+  - A stall stalls the stream.
+  - extrap stops one period after the newest frame, at gains 1 and 0.5.
+  - No fill across a dropout (interp and extrap) or a long gap.
+  - The clock running back and a faster camera are handled.
+- `PoseFillLatencyTest`: interp's delay rides on whichever sensor latency
+  wins.
+  - default 100 + 160 = 260; declared 0 + 160 = 160; explicit 50 + 160 = 210;
+  - on release, back to the explicit 50, then the default 100.
+
+**`native/tests/test_native_pose_socket.cpp` `PoseFillSensorTest`**: the
+real `BuildSensorFrame` path (slots, levelling, recording), with a test song
+clock.
+- extrap (the default) and interp each fill an 8 Hz camera to ~30 Hz.
+- The session recording holds only the camera's own frames.
+- extrap is never more than one period ahead, and it adds no latency.
+- A dropout reaches P-12's hold exactly as with the fill off: 8 held
+  frames in all three modes.
+- A 30 Hz camera is the same stream with the fill on or off.
+
+**Sabotages, every one caught; the source was restored and 22 of 22 pass.**
+
+| sabotage | caught by | how it showed |
+|---|---|---|
+| interp's `SamePeople`/`AnyValid` guard → `if (false)` | sensor dropout test, schedule dropout test | held frames 8 (off) vs 32 (interp) |
+| `DeliverFillFrame` also calls `Dc3PoseSessionRecord` | the recording test | 220 frames recorded vs 49 camera frames |
+| extrap without the flip guard | `GuardedExtrapolation…` | 20 joint failures |
+| extrap without the speed clamp | `GuardedExtrapolation…` | the absurd step goes through |
+| extrap without the one-period horizon | `ExtrapStopsOnePeriod…` | 116 failures |
+| extrap filling after a frame with nobody | schedule dropout test, sensor dropout test | held frames 8 vs 32 |
+
+### Costs and limits
+
+- **Generous by design.** At 8–15 Hz the default scores 5–10% above a real
+  30 Hz camera on the footage. It also gives a wrong dance 1.6× a real
+  30 Hz camera's credit, though that is still under 2% of the right
+  dance's. Dial it with the gain.
+- **A slow game engages the fill.** The engage log line says so, with its
+  song time.
+- **Not run on web.** The changed sources compile under em++
+  (`-fsyntax-only` with dc3-web's flags). The fill has not been run in a
+  browser.
+- **Not validated live.** No owner session on the GPD with a real webcam
+  has been taken, and the guarded default has not been replayed on the
+  owner's recorded session.
+- **The scores are from a loaded box** (load 25–84). FAST_TIME makes them
+  frame-exact rather than wall-clock dependent, so a quiet-box rerun is
+  expected to agree, but none was taken.
+
+### Reproducing
+
+```bash
+# one config: footage at 8 Hz, the default fill at gain 0.75 (no GPU)
+python3 scripts/native_song_sweep.py --out /tmp/fill/x8_g075 --no-gpu --jobs 3 \
+  --songs macarena,indaclub,boyfriend,12step,starships,supersonic,scream,cupidshuffle \
+  --difficulty medium --performer 'replay:<pose_songlead>/{song}.dc3pose' \
+  --env DC3_POSE_PERFORM_REPLAY_SYNC=song --env DC3_AUDIO_GAIN=0 \
+  --env DC3_POSE_PERFORM_HZ=8 --env DC3_POSE_FILL_GAIN=0.75 \
+  --eval '{profile_mgr toggle_disable_freestyle}' --stall 60 --timeout 420
+# controls: --performer stand (standing still); replay of another song's footage (wrong dance);
+# --env DC3_POSE_PERFORM_NOISE=... --env DC3_POSE_PERFORM_GLITCH=... (noise)
+native/build/milo-tests --gtest_filter='PoseFill*'
+```
 
 ## Gaps
 

@@ -81,3 +81,7 @@ Inside the body (was lines 120-184):
             // (mLoadedSubdirs.size() != 0)` 97.07; guard wrapping clear()
             // 95.77.  The cr0 choice is not reachable from this TU's source.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: while vs
+do-while loop shape; function-local static Message named lbl_ on target side.
