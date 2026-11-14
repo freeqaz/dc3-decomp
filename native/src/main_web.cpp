@@ -21,6 +21,8 @@
 #include <string>
 
 #include "App.h"
+#include "platform/FrameTraceCounters.h"
+#include "platform/FramePacer_Native.h"
 #include "platform/WebAssets.h"
 #include "platform/Rnd_Wgpu.h"
 #include "ui/UI.h"
@@ -184,6 +186,58 @@ static void WebScreenBundleHook() {
 }
 
 // ============================================================================
+// Per-frame cost trace (PLAN W-14): ?env=DC3_FRAME_TRACE=1
+//
+// The engine already times its web choke points into the FrameTraceCounters.h
+// accumulators (blocking asset fetch, texture/mesh upload, vertex unpack,
+// pipeline creation), gated on gFrameTraceActive; rb3 has the recorder, dc3 had
+// none, so the counters never ran here. With DC3_FRAME_TRACE set, each game
+// frame hands its wall time (RunOneFrame, JSPI suspensions included) and the
+// counters to window.dc3FrameTraceSink (scripts/web/lib/pacing.mjs installs
+// it), then zeroes them. Off: one predicted branch a frame.
+// ============================================================================
+
+static bool FrameTraceEnabled() {
+    static int s = -1;
+    if (s < 0) {
+        const char *e = ::getenv("DC3_FRAME_TRACE");
+        s = (e && e[0] && e[0] != '0') ? 1 : 0;
+        if (s)
+            printf("DC3 Web: frame trace on (DC3_FRAME_TRACE)\n");
+    }
+    return s != 0;
+}
+
+static void FrameTraceRecord(int frame, double t0, double t1) {
+    EM_ASM(
+        {
+            var f = window.dc3FrameTraceSink;
+            if (f)
+                f({frame : $0, t0 : $1, t1 : $2, fetchMs : $3, fetchN : $4, fetchBytes : $5,
+                   texMs : $6, texN : $7, meshMs : $8, meshN : $9, pipeMs : $10, pipeN : $11,
+                   unpackMs : $12, dtaMs : $13, streamMs : $14});
+        },
+        frame, t0, t1, gFetchSyncMsThisFrame, gFetchSyncCountThisFrame,
+        gFetchSyncBytesThisFrame, gTexUploadMsThisFrame, gTexUploadCountThisFrame,
+        gMeshUploadMsThisFrame, gMeshUploadCountThisFrame, gPipelineCreateMsThisFrame,
+        gPipelineCreateCountThisFrame, gVertUnpackMsThisFrame, gDtaParseMsThisFrame,
+        gStreamReadMsThisFrame);
+    gFetchSyncMsThisFrame = 0;
+    gFetchSyncCountThisFrame = 0;
+    gFetchSyncBytesThisFrame = 0;
+    gTexUploadMsThisFrame = 0;
+    gTexUploadCountThisFrame = 0;
+    gMeshUploadMsThisFrame = 0;
+    gMeshUploadCountThisFrame = 0;
+    gPipelineCreateMsThisFrame = 0;
+    gPipelineCreateCountThisFrame = 0;
+    gVertUnpackMsThisFrame = 0;
+    gVertUnpackCountThisFrame = 0;
+    gDtaParseMsThisFrame = 0;
+    gStreamReadMsThisFrame = 0;
+}
+
+// ============================================================================
 // Main loop — drives the boot state machine
 // ============================================================================
 
@@ -258,7 +312,13 @@ static void mainLoop() {
 
     case BOOT_RUNNING: {
         sFrameCount++;
+        const bool trace = FrameTraceEnabled();
+        if (trace)
+            gFrameTraceActive = true;
+        const double t0 = trace ? emscripten_get_now() : 0.0;
         sApp->RunOneFrame();
+        if (trace)
+            FrameTraceRecord(sFrameCount, t0, emscripten_get_now());
         WebScreenBundleHook();
         WebPoseStatusTick(sFrameCount);
         EM_ASM({ window.dc3FrameCount = $0; }, sFrameCount);
@@ -288,6 +348,29 @@ void dc3MainLoopTick() {
     mainLoop();
 }
 
+// PLAN H-34: the page asks on every requestAnimationFrame whether a game frame
+// runs on it. rAF fires at the display's rate, so without this a 120/144 Hz
+// browser ran 120/144 game frames a second (desktop caps at the image's 60,
+// FramePacer_Native.h). DC3_FPS_CAP as on desktop (0 = off, N = cap at N
+// snapped to the display). window.dc3FrameCap reports the decision.
+EMSCRIPTEN_KEEPALIVE
+int dc3RafGate(double nowMs) {
+    static Dc3RafGate *sGate = new Dc3RafGate(getenv("DC3_FPS_CAP"));
+    static int sLogged = 0;
+    const bool run = sGate->OnRaf(nowMs);
+    if (sGate->Decisions() != sLogged) {
+        sLogged = sGate->Decisions();
+        printf("DC3 Web: frame cap %s (display ~%.1f Hz from rAF)\n", sGate->Why(), sGate->RefreshHz());
+    }
+    if (((sGate->Ran() + sGate->Skipped()) & 63) == 0) {
+        EM_ASM({
+            var c = window.dc3FrameCap || (window.dc3FrameCap = new Object());
+            c.refreshHz = $0; c.fps = $1; c.ran = $2; c.skipped = $3;
+        }, sGate->RefreshHz(), sGate->TargetFps(), (double)sGate->Ran(), (double)sGate->Skipped());
+    }
+    return run ? 1 : 0;
+}
+
 } // extern "C"
 
 // ============================================================================
@@ -307,8 +390,8 @@ int main(int argc, char **argv) {
     // (via emscripten_sleep) during synchronous file loads, letting the
     // loading screen render while .milo_xbox files download.
     EM_ASM({
-        async function tick() {
-            await Module._dc3MainLoopTick();
+        async function tick(ts) {
+            if (Module._dc3RafGate(ts)) await Module._dc3MainLoopTick();
             requestAnimationFrame(tick);
         }
         requestAnimationFrame(tick);
@@ -316,7 +399,10 @@ int main(int argc, char **argv) {
     emscripten_exit_with_live_runtime();
 #else
     // Fallback: cooperative main loop (no async yielding — file loads block).
-    emscripten_set_main_loop(mainLoop, 0, true);
+    emscripten_set_main_loop([] {
+        if (dc3RafGate(emscripten_get_now()))
+            mainLoop();
+    }, 0, true);
 #endif
     return EXIT_SUCCESS;
 }

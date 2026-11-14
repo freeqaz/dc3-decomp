@@ -50,6 +50,7 @@
 #include "os/Debug.h"
 #include "os/File.h"
 #include "os/System.h"
+#include "NativeSettings.h" // dc3's, same directory (the engine has an older one)
 #include "utl/Std.h"
 #include <algorithm>
 #include <climits>
@@ -65,12 +66,44 @@ extern bool NativeMountDrive(const char *drive, const char *hostDir);
 extern void NativeUnmountDrive(const char *drive);
 #endif
 
+extern const char *NativeFindDataDir(); // System_Native.cpp
+
 namespace {
 
 bool IsDirectory(const char *path) {
     struct stat st;
     return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 }
+
+} // namespace
+
+// Which DLC roots this boot mounts (':'-separated; empty = none):
+//
+//   DC3_DLC_DIR=<roots>           those roots (a test or a script naming its
+//                                 packages gets exactly them); set but
+//                                 empty: none (play.sh --no-dlc)
+//   DC3_DLC=0 (or false/off/no)   none
+//   DC3_DLC=1                     <game data>/dlc if it is a directory
+//                                 (orig-assets/dlc, where import.sh puts
+//                                 packages); none otherwise
+//   neither                       none
+//
+// The dev profile sets DC3_DLC=1 (System_Native.cpp kDc3DevDefaults), so a
+// developer's boot lists every imported package; release does not.  ctest
+// runs every test with DC3_DLC=0 (MILO_TEST_ENV, native/CMakeLists.txt), so a
+// box with packages runs the same songs as one without unless a test names
+// its own DC3_DLC_DIR.
+std::string NativeDlcRoots() {
+    const char *env = getenv("DC3_DLC_DIR");
+    if (env) return env;
+    if (!Dc3EnvFlag("DC3_DLC", false)) return std::string();
+    const char *data = NativeFindDataDir();
+    if (!data) return std::string();
+    std::string root = std::string(data) + "/dlc";
+    return IsDirectory(root.c_str()) ? root : std::string();
+}
+
+namespace {
 
 // XboxContent's kContentRootFormat.
 const char *const kContentRootFormat = "cnt%08x";
@@ -320,10 +353,12 @@ private:
     // DC3_DLC_DIR: one or more DLC roots (':'-separated), each holding one
     // directory per package. Returns how many packages need mounting.
     int DiscoverPackages() {
-        const char *env = getenv("DC3_DLC_DIR");
-        if (!env || !*env) return 0;
+        std::string roots = NativeDlcRoots();
+        if (roots.empty()) return 0;
+        MILO_LOG("DC3 Native: DLC roots %s (%s)\n", roots.c_str(),
+                 getenv("DC3_DLC_DIR") && *getenv("DC3_DLC_DIR") ? "DC3_DLC_DIR"
+                                                                 : "DC3_DLC=1: <data>/dlc");
         int toMount = 0;
-        std::string roots(env);
         size_t start = 0;
         while (start <= roots.size()) {
             size_t end = roots.find(':', start);

@@ -7,7 +7,7 @@
 //       and compare DC3-20 joints. Tests the port of the geometry alone; should
 //       agree to float rounding.
 //   node scripts/web/pose_parity.mjs browser ref.json --port 8432 [--frames DIR]
-//       [--delegate CPU|GPU] [--model full] [--no-gpu]
+//       [--delegate CPU|GPU] [--model full] [--no-gpu] [--persons 1|2] [--probe S]
 //       Run the shipped web pipeline (pose_worker.js: tasks-vision in a worker +
 //       pose_geometry.js) in Chromium over the same PNG frames at the same
 //       timestamps, and compare. Tests inference + geometry end to end; the
@@ -33,6 +33,11 @@ function compare(refFrames, jsFrames, label) {
     const shift = flag('negative') ? 1 : 0;
     const d = [], dRel = [], perJoint = DC3_JOINT_NAMES.map(() => []);
     let both = 0, refOnly = 0, jsOnly = 0, none = 0, confDiff = 0, confN = 0;
+    // How many people each side reports per frame (the error terms below are
+    // person 0 only): a second-person probe that never switches shows here.
+    let countAgree = 0;
+    for (let i = 0; i + shift < refFrames.length && i < jsFrames.length; i++)
+        if (refFrames[i + shift].joints.length === jsFrames[i].length) countAgree++;
     for (let i = 0; i + shift < refFrames.length && i < jsFrames.length; i++) {
         const r = refFrames[i + shift].joints[0];
         const j = jsFrames[i][0];
@@ -51,6 +56,7 @@ function compare(refFrames, jsFrames, label) {
     const res = {
         label, negativeControl: !!shift, frames: Math.min(refFrames.length, jsFrames.length),
         detection: { both, pythonOnly: refOnly, jsOnly, neither: none },
+        personCountAgree: countAgree,
         jointErrorM: { mean: mean(d), p50: q(d, 0.5), p95: q(d, 0.95), max: q(d, 1) },
         rootRelativeErrorM: { mean: mean(dRel), p50: q(dRel, 0.5), p95: q(dRel, 0.95), max: q(dRel, 1) },
         maxConfDiff: confDiff,
@@ -92,7 +98,11 @@ if (mode === 'geometry') {
         const name = new URL(route.request().url()).pathname.split('/').pop();
         return route.fulfill({ contentType: 'image/png', headers: { 'Cross-Origin-Resource-Policy': 'same-origin' }, body: readFileSync(join(framesDir, name)) });
     });
-    const q = new URLSearchParams({ pose: 'off', pose_model: arg('model', 'full'), pose_delegate: arg('delegate', 'CPU') });
+    // --persons 1|2 and --probe S pass through as pose_persons / pose_probe
+    // (pose_input.js); compare against a reference recorded with the same
+    // --num-poses (pose_parity.py).
+    const q = new URLSearchParams({ pose: 'off', pose_model: arg('model', 'full'), pose_delegate: arg('delegate', 'CPU'),
+        pose_persons: arg('persons', '2'), pose_probe: arg('probe', '0') });
     await page.goto(`${origin}/__parity.html?${q}`);
     const t0 = Date.now();
     const out = await page.evaluate(async ({ frames }) => {
@@ -102,6 +112,7 @@ if (mode === 'geometry') {
         const { worker, ready } = await mod.createWorker(sources);
         const info = await ready;
         const results = [], timing = [];
+        let probe = null;
         for (const fr of frames) {
             const blob = await (await fetch('/__parity_frames/' + fr.file)).blob();
             const bmp = await createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
@@ -120,13 +131,15 @@ if (mode === 'geometry') {
             }
             results.push(persons);
             timing.push(msg.inferMs + msg.geomMs);
+            if (msg.probe) probe = msg.probe;
         }
-        return { results, timing, info, source: sources.source };
+        return { results, timing, info, source: sources.source, probe };
     }, { frames: ref.frames.map((f) => ({ file: f.file, tsMs: f.tsMs })) });
     const s = [...out.timing].sort((a, b) => a - b);
     console.log(`browser: ${out.results.length} frames in ${((Date.now() - t0) / 1000).toFixed(1)}s, delegate=${out.info.delegate} source=${out.source} load=${Math.round(out.info.loadMs)}ms, per-frame infer+geom p50=${s[s.length >> 1].toFixed(1)}ms p95=${s[Math.floor(s.length * 0.95)].toFixed(1)}ms`);
+    if (out.probe) console.log(`browser: second-person probe ${JSON.stringify(out.probe)}`);
     const res = compare(ref.frames, out.results, `browser pipeline (${out.info.delegate})`);
-    if (arg('out')) writeFileSync(arg('out'), JSON.stringify({ ...res, timingP50: s[s.length >> 1], timingP95: s[Math.floor(s.length * 0.95)], delegate: out.info.delegate }, null, 1));
+    if (arg('out')) writeFileSync(arg('out'), JSON.stringify({ ...res, timingP50: s[s.length >> 1], timingP95: s[Math.floor(s.length * 0.95)], delegate: out.info.delegate, probe: out.probe }, null, 1));
     await browser.close();
 } else {
     console.error('unknown mode ' + mode); process.exit(2);

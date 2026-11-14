@@ -479,6 +479,42 @@ TEST(PoseFillScheduleTest, AFasterCameraReleasesTheFill) {
     EXPECT_EQ(f.Delay(), 0.0);
 }
 
+// A camera delivering at ~23 Hz as a mix of one- and two-frame intervals of a
+// 30 Hz grab (33 and 53 ms, alternating -- what the web worker delivered on the
+// rig, MEASURED np-web4). The median of 15 such intervals is 33 ms with eight
+// short ones in the window and 53 ms with seven, so a median-rate fill
+// engaged and released on every frame: 349 changes in one song. The rate
+// estimate is the window's trimmed mean, ~23 Hz: engaged once, and stays.
+TEST(PoseFillScheduleTest, AnAlternatingCameraRateDoesNotFlapTheFill) {
+    for (Mode m : { kExtrap, kInterp }) {
+        Filler f;
+        f.SetMode(m);
+        double t = 10.0;
+        int changes = 0;
+        bool was = f.Engaged();
+        for (int i = 0; i < 300; i++) {
+            t += (i % 2) ? 0.053 : 1.0 / 30.0;
+            std::vector<Person> people{ MakePerson(5, (float)t) };
+            bool now = f.Push(MakeSource(t, t, people));
+            if (now != was)
+                changes++;
+            was = now;
+        }
+        EXPECT_TRUE(f.Engaged()) << ModeName(m);
+        EXPECT_EQ(changes, 1) << ModeName(m) << ": the fill flapped";
+        EXPECT_NEAR(1.0 / f.RateInterval(), 23.2, 1.0) << ModeName(m);
+    }
+    // ...and a mix that averages over the release rate (33 / 37 ms, ~28.5 Hz)
+    // is never engaged.
+    Filler f;
+    double t = 10.0;
+    for (int i = 0; i < 300; i++) {
+        t += (i % 2) ? 0.037 : 1.0 / 30.0;
+        std::vector<Person> people{ MakePerson(5, (float)t) };
+        EXPECT_FALSE(f.Push(MakeSource(t, t, people))) << "frame " << i;
+    }
+}
+
 TEST(PoseFillScheduleTest, HoldAndExtrapAreNotDelayed) {
     for (Mode m : { kHold, kExtrap, kExtrapClamped }) {
         Filler f;

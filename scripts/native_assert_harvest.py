@@ -222,6 +222,11 @@ class Harvest:
             # stalled the party route; PLAN H-7).
             seed_all_tutorials_seen(os.path.join(persist, "cache"))
         self.persist = persist
+        # Songs are picked by counted downs (--song-downs): pin the disc
+        # list, which the dev profile would otherwise extend with every
+        # package under <data>/dlc (DC3_DLC).  DC3_DLC=1 or a DC3_DLC_DIR in
+        # the caller's environment still wins.
+        env.setdefault("DC3_DLC", "0")
         env.update({
             "DC3_CACHE_DIR": os.path.join(persist, "cache"),
             "DC3_SAVE_DIR": os.path.join(persist, "saves"),

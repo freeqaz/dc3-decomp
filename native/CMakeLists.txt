@@ -328,7 +328,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "7d8c5f32e0f4b36bb631722c0a95777b80f87969"
+set(MILO_ENGINE_PIN "e391f95ae4bd759e9abe63003824fa603233f373"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -1230,6 +1230,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/ProcessSpawner_Native.cpp # pose_server.py launched from a pristine fork (RLIMIT_RTTIME)
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
+    src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/NuiImageSurface_Native.cpp
@@ -1406,6 +1407,8 @@ set(DC3_WEB_CORE_SOURCES
     src/xbox_link_stubs.cpp
     src/telemetry/GameplayTelemetry.cpp
     src/platform/DtaEvalSupport.cpp
+    # Dc3FrameCapDecide + Dc3RafGate: the rAF loop's frame cap (H-34).
+    src/platform/FramePacer_Native.cpp
     # Web stand-ins for the XDK/NUI/XNet entry points (exact XDK signatures).
     # Dropped in 466a3a591 as a "deleted file" -- it was not deleted, and its
     # absence left those symbols as unresolved wasm imports.
@@ -1421,6 +1424,7 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/ProcessSpawner_Native.cpp # pose_server.py launched from a pristine fork (RLIMIT_RTTIME)
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
+    src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/NuiImageSurface_Native.cpp
@@ -2106,6 +2110,7 @@ if(BUILD_TESTS)
         tests/test_native_twoplayer.cpp
         tests/test_native_pose_dropout.cpp
         tests/test_native_second_person.cpp
+        tests/test_native_pad_with_person.cpp  # H-20 pad presses with a person on the sensor
         tests/test_native_pose_socket.cpp
         tests/test_native_pose_spawner.cpp
         tests/test_native_tree_paths.cpp
@@ -2124,6 +2129,9 @@ if(BUILD_TESTS)
         tests/test_native_glyph_render.cpp
         tests/test_native_ui_material_terms.cpp
         tests/test_frame_pacer.cpp     # H-29 frame cap + engine CPU-use guards
+        tests/test_bind_group_cache.cpp # H-30/H-31 cached bind groups, staged uniform rings
+        tests/test_host_path_case.cpp  # H-17/H-23 upper-case host directories
+        tests/test_present_scale.cpp  # H-18 fit the frame into the window
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
@@ -2262,6 +2270,12 @@ if(BUILD_TESTS)
     # developer's running game: kernel-assigned unless the test names a port
     # (the port-file helpers read the one it got).
     list(APPEND MILO_TEST_ENV "DC3_HTTP_PORT=0")
+    # The dev profile also mounts every package under <data>/dlc (DC3_DLC=1).
+    # A test mounts DLC only when it names its own DC3_DLC_DIR (the
+    # DC3_DLC_TESTS gate), so a box with imported packages boots the same song
+    # list -- and runs the same tests -- as one without
+    # (ContentMgr_Native.cpp NativeDlcRoots).
+    list(APPEND MILO_TEST_ENV "DC3_DLC=0")
     set(MILO_TEST_GATES_ON "")
     set(MILO_TEST_GATES_OFF "")
     # MILO_TEST_GATE_PROBES records, for every probed gate, the exact path whose

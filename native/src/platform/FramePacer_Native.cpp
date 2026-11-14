@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <strings.h>
+#include <algorithm>
 #include <thread>
 
 namespace {
@@ -89,4 +90,81 @@ void Dc3FramePacer::Pace() {
         // frames afterwards.
         mNext = now;
     }
+}
+
+void Dc3RafGate::Decide() {
+    double sorted[kWindow];
+    std::copy(mGaps, mGaps + mGapCount, sorted);
+    // The one-refresh cluster, not the median of all gaps: see the header.
+    // Its edge is the 25th percentile; its centre is the median of the gaps
+    // within 1.5x of that edge (one refresh, jitter included; a gap holding a
+    // frame's cost is two refreshes or more and falls outside).
+    const int k = mGapCount / 4;
+    std::nth_element(sorted, sorted + k, sorted + mGapCount);
+    const double edgeMs = sorted[k];
+    int n = 0;
+    for (int i = 0; i < mGapCount; i++)
+        if (sorted[i] <= edgeMs * 1.5)
+            sorted[n++] = sorted[i];
+    std::nth_element(sorted, sorted + n / 2, sorted + n);
+    const double refreshMs = sorted[n / 2];
+    const double hz = refreshMs > 0.0 ? 1000.0 / refreshMs : 0.0;
+    const Dc3FrameCap cap = Dc3FrameCapDecide(mEnv.empty() ? nullptr : mEnv.c_str(), true, hz);
+    // A re-estimate within 5% of the cap in force is not a new decision: the
+    // estimate carries timestamp noise (72.0000 vs 71.9999 fps), and counting
+    // those as changes logged the same "frame cap 72.00 fps" line again and
+    // again and hid the one real flip among them.
+    const bool changed = mDecisions == 0 || (cap.fps > 0.0) != (mCap.fps > 0.0) ||
+                         std::fabs(cap.fps - mCap.fps) > 0.05 * mCap.fps;
+    mRefreshHz = hz;
+    if (changed) {
+        snprintf(mWhy, sizeof(mWhy), "%s", cap.why); // cap.why is a static buffer
+        mCap = {cap.fps, mWhy};
+        mDecisions++;
+    }
+}
+
+bool Dc3RafGate::OnRaf(double nowMs) {
+    if (mLastRafMs >= 0.0) {
+        const double gap = nowMs - mLastRafMs;
+        if (gap > 0.0 && gap < 1000.0) { // a hidden tab's pause is not a refresh
+            mGaps[mGapNext] = gap;
+            mGapNext = (mGapNext + 1) % kWindow;
+            if (mGapCount < kWindow)
+                mGapCount++;
+            if (++mSinceDecide >= (mDecisions == 0 ? 16 : kWindow)) {
+                mSinceDecide = 0;
+                Decide();
+            }
+        }
+    }
+    mLastRafMs = nowMs;
+
+    bool run = true;
+    const bool capped = mCap.fps > 0.0 && mRefreshHz > 0.0;
+    const double halfRefreshMs = capped ? 500.0 / mRefreshHz : 0.0;
+    if (capped && mDueMs >= 0.0)
+        run = nowMs >= mDueMs - halfRefreshMs;
+    if (run) {
+        // On time (within half a refresh): the next frame is due one period
+        // after this rAF, so the gate follows the panel and an estimate a
+        // fraction off (143.6 vs 144 Hz) never accumulates into a drop. Late
+        // (a frame ran past its refresh): one period after it was DUE, so
+        // the lost refresh is made up on the next one -- at most one period
+        // of debt, so a long stall buys one quick frame, not a burst.
+        if (capped) {
+            const double periodMs = 1000.0 / mCap.fps;
+            if (mDueMs < 0.0 || nowMs - mDueMs <= halfRefreshMs)
+                mDueMs = nowMs + periodMs;
+            else
+                mDueMs = std::max(mDueMs + periodMs, nowMs);
+        } else {
+            mDueMs = -1.0;
+        }
+        mLastRunMs = nowMs;
+        mRan++;
+    } else {
+        mSkipped++;
+    }
+    return run;
 }

@@ -47,9 +47,6 @@ from a box that has it:
 scripts/playtest/bootstrap.sh --fix --assets-from free@main-box:code/milohax/dc3-decomp/orig-assets
 ```
 
-The data path must be all lower case (the game lower-cases file paths, PLAN
-H-17).
-
 ## Before every session: the check
 
 ```sh
@@ -107,16 +104,18 @@ controller mode, and 5 s without a press hands the menus back to your hands.
 | Esc, Backspace | B | | Q / E | LB / RB |
 | X | X | | Z / C | LT / RT |
 | Y | Y (Options) | | **Ctrl+Q** | **quit** |
+| F11, Alt+Enter | fullscreen | | | |
 
 Space opens the pause menu but does not close it; resume with Continue (the
 original's behaviour). The map is printed at startup.
 
 **Quit** with Ctrl+Q or by closing the window. Esc is B, not quit.
 
-The window is 1280x720. **Do not maximise it or make it fullscreen:** the
-game then draws into the top-left corner (PLAN H-18); `--fullscreen` says so
-and stays windowed. On a Wayland desktop the kit opens the window through
-Xwayland, so a scaled (HiDPI) screen shows the whole picture.
+The window opens at 1280x720 and can be resized, maximised or made
+fullscreen: the picture is scaled to fit, with black bars where the window's
+shape differs from 16:9. **F11** or **Alt+Enter** toggles fullscreen;
+`--fullscreen` starts that way. On a Wayland desktop the kit opens the window
+through Xwayland (the game would fall back to it anyway: PLAN H-33).
 
 ## Notices on screen
 
@@ -137,7 +136,6 @@ stand-in skeleton and nothing you do is scored.
 
 - **Camera frame rate**: the main suspect for rough live scores (a session
   at 7.7 accepted frames a second). Light first; see the check above.
-- **H-18** no fullscreen; a maximised window shows the game in a corner.
 - **H-20** with a person moving in view, only the first pad press on a menu
   may land: use your hands for the menus, or step out of view to use a pad.
 - **G-10** audio has not been judged by ear on this port: tell us how it
