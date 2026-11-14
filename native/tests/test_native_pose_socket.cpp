@@ -40,6 +40,7 @@
 #include "platform/NativeNotice.h"
 #include "platform/Skeleton_Native.h"
 #include "platform/PoseLevel_Native.h"
+#include "platform/PoseEstimate_Native.h" // NativePoseEstimateTestSet
 #include "platform/PoseFill_Native.h"
 #include "platform/PoseSession_Native.h"
 #include "gesture/CameraInput.h"
@@ -862,6 +863,80 @@ TEST_F(PoseSensorStallTest, ZeroKeepsTheOldFrozenFrame) {
     EXPECT_EQ(Silence(700, &delivered), nullptr);
     EXPECT_EQ(delivered, 0);
     EXPECT_FALSE(NativePoseStalled());
+}
+
+// ---------------------------------------------------------------------------
+// DC3_POSE_ESTIMATE on the real sensor path (np-cutoff, PLAN H-91).  The
+// estimator's math is PoseEstimateTest; this is the wiring: a person whose
+// legs leave the picture (conf 0.1, the tracker's guess 2 m below the hips)
+// while she steps 0.5 m to her side.  With `kinematic` the slot's knee goes
+// with her and reads Inferred; with `off` (the control: the old behaviour)
+// it stays frozen where it was last seen.  Sabotaged: the gEstimate.Apply
+// call in FillPersonSlots removed -> AKnee... fails (the knee stays behind).
+// ---------------------------------------------------------------------------
+class PoseSensorEstimateTest : public PoseSensorSlotTest {
+protected:
+    void TearDown() override {
+        NativePoseEstimateTestSet(-1, -1.0f); // back to the environment
+        PoseSensorSlotTest::TearDown();
+    }
+    // Frames of one person standing at x = dx; with `legsCut`, knees, ankles
+    // and feet arrive not tracked, at a wild guess.
+    const SkeletonFrame *Step(int trackId, float dx, bool legsCut) {
+        WirePerson p = Dc3Person(trackId, dx);
+        if (legsCut) {
+            const int legs[] = { kJointKneeLeft, kJointAnkleLeft, kJointFootLeft,
+                                 kJointKneeRight, kJointAnkleRight, kJointFootRight };
+            for (int j : legs) {
+                p.values[j * 4 + 1] -= 2.0f;
+                p.values[j * 4 + 3] = 0.1f;
+            }
+        }
+        uint32_t id = ++sFrameId;
+        if (!mServer.Send(PacketV2(id, id / 30.0, 640, 480, kNumJoints, 1, { p })))
+            return nullptr;
+        if (!WaitForFrame(mProvider, id))
+            return nullptr;
+        return mSensor->PollNewFrame();
+    }
+    // Walk 0.5 m with the legs cut after 1 s in full view; the slot's left
+    // knee x minus its hip-centre x at the end.
+    float KneeOffsetAfterAStep(int trackId, JointConfidence *conf) {
+        const SkeletonFrame *f = nullptr;
+        for (int i = 0; i < 31; i++)
+            f = Step(trackId, 0.0f, false);
+        for (int i = 1; i <= 30; i++)
+            f = Step(trackId, 0.5f * i / 30.0f, true);
+        EXPECT_NE(f, nullptr);
+        if (!f)
+            return 99.0f;
+        int s = SlotOf(f, trackId);
+        EXPECT_GE(s, 0);
+        if (s < 0)
+            return 99.0f;
+        const SkeletonData &d = f->mSkeletonDatas[s];
+        *conf = (JointConfidence)d.mJointTrackingState[kJointKneeLeft];
+        return d.mJointPositions[kJointKneeLeft].x - d.mJointPositions[kJointHipCenter].x;
+    }
+};
+
+TEST_F(PoseSensorEstimateTest, AKneeOutOfThePictureGoesWithTheDancer) {
+    NativePoseEstimateTestSet(Dc3PoseEstimate::kKinematic, 1.0f);
+    JointConfidence conf = kConfidenceTracked;
+    float off = KneeOffsetAfterAStep(91, &conf);
+    // Standing, the left knee is 0.12 m to the hip centre's left; the solve
+    // (the guess 2 m down is implausible) stands it a little wider (-0.21
+    // MEASURED).  Frozen, it would be 0.62 m to the left.
+    EXPECT_NEAR(off, -0.12f, 0.15f) << "the knee must follow the hips";
+    EXPECT_EQ(conf, kConfidenceInferred);
+}
+
+TEST_F(PoseSensorEstimateTest, OffFreezesTheKneeWhereItWasLastSeen) {
+    NativePoseEstimateTestSet(Dc3PoseEstimate::kOff, 1.0f);
+    JointConfidence conf = kConfidenceTracked;
+    float off = KneeOffsetAfterAStep(92, &conf);
+    // Frozen at x = -0.12 while the hips went to +0.5.
+    EXPECT_NEAR(off, -0.62f, 0.05f) << "the control: the old frozen knee";
 }
 
 // ===========================================================================
