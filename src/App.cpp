@@ -6,6 +6,7 @@
 #include "telemetry\GameplayTelemetry.h"
 #include "NativeQuit.h"
 #if !defined(__EMSCRIPTEN__)
+#include "platform/FramePacer_Native.h"
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 sigjmp_buf gDrawJmpBuf;
@@ -1189,6 +1190,22 @@ void App::RunWithoutDebugging() {
     HttpServerInit();
 #endif
 
+    // H-14: the image's frame ceiling (see platform/FramePacer_Native.h).
+    // Windowed runs on a display faster than 60 Hz are capped; headless runs
+    // only when DC3_FPS_CAP asks.
+    Dc3FramePacer framePacer;
+    {
+        double refreshHz = 0.0;
+        if (windowed) {
+            if (GLFWmonitor *mon = glfwGetPrimaryMonitor())
+                if (const GLFWvidmode *mode = glfwGetVideoMode(mon))
+                    refreshHz = mode->refreshRate;
+        }
+        const Dc3FrameCap cap = Dc3FrameCapDecide(getenv("DC3_FPS_CAP"), windowed, refreshHz);
+        framePacer.SetTarget(cap.fps);
+        MILO_LOG("DC3 Native: frame cap: %s\n", cap.why);
+    }
+
     if (windowed) {
         // G-5: Esc is the B button, not quit. Quitting is Ctrl+Q (installed by
         // main_native.cpp) or closing the window.
@@ -1349,7 +1366,13 @@ void App::RunWithoutDebugging() {
                 break;
             }
         }
+        // H-14: sleep out the rest of the frame period (no-op when uncapped).
+        framePacer.Pace();
     }
+    if (framePacer.TargetFps() > 0.0)
+        MILO_LOG("DC3 Native: frame cap: %.2f fps, %lld of %d frames paced, %.1f s slept\n",
+                 framePacer.TargetFps(), framePacer.PacedFrames(), frameCount,
+                 framePacer.SleptSeconds());
 #ifdef DC3_HTTP_SERVER
     HttpServerShutdown();
 #endif

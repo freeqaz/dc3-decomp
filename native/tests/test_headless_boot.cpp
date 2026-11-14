@@ -278,6 +278,36 @@ TEST_F(HeadlessBootTest, SurvivesMainLoop) {
     bool completed = HasCompletionMarker(result.output);
     printf("Engine completed all frames: %s\n", completed ? "yes" : "no");
     EXPECT_TRUE(completed) << "Expected engine to complete 2000 frames of main loop";
+
+    // H-14: a headless run is never frame-capped by default -- the flow tests
+    // depend on running faster than real time.
+    EXPECT_NE(result.output.find("frame cap: off (headless"), std::string::npos)
+        << "headless runs must stay uncapped unless DC3_FPS_CAP asks";
+}
+
+// H-14: DC3_FPS_CAP caps a headless run when asked, by sleeping (the exit line
+// reports how many frames the pacer held and for how long).
+TEST_F(HeadlessBootTest, FrameCapWhenAsked) {
+    auto result = RunHeadless(150, nullptr, 120, {{"DC3_FPS_CAP", "30"}});
+    PrintOutputTail(result.output);
+    ASSERT_EQ(result.signal, 0) << CrashSummary(result);
+    ASSERT_TRUE(HasCompletionMarker(result.output)) << CrashSummary(result);
+    EXPECT_NE(result.output.find("frame cap: 30.0 fps (headless, DC3_FPS_CAP)"),
+              std::string::npos);
+    long long paced = -1;
+    int frames = -1;
+    double slept = -1.0;
+    size_t pos = result.output.find("frame cap: 30.00 fps, ");
+    ASSERT_NE(pos, std::string::npos) << "no pacer summary at exit";
+    ASSERT_EQ(sscanf(result.output.c_str() + pos,
+                     "frame cap: 30.00 fps, %lld of %d frames paced, %lf s slept", &paced,
+                     &frames, &slept),
+              3);
+    EXPECT_EQ(frames, 150);
+    // Boot frames are long (loading) and are not slept; the menu frames after
+    // them are. 150 frames at 30 fps is 5 s; well over half must have slept.
+    EXPECT_GE(paced, 75) << "the cap held too few frames";
+    EXPECT_GE(slept, 1.0) << "the cap did not sleep";
 }
 
 // Boot with scripted input — press Start after some frames to dismiss title
