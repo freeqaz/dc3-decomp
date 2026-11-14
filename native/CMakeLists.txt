@@ -2055,6 +2055,7 @@ if(BUILD_TESTS)
         tests/test_native_pose_dropout.cpp
         tests/test_native_second_person.cpp
         tests/test_native_pose_socket.cpp
+        tests/test_native_pose_spawner.cpp
         tests/test_native_tree_paths.cpp
         tests/test_movie_audio.cpp
         tests/test_texrenderer_clear.cpp
