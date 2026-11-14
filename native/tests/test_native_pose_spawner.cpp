@@ -125,7 +125,8 @@ std::string RealPython() {
     return std::string();
 }
 
-// A temp dir with an executable `python3` in it, first on PATH while alive.
+// A temp dir with an executable `python3` in it, first on PATH and named by
+// DC3_POSE_PYTHON while alive.
 class StubDir {
 public:
     explicit StubDir(const std::string &python3Body) {
@@ -146,6 +147,8 @@ public:
         const char *oldPath = getenv("PATH");
         mPath.reset(new ScopedEnv("PATH", (mDir + ":" + (oldPath ? oldPath : "/usr/bin:/bin")).c_str()));
         mStubDirEnv.reset(new ScopedEnv("DC3_STUB_DIR", mDir.c_str()));
+        // The game prefers a venv (ChoosePosePython) to python3 from PATH.
+        mPython.reset(new ScopedEnv("DC3_POSE_PYTHON", stub.c_str()));
         mOk = true;
     }
     ~StubDir() {
@@ -170,7 +173,7 @@ public:
 private:
     std::string mDir;
     bool mOk = false;
-    std::unique_ptr<ScopedEnv> mPath, mStubDirEnv;
+    std::unique_ptr<ScopedEnv> mPath, mStubDirEnv, mPython;
 };
 
 // A pose server stand-in: records each run's pid and RLIMIT_RTTIME, binds the

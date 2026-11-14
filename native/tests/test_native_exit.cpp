@@ -834,6 +834,7 @@ protected:
             "DC3_CAMERA_FRAMES=off",
             "DC3_STUB_DIR=" + mStub,
             "PATH=" + mStub + ":" + (path ? path : "/usr/bin:/bin"),
+            "DC3_POSE_PYTHON=" + mStub + "/python3", // else the game prefers a venv
         };
     }
 

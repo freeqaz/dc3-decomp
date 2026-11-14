@@ -1134,6 +1134,7 @@ TEST(PoseServerStartTest, TheCameraSpecReachesTheServerAsGivenAndDefaultsToAuto)
     const char *oldPath = getenv("PATH");
     std::string path = stubDir + ":" + (oldPath ? oldPath : "/usr/bin:/bin");
     ScopedEnv envPath("PATH", path.c_str());
+    ScopedEnv envPy("DC3_POSE_PYTHON", stub.c_str()); // else the game prefers a venv
     ScopedEnv noSpawn("DC3_POSE_NO_SPAWN", nullptr);
 
     auto cameraArg = [&]() {
@@ -1195,6 +1196,7 @@ TEST(PoseServerStartTest, NoCameraFailsInUnderASecondAndPostsANotice) {
     const char *oldPath = getenv("PATH");
     std::string path = stubDir + ":" + (oldPath ? oldPath : "/usr/bin:/bin");
     ScopedEnv envPath("PATH", path.c_str());
+    ScopedEnv envPy("DC3_POSE_PYTHON", stub.c_str()); // else the game prefers a venv
     ScopedEnv noSpawn("DC3_POSE_NO_SPAWN", nullptr);
     NativeNotice::Clear("pose");
 
