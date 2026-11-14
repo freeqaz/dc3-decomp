@@ -3,6 +3,7 @@
 #include "Skeleton_Native.h"
 #include "CameraStream_Native.h"
 #include "PoseLevel_Native.h" // NativeSensorLevel: the camera-tilt step
+#include "PoseEstimate_Native.h" // DC3_POSE_ESTIMATE: joints the camera cannot see
 #ifndef __EMSCRIPTEN__
 #include "PosePerformer_Native.h" // Dc3PosePerformerEnabled
 #include "PoseSession_Native.h"   // DC3_POSE_RECORD / session replay (PLAN L-1)
@@ -19,6 +20,7 @@
 #include "hamobj/HamPlayerData.h" // GetSkeletonTrackingID
 #include "hamobj/MoveDir.h"       // MoveDir::SongSeconds (DC3_POSE_FILL)
 #include "PoseFill_Native.h"      // DC3_POSE_FILL
+#include "NativeNotice.h"         // DC3_POSE_STALL_MS
 #include "meta_ham/HamUI.h"          // TheHamUI -> ShellInput -> SkeletonChooser
 #include "meta_ham/ShellInput.h"
 #include "meta_ham/SkeletonChooser.h"
@@ -114,6 +116,9 @@ struct SlotHold {
     float heldMs = 0.0f;    // sensor time the slot has been held (0 = not held)
 };
 static SlotHold sSlotHold[NUM_SKELETONS];
+
+// DC3_POSE_ESTIMATE's per-slot state (configured by EstimateReadMode below).
+static Dc3PoseEstimate::Estimator gEstimate;
 
 static void ResetSlotHold(int s) {
     sSlotHold[s].presentMs = 0.0f;
@@ -400,6 +405,7 @@ static int AssignSlots(const int *trackIds, const Vector3 *hips, int numValid,
                 // low-confidence joint positions either.
                 NativeSkeletonProvider::ResetJointHold(s);
                 ResetSlotHold(s);
+                gEstimate.ResetSlot(s);
                 reassignments++;
                 break;
             }
@@ -672,10 +678,76 @@ static void FinishTrackedSlot(int s) {
     }
 }
 
+// DC3_POSE_ESTIMATE (PoseEstimate_Native.h): joints the camera could not see,
+// completed per slot just before the slot layer lays the person in.
+namespace {
+bool gEstimateRead = false;
+int gEstimateModeOverride = -1;
+float gEstimateGainOverride = -1.0f;
+
+void EstimateReadMode() {
+    if (gEstimateRead)
+        return;
+    gEstimateRead = true;
+    Dc3PoseEstimate::Mode mode;
+    if (gEstimateModeOverride >= 0) {
+        mode = (Dc3PoseEstimate::Mode)gEstimateModeOverride;
+    } else {
+        const char *v = getenv("DC3_POSE_ESTIMATE");
+        bool ok = true;
+        mode = Dc3PoseEstimate::ParseMode(v, &ok);
+        if (!ok)
+            fprintf(stderr, "DC3_POSE_ESTIMATE='%s' ignored (want off, tracker or kinematic)\n", v);
+    }
+    float gain;
+    if (gEstimateGainOverride >= 0.0f) {
+        gain = gEstimateGainOverride;
+    } else {
+        const char *g = getenv("DC3_POSE_ESTIMATE_GAIN");
+        bool ok = true;
+        gain = Dc3PoseEstimate::ParseGain(g, &ok);
+        if (!ok)
+            fprintf(stderr, "DC3_POSE_ESTIMATE_GAIN='%s' ignored (want 0 .. 1)\n", g);
+    }
+    gEstimate.SetMode(mode);
+    gEstimate.SetGain(gain);
+    gEstimate.Reset();
+}
+
+// The first estimated joint of a run, and then every 30 s of estimates, say
+// how much of the body is being estimated.
+void EstimateLog(int wrote, float elapsedMs) {
+    static bool sSaid = false;
+    static float sSinceMs = 0.0f;
+    static unsigned sFrames = 0, sJoints = 0;
+    sSinceMs += elapsedMs;
+    sFrames++;
+    sJoints += wrote;
+    if ((!sSaid && wrote > 0) || (sSaid && sSinceMs >= 30000.0f && sJoints > 0)) {
+        fprintf(stderr, "DC3 POSE ESTIMATE: %s (gain %.2f) %.1f joints a frame estimated (%u frames)\n",
+                Dc3PoseEstimate::ModeName(gEstimate.GetMode()), gEstimate.Gain(),
+                sFrames ? (double)sJoints / sFrames : 0.0, sFrames);
+        sSaid = true;
+        sSinceMs = 0.0f;
+        sFrames = sJoints = 0;
+    }
+}
+} // namespace
+
+void NativePoseEstimateTestSet(int mode, float gain) {
+    gEstimateModeOverride = mode;
+    gEstimateGainOverride = gain;
+    gEstimateRead = false;
+    EstimateReadMode();
+}
+
+const Dc3PoseEstimate::Estimator &NativePoseEstimator() { return gEstimate; }
+
 // Lay this frame's persons into their persistent slots.  `elapsedMs` is the
-// sensor time since the previous frame (the dropout hold's clock).
+// sensor time since the previous frame (the dropout hold's clock); `real` =
+// a camera frame, not one the fill made (only those teach the estimator).
 static int FillPersonSlots(const NativeSkeletonProvider::PersonData *persons, int numPersons,
-                           float elapsedMs) {
+                           float elapsedMs, bool real = true) {
     int trackIds[NUM_SKELETONS], origIdx[NUM_SKELETONS], numValid = 0;
     Vector3 hips[NUM_SKELETONS];
     for (int i = 0; i < numPersons && numValid < NUM_SKELETONS; i++) {
@@ -691,7 +763,9 @@ static int FillPersonSlots(const NativeSkeletonProvider::PersonData *persons, in
     for (int s = 0; s < NUM_SKELETONS; s++) {
         int k = personForSlot[s];
         if (k >= 0) {
-            const NativeSkeletonProvider::PersonData &person = persons[origIdx[k]];
+            NativeSkeletonProvider::PersonData person = persons[origIdx[k]];
+            EstimateReadMode();
+            EstimateLog(gEstimate.Apply(s, person, elapsedMs * 0.001f, real), elapsedMs);
             NativeSkeletonProvider::FillSkeletonData(sFrame.mSkeletonDatas[s], person, s);
             FinishTrackedSlot(s);
             SlotHold &h = sSlotHold[s];
@@ -871,10 +945,97 @@ const Dc3PoseFill::Filler &NativePoseFiller() { return gFill; }
 // elapsed time is what the frame shows, not the game loop's.
 static void DeliverFillFrame(const Dc3PoseFill::Output &out) {
     BeginSensorFrame(AcceptedFrameElapsed(out.ts));
-    int reassigns = FillPersonSlots(out.persons, out.numPersons, (float)sFrame.mElapsedMs);
+    int reassigns = FillPersonSlots(out.persons, out.numPersons, (float)sFrame.mElapsedMs, out.real);
     ScoringDebugTick(out.real, false, reassigns);
     if (out.levelled)
         NativeLevelSensorFrameBy(sFrame, out.floorNormal);
+}
+
+// DC3_POSE_STALL_MS (default kDefaultStallMs, 0 = off): a pose source that
+// stops sending frames while it still "runs" -- a pose server hung in
+// inference or SIGSTOPped, a camera driver that blocks, a web worker that
+// stopped posting -- used to leave every slot at its last frame, tracked,
+// with the song scoring a frozen player.  A Kinect never stops: with nobody
+// in view it still sends frames with nobody in them.  So once the source has
+// been silent this long, the sensor delivers exactly that, one empty frame
+// per 1/30 s of wall time: P-12's hold keeps the player for DC3_POSE_HOLD_MS,
+// then the slot reads untracked and the image's own skeleton-loss handling
+// takes over (Game::CheckForSkeletonLoss pauses a song, "stand in front of
+// the sensor").  When frames return, the person is laid in again and the
+// pause screen behaves as on a 360.  Wall time, not song time: a stalled
+// source must be noticed on the pause screen too.
+static const int kDefaultStallMs = 1500;
+static const char *kStallNoticeKey = "pose-stall";
+
+static int NativePoseStallMs() {
+    const char *v = getenv("DC3_POSE_STALL_MS");
+    if (!v || !*v)
+        return kDefaultStallMs;
+    char *end = nullptr;
+    long ms = strtol(v, &end, 10);
+    if (end == v || *end != '\0' || ms < 0)
+        return kDefaultStallMs;
+    return ms > 60000 ? 60000 : (int)ms;
+}
+
+namespace {
+struct StallWatch {
+    std::chrono::steady_clock::time_point lastNew, lastEmpty;
+    bool haveNew = false;
+    bool stalled = false;
+    unsigned stalls = 0;
+};
+StallWatch gStall;
+} // namespace
+
+unsigned NativePoseStalls() { return gStall.stalls; }
+bool NativePoseStalled() { return gStall.stalled; }
+
+// Called once per BuildSensorFrame with the provider running.  Returns true
+// when it laid an empty frame into the slots (never when this call already
+// delivered a frame).
+static bool StallWatchTick(bool newFrame, bool delivered) {
+    auto now = std::chrono::steady_clock::now();
+    if (newFrame) {
+        if (gStall.stalled) {
+            double secs = std::chrono::duration<double>(now - gStall.lastNew).count();
+            fprintf(stderr, "DC3 POSE STALL: frames are back after %.1f s\n", secs);
+            NativeNotice::Clear(kStallNoticeKey);
+            NativeNotice::Post(kStallNoticeKey, "Pose frames are back - tracking resumed.", "", 4.0f);
+        }
+        gStall.stalled = false;
+        gStall.haveNew = true;
+        gStall.lastNew = now;
+        return false;
+    }
+    int stallMs = NativePoseStallMs();
+    if (stallMs <= 0 || !gStall.haveNew)
+        return false;
+    double silentMs = std::chrono::duration<double, std::milli>(now - gStall.lastNew).count();
+    if (silentMs < stallMs)
+        return false;
+    if (!gStall.stalled) {
+        gStall.stalled = true;
+        gStall.stalls++;
+        gStall.lastEmpty = now - std::chrono::milliseconds(100);
+        fprintf(stderr,
+                "DC3 POSE STALL: no pose frame for %.1f s - the sensor reports nobody until frames "
+                "return (DC3_POSE_STALL_MS=%d)\n",
+                silentMs / 1000.0, stallMs);
+        NativeNotice::Post(kStallNoticeKey,
+                           "The pose stream stopped sending frames - pose tracking is paused until "
+                           "it is back.",
+                           "Pose stream stalled", 20.0f);
+        gFill.Reset();
+    }
+    if (delivered
+        || std::chrono::duration<double, std::milli>(now - gStall.lastEmpty).count() < 1000.0 / 30.0)
+        return false;
+    gStall.lastEmpty = now;
+    BeginSensorFrame(AcceptedFrameElapsed());
+    ScoringDebugTick(true, false, FillPersonSlots(nullptr, 0, (float)sFrame.mElapsedMs));
+    sFrame.mFloorNormal.Set(0.0f, 1.0f, 0.0f);
+    return true;
 }
 
 static const SkeletonFrame *BuildSensorFrame() {
@@ -963,12 +1124,16 @@ static const SkeletonFrame *BuildSensorFrame() {
                 delivered = true;
             }
         }
+        if (StallWatchTick(newFrame, delivered))
+            delivered = true;
         FillPublishDelay();
         if (!delivered)
             ScoringDebugTick(false, true, 0);
     }
 
     if (!providerRunning) {
+        gStall = StallWatch(); // a new source starts unwatched
+        NativeNotice::Clear(kStallNoticeKey);
         ResetSlotMap();
         gFill.Reset();
         FillPublishDelay();

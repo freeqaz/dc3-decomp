@@ -179,7 +179,8 @@ private:
 // A pose server stand-in: records each run's pid and RLIMIT_RTTIME, binds the
 // socket, and on accept either SIGKILLs itself (DC3_STUB_MODE=die always,
 // die-once on its first run only) or streams empty v1 frames whose ids carry
-// the run number (run * 1000 + n).
+// the run number (run * 1000 + n); stall-once SIGSTOPs itself after five
+// frames of its first run, staying connected.
 const char *kStubPy = R"PY(
 import os, signal, socket, struct, sys, time
 d = os.environ["DC3_STUB_DIR"]
@@ -204,6 +205,8 @@ while True:
     n += 1
     body = struct.pack("<IId", run * 1000 + n, 0, time.time())
     c.sendall(struct.pack("<I", len(body)) + body)
+    if mode == "stall-once" and run == 1 and n == 5:
+        os.kill(os.getpid(), signal.SIGSTOP)  # hung: connected, silent
     time.sleep(0.03)
 )PY";
 
@@ -389,6 +392,54 @@ TEST_F(PoseSpawnerTest, ADeadServerIsRestartedAndTrackingResumes) {
     EXPECT_NE(provider.ServerPid(), first);
     EXPECT_TRUE(ProcessGone(first));
     EXPECT_TRUE(provider.LastProblem().empty()) << provider.LastProblem().text;
+    EXPECT_EQ(NativeNotice::Text("pose"), "");
+
+    pid_t second = provider.ServerPid();
+    provider.Stop();
+    EXPECT_TRUE(WaitUntil([&] { return ProcessGone(second); }, 3000)) << "Stop() left the server";
+}
+
+// A server that hangs -- connected, alive, silent (np-cutoff, PLAN H-94) --
+// is replaced: after the stall time the provider SIGKILLs it (a stopped
+// process ignores SIGTERM) and relaunches it under the restart policy.
+// Before, the reader polled the silent socket forever and the game scored a
+// frozen player.  Sabotaged: SetServerStallMs(0) here -> no restart, the
+// frame-id wait times out, caught.
+TEST_F(PoseSpawnerTest, AStalledServerIsReplacedAndTrackingResumes) {
+    std::string py = RealPython();
+    if (py.empty())
+        GTEST_SKIP() << "no python3 to run the stub server";
+    ASSERT_TRUE(NativeSpawner::Init());
+    StubDir stub(PythonStub(py));
+    ASSERT_TRUE(stub.ok() && WriteStubPy(stub));
+    ScopedEnv mode("DC3_STUB_MODE", "stall-once");
+    ScopedEnv noSpawn("DC3_POSE_NO_SPAWN", nullptr);
+
+    NativeSkeletonProvider provider;
+    provider.SetRestartPolicy(3, 200);
+    provider.SetServerStallMs(600);
+    ASSERT_TRUE(provider.Start(stub.sock(), "unused.task", 0));
+    pid_t first = provider.ServerPid();
+    ASSERT_GT(first, 0);
+
+    std::string seen;
+    EXPECT_TRUE(WaitUntil([&] {
+        std::string t = NativeNotice::Text("pose");
+        if (t.find("stalled") != std::string::npos)
+            seen = t;
+        return !seen.empty();
+    }, 5000)) << NativeNotice::Text("pose");
+    EXPECT_NE(seen.find("The pose server stalled - restarting pose tracking (1 of 3)"),
+              std::string::npos) << seen;
+    EXPECT_TRUE(WaitUntil([&] {
+        provider.Poll();
+        return provider.FrameId() > 2000;
+    }, 8000)) << "frame id " << provider.FrameId();
+    EXPECT_TRUE(provider.IsRunning());
+    EXPECT_EQ(provider.ServerStalls(), 1);
+    EXPECT_EQ(provider.Restarts(), 1);
+    EXPECT_EQ(stub.Runs(), 2);
+    EXPECT_TRUE(ProcessGone(first));
     EXPECT_EQ(NativeNotice::Text("pose"), "");
 
     pid_t second = provider.ServerPid();

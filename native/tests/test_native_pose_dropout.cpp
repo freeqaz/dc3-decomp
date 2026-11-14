@@ -25,6 +25,12 @@
 //   PoseExitTest          the person is gone from song 20.0 on -> paused
 //                         (hold 1 s + the image's 1 s), as on a 360.
 //
+//   PoseStallTest         (np-cutoff, H-94) the source sends NO frames from
+//                         song 20.0 for 9 s of wall time (a hung server):
+//                         paused ~3.5 s in, and the stream resumes after.
+//   PoseStallOffTest      the same with DC3_POSE_STALL_MS=0 -> never paused,
+//                         the frozen last frame plays on (the old behaviour).
+//
 // One test per fixture (ctest runs each in its own process).  Gated by
 // DC3_DTA_FLOW_TESTS=1.  The engine is killed by PID; every wait is bounded.
 
@@ -158,9 +164,12 @@ struct DropoutRun {
     }
 };
 
-// Plays until perform_pause_screen, or gameplay telemetry past `stopSecs`, or
-// the bounded wait runs out.
-DropoutRun RunDropout(const std::vector<Gap> &gaps, const char *holdMs, double stopSecs) {
+// Plays until `waitFor` is in the log (default: perform_pause_screen), or
+// gameplay telemetry past `stopSecs`, or the bounded wait runs out.
+// `extraEnv` is prepended to the engine's environment ("A=1 B=2").
+DropoutRun RunDropout(const std::vector<Gap> &gaps, const char *holdMs, double stopSecs,
+                      const char *extraEnv = nullptr,
+                      const char *waitFor = "Screen 'perform_pause_screen' Enter") {
     DropoutRun r;
     std::string dir = BinaryDir();
     std::string bin = dir + "/dc3-native";
@@ -203,9 +212,11 @@ DropoutRun RunDropout(const std::vector<Gap> &gaps, const char *holdMs, double s
        << " DC3_POSE_PERFORM=replay:" << fixture << " DC3_POSE_PERFORM_REPLAY_SYNC=song";
     if (holdMs)
         sh << " DC3_POSE_HOLD_MS=" << holdMs;
+    if (extraEnv)
+        sh << " " << extraEnv;
     sh << " exec ${t:+$t 280} ./dc3-native > " << log << " 2>&1 ) & epid=$!; "
        << "end=$((SECONDS+240)); "
-       << "until grep -aq \"Screen 'perform_pause_screen' Enter\" " << log << " 2>/dev/null"
+       << "until grep -aqF \"" << waitFor << "\" " << log << " 2>/dev/null"
        << " || awk -v s=" << stop
        << " '/^DC3_TEL:.*screen=game_screen / { for (i = 1; i <= NF; i++) if ($i ~ /^realSecs=/)"
           " { split($i, a, \"=\"); if (a[2] + 0 >= s) found = 1 } } END { exit !found }' "
@@ -253,6 +264,16 @@ const std::vector<Gap> kDropouts = { { 20.0, 21.43 }, { 28.0, 29.43 } };
 class PoseDropoutTest : public DropoutFixture {};
 class PoseDropoutHoldOffTest : public DropoutFixture {};
 class PoseExitTest : public DropoutFixture {};
+class PoseStallTest : public DropoutFixture {};
+class PoseStallOffTest : public DropoutFixture {};
+
+// The source goes silent at song 20 s for 9 s of wall time (the performer's
+// DC3_POSE_PERFORM_STALL): no frames at all, not frames with nobody.
+const char *kStallEnv = "DC3_POSE_PERFORM_STALL=20,9";
+
+size_t Find(const std::string &log, const char *what) {
+    return log.find(what);
+}
 
 } // namespace
 
@@ -291,4 +312,49 @@ TEST_F(PoseExitTest, APlayerWhoLeavesIsStillPaused) {
     double at = r.LastPlayingSecs();
     EXPECT_GT(at, 21.5) << "paused inside the hold; " << where;
     EXPECT_LT(at, 24.0) << "the hold delayed the pause too long; " << where;
+}
+
+// np-cutoff (PLAN H-94): a pose source that stops sending frames while it
+// still runs.  Before the stall watchdog the slots kept the last frame,
+// tracked, and the song played on scoring a frozen player; now, 1.5 s
+// (DC3_POSE_STALL_MS) into the silence, the sensor reports nobody, P-12's
+// hold and the image's recoverer run as for a player who left, and the song
+// pauses; when frames return the pose stream resumes (resuming the song is
+// the player's choice on the pause screen, as on a 360).
+TEST_F(PoseStallTest, ASilentSourcePausesTheSongAndTrackingResumes) {
+    DropoutRun r = RunDropout({}, nullptr, 40.0, kStallEnv, "DC3 POSE STALL: frames are back");
+    ASSERT_TRUE(r.setupError.empty()) << r.setupError;
+    std::string where = Dump(r);
+    ASSERT_TRUE(r.Entered("game_screen")) << "never reached gameplay; " << r.driver << where;
+    ASSERT_NE(Find(r.output, "DC3 PERFORM: stalled at song"), std::string::npos)
+        << "the performer never went silent; " << where;
+    size_t stall = Find(r.output, "DC3 POSE STALL: no pose frame");
+    size_t pause = Find(r.output, "Screen 'perform_pause_screen' Enter");
+    size_t back = Find(r.output, "DC3 POSE STALL: frames are back");
+    ASSERT_NE(stall, std::string::npos) << "the watchdog never noticed the silence; " << where;
+    ASSERT_NE(pause, std::string::npos)
+        << "the source went silent at song 20 s and the game never paused; " << where;
+    double at = r.LastPlayingSecs();
+    // 1.5 s watchdog + 1 s hold + the image's 1 s, from song 20.0
+    EXPECT_GT(at, 22.5) << "paused before the watchdog and the hold had run; " << where;
+    EXPECT_LT(at, 26.0) << "the pause came too late; " << where;
+    EXPECT_LT(stall, pause);
+    ASSERT_NE(back, std::string::npos) << "frames never came back after the stall; " << where;
+    EXPECT_LT(pause, back) << "frames returned before the pause: the stall was too short to test it";
+}
+
+// The control: with the watchdog off (DC3_POSE_STALL_MS=0, the old
+// behaviour) the same silence never pauses the song -- the frozen last frame
+// stays tracked.  It shows the first test's pause is the watchdog's.
+TEST_F(PoseStallOffTest, WithoutTheWatchdogTheFrozenPlayerPlaysOn) {
+    std::string env = std::string(kStallEnv) + " DC3_POSE_STALL_MS=0";
+    DropoutRun r = RunDropout({}, nullptr, 27.0, env.c_str());
+    ASSERT_TRUE(r.setupError.empty()) << r.setupError;
+    std::string where = Dump(r);
+    ASSERT_TRUE(r.Entered("game_screen")) << "never reached gameplay; " << r.driver << where;
+    ASSERT_NE(Find(r.output, "DC3 PERFORM: stalled at song"), std::string::npos)
+        << "the performer never went silent; " << where;
+    EXPECT_FALSE(r.Entered("perform_pause_screen"))
+        << "paused with the watchdog off: something else noticed the silence; " << where;
+    EXPECT_GE(r.LastPlayingSecs(), 26.5) << where;
 }

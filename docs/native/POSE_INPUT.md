@@ -16,7 +16,7 @@ Work items: [PLAN.md](PLAN.md) track P.
 | Camera frame | `native/scripts/pose_server.py` (`cv2.VideoCapture`: 640×480 @ 30 fps, 1-frame driver buffer), a Python child spawned by `NativeSkeletonProvider::Start` in `native/src/platform/Skeleton_Native.cpp`. Packet timestamp = capture time (the device's `CAP_PROP_POS_MSEC` when it is on our monotonic clock, as V4L2's is; else when `read()` returned). | `DC3_POSE_CAMERA` (default `auto`; also an index, a `/dev/videoN` path or a `/dev/v4l/by-id` name — [camera selection](#which-camera-and-a-camera-that-goes-away)) |
 | 2D + 3D pose | `native/scripts/pose_mediapipe.py` `MediaPipeBackend`: BlazePose world landmarks (metres), absolute root by PnP, one-euro filter on root depth, centroid tracker. Emits DC3's 20 Kinect joints in camera-space metres. | `DC3_POSE_MODEL` (default `native/models/pose_landmarker_full.task` of the executable's tree, gitignored), `DC3_POSE_HFOV` |
 | Wire | Unix socket, protocol v2, layout 1 (20 DC3 joints). The header's u16 after the layout byte is `flags`; bit 0 `FLAG_UNLEVELLED` = "this camera does not know its gravity, estimate it" (`pose_server.py` always sets it); bit 1 `FLAG_NO_CAMERA` = "the camera is gone and the server is reopening it" (zero-person heartbeats every 0.1 s). Bit 2 `FLAG_LATENCY_DECLARED` = "score me at bits 8..15 × 5 ms" (`--video` declares 0; see [Who sets the latency](#who-sets-the-latency-np-latency-harness)). Layout 0 = COCO, remapped by `MapCOCOToDC3`. | `DC3_POSE_SOCKET`, `DC3_POSE_NO_SPAWN=1` (connect to a server you started) |
-| Socket → slots | `GestureMgr_Native.cpp`: `BuildSensorFrame` → `FillPersonSlots` / `AssignSlots` / `NativeAutoAssignPlayers`. `FillSkeletonData` holds the last good position of joints under 0.3 confidence. No provider → a jittered standing dummy (two in two-player modes, `DC3_DUMMY_PLAYERS`). Every valid person fills its own slot: two people on the socket or in one `dc3_pose_push` frame are two players. | `DC3_POSE` (`off`, `external`, …), `DC3_NATIVE_SCORING` (default on), `DC3_POSE_SELFTEST` |
+| Socket → slots | `GestureMgr_Native.cpp`: `BuildSensorFrame` → `FillPersonSlots` / `AssignSlots` / `NativeAutoAssignPlayers`. Joints under 0.3 confidence are first estimated (`PoseEstimate_Native.cpp`, [Cut-off joints](#cut-off-joints-np-cutoff-2026-11-14)) and marked Inferred; with `DC3_POSE_ESTIMATE=off`, `FillSkeletonData` holds their last good position. No provider → a jittered standing dummy (two in two-player modes, `DC3_DUMMY_PLAYERS`). Every valid person fills its own slot: two people on the socket or in one `dc3_pose_push` frame are two players. | `DC3_POSE` (`off`, `external`, …), `DC3_NATIVE_SCORING` (default on), `DC3_POSE_SELFTEST`, `DC3_POSE_ESTIMATE`, `DC3_POSE_STALL_MS` |
 | Gravity (np-pose-tilt) | `PoseLevel_Native.cpp` `NativeSensorLevel`, called by `BuildSensorFrame`: for a camera that does not know its gravity (socket packets with header flag bit 0, web pushes, performer `replay:`) it estimates `vNormalToGravity` from the player's standing posture, then runs `SkeletonFrame::Create`'s own gravity step (`sUpVectorSmoother` → `mFloorNormal` → `NuiTransformMatrixLevel` on every joint; `mRawPositions` stays raw). A Kinect-like source (synthetic modes) is levelled by (0,1,0). [Camera tilt](#camera-tilt-np-pose-tilt-2026-11-13) | `DC3_POSE_LEVEL` (default `auto`; `0` off; degrees = fixed), `DC3_POSE_LEVEL_LOG` |
 | Scoring | Decompiled code: SkeletonUpdate → `Skeleton::Poll` → FilterQueue / MoveDir / async MoveDetectors → `move_passed` | `DC3_REAL_MOVE_PASSED` (default on) |
 | Feedback | Ratings and score through the normal HUD. **Player view (P-4):** the camera picture and a per-person mask become the Kinect's colour and depth\|player streams, so the decompiled `StreamRenderer` draws the player's silhouette in the menu and gameplay boxes ([Player on screen](#player-on-screen-p-4)). | `DC3_CAMERA_FRAMES` (`WxH`, default `320x240`; `off`) · web `?pose_frames=` |
@@ -2055,6 +2055,385 @@ python3 scripts/native_song_sweep.py --out /tmp/fill/x8_g075 --no-gpu --jobs 3 \
 # controls: --performer stand (standing still); replay of another song's footage (wrong dance);
 # --env DC3_POSE_PERFORM_NOISE=... --env DC3_POSE_PERFORM_GLITCH=... (noise)
 native/build/milo-tests --gtest_filter='PoseFill*'
+```
+
+## Cut-off joints (`np-cutoff`, 2026-11-14)
+
+A webcam frames less of the player than a Kinect does. On the GPD Pocket's
+own camera the dancer's legs are below the frame for most of a song. In the
+owner's YMCA Easy session (`~/tmp/gpd-ymca-session`, 2026-11-14), ankles were
+tracked in 0–1% of frames and feet in 0% for the first 40 s; knees in 8–42%.
+Owner ask: *"if feet are cut off we should still be able to score their
+feet"*.
+
+**Default: `DC3_POSE_ESTIMATE=kinematic` at gain 1.0.** Every joint that
+arrives NotTracked is estimated and marked Inferred before the slot layer.
+- Code: `native/src/platform/PoseEstimate_Native.{h,cpp}`, called from
+  `GestureMgr_Native.cpp` `FillPersonSlots`. Desktop (socket) and web
+  (`dc3_pose_push`) share it, and so does the fill.
+- `DC3_POSE_ESTIMATE=off` is the old behaviour; `tracker` is MediaPipe's own
+  guess relabelled.
+- `DC3_POSE_ESTIMATE_GAIN` (0..1) blends from the tracker's guess (0) to the
+  completion (1).
+- One log line on the first estimate, then every 30 s:
+  `DC3 POSE ESTIMATE: kinematic (gain 1.00) 6.0 joints a frame estimated (…)`.
+- No web JS change: `native/web/pose/pose_geometry.js` already passes every
+  landmark with its visibility as confidence.
+
+### Before (from code; MEASURED where marked)
+
+- **The tracker.** MediaPipe reports all 33 landmarks every frame, including
+  those outside the picture, with `visibility` as confidence. The desktop
+  server and the web worker both pass them on.
+  `Skeleton_Native.cpp` `ConfidenceFromScore`: below 0.3 is NotTracked (0),
+  below 0.6 Inferred (1), otherwise Tracked (2).
+- **The slot layer.** `FillSkeletonData` puts a NotTracked joint at the
+  slot's last position with confidence > 0, frozen there while the body
+  moves. A joint the slot never saw gets the tracker's raw guess.
+- **The scorer never reads confidence.** No `hamobj`/`gesture` scoring code
+  reads `mJointTrackingState`. `DetectFrame::LimbPSNR` weighs joint
+  *positions*. So a conf-0 joint is scored at its frozen place, and a conf-1
+  joint at the tracker's raw place.
+- **The original's out-of-view cues are not reached.**
+  `SkeletonChooser::SetPlayerSkeletonWarningData` reads the Kinect's
+  `QualityFlags` (1 right, 2 left, 4 top, 8 bottom; 4|8 = too close) into
+  `player_close_*` provider properties. Only `ui/gen/cursor.milo_xbox` and
+  `party_mode_signin` read those: menu cues, not gameplay. Native sets
+  `mQualityFlags = 0` (`Skeleton_Native.cpp`), so they never show. Not done
+  here (H-92).
+- **A silent pose source** (hung server, blocked camera, stopped web worker)
+  left the slot at its last frame, tracked, and the song scored a statue.
+  Only a closed socket was handled.
+
+### Which joints are scored (MEASURED)
+
+`DC3_MOVE_WEIGHTS_LOG=1` prints each rated move's share of `LimbPSNR`'s
+weight per error node (an `HX_NATIVE` hook in `Game::SetHamMove`, still
+100% `name_check`, 209/209). Every disc song at Medium, 862 moves with
+frames (`scripts/pose_cutoff/move_weights.py`):
+
+| group | share |
+|---|---|
+| legs (knees + ankles + feet) | **0.298** |
+| knees | 0.081 |
+| ankles | 0.112 |
+| feet | 0.105 |
+| arms (shoulder to hand) | 0.609 |
+| hip, shoulder centre, head | 0.092 |
+
+680 of 862 moves put more than a quarter of their weight on the legs. YMCA
+is among the least leg-weighted songs (0.228, 13 moves). **Feet are scored**;
+a frozen foot is scored as a foot that does not move.
+
+### What `kinematic` does
+
+Only on joints that arrived NotTracked; every joint it writes is Inferred.
+- **Bone lengths per player** (for the plausibility test and the solve).
+  Thigh, shin and foot length are learned from tracked frames, but only from
+  a bone within 0.5–1.6× its expected length. Before any are seen, torso proportions measured on the footage
+  fixtures are used (median over 88,071 tracked frames):
+
+  | bone | per torso |
+  |---|---|
+  | thigh | 1.07 |
+  | shin | 0.96 |
+  | foot | 0.205 |
+  | head | 0.43 |
+
+  The standing hip height is 2.2 torso lengths.
+- **The tracker's guess where it is plausible.** Where the guess implies a
+  leg bone of 0.5–1.6× its learned length, it is kept as it is. The head
+  keeps the guess's direction at the head length.
+- **Otherwise a floor and a two-bone solve.** The ankles are put on a floor
+  under the standing hip height, and the knee is solved to bend forward when
+  the hips drop.
+- **A hold.** The last tracked pose of each joint, relative to the body,
+  decays to the estimate (1/e in 0.35 s).
+- **Arms** have no kinematic answer. They get the hold, decaying to the
+  tracker's guess.
+- **Fill frames** are estimated but teach nothing, and a new track id
+  resets the player's learned bones (`ResetSlot`).
+
+### Measured: scores per cut
+
+Rig (`scripts/pose_cutoff/`):
+- **Image crops.** The four footage clips (macarena, 12step, supersonic,
+  iceicebaby) are re-tracked by MediaPipe with the picture cut away by
+  ffmpeg (`record_cut.py`). Cuts: knees = frame bottom at row 340 of 480,
+  midshin 380, ankles 410, head = top 120 rows, side = right 300 columns,
+  close = 0.7× zoom.
+- **Skeleton drops.** The uncut fixtures with the cut joints marked
+  NotTracked and moved 2 m below the hips (`cutoff.py cut --pos drop`). No
+  tracker guess at all: the worst case.
+- **Controls.** Wrong = another song's footage under this song's name (cut
+  the same way). Still = one frame of the dancer held all song.
+
+Each is played through the real game: `matrix.py`, which runs
+`native_song_sweep.py` with `--performer replay:`, Medium, FAST_TIME,
+`--no-gpu`. Each figure sums 4 songs; full-body right dance = 6,955,146.
+MEASURED: `off` and `tracker` on `ef597140b`, `kinematic` on `897131982` (the same code but for keeping a plausible guess as it is); load 25–48 on 32 cores. Reruns of one configuration agreed within 0.4%.
+
+Image crops:
+
+| variant | `off` (before) | `tracker` | `kinematic` (default) |
+|---|---|---|---|
+| right, full | 6,955,146 | 7,031,545 | 7,031,125 |
+| right, knees | 3,773,387 (0.54) | 4,489,499 (0.65) | **4,486,824 (0.65)** |
+| right, midshin | 4,633,015 (0.67) | 6,142,955 (0.88) | **6,142,615 (0.88)** |
+| right, ankles | 6,812,700 (0.98) | 6,846,456 (0.98) | 6,847,968 (0.98) |
+| right, close | 7,160,242 (1.03) | 7,166,344 (1.03) | 7,165,551 (1.03) |
+| wrong, full | 159,386 | 156,908 | 156,933 |
+| wrong, knees | 115,317 | 189,923 | 189,872 |
+| still, full | 3,348 | 3,348 | 3,348 |
+| still, knees | 3,628 | 3,628 | 3,628 |
+
+- `close` scores at full body: MediaPipe keeps the knees-down at tracked
+  confidence on a 0.7× zoom.
+- On real crops `kinematic` and the tracker's guess score the same (within
+  0.1%): MediaPipe's guesses for the legs are mostly plausible, and those are
+  kept. `kinematic` is the default because it is also safe when the guess is
+  not good (next table), where `tracker` is no better than `off`.
+- The wrong-dance control gains +74,555 on knees (1.07% of the right
+  dance's full score) and stays under 3% of the right dance either way.
+
+Skeleton drops (cut joints NotTracked, 2 m below the hips; no usable guess;
+`tracker` = `off` here by construction):
+
+| variant | `off` (before) | `kinematic` (default) |
+|---|---|---|
+| right, full | 7,129,659 | 7,143,058 |
+| right, knees | 1,662,469 (0.23) | **3,456,479 (0.48)** |
+| right, midshin | 2,207,548 (0.31) | **3,775,877 (0.53)** |
+| right, ankles | 3,891,890 (0.55) | **6,684,053 (0.94)** |
+| right, head | 5,964,860 (0.84) | **6,946,116 (0.97)** |
+| right, close | 1,339,636 (0.19) | **3,410,399 (0.48)** |
+| wrong, full / knees / midshin | 136,129 / 25,732 / 36,594 | 136,559 / 70,287 / 77,065 |
+| still, full / knees / midshin | 3,752 / 2,584 / 2,786 | 3,752 / 6,870 / 5,702 |
+
+With no guess at all, the legs' *movement* is unknown. The solve puts them
+under a moving body, which is worth about half of what they cost.
+
+### Measured: estimated-joint error
+
+`joint_error.py`: for every frame where a joint is NotTracked in the cut
+take but tracked in the uncut one, the distance between its hip-relative
+position in each estimate and in the uncut take. Median metres, pooled
+over the 4 songs. `estimate_tool` (`build_estimate_tool.py`) runs the
+estimator offline over a fixture.
+
+Image crops (`rescaled` is the earlier `kinematic`, which stretched a
+plausible guess to the learned bone length):
+
+| cut | joint | `off` (frozen) | `tracker` | `rescaled` | `kinematic` (default) |
+|---|---|---|---|---|---|
+| knees | knees | 0.147 | 0.116 | 0.115 | 0.116 |
+| knees | ankles | 0.201 | 0.189 | 0.177 | 0.189 |
+| knees | feet | 0.210 | 0.202 | 0.184 | 0.202 |
+| midshin | knees | 0.100 | 0.078 | 0.079 | 0.078 |
+| midshin | ankles | 0.140 | 0.110 | 0.105 | 0.110 |
+| midshin | feet | 0.150 | 0.115 | 0.107 | 0.115 |
+| ankles | ankles | 0.120 | 0.105 | 0.097 | 0.107 |
+| ankles | feet | 0.132 | 0.104 | 0.102 | 0.104 |
+| close | ankles | 0.187 | 0.134 | 0.118 | 0.133 |
+| close | feet | 0.115 | 0.093 | 0.090 | 0.093 |
+| head | wrists | 0.638 | 0.545 | 0.526 | 0.526 |
+| head | hands | 0.671 | 0.575 | 0.573 | 0.573 |
+
+- **Closer in metres is not more score.** `rescaled` is 1–2 cm closer on
+  ankles and feet. But it scored lower in the game than the guess kept as it
+  is: owner's YMCA 38,853 against 40,947; knees crop 4,447,405 against
+  4,486,820; midshin 6,047,419 against 6,142,625; skeleton knees 3,456,498
+  against 3,468,677. The default keeps the guess. INFERRED: the scorer
+  compares each frame's displacement against the choreography, and a guess
+  rescaled to a fixed length moves less than the leg did.
+- Two other levers changed nothing (< 0.4% on every variant): not holding
+  guessed joints, and the arms' hold.
+- An earlier solve-only version (floor + two-bone, the guess ignored) was
+  worse than the frozen joint on knees: 0.264 on the knees cut, 0.294 on
+  midshin. That is why a plausible guess is used.
+- A floor clamp on the guided ankles made knees worse (0.12 → 0.18–0.21 m
+  with 5 cm of slack, 0.13 with 30 cm). Removed.
+- On the side cut every method is about the same.
+
+Skeleton drops (`off` = `tracker` here are 1.2–2.5 m, the dropped place),
+`kinematic`:
+
+| cut | knees | ankles | feet | head |
+|---|---|---|---|---|
+| knees | 0.152 | 0.173 | 0.183 | — |
+| midshin | — | 0.157 | 0.168 | — |
+| ankles | — | — | 0.015 | — |
+| head | — | — | — | 0.044 |
+
+**Finding on the way: a performer replay re-published held frames at
+confidence 1.** Between recorded frames (`PosePerformer_Native.cpp`), a
+replayed joint the tracker had lost came back Tracked at its guess. On the
+skeleton-drop fixtures that is 2 m below the hips, and it taught the
+estimator a 1.89 m thigh. In-engine `kinematic` then scored *below* the
+solve-only version on knees (macarena 899,479 vs 1,106,827) although the
+offline outputs were identical. Fixed in `ef597140b`: held frames keep their
+confidence, and a bone is learned only within 0.5–1.6× its expected length.
+After the fix macarena knees scores 1,279,981 (`off` 1,001,557). The `off`
+image baseline moved too: img knees `off` was 3,097,457 on the pre-lane
+binary and is 3,773,387 on `ef597140b`; the held-frame fix is the INFERRED
+cause (the uncut rows agree within 0.004%). A live camera has no held
+frames.
+
+### The owner's YMCA session
+
+`~/tmp/gpd-ymca-session` (Easy, live 21,300, 31 bad / 7 ok / 2 awesome over
+measures 4–43). Replayed as a session (`--performer session:`,
+`matrix.py` `ymca_*` labels). MEASURED, load 29–36.
+
+1. **The replay reproduces the live ratings.** 33 of 40 moves get the same
+   rating. Median |Δ lastfrac| is 0.010 and the mean 0.018. The largest
+   differences are m25 (0.560 live, 0.718 replay) and m43 (0.054 vs 0.168,
+   the session's last move). Replay `off` gives 30/4/6 and 28,078. Every
+   rating difference is at a threshold; FAST_TIME's fixed step against an
+   8 fps wall-clock camera is the INFERRED cause.
+2. **Per move, before → after.**
+
+   | measures | `off` bad/ok/awesome | `kinematic` | mean Δ lastfrac |
+   |---|---|---|---|
+   | 4–27, legs cut | 17 / 3 / 4 | **15 / 1 / 8** | +0.081 (one move −0.005) |
+   | 28–39, legs seen | 9 / 1 / 2 | 9 / 1 / 2 | +0.003 (none below −0.002) |
+   | 4–43 | 30 / 4 / 6, 28,078 | **28 / 2 / 10, 40,925** | |
+
+   (`tracker`: 15 / 1 / 8 and 40,805.) Changed ratings, all in the legs-cut
+   part:
+   - m9 Sideclap bad 0.374 → awesome 0.757;
+   - m10 T_Bar ok 0.644 → awesome 0.745;
+   - m11 T_Bar ok 0.503 → awesome 0.710;
+   - m15 T_Bar ok 0.679 → awesome 0.749;
+   - m24 Lecture bad 0.496 → ok 0.552.
+
+   Sideclap m4–m9 rises by 0.06–0.38, T_Bar m10–m17 by 0.04–0.21 and
+   Lecture m18–m20 by 0.09–0.14; m21–m27 move by under 0.06. Per-move
+   lastfrac comes from the engine log's `MOVE_RATING` lines in each run
+   directory.
+3. **The legs-seen part is not made worse.** Same ratings; the largest drop
+   is 0.002 in lastfrac.
+4. **conf 0 and conf 1 in the scorer.** Neither is read. conf 0 (NotTracked)
+   was frozen at its last conf>0 position (the raw guess if never seen);
+   under `kinematic` it is the estimate. conf 1 (Inferred) is the raw
+   position, unchanged by the estimator.
+5. **Track-id changes.** In this session the dancer's id went 1→2 at song
+   0.05 s, flickered 2⇄3/4/5 alongside a second detection over song
+   29–35 s, was 6 for 12 frames at 39.6 s, 3 from 41.3 s, and 9 from 78.6 s
+   after a 10-frame dropout. A newcomer within 0.3 m of a
+   held player ends P-12's hold; the slot reads untracked for one frame,
+   and the new id claims it with `ResetJointHold`, `ResetSlotHold` and
+   `gEstimate.ResetSlot` (learned bones forgotten; up and floor kept). The
+   image's `ClearHistory` empties the displacement history. PoseFill copies
+   a new person for one frame without extrapolating. MEASURED cost: the same
+   session with every single-person frame relabelled to one id
+   (`ymca_oneid`) scores `off` 29,038 (+960) and `kinematic` 41,551 (+626).
+   The gain is in m15–m21, where the 29–35 s flicker sits: m15 ok →
+   awesome under `off`. Not changed here: an id flicker is the tracker's
+   (P-12's `CentroidTracker`), and merging ids is a tracker decision.
+
+### The camera stops or the dancer leaves (H-94)
+
+- **Sensor watchdog, `DC3_POSE_STALL_MS` (default 1500, wall time).** After
+  that long with no new frame the sensor reports nobody, one empty frame per
+  1/30 s. P-12's 1 s hold keeps the player; then the slot reads untracked
+  and the image's own `Game::CheckForSkeletonLoss` pauses the song. A
+  `pose-stall` notice says the source stopped; when frames return the player
+  is laid in again and the notice says so. Covers every provider, desktop
+  and web. `0` = off (the old frozen player).
+- **Server watchdog, `DC3_POSE_SERVER_STALL_MS` (default 5000).** A launched
+  desktop server that stays silent is SIGKILLed (a stopped process ignores
+  SIGTERM) and relaunched under the existing restart policy.
+- **MEASURED end to end** (`PoseStallTest`, YMCA, the performer silent from
+  song 20.00 s for 9 s of wall time):
+  - the watchdog fired 1.5 s in;
+  - `perform_pause_screen` was entered, the last gameplay frame at song
+    23.39 s;
+  - frames returned after 9.0 s.
+
+  With `DC3_POSE_STALL_MS=0` the song never pauses and plays on past 26.5 s
+  scoring a statue.
+- **Seen in the sweeps:** a performer replay publishes nothing on song
+  select, so the watchdog fires there in 153 of 204 runs. That costs one or
+  two log lines, never a pause screen (none in any sweep run). A live
+  camera keeps sending there.
+
+### Tests
+
+- `native/tests/test_pose_estimate.cpp` (`PoseEstimateMathTest`,
+  `PoseEstimateTest`, 10): two-bone lengths and reach, learned bones, the
+  plausibility gate, the floor, the hold's decay, the guess's direction,
+  Inferred marking, the gain, the knob parse. Six sabotages, each caught
+  (listed in the file's header).
+- `test_native_pose_socket.cpp`:
+  - `PoseSensorEstimateTest`, on the real sensor path: a knee out of the
+    picture follows a dancer who steps 0.5 m and reads Inferred; the control
+    `off` leaves it 0.5 m behind. Sabotage: the `Apply` call removed.
+  - `PoseSensorStallTest`: stall, hold, loss, recovery, and the `=0`
+    control. Sabotage: watchdog off.
+- `test_native_pose_spawner.cpp`
+  `PoseSpawnerTest.AStalledServerIsReplacedAndTrackingResumes` (a stub
+  server SIGSTOPs itself). Sabotage: server stall off.
+- `test_native_pose_dropout.cpp` `PoseStallTest` / `PoseStallOffTest`: the
+  end-to-end pause and resume above, and the no-watchdog control. Sabotage:
+  the watchdog never fires.
+- **The replay gate, `scripts/pose_cutoff/check.py`** (not in
+  `native_test.sh`: one matrix run is ~1 h of game time on this box).
+  - Check 1: the knees cut must score ≥ `--min-frac` of the uncut dance.
+  - Check 2: the wrong-dance and still controls with the cut must stay ≤
+    their uncut score + 0.02 × the right dance's full score.
+
+  Stated thresholds, from the tables above:
+
+  | family | `--min-frac` | `kinematic` | `off` (the sabotage, must fail) |
+  |---|---|---|---|
+  | img | 0.60 | **0.645, PASS** | 0.543, FAIL |
+  | skel | 0.45 | **0.485, PASS** (midshin 0.530) | 0.233, FAIL |
+
+  Both controls pass under both. `--selftest` covers 4 cases.
+
+### Costs and limits
+
+- **Generous.** The wrong-dance control gains about 1% of the right
+  dance's full score on a cut (img knees: 115,317 → 189,872; skel knees:
+  25,732 → 70,287). It stays below its own uncut score + 2%. A still player gains
+  nothing that matters (≤ 6,870 against 7.1 M).
+- **Skeleton drops are half-recovered.** With no tracker guess, the legs'
+  movement is unknown; a choreography prior (step 3d) would be the next
+  lever. It was not needed for the real-crop case, where the guess carries
+  the motion.
+- **Not validated live.** No GPD session with the estimator on has been
+  taken. The image crops are a 640×480 replay of stream footage, not the
+  GPD's camera.
+- **FAST_TIME, loaded box** (load 25–48 on 32 cores). Frame-exact, so a
+  quiet-box rerun is expected to agree; none was taken.
+
+### Reproducing
+
+```bash
+# fixtures: image crops (MediaPipe over cut footage) and skeleton drops
+.venv/bin/python -I scripts/pose_cutoff/record_cut.py --video <footage>/macarena.mp4 \
+  --start -5 --dur 161.3 --shift 0.137 --cut-bottom 340 --out rec/macarena_knees.dc3pose
+python3 scripts/pose_cutoff/cutoff.py cut <fixture> right_knees/macarena.dc3pose --cut knees --pos drop
+python3 scripts/pose_cutoff/cutoff.py still <fixture> still_full/macarena.dc3pose
+# score: one label per mode, then the table and the gate
+python3 scripts/pose_cutoff/matrix.py run --label kinematic --out OUT --variants FX/img_full,FX/img_knees,... \
+  --env DC3_POSE_ESTIMATE=kinematic --jobs 4
+python3 scripts/pose_cutoff/matrix.py table OUT
+python3 scripts/pose_cutoff/check.py OUT --family img --cut knees --min-frac 0.6
+python3 scripts/pose_cutoff/check.py OUT --family skel --cut knees --min-frac 0.45
+# the owner's session, split legs cut / legs seen
+python3 scripts/pose_cutoff/matrix.py run --label ymca_kinematic --out OUT --variants ymca.dc3session
+python3 scripts/pose_cutoff/matrix.py table OUT --label ymca_kinematic --measures 4-27,28-39,4-43
+# joint error: estimate offline, compare against the uncut take
+python3 scripts/pose_cutoff/build_estimate_tool.py /tmp/estimate_tool
+/tmp/estimate_tool kinematic 1 rec/macarena_knees.dc3pose est/macarena_knees.dc3pose
+python3 -I scripts/pose_cutoff/joint_error.py rec/macarena_full.dc3pose rec/macarena_knees.dc3pose \
+  --est kinematic=est/macarena_knees.dc3pose
+# which joints count
+python3 scripts/native_song_sweep.py --out SW --no-gpu --performer choreo --env DC3_MOVE_WEIGHTS_LOG=1 ...
+python3 scripts/pose_cutoff/move_weights.py SW
+native/build/milo-tests --gtest_filter='PoseEstimate*:PoseSensorEstimate*:PoseSensorStall*:PoseStall*'
 ```
 
 ## Gaps
