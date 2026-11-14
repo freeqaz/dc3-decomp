@@ -45,6 +45,24 @@ import kitdrive  # noqa: E402
 import session_summary  # noqa: E402
 
 T0 = time.time()
+LOAD = []  # (t, 1-min load average) every 10 s: a score from a loaded box is not evidence
+
+
+def _sample_load():
+    while True:
+        try:
+            LOAD.append((time.time(), os.getloadavg()[0]))
+        except OSError:
+            pass
+        time.sleep(10)
+
+
+threading.Thread(target=_sample_load, daemon=True).start()
+
+
+def load_over(t0, t1):
+    xs = [x for t, x in LOAD if t0 - 10 <= t <= t1]
+    return {"mean": round(sum(xs) / len(xs), 1), "max": round(max(xs), 1)} if xs else None
 EVENTS = []
 
 
@@ -209,6 +227,8 @@ class Soak:
         try:
             rec.update(fn(*args) or {})
             rec["ok"] = rec.get("ok", True)
+            if not rec["ok"]:
+                say(f"== {name} FAILED: {rec.get('error') or rec.get('screen') or 'not ok'}")
         except RuntimeError as e:
             rec["ok"] = False
             rec["error"] = str(e)
@@ -270,11 +290,13 @@ class Soak:
         time.sleep(6)
         card = k.card(0)
         card1 = k.card(1)
+        load = load_over(time.time() - secs, time.time())
         say(f"results on {got} after {secs:.0f} s: p1 {card}"
-            + (f", p2 {card1}" if card1.get("score") else ""))
+            + (f", p2 {card1}" if card1.get("score") else "")
+            + (f"; box load mean {load['mean']} max {load['max']} ({os.cpu_count()} threads)" if load else ""))
         nxt = advance(k, back_to, 180, label="after results") if back_to else None
         return {"results_screen": got, "song_s": round(secs), "card": card, "card_p2": card1,
-                "next": nxt, "ok": bool(nxt) or not back_to}
+                "load": load, "next": nxt, "ok": bool(nxt) or not back_to}
 
     def resume(self):
         """Continue a paused song, as a player would: Resume on the pause menu
@@ -307,13 +329,28 @@ class Soak:
         self.watch.paused_since = time.time()
 
     def back_to_main(self):
+        """To the main menu as a player would: the Main Menu row where a
+        screen has one (a Battle's complete screen ignores Back -- measured:
+        six presses left it on dancebattle_perform_complete_screen), Ok on
+        its confirm dialog, else Back."""
         k = self.kit
-        for _ in range(6):
-            if k.screen() == "main_screen":
-                return {"ok": True}
-            k.press("cancel")
+        path = []
+        end = time.time() + 90
+        while time.time() < end and k.alive():
+            s = k.screen()
+            if s == "main_screen":
+                return {"ok": True, "via": path}
+            if not path or path[-1] != s:
+                path.append(s)
+            lst = k.focus_list()
+            if k.has_row(lst, "pausecommand_mainmenu"):
+                k.choose("pausecommand_mainmenu")
+            elif s and "confirm" in s and k.has_row(lst, "ok"):
+                k.choose("ok")
+            else:
+                k.press("cancel")
             time.sleep(3)
-        return {"ok": k.screen() == "main_screen", "screen": k.screen()}
+        raise RuntimeError(f"not back at main_screen after 90 s (at {k.screen()}; via {path})")
 
     def rehearse(self, song):
         k = self.kit

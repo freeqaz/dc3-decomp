@@ -337,10 +337,19 @@ class Kit:
         self.pick_song(song)
         if mode == "practice":
             # Rehearse picks its difficulty on its own screen (rows easy,
-            # medium, expert), then goes straight to the song.
+            # medium, expert), then a start screen whose row is
+            # break_it_down_title_song (ui/startgame/startgame.dta); with two
+            # people present it asks first (practice_confirm_screen, ok).
             self.need("seldiff_practice_screen")
             if not self.choose(difficulty):
                 raise RuntimeError(f"seldiff_practice_screen has no {difficulty}")
+            got = self.need(("startgame_practice_screen", "game_screen"), 120)
+            if got == "startgame_practice_screen":
+                if not self.choose("break_it_down_title_song"):
+                    raise RuntimeError("startgame_practice_screen has no break_it_down_title_song")
+                got = self.need(("practice_confirm_screen", "game_screen"), 120)
+                if got == "practice_confirm_screen":
+                    self.choose("ok")  # the dialog's rows are ok / no
             return self.need(("game_screen",), 120)
         return self.multiuser(difficulty)
 
