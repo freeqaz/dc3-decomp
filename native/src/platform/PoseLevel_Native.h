@@ -125,6 +125,11 @@ bool NativeSensorLevelApplies();
 // so the next live frame continues from there, and every tracked slot is
 // levelled exactly as NativeLevelSensorFrame levelled it when it was recorded.
 void NativeLevelSensorFrameAt(SkeletonFrame &frame, const Vector3 &floorNormal);
+// Level `frame` by `floorNormal` and leave the smoother alone: a frame the
+// pose fill delivers late (PoseFill_Native.h) is levelled by the normal its
+// camera frame got when it arrived, and the smoother keeps following the
+// camera.
+void NativeLevelSensorFrameBy(SkeletonFrame &frame, const Vector3 &floorNormal);
 
 // The sensor's estimator (read by tests and the HTTP debug surface).
 const NativeGravityEstimator &NativeSensorGravityEstimator();

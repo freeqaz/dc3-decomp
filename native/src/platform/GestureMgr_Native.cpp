@@ -18,6 +18,7 @@
 #include "hamobj/HamGameData.h"   // TheGameData (player->skeleton binding)
 #include "hamobj/HamPlayerData.h" // GetSkeletonTrackingID
 #include "hamobj/MoveDir.h"       // MoveDir::SongSeconds (DC3_POSE_FILL)
+#include "PoseFill_Native.h"      // DC3_POSE_FILL
 #include "meta_ham/HamUI.h"          // TheHamUI -> ShellInput -> SkeletonChooser
 #include "meta_ham/ShellInput.h"
 #include "meta_ham/SkeletonChooser.h"
@@ -780,50 +781,92 @@ static void PerfTick(bool providerRunning, bool accepted, int persons) {
     }
 }
 
-// DC3_POSE_FILL=hold|extrap (PROTOTYPE, np-pose-rough study; off by default).
-// The scorer keeps, per choreography frame, the BEST (pose error + time
-// error) over every sensor frame within reach of it (MoveDir::
-// EnqueueDetectFrames -> DetectFrame::AddError), a rule tuned on a 30 Hz
-// Kinect.  At 8 camera frames/s the nearest frame is up to 60 ms from each
-// choreography frame and the time error alone costs a rating.  A fill frame
-// re-accepts the last camera frame (hold) or a linear step on from it
-// (extrap: from the last two camera frames of the same track id, capped at
-// one camera period) every 1/30 s of SONG time between camera frames.  Not
-// recorded (DC3_POSE_RECORD keeps camera frames only), not counted as
-// pose_fps, and no fill more than 0.5 s after the last camera frame.
+// DC3_POSE_FILL (PoseFill_Native.h): frames between camera frames, at the
+// Kinect's 30 Hz of song time, while the camera is slow.  The default,
+// interp, runs the stream one camera period behind the camera and adds that
+// delay to the scorer's latency (Dc3SetPoseFillDelaySeconds).
+//
+// While the fill is engaged a camera frame is NOT laid into the slots when it
+// arrives: it is levelled (the gravity estimate is sensor state built from
+// camera frames only), recorded (DC3_POSE_RECORD writes camera frames as they
+// arrived, never fill frames) and buffered; the filler then hands frames to
+// DeliverFillFrame when they are due, and those go through the same slot
+// layer -- AssignSlots, P-12's dropout hold, the joint hold -- as a camera
+// frame does when the fill is off.
 namespace {
-enum FillMode { kFillOff, kFillHold, kFillExtrap };
-FillMode PoseFillMode() {
-    static const FillMode sMode = [] {
+Dc3PoseFill::Filler gFill;
+bool gFillModeRead = false;
+Dc3PoseFill::Mode gFillModeOverride = Dc3PoseFill::kInterp;
+bool gFillHaveOverride = false;
+double (*gFillClock)() = nullptr;
+
+void FillReadMode() {
+    if (gFillModeRead)
+        return;
+    gFillModeRead = true;
+    Dc3PoseFill::Mode mode;
+    if (gFillHaveOverride) {
+        mode = gFillModeOverride;
+    } else {
         const char *v = getenv("DC3_POSE_FILL");
-        if (!v || !*v || !strcmp(v, "0") || !strcmp(v, "off"))
-            return kFillOff;
-        if (!strcmp(v, "hold"))
-            return kFillHold;
-        if (!strcmp(v, "extrap"))
-            return kFillExtrap;
-        fprintf(stderr, "DC3_POSE_FILL='%s' ignored (want hold or extrap)\n", v);
-        return kFillOff;
-    }();
-    return sMode;
+        bool ok = true;
+        mode = Dc3PoseFill::ParseMode(v, &ok);
+        if (!ok)
+            fprintf(stderr, "DC3_POSE_FILL='%s' ignored (want off, interp, hold, extrap or extrapc)\n",
+                    v);
+    }
+    gFill.SetMode(mode);
+    gFill.Reset();
 }
-struct PoseFill {
-    bool have = false;
-    double lastAcceptSong = 0.0, lastRealSong = 0.0;
-    double realTs = -1.0, prevRealTs = -1.0;
-    NativeSkeletonProvider::PersonData last[NativeSkeletonProvider::kMaxPersons];
-    NativeSkeletonProvider::PersonData prev[NativeSkeletonProvider::kMaxPersons];
-    int nLast = 0, nPrev = 0;
-    unsigned fills = 0;
-};
-PoseFill gFill;
+
+double FillClock() { return gFillClock ? gFillClock() : (double)MoveDir::SongSeconds(); }
+
+// Engagement changes move the scorer's latency; say so once each time.
+void FillPublishDelay() {
+    static bool sWasEngaged = false;
+    float delay = (float)gFill.Delay();
+    Dc3SetPoseFillDelaySeconds(delay);
+    if (gFill.Engaged() != sWasEngaged) {
+        sWasEngaged = gFill.Engaged();
+        double med = gFill.MedianInterval();
+        fprintf(stderr,
+                "DC3 POSE FILL: %s %s (camera %.1f frames/s, stream delay %.0f ms added to the "
+                "scorer's latency)\n",
+                Dc3PoseFill::ModeName(gFill.GetMode()), sWasEngaged ? "engaged" : "released",
+                med > 0.0 ? 1.0 / med : 0.0, delay * 1000.0f);
+    }
+}
 } // namespace
+
+void NativePoseFillTestSet(int mode, double (*clock)()) {
+    gFillHaveOverride = mode >= 0;
+    if (mode >= 0)
+        gFillModeOverride = (Dc3PoseFill::Mode)mode;
+    gFillClock = clock;
+    gFillModeRead = false;
+    FillReadMode();
+    Dc3SetPoseFillDelaySeconds(0.0f);
+}
+
+const Dc3PoseFill::Filler &NativePoseFiller() { return gFill; }
+
+// A frame the filler made due: into the slots exactly as a camera frame goes
+// when the fill is off.  Its time base is the camera's (out.ts), so the
+// elapsed time is what the frame shows, not the game loop's.
+static void DeliverFillFrame(const Dc3PoseFill::Output &out) {
+    BeginSensorFrame(AcceptedFrameElapsed(out.ts));
+    int reassigns = FillPersonSlots(out.persons, out.numPersons, (float)sFrame.mElapsedMs);
+    ScoringDebugTick(out.real, false, reassigns);
+    if (out.levelled)
+        NativeLevelSensorFrameBy(sFrame, out.floorNormal);
+}
 
 static const SkeletonFrame *BuildSensorFrame() {
     bool providerRunning = false;
     bool newFrame = false;
-    bool filled = false;
+    bool delivered = false;
 
+    FillReadMode();
     if (TheSkeletonProvider && TheSkeletonProvider->IsRunning()) {
         providerRunning = true;
         TheSkeletonProvider->Poll();
@@ -836,100 +879,83 @@ static const SkeletonFrame *BuildSensorFrame() {
         sExtLastFrameId = frameId;
 
         if (newFrame) {
-            BeginSensorFrame(AcceptedFrameElapsed(TheSkeletonProvider->Timestamp()));
             PoseAgeLog(TheSkeletonProvider->Timestamp());
             static NativeSkeletonProvider::PersonData sPersons[NativeSkeletonProvider::kMaxPersons];
             int numPersons = TheSkeletonProvider->NumPersons();
             for (int i = 0; i < numPersons; i++)
                 sPersons[i] = TheSkeletonProvider->GetPerson(i);
-            ScoringDebugTick(true, false, FillPersonSlots(sPersons, numPersons, (float)sFrame.mElapsedMs));
             // SkeletonFrame::Create's gravity step (PoseLevel_Native.h): the
             // slots hold raw camera space; a camera that does not know its
             // gravity gets an estimate, everything else (0,1,0).
             bool unlevelled = TheSkeletonProvider->FrameUnlevelled() || PerformerReplaysRecording();
+
+            Dc3PoseFill::Source src;
+            src.arrival = FillClock();
+            src.ts = TheSkeletonProvider->Timestamp();
+            src.frameId = frameId;
+            src.numPersons = numPersons;
+            for (int i = 0; i < numPersons; i++)
+                src.persons[i] = sPersons[i];
+            bool engaged = gFill.Push(src);
+            if (!engaged) {
+                // The camera frame, now: the path with the fill off.
+                BeginSensorFrame(AcceptedFrameElapsed(TheSkeletonProvider->Timestamp()));
+                ScoringDebugTick(true, false, FillPersonSlots(sPersons, numPersons, (float)sFrame.mElapsedMs));
+                sFrame.mFloorNormal.Set(0.0f, 0.0f, 0.0f); // "not levelled", for the filler
 #ifndef __EMSCRIPTEN__
-            // A replayed session frame is levelled as it was when recorded
-            // (the estimate is session state a one-song replay cannot rebuild).
-            if (!Dc3PoseSessionReplayLevel(sFrame, frameId))
-#endif
-                NativeSensorLevel(sFrame, sPersons, numPersons, unlevelled, sFrame.mElapsedMs * 0.001f);
-#ifndef __EMSCRIPTEN__
-            // DC3_POSE_RECORD: what the sensor accepted, for an offline replay.
-            Dc3PoseSessionRecord(sPersons, numPersons, frameId, TheSkeletonProvider->Timestamp(),
-                                 unlevelled, sFrame);
-#endif
-            if (PoseFillMode() != kFillOff) {
-                double song = MoveDir::SongSeconds();
-                for (int i = 0; i < gFill.nLast; i++)
-                    gFill.prev[i] = gFill.last[i];
-                gFill.nPrev = gFill.nLast;
-                for (int i = 0; i < numPersons; i++)
-                    gFill.last[i] = sPersons[i];
-                gFill.nLast = numPersons;
-                gFill.prevRealTs = gFill.have ? gFill.realTs : -1.0;
-                gFill.realTs = TheSkeletonProvider->Timestamp();
-                gFill.lastAcceptSong = gFill.lastRealSong = song;
-                gFill.have = true;
-            }
-        } else if (PoseFillMode() != kFillOff && gFill.have) {
-            double song = MoveDir::SongSeconds();
-            double sinceReal = song - gFill.lastRealSong;
-            if (song < gFill.lastAcceptSong - 0.5) {
-                gFill.have = false; // the clock went back: a new song, the menus
-            } else if (song - gFill.lastAcceptSong >= 1.0 / 30.0 - 1e-6 && sinceReal < 0.5) {
-                double camPeriod = gFill.realTs >= 0.0 && gFill.prevRealTs >= 0.0
-                    ? gFill.realTs - gFill.prevRealTs
-                    : -1.0;
-                static NativeSkeletonProvider::PersonData sFillPersons[NativeSkeletonProvider::kMaxPersons];
-                for (int i = 0; i < gFill.nLast; i++) {
-                    sFillPersons[i] = gFill.last[i];
-                    if (PoseFillMode() != kFillExtrap || camPeriod <= 1e-3 || !gFill.last[i].valid)
-                        continue;
-                    for (int k = 0; k < gFill.nPrev; k++) {
-                        const NativeSkeletonProvider::PersonData &p = gFill.prev[k];
-                        if (p.trackId != gFill.last[i].trackId || !p.valid)
-                            continue;
-                        float a = (float)(std::min(sinceReal, camPeriod) / camPeriod);
-                        for (int j = 0; j < kNumJoints; j++) {
-                            const Vector3 &x = gFill.last[i].joints[j];
-                            const Vector3 &xp = p.joints[j];
-                            sFillPersons[i].joints[j].Set(x.x + (x.x - xp.x) * a,
-                                                          x.y + (x.y - xp.y) * a,
-                                                          x.z + (x.z - xp.z) * a);
-                        }
-                        break;
-                    }
-                }
-                // The camera's time base, so the elapsed time is the fill's
-                // own step; kept short of where the next camera frame lands.
-                double ts = -1.0;
-                if (gFill.realTs >= 0.0) {
-                    double step = sinceReal;
-                    if (camPeriod > 0.0 && step > 0.9 * camPeriod)
-                        step = 0.9 * camPeriod;
-                    ts = gFill.realTs + step;
-                }
-                BeginSensorFrame(AcceptedFrameElapsed(ts));
-                FillPersonSlots(sFillPersons, gFill.nLast, (float)sFrame.mElapsedMs);
-                bool unlevelled = TheSkeletonProvider->FrameUnlevelled() || PerformerReplaysRecording();
-#ifndef __EMSCRIPTEN__
+                // A replayed session frame is levelled as it was when recorded
+                // (the estimate is session state a one-song replay cannot rebuild).
                 if (!Dc3PoseSessionReplayLevel(sFrame, frameId))
 #endif
-                    NativeSensorLevel(sFrame, sFillPersons, gFill.nLast, unlevelled,
-                                      sFrame.mElapsedMs * 0.001f);
-                gFill.lastAcceptSong = song;
-                gFill.fills++;
-                filled = true;
+                    NativeSensorLevel(sFrame, sPersons, numPersons, unlevelled, sFrame.mElapsedMs * 0.001f);
+                gFill.MarkLevel(sFrame.mFloorNormal);
+                if (sFrame.mFloorNormal.x == 0.0f && sFrame.mFloorNormal.y == 0.0f
+                    && sFrame.mFloorNormal.z == 0.0f)
+                    sFrame.mFloorNormal.Set(0.0f, 1.0f, 0.0f);
+#ifndef __EMSCRIPTEN__
+                // DC3_POSE_RECORD: what the sensor accepted, for an offline replay.
+                Dc3PoseSessionRecord(sPersons, numPersons, frameId, TheSkeletonProvider->Timestamp(),
+                                     unlevelled, sFrame);
+#endif
+                delivered = true;
+            } else {
+                // Levelled and recorded now, laid into the slots when due.
+                static SkeletonFrame sArrival;
+                memset(&sArrival, 0, sizeof(sArrival));
+                sArrival.mElapsedMs = gFill.ArrivalElapsedMs();
+                for (int s = 0; s < NUM_SKELETONS; s++)
+                    sArrival.mSkeletonDatas[s].mTrackingID = -1;
+#ifndef __EMSCRIPTEN__
+                if (!Dc3PoseSessionReplayLevel(sArrival, frameId))
+#endif
+                    NativeSensorLevel(sArrival, sPersons, numPersons, unlevelled,
+                                      sArrival.mElapsedMs * 0.001f);
+                gFill.MarkLevel(sArrival.mFloorNormal);
+                if (sArrival.mFloorNormal.x == 0.0f && sArrival.mFloorNormal.y == 0.0f
+                    && sArrival.mFloorNormal.z == 0.0f)
+                    sArrival.mFloorNormal.Set(0.0f, 1.0f, 0.0f);
+#ifndef __EMSCRIPTEN__
+                Dc3PoseSessionRecord(sPersons, numPersons, frameId, TheSkeletonProvider->Timestamp(),
+                                     unlevelled, sArrival);
+#endif
             }
-            if (!filled)
-                ScoringDebugTick(false, true, 0);
-        } else {
-            ScoringDebugTick(false, true, 0);
         }
+        if (gFill.Engaged()) {
+            Dc3PoseFill::Output out;
+            if (gFill.Poll(FillClock(), out)) {
+                DeliverFillFrame(out);
+                delivered = true;
+            }
+        }
+        FillPublishDelay();
+        if (!delivered)
+            ScoringDebugTick(false, true, 0);
     }
 
     if (!providerRunning) {
         ResetSlotMap();
+        gFill.Reset();
+        FillPublishDelay();
         BeginSensorFrame(AcceptedFrameElapsed());
         int dummies = NativeDummyPlayerCount();
         for (int d = 0; d < dummies; d++) {
@@ -937,12 +963,13 @@ static const SkeletonFrame *BuildSensorFrame() {
             FinishTrackedSlot(d);
         }
         NativeSensorLevel(sFrame, nullptr, 0, false, sFrame.mElapsedMs * 0.001f);
-        newFrame = true;
+        delivered = true;
     }
 
-    PerfTick(providerRunning, newFrame,
+    // pose_fps counts camera frames only, never fill frames.
+    PerfTick(providerRunning, newFrame || !providerRunning,
              providerRunning && TheSkeletonProvider ? TheSkeletonProvider->NumPersons() : 0);
-    if (!newFrame && !filled)
+    if (!delivered)
         return nullptr;
     NativeAutoAssignPlayers();
     return &sFrame;
