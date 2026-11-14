@@ -25,6 +25,7 @@
 
 #include "test_helpers.h"
 
+#include "gfx/DisplayRamp.h"
 #include "gfx/GpuDevice.h"
 #include "gfx/PostProcPass.h"
 #include "gfx/RB3RetailPost.h"
@@ -75,6 +76,15 @@ TEST_F(DC3RetailPostTest, BloomMaskScaleIsAllowHDRLumaOverThreshold) {
 
     pp->SetProperty("bloom_threshold", DataNode(0.5f));
     EXPECT_FLOAT_EQ(rndshape::BloomMaskScale(mat), -2.0f) << "threshold <= 1 does not scale";
+
+    // bloom_multiplier 0 (the "debloom" materials, e.g. game_mode_icon's
+    // debloom.mat): retail still writes the mask, as 0, so the scale must stay
+    // a mask write (negative) whose mask rounds to 0, not "leave alpha alone".
+    mat->SetProperty("bloom_multiplier", DataNode(0.0f));
+    const float zero = rndshape::BloomMaskScale(mat);
+    EXPECT_LT(zero, 0.0f) << "a bloom_multiplier-0 AllowHDR material still writes the mask";
+    EXPECT_LT(std::fabs(zero) * 1e6f, 1.0f / 255.0f) << "and the mask it writes is 0";
+    mat->SetProperty("bloom_multiplier", DataNode(2.0f));
 
     mat->SetProperty("blend", DataNode((int)RndMat::kBlendSrcAlpha));
     EXPECT_EQ(rndshape::BloomMaskScale(mat), 0.0f) << "SrcAlpha is not NgMat::AllowHDR";
@@ -282,8 +292,26 @@ TEST_F(DC3RetailPostGpuTest, PassCostAt720p) {
     const double tBase = timeIt(base), tPlain = timeIt(plain), tStreak = timeIt(streak),
                  tAll = timeIt(all), tBase2 = timeIt(base);
     post.Terminate();
+    // The scan-out ramp (WgpuRnd::EndDrawing): a copy and one full-screen pass.
+    DisplayRamp ramp;
+    auto rampN = [&](int n) {
+        for (int i = 0; i < n; i++) {
+            wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+            EXPECT_TRUE(ramp.Apply(enc, frame, frameView, 0.85f, gpu));
+            wgpu::CommandBuffer cmd = enc.Finish();
+            gpu.Queue().Submit(1, &cmd);
+        }
+        EXPECT_TRUE(gpu.ReadbackTexture(frame, W, H, sink.data(), sink.size()));
+    };
+    rampN(10);
+    const auto r0 = std::chrono::steady_clock::now();
+    rampN(200);
+    const double tRamp =
+        std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - r0).count() /
+        200.0;
     printf("DC3RetailPost cost @%dx%d (us/frame): composite only %.0f (again %.0f), "
-           "+plain bloom %.0f, +streak bloom %.0f, streak+vignette+chroma+xfm %.0f\n",
-           W, H, tBase, tBase2, tPlain, tStreak, tAll);
+           "+plain bloom %.0f, +streak bloom %.0f, streak+vignette+chroma+xfm %.0f, "
+           "scan-out ramp %.0f\n",
+           W, H, tBase, tBase2, tPlain, tStreak, tAll, tRamp);
     EXPECT_GT(tBase, 0.0);
 }
