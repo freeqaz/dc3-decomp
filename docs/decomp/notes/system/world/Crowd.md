@@ -76,3 +76,10 @@ Inside the body (was lines 1094-1121):
     // 99.86385 canonical 99.98487 against these report values, so any candidate
     // must be measured on a full ninja.
 ```
+
+## `?Apply3DCharXfm@WorldCrowd@@QAAXABU?$_List_iterator@UCharData@WorldCrowd@@U?$_Nonconst_traits@UCharData@WorldCrowd@@@stlpmtx_std@@@stlpmtx_std@@HPAVRndCam@@@Z`
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.848, 3 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
