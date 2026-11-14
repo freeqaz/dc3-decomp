@@ -1190,7 +1190,7 @@ void App::RunWithoutDebugging() {
     HttpServerInit();
 #endif
 
-    // H-14: the image's frame ceiling (see platform/FramePacer_Native.h).
+    // H-17: the image's frame ceiling (see platform/FramePacer_Native.h).
     // Windowed runs on a display faster than 60 Hz are capped; headless runs
     // only when DC3_FPS_CAP asks.
     Dc3FramePacer framePacer;
@@ -1366,7 +1366,7 @@ void App::RunWithoutDebugging() {
                 break;
             }
         }
-        // H-14: sleep out the rest of the frame period (no-op when uncapped).
+        // H-17: sleep out the rest of the frame period (no-op when uncapped).
         framePacer.Pace();
     }
     if (framePacer.TargetFps() > 0.0)

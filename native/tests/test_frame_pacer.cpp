@@ -1,4 +1,4 @@
-// CPU-use guards (lane np-cpu-perf, PLAN H-14):
+// CPU-use guards (lane np-cpu-perf, PLAN H-17):
 //   * the frame cap's decision (DC3_FPS_CAP x windowed/headless x display rate)
 //     and that the pacer SLEEPS rather than spins;
 //   * the engine's backend-label switch (MILO_GPU_LABELS) and the render

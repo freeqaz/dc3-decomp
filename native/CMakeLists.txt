@@ -1268,7 +1268,7 @@ set(DC3_NATIVE_CORE_SOURCES
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/PosePerformer_Native.cpp>  # DC3_POSE_PERFORM
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/PoseSession_Native.cpp>  # DC3_POSE_RECORD, session: replay (PLAN L-1)
     src/platform/DtaEvalSupport.cpp   # DTA eval state guard + result serializer (unit-tested)
-    $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/FramePacer_Native.cpp>  # H-14 frame cap (DC3_FPS_CAP)
+    $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/FramePacer_Native.cpp>  # H-17 frame cap (DC3_FPS_CAP)
     src/engine_stubs_generated.cpp
     src/StubTrace.cpp
     src/native_link_glue.cpp
@@ -2093,7 +2093,7 @@ if(BUILD_TESTS)
         tests/test_native_options.cpp
         tests/test_native_profile.cpp
         tests/test_native_glyph_render.cpp
-        tests/test_frame_pacer.cpp     # H-14 frame cap + engine CPU-use guards
+        tests/test_frame_pacer.cpp     # H-17 frame cap + engine CPU-use guards
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
