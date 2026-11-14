@@ -130,6 +130,13 @@ ARCHIVE="$( [ -e "$WT/archive" ] && readlink -f "$WT/archive" )"
     || { echo "cannot reach $HOST" >&2; exit 75; }
 
 if [ "$ACTION" = assets ]; then
+    # ~24 GB of disk and network IO on the serving host: same window rule as a
+    # build, idle IO class on the receiving side.
+    if "${SSH[@]}" "$HOST" 'test -e /run/cmp-measure-window || test -e /run/cmp-agent-pause'; then
+        echo "tnr is in a measurement window or paused; not copying assets now" >&2; exit 75
+    fi
+    IDLE="ionice -c 3 nice -n 19 rsync"
+    rs() { rsync -e "$RSH" --rsync-path="$IDLE" "$@"; }
     t=$(now)
     [ -n "$ASSETS" ] && { echo "orig-assets <- $ASSETS"; rs -a --delete "$ASSETS/" "$HOST:$B/assets/orig-assets/" || exit 3; }
     [ -n "$ARCHIVE" ] && { echo "archive <- $ARCHIVE"; rs -a --delete "$ARCHIVE/" "$HOST:$B/assets/archive/" || exit 3; }
