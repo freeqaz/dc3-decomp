@@ -851,5 +851,105 @@ class NoAudioImportTest(unittest.TestCase):
             self.assertEqual(self.probe("pm.block_audio_import = lambda: None"), "module")
 
 
+class _FakeResult:
+    def __init__(self, n, who):
+        self.pose_landmarks = [[who]] * n
+
+
+class _FakeLandmarker:
+    """A PoseLandmarker that sees `scene(ts_ms)` people, never more than its
+    num_poses, and records which thread called it and when."""
+
+    def __init__(self, num_poses, scene, log, busy):
+        self.num_poses, self.scene, self.log, self.busy = num_poses, scene, log, busy
+        self.ts = []
+        self.closed = False
+
+    def detect_for_video(self, image, ts_ms):
+        key = id(self)
+        if key in self.busy:
+            raise AssertionError("one landmarker used from two threads at once")
+        self.busy.add(key)
+        try:
+            time.sleep(0.001)
+            if self.ts and ts_ms <= self.ts[-1]:
+                raise AssertionError(f"VIDEO timestamps must increase: {self.ts[-1]} then {ts_ms}")
+            self.ts.append(ts_ms)
+            self.log.append((self.num_poses, threading.current_thread().name, ts_ms, image))
+            return _FakeResult(min(self.num_poses, self.scene(ts_ms)), self.num_poses)
+        finally:
+            self.busy.discard(key)
+
+    def close(self):
+        self.closed = True
+
+
+class SecondPersonProbeTest(unittest.TestCase):
+    """pose_server.py --probe-second-person (PLAN L-3): num_poses 1 on every
+    frame while one person is seen, a num_poses-2 probe off the main thread
+    every interval, num_poses 2 on every frame while two are seen."""
+
+    def setUp(self):
+        try:
+            import numpy  # noqa: F401  (pose_mediapipe imports it)
+        except ImportError:
+            self.skipTest("numpy not installed")
+        from pose_mediapipe import SecondPersonProbe
+        self.SecondPersonProbe = SecondPersonProbe
+
+    def run_scene(self, scene, frames=300, period_ms=33, interval_s=0.5, hold_s=1.0):
+        log, busy = [], set()
+        made = {}
+
+        def make(n):
+            made[n] = _FakeLandmarker(n, scene, log, busy)
+            return made[n]
+        p = self.SecondPersonProbe(make, 2, interval_s=interval_s, hold_s=hold_s)
+        out = []
+        for i in range(frames):
+            ts = i * period_ms
+            res = p.detect_for_video(("frame", ts), ts, make_copy=lambda ts=ts: ("copy", ts))
+            out.append((ts, res.pose_landmarks[0][0] if res.pose_landmarks else None,
+                        len(res.pose_landmarks)))
+            if p._probe is not None:        # let the fake probe finish: deterministic
+                p._probe.exception(timeout=5)
+        p.close()
+        self.assertTrue(made[1].closed and made[2].closed)
+        return p, out, log
+
+    def test_one_dancer_is_tracked_by_num_poses_1_and_probed_off_thread(self):
+        p, out, log = self.run_scene(lambda ts: 1)
+        self.assertTrue(all(who == 1 for _, who, _ in out), "a frame came from the 2-pose landmarker")
+        main = threading.current_thread().name
+        multi_calls = [c for c in log if c[0] == 2]
+        self.assertTrue(multi_calls)
+        self.assertTrue(all(thread != main for _, thread, _, _ in multi_calls),
+                        "the probe ran on the main thread")
+        self.assertTrue(all(img[0] == "copy" for *_, img in multi_calls),
+                        "the probe was handed the main thread's image, not a copy")
+        # a probe on the first frame >= 0.5 s after the last: every 16th
+        # 33 ms frame, frames 0, 16, ..., 288 -> 19
+        self.assertEqual(p.probes, 19)
+        steps = [b[2] - a[2] for a, b in zip(multi_calls, multi_calls[1:])]
+        self.assertTrue(all(s >= 500 for s in steps), steps)
+
+    def test_a_second_dancer_switches_to_num_poses_2_within_one_interval(self):
+        join = 3000
+        _, out, _ = self.run_scene(lambda ts: 2 if ts >= join else 1)
+        first_two = next(ts for ts, _, n in out if n >= 2)
+        self.assertGreaterEqual(first_two, join)
+        self.assertLessEqual(first_two - join, 500 + 2 * 33)
+        after = [(who, n) for ts, who, n in out if ts > first_two]
+        self.assertTrue(all(who == 2 and n == 2 for who, n in after))
+
+    def test_back_to_num_poses_1_after_hold_when_the_second_dancer_leaves(self):
+        p, out, _ = self.run_scene(lambda ts: 2 if 1000 <= ts < 4000 else 1)
+        whos = {ts: who for ts, who, _ in out}
+        self.assertEqual(whos[3960], 2)                # still two
+        self.assertEqual(whos[4950], 2)                # one, but within hold_s
+        self.assertTrue(all(whos[ts] == 1 for ts in whos if ts >= 5100), "never went back")
+        self.assertEqual(p.switches, 2)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -322,6 +322,8 @@ def backend_kwargs(args):
         kwargs["hfov_deg"] = args.hfov
     if getattr(args, "frames", None):
         kwargs["segmentation"] = True
+    if getattr(args, "probe_second_person", 0.0):
+        kwargs["probe_s"] = args.probe_second_person
     return kwargs
 
 
@@ -438,6 +440,13 @@ def parse_args(argv=None):
                              "absolute-position accuracy (pose SHAPE is FOV-invariant).")
     parser.add_argument("--conf", type=float, default=0.5, help="Confidence threshold")
     parser.add_argument("--max-persons", type=int, default=6, help="Max tracked persons")
+    parser.add_argument("--probe-second-person", type=float, default=0.0, metavar="S",
+                        help="Track with MediaPipe num_poses 1 and look for a second person "
+                             "every S seconds on a background thread, switching to num_poses 2 "
+                             "while two are seen (pose_mediapipe.SecondPersonProbe). ~40%% less "
+                             "inference with one dancer; a second player is found up to S s "
+                             "later. 0 (default) = num_poses 2 on every frame "
+                             "(docs/native/POSE_INPUT.md#performance)")
     parser.add_argument("--show", action="store_true", help="Show debug visualization window")
     parser.add_argument("--frames", default=None, metavar="WxH",
                         help="Also send the camera picture and a person mask at WxH "
