@@ -28,9 +28,9 @@
 // The test drives the real engine to the Rehearse game_screen (DTA over HTTP,
 // the same calls the menus make, so no pad timing and no tutorial), takes
 // screenshots across several reveal cycles and counts non-tunnel pixels where
-// the dancer stands. The bid tunnel is purple/magenta/black (green channel low
-// against red and blue); a character has skin, hair and clothing, which are
-// not (kDancerShown below has the measurements).
+// the dancer stands. The bid tunnel is purple/magenta/black; a character has
+// skin, hair and clothing, which are not (kDancerShown below has the
+// measurements).
 //
 // Route preconditions are asserted separately (game_screen reached,
 // use_char_projection on, projection_mesh at the full-quad reveal at least
@@ -167,22 +167,44 @@ double DancerFraction(const Image &img) {
         for (int x = x0; x < x1; x++) {
             const unsigned char *p = &img.rgb[((size_t)y * img.w + x) * 3];
             int r = p[0], g = p[1], b = p[2];
-            // Not tunnel: green holds up against red and blue. Not a flare:
-            // the venue's lens flares are white-to-pink (red and blue both
-            // high and close), and one crossing this area read 16.8% before
-            // they were excluded.
-            bool flare = r >= 170 && b >= 170 && abs(r - b) < 40;
-            if (g >= 80 && g * 10 >= 6 * std::max(r, b) && !flare)
-                hit++;
             total++;
+            // Not a flare: the venue's lens flares are white-to-pink (red and
+            // blue both high and close), and one crossing this area read 16.8%
+            // before they were excluded.
+            if (r >= 170 && b >= 170 && abs(r - b) < 40)
+                continue;
+            // Not tunnel: the tunnel is dark, or purple-to-magenta (hue 255..335
+            // degrees). Anything bright that is either nearly grey or of
+            // another hue is the character. (This used to ask for green >= 80,
+            // which measured how overexposed the character was: under DC3's
+            // retail light model the dancer reads 2-3% by that rule and
+            // 22-33% by this one, with 0.0% on the reveal-off shots by both.)
+            int mx = std::max(r, std::max(g, b)), mn = std::min(r, std::min(g, b));
+            if (mx < 64)
+                continue;
+            int chroma = mx - mn;
+            if (chroma * 4 < mx) {   // saturation below 0.25
+                hit++;
+                continue;
+            }
+            double h;
+            if (mx == r) h = 60.0 * (double)(g - b) / chroma;
+            else if (mx == g) h = 60.0 * ((double)(b - r) / chroma + 2.0);
+            else h = 60.0 * ((double)(r - g) / chroma + 4.0);
+            if (h < 0.0) h += 360.0;
+            if (h < 255.0 || h > 335.0)
+                hit++;
         }
     return total ? (double)hit / total : 0.0;
 }
 
 constexpr int kShots = 8;
 // A shot shows the dancer when this much of the area is character-coloured.
-// Measured: fixed engine 17.8..39.2% in 4..6 of 8 shots; stock engine and
-// either fix alone 0.0%, except one shot with a lens flare in the area (3.2%).
+// Measured with the green rule this replaced: fixed engine 17.8..39.2% in 4..6
+// of 8 shots; stock engine and either fix alone 0.0%, except one shot with a
+// lens flare in the area (3.2%). With the hue rule (2026-11-14): engine
+// 99ee167 17.0..40.0% in 6 of 8, the retail light model 21.8..32.9% in 6 of 8,
+// reveal-off shots 0.0% in both.
 // The test asks for two shots, so one stray effect cannot pass it.
 constexpr double kDancerShown = 0.10;
 

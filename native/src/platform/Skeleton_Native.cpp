@@ -2,6 +2,7 @@
 #include "gesture/GestureMgr.h" // NUM_SKELETONS
 #include "platform/NativeNotice.h"
 #include "platform/CameraStream_Native.h"
+#include "hamobj/MoveDir.h" // NativeSetLatencySeconds (a source-declared latency)
 #include <cstdint>
 #include <cstring>
 #include <cstdio>
@@ -11,10 +12,12 @@
 #ifndef __EMSCRIPTEN__
 #include "PosePerformer_Native.h"
 #include "platform/ExecutablePath.h"
+#include "platform/ProcessSpawner_Native.h"
 #include <unistd.h>
 #include <signal.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/stat.h>
 #include <poll.h>
 #ifdef __linux__
 #include <linux/limits.h>
@@ -91,7 +94,7 @@ static const char *kStandIn =
     " The game is using a stand-in skeleton, so your dancing is not scored.";
 
 NativeSkeletonProvider::Problem NativeSkeletonProvider::DescribeServerExit(
-    int waitStatus, int cameraIndex
+    int waitStatus, const std::string &camera, const std::string &python
 ) {
     Problem p;
     char buf[512];
@@ -107,14 +110,15 @@ NativeSkeletonProvider::Problem NativeSkeletonProvider::DescribeServerExit(
     switch (code) {
     case kExitNoCamera:
         snprintf(buf, sizeof(buf),
-            "No camera found (camera %d) - pose tracking is off.%s Connect a webcam"
+            "No camera found (camera %s) - pose tracking is off.%s Connect a webcam"
             " and restart, or pick another camera with DC3_POSE_CAMERA.",
-            cameraIndex, kStandIn);
+            camera.c_str(), kStandIn);
         p.brief = "No camera: pose tracking off";
         break;
     case kExitCameraLost:
         snprintf(buf, sizeof(buf),
-            "The camera stopped sending pictures - pose tracking is off.%s",
+            "The camera stopped sending pictures and did not come back - pose"
+            " tracking is off.%s",
             kStandIn);
         p.brief = "Camera lost: pose tracking off";
         break;
@@ -134,14 +138,17 @@ NativeSkeletonProvider::Problem NativeSkeletonProvider::DescribeServerExit(
     case kExitNoDeps:
         snprintf(buf, sizeof(buf),
             "Python pose packages (mediapipe, opencv-python, numpy) are not"
-            " installed for python3 - pose tracking is off.%s",
-            kStandIn);
+            " installed for %s - pose tracking is off.%s Install them with"
+            " scripts/playtest/bootstrap.sh --fix (it makes the venv the game"
+            " looks for), or point DC3_POSE_PYTHON at a Python that has them.",
+            python.c_str(), kStandIn);
         p.brief = "Pose packages missing: pose tracking off";
         break;
     case kExitExecFailed:
         snprintf(buf, sizeof(buf),
-            "python3 could not be started, so there is no pose server - pose"
-            " tracking is off.%s", kStandIn);
+            "%s could not be started, so there is no pose server - pose"
+            " tracking is off.%s Run scripts/playtest/bootstrap.sh --fix.",
+            python.c_str(), kStandIn);
         p.brief = "No python3: pose tracking off";
         break;
     default:
@@ -152,6 +159,21 @@ NativeSkeletonProvider::Problem NativeSkeletonProvider::DescribeServerExit(
         break;
     }
     p.text = buf;
+    return p;
+}
+
+NativeSkeletonProvider::Problem NativeSkeletonProvider::CameraLostProblem() {
+    Problem p;
+    p.text = "The camera disconnected - looking for it again. Pose tracking is"
+             " paused until it is back.";
+    p.brief = "No camera: looking for it";
+    return p;
+}
+
+NativeSkeletonProvider::Problem NativeSkeletonProvider::CameraBackNotice() {
+    Problem p;
+    p.text = "The camera is back - pose tracking resumed.";
+    // No short form: a banner for a few seconds, then nothing in the corner.
     return p;
 }
 
@@ -174,18 +196,32 @@ void NativeSkeletonProvider::ReportProblem(const Problem &p) {
 // with the choreography scheduled at S - latency_offset
 // (MoveDir::PostUpdateFilters).  That constant describes the KINECT's
 // pipeline -- capture to NuiSkeletonGetNextFrame -- plus the display/audio lag
-// it was tuned with.  A webcam + MediaPipe pipeline has its own latency, so
-// DC3_POSE_LATENCY_MS lets the player's sensor say what its latency is; it
-// replaces latency_offset (same units, same meaning).  Unset, the image's
-// value stands.  A value outside [0, 1000] ms is ignored with a warning.
+// it was tuned with.  A native pose source has its own, so three things can
+// set the latency the scorer uses, highest first:
+//
+//   1. explicit  DC3_POSE_LATENCY_MS (0..1000 ms).  Always wins.  Outside
+//                that range it is ignored with a warning.
+//   2. declared  the pose source's own figure, sent in the v2/v3 packet header
+//                (kFlagLatencyDeclared, below).  pose_server.py declares 0 for
+//                a recorded file (--video): the frame is decoded, not
+//                exposed, and nobody is reacting to the game's audio, so
+//                there is no capture delay to correct.  Measured on six songs
+//                (docs/native/POSE_INPUT.md, L-4): 0 scored 0.70 of the
+//                original's card, 100 scored 0.49-0.52.  A webcam declares
+//                nothing.
+//   3. default   latency_offset as scoring.dta gave it: the image's 100.
+//
+// The engine log says which one is in force, once per change:
+//   DC3 POSE LATENCY: scoring at 0 ms -- declared by the pose source (...)
 // Measured, docs/native/POSE_INPUT.md (Better Off Alone, Easy): a correct
 // performance 300 ms later than latency_offset assumes rates 29 perfect / 28
 // awesome / 20 bad of 77; the same with DC3_POSE_LATENCY_MS=400 rates 77/77
 // perfect, score identical to an on-time sensor.
 // ---------------------------------------------------------------------------
 static float sScoringDtaLatency = -1.0f;
+static int sSourceLatencyMs = -1; // -1 = the source declared nothing
 
-// latency_offset as config/scoring.dta gave it, before DC3_POSE_LATENCY_MS:
+// latency_offset as config/scoring.dta gave it, before any override:
 // the latency of the sensor the game was tuned for.  The in-process performer
 // (PosePerformer_Native.cpp) is a sensor of exactly that latency, so the knob
 // has something to correct when it is told to be late.  Before LoadScoring has
@@ -194,28 +230,108 @@ float Dc3ScoringDtaLatencySeconds(float scorerSeconds) {
     return sScoringDtaLatency >= 0.0f ? sScoringDtaLatency : scorerSeconds;
 }
 
-float Dc3SensorLatencySeconds(float scoringDtaSeconds) {
-    sScoringDtaLatency = scoringDtaSeconds;
+// DC3_POSE_LATENCY_MS, parsed.  False when unset, empty or out of range.
+static bool ExplicitLatencyMs(double *ms) {
     const char *v = getenv("DC3_POSE_LATENCY_MS");
     if (!v || !*v)
-        return scoringDtaSeconds;
+        return false;
     char *end = nullptr;
-    double ms = strtod(v, &end);
-    if (end == v || ms < 0.0 || ms > 1000.0) {
+    double d = strtod(v, &end);
+    if (end == v || d < 0.0 || d > 1000.0) {
         fprintf(stderr, "DC3_POSE_LATENCY_MS='%s' ignored (want 0..1000 ms)\n", v);
-        return scoringDtaSeconds;
+        return false;
     }
-    fprintf(stderr, "DC3_POSE_LATENCY_MS: scoring latency %.0f ms (latency_offset %.0f ms)\n", ms,
-            scoringDtaSeconds * 1000.0f);
-    return (float)(ms * 0.001);
+    *ms = d;
+    return true;
 }
+
+Dc3LatencySource Dc3ResolveSensorLatency(float scoringDtaSeconds, float *seconds) {
+    double ms = 0.0;
+    if (ExplicitLatencyMs(&ms)) {
+        *seconds = (float)(ms * 0.001);
+        return kLatencyExplicit;
+    }
+    if (sSourceLatencyMs >= 0) {
+        *seconds = sSourceLatencyMs * 0.001f;
+        return kLatencyDeclared;
+    }
+    *seconds = scoringDtaSeconds;
+    return kLatencyDefault;
+}
+
+const char *Dc3LatencySourceName(Dc3LatencySource source) {
+    switch (source) {
+    case kLatencyExplicit: return "explicit";
+    case kLatencyDeclared: return "declared";
+    default: return "default";
+    }
+}
+
+// One line per change of value or reason (LoadScoring runs at boot and on a
+// scoring reload; the source declares on its first frame).
+static void LogLatency(Dc3LatencySource source, float seconds) {
+    static int sLoggedMs = -2;
+    static int sLoggedSource = -1;
+    int ms = (int)(seconds * 1000.0f + 0.5f);
+    if (ms == sLoggedMs && (int)source == sLoggedSource)
+        return;
+    sLoggedMs = ms;
+    sLoggedSource = (int)source;
+    const float dtaMs = sScoringDtaLatency * 1000.0f;
+    switch (source) {
+    case kLatencyExplicit:
+        fprintf(stderr,
+                "DC3 POSE LATENCY: scoring at %d ms -- explicit DC3_POSE_LATENCY_MS "
+                "(scoring.dta latency_offset %.0f ms)\n",
+                ms, dtaMs);
+        break;
+    case kLatencyDeclared:
+        fprintf(stderr,
+                "DC3 POSE LATENCY: scoring at %d ms -- declared by the pose source "
+                "(pose_server.py: 0 for a recorded file, or --source-latency-ms; "
+                "DC3_POSE_LATENCY_MS overrides)\n",
+                ms);
+        break;
+    default:
+        fprintf(stderr,
+                "DC3 POSE LATENCY: scoring at %d ms -- default, scoring.dta latency_offset "
+                "(the source declared nothing, as a live camera does; DC3_POSE_LATENCY_MS "
+                "overrides)\n",
+                ms);
+        break;
+    }
+}
+
+float Dc3SensorLatencySeconds(float scoringDtaSeconds) {
+    sScoringDtaLatency = scoringDtaSeconds;
+    float seconds = scoringDtaSeconds;
+    Dc3LatencySource source = Dc3ResolveSensorLatency(scoringDtaSeconds, &seconds);
+    LogLatency(source, seconds);
+    return seconds;
+}
+
+void Dc3DeclareSourceLatencyMs(int ms) {
+    if (ms < -1 || ms > 1000)
+        ms = -1;
+    if (ms == sSourceLatencyMs)
+        return;
+    sSourceLatencyMs = ms;
+    if (sScoringDtaLatency < 0.0f)
+        return; // LoadScoring has not run; it will resolve with this declaration
+    float seconds = sScoringDtaLatency;
+    Dc3LatencySource source = Dc3ResolveSensorLatency(sScoringDtaLatency, &seconds);
+    MoveDir::NativeSetLatencySeconds(seconds);
+    LogLatency(source, seconds);
+}
+
+int Dc3DeclaredSourceLatencyMs() { return sSourceLatencyMs; }
 
 #ifdef __EMSCRIPTEN__
 // Web: only the TRANSPORT is absent -- no pose_server.py to spawn, no Unix
 // socket to read.  Frames arrive from the page's camera + MediaPipe pipeline
 // (native/web/pose/) through dc3_pose_push (PoseInput_Web.cpp) into
 // PublishFrame; the buffering, slot fill and joint hold below are shared.
-bool NativeSkeletonProvider::Start(const std::string&, const std::string&, int) { return false; }
+bool NativeSkeletonProvider::Start(const std::string&, const std::string&, const std::string&) { return false; }
 std::string NativeSkeletonProvider::DefaultModelPath() { return std::string(); }
 void NativeSkeletonProvider::Stop() {
     mRunning = false;
@@ -246,6 +362,15 @@ enum COCOKeypoint {
 
 // v2/v3 header flag bits (native/scripts/pose_server.py FLAG_*).
 static const uint16_t kFlagUnlevelled = 1u << 0;
+static const uint16_t kFlagNoCamera = 1u << 1;  // camera gone; the server is reopening it
+// bit 2: the source declares its own scoring latency, in bits 8..15 as a
+// count of 5 ms (0..1275; above 1000 is treated as undeclared).  pose_server.py
+// declares 0 for --video (Dc3SensorLatencySeconds above).  Older servers, and
+// synthetic_kinect.py's live sensor, send neither bit.
+static const uint16_t kFlagLatencyDeclared = 1u << 2;
+static int DeclaredLatencyMsFromFlags(uint16_t flags) {
+    return (flags & kFlagLatencyDeclared) ? ((flags >> 8) & 0xff) * 5 : -1;
+}
 
 // Wire layout ids (see native/scripts/pose_server.py protocol v2).
 enum PoseLayout {
@@ -286,12 +411,118 @@ static std::string CameraFramesArg() {
 }
 
 
+// ---- Which Python runs the pose server ------------------------------------
+static bool IsExecutableFile(const std::string &path) {
+    struct stat st;
+    return !path.empty() && stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode)
+        && access(path.c_str(), X_OK) == 0;
+}
+
+// The main checkout of a git worktree: <root>/.git is then a file
+// "gitdir: <main>/.git/worktrees/<name>".  "" for a main checkout or no git.
+static std::string MainCheckoutOf(const std::string &root) {
+    FILE *f = fopen((root + "/.git").c_str(), "r");
+    if (!f)
+        return std::string();
+    char line[4096] = {};
+    bool ok = fgets(line, sizeof(line), f) != nullptr;
+    fclose(f);
+    if (!ok || strncmp(line, "gitdir: ", 8) != 0)
+        return std::string(); // a directory (fopen succeeds, fgets fails) or junk
+    std::string gitdir(line + 8);
+    while (!gitdir.empty() && (gitdir.back() == '\n' || gitdir.back() == '\r'))
+        gitdir.pop_back();
+    size_t at = gitdir.find("/.git/worktrees/");
+    return at == std::string::npos ? std::string() : gitdir.substr(0, at);
+}
+
+NativeSkeletonProvider::PythonChoice NativeSkeletonProvider::ChoosePosePython(
+    const std::string &treeRoot, const char *home
+) {
+    if (const char *py = getenv("DC3_POSE_PYTHON"); py && *py)
+        return { py, "DC3_POSE_PYTHON" };
+    std::string venv;
+    const char *venvEnv = getenv("DC3_POSE_VENV");
+    if (venvEnv && *venvEnv)
+        venv = venvEnv;
+    else if (home && *home)
+        venv = std::string(home) + "/.local/share/dc3/pose-venv";
+    if (!venv.empty() && IsExecutableFile(venv + "/bin/python3"))
+        return { venv + "/bin/python3",
+                 std::string("the playtest venv") + (venvEnv && *venvEnv ? " (DC3_POSE_VENV)" : "")
+                     + "; scripts/playtest/bootstrap.sh --fix makes it" };
+    if (!treeRoot.empty()) {
+        if (IsExecutableFile(treeRoot + "/.venv/bin/python3"))
+            return { treeRoot + "/.venv/bin/python3", "the checkout's .venv" };
+        std::string main = MainCheckoutOf(treeRoot);
+        if (!main.empty() && IsExecutableFile(main + "/.venv/bin/python3"))
+            return { main + "/.venv/bin/python3", "the main checkout's .venv (this is a worktree)" };
+    }
+    return { "python3", "no venv found (" + (venv.empty() ? std::string("no $HOME") : venv)
+                            + ", " + (treeRoot.empty() ? std::string("?") : treeRoot)
+                            + "/.venv): python3 from PATH" };
+}
+
+NativeSkeletonProvider::PythonChoice NativeSkeletonProvider::ChoosePosePython() {
+    std::string native = NativeTreeDir();
+    std::string root;
+    if (size_t slash = native.rfind('/'); slash != std::string::npos && slash > 0)
+        root = native.substr(0, slash);
+    return ChoosePosePython(root, getenv("HOME"));
+}
+
+std::vector<std::string> NativeSkeletonProvider::ServerCommand(
+    const std::string &scriptPath, const std::string &socketPath, const std::string &modelPath,
+    const std::string &camera
+) {
+    std::vector<std::string> argv = {
+        ChoosePosePython().path, scriptPath, "--socket", socketPath, "--model", modelPath,
+    };
+    // DC3_POSE_VIDEO: a video file stands in for the camera (looped), so the
+    // whole live path -- spawn, exit codes, notices, the socket -- runs
+    // without one.  Otherwise the camera.
+    const char *video = getenv("DC3_POSE_VIDEO");
+    if (video && *video) {
+        argv.insert(argv.end(), { "--video", video, "--loop" });
+    } else {
+        argv.insert(argv.end(), { "--camera", camera.empty() ? std::string("auto") : camera });
+    }
+    // DC3_POSE_HFOV (degrees) calibrates the server to the real camera's
+    // horizontal FOV -- absolute depth scales with the assumed focal length,
+    // and the 58.51-degree Kinect default measured +0.76..1.73 m of depth bias
+    // on real 65-72.5 degree cameras (bench_model_z.py). Pose SHAPE is
+    // FOV-invariant, so the default stays safe for scoring; calibrate for
+    // better absolutes.
+    const char *hfov = getenv("DC3_POSE_HFOV");
+    if (hfov && *hfov)
+        argv.insert(argv.end(), { "--hfov", hfov });
+    // PLAN P-4: ask for the camera picture + person mask (protocol v3) the
+    // player view is drawn from.  DC3_CAMERA_FRAMES=off keeps the pose-only v2
+    // stream; WxH picks the size (default 320x240, the Kinect depth
+    // resolution).
+    std::string framesArg = CameraFramesArg();
+    if (!framesArg.empty())
+        argv.insert(argv.end(), { "--frames", framesArg });
+    return argv;
+}
+
 std::string NativeSkeletonProvider::DefaultModelPath() {
     return NativeTreePath("models/pose_landmarker_full.task");
 }
 
+// How long Start() (and each restart) waits for the server's socket.
+static const int kServerTimeoutMs = 5000;
+
+static NativeSkeletonProvider::Problem StartTimeoutProblem() {
+    NativeSkeletonProvider::Problem p;
+    p.text = std::string("The pose server did not start within 5 seconds - pose tracking is off.")
+        + kStandIn + " Its messages are in the console log.";
+    p.brief = "Pose server did not start: pose tracking off";
+    return p;
+}
+
 bool NativeSkeletonProvider::Start(
-    const std::string &socketPath, const std::string &modelPath, int cameraIndex
+    const std::string &socketPath, const std::string &modelPath, const std::string &camera
 ) {
     if (mRunning) return true;
 
@@ -304,7 +535,11 @@ bool NativeSkeletonProvider::Start(
     }
 
     mSocketPath = socketPath;
-    mCameraIndex = cameraIndex;
+    mModelPath = modelPath;
+    mCamera = camera.empty() ? std::string("auto") : camera;
+    mNoCamera = false;
+    mStopRequested = false;
+    mRestarts = 0;
     {
         std::lock_guard<std::mutex> lock(mSwapMutex);
         mProblem = Problem();
@@ -312,55 +547,12 @@ bool NativeSkeletonProvider::Start(
 
     // DC3_POSE_NO_SPAWN=1: connect-only mode — attach to an already-running
     // pose server (e.g. a synthetic one in CI) instead of forking pose_server.py.
-    if (getenv("DC3_POSE_NO_SPAWN")) {
+    mSpawned = !getenv("DC3_POSE_NO_SPAWN");
+    if (!mSpawned) {
         printf("DC3_POSE_NO_SPAWN: connecting to existing pose server at %s\n",
             socketPath.c_str());
-    } else {
-        // Launch pose_server.py as child process, found next to the
-        // executable's tree (native/build/<exe> -> native/scripts), never the
-        // working directory.
-        std::string scriptPath = NativeTreePath("scripts/pose_server.py");
-
-        mServerPid = fork();
-        if (mServerPid == 0) {
-            // Child process. DC3_POSE_HFOV (degrees) calibrates the server to
-            // the real camera's horizontal FOV -- absolute depth scales with
-            // the assumed focal length, and the 58.51-degree Kinect default
-            // measured +0.76..1.73 m of depth bias on real 65-72.5 degree
-            // cameras (bench_model_z.py). Pose SHAPE is FOV-invariant, so the
-            // default stays safe for scoring; calibrate for better absolutes.
-            std::string camArg = std::to_string(cameraIndex);
-            const char *hfov = getenv("DC3_POSE_HFOV");
-            std::vector<const char *> argv = {
-                "python3", scriptPath.c_str(),
-                "--socket", socketPath.c_str(),
-                "--model",  modelPath.c_str(),
-                "--camera", camArg.c_str(),
-            };
-            if (hfov && *hfov) {
-                argv.push_back("--hfov");
-                argv.push_back(hfov);
-            }
-            // PLAN P-4: ask for the camera picture + person mask (protocol v3)
-            // the player view is drawn from.  DC3_CAMERA_FRAMES=off keeps the
-            // pose-only v2 stream; WxH picks the size (default 320x240, the
-            // Kinect depth resolution).
-            std::string framesArg = CameraFramesArg();
-            if (!framesArg.empty()) {
-                argv.push_back("--frames");
-                argv.push_back(framesArg.c_str());
-            }
-            argv.push_back(nullptr);
-            execvp("python3", const_cast<char *const *>(argv.data()));
-            // If exec fails
-            perror("Failed to launch pose_server.py");
-            _exit(kExitExecFailed);
-        } else if (mServerPid < 0) {
-            perror("fork failed");
-            return false;
-        }
-
-        printf("Launched pose_server.py (pid %d)\n", mServerPid);
+    } else if (!LaunchServer()) {
+        return false;
     }
 
     // Wait for the socket to appear, then connect.  pose_server.py binds it
@@ -368,21 +560,77 @@ bool NativeSkeletonProvider::Start(
     // exits with an EXIT_* code if the camera, model or packages are missing;
     // that exit is noticed on the next 50 ms tick instead of after the whole
     // timeout.
+    int status = 0;
+    switch (WaitForServer(kServerTimeoutMs, &status)) {
+    case kConnected:
+        printf("Connected to pose server\n");
+        NativeNotice::Clear(kPoseNoticeKey);
+        mRunning = true;
+        mReaderThread = std::thread(&NativeSkeletonProvider::ReaderThread, this);
+        return true;
+    case kServerExited:
+        ReportProblem(DescribeServerExit(status, mCamera, mPython));
+        Stop();
+        return false;
+    case kTimedOut:
+    case kStopped:
+        break;
+    }
+
+    fprintf(stderr, "Failed to connect to pose server after %d ms\n", kServerTimeoutMs);
+    ReportProblem(StartTimeoutProblem());
+    Stop();
+    return false;
+}
+
+bool NativeSkeletonProvider::LaunchServer() {
+    // pose_server.py is found next to the executable's tree (native/build/<exe>
+    // -> native/scripts), never the working directory; DC3_POSE_SERVER names
+    // a drop-in that takes the same arguments (the playtest kit's footage
+    // feeder).  The command line, interpreter included, is ServerCommand's.
+    std::string scriptPath = NativeTreePath("scripts/pose_server.py");
+    if (const char *srv = getenv("DC3_POSE_SERVER"); srv && *srv)
+        scriptPath = srv;
+    PythonChoice py = ChoosePosePython();
+    mPython = py.path;
+    printf("Pose server python: %s (%s)\n", py.path.c_str(), py.why.c_str());
+    std::vector<std::string> argv = ServerCommand(scriptPath, mSocketPath, mModelPath, mCamera);
+    printf("Pose server command:");
+    for (const std::string &a : argv)
+        printf(" %s", a.c_str());
+    printf("\n");
+    // Through the spawner forked at the top of main (ProcessSpawner_Native.h):
+    // a child forked from this process now would inherit the RLIMIT_RTTIME of
+    // 0 that PipeWire's ALSA plugin sets on it, and MediaPipe's realtime
+    // thread gets the server SIGKILLed at model load.
+    mServerPid = NativeSpawner::Spawn(argv);
+    if (mServerPid < 0) {
+        perror("Failed to launch pose_server.py");
+        mServerPid = -1;
+        return false;
+    }
+    printf("Launched pose_server.py (pid %d%s)\n", (int)mServerPid,
+        NativeSpawner::Active() ? ", via the spawner" : "");
+    return true;
+}
+
+NativeSkeletonProvider::WaitResult NativeSkeletonProvider::WaitForServer(
+    int timeoutMs, int *exitStatus
+) {
     static const int kPollMs = 50;
-    static const int kTimeoutMs = 5000;
-    for (int waited = 0; waited < kTimeoutMs; waited += kPollMs) {
+    for (int waited = 0; waited < timeoutMs; waited += kPollMs) {
         usleep(kPollMs * 1000);
+        if (mStopRequested)
+            return kStopped;
 
         if (mServerPid > 0) {
             int status = 0;
-            if (waitpid(mServerPid, &status, WNOHANG) == mServerPid) {
+            if (NativeSpawner::TryReap(mServerPid, &status)) {
                 mServerPid = -1;
-                Problem p = DescribeServerExit(status, cameraIndex);
                 fprintf(stderr, "pose_server.py exited after %d ms (status 0x%x)\n",
                     waited + kPollMs, status);
-                ReportProblem(p);
-                Stop();
-                return false;
+                *exitStatus = status;
+                return kServerExited;
             }
         }
 
@@ -392,31 +640,19 @@ bool NativeSkeletonProvider::Start(
         struct sockaddr_un addr;
         memset(&addr, 0, sizeof(addr));
         addr.sun_family = AF_UNIX;
-        strncpy(addr.sun_path, socketPath.c_str(), sizeof(addr.sun_path) - 1);
+        strncpy(addr.sun_path, mSocketPath.c_str(), sizeof(addr.sun_path) - 1);
 
-        if (connect(mSocketFd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
-            printf("Connected to pose server\n");
-            NativeNotice::Clear(kPoseNoticeKey);
-            mRunning = true;
-            mReaderThread = std::thread(&NativeSkeletonProvider::ReaderThread, this);
-            return true;
-        }
+        if (connect(mSocketFd, (struct sockaddr *)&addr, sizeof(addr)) == 0)
+            return kConnected;
 
         close(mSocketFd);
         mSocketFd = -1;
     }
-
-    fprintf(stderr, "Failed to connect to pose server after %d ms\n", kTimeoutMs);
-    Problem p;
-    p.text = std::string("The pose server did not start within 5 seconds - pose tracking is off.")
-        + kStandIn + " Its messages are in the console log.";
-    p.brief = "Pose server did not start: pose tracking off";
-    ReportProblem(p);
-    Stop();
-    return false;
+    return kTimedOut;
 }
 
 void NativeSkeletonProvider::Stop() {
+    mStopRequested = true;
     mRunning = false;
     NativeCamera::Stop(); // the camera picture goes with the pose stream
 
@@ -430,34 +666,137 @@ void NativeSkeletonProvider::Stop() {
     }
 
     if (mServerPid > 0) {
-        kill(mServerPid, SIGTERM);
-        int status;
-        waitpid(mServerPid, &status, WNOHANG);
+        // The spawner reaps it (and SIGKILLs it if it ignores this).
+        NativeSpawner::Kill(mServerPid, SIGTERM);
         mServerPid = -1;
+    }
+}
+
+bool NativeSkeletonProvider::ServerExitIsRestartable(int waitStatus) {
+    if (WIFSIGNALED(waitStatus))
+        return true; // a crash, e.g. the kernel's SIGKILL
+    if (!WIFEXITED(waitStatus))
+        return false;
+    switch (WEXITSTATUS(waitStatus)) {
+    case 0:               // asked to stop, or its video ended
+    case kExitNoVideo:
+    case kExitNoModel:
+    case kExitNoDeps:
+    case kExitExecFailed: // nothing a second try changes
+        return false;
+    default:              // a lost camera, an unexpected error
+        return true;
     }
 }
 
 // The socket closed under the reader.  If we spawned the server, give it a
 // moment to finish exiting so its code can say why (a lost camera exits
 // EXIT_CAMERA_LOST); otherwise -- a connect-only server, or one still running
-// -- say that the stream stopped.
-void NativeSkeletonProvider::ReportServerGone() {
+// -- say that the stream stopped.  A server we launched is then relaunched,
+// within the restart policy.
+bool NativeSkeletonProvider::ServerGone() {
     NativeCamera::Stop(); // no more camera frames either (PLAN P-4)
+    if (mSocketFd >= 0) {
+        close(mSocketFd);
+        mSocketFd = -1;
+    }
+    mNoCamera = false; // a new server (or none) starts over; its notice replaces this one
+
+    Problem streamStopped;
+    streamStopped.text = std::string("The pose stream stopped - pose tracking is off.") + kStandIn;
+    streamStopped.brief = "Pose stream stopped: pose tracking off";
+
+    bool exited = false;
+    int status = 0;
     if (mServerPid > 0) {
-        for (int i = 0; i < 20; i++) {
-            int status = 0;
-            if (waitpid(mServerPid, &status, WNOHANG) == mServerPid) {
+        for (int i = 0; i < 20 && !mStopRequested; i++) {
+            if (NativeSpawner::TryReap(mServerPid, &status)) {
                 mServerPid = -1;
-                ReportProblem(DescribeServerExit(status, mCameraIndex));
-                return;
+                exited = true;
+                break;
             }
             usleep(25000);
         }
     }
-    Problem p;
-    p.text = std::string("The pose stream stopped - pose tracking is off.") + kStandIn;
-    p.brief = "Pose stream stopped: pose tracking off";
-    ReportProblem(p);
+    if (!mSpawned) {
+        ReportProblem(streamStopped);
+        return false;
+    }
+    Problem problem = exited ? DescribeServerExit(status, mCamera, mPython) : streamStopped;
+    if (!exited && mServerPid > 0) {
+        // It closed the socket but did not exit: replace it.
+        NativeSpawner::Kill(mServerPid, SIGTERM);
+        mServerPid = -1;
+    }
+
+    for (;;) {
+        if (mStopRequested)
+            return false;
+        if (exited && !ServerExitIsRestartable(status))
+            break;
+        if (mRestarts >= mMaxRestarts) {
+            if (mMaxRestarts > 0)
+                fprintf(stderr, "Pose server: not restarting it again (%d restarts already)\n",
+                    (int)mRestarts);
+            break;
+        }
+        mRestarts = mRestarts + 1;
+        int delayMs = mRestartBackoffMs;
+        for (int i = 1; i < mRestarts && delayMs < 30000; i++)
+            delayMs *= 2;
+
+        // One line per restart, on the console and on screen.
+        std::string why;
+        if (!exited) {
+            why = "The pose stream stopped";
+        } else if (WIFSIGNALED(status)) {
+            why = "The pose server crashed (signal " + std::to_string(WTERMSIG(status)) + ")";
+        } else {
+            why = "The pose server exited (code " + std::to_string(WEXITSTATUS(status)) + ")";
+        }
+        fprintf(stderr, "%s - restarting it in %d ms (restart %d of %d)\n", why.c_str(), delayMs,
+            (int)mRestarts, mMaxRestarts);
+        char brief[96];
+        snprintf(brief, sizeof(brief), "Pose server restarting (%d of %d)", (int)mRestarts,
+            mMaxRestarts);
+        Problem restarting;
+        restarting.text = why + " - restarting pose tracking (" + std::to_string(mRestarts) + " of "
+            + std::to_string(mMaxRestarts) + ").";
+        restarting.brief = brief;
+        ReportProblem(restarting);
+
+        for (int waited = 0; waited < delayMs && !mStopRequested; waited += 50)
+            usleep(50 * 1000);
+        if (mStopRequested || !LaunchServer())
+            continue; // a failed fork counts as a restart
+
+        switch (WaitForServer(kServerTimeoutMs, &status)) {
+        case kConnected:
+            printf("Pose server restarted (pid %d): pose tracking resumed\n", (int)mServerPid);
+            {
+                std::lock_guard<std::mutex> lock(mSwapMutex);
+                mProblem = Problem();
+            }
+            NativeNotice::Clear(kPoseNoticeKey);
+            return true;
+        case kServerExited:
+            exited = true;
+            problem = DescribeServerExit(status, mCamera, mPython);
+            break;
+        case kTimedOut:
+            exited = false;
+            problem = StartTimeoutProblem();
+            if (mServerPid > 0) {
+                NativeSpawner::Kill(mServerPid, SIGTERM);
+                mServerPid = -1;
+            }
+            break;
+        case kStopped:
+            return false;
+        }
+    }
+    ReportProblem(problem);
+    return false;
 }
 
 // The v3 camera block that follows the persons: hand it to the camera stream
@@ -500,7 +839,7 @@ static bool readExact(int fd, void *buf, size_t len) {
 }
 
 void NativeSkeletonProvider::ReaderThread() {
-    while (mRunning) {
+    while (mRunning && !mStopRequested) {
         // Poll for data with timeout
         struct pollfd pfd;
         pfd.fd = mSocketFd;
@@ -512,7 +851,8 @@ void NativeSkeletonProvider::ReaderThread() {
         uint32_t packetLen;
         if (!readExact(mSocketFd, &packetLen, 4)) {
             fprintf(stderr, "Pose server disconnected\n");
-            ReportServerGone();
+            if (ServerGone())
+                continue; // a relaunched server is connected again
             mRunning = false;
             break;
         }
@@ -521,7 +861,8 @@ void NativeSkeletonProvider::ReaderThread() {
         std::vector<uint8_t> packet(packetLen);
         if (!readExact(mSocketFd, packet.data(), packetLen)) {
             fprintf(stderr, "Pose server read error\n");
-            ReportServerGone();
+            if (ServerGone())
+                continue;
             mRunning = false;
             break;
         }
@@ -642,7 +983,23 @@ void NativeSkeletonProvider::ReaderThread() {
         if (v3 && !truncated)
             ParseCameraBlock(p, end, newBack, (int)numPersons, timestamp);
 
-        PublishFrame(newBack, (int)numPersons, frameId, timestamp, (flags & kFlagUnlevelled) != 0);
+        // FLAG_NO_CAMERA: one notice when the camera goes, one when it is
+        // back (edges only -- the server repeats the flag every 0.1 s).
+        const bool noCamera = v2 && (flags & kFlagNoCamera) != 0;
+        if (noCamera != mNoCamera) {
+            mNoCamera = noCamera;
+            if (noCamera) {
+                fprintf(stderr, "Pose server: camera lost, it is looking for it again\n");
+                NativeNotice::Post(kPoseNoticeKey, CameraLostProblem().text,
+                    CameraLostProblem().brief, 20.0f);
+            } else {
+                fprintf(stderr, "Pose server: camera is back\n");
+                NativeNotice::Post(kPoseNoticeKey, CameraBackNotice().text, "", 5.0f);
+            }
+        }
+
+        PublishFrame(newBack, (int)numPersons, frameId, timestamp, (flags & kFlagUnlevelled) != 0,
+                     DeclaredLatencyMsFromFlags(flags));
     }
 }
 
@@ -650,7 +1007,7 @@ void NativeSkeletonProvider::ReaderThread() {
 
 void NativeSkeletonProvider::PublishFrame(
     const PersonData *persons, int numPersons, uint32_t frameId, double timestamp,
-    bool unlevelled
+    bool unlevelled, int declaredLatencyMs
 ) {
     if (numPersons < 0)
         numPersons = 0;
@@ -663,6 +1020,7 @@ void NativeSkeletonProvider::PublishFrame(
     mFrameIdBack = frameId;
     mTimestampBack = timestamp;
     mUnlevelledBack = unlevelled;
+    mDeclaredLatencyMsBack = declaredLatencyMs;
 }
 
 void NativeSkeletonProvider::Poll() {
@@ -670,12 +1028,22 @@ void NativeSkeletonProvider::Poll() {
     if (mRunning && mSocketFd < 0 && Dc3PosePerformerEnabled())
         Dc3PosePerformerPump(this); // publishes; latched below
 #endif
-    std::lock_guard<std::mutex> lock(mSwapMutex);
-    memcpy(mPersons, mBack, sizeof(mPersons));
-    mNumPersons = mNumPersonsBack;
-    mFrameIdFront = mFrameIdBack;
-    mTimestampFront = mTimestampBack;
-    mUnlevelledFront = mUnlevelledBack;
+    int declaredLatencyMs;
+    uint32_t frameId;
+    {
+        std::lock_guard<std::mutex> lock(mSwapMutex);
+        memcpy(mPersons, mBack, sizeof(mPersons));
+        mNumPersons = mNumPersonsBack;
+        mFrameIdFront = mFrameIdBack;
+        mTimestampFront = mTimestampBack;
+        mUnlevelledFront = mUnlevelledBack;
+        declaredLatencyMs = mDeclaredLatencyMsBack;
+        frameId = mFrameIdBack;
+    }
+    // On the main thread, which is where the scorer reads its latency.  Only
+    // once a frame has arrived: before that the source has said nothing.
+    if (frameId != 0 && declaredLatencyMs != Dc3DeclaredSourceLatencyMs())
+        Dc3DeclareSourceLatencyMs(declaredLatencyMs);
 }
 
 int NativeSkeletonProvider::FindByTrackId(int trackId) const {
@@ -840,6 +1208,13 @@ void NativeSkeletonProvider::MapCOCOToDC3(const float cocoKpts[][3], PersonData 
 static Vector3 sLastGoodJointPos[NUM_SKELETONS][kNumJoints];
 static bool sHaveLastGoodJoint[NUM_SKELETONS][kNumJoints];
 
+static uint32_t sNoiseFrame[NUM_SKELETONS + 1];
+
+void NativeSkeletonProvider::ResetSensorNoiseFloor() {
+    for (uint32_t &n : sNoiseFrame)
+        n = 0;
+}
+
 void NativeSkeletonProvider::ResetJointHold(int skelIdx) {
     if (skelIdx < 0 || skelIdx >= NUM_SKELETONS)
         return;
@@ -853,7 +1228,6 @@ void NativeSkeletonProvider::FillSkeletonData(
     bool canHold = (slot >= 0 && slot < NUM_SKELETONS);
     // One noise-floor frame per delivered frame per slot (see SensorNoiseFloor
     // at the top of this file).  A held joint is exactly the case that needs it.
-    static uint32_t sNoiseFrame[NUM_SKELETONS + 1];
     uint32_t noiseFrame = ++sNoiseFrame[canHold ? slot : NUM_SKELETONS];
     for (int j = 0; j < kNumJoints; j++) {
         Vector3 pos = person.joints[j];

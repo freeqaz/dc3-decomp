@@ -94,6 +94,29 @@ public:
         return p;
     }
 
+    // UI colour (PLAN G-24). The Xbox 360 renderer is gamma space end to end:
+    // the frame is D3DFMT_A8R8G8B8 (CreateBackBuffers, 100%), bitmaps fetch
+    // with no gamma sign (DxRnd::D3DFormatForBitmap, 100%), and the shipped
+    // standard pixel shaders multiply the stored texel (the prelit textured
+    // permutation is `tfetch2D r0` then `mul oC0, r0, r2`; no log/exp touches
+    // a colour). The engine's dc3 shader instead treats texel * colour as
+    // linear and sRGB-encodes the result, which lifted every UI colour: the
+    // move cards' deep purple (front-buffer ~ 80,20,75) drew as a washed pink
+    // (~ 164,83,165). The world before EndWorld stays on the shader's linear
+    // model (lane np-gfx-light owns it); everything drawn after it is UI.
+    bool UiShadesInGammaSpace() override { return true; }
+
+    // UI lighting (PLAN G-24). DxRnd shades a UI mesh like any other: a lit
+    // material takes the environ selected when it draws. The score digits are
+    // the case that shows it: Eagle-Book(numbers*).mat is prelit 0 /
+    // use_environ 1, and score.grp leads with score.env (ambient 127,0,255;
+    // light score.lit 226,63,255 x3), so retail digits are magenta while the
+    // white atlas alone (what forced-prelit drew) is grey-white. The same font
+    // is intensify 1 under a 0.5 font_alpha, and the shipped standard pixel
+    // shaders scale the whole texel by intensify (`mul r0, r0, c5.yyyy`,
+    // alpha included), so retail digits are opaque.
+    bool UiUsesRetailMaterialTerms() override { return true; }
+
     // RndText marks every glyph page it creates (Text.cpp AllocateMeshes and
     // FontMap3d's meshes call MarkTextGlyphMesh), so the engine can draw only
     // those without depth test and culling and leave spotlight beams, ribbons,

@@ -19,6 +19,11 @@
 //   pose_frames=WxH|off the camera picture + person mask the game draws the
 //                       player view from (PLAN P-4; default 320x240, the
 //                       desktop default; off = skeleton only)
+//   pose_persons=1|2    MediaPipe numPoses (default 2; pose_server.py
+//                       --max-persons). 1 is ~40% less inference but finds
+//                       one player only (POSE_INPUT.md#performance)
+//   pose_slow=STAGE:MS  instrument check: busy work in one worker stage
+//                       (scripts/pose_bench/web_pose_fps.mjs)
 //
 // Test hooks: window.dc3PoseStats (page side) and window.dc3PoseGame (what the
 // engine sees, published by PoseInput_Web.cpp).
@@ -38,6 +43,13 @@ const opt = {
     cdn: params.get('pose_cdn') === '1',
     hfov: params.get('pose_hfov') ? parseFloat(params.get('pose_hfov')) : 58.51,
     frames: parseFrames(params.get('pose_frames')),
+    // Instrument check only (scripts/pose_bench/web_pose_fps.mjs): STAGE:MS of
+    // busy work in one worker stage.
+    slow: params.get('pose_slow') || null,
+    // MediaPipe numPoses (pose_server.py --max-persons, capped at 2 the same
+    // way). 1 skips the per-frame person detector that 2 runs while fewer
+    // than 2 people are tracked, but a second player is never found.
+    persons: Math.min(2, Math.max(1, parseInt(params.get('pose_persons') || '2', 10) || 2)),
 };
 
 function parseFrames(v) {
@@ -54,18 +66,28 @@ const stats = window.dc3PoseStats = {
     framesIn: 0, framesWithPerson: 0, pushed: 0, pushRejected: 0,
     lastCount: 0, inferMs: [], mainMs: [], fps: 0, camera: null,
     frames: opt.frames, picturesPushed: 0, picturesRejected: 0, pictureMs: [],
+    stageMs: {},   // per-stage rings: the worker's msg.stages + xfer + main
 };
-const RING = 120;
+const RING = 600;   // 20 s at 30 fps: a measurement window's worth
 function ring(arr, v) { arr.push(v); if (arr.length > RING) arr.shift(); }
-export function summary() {
+// summary({reset: true}) also empties the rings, so the next call describes
+// only what came after (a measurement window).
+export function summary(o) {
     const q = (a, p) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return +s[Math.min(s.length - 1, Math.floor(p * s.length))].toFixed(2); };
-    return {
-        ...stats, inferMs: undefined, mainMs: undefined,
+    const stages = {};
+    for (const [k, a] of Object.entries(stats.stageMs)) stages[k] = [q(a, 0.5), q(a, 0.95)];
+    const out = {
+        ...stats, inferMs: undefined, mainMs: undefined, stageMs: undefined, stages,
         inferMsP50: q(stats.inferMs, 0.5), inferMsP95: q(stats.inferMs, 0.95),
         pictureMs: undefined, pictureMsP50: q(stats.pictureMs, 0.5),
         pictureMsP95: q(stats.pictureMs, 0.95),
         mainMsP50: q(stats.mainMs, 0.5), mainMsP95: q(stats.mainMs, 0.95),
     };
+    if (o && o.reset) {
+        stats.inferMs.length = 0; stats.mainMs.length = 0; stats.pictureMs.length = 0;
+        stats.stageMs = {};
+    }
+    return out;
 }
 window.dc3PoseSummary = summary;
 
@@ -208,6 +230,10 @@ function onWorkerMessage(ev) {
         stats.lastCount = msg.count;
         if (msg.count > 0) stats.framesWithPerson++;
         ring(stats.inferMs, msg.inferMs + msg.geomMs);
+        stats.numPoses = msg.numPoses;
+        const stageRing = (k, v) => ring(stats.stageMs[k] || (stats.stageMs[k] = []), v);
+        if (msg.stages) for (const [k, v] of Object.entries(msg.stages)) stageRing(k, v);
+        if (msg.postedAt) stageRing('xfer', performance.timeOrigin + t0 - msg.postedAt);
         if (lastPoseT) {
             const dt = (t0 - lastPoseT) / 1000;
             stats.fps = +(0.9 * (stats.fps || 1 / dt) + 0.1 / dt).toFixed(1);
@@ -220,6 +246,7 @@ function onWorkerMessage(ev) {
         else if (msg.count === 0) setStateOnce('noperson', 'No one in view — step into the camera', 'warn');
         else setStateOnce('tracking', 'Tracking you ✓', 'ok');
         ring(stats.mainMs, performance.now() - t0);
+        ring(stats.stageMs.main || (stats.stageMs.main = []), performance.now() - t0);
         if (frameCb) frameCb(msg);
     } else if (msg.type === 'ready') {
         stats.loadMs = Math.round(msg.loadMs);
@@ -244,8 +271,8 @@ export async function createWorker(sources) {
         };
         w.addEventListener('message', h);
     });
-    w.postMessage({ type: 'init', ...sources, delegate: opt.delegate, hfovDeg: opt.hfov, numPoses: 2,
-        frames: opt.frames });
+    w.postMessage({ type: 'init', ...sources, delegate: opt.delegate, hfovDeg: opt.hfov, numPoses: opt.persons,
+        frames: opt.frames, slow: opt.slow });
     return { worker: w, ready };
 }
 

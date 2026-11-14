@@ -130,6 +130,7 @@ Start at [native/README.md](native/README.md).
 |-----|-------------|
 | [native/PLAN.md](native/PLAN.md) | **Roadmap to playable** — pose, gameplay, web, macOS and hygiene tracks; owner decisions pending |
 | [native/STATUS.md](native/STATUS.md) | Measured state, dated (2026-11-13): what plays, what crashes, test numbers |
+| [native/PLAYTEST.md](native/PLAYTEST.md) | Playtest runbook: player-box bootstrap, `scripts/play.sh`, camera placement, notices, what to send back; record/replay of a live session |
 | [native/POSE_INPUT.md](native/POSE_INPUT.md) | Webcam → MediaPipe → Kinect skeleton → scoring; running without a camera; gaps |
 | [native/WEB.md](native/WEB.md) | Web build, measured runtime, Playwright scripts, deployment |
 | [native/MACOS.md](native/MACOS.md) | macOS: what broke since March, Linux-side proxies, bring-up order |
