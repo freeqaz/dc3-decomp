@@ -1672,65 +1672,104 @@ within reach, and at 8 Hz the nearest one is up to 60 ms away. More inference
 speed (L-3) is the real cure. The fill is what the game does with the frames
 it does get.
 
-**Default: `interp`.** `DC3_POSE_FILL=off|hold|extrap|extrapc|interp`
-overrides it (unset or unknown = `interp`; an unknown value is logged).
-Code: `native/src/platform/PoseFill_Native.{h,cpp}` (math and schedule),
-`GestureMgr_Native.cpp` `BuildSensorFrame` (slots, levelling, recording),
-`Skeleton_Native.cpp` `Dc3SetPoseFillDelaySeconds` (the latency fold).
+**Default: `extrap` at gain 1.0, which is deliberately generous.** Owner
+decision, 2026-11-14: *"i would rather over credit and then calibrate
+further. it feels fine to be a bit generous and then dial it back"*. The
+default is therefore the mode that recovers the most score at 8–15 Hz.
+- **It scores above a real 30 Hz camera** on the footage: 1.05–1.10.
+- **The knob to dial it back is `DC3_POSE_FILL_GAIN`** (0..1). The
+  [score-vs-gain table](#calibrating-dc3_pose_fill_gain) is the lookup: at
+  8 Hz, gain 0.75 lands on a real 30 Hz camera's score.
+- **`DC3_POSE_FILL=off|hold|interp|extrap|extrapc`** picks the mode. Unset
+  means `extrap`; an unknown value is logged and the default used.
+- `interp` is the conservative alternative. It never scores above real
+  30 Hz (0.92 at 8 Hz), at the cost of a ~150 ms skeleton delay.
 
-### What `interp` does
+Code:
+- `native/src/platform/PoseFill_Native.{h,cpp}`: the math and the schedule.
+- `GestureMgr_Native.cpp` `BuildSensorFrame`: slots, levelling, recording.
+- `Skeleton_Native.cpp` `Dc3SetPoseFillDelaySeconds`: interp's latency fold.
 
-- **Engages only for a slow camera.** It engages when the median of the last
-  15 camera-frame intervals, measured in song time, is above 1/24 s. It
-  releases below 1/27 s. A 30 Hz source never engages it, so at 30 Hz the
-  stream is the camera's own (measured below). A slow *game* (song loading,
-  a box at load 150) also reads as a slow camera, because the rate is
-  measured in song time. That is deliberate: what the scorer sees is frames
-  per song second.
+### What every mode shares
+
+- **Engages only for a slow camera.**
+  - It engages when the median of the last 15 camera-frame intervals,
+    measured in song time, is above 1/24 s. It releases below 1/27 s.
+  - A 30 Hz source never engages it, so at 30 Hz the stream is the camera's
+    own (measured below).
+  - A slow *game* (song loading, a box at load 150) also reads as a slow
+    camera, because the rate is measured in song time. That is deliberate:
+    what the scorer sees is frames per song second.
+- **Is never recorded.** `DC3_POSE_RECORD` writes camera frames as they
+  arrive, before the fill. Fill frames are not counted in `pose_fps`.
+- **Does not bridge tracking dropouts.** Nothing is filled after a frame
+  with nobody in it. So a detection dropout reaches the slot layer, P-12's
+  1 s dropout hold and the 2 s tracker memory as the camera's own frames,
+  exactly as with the fill off.
+  `PoseFillSensorTest.ADropoutReachesTheHoldExactlyAsWithTheFillOff` counts
+  held frames: 8 off, 8 interp, 8 extrap.
+- **One log line** on engage, release, or an interp delay change ≥ 20 ms:
+  `DC3 POSE FILL: extrap (gain 1.00) engaged at song 12.34 s (camera 8.4 frames/s, stream delay 0 ms added to the scorer's latency)`.
+
+### What `extrap` (the default) does
+
+Each camera frame is delivered the moment it arrives. Until the next one,
+a frame every 1/30 s of song time steps it on by its joints' velocity from
+the frame before, times the gain. It adds no delay, so the scorer's latency
+is the camera's.
+
+The guards are what keep the generosity aimed at the dancer:
+- **Horizon: one source period, then nothing.** The period is the last
+  pair's, but never more than the median interval, since a dropped frame
+  doubles the pair's. After that the stream waits for the camera, so a
+  stall stays a stall. The prototype (a3a9eccf6) held the stepped pose for
+  0.5 s.
+- **Speed clamp.** Each joint's velocity is clamped to 4 m/s. That is p99.6
+  of the np-video-calib footage's joint steps at 8 Hz: p90 0.18 m, p99
+  0.43 m per 125 ms.
+- **Flip guard.** A person is not stepped at all when some L/R pair of the
+  new frame sits closer to the *other* side's joint of the frame before
+  than to its own, by more than half. A tracker's left/right swap is held
+  where the camera put it, never amplified.
+  - Measured on the same footage at 8 Hz, frame pair by frame pair, it
+    fires on 0.1% of real motion (hands crossing) and on 99.7% of
+    synthetic whole-body swaps.
+  - Size alone cannot tell them apart: the L/R separation (median 0.37 m)
+    is an ordinary 8 Hz step.
+- **No guesses.** A joint not tracked in either frame is not moved.
+  Inferred joints are moved.
+- **No velocity across a camera gap** longer than min(2.5 × median, 0.5 s).
+- **A person not in the frame before** is copied, not moved.
+
+### What `interp` does (the conservative mode)
+
 - **Runs D behind the camera.** At song time S the stream shows the moment
   σ = S − D, with D = 1.2 × the median interval, clamped to [1/30, 0.30] s,
   with 15 ms hysteresis. At 8 Hz, D ≈ 150 ms.
   - Every camera frame is delivered exactly, oldest first.
-  - Between two camera frames a fill frame lies on the 30 Hz σ-grid. It is
-    the linear interpolation of the two, joint by joint, at the lower of the
-    two confidences. A fill frame therefore lies on the segment between two
-    real poses: it cannot overshoot.
-  - No fill is made within half a step of the next camera frame.
-  - The stream is never later than the newest camera frame: a camera stall
-    stalls the stream.
+  - Between two camera frames, a fill frame on the 30 Hz σ-grid is their
+    linear interpolation. So it lies on the segment between two real poses
+    and cannot overshoot.
+  - It fills only between frames with the same people (`SamePeople`), and
+    nothing within half a step of the next camera frame.
+  - The stream is never later than the newest camera frame.
 - **Folds D into latency compensation.** D is added to whichever sensor
   latency wins `np-latency-harness`'s precedence: explicit
-  `DC3_POSE_LATENCY_MS` > the source's declared latency > `scoring.dta`'s 100.
-  `MoveDir::NativeSetLatencySeconds(resolved + D)`. So the scorer still
-  compares each frame with the choreography of the moment the camera
-  captured it.
-  - One log line on engage, release, or a delay change ≥ 20 ms:
-    `DC3 POSE FILL: interp engaged at song 12.34 s (camera 8.4 frames/s, stream delay 150 ms added to the scorer's latency)`.
-- **Does not bridge tracking dropouts.**
-  - A person is interpolated only when both camera frames around the fill
-    have her under the same tracking id. `SamePeople` covers this: a person
-    who appears or vanishes stops the fill for that segment.
-  - Nothing is filled after a frame with nobody valid in it.
-  - No fill is made across a camera gap longer than min(2.5 × median, 0.5 s).
-  - A detection dropout therefore reaches the slot layer, P-12's 1 s dropout
-    hold and the 2 s tracker memory as the camera's own frames, exactly as
-    with the fill off. `PoseFillSensorTest.ADropoutReachesTheHoldExactlyAsWithTheFillOff`
-    counts held frames: 8 off, 8 on.
-- **Is never recorded.** `DC3_POSE_RECORD` writes camera frames as they
-  arrive, before the fill. Fill frames are not counted in `pose_fps`.
+  `DC3_POSE_LATENCY_MS` > the source's declared latency > `scoring.dta`'s
+  100. The call is `MoveDir::NativeSetLatencySeconds(resolved + D)`.
 - **On release**, buffered camera frames not yet delivered (at most D's
-  worth) are skipped, so the stream jumps to now rather than lagging.
+  worth) are skipped.
+- **Cost.** The skeleton that the gesture cursor, the player box and the
+  `shot` heuristics read runs D behind the camera while engaged. The scorer
+  compensates; they do not.
 
-The other modes stay as overrides:
-- `hold` re-sends the newest frame.
-- `extrap` is the np-pose-rough prototype (a3a9eccf6): one linear step on
-  from the newest two frames, capped at a period.
-- `extrapc` is extrap clamped: half a period, tracked joints only, 10 cm a
-  joint, nothing after one period.
+The other modes:
+- `hold` re-sends the newest frame for up to 0.5 s; it equals
+  `extrap` at gain 0, except for the horizon.
+- `extrapc` is the prototype's step, clamped: half a period, tracked joints
+  only, 10 cm a joint.
 
-None of the three adds delay.
-
-### Measured: footage fixtures (`run_grid` / `native_song_sweep.py`, no GPU)
+### Measured: footage fixtures (`native_song_sweep.py`, no GPU)
 
 **Setup.**
 - 8 songs: macarena, indaclub, boyfriend, 12step, starships, supersonic,
@@ -1739,193 +1778,226 @@ None of the three adds delay.
   replaying the np-video-calib footage (`replay:…/pose_songlead/{song}.dc3pose`,
   `DC3_POSE_PERFORM_REPLAY_SYNC=song`).
 - `DC3_POSE_PERFORM_HZ` sets the camera rate. `DC3_AUDIO_GAIN=0`.
-- **Box load (1-min) 37–84** across all grids (logged at every config's
-  start and end). Ratings under FAST_TIME are deterministic up to the
-  scorer's own run-to-run spread: one rating flip, or ≤ 0.02% of score,
-  between two `off` runs.
+- **Box load (1-min) 25–84** across all grids (logged at every config's
+  start and end).
+- Under FAST_TIME the ratings are deterministic up to the scorer's own
+  run-to-run spread: one rating flip, or ≤ 0.02% of score, between two
+  `off` runs.
 
-Score as a fraction of the same footage at a real 30 Hz with the fill off
-(`h30_off`, 14,607k over 8 songs; ratings 373/156/28/11):
+The tables give score as a fraction of the same footage at a real 30 Hz
+with the fill off (`h30_off`, 14,607k over 8 songs, ratings
+373/156/28/11). All MEASURED.
 
-| camera | off | hold | extrap | extrapc | **interp** |
+| camera | off | hold | **extrap g1 (default)** | extrap prototype | extrapc | interp |
+|---|---|---|---|---|---|---|
+| 8 Hz | 0.391 | 0.767 | **1.054** | 1.054 | 0.955 | 0.916 |
+| 10 Hz | 0.557 | 0.854 | **1.098** | 1.101 | 1.029 | 0.940 |
+| 15 Hz | 0.803 | 0.912 | **1.078** | 1.076 | 1.061 | 0.964 |
+| 30 Hz | 1.000 | – | **1.000**, ratings 373/156/28/11 = `off` | – | – | 1.000 |
+
+- **The guards cost nothing on clean footage.** Guarded extrap matches the
+  prototype to 0.003.
+- **Ratings at 8 Hz, default:** 375/164/21/8, against real 30 Hz
+  373/156/28/11.
+- **Per song**, extrap g1 at 8 Hz runs 0.93–1.13.
+- **The 30 Hz runs:**
+  - `h30_x` (default build) 373/156/28/11 and never engaged.
+  - The `off` repeats: 373/156/28/11 and 372/157/28/11.
+  - `h30_interp_c/d`: 372/157/28/11 and 373/156/28/11.
+- **The 30 Hz run with 4 songs:** `h30_x4` had macarena time out on
+  main_screen before gameplay, the same harness navigation flake as an
+  earlier fill-off run (`h15_off`, macarena). The other 3 songs were
+  identical to `off`.
+
+### Calibrating `DC3_POSE_FILL_GAIN`
+
+Score of extrap at each gain as a fraction of real 30 Hz with the fill off
+(8 songs, MEASURED). Gain 0 is a hold of at most one period.
+
+| gain | 8 Hz | ratings p/a/o/b | 10 Hz | 15 Hz | ratings p/a/o/b |
 |---|---|---|---|---|---|
-| 8 Hz | 0.391 | 0.767 | 1.054 | 0.955 | **0.916** (best song 0.95) |
-| 10 Hz | 0.557 | 0.854 | 1.101 | 1.029 | **0.940** (best song 0.98) |
-| 15 Hz | 0.803 | 0.912 | 1.076 | 1.061 | **0.964** (best song 0.99) |
-| 30 Hz | 1.000 | – | – | – | **1.000**, ratings identical to `off` |
+| (fill off) | 0.391 | 95/297/100/76 | 0.557 | 0.803 | 259/248/39/22 |
+| 0 | 0.767 | 242/250/55/21 | – | 0.909 | 331/186/38/13 |
+| 0.25 | 0.818 | 285/212/54/17 | – | 0.934 | 345/174/38/11 |
+| 0.5 | 0.904 | 321/194/39/14 | 0.977 | 1.004 | 369/159/30/10 |
+| 0.75 | **0.989** | 357/172/29/10 | – | 1.051 | 389/145/26/8 |
+| **1.0 (default)** | **1.054** | 375/164/21/8 | **1.098** | **1.078** | 397/141/23/7 |
+| (real 30 Hz) | 1.000 | 373/156/28/11 | 1.000 | 1.000 | 373/156/28/11 |
 
-At 30 Hz:
+- **The score rises monotonically with the gain** at both rates, so "best"
+  means the most score, and that is gain 1.0.
+- **Parity with a real 30 Hz camera** is gain ≈ 0.75 at 8 Hz and ≈ 0.5
+  at 15 Hz. The owner's later calibration down starts there.
+- INFERRED cause of going above 1: the scorer rewards motion energy, and a
+  stepped-on frame overshoots every turn of a limb. The noise rows below
+  show the same property from the other side.
+- **On the owner's real session (concern (c) runs, below)**, the
+  *prototype* extrap scored 1.9× `off`. The guarded default was not
+  re-run on that session.
 
-| run | score / h30_off | ratings p/a/o/b |
-|---|---|---|
-| `h30_off_b`, `h30_off_c` (repeats) | 1.000, 1.000 | 373/156/28/11, 372/157/28/11 |
-| `h30_interp` | 1.000 | 373/156/28/11 |
-| `h30_interp_c` (final build) | 1.000 | 372/157/28/11 |
-| `h30_interp_d` (final build) | 1.000 | 373/156/28/11 |
+### Measured: the controls (generous to a dancer, not to anyone else)
 
-- The final build never engaged at 30 Hz.
-- An earlier build engaged during song load in 6 of 8 songs and released
-  before scoring. 12step never engaged and still differed from `off` by the
-  same ≤ 0.02%, so that spread is the scorer's, not the fill's.
+Fraction of the **right-dance** real-30 Hz score on the same 4 songs
+(starships, macarena, indaclub, supersonic: 7,537k):
 
-**Why not `extrap`.**
-- It scores **above** a real 30 Hz camera: 1.05–1.10 in total, up to 1.2 on
-  single songs.
-- Clamping (`extrapc`) does not stop that at 10 and 15 Hz.
-- INFERRED cause: the scorer rewards motion energy, and an extrapolated
-  frame overshoots every turn of a limb. The noise rows below show the same
-  property from the other side.
-- That is credit a real 30 Hz camera would not earn.
-- `interp` cannot overshoot: every fill lies between two real poses.
+| input | real 30 Hz, fill off | 8 Hz, fill off | **8 Hz extrap (default)** | 15 Hz extrap | 8 Hz interp |
+|---|---|---|---|---|---|
+| **standing still** (`DC3_POSE_PERFORM=stand`) | 0 | 0 | **0** | 0 | – |
+| standing still + NZ noise | 0.026 | 0.001 | **0.024** | – | – |
+| **wrong dance** (`wrongfx`) | 0.011 | 0.005 | **0.019** | 0.017 | 0.009 |
+| wrong dance + NZ noise | 0.049 | – | **0.036** | – | 0.021 |
 
-### Measured: wrong dance, and noise
+- **Standing still earns nothing**, with or without the fill: every move
+  rated bad, score 0. The fill steps on motion, and a still body has none.
+- **With noise, standing still at 8 Hz plus extrap stays below the same
+  noise at real 30 Hz** (0.024 vs 0.026).
+- **The wrong dance stays near zero:** 1.9% of the right dance at 8 Hz.
+  That is 1.6× what a real 30 Hz camera gives it (1.1%), against 1.05× for
+  the right dance.
+- **The wrong dance with noise is below the same noise at real 30 Hz**
+  (0.036 vs 0.049).
+- **The scorer's own jitter reward**, with the fill off, matters more than
+  the fill here: noise multiplies a wrong dance's score by 4.3 at 30 Hz
+  and gives a still body 2.6%.
+  - The wrong-dance fixture swaps the footage: starships ↔ macarena,
+    indaclub ↔ supersonic.
 
-**Wrong dance.**
-- Fixture: np-pose-rough's `wrongfx`, a different song's footage played
-  against each chart (starships ↔ macarena, indaclub ↔ supersonic).
-- Fraction of the *right-dance* real-30 Hz score on those songs:
-
-| run | of right-dance 30 Hz | of wrong-dance 30 Hz off |
-|---|---|---|
-| w30_off | 0.011 | 1.00 |
-| w8_off | 0.005 | 0.45 |
-| **w8_interp** | **0.009** | **0.82** |
-| w8_extrap | 0.019 | 1.63 |
-| w8_extrapc | 0.016 | 1.40 |
-| wn30_off (wrong + NZ noise) | 0.049 | 4.27 |
-| **wn8_interp** (wrong + NZ noise) | **0.021** | 1.79 (**0.42** of wn30_off) |
-
-- `interp` at 8 Hz gives a wrong dance less than a real 30 Hz camera does,
-  clean (0.82×) and with noise (0.42× the same noise at 30 Hz).
-- `extrap` and `extrapc` give it more (1.63×, 1.40×).
-- Noise alone multiplies a wrong dance's score by 4.3 at 30 Hz. That is the
-  scorer's jitter reward again, with the fill off, and it is not the fill's
-  to fix. It is recorded here because a noisy webcam will collect wrong-dance
-  credit the clean fixtures do not show.
-
-**Noise.**
-- Injected by the performer.
-  - `DC3_POSE_PERFORM_NOISE=sxy,sz,rho,seed` is per-joint jitter (metres,
-    image plane and depth).
-  - `DC3_POSE_PERFORM_GLITCH=infer,untracked,flip,drop,seed` gives
-    per-frame probabilities: a joint marked INFERRED 5 cm off, a joint NOT
-    TRACKED 30 cm off, left and right swapped, and the frame dropped (not
-    published).
+**Noise.** The performer injects it.
+- `DC3_POSE_PERFORM_NOISE=sxy,sz,rho,seed` is per-joint jitter (metres,
+  image plane and depth).
+- `DC3_POSE_PERFORM_GLITCH=infer,untracked,flip,drop,seed` gives per-frame
+  probabilities:
+  - a joint marked INFERRED, 5 cm off;
+  - a joint NOT TRACKED, 30 cm off;
+  - the whole body's left and right swapped;
+  - the frame dropped (not published).
 - NZ = `NOISE=0.015,0.04,0,11`, `GLITCH=0.03,0.01,0.01,0.05,13`: 1.5 cm /
   4 cm jitter, 3% inferred, 1% untracked, 1% flipped, 5% of frames
   dropped.
 - NL = `NOISE=0.005,0.015,0,11`, `GLITCH=0.01,0.003,0.003,0.02,13`.
-- The scorer pays *more* for jitter: NZ at a real 30 Hz scores **1.342×**
-  the clean footage, and NL **1.171×**. That is the scorer's property, and
-  it is the same property that rewards `extrap`. So the criterion is that
-  the same noise at a slow rate plus the fill must not score above the same
-  noise at a real 30 Hz:
+- FLIP = `GLITCH=0,0,0.1,0,13`: 10% of frames body-swapped.
 
-| noise | 8 Hz off | 8 Hz hold | 8 Hz extrap | 8 Hz extrapc | **8 Hz interp** | **15 Hz interp** |
-|---|---|---|---|---|---|---|
-| NZ (vs n30_off = 19,603k) | 0.241 | – | 0.830 | 0.787 | **0.757** | **0.920** |
-| NL (vs nl30_off = 17,106k) | 0.338 | – | 0.966 | – | **0.825** | – |
+Fraction of the same noise at real 30 Hz, fill off (MEASURED):
 
-- `interp` stays below the matching 30 Hz run everywhere.
-- It also recovers less under noise than when clean (0.76 vs 0.92 at 8 Hz).
-  INFERRED cause: interpolating two jittered frames averages the jitter
-  down. A real 30 Hz camera does not get that averaging, so this is the
-  conservative side.
+| noise | 8 Hz off | **8 Hz extrap** | 15 Hz extrap | 8 Hz interp | 15 Hz interp |
+|---|---|---|---|---|---|
+| NZ (vs n30_off = 19,603k, 8 songs) | 0.241 | **0.827** | 0.992 | 0.757 | 0.920 |
+| NL (vs nl30_off = 17,106k, 8 songs) | 0.338 | **0.954** | – | 0.825 | – |
+| FLIP (vs f30_off = 8,428k, 4 songs) | 0.395 | **0.942** | – | – | – |
+
+- **Noise does not blow up**: under every noise, extrap stays at or below
+  the same noise at a real 30 Hz.
+- **Clean, extrap is at 1.05–1.08.** Under noise it recovers less than it
+  does clean.
+- INFERRED: the clamp and the guess rule take out the outliers' step. Under
+  10% body flips, extrap at 8 Hz scores 0.94, against 1.06–1.13 clean on
+  those songs: the flip guard holds the swapped frames instead of stepping
+  them on.
+- **Noise raises the scorer's 30 Hz score**: NZ is 1.342× the clean
+  footage, NL 1.171× and FLIP 1.12×. That is the scorer's property, not
+  the fill's.
 
 ### Measured: concern (c), the owner-session timeouts
 
 Two owner-session fill replays hit the 900 s timeout at load 138. The
 re-run used four replays of `owner_bofa.dc3session` (betteroffalone,
-beginner) run **concurrently**, with:
+beginner), run **concurrently**, with:
 - GPU, under the gpu1 flock;
 - `DC3_FAST_TIME`, the kitdrive route, `DC3_PERF_LOG=1`, `DC3_AUDIO_GAIN=0`;
 - box load 50–70.
 
 All four completed: 77 moves, 92 rating lines and 59 PERF windows each.
+These were the builds before the guarded extrap, so `extrap` here is the
+prototype.
 
 | run | score | perfect/awesome/ok/bad | mean fps |
 |---|---|---|---|
 | off | 193,326 | 4/20/7/46 | 82.0 |
 | interp | 245,896 | 7/22/6/42 | 81.3 |
 | hold | 208,335 | 7/17/3/50 | 82.7 |
-| extrap | 362,665 | 10/21/4/42 | 80.0 |
+| extrap (prototype) | 362,665 | 10/21/4/42 | 80.0 |
 
-- **The timeouts were load, not the fill.** The fill modes run at the same
-  frame rate as `off`. The earlier runs managed 18–20 fps at load 138.
+- **The timeouts were load, not the fill.** Every fill mode runs at the
+  frame rate of `off`, and the earlier runs managed 18–20 fps at load 138.
 - The filler's cost is negligible: about 10k `Poll` calls run in the 0 ms
   unit tests.
-- This is a replay of a real session at its recorded camera rate. In it,
-  `extrap` scores 1.9× `off`. That is the overshoot reward again, on a real
-  camera, and it is why `extrap` is not the default.
 
 ### Tests
 
 **`native/tests/test_pose_fill.cpp`**: math, schedule and latency, with no
 game or GPU.
-- `PoseFillMathTest`: ParseMode, interpolation stays on the segment,
-  people/untracked handling, extrap and extrapc.
+- `PoseFillMathTest`:
+  - the default mode and the gain parse;
+  - interpolation stays on the segment;
+  - people and untracked handling;
+  - `ExtrapolateGuarded`: the gain scales the step, the speed is clamped,
+    a guess is not moved, an inferred joint is, a swap is held, crossing
+    hands are not a swap, a new person is copied;
+  - the prototype and extrapc.
 - `PoseFillScheduleTest`:
   - 30 Hz is never filled; `off` never fills.
-  - 8 Hz is delivered exactly, at the right delay and rate.
+  - interp at 8 Hz is exact, at the right delay and rate.
   - A stall stalls the stream.
-  - No fill across a dropout or a long gap.
-  - A clock that runs back is handled.
-  - A faster camera releases the fill.
-  - hold/extrap are undelayed.
-- `PoseFillLatencyTest`:
-  - The delay rides on whichever sensor latency wins:
-    default 100 + 160 = 260; declared 0 + 160 = 160;
-    explicit 50 + 160 = 210.
-  - On release the latency drops back to the explicit 50, then the
-    default 100.
+  - extrap stops one period after the newest frame, at gains 1 and 0.5.
+  - No fill across a dropout (interp and extrap) or a long gap.
+  - The clock running back and a faster camera are handled.
+- `PoseFillLatencyTest`: interp's delay rides on whichever sensor latency
+  wins.
+  - default 100 + 160 = 260; declared 0 + 160 = 160; explicit 50 + 160 = 210;
+  - on release, back to the explicit 50, then the default 100.
 
 **`native/tests/test_native_pose_socket.cpp` `PoseFillSensorTest`**: the
 real `BuildSensorFrame` path (slots, levelling, recording), with a test song
 clock.
-- An 8 Hz camera is filled, and only its own 49 frames reach the session
-  recording.
-- A dropout reaches the hold exactly as with the fill off.
+- extrap (the default) and interp each fill an 8 Hz camera to ~30 Hz.
+- The session recording holds only the camera's own frames.
+- extrap is never more than one period ahead, and it adds no latency.
+- A dropout reaches P-12's hold exactly as with the fill off: 8 held
+  frames in all three modes.
 - A 30 Hz camera is the same stream with the fill on or off.
 
-**Sabotages, both caught, source restored:**
-1. The `SamePeople`/`AnyValid` guard in `Filler::Poll` was replaced by
-   `if (false)`. Result: `ADropoutReachesTheHoldExactlyAsWithTheFillOff`
-   fails with held frames 8 (off) vs 32 (interp), and the schedule dropout
-   test fails.
-2. `DeliverFillFrame` was also made to call `Dc3PoseSessionRecord`. Result:
-   the recording test fails with 220 frames recorded vs 49 camera frames.
+**Sabotages, every one caught; the source was restored and 22 of 22 pass.**
+
+| sabotage | caught by | how it showed |
+|---|---|---|
+| interp's `SamePeople`/`AnyValid` guard → `if (false)` | sensor dropout test, schedule dropout test | held frames 8 (off) vs 32 (interp) |
+| `DeliverFillFrame` also calls `Dc3PoseSessionRecord` | the recording test | 220 frames recorded vs 49 camera frames |
+| extrap without the flip guard | `GuardedExtrapolation…` | 20 joint failures |
+| extrap without the speed clamp | `GuardedExtrapolation…` | the absurd step goes through |
+| extrap without the one-period horizon | `ExtrapStopsOnePeriod…` | 116 failures |
+| extrap filling after a frame with nobody | schedule dropout test, sensor dropout test | held frames 8 vs 32 |
 
 ### Costs and limits
 
-- **The skeleton runs D behind the camera while engaged** (~150 ms at
-  8 Hz). Scoring compensates for it. Everything else that reads the
-  skeleton does not: the gesture cursor, the player box, and the camera
-  `shot` heuristics. INFERRED: at 8 Hz the cursor already moves in 120 ms
-  steps, so a smoother cursor 150 ms late is a fair trade. **Not measured
-  with a person.**
-- A slow game engages the fill, as noted above, and the engage log line
-  says so with its song time.
+- **Generous by design.** At 8–15 Hz the default scores 5–10% above a real
+  30 Hz camera on the footage. It also gives a wrong dance 1.6× a real
+  30 Hz camera's credit, though that is still under 2% of the right
+  dance's. Dial it with the gain.
+- **A slow game engages the fill.** The engage log line says so, with its
+  song time.
 - **Not run on web.** The changed sources compile under em++
   (`-fsyntax-only` with dc3-web's flags). The fill has not been run in a
   browser.
 - **Not validated live.** No owner session on the GPD with a real webcam
-  has been taken.
-- **The scores are from a loaded box** (load 37–84). FAST_TIME makes them
+  has been taken, and the guarded default has not been replayed on the
+  owner's recorded session.
+- **The scores are from a loaded box** (load 25–84). FAST_TIME makes them
   frame-exact rather than wall-clock dependent, so a quiet-box rerun is
   expected to agree, but none was taken.
 
 ### Reproducing
 
 ```bash
-# one config: footage at 8 Hz, fill interp (no GPU)
-python3 scripts/native_song_sweep.py --out /tmp/fill/h8_interp --no-gpu --jobs 3 \
+# one config: footage at 8 Hz, the default fill at gain 0.75 (no GPU)
+python3 scripts/native_song_sweep.py --out /tmp/fill/x8_g075 --no-gpu --jobs 3 \
   --songs macarena,indaclub,boyfriend,12step,starships,supersonic,scream,cupidshuffle \
   --difficulty medium --performer 'replay:<pose_songlead>/{song}.dc3pose' \
   --env DC3_POSE_PERFORM_REPLAY_SYNC=song --env DC3_AUDIO_GAIN=0 \
-  --env DC3_POSE_PERFORM_HZ=8 --env DC3_POSE_FILL=interp \
+  --env DC3_POSE_PERFORM_HZ=8 --env DC3_POSE_FILL_GAIN=0.75 \
   --eval '{profile_mgr toggle_disable_freestyle}' --stall 60 --timeout 420
-# add --env DC3_POSE_PERFORM_NOISE=... --env DC3_POSE_PERFORM_GLITCH=... for the noise rows
-build/bin/milo-tests --gtest_filter='PoseFill*'
+# controls: --performer stand (standing still); replay of another song's footage (wrong dance);
+# --env DC3_POSE_PERFORM_NOISE=... --env DC3_POSE_PERFORM_GLITCH=... (noise)
+native/build/milo-tests --gtest_filter='PoseFill*'
 ```
 
 ## Gaps
