@@ -300,6 +300,7 @@ class Kit:
     def list_select(self, panel_list, sym, timeout=30):
         """Move a HamNavList's highlight to `sym` with up/down presses."""
         end = time.time() + timeout
+        stretched = False
         while time.time() < end:
             want = self.eval(f"{{{panel_list} data_index {sym}}}")
             cur = self.eval(f"{{{panel_list} get_selected}}")
@@ -311,6 +312,12 @@ class Kit:
             if cur == want:
                 return True
             n = int(want) - int(cur)
+            if not stretched:
+                # A far row is many presses: with the DLC songs listed, a song
+                # can be ~100 rows down (np-soak3: milkshake missed in 30 s at
+                # 21 fps windowed).  Allow ~1 s a row on top of the timeout.
+                stretched = True
+                end = max(end, time.time() + timeout + 1.0 * abs(n))
             self.press(*(["down"] * n if n > 0 else ["up"] * -n), gap=12)
             time.sleep(1.0)
         return False

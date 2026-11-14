@@ -35,6 +35,7 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -176,6 +177,32 @@ class Soak:
         self.kit = None
         self.watch = None
         self.n = 0
+        self.shots = []
+
+    def shot(self, tag):
+        """--shots: the game's own frame (/api/screenshot, the 1280x720
+        render target) and, windowed, the whole X screen the window is on
+        (`import -window root`: what a player sees, bars and scaling
+        included).  For looking at, not for scoring."""
+        if not self.a.shots or not self.kit:
+            return
+        d = os.path.join(self.a.out, "shots")
+        os.makedirs(d, exist_ok=True)
+        stem = f"{len(self.shots):02d}-{tag}".replace(" ", "_").replace("/", "_")
+        rec = {"tag": tag, "at_min": round((time.time() - T0) / 60, 2), "screen": self.kit.screen()}
+        p = os.path.join(d, stem + "-game.png")
+        if self.kit.screenshot(p):
+            rec["game"] = p
+        if self.a.window and os.environ.get("DISPLAY"):
+            p = os.path.join(d, stem + "-x.png")
+            try:
+                subprocess.run(["import", "-window", "root", p], timeout=30, check=True,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                rec["x"] = p
+            except (OSError, subprocess.SubprocessError):
+                pass
+        self.shots.append(rec)
+        say(f"shot {stem} on {rec['screen']}")
 
     def clip(self, path):
         self.current_clip = path
@@ -195,11 +222,17 @@ class Soak:
         # scrolls the song list away from the row being sought (measured:
         # cupidshuffle reached, then scrolled past, for 2 min).  A pad player
         # who pauses to think keeps the pad here: 60 s.
-        env = {"DC3_FOOTAGE_CONTROL": self.control, "DC3_CONTROLLER_MODE_TIMEOUT_MS": "60000"}
+        # Muted always: a windowed run opens the sound device (lane rule).
+        env = {"DC3_FOOTAGE_CONTROL": self.control, "DC3_CONTROLLER_MODE_TIMEOUT_MS": "60000",
+               "DC3_AUDIO_GAIN": "0"}
         env["MILO_NORENDER" if self.a.norender else "MILO_RENDER"] = "1"
+        # --window WxH: a real window (on $DISPLAY, e.g. an Xvfb) of that
+        # size, so the scaled-frame present path (PLAN H-18) runs the whole
+        # session; else headless, as soaks #5 and #6.
+        view = ["--size", self.a.window] if self.a.window else ["--headless"]
         self.clip(self.default_clip)
         self.kit = kitdrive.Kit(os.path.join(self.a.out, label), self.home,
-                                args=["--headless"] + (["--fast-boot"] if fast else [])
+                                args=view + (["--fast-boot"] if fast else [])
                                 + ["--video", self.default_clip,
                                       "--video-pre", str(self.a.pre)],
                                 env=env, gpu_lock=self.a.gpu_lock,
@@ -306,10 +339,15 @@ class Soak:
         song = None
         try:
             end = time.time() + song_timeout
+            shot_at = None
             while time.time() < end and k.alive():
                 s = k.screen()
                 if s == "game_screen" and song is None:
                     song = self.follow_song(duo)
+                    shot_at = time.time() + 45   # well into the song, dancers on
+                if shot_at and time.time() > shot_at:
+                    shot_at = None
+                    self.shot(f"{song} gameplay")
                 # Each mode has its own: perform_, fitness_perform_,
                 # dancebattle_perform_, campaign_perform_endgame_screen ...
                 if s in end_screens or (isinstance(s, str) and s.endswith("endgame_screen")):
@@ -331,11 +369,15 @@ class Soak:
         time.sleep(6)
         card = k.card(0)
         card1 = k.card(1)
+        self.shot(f"{song} {got}")
         load = load_over(time.time() - secs, time.time())
         say(f"results on {got} after {secs:.0f} s: p1 {card}"
             + (f", p2 {card1}" if card1.get("score") else "")
             + (f"; box load mean {load['mean']} max {load['max']} ({os.cpu_count()} threads)" if load else ""))
         nxt = advance(k, back_to, 180, label="after results") if back_to else None
+        if nxt:
+            time.sleep(3)
+            self.shot(nxt)
         return {"results_screen": got, "song": song, "footage": os.path.basename(self.current_clip),
                 "song_s": round(secs), "card": card, "card_p2": card1,
                 "load": load, "next": nxt, "ok": bool(nxt) or not back_to}
@@ -381,6 +423,8 @@ class Soak:
         while time.time() < end and k.alive():
             s = k.screen()
             if s == "main_screen":
+                time.sleep(2)
+                self.shot("main_screen")
                 return {"ok": True, "via": path}
             if not path or path[-1] != s:
                 path.append(s)
@@ -407,6 +451,7 @@ class Soak:
         self.watch.in_song = True
         end = time.time() + self.a.rehearse_min * 60
         seen = []
+        rshot = False
         try:
             while time.time() < end and k.alive():
                 s = k.screen()
@@ -415,6 +460,9 @@ class Soak:
                     say(f"rehearse: {s}")
                 if s == "practice_endgame_screen":
                     break
+                if s == "game_screen" and not rshot and time.time() > end - self.a.rehearse_min * 60 + 90:
+                    rshot = True
+                    self.shot(f"rehearse {song}")
                 # The same as a song: a pause the player sees is continued
                 # (the full soak sat 2.8 min on practice_pause_screen).
                 if s == "confirm_quit_screen" or (
@@ -594,6 +642,10 @@ def main(argv=None):
     ap.add_argument("--short", action="store_true")
     ap.add_argument("--norender", action="store_true", help="no GPU (MILO_NORENDER=1)")
     ap.add_argument("--fresh", action="store_true", help="a console that has seen no tutorial")
+    ap.add_argument("--window", metavar="WxH",
+                    help="a window of this size on $DISPLAY (e.g. an Xvfb) instead of headless")
+    ap.add_argument("--shots", action="store_true",
+                    help="screenshots in each song, at results and at the main menu (OUT/shots)")
     ap.add_argument("--pre", type=float, default=8.0)
     # Five Perform songs (~4 min each) put the full run in the 45-60 min band.
     ap.add_argument("--songs", nargs="+",
@@ -617,6 +669,7 @@ def main(argv=None):
         if s.kit and s.kit.alive():
             s.close("soak aborted")
     s.results["minutes"] = (time.time() - T0) / 60
+    s.results["shots"] = s.shots
     s.results["events"] = EVENTS
     with open(os.path.join(a.out, "soak.json"), "w") as f:
         json.dump(s.results, f, indent=1, default=str)
