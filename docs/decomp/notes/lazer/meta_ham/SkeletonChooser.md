@@ -189,3 +189,8 @@ Inside the body (was lines 1331-1371):
                     // arm instead (98.6), and also fixes the trackingID0/1
                     // slots at 0x58/0x5c (the w18-e row).
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.789, 12 non-equal row(s): SYM rows:
+lbl_82F1BD80..94 hold 0.03, 0.37, 0.2, 0.6, 0.1, 0.25 = sFloat0..5 in order, so every
+float pairs with the right global; textColor/bgColor/$S20 pair via their ctor rows. The
+4 register rows are pure permutation. NOT A BUG.
