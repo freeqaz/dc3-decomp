@@ -271,6 +271,53 @@ TEST_F(NativeUiMaterialBuilderTest, PassBuilderAppliesTheUiTerms) {
     delete bright;
 }
 
+// A premultiplied-alpha material (blend 7: One / OneMinusSrcAlpha) reaches the
+// shader with rgb scaled by its alpha: NgMat::SetRegularShaderConst
+// (Mat_NG.cpp:191, 100% matched) calls PreMultiplyAlpha on the colour before
+// setting kVS_Color/kPS_Color. Without it a fading premult label adds its full
+// colour until the shader's fringe fade near alpha 0: the fitness HUD's
+// time/kCal crossfade drew both labels at full brightness for its 0.33 s
+// (Eagle-Light(47).mat is blend 7). Both term sets, both builders; the scale
+// uses the authored alpha, before the intensify factor on alpha.
+// Sabotages tried, each verified to fail here: MaterialShaderColor not scaling
+// rgb (both builders at once); the primary builder copying the raw colour;
+// the pass builder copying the raw colour; scaling every blend, not just 7;
+// scaling by twice the alpha (the intensify-doubled value).
+TEST_F(NativeUiMaterialBuilderTest, PremultipliedAlphaColourIsScaledByAlpha) {
+    ASSERT_NE(gWgpuRnd, nullptr);
+    RndMat *label = MakeMat(false, false, false, 0.25f);
+    label->SetColor(0.8f, 0.6f, 0.4f);
+    label->SetBlend(BaseMaterial::kPreMultAlpha);
+    for (const UiDrawTerms &terms : {kRetail, kEngineDefault}) {
+        for (const MaterialParams &p : {BuildMaterialParams(label, true, terms),
+                                        BuildPassMaterialParams(label, terms)}) {
+            EXPECT_FLOAT_EQ(p.uniforms.color[0], 0.8f * 0.25f);
+            EXPECT_FLOAT_EQ(p.uniforms.color[1], 0.6f * 0.25f);
+            EXPECT_FLOAT_EQ(p.uniforms.color[2], 0.4f * 0.25f);
+            EXPECT_FLOAT_EQ(p.uniforms.color[3], 0.25f);
+        }
+    }
+
+    // Any other blend: the colour as authored.
+    label->SetBlend(BaseMaterial::kBlendSrcAlpha);
+    for (const MaterialParams &p : {BuildMaterialParams(label, true, kRetail),
+                                    BuildPassMaterialParams(label, kRetail)}) {
+        EXPECT_FLOAT_EQ(p.uniforms.color[0], 0.8f);
+        EXPECT_FLOAT_EQ(p.uniforms.color[2], 0.4f);
+        EXPECT_FLOAT_EQ(p.uniforms.color[3], 0.25f);
+    }
+
+    // Intensify: retail premultiplies the authored alpha, then the shader's
+    // intensify doubles rgb and alpha alike (MaterialAlphaScale).
+    RndMat *bright = MakeMat(false, true, true, 0.5f);
+    bright->SetBlend(BaseMaterial::kPreMultAlpha);
+    MaterialParams p = BuildMaterialParams(bright, true, kRetail);
+    EXPECT_FLOAT_EQ(p.uniforms.color[0], 0.5f);
+    EXPECT_FLOAT_EQ(p.uniforms.color[3], 1.0f);
+    delete label;
+    delete bright;
+}
+
 // The two-argument entry point the draw path uses must forward the current
 // phase's terms: outside the overlay phase it equals the engine default.
 TEST_F(NativeUiMaterialBuilderTest, DrawPathEntryPointForwardsTheCurrentTerms) {
