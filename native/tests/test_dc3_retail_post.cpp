@@ -1112,6 +1112,88 @@ TEST_F(DC3VelocityGpuTest, VelocityBlurIsRetailBit42) {
     pass.Terminate();
 }
 
+// Bits 42 + 24 together (postprocess_0000040001200010, decoded): the motion
+// blur's exposure term reads the VELOCITY-BLURRED alpha (r1 after the taps
+// feeds prev.a - r1.w), not the sharp scene's. Frame 1 leaves prev = (200, a 1);
+// frame 2 is grey 50 with a one-texel alpha line under a sideways slide, so
+// beside the line the blurred alpha A > 0 and out = c + (prev - c) (1 - A),
+// where the sharp alpha (0 there) would give prev outright.
+TEST_F(DC3VelocityGpuTest, MotionBlurReadsTheVelocityBlurredAlpha) {
+    pp->SetProperty("bloom_intensity", DataNode(0.0f));
+    pp->SetProperty("bloom_color", DataNode(0));
+    pp->SetProperty("motion_blur_blend", DataNode(1.0f));
+    pp->SetProperty("motion_blur_weight", DataNode(0x010101));   // c105.rgb = 1/255: r decides
+    pp->SetProperty("motion_blur_exposure", DataNode(1.0f));
+    {
+        RetailPostParams p;
+        rndshape::FillRetailPost(pp, 1.0f, p);
+        ASSERT_TRUE(p.motionBlur);
+        ASSERT_FALSE(p.bloom) << "the case needs bloom off (alpha is also the bloom mask)";
+    }
+    PostProcPass pass;
+    pass.Init(gWgpuRnd->Gpu());
+    Place(prev, -0.2f, 0.0f, 0.0f);
+    Place(cur, 0.0f, 0.0f, 0.0f);
+    float prevVP[16], curVP[16];
+    CamVP(prev, prevVP);
+    CamVP(cur, curVP);
+    const float scale = 1.8f;
+    const double n = 1.0, f = 1000.0, z = 8.0;
+    const float depth = (float)(f * (z - n) / (z * (f - n)));
+    std::vector<uint8_t> px((size_t)kVW * kVH * 4), frame, vel;
+    for (size_t i = 0; i < px.size(); i += 4) {
+        px[i] = px[i + 1] = px[i + 2] = 200;
+        px[i + 3] = 255;
+    }
+    pass.SetVelocity(true, scale, prevVP);   // no previous VP yet: no velocity
+    RunFrame(pass, px, depth, frame, nullptr);
+    ASSERT_EQ(pass.Retail().VelocityPasses(), 0);
+    const int x0 = kVW / 2;
+    for (int y = 0; y < kVH; y++)
+        for (int x = 0; x < kVW; x++) {
+            uint8_t *q = &px[(y * kVW + x) * 4];
+            q[0] = q[1] = q[2] = 50;
+            q[3] = x == x0 ? 255 : 0;
+        }
+    pass.SetVelocity(true, scale, curVP);
+    RunFrame(pass, px, depth, frame, &vel);
+    ASSERT_EQ(pass.Retail().VelocityPasses(), 1);
+    const int hw = kVW / 2;
+    const uint8_t *vc = &vel[((kVH / 4) * hw + hw / 2) * 4];
+    const float velx = vc[0] / 255.0f;
+    ASSERT_GE(vc[2] / 255.0f, 0.003f);
+    const float d = (velx - 0.5f) * scale;
+    const float st = 0.0046f * d * kVW, b0 = -0.023f * d * kVW;
+    const float wk[10] = {0.00876f, 0.02700f, 0.06476f, 0.12099f, 0.17603f,
+                          0.17603f, 0.12099f, 0.06476f, 0.02700f, 0.00876f};
+    auto line = [&](float x) {
+        const float xf = std::floor(x), t = x - xf;
+        auto at = [&](int xi) { return xi == x0 ? 1.0f : 0.0f; };
+        return at((int)xf) * (1 - t) + at((int)xf + 1) * t;
+    };
+    const float c = 50 / 255.0f, pv = 200 / 255.0f;
+    const int y = kVH / 2;
+    int bad = 0, mixed = 0;
+    float worst = 0;
+    for (int x = x0 - 12; x <= x0 + 12; x++) {
+        float A = line((float)x) * 0.19947f;
+        for (int k = 0; k < 10; k++) A += wk[k] * line(x + b0 + k * st);
+        A = std::min(1.0f, A * 1.00549f);
+        const float k = std::max(1.0f - A, 1.0f / 255.0f);
+        const float m = c + (pv - c) * k;
+        const float g = frame[(y * kVW + x) * 4 + 1] / 255.0f;
+        worst = std::max(worst, std::fabs(g - m));
+        if (std::fabs(g - m) > 3.0f / 255.0f) bad++;
+        if (x != x0 && A > 0.05f) mixed++;
+        printf("  x %+3d: blurred alpha %.4f gpu %.4f model %.4f\n", x - x0, A, g, m);
+    }
+    printf("DC3 velocity + motion blur: %d columns beside the line mixed by the blurred alpha, worst %.4f\n",
+           mixed, worst);
+    EXPECT_GE(mixed, 3) << "the case must put blurred alpha beside the line";
+    EXPECT_EQ(bad, 0) << "bits 42 + 24: the exposure term must read the velocity-blurred alpha";
+    pass.Terminate();
+}
+
 // Off costs nothing: no velocity target, no pass, the same composite; and the
 // frame after a cut (not ready), a first frame with no previous VP, or a depth
 // that is not multisampled, add none either.
