@@ -1,0 +1,29 @@
+# The pose tracker's Python packages (native/scripts/pose_server.py), pinned
+# to what every measurement in docs/native/POSE_INPUT.md and STATUS.md was
+# taken with (the main box's .venv, Python 3.10, 2026-11-13).
+# scripts/playtest/bootstrap.sh --fix installs these into a venv made with
+# `uv venv --python 3.10` (uv fetches that Python itself; numpy 2.2.6 has no
+# wheel for Python 3.14, which is what Arch ships).
+# opencv-contrib-python is the cv2 mediapipe itself requires; it contains
+# everything opencv-python has, so only one is installed (two packages that
+# both provide cv2 overwrite each other's files).
+mediapipe==1.0.0
+opencv-contrib-python==5.0.0.93
+numpy==2.2.6
+absl-py==2.5.0
+flatbuffers==25.12.19
+matplotlib==3.10.9
+sounddevice==0.5.5
+# their dependencies, at the same versions
+certifi==2026.6.17
+cffi==2.1.0
+contourpy==1.3.2
+cycler==0.12.1
+fonttools==4.63.0
+kiwisolver==1.5.0
+packaging==26.2
+pillow==12.3.0
+pycparser==3.0
+pyparsing==3.3.2
+python-dateutil==2.9.0.post0
+six==1.17.0

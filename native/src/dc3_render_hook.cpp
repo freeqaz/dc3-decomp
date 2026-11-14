@@ -117,6 +117,12 @@ public:
     // alpha included), so retail digits are opaque.
     bool UiUsesRetailMaterialTerms() override { return true; }
 
+    // RndText marks every glyph page it creates (Text.cpp AllocateMeshes and
+    // FontMap3d's meshes call MarkTextGlyphMesh), so the engine can draw only
+    // those without depth test and culling and leave spotlight beams, ribbons,
+    // lines and crowd billboards -- unnamed too -- their material's.
+    bool MarksTextGlyphMeshes() override { return true; }
+
     static bool IsTextGlyphMesh(RndMesh* mesh) {
         const char* name = mesh ? mesh->Name() : nullptr;
         return name && !name[0];
