@@ -116,6 +116,9 @@ Inside the body (was lines 349-365):
         // dropping the dy/diffZ/dx locals: keys unchanged or code changed.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.000, 12 non-equal row(s): The 1 SYM
+row is lbl_82F44754 vs sSlopeRatioThreshold: the image's .data float is 0.5, same
+initialiser. The 11 register rows are pure permutation. NOT A BUG.
 
 ## `?Update@ArcDetector@@QAAXABVSkeleton@@H@Z`
 
