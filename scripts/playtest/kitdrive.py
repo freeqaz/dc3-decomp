@@ -17,10 +17,12 @@ that play.sh.  A driver that "fell back" to whatever game answered once quit
 a person's song mid-way (np-gpd-test, 2026-11-14).
 
 Presses go through POST /api/input/sequence: the game turns each into a
-ButtonDown message on one frame and the ButtonUp on the next (HttpServer.cpp
-DispatchInjectedButtons), so a press can never fall between two frames the
-way a window-system key tap can.  Presses are spaced at least MIN_GAP_FRAMES
-apart, so two presses of one button are never merged into one.
+ButtonDown message on one frame and the ButtonUp HOLD_FRAMES later
+(HttpServer.cpp DispatchInjectedButtons, "hold"), so a press can never fall
+between two frames the way a window-system key tap can, and is never a
+one-frame blip.  Presses are spaced at least MIN_GAP_FRAMES apart (more than
+HOLD_FRAMES), so a button is up before it is pressed again and two presses of
+one button are never merged into one.
 """
 import json
 import os
@@ -42,7 +44,8 @@ _GLOBAL_OPTIONS = bytes([
     0, 9, 4, 0, 0, 0, 0, 0, 0])
 
 
-MIN_GAP_FRAMES = 3
+HOLD_FRAMES = 2      # frames a press stays down
+MIN_GAP_FRAMES = 3   # frames between presses; > HOLD_FRAMES
 
 
 class NotOurGame(RuntimeError):
@@ -236,11 +239,12 @@ class Kit:
         """Press buttons in order, `gap` frames apart (at least
         MIN_GAP_FRAMES), after a wake."""
         gap = max(int(gap), MIN_GAP_FRAMES)
-        seq = [{"button": "l3", "delay": 0}] if wake else []
+        seq = [{"button": "l3", "delay": 0, "hold": HOLD_FRAMES}] if wake else []
         if not buttons and not seq:
             return
         for i, b in enumerate(buttons):
-            seq.append({"button": b, "delay": MIN_GAP_FRAMES if (i == 0 and wake) else gap})
+            seq.append({"button": b, "delay": MIN_GAP_FRAMES if (i == 0 and wake) else gap,
+                        "hold": HOLD_FRAMES})
         try:
             self._req("/input/sequence", json.dumps(seq), 10)
         except (urllib.error.URLError, OSError) as e:

@@ -23,6 +23,7 @@
 #include <gtest/gtest.h>
 
 #include "platform/PoseSession_Native.h"
+#include "platform/HttpServer.h"
 #include "platform/Skeleton_Native.h"
 
 #include <cstdio>
@@ -354,4 +355,40 @@ TEST(SensorNoiseFloorTest, AResetRestartsTheOffsets) {
         moved |= next.mJointPositions[j].x != first.mJointPositions[j].x;
     }
     EXPECT_TRUE(moved);
+}
+
+// ---- Injected pad presses (the playtest kit's driver, POST /api/input/sequence)
+// A press is down for `hold` frames, then up; 1 (the default) is the next
+// frame, as before.  The kit holds for 2 so no press is a one-frame blip.
+TEST(HttpInjectedHoldTest, APressIsHeldForItsFramesThenReleased) {
+    const unsigned A = 1u << 3, B = 1u << 5;
+    int hold[InjectedPadHold::kBits] = {};
+    hold[3] = 2;
+    InjectedPadHold pad;
+    unsigned ups, downs;
+    pad.Step(A, hold, &ups, &downs); // frame 0: A down
+    EXPECT_EQ(downs, A);
+    EXPECT_EQ(ups, 0u);
+    int none[InjectedPadHold::kBits] = {};
+    pad.Step(0, none, &ups, &downs); // frame 1: still down
+    EXPECT_EQ(ups, 0u);
+    EXPECT_EQ(pad.held, A);
+    pad.Step(0, none, &ups, &downs); // frame 2: up
+    EXPECT_EQ(ups, A);
+    EXPECT_EQ(pad.held, 0u);
+    pad.Step(0, none, &ups, &downs);
+    EXPECT_EQ(ups | downs, 0u);
+
+    // Default hold: released the next frame (the behaviour before "hold").
+    pad.Step(B, nullptr, &ups, &downs);
+    EXPECT_EQ(downs, B);
+    pad.Step(0, nullptr, &ups, &downs);
+    EXPECT_EQ(ups, B);
+
+    // Pressed again while held: released and pressed again that frame.
+    pad.Step(A, hold, &ups, &downs);
+    pad.Step(A, hold, &ups, &downs);
+    EXPECT_EQ(ups, A);
+    EXPECT_EQ(downs, A);
+    EXPECT_EQ(pad.held, A);
 }

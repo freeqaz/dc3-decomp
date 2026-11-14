@@ -20,7 +20,8 @@ Stdlib unittest, no GPU, no camera, no game data: synthetic files only.
                      null-screen guard
   kitdrive ownership a used session folder is refused; quit() leaves a game it
                      did not start and stops its own; a debug port answered by
-                     another game is not driven; presses are >= 3 frames apart
+                     another game is not driven; presses are >= 3 frames apart and
+                     held >= 2 frames
   camera_resolve / preflight camera
                      auto and a by-id name find a camera that came back as
                      /dev/video1; a missing index is explained (re-connected,
@@ -382,6 +383,9 @@ class KitDriveOwnershipTest(unittest.TestCase):
         delays = [e["delay"] for seq in sent for e in seq if e["button"] != "l3"]
         self.assertEqual(len(delays), 3)
         self.assertTrue(all(x >= kitdrive.MIN_GAP_FRAMES for x in delays), delays)
+        holds = [e.get("hold", 1) for seq in sent for e in seq]
+        self.assertTrue(all(h >= 2 for h in holds), holds)
+        self.assertGreater(kitdrive.MIN_GAP_FRAMES, kitdrive.HOLD_FRAMES)
 
 
 class FakeCameras:
