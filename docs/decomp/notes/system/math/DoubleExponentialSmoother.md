@@ -51,6 +51,10 @@ Above the definition (was lines 62-74):
 // row left is the commutative fmadds inside the inlined mY Smooth().
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.870, 1 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
 
 ## `?Smooth@Vector3DESmoother@@QAAXVVector3@@M_N@Z`
 
