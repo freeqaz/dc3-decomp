@@ -26,6 +26,17 @@
 //                       numPoses 2 probe every <s> seconds that switches to 2
 //                       when it sees a second person (pose_mediapipe.py
 //                       --probe-second-person; 0 = off, numPoses 2 every frame)
+//   pose_probe_worker=1|0  run that probe in a second worker (default 1), as
+//                       desktop runs it on a thread; 0 = after the frame's own
+//                       pass in the one worker (np-web4's version)
+//   pose_input=<h>|0    scale each camera frame to this height before
+//                       MediaPipe sees it (0 = as captured)
+//   pose_stats=1        per-frame pipeline timing: camera age at read, worker,
+//                       transfer, page, push -> the game frame that took it,
+//                       end to end, plus the preview's requestVideoFrameCallback
+//                       count (dc3PoseSummary().pipeline; docs/native/WEB.md
+//                       "Pose pipeline").  The per-stage worker times are
+//                       always on (a few performance.now() a frame)
 //   pose_slow=STAGE:MS  instrument check: busy work in one worker stage
 //                       (scripts/pose_bench/web_pose_fps.mjs)
 //
@@ -55,6 +66,9 @@ const opt = {
     // than 2 people are tracked, but a second player is never found.
     persons: Math.min(2, Math.max(1, parseInt(params.get('pose_persons') || '2', 10) || 2)),
     probeSec: Math.max(0, parseFloat(params.get('pose_probe') || '0') || 0),
+    probeWorker: params.get('pose_probe_worker') !== '0',
+    input: Math.max(0, parseInt(params.get('pose_input') || '0', 10) || 0),
+    statsOn: params.get('pose_stats') === '1',
 };
 
 function parseFrames(v) {
@@ -72,17 +86,29 @@ const stats = window.dc3PoseStats = {
     lastCount: 0, inferMs: [], mainMs: [], fps: 0, camera: null,
     frames: opt.frames, picturesPushed: 0, picturesRejected: 0, pictureMs: [],
     stageMs: {},   // per-stage rings: the worker's msg.stages + xfer + main
+    // Counters for rates over a window (the harness divides deltas by time):
+    // camFrames  camera frames the stream produced (processed + skipped)
+    // skipped    camera frames dropped while the worker was busy
+    // consumed   pose frames a game frame took (PoseInput_Web.cpp; pose_stats=1)
+    // overwritten  pushed frames replaced before any game frame took them
+    camFrames: 0, skipped: 0, consumed: 0, overwritten: 0, rvfcFrames: 0,
+    input: opt.input, probeWorker: opt.probeWorker, statsOn: opt.statsOn,
+    pipelineMs: {},  // pose_stats=1: per-frame latency rings, see pipelineFrame
 };
 const RING = 600;   // 20 s at 30 fps: a measurement window's worth
 function ring(arr, v) { arr.push(v); if (arr.length > RING) arr.shift(); }
+const pipeRing = (k, v) => ring(stats.pipelineMs[k] || (stats.pipelineMs[k] = []), v);
 // summary({reset: true}) also empties the rings, so the next call describes
 // only what came after (a measurement window).
 export function summary(o) {
     const q = (a, p) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return +s[Math.min(s.length - 1, Math.floor(p * s.length))].toFixed(2); };
     const stages = {};
     for (const [k, a] of Object.entries(stats.stageMs)) stages[k] = [q(a, 0.5), q(a, 0.95)];
+    const pipeline = {};
+    for (const [k, a] of Object.entries(stats.pipelineMs)) pipeline[k] = [q(a, 0.5), q(a, 0.95)];
     const out = {
         ...stats, inferMs: undefined, mainMs: undefined, stageMs: undefined, stages,
+        pipelineMs: undefined, pipeline,
         inferMsP50: q(stats.inferMs, 0.5), inferMsP95: q(stats.inferMs, 0.95),
         pictureMs: undefined, pictureMsP50: q(stats.pictureMs, 0.5),
         pictureMsP95: q(stats.pictureMs, 0.95),
@@ -90,7 +116,7 @@ export function summary(o) {
     };
     if (o && o.reset) {
         stats.inferMs.length = 0; stats.mainMs.length = 0; stats.pictureMs.length = 0;
-        stats.stageMs = {};
+        stats.stageMs = {}; stats.pipelineMs = {};
     }
     return out;
 }
@@ -174,12 +200,74 @@ function engineReady() {
     return typeof window.wasmReady !== 'undefined' && window.wasmReady &&
         window.Module && typeof window.Module.dc3PosePush === 'function';
 }
+// Returns the engine's frame id for the push (> 0), or 0 if it was refused.
 function pushToEngine(floats, count, captureSec) {
-    if (!engineReady()) { stats.pushRejected++; return false; }
-    let ok = 0;
-    try { ok = window.Module.dc3PosePush(floats, count, captureSec); } catch (e) { ok = 0; }
-    if (ok) stats.pushed++; else stats.pushRejected++;
-    return !!ok;
+    if (!engineReady()) { stats.pushRejected++; return 0; }
+    let id = 0;
+    try { id = window.Module.dc3PosePush(floats, count, captureSec); } catch (e) { id = 0; }
+    if (id) stats.pushed++; else stats.pushRejected++;
+    return id;
+}
+
+// ---------------------------------------------------------------- pose_stats=1
+// Per-frame pipeline timing.  Every time below is on the page's clock
+// (performance.timeOrigin + performance.now(), ms) except the camera's: a
+// VideoFrame's capture timestamp is on the camera clock (Chromium: the
+// monotonic clock), whose offset to the page clock is not exposed.  `age`
+// (camera -> worker) is therefore measured against the freshest frame seen:
+// availAt - capture minus its minimum over the run, i.e. how long a frame
+// waited in the stream's one-frame buffer beyond the best case.  The
+// camera's own exposure + driver latency (a constant, ~40-50 ms on the GPD's
+// webcam, POSE_INPUT.md) is outside every number here.
+let capOffMin = Infinity;
+const pending = new Map();   // engine frame id -> per-frame record
+function pipelineFrame(msg, recvAt, pushedAt, id) {
+    if (!opt.statsOn || !id) return;
+    let age = null;
+    if (msg.capUs !== null && msg.availAt !== null) {
+        const off = msg.availAt - msg.capUs / 1000;
+        if (off < capOffMin) capOffMin = off;
+        age = off - capOffMin;
+    }
+    pending.set(id, { age, availAt: msg.availAt, postedAt: msg.postedAt, recvAt, pushedAt });
+    if (pending.size > 64) pending.delete(pending.keys().next().value);
+}
+// PoseInput_Web.cpp calls this (dc3_pose_stats(1)) at the end of the game
+// frame whose Poll latched pose frame `id`.
+function onConsume(id, nowMs, overwritten) {
+    stats.consumed++;
+    stats.overwritten = overwritten;
+    const r = pending.get(id);
+    for (const k of pending.keys()) { if (k > id) break; pending.delete(k); }
+    if (!r) return;
+    const at = performance.timeOrigin + nowMs;
+    pipeRing('worker', r.postedAt - r.availAt);  // read -> posted (the worker's whole frame)
+    pipeRing('xfer', r.recvAt - r.postedAt);
+    pipeRing('page', r.pushedAt - r.recvAt);     // handler up to the push
+    pipeRing('toGame', at - r.pushedAt);          // push -> end of the game frame that took it
+    if (r.age !== null) {
+        pipeRing('age', r.age);
+        pipeRing('e2e', r.age + (at - r.availAt));
+    }
+    pipeRing('read2game', at - r.availAt);
+}
+let statsArmed = false;
+function armEngineStats() {
+    if (statsArmed || !opt.statsOn || !window.Module || typeof window.Module._dc3_pose_stats !== 'function') return;
+    window.dc3PoseOnConsume = onConsume;
+    window.Module._dc3_pose_stats(1);
+    statsArmed = true;
+}
+// The camera's own frame count at the page (preview <video>), for the ceiling.
+function countCameraFrames(video) {
+    if (!opt.statsOn || !video.requestVideoFrameCallback) return;
+    let first = null;
+    const cb = (now, meta) => {
+        if (first === null) first = meta.presentedFrames;
+        stats.rvfcFrames = meta.presentedFrames - first;
+        video.requestVideoFrameCallback(cb);
+    };
+    video.requestVideoFrameCallback(cb);
 }
 
 // The frame's picture + mask (PLAN P-4), right after its skeletons: the mask's
@@ -231,7 +319,10 @@ function onWorkerMessage(ev) {
     const msg = ev.data;
     if (msg.type === 'pose') {
         const t0 = performance.now();
+        const recvAt = performance.timeOrigin + t0;
         stats.framesIn++;
+        stats.camFrames += 1 + (msg.skipped || 0);
+        stats.skipped += msg.skipped || 0;
         stats.lastCount = msg.count;
         if (msg.count > 0) stats.framesWithPerson++;
         ring(stats.inferMs, msg.inferMs + msg.geomMs);
@@ -250,8 +341,12 @@ function onWorkerMessage(ev) {
         // menus with the keyboard while a fake camera dances: the dancer's
         // hand cursor otherwise picks menu items on its own
         // (scripts/web/pose-gameplay.mjs).
-        const pushed = hold ? pushToEngine(new Float32Array(0), 0, msg.captureSec)
+        const pushed = hold ? pushToEngine(EMPTY, 0, msg.captureSec)
             : pushToEngine(msg.floats, msg.count, msg.captureSec);
+        if (pushed) {
+            armEngineStats();
+            pipelineFrame(msg, recvAt, performance.timeOrigin + performance.now(), pushed);
+        }
         if (pushed && msg.camera && !hold) pushCameraToEngine(msg);
         drawOverlay(msg.image2d, msg.numPoses);
         if (!pushed) setStateOnce('waiting', 'Camera ready — waiting for the game…', 'warn');
@@ -271,6 +366,7 @@ function onWorkerMessage(ev) {
 }
 function setStateOnce(state, text, cls) { if (stats.state !== state) setState(state, text, cls, false); }
 
+const EMPTY = new Float32Array(0);
 let hold = false;
 window.dc3PoseHold = (on) => { hold = !!on; stats.held = hold; };
 let frameCb = null;
@@ -286,7 +382,8 @@ export async function createWorker(sources) {
         w.addEventListener('message', h);
     });
     w.postMessage({ type: 'init', ...sources, delegate: opt.delegate, hfovDeg: opt.hfov, numPoses: opt.persons,
-        frames: opt.frames, slow: opt.slow, probeSec: opt.probeSec });
+        frames: opt.frames, slow: opt.slow, probeSec: opt.probeSec, probeWorker: opt.probeWorker,
+        input: opt.input });
     return { worker: w, ready };
 }
 
@@ -320,6 +417,7 @@ async function start() {
     stats.camera = { label: track.label, width: s.width, height: s.height, frameRate: s.frameRate };
     ui.video.srcObject = stream;
     ui.video.play().catch(() => {});
+    countCameraFrames(ui.video);
     ui.view.style.display = 'block';
     track.addEventListener('ended', () => {
         if (window.Module && window.Module.dc3PoseStop) window.Module.dc3PoseStop();
