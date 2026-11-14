@@ -23,12 +23,14 @@
 //                          live sensor accepted, recorded and replayed, reaches
 //                          the scorer as it did live -- levelled by the tilt
 //                          estimate the live session had built up.
-//   PoseFillSensorTest     DC3_POSE_FILL=interp at the sensor: a slow camera
-//                          filled to ~30 Hz, the recording holds camera frames
-//                          only, a dropout reaches P-12's hold as with the
-//                          fill off, a 30 Hz camera is untouched.  Sabotaged:
-//                          dropping the same-people guard (hold 8 -> 32
-//                          frames), recording fill frames (49 -> 220 frames).
+//   PoseFillSensorTest     DC3_POSE_FILL at the sensor, extrap (the default)
+//                          and interp: a slow camera filled to ~30 Hz, the
+//                          recording holds camera frames only, a dropout
+//                          reaches P-12's hold as with the fill off, a 30 Hz
+//                          camera is untouched.  Sabotaged: interp without its
+//                          same-people guard (hold 8 -> 32 frames), extrap
+//                          filling after a frame with nobody (8 -> 32),
+//                          recording fill frames (49 -> 220 frames).
 //
 // Each case was sabotage-checked against the code it pins (see the commit).
 

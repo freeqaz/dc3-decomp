@@ -6,7 +6,14 @@
 //                         camera frames (it cannot overshoot), only moves a
 //                         person both frames have, never draws a line to an
 //                         untracked joint; Extrapolate does overshoot, and
-//                         its clamped form is bounded.
+//                         its clamped form is bounded; ExtrapolateGuarded (the
+//                         default) scales by the gain, clamps the speed, does
+//                         not move guesses and holds a left/right swap.
+//                         Sabotaged (each caught): no swap guard, no speed
+//                         clamp (GuardedExtrapolation...), no one-period
+//                         horizon (ExtrapStopsOnePeriod...), filling after a
+//                         frame with nobody (NoFillAcrossADropout... and the
+//                         sensor's hold test, 8 -> 32 held frames).
 //   PoseFillScheduleTest  Filler: inert at 30 Hz; at 8 Hz a frame every
 //                         1/30 s, each camera frame delivered exactly once,
 //                         in order, a fixed delay behind its arrival, nothing
