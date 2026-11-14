@@ -25,7 +25,8 @@
 #   --jobs N         ninja -j and CPU quota on tnr (default 32, max 64; see
 #                    docs/native/REMOTE_BUILD.md before raising it)
 #   --build-image    (re)build the container image on tnr and exit
-#   --sync-assets    copy orig-assets / archive / milo-rnd-library to tnr
+#   --sync-assets    copy orig-assets / archive / milo-rnd-library /
+#                    native/models to tnr
 #                    (needed for --test only; under TNR_ROOT, nowhere else)
 #
 # Environment: TNR_HOST (tnr-decomp), TNR_ROOT (/scratch/dc3-native-build),
@@ -44,7 +45,7 @@ B="${TNR_ROOT:-/scratch/dc3-native-build}"
 IMAGE="${TNR_IMAGE:-localhost/dc3-native-build:20261020}"
 JOBS=32; FETCH=1; RECONF=0; MODE=build; TEST_ARGS=""; ACTION=build
 
-usage() { sed -n '2,37p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,38p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
 WT=""; TARGETS=()
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -128,6 +129,10 @@ done
 MILO_LIB="$HOME/code/milohax/milo-engine-libs/harmonix-repos/milo-rnd-library/dc3"
 [ -e "$MILO_LIB/char/crowd/anim/gen/female_base.milo_xbox" ] || MILO_LIB=""
 ARCHIVE="$( [ -e "$WT/archive" ] && readlink -f "$WT/archive" )"
+# native/models: the pose models (MediaPipe, ~60 MB, gitignored; a symlink in
+# a setup_worktree.sh tree). Only NativeTreePaths.PoseServerFindsTheDefaultModel
+# reads them; without them it skips.
+MODELS="$( [ -e "$WT/native/models/pose_landmarker_full.task" ] && readlink -f "$WT/native/models" )"
 
 "${SSH[@]}" "$HOST" "mkdir -p $B/trees/$KEY/src $B/trees/$KEY/engine $B/deps/dawn $B/deps/imgui-src $B/bin $B/locks $B/assets" \
     || { echo "cannot reach $HOST" >&2; exit 75; }
@@ -143,6 +148,7 @@ if [ "$ACTION" = assets ]; then
     t=$(now)
     [ -n "$ASSETS" ] && { echo "orig-assets <- $ASSETS"; rs -a --delete "$ASSETS/" "$HOST:$B/assets/orig-assets/" || exit 3; }
     [ -n "$ARCHIVE" ] && { echo "archive <- $ARCHIVE"; rs -a --delete "$ARCHIVE/" "$HOST:$B/assets/archive/" || exit 3; }
+    [ -n "$MODELS" ] && { echo "native/models <- $MODELS"; rs -a --delete "$MODELS/" "$HOST:$B/assets/native-models/" || exit 3; }
     [ -n "$MILO_LIB" ] && { echo "milo-rnd-library/dc3 <- $MILO_LIB"; rs -a --delete "$MILO_LIB/" "$HOST:$B/assets/milo-lib-dc3/" || exit 3; }
     echo "assets synced in $(since "$t") s"
     exit 0
@@ -151,7 +157,8 @@ fi
 # ---- sync ---------------------------------------------------------------------
 t_sync=$(now)
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/tnr-build.XXXXXX")"
-( cd "$WT" && { git ls-files -co --exclude-standard -z; find . -maxdepth 1 -type l -printf '%P\0'; } ) > "$tmp/src.list"
+( cd "$WT" && { git ls-files -co --exclude-standard -z; find . -maxdepth 1 -type l -printf '%P\0'
+                if [ -L native/models ]; then printf 'native/models\0'; fi; } ) > "$tmp/src.list"
 if [ -e "$ENGINE_REAL/.git" ]; then
     git -C "$ENGINE_REAL" ls-files -co --exclude-standard -z > "$tmp/engine.list"
 else
@@ -171,7 +178,7 @@ echo "tnr: synced $(tr -cd '\0' < "$tmp/src.list" | wc -c) files + engine in $(s
 q() { printf '%q' "$1"; }
 ENV_ARGS="TNR_ROOT=$(q "$B") TNR_KEY=$(q "$KEY") TNR_WT=$(q "$WT") TNR_ENGINE=$(q "$ENGINE")"
 ENV_ARGS="$ENV_ARGS TNR_DAWN=$(q "$DAWN_ROOT") TNR_IMGUI=$(q "$IMGUI") TNR_ASSETS=$(q "$ASSETS")"
-ENV_ARGS="$ENV_ARGS TNR_MILO_LIB=$(q "$MILO_LIB") TNR_ARCHIVE=$(q "$ARCHIVE")"
+ENV_ARGS="$ENV_ARGS TNR_MILO_LIB=$(q "$MILO_LIB") TNR_ARCHIVE=$(q "$ARCHIVE") TNR_MODELS=$(q "$MODELS")"
 ENV_ARGS="$ENV_ARGS TNR_CCACHE_BIN=$(q "$CCACHE_BIN") TNR_CCACHE_DIR=$(q "$CCACHE_DIR") TNR_MILO_CCACHE=$(q "${MILO_CCACHE:-}")"
 ENV_ARGS="$ENV_ARGS TNR_CC=$(q "$CC_DESK") TNR_CXX=$(q "$CXX_DESK")"
 ENV_ARGS="$ENV_ARGS TNR_JOBS=$JOBS TNR_IMAGE=$(q "$IMAGE") TNR_MODE=$MODE TNR_RECONFIGURE=$RECONF"

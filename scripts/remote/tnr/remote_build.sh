@@ -140,6 +140,9 @@ fi
 if [ "${TNR_MODE:-build}" = test ] && [ -n "${TNR_ARCHIVE:-}" ] && [ -d "$B/assets/archive" ]; then
     MOUNTS+=(-v "$B/assets/archive:${TNR_ARCHIVE:?}:ro")
 fi
+if [ "${TNR_MODE:-build}" = test ] && [ -n "${TNR_MODELS:-}" ] && [ -d "$B/assets/native-models" ]; then
+    MOUNTS+=(-v "$B/assets/native-models:$TNR_MODELS:ro")
+fi
 
 # ---- one build per worktree, TNR_SLOTS host-wide ------------------------------
 exec 8>"$B/locks/tree-$KEY.lock"
