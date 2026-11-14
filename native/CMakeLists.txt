@@ -2010,6 +2010,7 @@ if(BUILD_TESTS)
         tests/test_mesh_loading.cpp
         tests/test_rndcam_projection.cpp
         tests/test_particle_color.cpp
+        tests/test_drawrect_color.cpp
         tests/test_dta_parser.cpp
         tests/test_movegraph.cpp
         tests/test_dta_flow.cpp
