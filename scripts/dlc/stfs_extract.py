@@ -4,7 +4,7 @@
     stfs_extract.py info    <package>
     stfs_extract.py list    <package>
     stfs_extract.py verify  <package>
-    stfs_extract.py extract <package> <out_dir> [--no-verify]
+    stfs_extract.py extract <package> <out_dir> [--no-verify] [--lowercase]
 
 The package is opened read-only and never modified.  `verify` checks the
 whole hash tree: every allocated data block against its level-0 record,
@@ -12,6 +12,9 @@ every level-0 table against its level-1 record, every level-1 table against
 the level-2 record, and the top table against the volume descriptor's top
 hash.  `extract` runs the same check over the blocks it reads (unless
 --no-verify) and refuses to write a file whose blocks do not hash.
+--lowercase writes every path in lower case (the 360's file system ignores
+case, and the native engine lowercases every path it opens) and refuses a
+package whose names collide once lowercased.
 
 Layout notes (block numbers are "data block" numbers; real blocks interleave
 hash tables).  Coordinates follow Onyx's STFS.hs and Velocity's StfsPackage:
@@ -311,7 +314,14 @@ def cmd_verify(p: Package) -> int:
     return 0 if not bad else 3
 
 
-def cmd_extract(p: Package, out_dir: str, verify: bool) -> int:
+def cmd_extract(p: Package, out_dir: str, verify: bool, lowercase: bool = False) -> int:
+    if lowercase:
+        seen: dict[str, str] = {}
+        for e in p.entries():
+            rel = p.path_of(e)
+            if seen.get(rel.lower(), rel) != rel:
+                raise StfsError(f"{rel!r} and {seen[rel.lower()]!r} collide in lower case")
+            seen[rel.lower()] = rel
     if verify:
         bad = p.verify_tree()
         if bad:
@@ -321,6 +331,8 @@ def cmd_extract(p: Package, out_dir: str, verify: bool) -> int:
     n_bytes = 0
     for e in p.entries():
         rel = p.path_of(e)
+        if lowercase:
+            rel = rel.lower()
         if rel.startswith("/") or ".." in rel.split("/"):
             raise StfsError(f"refusing unsafe path {rel!r}")
         dest = os.path.join(out_dir, rel)
@@ -344,6 +356,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("package")
     ap.add_argument("out_dir", nargs="?")
     ap.add_argument("--no-verify", action="store_true")
+    ap.add_argument("--lowercase", action="store_true")
     a = ap.parse_args(argv)
     try:
         p = Package(a.package)
@@ -355,7 +368,7 @@ def main(argv: list[str]) -> int:
             return cmd_verify(p)
         if not a.out_dir:
             ap.error("extract needs an out_dir")
-        return cmd_extract(p, a.out_dir, not a.no_verify)
+        return cmd_extract(p, a.out_dir, not a.no_verify, a.lowercase)
     except HashError as exc:
         print(f"stfs: {exc}", file=sys.stderr)
         return 3
