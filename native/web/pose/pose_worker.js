@@ -100,7 +100,17 @@ async function init(msg) {
     const refactory = async () => {
         if (!self.ModuleFactory) self.ModuleFactory = (await import(fileset.wasmLoaderPath)).default;
     };
-    let delegate = msg.delegate || 'CPU';
+    // AUTO (the default, W-19): the GPU delegate unless this worker has no
+    // WebGL2 or only a software rasteriser (SwiftShader, llvmpipe: slower
+    // than XNNPACK), then CPU.  GPU/CPU force one (GPU still falls back to
+    // CPU if the delegate fails to start).
+    let delegate = (msg.delegate || 'CPU').toUpperCase();
+    let delegateWhy = delegate === 'AUTO' ? '' : 'asked';
+    if (delegate === 'AUTO') {
+        const why = gpuUnusable();
+        delegate = why ? 'CPU' : 'GPU';
+        delegateWhy = why ? 'auto: ' + why : 'auto';
+    }
     const wantProbe = !isProbe && (msg.numPoses || 2) >= 2 && msg.probeSec > 0;
     const makeOne = wantProbe ? (d) => vision.PoseLandmarker.createFromOptions(fileset, options(d, 1)) : null;
     try {
@@ -110,6 +120,7 @@ async function init(msg) {
         if (delegate === 'CPU') throw e;
         console.warn('[pose-worker] ' + delegate + ' delegate failed (' + e + '); using CPU');
         delegate = 'CPU';
+        delegateWhy = 'GPU failed: ' + String(e && e.message || e).slice(0, 80);
         probe = null;
         await refactory();
         landmarker = await make(delegate);
@@ -147,7 +158,26 @@ async function init(msg) {
         }
     }
     geometry = new PoseGeometry({ hfovDeg: msg.hfovDeg });
-    post({ type: 'ready', delegate, loadMs: performance.now() - t0 });
+    post({ type: 'ready', delegate, delegateWhy, loadMs: performance.now() - t0 });
+}
+
+// Why the GPU delegate would not help here, or null.  The delegate runs on
+// WebGL2 in this worker (tasks-vision's own OffscreenCanvas), so that is
+// what is asked; a software renderer is reported by its name.
+function gpuUnusable() {
+    try {
+        if (typeof OffscreenCanvas === 'undefined') return 'no OffscreenCanvas';
+        const gl = new OffscreenCanvas(1, 1).getContext('webgl2');
+        if (!gl) return 'no WebGL2';
+        const ext = gl.getExtension('WEBGL_debug_renderer_info');
+        const r = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || '');
+        const lose = gl.getExtension('WEBGL_lose_context');
+        if (lose) lose.loseContext();
+        if (/swiftshader|llvmpipe|softpipe|software|basic render/i.test(r)) return 'software WebGL (' + r.slice(0, 60) + ')';
+        return null;
+    } catch (e) {
+        return 'WebGL2 check failed (' + e + ')';
+    }
 }
 
 function sourceSize(img) {

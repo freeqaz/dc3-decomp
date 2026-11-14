@@ -10,7 +10,10 @@
 //   pose=off            no camera, the game scores the stand-in skeleton
 //   pose=manual         do not ask for the camera until the button is clicked
 //   pose_model=lite|full|heavy   (default full, the desktop default)
-//   pose_delegate=CPU|GPU        (default CPU, as the desktop server runs)
+//   pose_delegate=AUTO|GPU|CPU   (default AUTO: GPU unless the worker has no
+//                       WebGL2 or a software renderer, then CPU.  W-19: the
+//                       same score as CPU on the footage grid, 26-28 vs
+//                       18-22 pose frames/s with the game on the rig)
 //   pose_transport=stream|bitmap (default stream when MediaStreamTrackProcessor exists)
 //   pose_cdn=1          load tasks-vision + model from the CDN instead of this server
 //                       (the only way the page uses a CDN: a server without them
@@ -25,9 +28,12 @@
 //   pose_probe=<s>      with pose_persons=2: numPoses 1 on every frame, and a
 //                       numPoses 2 probe every <s> seconds that switches to 2
 //                       when it sees a second person (pose_mediapipe.py
-//                       --probe-second-person).  Default 0.5 (W-18: 21.5-22
-//                       -> 28.5-29.2 pose frames/s with the game on the rig);
-//                       0 = off, numPoses 2 every frame (the old default)
+//                       --probe-second-person).  0 = off (default):
+//                       numPoses 2 every frame.  0.5 is the fast CPU setting
+//                       (W-18: 18-22 -> 25-29 pose frames/s with the game on
+//                       the rig) but with one dancer it is numPoses 1, which
+//                       scores lower against the original's cards than
+//                       numPoses 2 (W-20, PLAN H-86)
 //   pose_probe_worker=1|0  run that probe in a second worker (default 1), as
 //                       desktop runs it on a thread; 0 = after the frame's own
 //                       pass in the one worker (np-web4's version).  Without
@@ -55,7 +61,7 @@ const params = new URLSearchParams(location.search);
 const opt = {
     mode: params.get('pose') || 'auto',
     model: params.get('pose_model') || 'full',
-    delegate: (params.get('pose_delegate') || 'CPU').toUpperCase(),
+    delegate: (params.get('pose_delegate') || 'AUTO').toUpperCase(),
     transport: params.get('pose_transport') ||
         (typeof MediaStreamTrackProcessor !== 'undefined' ? 'stream' : 'bitmap'),
     cdn: params.get('pose_cdn') === '1',
@@ -68,8 +74,9 @@ const opt = {
     // way). 1 skips the per-frame person detector that 2 runs while fewer
     // than 2 people are tracked, but a second player is never found.
     persons: Math.min(2, Math.max(1, parseInt(params.get('pose_persons') || '2', 10) || 2)),
-    // The second-person probe (W-18): on by default, 0 turns it off.
-    probeSec: params.has('pose_probe') ? Math.max(0, parseFloat(params.get('pose_probe')) || 0) : 0.5,
+    // The second-person probe (W-18): off by default (W-20: numPoses 1 scores
+    // lower than numPoses 2, PLAN H-86).
+    probeSec: Math.max(0, parseFloat(params.get('pose_probe') || '0') || 0),
     probeWorker: params.get('pose_probe_worker') !== '0',
     input: Math.max(0, parseInt(params.get('pose_input') || '0', 10) || 0),
     statsOn: params.get('pose_stats') === '1',
@@ -362,7 +369,8 @@ function onWorkerMessage(ev) {
     } else if (msg.type === 'ready') {
         stats.loadMs = Math.round(msg.loadMs);
         stats.delegate = msg.delegate;
-        console.log(`[dc3-pose] model ready: ${opt.model} delegate=${msg.delegate} load=${stats.loadMs}ms source=${stats.source}`);
+        stats.delegateWhy = msg.delegateWhy || '';
+        console.log(`[dc3-pose] model ready: ${opt.model} delegate=${msg.delegate}${msg.delegateWhy ? ' (' + msg.delegateWhy + ')' : ''} load=${stats.loadMs}ms source=${stats.source}`);
     } else if (msg.type === 'error') {
         console.error('[dc3-pose] worker: ' + msg.message);
         if (stats.state === 'loading') setState('error', 'Pose model failed to load — playing without camera', 'err', true);
@@ -448,6 +456,7 @@ async function start() {
         const r = await created.ready;
         stats.loadMs = Math.round(r.loadMs);
         stats.delegate = r.delegate;
+        stats.delegateWhy = r.delegateWhy || '';
     } catch (e) {
         console.error('[dc3-pose] model load failed: ' + e);
         setState('error', 'Pose model failed to load — playing without camera', 'err', true);
