@@ -79,6 +79,7 @@ TEST(RetailLightingShape, Dc3SelectsTheRetailModel) {
     EXPECT_TRUE(rndshape::kDC3RetailModel);
     EXPECT_TRUE(rndshape::kGammaSpaceShading);
     EXPECT_FALSE(rndshape::kGenericShadowPass);
+    EXPECT_TRUE(rndshape::kSelectDefaultEnvEachFrame);
 }
 
 TEST_F(RetailLightingTest, AmbientAndPointLightsAreTheEnvironsOwn) {
@@ -104,6 +105,18 @@ TEST_F(RetailLightingTest, AmbientAndPointLightsAreTheEnvironsOwn) {
     EXPECT_FLOAT_EQ(s.pointLightColors[0][1], 0.5f);
     EXPECT_FLOAT_EQ(s.pointLightColors[0][3], -(100.0f * (1.0f / (40.0f - 100.0f))));
     EXPECT_EQ(s.shadowEnabled, 0.0f);
+
+    // A light's intensity lives in its colour (RndLight::SetPackedColor
+    // multiplies it in; Intensity() is the max channel), and c66 is that
+    // colour: SetPointLightRegisters reads GetColor(). The HUD lane measured
+    // score.lit at x3 and static_now_bar.lit at x21.45.
+    // (The property path re-packs the colour to 8 bits a channel, as the
+    // image's does.)
+    point->SetProperty("intensity", DataNode(3.0f));
+    SceneUniforms s3 = Write();
+    EXPECT_NEAR(s3.pointLightColors[0][0], 3.0f, 0.02f);
+    EXPECT_NEAR(s3.pointLightColors[0][1], 1.5f, 0.02f);
+    EXPECT_NEAR(s3.pointLightColors[0][2], 0.75f, 0.02f);
 }
 
 TEST_F(RetailLightingTest, OnlyTheFirstThreeLitPointLightsInListOrder) {
@@ -273,4 +286,27 @@ TEST_F(RetailLightingTest, ShadowLightWithoutCastersIsRejected) {
     EXPECT_EQ(s.shadowEnabled, 0.0f);
     rndshape::ProjShadowCasters none;
     EXPECT_FALSE(rndshape::CollectProjShadowCasters(none));
+}
+
+// NgMat::SetupAmbient: a material with use_environ off gets c1 = (1,1,1,1),
+// and CalcShaderOpts drops both light bits, so the shipped permutation 0x10
+// draws texel * c0 -- unlit, not lit by the scene's environ. Prelit without
+// use_environ (0x100) is the vertex colour as authored, which is not "unlit"
+// in MatUnlit's sense; prelit with use_environ takes the environ ambient.
+// (The np-gfx-blend lane measured the stock engine lighting use_environ 0
+// materials with the scene environ.)
+TEST_F(RetailLightingTest, MaterialWithoutEnvironIsUnlit) {
+    RndMat *mat = Hmx::Object::New<RndMat>();
+    mat->SetPreLit(false);
+    mat->SetUseEnv(false);
+    EXPECT_TRUE(rndshape::MatUnlit(mat));
+    EXPECT_FALSE(rndshape::MatPrelitAmbient(mat));
+    mat->SetUseEnv(true);
+    EXPECT_FALSE(rndshape::MatUnlit(mat));
+    mat->SetPreLit(true);
+    EXPECT_TRUE(rndshape::MatPrelitAmbient(mat));
+    mat->SetUseEnv(false);
+    EXPECT_FALSE(rndshape::MatUnlit(mat));
+    EXPECT_FALSE(rndshape::MatPrelitAmbient(mat));
+    delete mat;
 }
