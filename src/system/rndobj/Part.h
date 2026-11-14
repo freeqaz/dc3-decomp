@@ -190,6 +190,10 @@ public:
     // The space particle positions live in: DxParticleSys::DrawShowing draws
     // them under TheShaderMgr.SetTransform(mRelativeXfm).
     const Transform &RelativeXfm() const { return mRelativeXfm; }
+    // DxParticleSys::DrawShowing scales the billboard's up axis by this
+    // (screen_aspect); the native renderer reads it through
+    // rndshape::PartBillboard.
+    float ScreenAspect() const { return mScreenAspect; }
 
     float CalcFrame() {
         if (mFrameDrive)
