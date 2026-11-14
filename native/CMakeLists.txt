@@ -45,6 +45,17 @@ if(ENABLE_ASAN)
     add_link_options(-fsanitize=address)
 endif()
 
+# Compiler cache (ccache) — set by scripts/native_configure.sh as
+# CMAKE_<LANG>_COMPILER_LAUNCHER; see docs/native/BUILD_CACHE.md. Clang stamps
+# the mtime of every header into a .pch, which makes every PCH unique and every
+# TU that uses one a guaranteed cache miss. -fno-pch-timestamp drops the stamp
+# (ninja's depfiles, not clang's mtime check, are what keep a PCH current here).
+# Directory scope, before add_subdirectory(milo-native-engine), so the engine's
+# PCH gets it too.
+if(CMAKE_CXX_COMPILER_LAUNCHER MATCHES "ccache")
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:SHELL:-Xclang -fno-pch-timestamp>")
+endif()
+
 # MSVC compatibility flags — applied per-target, not globally.
 set(DC3_MSVC_COMPAT_FLAGS
     -fms-extensions          # __declspec support (xdk headers)
@@ -2086,11 +2097,20 @@ if(BUILD_TESTS)
         MILO_DEBUG=1
         _DEBUG=1
         $<$<BOOL:${ENABLE_FFMPEG}>:HX_FFMPEG=1>
-        # Absolute path to the decomp source tree. ctest runs the binary with
-        # WORKING_DIRECTORY=orig-assets, so a test that needs to read decomp
-        # SOURCE (rather than assets) cannot get there by a relative path.
-        "DC3_DECOMP_SRC_DIR=\"${CMAKE_SOURCE_DIR}/../src\""
     )
+    # Absolute path to the decomp source tree. ctest runs the binary with
+    # WORKING_DIRECTORY=orig-assets, so a test that needs to read decomp
+    # SOURCE (rather than assets) cannot get there by a relative path.
+    # Per FILE, not per target: an absolute worktree path in a target-wide
+    # define puts that path on all ~900 milo-tests compile lines, and ccache
+    # (docs/native/BUILD_CACHE.md) can then never share one of them between
+    # worktrees. Add a file here when it starts using the macro.
+    set_property(SOURCE
+            tests/test_native_options.cpp
+            tests/test_null_this_guards.cpp
+            tests/test_pose_scoring.cpp
+        APPEND PROPERTY COMPILE_DEFINITIONS
+            "DC3_DECOMP_SRC_DIR=\"${CMAKE_SOURCE_DIR}/../src\"")
     target_include_directories(milo-tests PRIVATE
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/../src
@@ -2304,7 +2324,9 @@ if(BUILD_TESTS)
         OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/milo_test_asset_dir.txt"
         CONTENT "${MILO_TEST_ASSET_DIR}\n")
 
-    target_compile_definitions(milo-tests PRIVATE
+    # Only test_gates.cpp reads these, and two of them are absolute paths of
+    # this build dir; per file for the same ccache reason as DC3_DECOMP_SRC_DIR.
+    set_property(SOURCE tests/test_gates.cpp APPEND PROPERTY COMPILE_DEFINITIONS
         "MILO_TEST_GATES_ON_STR=\"${_gates_on_str}\""
         "MILO_TEST_GATES_OFF_STR=\"${_gates_off_str}\""
         "MILO_TEST_GATE_PROBES_STR=\"${_gate_probes_str}\""

@@ -208,6 +208,77 @@ if [ -z "${FETCHCONTENT_SOURCE_DIR_IMGUI:-}" ] && [ "$REPO_ROOT" != "$MAIN_CHECK
     [ -f "$_cand/imgui.cpp" ] && imgui_src="$_cand"
 fi
 
+# ---- compiler cache (OPTIONAL, default ON when ccache is installed) ---------
+# Every lane builds the same ~2,600 TUs in its own worktree. ccache shares the
+# objects between worktrees (docs/native/BUILD_CACHE.md). Never a hard
+# dependency: no ccache -> plain compiles, exactly as before.
+#
+#   MILO_CCACHE=0          disable (configure clears any launcher it set)
+#   MILO_CCACHE=1          require: exit 9 if ccache cannot be found
+#   MILO_CCACHE_BIN        ccache executable (default: PATH, then ~/.local/bin)
+#   MILO_CCACHE_DIR        cache dir (default: ${XDG_CACHE_HOME:-~/.cache}/milo-native-ccache)
+#   MILO_CCACHE_MAXSIZE    cache size cap (default 16G)
+#   CCACHE_DISABLE=1 ninja ...   bypass the cache for one build, no reconfigure
+#
+# Everything is passed on ccache's own command line (`ccache KEY=VALUE ...
+# compiler`), so a personal ~/.config/ccache/ccache.conf cannot change what this
+# build does, and the settings travel with build.ninja:
+#   base_dir=<this tree>   rewrites THIS tree's absolute paths to paths relative
+#                          to the build dir, identical in every worktree; the
+#                          engine, deps and system paths stay absolute and are
+#                          identical anyway. (Consequence: __FILE__ is relative
+#                          under ccache. Code must not locate files from it.)
+#   hash_dir=false         -g puts the cwd in DWARF; do not hash it. A hit may
+#                          carry another worktree's DW_AT_comp_dir.
+#   sloppiness             pch_defines,time_macros: what ccache requires to cache
+#                          PCH users at all; include_file_m/ctime: fresh
+#                          worktree files are all "too new" otherwise.
+#   compiler_check         a content hash of clang + libclang-cpp + libLLVM taken
+#                          here. clang-23 is a 170 KB driver; its mtime/size (the
+#                          default) does not move when only llvm-libs does.
+LAUNCHER_ARGS=()
+CCACHE_MODE="${MILO_CCACHE:-auto}"
+ccache_bin=""
+case "$CCACHE_MODE" in
+    0|off|OFF|no|NO|false|FALSE) CCACHE_MODE=off ;;
+    1|on|ON|yes|YES|true|TRUE)   CCACHE_MODE=require ;;
+    auto|"")                     CCACHE_MODE=auto ;;
+    *) echo "error: MILO_CCACHE must be 0, 1 or unset (got '$CCACHE_MODE')" >&2; exit 1 ;;
+esac
+if [ "$CCACHE_MODE" != off ]; then
+    for _c in "${MILO_CCACHE_BIN:-}" "$(command -v ccache 2>/dev/null || true)" \
+              "${HOME:-/nonexistent}/.local/bin/ccache"; do
+        if [ -n "$_c" ] && [ -x "$_c" ]; then ccache_bin="$_c"; break; fi
+    done
+    if [ -z "$ccache_bin" ] && [ "$CCACHE_MODE" = require ]; then
+        echo "error: MILO_CCACHE=1 but no ccache found (MILO_CCACHE_BIN, PATH, ~/.local/bin)." >&2
+        exit 9
+    fi
+fi
+if [ -n "$ccache_bin" ]; then
+    ccache_dir="${MILO_CCACHE_DIR:-${XDG_CACHE_HOME:-${HOME:-/nonexistent}/.cache}/milo-native-ccache}"
+    mkdir -p "$ccache_dir" || { echo "error: cannot create ccache dir $ccache_dir" >&2; exit 1; }
+    cc_check=""
+    if [ "$PLATFORM" = "Linux" ] && command -v ldd >/dev/null 2>&1 \
+            && command -v sha256sum >/dev/null 2>&1; then
+        _drv="$(readlink -f "$cxx" 2>/dev/null || echo "$cxx")"
+        # shellcheck disable=SC2046
+        _sum="$( { cat "$_drv"; for _l in $(ldd "$_drv" 2>/dev/null \
+                    | awk '/=>/ && ($1 ~ /clang|LLVM/) {print $3}'); do cat "$_l"; done; } \
+                 | sha256sum | cut -c1-16)"
+        [ -n "$_sum" ] && cc_check="compiler_check=string:clang-$_sum"
+    fi
+    _launcher="$ccache_bin;cache_dir=$ccache_dir;max_size=${MILO_CCACHE_MAXSIZE:-16G}"
+    _launcher="$_launcher;base_dir=$REPO_ROOT;hash_dir=false"
+    _launcher="$_launcher;sloppiness=pch_defines,time_macros,include_file_mtime,include_file_ctime"
+    [ -n "$cc_check" ] && _launcher="$_launcher;$cc_check"
+    LAUNCHER_ARGS=(-DCMAKE_C_COMPILER_LAUNCHER="$_launcher" -DCMAKE_CXX_COMPILER_LAUNCHER="$_launcher")
+else
+    # Explicitly empty, so reconfiguring with MILO_CCACHE=0 (or after ccache
+    # was removed) takes a previously cached launcher back out.
+    LAUNCHER_ARGS=(-DCMAKE_C_COMPILER_LAUNCHER= -DCMAKE_CXX_COMPILER_LAUNCHER=)
+fi
+
 CMAKE_ARGS=(
     -S "$REPO_ROOT/native"
     -B "$BUILD_DIR"
@@ -218,6 +289,7 @@ CMAKE_ARGS=(
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
     -DDawn_DIR="$dawn_dir"
     -DBUILD_TESTS="$BUILD_TESTS_VALUE"
+    "${LAUNCHER_ARGS[@]}"
 )
 if [ -n "$imgui_src" ]; then
     CMAKE_ARGS+=(-DFETCHCONTENT_SOURCE_DIR_IMGUI="$imgui_src")
@@ -231,6 +303,11 @@ echo "    main repo  : $MAIN_CHECKOUT"
 echo "    Dawn_DIR   : $dawn_dir"
 echo "    platform   : $PLATFORM    BUILD_TESTS=$BUILD_TESTS_VALUE"
 [ -n "$imgui_src" ] && echo "    imgui src  : $imgui_src (reused from main; no clone)"
+if [ -n "$ccache_bin" ]; then
+    echo "    ccache     : $ccache_bin -> $ccache_dir (MILO_CCACHE=0 to disable)"
+else
+    echo "    ccache     : off ($([ "$CCACHE_MODE" = off ] && echo 'MILO_CCACHE=0' || echo 'not installed'))"
+fi
 
 if [ "${MILO_CONFIGURE_DRY_RUN:-0}" = "1" ]; then
     printf 'DRY RUN: cmake'; printf ' %q' "${CMAKE_ARGS[@]}"; printf '\n'
