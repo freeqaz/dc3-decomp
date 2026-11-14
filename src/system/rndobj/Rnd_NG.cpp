@@ -19,6 +19,7 @@
 #include "utl\MakeString.h"
 #include "rndobj\PostProc_NG.h"
 #include "rndobj\DOFProc_NG.h"
+#include "rndobj/VelocityBuffer.h"
 
 extern "C" void OnlyReturns();
 
@@ -130,6 +131,34 @@ void NgRnd::DoPostProcess() {
     // game HUD (postprocs_before_draw FALSE in its .milo) was drawn into the
     // world target and graded with it, and the grade itself ran with whatever
     // camera/postproc was current by then.
+    // NgPostProc::EndWorld and DoVelocity, natively. The PostProc factory is
+    // RndPostProc here (RndPostProc::Init; NgPostProc::Init is DxRnd's), so
+    // NgPostProc's own EndWorld / DoPost never run: the velocity bookkeeping
+    // follows the same dispatch as Rnd::DoWorldEnd (every post-processor's
+    // EndWorld caches the world camera, mDisablePostProc or not) and
+    // Rnd::DoPostProcess (each one's DoPost runs DoVelocity, unless disabled).
+    // The backend takes the result in the flush below.
+    {
+        RndPostProc *only[1] = {nullptr};
+        if (mPostProcBlackLightOverride) only[0] = mPostProcBlackLightOverride;
+        else if (mPostProcOverride) only[0] = mPostProcOverride;
+        auto each = [&](auto fn) {
+            if (only[0]) {
+                fn(only[0]);
+                return;
+            }
+            for (std::list<PostProcessor *>::iterator it = mPostProcessors.begin();
+                 it != mPostProcessors.end(); ++it) {
+                if (RndPostProc *pp = dynamic_cast<RndPostProc *>(*it)) fn(pp);
+            }
+        };
+        each([&](RndPostProc *) {
+            if (mWorldCamCopy) RndVelocityBuffer::Singleton().CacheCameraSettings(mWorldCamCopy);
+        });
+        if (!mDisablePostProc) {
+            each([&](RndPostProc *pp) { RndVelocityBuffer::DoVelocityNative(pp, mWorldCamCopy); });
+        }
+    }
     if (!Offscreen())
         FlushPostProcessingForOverlay();
 #endif
