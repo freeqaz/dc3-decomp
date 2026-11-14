@@ -290,6 +290,8 @@ Inside the body (was lines 1274-1278):
         // (93.39474 -> 99.7).
 ```
 
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. The plane-vs-(1,0,0) dot product pairs the same terms on both sides; only the association order differs.
+
 
 ## `?CacheResource@@YAPBDPBDAAW4CacheResourceResult@@@Z`
 
@@ -943,6 +945,8 @@ Inside the body (was lines 2908-2933):
     // Set(...) spellings (in-place 92.99, saved-temps 92.96, per-column 89.38,
     // all 172 insns instead of 168), which lose the loop outright.
 ```
+
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. Each transformed component (0x14, 0x54, 0x58) multiplies the same matrix element by the same vector component on both sides; only the association differs. The differing f3-f8 at Normalize are dead leftovers.
 
 
 ## `?TessellateMesh@@YAXPAVRndMesh@@@Z`

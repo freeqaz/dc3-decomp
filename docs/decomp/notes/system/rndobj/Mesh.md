@@ -120,6 +120,8 @@ Inside the body (was lines 37-139):
     // swap the same way.
 ```
 
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. z = v.x*m.x.z + v.y*m.y.z + v.z*m.z.z on both sides; only the association order differs.
+
 
 ## `?Add@PatchVerts@@QAAXHAAVVertVector@RndMesh@@AAVVector3@@@Z`
 
