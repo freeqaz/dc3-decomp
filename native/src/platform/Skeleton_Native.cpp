@@ -532,7 +532,9 @@ bool NativeSkeletonProvider::ServerGone() {
             break;
         }
         mRestarts = mRestarts + 1;
-        int delayMs = mRestartBackoffMs << (mRestarts - 1);
+        int delayMs = mRestartBackoffMs;
+        for (int i = 1; i < mRestarts && delayMs < 30000; i++)
+            delayMs *= 2;
 
         // One line per restart, on the console and on screen.
         std::string why;
