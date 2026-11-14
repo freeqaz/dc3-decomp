@@ -251,20 +251,9 @@ class Soak:
                 if s in end_screens:
                     got = s
                     break
-                if self.watch.paused_since and time.time() - self.watch.paused_since > 4:
-                    # The game also pauses at a song's end, before its results
-                    # (measured: paused at 155.8 s of macarena, results 11 s
-                    # later): press only when a pause menu has the focus.
-                    panel = k.eval("{{{ui current_screen} focus_panel} name}")
-                    if isinstance(panel, str) and "pause" in panel:
-                        lst = k.focus_list()
-                        pick = next((p for p in ("resume", "continue", "keep_dancing")
-                                     if k.has_row(lst, p)), None)
-                        say(f"paused ({panel}): pressing {pick or 'confirm'}")
-                        k.choose(pick) if pick else k.press("confirm")
-                        if self.watch.pauses:
-                            self.watch.pauses[-1].setdefault("panel", panel)
-                    self.watch.paused_since = time.time()
+                if s == "confirm_quit_screen" or (
+                        self.watch.paused_since and time.time() - self.watch.paused_since > 4):
+                    self.resume()
                 time.sleep(2)
         finally:
             self.watch.in_song = False
@@ -283,6 +272,22 @@ class Soak:
         nxt = advance(k, back_to, 180, label="after results") if back_to else None
         return {"results_screen": got, "song_s": round(secs), "card": card, "card_p2": card1,
                 "next": nxt, "ok": bool(nxt) or not back_to}
+
+    def resume(self):
+        """Continue a paused song, as a player would: Resume on the pause menu
+        (pausecommand_resume -- a bare confirm picks whatever row the hand is
+        on, measured: Practice, then a quit dialog), No on a quit dialog."""
+        k = self.kit
+        s = k.screen()
+        if s == "confirm_quit_screen":
+            say("paused: a quit dialog is up; answering no")
+            k.choose("no")
+        elif k.has_row(k.focus_list(), "pausecommand_resume"):
+            say(f"paused on {s}: choosing Resume")
+            k.choose("pausecommand_resume")
+            if self.watch.pauses:
+                self.watch.pauses[-1].setdefault("resumed_from", s)
+        self.watch.paused_since = time.time()
 
     def back_to_main(self):
         k = self.kit
