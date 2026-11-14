@@ -58,10 +58,13 @@ TEST(NativeUiMaterialTerms, OverlayPhaseTakesRetailTerms) {
 }
 
 TEST(NativeUiMaterialTerms, WorldPhaseUnchanged) {
-    // Before EndWorld the world keeps the dc3 shader's linear model (lane
-    // np-gfx-light) and the engine's existing material rules.
+    // Before EndWorld the world keeps the engine's existing material rules.
+    // It shades in gamma space too: the Xbox 360 renders the whole frame in
+    // gamma space (engine docs/native/dc3-retail-lighting.md section 2), and
+    // the DC3 shape's kGammaSpaceShading switches world and UI alike. This
+    // test was written while the world was still linear.
     UiDrawTerms world = UiDrawTermsFor(false);
-    EXPECT_FALSE(world.gammaShading);
+    EXPECT_TRUE(world.gammaShading);
     EXPECT_FALSE(world.retailMaterialTerms);
 }
 
