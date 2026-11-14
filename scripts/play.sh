@@ -40,6 +40,8 @@
 #                      many packages and songs it found.  Import packages with
 #                      scripts/dlc/import.sh (docs/native/DLC.md)
 #   --no-dlc           no downloadable songs even if $DC3_DLC_DIR is set
+#                      (without either, the dev profile mounts <data>/dlc when
+#                      it exists, DC3_DLC=1; the check counts it then too)
 #   --fast-boot        skip the intro and title (straight to the main menu)
 #   --home DIR         saves, settings cache and sessions (default
 #                      ~/.local/share/dc3/playtest; $DC3_PLAYTEST_HOME)
@@ -101,6 +103,14 @@ BINARY="$REPO/native/build/dc3-native"
 DATA="${DC3_DATA:-$REPO/orig-assets}"
 MODEL="${DC3_POSE_MODEL:-$REPO/native/models/pose_landmarker_full.task}"
 [ "$DLC_DEFAULT" = 1 ] && DLC="$DATA/dlc"
+# Without --dlc the game still mounts <data>/dlc under the dev profile
+# (DC3_DLC=1, ContentMgr_Native.cpp NativeDlcRoots): name it, so the check
+# counts the songs this session will list.
+if [ -z "$DLC" ] && [ "${NO_DLC:-0}" != 1 ] && [ -z "${DC3_DLC_DIR+x}" ] && [ -d "$DATA/dlc" ]; then
+    prof="${DC3_PROFILE:-dev}"; flag="${DC3_DLC:-}"
+    [ -z "$flag" ] && [ "${prof,,}" = dev ] && flag=1   # the dev profile's row
+    case "${flag,,}" in 1|true|on|yes) DLC="$DATA/dlc" ;; esac
+fi
 # Absolute roots: the game's working directory is not the caller's.
 if [ -n "$DLC" ]; then
     abs=""; IFS=: read -ra parts <<< "$DLC"
@@ -141,7 +151,7 @@ export DC3_SAVE_DIR="${DC3_SAVE_DIR:-$HOME_DIR/saves}"
 export DC3_CACHE_DIR="${DC3_CACHE_DIR:-$HOME_DIR/cache}"
 export DC3_DATA="$DATA"
 if [ -n "$DLC" ]; then export DC3_DLC_DIR="$DLC"
-elif [ "${NO_DLC:-0}" = 1 ]; then export DC3_DLC_DIR=""; fi
+elif [ "${NO_DLC:-0}" = 1 ]; then export DC3_DLC_DIR="" DC3_DLC=0; fi
 # The dev profile (DC3_PROFILE, the default) already turns on the debug API
 # (loopback only), gesture menus while the tracker runs and the per-move
 # rating log; the session summary reads that log.

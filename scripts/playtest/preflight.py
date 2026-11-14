@@ -119,7 +119,8 @@ def dlc_census(roots):
 
 def check_dlc(a):
     if not a.dlc:
-        add("OK", "dlc", "off (no DLC directory; scripts/play.sh --dlc DIR)")
+        add("OK", "dlc", "off (no DLC roots this session: --no-dlc, DC3_DLC=0, the release "
+            "profile, or no <data>/dlc; scripts/play.sh --dlc DIR mounts packages)")
         return
     roots = [r for r in a.dlc.split(":") if r]
     missing = [r for r in roots if not os.path.isdir(r)]

@@ -80,7 +80,8 @@ bool IsDirectory(const char *path) {
 // Which DLC roots this boot mounts (':'-separated; empty = none):
 //
 //   DC3_DLC_DIR=<roots>           those roots (a test or a script naming its
-//                                 packages gets exactly them)
+//                                 packages gets exactly them); set but
+//                                 empty: none (play.sh --no-dlc)
 //   DC3_DLC=0 (or false/off/no)   none
 //   DC3_DLC=1                     <game data>/dlc if it is a directory
 //                                 (orig-assets/dlc, where import.sh puts
@@ -94,7 +95,7 @@ bool IsDirectory(const char *path) {
 // its own DC3_DLC_DIR.
 std::string NativeDlcRoots() {
     const char *env = getenv("DC3_DLC_DIR");
-    if (env && *env) return env;
+    if (env) return env;
     if (!Dc3EnvFlag("DC3_DLC", false)) return std::string();
     const char *data = NativeFindDataDir();
     if (!data) return std::string();

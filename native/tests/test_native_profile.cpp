@@ -225,6 +225,9 @@ TEST(Dc3ProfileTest, DlcRootsFollowDc3DlcAndDc3DlcDir) {
     setenv("DC3_DLC", "0", 1);
     setenv("DC3_DLC_DIR", "/a:/b", 1);
     EXPECT_EQ(NativeDlcRoots(), "/a:/b") << "a named DC3_DLC_DIR wins";
+    setenv("DC3_DLC", "1", 1);
+    setenv("DC3_DLC_DIR", "", 1);
+    EXPECT_EQ(NativeDlcRoots(), "") << "an empty DC3_DLC_DIR names no roots (play.sh --no-dlc)";
 
     // The dev profile turns it on.
     unsetenv("DC3_DLC");
