@@ -328,7 +328,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "c8abfc0b9b377db695377cc9b4b57d9b1b0cefa2"
+set(MILO_ENGINE_PIN "12718566cc5244004f7c9ad39e28bb2be3b0fe1a"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -1967,6 +1967,26 @@ target_precompile_headers(milo-mat-export PRIVATE
     "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
+# --- milo-pp-dump ---
+# Every RndPostProc in a .milo_xbox as JSON lines, loaded through the decomp's
+# own RndPostProc::Load (np-gfx-post usage inventory).
+add_executable(milo-pp-dump
+    src/tools/milo_pp_dump.cpp
+    ${DC3_EXPORT_TOOL_SOURCES}
+)
+target_compile_options(milo-pp-dump PRIVATE
+    ${DC3_MSVC_COMPAT_FLAGS}
+    ${DC3_DECOMP_FLAGS}
+    ${DC3_ATOMIC_COMPAT_FLAGS}
+)
+target_compile_definitions(milo-pp-dump PRIVATE HX_NATIVE=1 MILO_DEBUG=1 _DEBUG=1)
+target_include_directories(milo-pp-dump PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
+target_link_options(milo-pp-dump PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
+target_link_libraries(milo-pp-dump PRIVATE ${DC3_EXPORT_TOOL_LIBS})
+target_precompile_headers(milo-pp-dump PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+)
+
 # --- milo2gltf ---
 add_executable(milo2gltf
     src/tools/milo2gltf.cpp
@@ -2028,6 +2048,7 @@ if(BUILD_TESTS)
         tests/test_charclipgroup.cpp
         tests/test_asset_loading.cpp
         tests/test_postproc_noise.cpp
+        tests/test_dc3_retail_post.cpp
         tests/test_merge_scope_parity.cpp
         tests/test_merge_lifecycle.cpp
         tests/test_cascade_ref_invariant.cpp
@@ -2035,6 +2056,10 @@ if(BUILD_TESTS)
         tests/test_archive_enumeration.cpp
         tests/test_mesh_loading.cpp
         tests/test_rndcam_projection.cpp
+        tests/test_particle_color.cpp
+        tests/test_drawrect_color.cpp
+        tests/test_retail_lighting.cpp
+        tests/test_retail_char_shading.cpp
         tests/test_dta_parser.cpp
         tests/test_movegraph.cpp
         tests/test_dta_flow.cpp
@@ -2096,6 +2121,7 @@ if(BUILD_TESTS)
         tests/test_native_options.cpp
         tests/test_native_profile.cpp
         tests/test_native_glyph_render.cpp
+        tests/test_native_ui_material_terms.cpp
         tests/test_frame_pacer.cpp     # H-29 frame cap + engine CPU-use guards
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}

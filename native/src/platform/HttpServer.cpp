@@ -11,6 +11,7 @@
 #include "telemetry/GameplayTelemetry.h"
 #include "gfx/Screenshot.h"
 #include "gfx/GpuDevice.h"
+#include "gfx/FrameCapture.h"
 #include "obj/Data.h"
 #include "obj/DataFile.h"
 #include "obj/DataFunc.h"
@@ -1623,6 +1624,14 @@ void HttpServer::RegisterEndpoints() {
         res.set_content(
             JsonOk("{\"frame\":" + std::to_string(frame) + "}"),
             "application/json");
+    });
+
+    // GET /api/capture/next — arm FrameCapture's per-draw log (mesh, material,
+    // blend, zmode, camera, colour) for the next frame: the F12 key's effect,
+    // for a headless engine. The log goes to stderr when that frame ends.
+    svr->Get("/api/capture/next", [](const httplib::Request&, httplib::Response& res) {
+        FrameCapture::Get().CaptureNextFrame();
+        res.set_content(JsonOk("{\"armed\":true}"), "application/json");
     });
 
     // GET /api/frame/wait/<n> — long-poll until frame N reached
