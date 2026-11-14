@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <unistd.h> // getpid (default pose socket)
@@ -821,18 +822,23 @@ void FillReadMode() {
 
 double FillClock() { return gFillClock ? gFillClock() : (double)MoveDir::SongSeconds(); }
 
-// Engagement changes move the scorer's latency; say so once each time.
+// Engagement changes, and delay changes of 20 ms or more, move the scorer's
+// latency; say so once each time.
 void FillPublishDelay() {
     static bool sWasEngaged = false;
+    static float sLoggedDelay = 0.0f;
     float delay = (float)gFill.Delay();
     Dc3SetPoseFillDelaySeconds(delay);
-    if (gFill.Engaged() != sWasEngaged) {
+    bool changed = gFill.Engaged() != sWasEngaged;
+    if (changed || std::fabs(delay - sLoggedDelay) >= 0.02f) {
         sWasEngaged = gFill.Engaged();
+        sLoggedDelay = delay;
         double med = gFill.MedianInterval();
         fprintf(stderr,
-                "DC3 POSE FILL: %s %s (camera %.1f frames/s, stream delay %.0f ms added to the "
-                "scorer's latency)\n",
-                Dc3PoseFill::ModeName(gFill.GetMode()), sWasEngaged ? "engaged" : "released",
+                "DC3 POSE FILL: %s %s at song %.2f s (camera %.1f frames/s, stream delay %.0f ms "
+                "added to the scorer's latency)\n",
+                Dc3PoseFill::ModeName(gFill.GetMode()),
+                changed ? (sWasEngaged ? "engaged" : "released") : "delay", FillClock(),
                 med > 0.0 ? 1.0 / med : 0.0, delay * 1000.0f);
     }
 }
