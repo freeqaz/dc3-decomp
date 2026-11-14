@@ -343,6 +343,8 @@ variables are value-parsed: `0`/`false`/`off`/`no` disable.
 | `DC3_POSE_SOCKET` | spawned server: `/tmp/dc3_pose_<pid>.sock`; with `DC3_POSE_NO_SPAWN`: `/tmp/dc3_pose.sock` | Unix socket shared with the pose server. Per process when the engine spawns the server, since `pose_server.py` unlinks whatever is at its path | `native/src/platform/GestureMgr_Native.cpp` |
 | `DC3_POSE_NO_SPAWN` | unset | Presence. Connect to an already-running pose server instead of forking `pose_server.py` | `native/src/platform/Skeleton_Native.cpp` |
 | `DC3_POSE_HFOV` | unset | Horizontal camera FOV passed to the spawned server | `native/src/platform/Skeleton_Native.cpp` |
+| `DC3_POSE_HOLD_MS` | `1000` | Dropout hold (PLAN P-12): a person the detector loses is still reported, same slot and tracking id, every joint inferred at its last pose, for this much sensor time; then the slot is released and the image's own 1 s recovery window runs. `0` = off (lost at once). Not applied to someone seen under 500 ms, or when a new id appears within 0.3 m. Capped at 5000 | `native/src/platform/GestureMgr_Native.cpp` |
+| `DC3_POSE_LATENCY_LOG` | off | `Dc3EnvFlag`. Every 5 s, `DC3 POSE AGE: capture->game median/p10/p90`: the age of a pose frame when the game takes it, from `pose_server.py`'s capture stamp (desktop only) | `native/src/platform/GestureMgr_Native.cpp` |
 
 ### Capture and output
 

@@ -85,8 +85,11 @@ export class OneEuroFilter {
     }
 }
 
+// maxMissing (frames): how long a lost person keeps her id -- 60 = 2 s at
+// 30 fps, so a dancer MediaPipe loses for ~1.4 s comes back as the same
+// player (PLAN P-12; the reasoning is on the Python class).
 export class CentroidTracker {
-    constructor(maxDist = 0.25, maxMissing = 15) {
+    constructor(maxDist = 0.25, maxMissing = 60) {
         this.maxDist = maxDist;
         this.maxMissing = maxMissing;
         this._nextId = 1;
@@ -275,7 +278,7 @@ export class PoseGeometry {
             out.push({ trackId: tid, joints, conf: person.conf, poseIndex: person.poseIndex });
         });
         for (const [t, seen] of [...this._filterLastSeen]) {
-            if (this._frameCount - seen > 60) {
+            if (this._frameCount - seen > 90) {
                 this._filterLastSeen.delete(t);
                 this._rootZFilters.delete(t);
             }

@@ -143,6 +143,25 @@ SPINE_BACK = 0.085          # fraction of torso LENGTH, posterior (away from cam
 SHOULDER_CENTER_UP = 1.04
 
 
+def block_audio_import():
+    """Keep `import mediapipe` from opening the sound system.
+
+    mediapipe 1.0.0 imports its audio tasks eagerly
+    (mediapipe/tasks/python/audio/core/audio_record.py: `import sounddevice`),
+    and sounddevice initialises PortAudio -> ALSA -> PipeWire's ALSA plugin,
+    whose module-rt asks rtkit to make the CALLING thread SCHED_FIFO under an
+    RLIMIT_RTTIME budget. That thread is Python's main thread, which then loads
+    the model and runs inference: on the GPD playtest box (Arch, PipeWire,
+    rtkit) the kernel SIGKILLed the server ~1 s into the model load, every
+    time, exit 137 (MEASURED 2026-11-13 with strace: sched_setscheduler
+    SCHED_FIFO 83, prlimit RLIMIT_RTTIME, killed with no kill() in the
+    process). The pose server never records audio, and audio_record.py treats
+    an ImportError as "no sounddevice", so make the import fail."""
+    import sys
+    if "sounddevice" not in sys.modules:
+        sys.modules["sounddevice"] = None   # `import sounddevice` -> ImportError
+
+
 class OneEuroFilter:
     """Speed-adaptive low-pass (Casiez et al.): smooth when slow, responsive
     when fast.
@@ -195,9 +214,19 @@ class CentroidTracker:
     on IDs being stable to keep a person in the same skeleton slot, so we supply
     them here. Matching on the hip centre in normalized image space is adequate
     for a living-room dance game (1-2 people, well separated).
+
+    max_missing (frames, 60 = 2 s at 30 fps) is how long a lost person keeps
+    her id. MediaPipe loses a dancer who never left the frame for up to ~1.4 s
+    (measured on real footage, PLAN P-12); a Kinect keeps such a person under
+    one tracking id. 2 s covers the engine's dropout hold (DC3_POSE_HOLD_MS,
+    default 1 s) plus the image's own recovery window
+    (GestureMgr::sMaxRecoveryTime, 1 s), so a short dropout comes back as the
+    same player in the same slot. It was 15 (0.5 s): the dancer came back as
+    someone new. native/web/pose/pose_geometry.js ports this class; keep the
+    two equal (tests/test_pose_tracker.py checks both).
     """
 
-    def __init__(self, max_dist=0.25, max_missing=15):
+    def __init__(self, max_dist=0.25, max_missing=60):
         self.max_dist = max_dist
         self.max_missing = max_missing
         self._next_id = 1
@@ -254,6 +283,7 @@ class MediaPipeBackend:
 
     def __init__(self, model_path, num_poses=2, hfov_deg=DEFAULT_HFOV_DEG,
                  min_conf=0.5, delegate="cpu", segmentation=False):
+        block_audio_import()
         import mediapipe as mp
         from mediapipe.tasks import python as mpp
         from mediapipe.tasks.python import vision
@@ -473,7 +503,7 @@ class MediaPipeBackend:
         # Age out filters for departed tracks (past the tracker's own
         # max_missing grace, so a brief dropout keeps its filter state).
         stale = [t for t, seen in self._filter_last_seen.items()
-                 if self._frame_count - seen > 60]
+                 if self._frame_count - seen > 90]
         for t in stale:
             self._filter_last_seen.pop(t, None)
             self._root_z_filters.pop(t, None)
