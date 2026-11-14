@@ -1350,6 +1350,8 @@ protected:
     static DtaRunResult sResult;
     static DtaRunResult sWarm; // second boot on the same cache and save dirs
     static bool sRanEngine;
+    static bool sRanWarm;
+    static std::string sEnv;
     static bool HavePackage() {
         return FileExists(GetDlcDir() + "/" + kMilkshakePackage +
                           "/songs/milkshake/milkshake.mogg");
@@ -1369,14 +1371,19 @@ protected:
             sRanEngine = true;
             return;
         }
-        std::string env = std::string("DC3_TAG_MODALS=1 DC3_DLC_DIR=") + root;
-        sResult = RunDtaFlow(3600, 180, "milkshake.txt", env.c_str(), true, kTutorialGeneral);
-        // The first boot writes the song cache (SongMgr's "songcache"
-        // container, which only content songs enter); the second reads it.
-        if (sResult.setupError.empty())
-            sWarm = RunDtaFlow(3600, 180, "milkshake.txt", env.c_str(), true, kTutorialGeneral,
-                               sResult.persistenceRoot);
+        sEnv = std::string("DC3_TAG_MODALS=1 DC3_DLC_DIR=") + root;
+        sResult = RunDtaFlow(3600, 180, "milkshake.txt", sEnv.c_str(), true, kTutorialGeneral);
         sRanEngine = true;
+    }
+    // The first boot writes the song cache (SongMgr's "songcache" container,
+    // which only content songs enter); a second boot on the same root reads
+    // it.  Run only by the test that needs it: ctest runs each test in its
+    // own process, so a suite-level second boot would be paid twice.
+    static void EnsureWarmBoot() {
+        if (sRanWarm || !sResult.setupError.empty()) return;
+        sWarm = RunDtaFlow(3600, 180, "milkshake.txt", sEnv.c_str(), true, kTutorialGeneral,
+                           sResult.persistenceRoot);
+        sRanWarm = true;
     }
     void SetUp() override {
         if (getenv("DC3_DTA_FLOW_TESTS") && !HavePackage())
@@ -1387,13 +1394,15 @@ protected:
     void TearDown() override {
         if (HasFailure() && sRanEngine) {
             Dump(sResult);
-            Dump(sWarm);
+            if (sRanWarm) Dump(sWarm);
         }
     }
 };
 DtaRunResult DlcSongFlowTest::sResult = {};
 DtaRunResult DlcSongFlowTest::sWarm = {};
 bool DlcSongFlowTest::sRanEngine = false;
+bool DlcSongFlowTest::sRanWarm = false;
+std::string DlcSongFlowTest::sEnv;
 
 TEST_F(DlcSongFlowTest, MilkshakeMountsAndReachesGameplay) {
     const std::string &out = sResult.output;
@@ -1435,6 +1444,9 @@ TEST_F(DlcSongFlowTest, MilkshakeMountsAndReachesGameplay) {
 // the next boot overran a 512-byte Symbol buffer and crashed at
 // wait_main_after_saveload_screen.
 TEST_F(DlcSongFlowTest, MilkshakePlaysAgainFromTheSongCache) {
+    ASSERT_NE(sResult.output.find("gameStage=playing"), std::string::npos)
+        << "precondition: the first boot did not play Milkshake";
+    EnsureWarmBoot();
     const std::string &out = sWarm.output;
     ASSERT_TRUE(sWarm.setupError.empty()) << sWarm.setupError;
     size_t mount = out.find(std::string("DLC package '") + kMilkshakePackage + "' at cnt");
