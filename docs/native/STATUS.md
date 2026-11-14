@@ -273,6 +273,21 @@ and differs between runs):
 | yougotittherightstuff | streetside | 69/0/0/0 | 2,393,070 | 454 | 735 | 2.9 | 435.5 |
 | youmakemefeeldc | dci | 73/0/0/0 | 2,522,663 | 502 | 835 | 4.1 | 522.6 |
 
+## Playtest kit (PLAN L) — see [PLAYTEST.md](PLAYTEST.md)
+
+Measured 2026-11-13/14 by `np-playtest-kit` on the development box (Ryzen,
+32 threads, RTX 3090, **load average 30–50 from other lanes throughout**).
+Footage: `scripts/video_calib/mqcXJrH5vUo.json`'s source video, cut per song by
+`scripts/playtest/make_footage.py` and played through the real tracker
+(`--video`, `footage_camera.py`) in step with the song clock.
+
+| Area | State | How measured |
+|---|---|---|
+| Kit | `scripts/play.sh` (check, play, record, summarise, pack), `scripts/playtest/bootstrap.sh` (player box: check / `--fix`), `preflight.py`, `asset_manifest.py` (6.59 GB the game reads; derived web-only files named) | ran: `--check`, headless and windowed sessions, bootstrap check-only and `--fix --no-build` into scratch |
+| Pose server lifetime | Dies with the game on every exit (`PR_SET_PDEATHSIG`, H-18); before, it outlived a quit and kept the camera | `PoseServerLifetimeTest`; end to end after a kit quit |
+| Record → replay, stream | A footage-driven Macarena Medium session recorded 5,897 accepted frames (4,877 in the song). Replayed under `DC3_FAST_TIME`: **every frame reached the scorer once, in order, unchanged** (id, timestamp, people, floor), ≤12 ms later in song time than live. Real time on this loaded box: 72 frames dropped where the game rendered below 30 fps for 5 s (13.6 fps) — a real-time replay accepts one frame per render frame, as the live game did | `replay_proof.py` (`--from-live`), `pose_session.py compare` |
+| Record → replay, ratings | Three fast-time replays: **identical** on all 53 moves (rating and detector fraction) and the same score, 1,189,670. Against the live run: 51 of 53 moves the same (both differences one band up). Real-time replays: 49–52 of 53, and 52 of 53 against each other — the scorer samples the skeleton on render frames (`MoveDir::PostUpdateFilters` / `FilterQueue::Poll`), so two real-time runs of one input differ on borderline moves; the live run is such a run | `replay_proof.py`, runs `Vo7Y` (live + 2 real-time + 2 fast) and `j5a6` (1 real-time + 3 fast) |
+
 ## Pose input — see [POSE_INPUT.md](POSE_INPUT.md)
 
 | Area | State | How measured |

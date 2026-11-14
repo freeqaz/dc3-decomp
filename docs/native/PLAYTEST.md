@@ -160,9 +160,15 @@ scripts/playtest/pose_session.py cut pose.dc3session 4 song.dc3session
 scripts/play.sh --replay song.dc3session                      # then play the same song
 ```
 
-The replay feeds the scorer the recorded frames at the recorded song times,
-with the recorded floor, so the same song on the same difficulty rates the
-same moves (proved by `scripts/playtest/replay_proof.py`, see STATUS). Without
+The replay holds the first frame through the menus, starts at the song's
+count-in, and feeds the scorer every recorded frame at its recorded song time
+with the recorded floor. The replay records itself too, so
+`pose_session.py compare song.dc3session <replay session>/pose.dc3session`
+says whether every frame arrived unchanged. Ratings then match the live run
+as closely as two runs of the same input match each other: the scorer samples
+the skeleton on render frames, so in real time a few borderline moves change
+from run to run; with `DC3_FAST_TIME=1` a replay is repeatable move for move
+(`scripts/playtest/replay_proof.py`, numbers in STATUS). Without
 a camera, `scripts/play.sh --video clip.mp4` plays recorded footage through
 the real tracker in step with the song (`scripts/playtest/make_footage.py`
 cuts clips).

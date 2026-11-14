@@ -192,11 +192,26 @@ song time, with its recorded timestamp, and the sensor levels it with its
 recorded floor normal instead of re-estimating one (the estimator is session
 state, so a replay that starts fresh would level differently). A whole session
 holds many songs, each with its own clock; `scripts/playtest/pose_session.py`
-lists the song segments and cuts one out. Tests: `PoseSessionFileTest`,
-`PoseSessionTest.AReplayedSessionReachesTheScorerAsItDidLive`
+lists the song segments and cuts one out. Under song sync the replay holds the
+first frame until the song clock comes down to the cut's first frame (the
+count-in; the menus' clock runs up from zero through the song's own times, and
+a dance played into the menus took the pad's presses, H-19), then publishes
+every frame on a render frame of its own -- catching up one per frame after a
+hitch, as the live game accepted them -- and restarts the sensor noise floor's
+counters so a replay does not depend on how long the menus took. Tests:
+`PoseSessionFileTest`, `PoseSessionTest.AReplayedSessionReachesTheScorerAsItDidLive`,
+`PoseSessionTest.ASongReplayWaitsForTheCountInNotTheMenuClock`,
+`SensorNoiseFloorTest.AResetRestartsTheOffsets`
 (`native/tests/test_pose_session.cpp`, `test_native_pose_socket.cpp`).
-End to end with the real tracker and footage: `scripts/playtest/replay_proof.py`
-(numbers in STATUS).
+
+A replay records itself as well, and `pose_session.py compare CUT REPLAYED`
+checks that every frame reached the scorer once, in order and unchanged.
+End to end with the real tracker and footage, `scripts/playtest/replay_proof.py`
+(numbers in STATUS): under `DC3_FAST_TIME` a replay is exact -- the same frames,
+the same rating and detector fraction on every move, the same score, three runs
+out of three. In real time two runs of one input differ on a few borderline
+moves (the scorer samples the skeleton on render frames), and a box that
+renders below 30 fps drops frames, as a live game on that box would.
 
 Run from the repo root: the server script and the model are found relative to the
 working directory when `/proc/self/exe` resolution fails.
