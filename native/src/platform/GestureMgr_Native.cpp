@@ -208,6 +208,8 @@ std::string GestureMgr_NativePoseModelPath() {
 void GestureMgr_NativeInit() {
     ResetSlotMap();
     JoypadScriptSetWakeNeeded(NativeWakeNeeded);
+    extern void JoypadSelect_NativeRegister();
+    JoypadSelect_NativeRegister();
 
     // In headless mode (tests, CLI tools), skip the pose server entirely.
     // The dummy skeleton in GestureMgr_NativePoll provides a neutral standing
