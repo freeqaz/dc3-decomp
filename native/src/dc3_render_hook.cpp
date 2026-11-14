@@ -106,6 +106,17 @@ public:
     // model (lane np-gfx-light owns it); everything drawn after it is UI.
     bool UiShadesInGammaSpace() override { return true; }
 
+    // UI lighting (PLAN G-24). DxRnd shades a UI mesh like any other: a lit
+    // material takes the environ selected when it draws. The score digits are
+    // the case that shows it: Eagle-Book(numbers*).mat is prelit 0 /
+    // use_environ 1, and score.grp leads with score.env (ambient 127,0,255;
+    // light score.lit 226,63,255 x3), so retail digits are magenta while the
+    // white atlas alone (what forced-prelit drew) is grey-white. The same font
+    // is intensify 1 under a 0.5 font_alpha, and the shipped standard pixel
+    // shaders scale the whole texel by intensify (`mul r0, r0, c5.yyyy`,
+    // alpha included), so retail digits are opaque.
+    bool UiUsesRetailMaterialTerms() override { return true; }
+
     static bool IsTextGlyphMesh(RndMesh* mesh) {
         const char* name = mesh ? mesh->Name() : nullptr;
         return name && !name[0];
