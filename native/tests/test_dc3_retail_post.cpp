@@ -22,6 +22,12 @@
 //   - streak weights normalised to sum 1 (the image's do not)
 //   - half-float bloom sets (the image's are 8-bit and saturate per pass)
 //   - DisplayGamma returning 0 (no ramp)
+//   motion blur (round 2, NgPostProc::CheckMotionBlur + postprocess.ps bit 24):
+//   - k = c105.rgb only (dropping max(r, ...), the exposure term)
+//   - the mix reversed (prev + (c - prev) * k)
+//   - the feedback never valid (every frame treated as the first)
+//   - a stale previous frame reused after motion blur was off for a frame
+//   - FillRetailPost ignoring RndPostProc::DoMotionBlur's Pack() gate
 
 #include "test_helpers.h"
 
@@ -230,6 +236,112 @@ TEST_F(DC3RetailPostGpuTest, StreakBloomIsScreenBlendOfMaskedScene) {
     delete pp;
 }
 
+// NgPostProc::CheckMotionBlur: c105 = (weight.rgb * blend, weight.a), on only
+// when RndPostProc::DoMotionBlur() holds (blend > 0, weight.Pack() > 0: the
+// 8-bit rgb, not alpha).
+TEST_F(DC3RetailPostTest, MotionBlurParamsFollowDoMotionBlur) {
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    RetailPostParams p;
+    rndshape::FillRetailPost(pp, 1.0f, p);
+    EXPECT_FALSE(p.motionBlur) << "the default post-process (blend 0) has no motion blur";
+    pp->SetProperty("motion_blur_blend", DataNode(0.6f));
+    // The weight syncs as a packed 0xBBGGRR int (PropSync(Hmx::Color&)); its
+    // alpha is the separate motion_blur_exposure property.
+    pp->SetProperty("motion_blur_weight", DataNode(0x40FF80));
+    pp->SetProperty("motion_blur_exposure", DataNode(0.75f));
+    rndshape::FillRetailPost(pp, 1.0f, p);
+    ASSERT_TRUE(p.motionBlur);
+    const Hmx::Color &w = pp->GetMotionBlurWeight();
+    EXPECT_FLOAT_EQ(p.motionBlurParams[0], w.red * 0.6f);
+    EXPECT_FLOAT_EQ(p.motionBlurParams[1], 0.6f);
+    EXPECT_FLOAT_EQ(p.motionBlurParams[2], w.blue * 0.6f);
+    EXPECT_NEAR(p.motionBlurParams[0], 0.3012f, 1e-3f);
+    EXPECT_FLOAT_EQ(p.motionBlurParams[3], 0.75f) << "c105.w is the weight's alpha (exposure), unscaled";
+    // DoMotionBlur's weight.Pack() > 0 ignores the alpha: black rgb is off.
+    pp->SetProperty("motion_blur_weight", DataNode(0));
+    rndshape::FillRetailPost(pp, 1.0f, p);
+    EXPECT_FALSE(p.motionBlur) << "weight.Pack() == 0 turns motion blur off whatever its exposure";
+    pp->SetProperty("motion_blur_weight", DataNode(0xFFFFFF));
+    pp->SetProperty("motion_blur_blend", DataNode(0.0f));
+    rndshape::FillRetailPost(pp, 1.0f, p);
+    EXPECT_FALSE(p.motionBlur) << "blend 0 is off";
+    delete pp;
+}
+
+// The motion-blur composite over flat scenes, frame after frame (RB3RetailPost
+// directly, so the run sequence is the test's): out = sat(c + (prev - c) * k),
+// k = max(r, c105.rgb), r = sat(c105.w * (prev.a - scene.a) / prev.a), and the
+// output alpha sat(scene.a + r * (prev.a - scene.a)) is the next prev.a.
+TEST_F(DC3RetailPostGpuTest, MotionBlurIsRetailFeedback) {
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    auto &dev = gpu.Device();
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)kW, (uint32_t)kH, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    wgpu::Texture scene = dev.CreateTexture(&d);
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture frame = dev.CreateTexture(&d);
+    wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView();
+    RB3RetailPost post;
+    post.Init(gpu);
+    std::vector<uint8_t> px(kW * kH * 4), out(kW * kH * 4);
+    auto frameOf = [&](uint8_t grey, uint8_t alpha, const RetailPostParams &p) {
+        for (size_t i = 0; i < px.size(); i += 4) {
+            px[i] = px[i + 1] = px[i + 2] = grey;
+            px[i + 3] = alpha;
+        }
+        wgpu::TexelCopyTextureInfo dst{};
+        dst.texture = scene;
+        wgpu::TexelCopyBufferLayout layout{};
+        layout.bytesPerRow = kW * 4;
+        wgpu::Extent3D ext = {(uint32_t)kW, (uint32_t)kH, 1};
+        gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        post.Run(enc, sceneView, sceneView, kW, kH, frameView, p, gpu);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        EXPECT_TRUE(gpu.ReadbackTexture(frame, kW, kH, out.data(), out.size()));
+        return out[((kH / 2) * kW + kW / 2) * 4 + 1] / 255.0f;
+    };
+    RetailPostParams mb;
+    mb.dc3 = true;
+    mb.motionBlur = true;
+    mb.motionBlurParams[0] = mb.motionBlurParams[1] = mb.motionBlurParams[2] = 0.6f;  // PostProc_local
+    RetailPostParams off = mb;
+    off.motionBlur = false;
+    const float tol = 2.5f / 255.0f;
+    auto u8 = [](float v) { return std::round(v * 255.0f) / 255.0f; };
+
+    // c105.w = 0 (every shipped post-process): a plain 0.6 feedback.
+    float f1 = frameOf(200, 0, mb);
+    EXPECT_NEAR(f1, 200 / 255.0f, tol) << "first frame: no previous output, the scene graded";
+    float f2 = frameOf(50, 0, mb);
+    const float e2 = u8(50 / 255.0f + (f1 - 50 / 255.0f) * 0.6f);
+    EXPECT_NEAR(f2, e2, tol) << "second frame: c + (prev - c) * 0.6";
+    float f3 = frameOf(50, 0, mb);
+    EXPECT_NEAR(f3, 50 / 255.0f + (e2 - 50 / 255.0f) * 0.6f, tol) << "the feedback decays geometrically";
+    printf("DC3RetailPost motion blur: 200 -> 50 -> 50 gives %.4f %.4f %.4f\n", f1, f2, f3);
+
+    // Off for one frame, then on: the previous output is gone (retail resolves it
+    // every frame; here the first frame back passes the scene through rather
+    // than mixing in an output two frames old).
+    frameOf(255, 0, off);
+    EXPECT_NEAR(frameOf(50, 0, mb), 50 / 255.0f, tol) << "a stale previous frame was mixed in";
+
+    // c105.w > 0, the exposure: where the mask (alpha) fell since last frame the
+    // previous output wins by r = (prev.a - scene.a) / prev.a.
+    mb.motionBlurParams[3] = 1.0f;
+    frameOf(0, 0, off);
+    frameOf(200, 255, mb);                  // first frame again: out 200, prev.a = 1
+    const float g = frameOf(50, 64, mb);    // scene.a = 0.251
+    const float sa = 64 / 255.0f, r = 1.0f - sa, k = std::max(r, 0.6f);
+    EXPECT_NEAR(g, 50 / 255.0f + (200 / 255.0f - 50 / 255.0f) * k, tol)
+        << "k = max(r, c105.rgb): the exposure term outweighs the 0.6 blend";
+    post.Terminate();
+}
+
 // Frame cost of the chain's passes at 1280x720 (np-gfx-post performance
 // report): mean GPU+submit time per Run over 200 runs, one sync at the end.
 // Prints the numbers; asserts only that a disabled effect costs nothing
@@ -289,8 +401,15 @@ TEST_F(DC3RetailPostGpuTest, PassCostAt720p) {
     all.vignetteIntensity = 1.05f;
     all.chromaticOffset = 2.0f;
     all.xfm[0][0] = 1.1f;
+    RetailPostParams mbOn = base;   // PostProc_local's motion blur, no bloom
+    mbOn.motionBlur = true;
+    mbOn.motionBlurParams[0] = mbOn.motionBlurParams[1] = mbOn.motionBlurParams[2] = 0.6f;
+    RetailPostParams streakMb = streak;   // a venue's: streak bloom + motion blur
+    streakMb.motionBlur = true;
+    streakMb.motionBlurParams[0] = streakMb.motionBlurParams[1] = streakMb.motionBlurParams[2] = 0.4f;
     const double tBase = timeIt(base), tPlain = timeIt(plain), tStreak = timeIt(streak),
-                 tAll = timeIt(all), tBase2 = timeIt(base);
+                 tAll = timeIt(all), tMb = timeIt(mbOn), tStreakMb = timeIt(streakMb),
+                 tBase2 = timeIt(base);
     post.Terminate();
     // The scan-out ramp (WgpuRnd::EndDrawing): a copy and one full-screen pass.
     DisplayRamp ramp;
@@ -311,7 +430,7 @@ TEST_F(DC3RetailPostGpuTest, PassCostAt720p) {
         200.0;
     printf("DC3RetailPost cost @%dx%d (us/frame): composite only %.0f (again %.0f), "
            "+plain bloom %.0f, +streak bloom %.0f, streak+vignette+chroma+xfm %.0f, "
-           "scan-out ramp %.0f\n",
-           W, H, tBase, tBase2, tPlain, tStreak, tAll, tRamp);
+           "+motion blur %.0f, streak bloom+motion blur %.0f, scan-out ramp %.0f\n",
+           W, H, tBase, tBase2, tPlain, tStreak, tAll, tMb, tStreakMb, tRamp);
     EXPECT_GT(tBase, 0.0);
 }
