@@ -275,12 +275,12 @@ void NgPostProc::RebuildTex() {
 
 #ifdef HX_NATIVE
 void NgPostProc::DoVelocity() {
-    // Retail's gate and bookkeeping (below); the velocity pass and the bit-42
-    // composite are the WebGPU backend's, which takes this frame's result with
-    // RndVelocityBuffer::TakeNativeFrame (TheShaderMgr.unk39 and c122 there).
-    if (mMotionBlurVelocity && !TheHiResScreen.IsActive()) {
-        RndVelocityBuffer::Singleton().DrawNative(TheRnd.GetWorldCamCopy(), mMotionBlurDrawList);
-    }
+    // Natively the PostProc factory is RndPostProc (NgPostProc::Init is
+    // DxRnd's), so this never runs: NgRnd::DoPostProcess drives retail's gate
+    // and bookkeeping for whichever post-process Rnd::DoPostProcess runs
+    // (RndVelocityBuffer::DoVelocityNative), and the WebGPU backend draws the
+    // velocity pass and bit 42. Kept equivalent should NgPostProc ever be
+    // instantiated natively: nothing here, so a frame is not advanced twice.
     if (!mMotionBlurDrawList.empty())
         mMotionBlurDrawList.clear();
 }

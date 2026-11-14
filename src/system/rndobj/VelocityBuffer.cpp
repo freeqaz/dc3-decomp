@@ -14,6 +14,10 @@
 #include "rndobj\Shader.h"
 #include "rndobj\Stats_NG.h"
 #include "rnddx9\RenderState.h"
+#ifdef HX_NATIVE
+#include "rndobj/HiResScreen.h"
+#include "rndobj/PostProc.h"
+#endif
 
 RndVelocityBuffer RndVelocityBuffer::sSingleton;
 
@@ -368,6 +372,13 @@ bool RndVelocityBuffer::DrawNative(RndCam *cam, ObjPtrList<RndDrawable> &drawLis
         mNativeCam = cam;
     }
     return mFrameAdvanced;
+}
+
+void RndVelocityBuffer::DoVelocityNative(RndPostProc *pp, RndCam *worldCam) {
+    static ObjPtrList<RndDrawable> sNoMotionBlurObjects(nullptr);
+    if (pp && pp->GetMotionBlurVelocity() && !TheHiResScreen.IsActive()) {
+        Singleton().DrawNative(worldCam, sNoMotionBlurObjects);
+    }
 }
 
 bool RndVelocityBuffer::TakeNativeFrame(bool &ready, float &scale, RndCam *&cam) {

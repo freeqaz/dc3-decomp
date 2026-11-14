@@ -883,6 +883,67 @@ TEST_F(DC3RetailPostTest, VelocityBufferFollowsDrawsBookkeeping) {
     delete cam;
 }
 
+// The frame path reaches it: natively the PostProc factory is RndPostProc, so
+// NgPostProc::EndWorld / DoVelocity never run, and NgRnd::DoPostProcess (what
+// Rnd::EndWorld calls) carries their velocity bookkeeping for the post-process
+// Rnd::DoPostProcess runs. Before that wiring no gameplay frame ever had a
+// velocity pass (round 3's first live run: 0 SetVelocity calls in 75 s).
+namespace {
+// Rnd::EndWorld's two steps (protected), with their virtual dispatch.
+struct RndEndWorldSteps : Rnd {
+    static void Run() {
+        void (Rnd::*worldEnd)() = &RndEndWorldSteps::DoWorldEnd;
+        void (Rnd::*post)() = &RndEndWorldSteps::DoPostProcess;
+        (TheRnd.*worldEnd)();
+        (TheRnd.*post)();
+    }
+};
+}  // namespace
+
+TEST_F(DC3RetailPostTest, FramePathRunsTheVelocityBookkeeping) {
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    RndPostProc *old = RndPostProc::Current();
+    pp->Select();
+    ASSERT_TRUE(TheRnd.GetWorldCamCopy());
+    RndCam *worldCam = Hmx::Object::New<RndCam>();
+    worldCam->Select();   // Rnd::DoWorldEnd copies RndCam::Current()
+    bool ready = false;
+    float scale = 0.0f;
+    RndCam *got = nullptr;
+    auto frame = [&]() {
+        RndEndWorldSteps::Run();
+        return rndshape::TakeVelocityFrame(ready, scale, got);
+    };
+    auto toggle = [] {
+        DataArray *a = DataReadString("{rnd toggle_all_postprocs}");
+        ASSERT_NE(a, nullptr);
+        a->Evaluate(0);
+        a->Release();
+    };
+    pp->SetProperty("motion_blur_velocity", DataNode(0));   // the constructor's is 1
+    frame();
+    EXPECT_FALSE(frame()) << "motion_blur_velocity 0: DoVelocity's gate is shut";
+    pp->SetProperty("motion_blur_velocity", DataNode(1));
+    ASSERT_TRUE(pp->GetMotionBlurVelocity());
+    EXPECT_TRUE(frame()) << "the frame path must run DoVelocity for the selected post-process";
+    EXPECT_EQ(got, TheRnd.GetWorldCamCopy()) << "Draw(TheRnd.GetWorldCamCopy(), ...)";
+    EXPECT_TRUE(frame());   // AdvanceFrame: a new camera restarts the count at 0, then 1
+    EXPECT_TRUE(frame());
+    EXPECT_TRUE(ready) << "consecutive frames on one camera are ready";
+    RndVelocityBuffer::Singleton().ResetFrame();   // CamShot::StartAnim
+    EXPECT_TRUE(frame());
+    EXPECT_FALSE(ready) << "the frame after a cut";
+    ASSERT_FALSE(TheRnd.DisablePP());
+    toggle();
+    ASSERT_TRUE(TheRnd.DisablePP());
+    EXPECT_FALSE(frame()) << "toggle_all_postprocs: Rnd::DoPostProcess skips DoPost, so no Draw";
+    toggle();
+    ASSERT_FALSE(TheRnd.DisablePP());
+    if (old) old->Select(); else pp->Unselect();
+    delete pp;
+    delete worldCam;
+}
+
 // {rnd toggle_all_postprocs}: Rnd::DoPostProcess skips DoPost, and the frame is
 // the scene through the option-free postprocess.ps (no grade, no bloom).
 TEST_F(DC3RetailPostGpuTest, TogglePostProcsShowsTheSceneUngraded) {

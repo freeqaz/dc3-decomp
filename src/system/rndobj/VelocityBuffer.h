@@ -5,6 +5,10 @@
 #include "rndobj\Mat.h"
 #include "rndobj\Tex.h"
 
+#ifdef HX_NATIVE
+class RndPostProc;
+#endif
+
 // size 0x1b584
 class RndXfmCache {
     friend class RndVelocityBuffer;
@@ -67,6 +71,10 @@ public:
     // is Draw()'s return (the composite's bit 42), `scale` its c122 value and
     // `cam` the camera the backend projects with. Clears the frame's result.
     bool TakeNativeFrame(bool &ready, float &scale, RndCam *&cam);
+    // NgPostProc::DoVelocity for `pp`: its gate (mMotionBlurVelocity and not
+    // the hi-res screen), then DrawNative with the world camera copy. Natively
+    // NgRnd::DoPostProcess calls it (NgPostProc is not the PostProc factory).
+    static void DoVelocityNative(RndPostProc *pp, RndCam *worldCam);
 #endif
 
 private:
