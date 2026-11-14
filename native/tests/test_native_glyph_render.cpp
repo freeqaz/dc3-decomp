@@ -28,6 +28,7 @@
 // native/src/platform/MaterialSetup.h (a pre-engine copy) is earlier on the
 // include path and shadows the engine's.
 bool TextMeshKeepsAtlasRGB(RndMesh *mesh, RndMat *mat, bool skinned);
+bool MeshDrawsAsGlyph(RndMesh *mesh, bool skinned);
 
 // The pipeline key's WgpuBlend and BaseMaterial::Blend share one numbering;
 // BlendSkipsFringeFade takes either.
@@ -61,4 +62,27 @@ TEST_F(NativeGlyphRenderTest, DC3TextGlyphsKeepAtlasRGB) {
     EXPECT_FALSE(TextMeshKeepsAtlasRGB(named, nullptr, false));
     delete named;
     delete glyphs;
+}
+
+// Lane np-gfx-blend: only an unnamed, unskinned mesh (an RndText glyph page)
+// is drawn without depth and culling. DC3's HamRibbon hand trail is unnamed
+// too, but skinned, and its material (hamribbon.mat: zMode 2, cull 1) must
+// hold -- drawn as text the trail went through the dancer and drew its back
+// faces, doubling the additive band (FrameCapture on streetside peak:
+// mesh='' mat='hamribbon_02.mat' blend=4 zMode=2 cull=1 SKINNED,
+// heuristics TextMeshDetect).
+// Sabotage tried: MeshDrawsAsGlyph back to `!mesh->Name()[0]` (the pre-fix
+// rule, skinning ignored) -> UnnamedSkinnedMeshKeepsDepthAndCull fails.
+TEST_F(NativeGlyphRenderTest, UnnamedSkinnedMeshKeepsDepthAndCull) {
+    RndMesh *unnamed = Hmx::Object::New<RndMesh>();
+    EXPECT_TRUE(MeshDrawsAsGlyph(unnamed, false)) << "a text glyph page draws without depth";
+    EXPECT_FALSE(MeshDrawsAsGlyph(unnamed, true))
+        << "a skinned unnamed mesh (HamRibbon) keeps its material's zMode and cull";
+    RndMesh *named = Hmx::Object::New<RndMesh>();
+    named->SetName("floor.mesh", ObjectDir::Main());
+    EXPECT_FALSE(MeshDrawsAsGlyph(named, false));
+    EXPECT_FALSE(MeshDrawsAsGlyph(named, true));
+    EXPECT_FALSE(MeshDrawsAsGlyph(nullptr, false));
+    delete named;
+    delete unnamed;
 }
