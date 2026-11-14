@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <strings.h>
+#include <algorithm>
 #include <thread>
 
 namespace {
@@ -89,4 +90,51 @@ void Dc3FramePacer::Pace() {
         // frames afterwards.
         mNext = now;
     }
+}
+
+void Dc3RafGate::Decide() {
+    double sorted[kWindow];
+    std::copy(mGaps, mGaps + mGapCount, sorted);
+    std::nth_element(sorted, sorted + mGapCount / 2, sorted + mGapCount);
+    const double medianMs = sorted[mGapCount / 2];
+    const double hz = medianMs > 0.0 ? 1000.0 / medianMs : 0.0;
+    const Dc3FrameCap cap = Dc3FrameCapDecide(mEnv.empty() ? nullptr : mEnv.c_str(), true, hz);
+    const bool changed = mDecisions == 0 || cap.fps != mCap.fps;
+    mRefreshHz = hz;
+    if (changed) {
+        snprintf(mWhy, sizeof(mWhy), "%s", cap.why); // cap.why is a static buffer
+        mCap = {cap.fps, mWhy};
+        mDecisions++;
+    }
+}
+
+bool Dc3RafGate::OnRaf(double nowMs) {
+    if (mLastRafMs >= 0.0) {
+        const double gap = nowMs - mLastRafMs;
+        if (gap > 0.0 && gap < 1000.0) { // a hidden tab's pause is not a refresh
+            mGaps[mGapNext] = gap;
+            mGapNext = (mGapNext + 1) % kWindow;
+            if (mGapCount < kWindow)
+                mGapCount++;
+            if (++mSinceDecide >= (mDecisions == 0 ? 16 : kWindow)) {
+                mSinceDecide = 0;
+                Decide();
+            }
+        }
+    }
+    mLastRafMs = nowMs;
+
+    bool run = true;
+    if (mCap.fps > 0.0 && mLastRunMs >= 0.0 && mRefreshHz > 0.0) {
+        const double periodMs = 1000.0 / mCap.fps;
+        const double halfRefreshMs = 500.0 / mRefreshHz;
+        run = nowMs - mLastRunMs >= periodMs - halfRefreshMs;
+    }
+    if (run) {
+        mLastRunMs = nowMs;
+        mRan++;
+    } else {
+        mSkipped++;
+    }
+    return run;
 }

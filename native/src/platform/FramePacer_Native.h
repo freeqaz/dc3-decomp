@@ -26,6 +26,7 @@
 #pragma once
 
 #include <chrono>
+#include <string>
 
 struct Dc3FrameCap {
     double fps = 0.0;        // 0 = no cap
@@ -58,4 +59,51 @@ private:
     bool mStarted = false;
     long long mPaced = 0;
     double mSleptS = 0.0;
+};
+
+// The same cap for a loop the BROWSER drives (web build, PLAN H-34). There is
+// no sleep there: the page runs one game frame per requestAnimationFrame, and
+// rAF fires at the display's rate (120/144 Hz on a high-refresh panel). This
+// gate is asked on every rAF and answers whether a game frame runs on it.
+//
+// The display rate is not exposed to a page, so it is estimated from the rAF
+// timestamps: the median gap over the last kWindow rAFs (a skipped rAF costs
+// nothing, so while capped the gaps stay at one refresh). A game slower than
+// the display makes the gaps longer and the estimate lower, which turns the
+// cap off -- correctly, there is nothing to cap. The decision is
+// Dc3FrameCapDecide(env, windowed=true, estimate), re-made every kWindow rAFs.
+//
+// A frame runs when at least (period - half a refresh) has passed since the
+// last one, so the rAF grid's own jitter never drops a frame: on 144 Hz with a
+// 72 fps cap that is every second rAF exactly.
+class Dc3RafGate {
+public:
+    static constexpr int kWindow = 64;
+
+    explicit Dc3RafGate(const char *env) : mEnv(env ? env : "") {}
+
+    // `nowMs` is the rAF timestamp (performance.now() timebase). True: run a
+    // game frame on this rAF.
+    bool OnRaf(double nowMs);
+
+    double RefreshHz() const { return mRefreshHz; }
+    double TargetFps() const { return mCap.fps; }
+    const char *Why() const { return mCap.why; }
+    long long Ran() const { return mRan; }
+    long long Skipped() const { return mSkipped; }
+    // Bumped whenever the decision changes (for a one-line log per change).
+    int Decisions() const { return mDecisions; }
+
+private:
+    void Decide();
+
+    std::string mEnv;
+    double mGaps[kWindow] = {};
+    int mGapCount = 0, mGapNext = 0, mSinceDecide = 0;
+    double mLastRafMs = -1.0, mLastRunMs = -1.0;
+    double mRefreshHz = 0.0;
+    Dc3FrameCap mCap{};
+    char mWhy[160] = "";
+    long long mRan = 0, mSkipped = 0;
+    int mDecisions = 0;
 };

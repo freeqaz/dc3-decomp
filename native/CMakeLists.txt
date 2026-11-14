@@ -1407,6 +1407,8 @@ set(DC3_WEB_CORE_SOURCES
     src/xbox_link_stubs.cpp
     src/telemetry/GameplayTelemetry.cpp
     src/platform/DtaEvalSupport.cpp
+    # Dc3FrameCapDecide + Dc3RafGate: the rAF loop's frame cap (H-34).
+    src/platform/FramePacer_Native.cpp
     # Web stand-ins for the XDK/NUI/XNet entry points (exact XDK signatures).
     # Dropped in 466a3a591 as a "deleted file" -- it was not deleted, and its
     # absence left those symbols as unresolved wasm imports.

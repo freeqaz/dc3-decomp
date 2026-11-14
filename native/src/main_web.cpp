@@ -22,6 +22,7 @@
 
 #include "App.h"
 #include "platform/FrameTraceCounters.h"
+#include "platform/FramePacer_Native.h"
 #include "platform/WebAssets.h"
 #include "platform/Rnd_Wgpu.h"
 #include "ui/UI.h"
@@ -347,6 +348,29 @@ void dc3MainLoopTick() {
     mainLoop();
 }
 
+// PLAN H-34: the page asks on every requestAnimationFrame whether a game frame
+// runs on it. rAF fires at the display's rate, so without this a 120/144 Hz
+// browser ran 120/144 game frames a second (desktop caps at the image's 60,
+// FramePacer_Native.h). DC3_FPS_CAP as on desktop (0 = off, N = cap at N
+// snapped to the display). window.dc3FrameCap reports the decision.
+EMSCRIPTEN_KEEPALIVE
+int dc3RafGate(double nowMs) {
+    static Dc3RafGate *sGate = new Dc3RafGate(getenv("DC3_FPS_CAP"));
+    static int sLogged = 0;
+    const bool run = sGate->OnRaf(nowMs);
+    if (sGate->Decisions() != sLogged) {
+        sLogged = sGate->Decisions();
+        printf("DC3 Web: frame cap %s (display ~%.1f Hz from rAF)\n", sGate->Why(), sGate->RefreshHz());
+    }
+    if (((sGate->Ran() + sGate->Skipped()) & 63) == 0) {
+        EM_ASM({
+            var c = window.dc3FrameCap || (window.dc3FrameCap = new Object());
+            c.refreshHz = $0; c.fps = $1; c.ran = $2; c.skipped = $3;
+        }, sGate->RefreshHz(), sGate->TargetFps(), (double)sGate->Ran(), (double)sGate->Skipped());
+    }
+    return run ? 1 : 0;
+}
+
 } // extern "C"
 
 // ============================================================================
@@ -366,8 +390,8 @@ int main(int argc, char **argv) {
     // (via emscripten_sleep) during synchronous file loads, letting the
     // loading screen render while .milo_xbox files download.
     EM_ASM({
-        async function tick() {
-            await Module._dc3MainLoopTick();
+        async function tick(ts) {
+            if (Module._dc3RafGate(ts)) await Module._dc3MainLoopTick();
             requestAnimationFrame(tick);
         }
         requestAnimationFrame(tick);
@@ -375,7 +399,10 @@ int main(int argc, char **argv) {
     emscripten_exit_with_live_runtime();
 #else
     // Fallback: cooperative main loop (no async yielding — file loads block).
-    emscripten_set_main_loop(mainLoop, 0, true);
+    emscripten_set_main_loop([] {
+        if (dc3RafGate(emscripten_get_now()))
+            mainLoop();
+    }, 0, true);
 #endif
     return EXIT_SUCCESS;
 }
