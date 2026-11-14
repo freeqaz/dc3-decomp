@@ -38,6 +38,7 @@ bool MeshDrawsAsGlyph(RndMesh *mesh, bool skinned);
 bool MeshShadesAsText(RndMesh *mesh);
 void MarkTextGlyphMesh(RndMesh *mesh);
 bool IsMarkedTextGlyphMesh(RndMesh *mesh);
+bool MaterialAlphaToCoverage(BaseMaterial *mat);
 
 // The pipeline key's WgpuBlend and BaseMaterial::Blend share one numbering;
 // BlendSkipsFringeFade takes either.
@@ -215,4 +216,46 @@ TEST_F(NativeGlyphRenderTest, RndTextMarksItsGlyphPages) {
     EXPECT_GT(meshes, 0) << "the text built no page mesh (font " << font->Name() << ")";
     delete text;
     delete fonts;
+}
+
+// Alpha cut is the alpha test and nothing more (engine rndshape::
+// kAlphaCutUsesCoverage, DC3 false). NgMat::SetBasicState (dc3
+// src/system/rndobj/Mat_NG.cpp) sets SetAlphaTestEnable(mAlphaCut) and
+// SetAlphaFunc(5, mAlphaThreshold), and the image never calls
+// D3DDevice_SetRenderState_AlphaToMaskEnable. The engine used to turn on
+// alpha-to-coverage for every alpha-cut material in the 4x MSAA frame, so a
+// premultiplied glyph drawn at alpha a resolved to a * a of its colour: song
+// select's faded list rows (Eagle-Light(47), alpha 0.5) drew at ~0.6 of the
+// original and every glyph edge thinned.
+// Sabotage: kAlphaCutUsesCoverage = true in RndShape_DC3.h -- both tests red.
+TEST_F(NativeGlyphRenderTest, AlphaCutMaterialGetsNoAlphaToCoverage) {
+    RndMat *mat = Hmx::Object::New<RndMat>();
+    mat->SetProperty("alpha_cut", DataNode(1));
+    ASSERT_TRUE(mat->GetAlphaCut()) << "alpha_cut did not set the material's alpha cut";
+    EXPECT_FALSE(MaterialAlphaToCoverage(mat))
+        << "an alpha-cut material's pipeline turned on alpha-to-coverage; the "
+           "original's alpha cut is the alpha test only";
+    delete mat;
+}
+
+// The song-select list font: its material is premultiplied and alpha-cut at
+// threshold 0, the case that faded the rows. At least one such material must
+// be examined, or the test proves nothing.
+TEST_F(NativeGlyphRenderTest, SongSelectListFontGetsNoAlphaToCoverage) {
+    if (IsSkipped()) return;
+    ObjectDir *font = DirLoader::LoadObjects(
+        FilePath("ui/resource/fonts/default/gen/eagle-light(47).milo_xbox"), nullptr, nullptr);
+    if (!font) GTEST_SKIP() << "no archive UI fonts (ui/resource/fonts/default/gen/eagle-light(47).milo_xbox)";
+    int cutPremult = 0;
+    for (ObjDirItr<RndMat> it(font, true); it != nullptr; ++it) {
+        RndMat *mat = it;
+        if (!mat->GetAlphaCut()) continue;
+        if (mat->GetBlend() == BaseMaterial::kPreMultAlpha) cutPremult++;
+        EXPECT_FALSE(MaterialAlphaToCoverage(mat))
+            << mat->Name() << " (alpha cut, threshold " << mat->GetAlphaThreshold()
+            << ", blend " << (int)mat->GetBlend() << ") turned on alpha-to-coverage";
+    }
+    EXPECT_GT(cutPremult, 0) << "no alpha-cut PreMultAlpha material in " << font->Name()
+                             << "; the faded-row case was not examined";
+    delete font;
 }
