@@ -228,10 +228,22 @@ match under lavapipe:
 None differed. `DtaFlowSongSelectScrollTest.ScrollDownEdgeMatchesImage`
 never reaches its comparison: its flow times out first.
 
-**What tnr could still save.** The 724 tests that pass took 1,257 s of the
-desk's 2,861 s serial gate. The 43 that fail took the other 1,589 s and still
-need a GPU. Offloading only the first group needs a reliable way to select
-them; see PLAN H-29. A hand-written exclude list would rot.
+**What tnr could still save.** One run excluded those 43 tests by name with
+`-E`:
+
+- **793 registered / 723 passed / 0 failed / 70 skipped, in 131 s end to end.**
+- The same tests took 1,257 s of the desk's 2,861 s serial gate.
+- The excluded 43 took the other 1,589 s, and they still need a GPU.
+
+**Trap:** `native_test.sh` exits **0** on that run. The skip ratchet counts
+skips, not exclusions, so a green subset there looks exactly like a green
+gate.
+
+Making this a supported mode needs two things, both tracked as PLAN H-29:
+
+- the rendered tests labelled in CMake, so `-LE` can select them instead of a
+  hand-written name list that would rot;
+- `native_test.sh` refusing to call a filtered run the gate.
 
 ## Measured
 
