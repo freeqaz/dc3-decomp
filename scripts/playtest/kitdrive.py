@@ -281,13 +281,16 @@ class Kit:
 
     def rows(self, lst, limit=60):
         """The list's row symbols, for logs and for lists that are discovered
-        (fitness, playlists).  Reads no further than the rows on display:
-        some providers raise a MILO_FAIL for an index past their end
-        (MainMenuProvider measured 14 in one soak when this read 12 rows of
-        a 5-row menu), others return garbage."""
-        shown = self.eval(f"{{{lst} get_num_display}}", timeout=3)
-        if isinstance(shown, int) and shown > 0:
-            limit = min(limit, shown)
+        (fitness, playlists).  Reads no further than the provider's row count
+        (`num_data`, a native-only HamNavList handler): every provider
+        raises a MILO_FAIL for an index past its end (MainMenuProvider 14x in
+        one soak; FitnessProvider.cpp:146 in soak #5, PLAN H-28, where
+        get_num_display -- the slots on screen -- said 5 of a 4-row list).
+        No count, no rows: guessing is what raised those FAILs."""
+        n = self.eval(f"{{{lst} num_data}}", timeout=3)
+        if not isinstance(n, int) or n <= 0:
+            return []
+        limit = min(limit, n)
         out = []
         for n in range(limit):
             sym = self.eval(f"{{{lst} data_symbol {n}}}", timeout=3)

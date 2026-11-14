@@ -166,6 +166,7 @@ class Soak:
         self.n = 0
 
     def clip(self, path):
+        self.current_clip = path
         with open(self.control + ".tmp", "w") as f:
             f.write(f"{path} {self.a.pre}\n")
         os.replace(self.control + ".tmp", self.control)
@@ -247,7 +248,7 @@ class Soak:
         else:
             k.pick_song(song)
             k.multiuser(difficulty, sides=sides)
-        return self.play_to_results(end_screens, song_timeout, back_to)
+        return self.play_to_results(end_screens, song_timeout, back_to, duo=sides == 2)
 
     def _battle(self, song, difficulty):
         k = self.kit
@@ -260,15 +261,31 @@ class Soak:
         k.pick_song(song)
         k.multiuser(difficulty, sides=2)
 
-    def play_to_results(self, end_screens, song_timeout, back_to):
+    def follow_song(self, duo=False):
+        """The song the game is playing, and its footage when there is a clip
+        for it: Story and the Fitness playlists pick their own songs, and a
+        dancer doing another song's routine is no test of the scorer."""
+        song = self.kit.eval("{meta_performer get_song}", 3)
+        if isinstance(song, str) and song:
+            clip = footage(self.a.footage, song, duo)
+            if clip and clip != self.current_clip:
+                self.clip(clip)
+            elif not clip:
+                say(f"no footage for {song}: the dancer is doing {os.path.basename(self.current_clip)}")
+        return song
+
+    def play_to_results(self, end_screens, song_timeout, back_to, duo=False):
         k = self.kit
         self.watch.in_song = True
         t = time.time()
         got = None
+        song = None
         try:
             end = time.time() + song_timeout
             while time.time() < end and k.alive():
                 s = k.screen()
+                if s == "game_screen" and song is None:
+                    song = self.follow_song(duo)
                 # Each mode has its own: perform_, fitness_perform_,
                 # dancebattle_perform_, campaign_perform_endgame_screen ...
                 if s in end_screens or (isinstance(s, str) and s.endswith("endgame_screen")):
@@ -295,7 +312,8 @@ class Soak:
             + (f", p2 {card1}" if card1.get("score") else "")
             + (f"; box load mean {load['mean']} max {load['max']} ({os.cpu_count()} threads)" if load else ""))
         nxt = advance(k, back_to, 180, label="after results") if back_to else None
-        return {"results_screen": got, "song_s": round(secs), "card": card, "card_p2": card1,
+        return {"results_screen": got, "song": song, "footage": os.path.basename(self.current_clip),
+                "song_s": round(secs), "card": card, "card_p2": card1,
                 "load": load, "next": nxt, "ok": bool(nxt) or not back_to}
 
     def resume(self):
@@ -396,10 +414,18 @@ class Soak:
         if not k.choose("fitness_mode"):
             raise RuntimeError("main_screen has no fitness_mode row")
         k.need("fitness_screen")
-        rows = k.rows(k.focus_list(), limit=8)
-        say(f"fitness rows {rows}")
-        k.choose(rows[0] if rows else "fitness_option")   # fitness mode on
-        time.sleep(3)
+        say(f"fitness rows {k.rows(k.focus_list(), limit=8)}")
+        # The row toggles: a profile saved in fitness mode (the soak's home
+        # carries across processes) would be switched off by a blind press.
+        on = "{if_else {profile_mgr get_active_profile} {{profile_mgr get_active_profile} in_fitness_mode} -1}"
+        was = k.eval(on, 3)
+        if was in (0, False):
+            k.choose("fitness_option")
+            time.sleep(3)
+        now = k.eval(on, 3)
+        say(f"fitness mode: {was} -> {now}")
+        if now not in (1, True):
+            raise RuntimeError(f"fitness mode not on (profile says {now})")
         if not k.choose("playlists"):
             raise RuntimeError("fitness_screen has no playlists row")
         got = advance(k, ("song_select_playlist_screen",), 60, label="fitness")
@@ -408,8 +434,12 @@ class Soak:
         time.sleep(2)
         rows = k.rows(k.focus_list(), limit=20)
         say(f"playlist rows {rows}")
-        pick = next((r for r in rows if r.endswith("_playlist") and "custom" not in r
-                     and "create" not in r), None)
+        # The decade lists hold every unlocked song of that decade in rank
+        # order; the 1990s one is the one with clips (Macarena, Ice Ice Baby).
+        # follow_song() puts the right dancer on whichever song it starts.
+        pick = next((r for r in ("1990s_dynamic_playlist",) if r in rows), None) or next(
+            (r for r in rows if r.endswith("_playlist") and "custom" not in r
+             and "create" not in r), None)
         if not pick or not k.choose(pick):
             raise RuntimeError(f"no playlist to pick in {rows}")
         time.sleep(3)
