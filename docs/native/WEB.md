@@ -619,14 +619,19 @@ interleaved (MEASURED; before = `pose_delegate=CPU`, the old default):
 | after1 | 36 → 41 | 24.8 | 58.1 | 16.7 / 22.0 / 36.3 | 243 / 43 | 40 | 0.258 (36) | 165/165 s |
 | after2 | 41 → 30 | 24.6 | 58.0 | 16.6 / 22.4 / 38.3 | 311 / 41 | 38 | 0.309 (36) | 165/165 s |
 | before2 | 30 → 31 | 21.1 | 59.6 | 16.9 / 20.5 / 22.9 | 69 / 7 | 5 | 0.275 (36) | 165/165 s |
-TODO-PACING3
+| after3 | 28 → 29 | 29.3 | 59.7 | 16.6 / 20.8 / 22.6 | 50 / 11 | 10 | 0.291 (36) | 166/166 s |
+| before3 | 29 → 33 | 19.9 | 58.8 | 16.9 / 21.1 / 32.4 | 178 / 33 | 31 | 0.296 (36) | 165/165 s |
 
-- **The GPU delegate costs the game some frame tail.** Median and p95 are
-  unchanged (16.6–16.9, 20.5–22.4 ms), but p99 rose (22.9–30.7 → 36–38 ms)
-  and so did the frames over 25 ms; the extra stalls are "browser frame gap"
-  (the compositor/GPU), not the game's own compute. The inference and the
-  game share one GPU; on the rig that GPU was also running four other
-  lanes' engines. INFERRED: on an integrated GPU this is the number to
+- **No consistent pacing cost was found in either direction.** Median and
+  p95 do not move (16.6–16.9, 20.5–22.4 ms in all six runs). The tail does,
+  and it follows the box rather than the delegate: in pairs 1 and 2 the GPU
+  runs had the worse p99 (36–38 vs 23–31 ms), in pair 3 the CPU run did
+  (32.4 vs 22.6 ms), and the GPU run there had the fewest slow frames of all
+  six (50 over 25 ms). The extra stalls are always "browser frame gap" (the
+  compositor/GPU), not the game's own compute, and the rig's GPU was also
+  running about four other lanes' engines. So three pairs bound the effect
+  but cannot sign it here. INFERRED: on an integrated GPU, where the
+  inference and the game share a much smaller GPU, this is the number to
   watch first (W-22).
 - The live score and detectFrac say little (the 20 s loop is not synced to
   the song; W-15 found the same); tracked is 100% in every run. The quality
