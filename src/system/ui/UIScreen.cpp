@@ -229,6 +229,10 @@ bool UIScreen::InComponentSelect() const {
 void UIScreen::Enter(UIScreen *scr) {
 #ifdef HX_NATIVE
     printf("DC3 UI: Screen '%s' Enter (from '%s')\n", Name(), scr ? scr->Name() : "<null>");
+    {
+        extern void NativeMemReport(const char *tag);
+        NativeMemReport(Name());
+    }
 #endif
     if (scr) {
         sUnloadingScreen = scr;

@@ -18,6 +18,12 @@ Hmx::Object *Hmx::Object::sDeleting;
 
 #ifdef HX_NATIVE
 #include <vector>
+#include <unordered_set>
+#include <unordered_map>
+#include <cstring>
+#if defined(__linux__)
+#include <execinfo.h>
+#endif
 // Declared at global scope: a block-scope extern inside a Hmx::Object member
 // would bind to Hmx::SoundAudioTraceOn (unresolved) instead of the global
 // definition in Sound.cpp.
@@ -25,6 +31,58 @@ extern bool SoundAudioTraceOn();
 bool Hmx::Object::sRingsDirty = false;
 bool gInReplaceList = false;
 bool gInRefSnapshot = false;
+
+// Live Hmx::Object census (PLAN H-24, memory growth per song).
+//
+// Count() is always kept (two integer ops per object lifetime). The
+// per-object registry that NativeMemReport groups by ClassName() is only kept
+// under DC3_MEM_CENSUS=1: an unordered_set insert/erase per object is not
+// free on a load that constructs ~10^5 objects.
+namespace NativeObjCensus {
+    long gLive = 0;
+    long gEverCreated = 0;
+    int gRegistryOn = -1;
+    // The report generation an object was created in (NativeMemReport bumps
+    // it), and -- under DC3_MEM_CENSUS_BT=1 -- where it was created.
+    int gGeneration = 0;
+    bool gBacktraces = false;
+    struct Info {
+        int gen;
+        int depth;
+        void *bt[14];
+    };
+    std::unordered_map<Hmx::Object *, Info> *gRegistry = nullptr;
+
+    static bool RegistryOn() {
+        if (gRegistryOn < 0) {
+            const char *e = getenv("DC3_MEM_CENSUS");
+            gRegistryOn = (e && *e && strcmp(e, "0") != 0) ? 1 : 0;
+            if (gRegistryOn)
+                gRegistry = new std::unordered_map<Hmx::Object *, Info>();
+            const char *b = getenv("DC3_MEM_CENSUS_BT");
+            gBacktraces = gRegistryOn && b && *b && strcmp(b, "0") != 0;
+        }
+        return gRegistryOn == 1;
+    }
+    void Add(Hmx::Object *o) {
+        gLive++;
+        gEverCreated++;
+        if (RegistryOn()) {
+            Info &info = (*gRegistry)[o];
+            info.gen = gGeneration;
+            info.depth = 0;
+#if defined(__linux__)
+            if (gBacktraces)
+                info.depth = backtrace(info.bt, 14);
+#endif
+        }
+    }
+    void Remove(Hmx::Object *o) {
+        gLive--;
+        if (gRegistryOn == 1)
+            gRegistry->erase(o);
+    }
+}
 
 namespace {
     struct PendingVecCompact {
@@ -310,12 +368,14 @@ Hmx::Object::Object()
     mRefs.DetachSelf();
 #ifdef HX_NATIVE
     mDeathWatch = nullptr;
+    NativeObjCensus::Add(this);
 #endif
 }
 
 Hmx::Object::~Object() {
     MILO_ASSERT_FMT(MainThread(), "Can't delete objects outside of the main thread");
 #ifdef HX_NATIVE
+    NativeObjCensus::Remove(this);
     // Trip every DeathWatch before anything else in the teardown: a watcher is
     // a frame of OUR OWN that is still on the stack, and it must learn we are
     // gone even if something below re-enters. Unlink as we go so ~DeathWatch
@@ -1335,3 +1395,161 @@ DataNode Hmx::Object::OnPropertyAppend(const DataArray *da) {
     cloned->Release();
     return size;
 }
+
+#ifdef HX_NATIVE
+// ---------------------------------------------------------------------------
+// NativeMemReport -- one "DC3 MEM" line per call under DC3_MEM_LOG=1 (PLAN
+// H-24). Called at every UIScreen::Enter, so a flow's log carries the
+// process's memory at each screen: resident set, what the allocator says is
+// in use vs. held free (leak vs. fragmentation), and the live Hmx::Object
+// count. Under DC3_MEM_CENSUS=1 it adds the classes whose live count moved
+// since the previous report. Under jemalloc with prof enabled and
+// DC3_MEM_PROF_DUMP=1 it also writes a heap profile (prof.dump), so jeprof
+// --base can attribute growth between two screens to call stacks.
+// ---------------------------------------------------------------------------
+#include <map>
+#include <string>
+#include <algorithm>
+#if defined(__linux__)
+#include <dlfcn.h>
+#include <unistd.h>
+#endif
+#if defined(__GLIBC__)
+#include <malloc.h>
+#endif
+
+
+static bool MemEnvOn(const char *name) {
+    const char *e = getenv(name);
+    return e && *e && strcmp(e, "0") != 0;
+}
+
+long NativeLiveObjectCount() { return NativeObjCensus::gLive; }
+
+void NativeMemReport(const char *tag) {
+    static int on = -1;
+    if (on < 0)
+        on = MemEnvOn("DC3_MEM_LOG") ? 1 : 0;
+    if (!on)
+        return;
+    long rssMb = -1;
+    double inuseMb = -1, freeMb = -1, mmapMb = -1;
+    const char *alloc = "unknown";
+#if defined(__linux__)
+    {
+        FILE *f = fopen("/proc/self/statm", "r");
+        if (f) {
+            long size = 0, resident = 0;
+            if (fscanf(f, "%ld %ld", &size, &resident) == 2)
+                rssMb = resident * sysconf(_SC_PAGESIZE) / (1024 * 1024);
+            fclose(f);
+        }
+    }
+    typedef int (*MallctlFn)(const char *, void *, size_t *, void *, size_t);
+    static MallctlFn mallctl = (MallctlFn)dlsym(RTLD_DEFAULT, "mallctl");
+    if (mallctl) {
+        alloc = "jemalloc";
+        uint64_t epoch = 1;
+        size_t sz = sizeof(epoch);
+        mallctl("epoch", &epoch, &sz, &epoch, sz);
+        size_t allocated = 0, resident = 0, retained = 0;
+        sz = sizeof(size_t);
+        mallctl("stats.allocated", &allocated, &sz, nullptr, 0);
+        sz = sizeof(size_t);
+        mallctl("stats.resident", &resident, &sz, nullptr, 0);
+        sz = sizeof(size_t);
+        mallctl("stats.retained", &retained, &sz, nullptr, 0);
+        inuseMb = allocated / 1048576.0;
+        freeMb = (resident > allocated ? resident - allocated : 0) / 1048576.0;
+        mmapMb = retained / 1048576.0;
+        if (MemEnvOn("DC3_MEM_PROF_DUMP"))
+            mallctl("prof.dump", nullptr, nullptr, nullptr, 0);
+    } else
+#endif
+    {
+#if defined(__GLIBC__)
+        alloc = "glibc";
+        struct mallinfo2 mi = mallinfo2();
+        inuseMb = (mi.uordblks + mi.hblkhd) / 1048576.0;
+        freeMb = mi.fordblks / 1048576.0;
+        mmapMb = mi.hblkhd / 1048576.0;
+#endif
+    }
+    printf("DC3 MEM %s rss=%ldMB inuse=%.1fMB heldfree=%.1fMB mmap=%.1fMB "
+           "objects=%ld created=%ld alloc=%s gen=%d\n",
+           tag, rssMb, inuseMb, freeMb, mmapMb, NativeObjCensus::gLive,
+           NativeObjCensus::gEverCreated, alloc, NativeObjCensus::gGeneration);
+    if (NativeObjCensus::gRegistryOn == 1 && NativeObjCensus::gRegistry) {
+        static std::map<std::string, long> prev;
+        std::map<std::string, long> now;
+        for (auto &kv : *NativeObjCensus::gRegistry)
+            now[kv.first->ClassName().Str()]++;
+        // DC3_MEM_CENSUS_GEN=g, DC3_MEM_CENSUS_GEN_AT=n: at report n, list the
+        // objects created during generation g (between reports g and g+1) that
+        // are still alive, grouped by class and creation stack. Run a flow that
+        // revisits a screen and pick g as one visit, n as a later one: what is
+        // listed outlived the screen that made it.
+        const char *genEnv = getenv("DC3_MEM_CENSUS_GEN");
+        const char *atEnv = getenv("DC3_MEM_CENSUS_GEN_AT");
+        if (genEnv && atEnv && atoi(atEnv) == NativeObjCensus::gGeneration) {
+            int gen = atoi(genEnv);
+            std::map<std::string, std::vector<Hmx::Object *> > groups;
+            for (auto &kv : *NativeObjCensus::gRegistry) {
+                if (kv.second.gen != gen)
+                    continue;
+                std::string key = kv.first->ClassName().Str();
+                char buf[32];
+                for (int f = 2; f < kv.second.depth && f < 9; f++) {
+                    snprintf(buf, sizeof(buf), " %p", kv.second.bt[f]);
+                    key += buf;
+                }
+                groups[key].push_back(kv.first);
+            }
+            std::vector<std::pair<size_t, std::string> > order;
+            for (auto &g : groups)
+                order.push_back({ g.second.size(), g.first });
+            std::sort(order.rbegin(), order.rend());
+            int shown = 0;
+            for (auto &o : order) {
+                if (shown++ >= 15)
+                    break;
+                Hmx::Object *ex = groups[o.second][0];
+                printf("DC3 MEM   gen%d survivor x%zu %s name='%s' path='%s'\n", gen, o.first,
+                       ex->ClassName().Str(), ex->Name(), PathName(ex));
+#if defined(__linux__)
+                auto &info = (*NativeObjCensus::gRegistry)[ex];
+                char **syms = backtrace_symbols(info.bt, info.depth);
+                for (int f = 2; syms && f < info.depth; f++)
+                    printf("DC3 MEM       %s\n", syms[f]);
+                free(syms);
+#endif
+            }
+        }
+        std::vector<std::pair<long, std::string> > moved;
+        for (auto &kv : now) {
+            long before = prev.count(kv.first) ? prev[kv.first] : 0;
+            if (kv.second != before)
+                moved.push_back({ kv.second - before, kv.first });
+        }
+        for (auto &kv : prev)
+            if (!now.count(kv.first))
+                moved.push_back({ -kv.second, kv.first });
+        std::sort(moved.begin(), moved.end(),
+                  [](const std::pair<long, std::string> &a,
+                     const std::pair<long, std::string> &b) {
+                      long aa = a.first < 0 ? -a.first : a.first;
+                      long bb = b.first < 0 ? -b.first : b.first;
+                      return aa > bb;
+                  });
+        // Every class that moved, not a top-N: a reader reconstructs the full
+        // table at any report by replaying these lines from the first one.
+        for (auto &m : moved) {
+            printf("DC3 MEM   class %-28s live=%ld delta=%+ld\n", m.second.c_str(),
+                   now.count(m.second) ? now[m.second] : 0L, m.first);
+        }
+        prev.swap(now);
+    }
+    NativeObjCensus::gGeneration++;
+    fflush(stdout);
+}
+#endif
