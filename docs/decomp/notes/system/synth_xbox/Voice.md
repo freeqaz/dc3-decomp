@@ -36,6 +36,13 @@ Inside the body (was lines 137-155):
     // question: which block adds a reference to `this` without emitting code.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.686, 11 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap. Name rows forgiven,
+value-checked: the image passes CreateSourceVoice's 4.0 max frequency ratio from a .data
+word (lbl_82F472F8, after gVoiceThread) where we use the `__real@40800000` literal -- a
+mutable static in the original, same value; gVoicesActive = lbl_8316C730.
 
 ## `?UpdateMix@Voice@@AAAXXZ`
 
