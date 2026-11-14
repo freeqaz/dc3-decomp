@@ -70,6 +70,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -1432,4 +1434,247 @@ TEST_F(DC3VelocityGpuTest, VelocityOffAddsNoPassAndNoTarget) {
     RunFrame(pass, px, 0.5f, frame, nullptr);   // no Draw this frame
     EXPECT_EQ(pass.Retail().VelocityPasses(), 1) << "the result is this frame's only";
     pass.Terminate();
+}
+
+// ---- np-gfx-post round 4: the post chain's bind groups (dc3 PLAN H-66) ----
+//
+// Every group the chain binds is the same frame after frame -- the scene, the
+// bloom sets, the feedback pair, the velocity target, the noise map, one
+// sampler and one uniform buffer whose per-pass slot is a DYNAMIC offset -- so
+// with WgpuRnd's post cache attached a steady frame must create none. The
+// motion-blur feedback ping-pongs, so its two composite groups alternate.
+// Sabotage: binding the uniform slot as a static offset (the pre-H-66 code)
+// makes each frame's passes land on new keys for 64 / gcd(passes, 64) frames.
+namespace {
+
+struct ChainTargets {
+    wgpu::Texture scene, frame, depth, noise;
+    wgpu::TextureView sceneView, frameView, depthView, noiseView;
+};
+
+ChainTargets MakeChainTargets(GpuDevice &gpu, int w, int h) {
+    auto &dev = gpu.Device();
+    ChainTargets t;
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)w, (uint32_t)h, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst |
+              wgpu::TextureUsage::RenderAttachment;
+    t.scene = dev.CreateTexture(&d);
+    std::vector<uint8_t> px((size_t)w * h * 4);
+    for (size_t i = 0; i < px.size(); i++) px[i] = (uint8_t)((i * 2654435761u) >> 24);
+    wgpu::TexelCopyTextureInfo dst{};
+    dst.texture = t.scene;
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = (uint32_t)w * 4;
+    wgpu::Extent3D ext = {(uint32_t)w, (uint32_t)h, 1};
+    gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc |
+              wgpu::TextureUsage::TextureBinding;
+    t.frame = dev.CreateTexture(&d);
+    d.size = {4, 4, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    t.noise = dev.CreateTexture(&d);
+    t.depth = ClearedDepth(gpu, w, h, 0.5f);
+    wgpu::TextureViewDescriptor dvd{};
+    dvd.aspect = wgpu::TextureAspect::DepthOnly;
+    t.depthView = t.depth.CreateView(&dvd);
+    t.sceneView = t.scene.CreateView();
+    t.frameView = t.frame.CreateView();
+    t.noiseView = t.noise.CreateView();
+    return t;
+}
+
+// The peak frame: streak bloom, noise, motion blur, velocity, hue converge.
+RetailPostParams PeakChain(const ChainTargets &t) {
+    RetailPostParams p;
+    p.dc3 = true;
+    p.bloom = true;
+    p.bloomColor[0] = p.bloomColor[1] = p.bloomColor[2] = 0.5f;
+    p.bloomLumaScale = 0.125f;
+    p.streak = true;
+    p.streakAttenuation = 0.92f;
+    p.streakAngle = -55.0f;
+    for (int i = 0; i < 3; i++) p.xfm[i][i] = 1.0f;
+    p.noiseMap = t.noiseView;
+    p.noiseParams[0] = 1.0f;
+    p.noiseParams[1] = 3.0f;
+    p.noiseParams[2] = 1.0f;
+    p.noiseParams[3] = 1.0f;
+    p.motionBlur = true;
+    p.motionBlurParams[0] = p.motionBlurParams[1] = p.motionBlurParams[2] = 0.5f;
+    p.hueConverge = true;
+    p.hueParams[2] = 0.5f;
+    p.velocity = true;
+    p.velocityScale = 2.0f;
+    for (int i = 0; i < 4; i++) p.velocityReproj[i * 5] = 1.0f;
+    p.velocityDepth = t.depthView;
+    p.velocityDepthSamples = 4;
+    return p;
+}
+
+// Runs `frames` frames of `post` with `p`, each behind cache.BeginFrame;
+// returns the groups created by each.
+std::vector<uint64_t> RunChainFrames(RB3RetailPost &post, BindGroupCache &cache, uint64_t &frameId,
+                                     const ChainTargets &t, int w, int h, const RetailPostParams &p,
+                                     int frames, GpuDevice &gpu) {
+    std::vector<uint64_t> created;
+    for (int f = 0; f < frames; f++) {
+        cache.BeginFrame(++frameId);
+        const uint64_t before = cache.Creates() + cache.Uncached();
+        wgpu::CommandEncoder enc = gpu.Device().CreateCommandEncoder();
+        post.Run(enc, t.sceneView, t.sceneView, w, h, t.frameView, p, gpu);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        created.push_back(cache.Creates() + cache.Uncached() - before);
+    }
+    return created;
+}
+
+std::string CreatedList(const std::vector<uint64_t> &v) {
+    std::string s;
+    for (uint64_t c : v) s += std::to_string(c) + " ";
+    return s;
+}
+
+}  // namespace
+
+TEST_F(DC3RetailPostGpuTest, SteadyFrameCreatesNoBindGroup) {
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    ChainTargets t = MakeChainTargets(gpu, kW, kH);
+    BindGroupCache cache;
+    uint64_t frameId = 1000;
+    RB3RetailPost post;
+    post.Init(gpu);
+    post.SetBindGroupCache(&cache);
+
+    RetailPostParams peak = PeakChain(t);
+    RetailPostParams glare = peak;
+    glare.streak = false;
+    glare.glare = true;
+    glare.motionBlur = false;
+    glare.velocity = false;
+    RetailPostParams plain = glare;
+    plain.glare = false;
+    RetailPostParams rb3;   // RB3's chain (kRetailPostChain), same object
+    rb3.bloom = true;
+    rb3.bloomColor[0] = rb3.bloomColor[1] = rb3.bloomColor[2] = 0.5f;
+    rb3.bloomLumaScale = 1.0f;
+    for (int i = 0; i < 3; i++) rb3.xfm[i][i] = 1.0f;
+
+    struct Arm { const char *name; RetailPostParams p; } arms[] = {
+        {"dc3 peak (streak, noise, motion blur, velocity, hue)", peak},
+        {"dc3 glare", glare},
+        {"dc3 plain", plain},
+        {"rb3", rb3},
+    };
+    for (const Arm &a : arms) {
+        const std::vector<uint64_t> c = RunChainFrames(post, cache, frameId, t, kW, kH, a.p, 8, gpu);
+        // The first arm's first frame creates its groups (non-vacuous). Motion
+        // blur reads black on its first frame and then each half of the
+        // ping-pong pair once, so its last new group is frame 2's.
+        if (&a == &arms[0]) EXPECT_GT(c[0], 0u) << a.name << ": the first frame creates its groups";
+        for (int f = 3; f < 8; f++)
+            EXPECT_EQ(c[f], 0u) << a.name << ": steady frame " << f << " created " << c[f]
+                                << " bind group(s); per frame: " << CreatedList(c);
+    }
+    EXPECT_EQ(cache.Uncached(), 0u) << "every post-chain descriptor is keyable";
+    EXPECT_EQ(post.VelocityPasses(), 8) << "the peak arm ran its velocity pass every frame";
+
+    // The display ramp and the generic bloom (DC3_RETAIL_POST=0, rb3-xenon).
+    DisplayRamp ramp;
+    ramp.SetBindGroupCache(&cache);
+    BloomPass bloom;
+    bloom.Init(gpu);
+    bloom.SetBindGroupCache(&cache);
+    std::vector<uint64_t> c;
+    for (int f = 0; f < 6; f++) {
+        cache.BeginFrame(++frameId);
+        const uint64_t before = cache.Creates() + cache.Uncached();
+        wgpu::CommandEncoder enc = gpu.Device().CreateCommandEncoder();
+        bloom.Run(enc, t.sceneView, kW, kH, 1.0f, 0.5f, Hmx::Color(1, 1, 1), gpu);
+        EXPECT_TRUE(ramp.Apply(enc, t.frame, t.frameView, 1.3f, gpu));
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        c.push_back(cache.Creates() + cache.Uncached() - before);
+    }
+    EXPECT_GT(c[0], 0u);
+    for (int f = 1; f < 6; f++)
+        EXPECT_EQ(c[f], 0u) << "ramp + generic bloom, steady frame " << f << ": " << CreatedList(c);
+    bloom.Terminate();
+    post.Terminate();
+}
+
+// A recreated target takes its groups with it: after a resize, once the cache
+// has had its frame, it holds no more groups than a fresh chain at the new
+// size -- none pinning the old bloom sets, feedback pair or velocity target
+// (Forget). The caller's own scene, depth and noise views are the caller's to
+// Forget, as WgpuRnd does for its intermediate. Sabotage: dropping
+// RB3RetailPost's Forget calls keeps the old size's groups (and their
+// textures) alive until they age out, kMaxAgeFrames later.
+TEST_F(DC3RetailPostGpuTest, ResizeDropsTheOldTargetsGroups) {
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    ChainTargets a = MakeChainTargets(gpu, kW, kH);
+    ChainTargets b = MakeChainTargets(gpu, kW * 2, kH * 2);
+    uint64_t frameId = 5000;
+    size_t fresh = 0;
+    {
+        BindGroupCache ref;
+        RB3RetailPost post;
+        post.Init(gpu);
+        post.SetBindGroupCache(&ref);
+        RunChainFrames(post, ref, frameId, b, kW * 2, kH * 2, PeakChain(b), 4, gpu);
+        fresh = ref.Size();
+        post.Terminate();
+    }
+    ASSERT_GT(fresh, 4u);
+    BindGroupCache cache;
+    RB3RetailPost post;
+    post.Init(gpu);
+    post.SetBindGroupCache(&cache);
+    RunChainFrames(post, cache, frameId, a, kW, kH, PeakChain(a), 4, gpu);
+    const size_t before = cache.Size();
+    cache.Forget(a.sceneView.Get());
+    cache.Forget(a.depthView.Get());
+    cache.Forget(a.noiseView.Get());
+    RunChainFrames(post, cache, frameId, b, kW * 2, kH * 2, PeakChain(b), 4, gpu);
+    cache.BeginFrame(++frameId);   // the Forget()s land here
+    printf("post bind groups: %zu at the old size, %zu after the resize, %zu for a fresh chain\n",
+           before, cache.Size(), fresh);
+    EXPECT_LE(cache.Size(), fresh) << "groups binding the old size's targets survived the resize";
+    post.Terminate();
+}
+
+// The steady-frame test above counts what goes THROUGH the cache, so a pass
+// that called device.CreateBindGroup itself would be invisible to it. Every
+// CreateBindGroup in the post chain's sources is therefore the cache-less
+// fallback of a `mBindGroups ? mBindGroups->GetOrCreate(...) :` (a pass used
+// without WgpuRnd, as the unit tests do). Sabotage: replacing one Group() call
+// in RB3RetailPostDC3.cpp with gpu.Device().CreateBindGroup(&bgd) fails here.
+TEST(DC3RetailPostSource, EveryPostChainBindGroupGoesThroughTheCache) {
+    const char *files[] = {"gfx/RB3RetailPost.cpp", "gfx/RB3RetailPostDC3.cpp", "gfx/BloomPass.cpp",
+                           "gfx/DofPass.cpp",       "gfx/DofPass.h",            "gfx/DisplayRamp.cpp",
+                           "gfx/PostProcPass.cpp"};
+    int fallbacks = 0;
+    for (const char *f : files) {
+        const std::string path = std::string(MILO_ENGINE_SRC_DIR) + "/" + f;
+        std::ifstream in(path);
+        ASSERT_TRUE(in.good()) << "cannot read " << path;
+        std::vector<std::string> lines;
+        for (std::string l; std::getline(in, l);) lines.push_back(l);
+        for (size_t i = 0; i < lines.size(); i++) {
+            if (lines[i].find("CreateBindGroup(") == std::string::npos) continue;
+            const size_t c = lines[i].find("//");
+            if (c != std::string::npos && c < lines[i].find("CreateBindGroup(")) continue;
+            bool guarded = false;
+            for (size_t j = (i >= 2 ? i - 2 : 0); j <= i; j++)
+                guarded |= lines[j].find("mBindGroups ?") != std::string::npos;
+            EXPECT_TRUE(guarded) << f << ":" << i + 1 << " creates a bind group outside the cache: "
+                                 << lines[i];
+            fallbacks += guarded;
+        }
+    }
+    EXPECT_GE(fallbacks, 6) << "the scan found the fallbacks it expects (non-vacuous)";
 }
