@@ -198,19 +198,25 @@ class Engine:
         return rss
 
 
-def route_script(downs, difficulty_downs=1):
-    """title -> main -> choose_mode (perform) -> song select (downs) ->
-    multiuser (difficulty, play, skip_waiting).  Spacing as betteroffalone.txt
-    and song-select-scroll.txt; no tutorial screens (all marked seen)."""
+def route_script(downs, difficulty_downs=1, song=None):
+    """title -> main -> choose_mode (perform) -> song select -> multiuser
+    (difficulty, play, skip_waiting).  The song is picked by NAME (`highlight`,
+    scripts/dc3-input-flows/README.txt) when `song` is given, else by `downs`
+    presses from the entry focus.  Spacing as betteroffalone.txt and
+    song-select-scroll.txt; no tutorial screens (all marked seen)."""
     lines = ["wait_screen title_screen", "+30 confirm",
              "wait_screen main_screen", "+30 confirm",
              "wait_screen choose_mode_screen", "+30 confirm",
              "wait_screen song_select_screen"]
-    t = 30
-    for _ in range(downs):
-        lines.append(f"+{t} down")
-        t += 15
-    lines.append(f"+{t + 60} confirm")
+    if song:
+        lines.append(f"+30 highlight {song}")
+        lines.append("+60 confirm")
+    else:
+        t = 30
+        for _ in range(downs):
+            lines.append(f"+{t} down")
+            t += 15
+        lines.append(f"+{t + 60} confirm")
     lines.append("wait_screen multiuser_screen")
     t = 40
     for _ in range(difficulty_downs):
@@ -227,7 +233,8 @@ def discover(binary, port, out, dlc=""):
     d = os.path.join(out, "_discover")
     lines = ["wait_screen title_screen", "+30 confirm", "wait_screen main_screen",
              "+30 confirm", "wait_screen choose_mode_screen", "+30 confirm"]
-    env = {"DC3_HTTP_PACE_FPS": "60"}
+    # DC3_DLC=0: the dev profile would otherwise mount <data>/dlc.
+    env = {"DC3_HTTP_PACE_FPS": "60", "DC3_DLC": "0"}
     if dlc:
         env["DC3_DLC_DIR"] = dlc
     e = Engine(binary, port, d, lines, gpu=False, extra_env=env)
@@ -338,12 +345,15 @@ def play_song(a, song, downs, port, venue, difficulty="easy"):
              "DC3_CONTROLLER_MODE": "forced"}
     if a.real_time:
         del extra["DC3_FAST_TIME"]
+    extra["DC3_DLC"] = "0"  # only the roots named by --dlc (not the dev profile's <data>/dlc)
+    if a.dlc:
+        extra["DC3_DLC_DIR"] = a.dlc
     for kv in a.env:
         k, _, v = kv.partition("=")
         extra[k] = v
-    if a.dlc:
-        extra["DC3_DLC_DIR"] = a.dlc
-    e = Engine(a.binary, port, out, route_script(downs, DIFFICULTY_DOWNS[difficulty]),
+    e = Engine(a.binary, port, out,
+               route_script(downs, DIFFICULTY_DOWNS[difficulty],
+                            None if a.by_position else song),
                gpu=not a.no_gpu, extra_env=extra)
     res = {"song": song, "venue_asked": venue, "difficulty_asked": difficulty,
            "downs": downs, "port": port,
@@ -583,6 +593,9 @@ def main():
     ap.add_argument("--timeout", type=int, default=1800, help="wall cap per song")
     ap.add_argument("--stall", type=int, default=180, help="beat-not-moving cap")
     ap.add_argument("--no-gpu", action="store_true", help="MILO_NORENDER=1 (no screenshots)")
+    ap.add_argument("--by-position", action="store_true",
+                    help="pick songs by counted downs instead of `highlight NAME` "
+                         "(a binary whose engine predates the directive)")
     ap.add_argument("--real-time", action="store_true",
                     help="no DC3_FAST_TIME: song time on the real clock (pair with DC3_HTTP_PACE_FPS)")
     a = ap.parse_args()

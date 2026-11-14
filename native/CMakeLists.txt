@@ -2237,6 +2237,12 @@ if(BUILD_TESTS)
     # developer's running game: kernel-assigned unless the test names a port
     # (the port-file helpers read the one it got).
     list(APPEND MILO_TEST_ENV "DC3_HTTP_PORT=0")
+    # The dev profile also mounts every package under <data>/dlc (DC3_DLC=1).
+    # A test mounts DLC only when it names its own DC3_DLC_DIR (the
+    # DC3_DLC_TESTS gate), so a box with imported packages boots the same song
+    # list -- and runs the same tests -- as one without
+    # (ContentMgr_Native.cpp NativeDlcRoots).
+    list(APPEND MILO_TEST_ENV "DC3_DLC=0")
     set(MILO_TEST_GATES_ON "")
     set(MILO_TEST_GATES_OFF "")
     # MILO_TEST_GATE_PROBES records, for every probed gate, the exact path whose
