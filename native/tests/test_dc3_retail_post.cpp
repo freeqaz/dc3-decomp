@@ -37,6 +37,10 @@
 //   - nine taps instead of ten; the tap weight not squared; half the step
 //   - the plain harmonic mean (no 2 - 2x); the glare pass skipped
 //   - FillRetailPost never selecting the glare arm
+//   hue converge (round 2, CheckHueConverge + postprocess.ps bit 62) and the
+//   post-process selection (Rnd::DoPostProcess' overrides): see
+//   HueConvergeIsRetailBit62 / ActivePostProcFollowsRndOverrides and
+//   lanes/post/round2/sab/sab_hue.log
 
 #include "test_helpers.h"
 
@@ -49,11 +53,13 @@
 #include "rndobj/Env.h"
 #include "rndobj/Mat.h"
 #include "rndobj/PostProc.h"
+#include "rndobj/Rnd.h"
 
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <vector>
 
 static_assert(rndshape::kDC3RetailPost,
@@ -471,6 +477,169 @@ TEST_F(DC3RetailPostGpuTest, GlareIsAdditiveRadialHarmonicMean) {
         EXPECT_NEAR(got, expected, 3.0f / 255.0f)
             << "uv=(" << u << "," << v << "): not scene + 0.5 c6 * bloom_glare";
     }
+}
+
+// NgPostProc::CheckHueConverge: c222 = (hue_target / 360 + 0.5, hue_focus,
+// blend_amount, brightness_power), bit 62 on when blend_amount > 0.
+TEST_F(DC3RetailPostTest, HueConvergeParamsFollowBlendAmount) {
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    RetailPostParams p;
+    rndshape::FillRetailPost(pp, 1.0f, p);
+    EXPECT_FALSE(p.hueConverge) << "blend_amount defaults to 0: off";
+    pp->SetProperty("hue_target", DataNode(-75.0f));
+    pp->SetProperty("hue_focus", DataNode(0.25f));
+    pp->SetProperty("blend_amount", DataNode(0.7f));
+    pp->SetProperty("brightness_power", DataNode(1.3f));
+    rndshape::FillRetailPost(pp, 1.0f, p);
+    ASSERT_TRUE(p.hueConverge);
+    EXPECT_FLOAT_EQ(p.hueParams[0], -75.0f / 360.0f + 0.5f);
+    EXPECT_FLOAT_EQ(p.hueParams[1], 0.25f);
+    EXPECT_FLOAT_EQ(p.hueParams[2], 0.7f);
+    EXPECT_FLOAT_EQ(p.hueParams[3], 1.3f);
+    delete pp;
+}
+
+// Rnd::DoPostProcess / BeginDrawing take the blacklight override first, then
+// the override, then the selected post-process.
+TEST_F(DC3RetailPostTest, ActivePostProcFollowsRndOverrides) {
+    RndPostProc *sel = Hmx::Object::New<RndPostProc>();
+    RndPostProc *ovr = Hmx::Object::New<RndPostProc>();
+    RndPostProc *blk = Hmx::Object::New<RndPostProc>();
+    RndPostProc *prev = RndPostProc::Current();
+    sel->Select();
+    EXPECT_EQ(rndshape::ActivePostProc(), sel);
+    TheRnd.SetPostProcOverride(ovr);
+    EXPECT_EQ(rndshape::ActivePostProc(), ovr) << "set_postproc_override wins over the selection";
+    TheRnd.SetPostProcBlacklightOverride(blk);
+    EXPECT_EQ(rndshape::ActivePostProc(), blk) << "the blacklight override wins over both";
+    TheRnd.SetPostProcBlacklightOverride(nullptr);
+    EXPECT_EQ(rndshape::ActivePostProc(), ovr);
+    TheRnd.SetPostProcOverride(nullptr);
+    EXPECT_EQ(rndshape::ActivePostProc(), sel);
+    if (prev) prev->Select(); else sel->Unselect();
+    delete blk;
+    delete ovr;
+    delete sel;
+}
+
+// CPU model of postprocess.ps bit 62 (checked against a Xenos interpreter
+// run of postprocess_4000000001200010 over 4000 random inputs, np-gfx-post
+// round 2): HSV (EasyRGB), H' = frac(T + 2 dist(H, T) (1 - focus)),
+// V' = V^power, back to RGB, mixed in by blend.
+static void HueConvergeModel(const float c[3], const float hue[4], float out[3]) {
+    const float mx = std::max(std::max(c[0], c[1]), c[2]);
+    const float mn = std::min(std::min(c[0], c[1]), c[2]);
+    const float delta = mx - mn;
+    float h = 0, s = 0;
+    if (delta != 0) {
+        s = delta / mx;
+        float d[3];
+        for (int i = 0; i < 3; i++) d[i] = ((mx - c[i]) / 6.0f + delta * 0.5f) / delta;
+        if (c[0] == mx) h = d[2] - d[1];
+        else if (c[1] == mx) h = 1.0f / 3.0f + d[0] - d[2];
+        else h = 2.0f / 3.0f + d[1] - d[0];
+        if (h < 0) h += 1;
+        if (h > 1) h -= 1;
+    }
+    const float dd = std::fabs(h - hue[0]);
+    const float dist = dd > 0.5f ? 1 - dd : dd;
+    float hn = hue[0] + 2 * dist * (1 - hue[1]);
+    if (hn > 1) hn -= 1;
+    float v = mx;
+    if (hue[3] != 1) v = mx == 0 ? 0 : std::exp2(hue[3] * std::log2(std::fabs(mx)));
+    float rgb[3] = {v, v, v};
+    if (s != 0) {
+        const float h6 = hn * 6, i = std::floor(h6), f = h6 - i;
+        const float p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+        const float tab[6][3] = {{v, t, p}, {q, v, p}, {p, v, t}, {p, q, v}, {t, p, v}, {v, p, q}};
+        const int k = i < 5 ? (int)i : 5;
+        for (int j = 0; j < 3; j++) rgb[j] = tab[k][j];
+    }
+    for (int j = 0; j < 3; j++)
+        out[j] = std::min(1.0f, std::max(0.0f, c[j] + (rgb[j] - c[j]) * hue[2]));
+}
+
+// Bit 62 over flat scenes, alone and after motion blur (where it is last, so
+// the next frame's previous output carries it).
+TEST_F(DC3RetailPostGpuTest, HueConvergeIsRetailBit62) {
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    auto &dev = gpu.Device();
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)kW, (uint32_t)kH, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    wgpu::Texture scene = dev.CreateTexture(&d);
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture frame = dev.CreateTexture(&d);
+    wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView();
+    const bool bgra = gpu.SurfaceFormat() == wgpu::TextureFormat::BGRA8Unorm ||
+        gpu.SurfaceFormat() == wgpu::TextureFormat::BGRA8UnormSrgb;
+    RB3RetailPost post;
+    post.Init(gpu);
+    std::vector<uint8_t> px(kW * kH * 4), out(kW * kH * 4);
+    auto frameOf = [&](const uint8_t rgb[3], const RetailPostParams &p, float res[3]) {
+        for (size_t i = 0; i < px.size(); i += 4) {
+            px[i] = rgb[0];
+            px[i + 1] = rgb[1];
+            px[i + 2] = rgb[2];
+            px[i + 3] = 0;
+        }
+        wgpu::TexelCopyTextureInfo dst{};
+        dst.texture = scene;
+        wgpu::TexelCopyBufferLayout layout{};
+        layout.bytesPerRow = kW * 4;
+        wgpu::Extent3D ext = {(uint32_t)kW, (uint32_t)kH, 1};
+        gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        post.Run(enc, sceneView, sceneView, kW, kH, frameView, p, gpu);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        EXPECT_TRUE(gpu.ReadbackTexture(frame, kW, kH, out.data(), out.size()));
+        const uint8_t *o = &out[((kH / 2) * kW + kW / 2) * 4];
+        res[0] = o[bgra ? 2 : 0] / 255.0f;
+        res[1] = o[1] / 255.0f;
+        res[2] = o[bgra ? 0 : 2] / 255.0f;
+    };
+    RetailPostParams hp;
+    hp.dc3 = true;
+    hp.hueConverge = true;
+    const float hue[4] = {-75.0f / 360.0f + 0.5f, 0.1f, 0.8f, 1.5f};   // (120 30 160) wraps
+    std::memcpy(hp.hueParams, hue, sizeof(hue));
+    const float tol = 2.5f / 255.0f;
+    const uint8_t cols[][3] = {{200, 50, 50}, {50, 200, 80}, {40, 60, 220},
+                               {230, 210, 40}, {120, 30, 160}, {128, 128, 128}};
+    for (const auto &col : cols) {
+        const float c[3] = {col[0] / 255.0f, col[1] / 255.0f, col[2] / 255.0f};
+        float got[3], exp[3];
+        frameOf(col, hp, got);
+        HueConvergeModel(c, hue, exp);
+        printf("DC3RetailPost hue: (%d %d %d) -> got (%.3f %.3f %.3f) expected (%.3f %.3f %.3f)\n", col[0],
+               col[1], col[2], got[0], got[1], got[2], exp[0], exp[1], exp[2]);
+        for (int j = 0; j < 3; j++)
+            EXPECT_NEAR(got[j], exp[j], tol) << "colour (" << (int)col[0] << " " << (int)col[1] << " "
+                                             << (int)col[2] << ") channel " << j;
+    }
+    // After motion blur: frame 1 (first) = hue(A); frame 2 =
+    // hue(B + (frame1 - B) * 0.6), the previous output being post-hue.
+    RetailPostParams mb = hp;
+    mb.motionBlur = true;
+    mb.motionBlurParams[0] = mb.motionBlurParams[1] = mb.motionBlurParams[2] = 0.6f;
+    RetailPostParams off;
+    off.dc3 = true;
+    float dummy[3], f1[3], f2[3];
+    frameOf(cols[5], off, dummy);
+    frameOf(cols[0], mb, f1);
+    frameOf(cols[2], mb, f2);
+    const float b[3] = {cols[2][0] / 255.0f, cols[2][1] / 255.0f, cols[2][2] / 255.0f};
+    float mixed[3], exp2c[3];
+    for (int j = 0; j < 3; j++) mixed[j] = b[j] + (f1[j] - b[j]) * 0.6f;
+    HueConvergeModel(mixed, hue, exp2c);
+    printf("DC3RetailPost hue after motion blur: got (%.3f %.3f %.3f) expected (%.3f %.3f %.3f)\n", f2[0],
+           f2[1], f2[2], exp2c[0], exp2c[1], exp2c[2]);
+    for (int j = 0; j < 3; j++)
+        EXPECT_NEAR(f2[j], exp2c[j], 3.0f / 255.0f) << "bit 62 after the motion-blur mix, channel " << j;
+    post.Terminate();
 }
 
 // Frame cost of the chain's passes at 1280x720 (np-gfx-post performance
