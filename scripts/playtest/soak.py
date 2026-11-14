@@ -84,7 +84,14 @@ class Watch(threading.Thread):
                                    "frame": last_frame})
                 say(f"[{self.label}] HANG: no new frame for 20 s on {self.kit.screen()}")
             if self.in_song:
+                # {game get_paused} is also true through the count-in and at
+                # the song's end (measured: -2.3 s, and 155.8 s of macarena);
+                # a pause the player sees has a pause panel in focus.
                 p = self.kit.eval("{game get_paused}", 3)
+                if p in (1, True):
+                    panel = self.kit.eval("{{{ui current_screen} focus_panel} name}", 3)
+                    if not (isinstance(panel, str) and "pause" in panel):
+                        p = 0
                 if p in (1, True) and self.paused_since is None:
                     self.paused_since = now
                     song_s = self.kit.eval("{taskmgr seconds}", 3)
@@ -149,7 +156,13 @@ class Soak:
     def launch(self):
         self.n += 1
         label = f"proc{self.n}"
-        env = {"DC3_FOOTAGE_CONTROL": self.control}
+        # The menus are driven by pad presses; under `auto` with a person on
+        # the sensor the game hands them back to the hand cursor after 5 s
+        # without a press, and the held footage frame's raised hand then
+        # scrolls the song list away from the row being sought (measured:
+        # cupidshuffle reached, then scrolled past, for 2 min).  A pad player
+        # who pauses to think keeps the pad here: 60 s.
+        env = {"DC3_FOOTAGE_CONTROL": self.control, "DC3_CONTROLLER_MODE_TIMEOUT_MS": "60000"}
         env["MILO_NORENDER" if self.a.norender else "MILO_RENDER"] = "1"
         self.clip(self.default_clip)
         self.kit = kitdrive.Kit(os.path.join(self.a.out, label), self.home,
@@ -239,11 +252,18 @@ class Soak:
                     got = s
                     break
                 if self.watch.paused_since and time.time() - self.watch.paused_since > 4:
-                    lst = k.focus_list()
-                    pick = next((p for p in ("resume", "continue", "keep_dancing")
-                                 if k.has_row(lst, p)), None)
-                    say(f"paused on {k.screen()}: pressing {pick or 'confirm'}")
-                    k.choose(pick) if pick else k.press("confirm")
+                    # The game also pauses at a song's end, before its results
+                    # (measured: paused at 155.8 s of macarena, results 11 s
+                    # later): press only when a pause menu has the focus.
+                    panel = k.eval("{{{ui current_screen} focus_panel} name}")
+                    if isinstance(panel, str) and "pause" in panel:
+                        lst = k.focus_list()
+                        pick = next((p for p in ("resume", "continue", "keep_dancing")
+                                     if k.has_row(lst, p)), None)
+                        say(f"paused ({panel}): pressing {pick or 'confirm'}")
+                        k.choose(pick) if pick else k.press("confirm")
+                        if self.watch.pauses:
+                            self.watch.pauses[-1].setdefault("panel", panel)
                     self.watch.paused_since = time.time()
                 time.sleep(2)
         finally:
@@ -251,6 +271,10 @@ class Soak:
         if not got:
             raise RuntimeError(f"no results within {song_timeout} s (at {k.screen()})")
         secs = time.time() - t
+        # A pause that the results followed within 20 s is the song's end.
+        for pz in self.watch.pauses:
+            if "end_of_song" not in pz and time.time() - T0 - pz["at"] < 20:
+                pz["end_of_song"] = True
         time.sleep(6)
         card = k.card(0)
         card1 = k.card(1)
