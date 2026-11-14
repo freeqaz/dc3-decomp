@@ -39,7 +39,10 @@
 //   - FillRetailPost never selecting the glare arm
 //   velocity blur (round 3, NgPostProc::DoVelocity / RndVelocityBuffer::Draw,
 //   velocity_camera.ps + postprocess.ps bit 42): see the Velocity* tests below
-//   and lanes/post/round3/sabotage (archive/np-gfx-2026-11-14)
+//   and lanes/post/round3/sabotage (archive/np-gfx-2026-11-14), S1-S17: the
+//   taps, centre weight, c122, reprojection, clamp, cuts, the off path, the
+//   blurred alpha, the frame path's bookkeeping (S14-S16) and the frame
+//   target's post-proc choice (S17)
 //   hue converge (round 2, CheckHueConverge + postprocess.ps bit 62) and the
 //   post-process selection (Rnd::DoPostProcess' overrides): see
 //   HueConvergeIsRetailBit62 / ActivePostProcFollowsRndOverrides and
@@ -976,6 +979,55 @@ TEST_F(DC3RetailPostGpuTest, TogglePostProcsShowsTheSceneUngraded) {
     pass.Terminate();
     if (prev) prev->Select(); else pp->Unselect();
     delete pp;
+}
+
+// A whole WgpuRnd frame (BeginDrawing .. EndDrawing, read back from the frame
+// target) whose ONLY post-process is set_postproc_override: Rnd::DoPostProcess
+// runs the override, so the frame must be graded even with no post-proc
+// selected. The engine's frame-target choice used to ask RndPostProc::Current()
+// and so drew such a frame straight to the screen ungraded (round 3, item 2).
+// Sabotage: FramePostProc() back to RndPostProc::Current() -> fails.
+TEST_F(DC3RetailPostGpuTest, OverrideAloneGradesTheFrame) {
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    if (!gpu.IsHeadless()) GTEST_SKIP() << "reads the headless frame target";
+    RndPostProc *prev = RndPostProc::Current();
+    if (prev) prev->Unselect();
+    ASSERT_EQ(RndPostProc::Current(), nullptr);
+    RndMat *mat = Hmx::Object::New<RndMat>();
+    mat->SetColor(100 / 255.0f, 100 / 255.0f, 100 / 255.0f);
+    mat->SetAlpha(1.0f);
+    mat->SetBlend(BaseMaterial::kBlendSrc);
+    mat->SetPreLit(false);
+    mat->SetZMode(kZModeDisable);
+    auto frame = [&](float &red) {
+        TheRnd.BeginDrawing();
+        Hmx::Rect rect(0.0f, 0.0f, (float)TheRnd.Width(), (float)TheRnd.Height());
+        TheRnd.DrawRect(rect, Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f), mat, nullptr, nullptr);
+        TheRnd.EndDrawing();
+        const int w = gpu.WindowWidth(), h = gpu.WindowHeight();
+        std::vector<uint8_t> px((size_t)w * h * 4);
+        if (!gpu.ReadbackFrame(px.data(), px.size())) return false;
+        red = px[((size_t)(h / 2) * w + w / 2) * 4] / 255.0f;
+        return true;
+    };
+    float plain = 0.0f, graded = 0.0f, after = 0.0f;
+    ASSERT_TRUE(frame(plain));
+    RndPostProc *ovr = Hmx::Object::New<RndPostProc>();
+    ovr->SetProperty("brightness", DataNode(40.0f));
+    TheRnd.SetPostProcOverride(ovr);
+    ASSERT_EQ(rndshape::ActivePostProc(), ovr);
+    const bool ok = frame(graded);
+    TheRnd.SetPostProcOverride(nullptr);
+    ASSERT_TRUE(ok);
+    ASSERT_TRUE(frame(after));
+    printf("DC3RetailPost override-only frame: plain %.4f, override (brightness 40) %.4f, "
+           "cleared %.4f\n", plain, graded, after);
+    EXPECT_GT(std::fabs(graded - plain), 0.05f)
+        << "a frame whose only post-proc is the override must go through the post chain";
+    EXPECT_NEAR(after, plain, 1.5f / 255.0f);
+    delete ovr;
+    delete mat;
+    if (prev) prev->Select();
 }
 
 class DC3VelocityGpuTest : public DC3RetailPostGpuTest {
