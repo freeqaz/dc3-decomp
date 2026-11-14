@@ -250,6 +250,11 @@ Inside the body (was lines 808-849):
             // bound at the Smooth call site (all byte-equal).
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual:
+TheTaskMgr spilled to the stack on target; function-local statics named lbl_ on target
+side.
+
 
 ## `?Enter@MoveDir@@UAAXXZ`
 

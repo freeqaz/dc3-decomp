@@ -132,3 +132,7 @@ Inside the body (was lines 798-806):
         // temp, so a transparent first column walked the cursor straight to
         // the far bound without testing any other column.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.

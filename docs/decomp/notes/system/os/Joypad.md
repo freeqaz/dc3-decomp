@@ -146,3 +146,10 @@ Inside the body (was lines 762-766):
                     // a true `/ 127.0f` rounds differently natively for 16 of
                     // the 256 byte values (+-9, 13, 18, 26, 36, 52, 72, 104).
 ```
+
+## `JoypadPollCommon`
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: the
+0x55/0xAA bytes swap registers but still store packet[j+4]=0x55, [j+5]=0xAA; the stick-
+byte conversion and state-2 stwx are equivalent.

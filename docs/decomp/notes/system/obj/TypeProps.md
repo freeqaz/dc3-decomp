@@ -56,3 +56,7 @@ Inside the body (was lines 362-388):
     // declared in the if-condition, bool decl orders, j declared before the
     // `if (mMap)` or at function top.
 ```
+
+## `?Save@TypeProps@@QAAXAAVBinStream@@@Z`
+
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. Every non-equal row is register numbering (we hold the zero in r22, the image in r30) or the order of the two `stb` flag stores before GetSaveFlags. All compare constants and loop bounds are identical.

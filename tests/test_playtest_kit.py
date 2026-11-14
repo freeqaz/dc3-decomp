@@ -300,6 +300,59 @@ class KitDriveTest(unittest.TestCase):
         self.assertEqual(g("{{ui current_screen} name}"),
                          "{if_else {ui current_screen} {{ui current_screen} name} -2}")
 
+    def test_every_link_of_the_focus_list_chain_is_guarded(self):
+        """A screen with no focus panel, or a panel without the list, used to
+        put 15 MILO_FAILs of the kit's own into one soak's log."""
+        k = kitdrive.Kit.__new__(kitdrive.Kit)
+        lst = k.focus_list()
+        g = kitdrive.Kit.guarded("{%s num_data}" % lst)
+        self.assertEqual(
+            g, "{if_else {ui current_screen} {if_else {{ui current_screen} focus_panel} "
+               "{if_else {{{ui current_screen} focus_panel} find right_hand.hnl} "
+               "{{{{ui current_screen} focus_panel} find right_hand.hnl} num_data} -2} -2} -2}")
+        self.assertEqual(g.count("{") , g.count("}"))
+
+
+class KitDriveRowsTest(unittest.TestCase):
+    """PLAN H-28: rows() must never ask a provider for a row past its end.
+    Soak #5 read data_symbol 4 of FitnessProvider's 4 rows because
+    get_num_display (slots on screen) said 5; the range FAIL then fell
+    through into a past-the-end read and a SIGSEGV in the eval."""
+
+    class FakeList:
+        def __init__(self, syms, slots):
+            self.syms, self.slots, self.asked = syms, slots, []
+
+        def eval(self, expr, timeout=10):
+            parts = expr.strip("{}").split()
+            op = parts[-2] if parts[-1].isdigit() else parts[-1]
+            if op == "num_data":
+                return len(self.syms)
+            if op == "get_num_display":
+                return self.slots
+            if op == "data_symbol":
+                n = int(parts[-1])
+                self.asked.append(n)
+                return self.syms[n] if n < len(self.syms) else "GARBAGE"
+            return None
+
+    def kit_on(self, fake):
+        k = kitdrive.Kit.__new__(kitdrive.Kit)
+        k.eval = fake.eval
+        return k
+
+    def test_reads_exactly_the_providers_rows(self):
+        fake = self.FakeList(["fitness_option", "fitness_set_fitness_goals",
+                              "fitness_body_profile", "playlists"], slots=5)
+        rows = self.kit_on(fake).rows("{lst}", limit=8)
+        self.assertEqual(rows, fake.syms)
+        self.assertEqual(max(fake.asked), 3, "asked past the provider's last row")
+
+    def test_no_count_no_rows(self):
+        fake = self.FakeList(["a", "b"], slots=5)
+        fake.eval = lambda expr, timeout=10: (5 if "get_num_display" in expr else None)
+        self.assertEqual(self.kit_on(fake).rows("{lst}"), [])
+
 
 class KitDriveOwnershipTest(unittest.TestCase):
     """The driver only drives and quits a game it started (a fallback in

@@ -100,3 +100,5 @@ Inside the body (was lines 222-231):
     // parks leftInPose in r10 and tiltOk in r11 while we do the reverse; both
     // paths AND together the same three bools.
 ```
+
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. Value-checked all three atan2 argument pairs: every dot-product term multiplies the same component pair on both sides (0x40*o.x, 0x44*o.y, 0x48*o.z); only the fmadds association order differs, plus one redundant bool `clrlwi`.

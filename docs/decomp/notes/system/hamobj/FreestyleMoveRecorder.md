@@ -25,6 +25,10 @@ Inside the body (was lines 188-195):
             // declaration order is inert.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.916, 5 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
 
 ## `?OnReadCreated@FreestyleMoveRecorder@@CA?AVDataNode@@PAVDataArray@@@Z`
 
@@ -65,6 +69,10 @@ Inside the body (was lines 647-677):
     // canonical score, so not kept.  Variants with a const int& parameter, a
     // FreestyleMove& local, or the second store in its own inline: identical.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
 
 
 ## `?CompareDisplacementVectors@FreestyleMoveRecorder@@ABAXABVVector3@@H0HAAM1@Z`

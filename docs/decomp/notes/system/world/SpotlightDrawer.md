@@ -159,6 +159,10 @@ Inside the body (was lines 457-491):
         // has them, which also fixes the mPosition/mDirection/mColor store order that follows.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
+
 
 ## `(file-level)`
 
@@ -229,6 +233,10 @@ Inside the body (was lines 687-719):
                     // green*I->0x64, 1.0->0x6c.  The ours-only `stw r31,0x54`
                     // homes the same `it` (e1).  Codegen-only.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: the
+arith-scan hit was a false positive; scaling is identical.
 
 ## `(file-level)`
 

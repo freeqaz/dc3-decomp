@@ -403,12 +403,19 @@ void DataArray::Remove(int index) {
     mSize = newCnt;
 }
 
+#ifdef HX_NATIVE
+// On LP64, UncheckedInt() reads only the low 4 bytes of an 8-byte pointer, so
+// every pointer-valued type compares the whole pointer (same set as
+// DataNode::Equal; Var/Func/Ifdef used to be missing here).
+static bool NativeNodeHoldsPointer(DataType t) {
+    return t == kDataVar || t == kDataFunc || t == kDataObject || t == kDataSymbol
+        || t == kDataIfdef || t >= kDataArray;
+}
+#endif
+
 void DataArray::Remove(const DataNode &dn) {
 #ifdef HX_NATIVE
-    // On LP64, UncheckedInt() truncates 8-byte pointers to 4 bytes.
-    // Use full pointer comparison for pointer-typed nodes.
-    bool isPtr = (dn.Type() == kDataSymbol || dn.Type() == kDataObject
-                  || dn.Type() >= kDataArray);
+    bool isPtr = NativeNodeHoldsPointer(dn.Type());
     for (int i = mSize - 1; i >= 0; i--) {
         bool match = isPtr ? (mNodes[i].UncheckedStr() == dn.UncheckedStr())
                            : (mNodes[i].UncheckedInt() == dn.UncheckedInt());
@@ -430,8 +437,7 @@ void DataArray::Remove(const DataNode &dn) {
 
 bool DataArray::Contains(const DataNode &dn) const {
 #ifdef HX_NATIVE
-    bool isPtr = (dn.Type() == kDataSymbol || dn.Type() == kDataObject
-                  || dn.Type() >= kDataArray);
+    bool isPtr = NativeNodeHoldsPointer(dn.Type());
     for (int i = mSize - 1; i >= 0; i--) {
         bool match = isPtr ? (mNodes[i].UncheckedStr() == dn.UncheckedStr())
                            : (mNodes[i].UncheckedInt() == dn.UncheckedInt());

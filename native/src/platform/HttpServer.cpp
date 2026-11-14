@@ -714,7 +714,7 @@ static int MaxNestingDepth(const char* s) {
 // Evaluate + serialize. Split out so HandleDtaEval's frame contains only the
 // guards, the sigsetjmp and this call — nothing that could return early past a
 // guard declaration.
-static void RunDtaEval(HttpServer::Command& cmd) {
+static void RunDtaEval(HttpServer::Command& cmd, DtaEval::FailScope& failScope) {
     DataArray* parsed = DataReadString(cmd.param1.c_str());
     if (!parsed || parsed->Size() == 0) {
         cmd.result.ok = false;
@@ -726,11 +726,17 @@ static void RunDtaEval(HttpServer::Command& cmd) {
 
     // DataReadString returns a top-level array containing parsed commands.
     // Evaluate each node — for command sub-arrays, Evaluate calls Execute.
+    // Under a try scope: a MILO_FAIL in the script ends the eval with an error
+    // instead of running on into whatever the failed check guarded (H-28).
     DataNode result(0);
-    for (int i = 0; i < parsed->Size(); i++) {
-        result = parsed->Evaluate(i);
-    }
+    std::string failure;
+    bool completed = failScope.Evaluate(parsed, result, failure);
     parsed->Release();
+    if (!completed) {
+        cmd.result.ok = false;
+        cmd.result.error = "DTA eval failed: " + failure;
+        return;
+    }
 
     std::string json = DtaEval::NodeToJson(result);
 
@@ -781,6 +787,7 @@ void HttpServer::HandleDtaEval(Command& cmd) {
     // stack slots, and the engine later died on the main thread inside unrelated
     // script with MILO_ASSERT(gCallStackPtr - gCallStack < HANDLE_STACK_SIZE).
     DtaEval::ScriptStateGuard stateGuard;
+    DtaEval::FailScope failScope;
     DtaEvalSignalGuard signalGuard;
 
     if (sigsetjmp(sDtaEvalJmpBuf, 1) != 0) {
@@ -788,6 +795,7 @@ void HttpServer::HandleDtaEval(Command& cmd) {
         // right here so the description can be logged; the guard destructors
         // still run on the way out (Restore() is idempotent).
         std::string repaired = stateGuard.Restore();
+        failScope.Close();
 
         const char* sigName = "unknown signal";
         switch (sDtaEvalSignal) {
@@ -809,12 +817,13 @@ void HttpServer::HandleDtaEval(Command& cmd) {
     }
 
     try {
-        RunDtaEval(cmd);
+        RunDtaEval(cmd, failScope);
     } catch (const std::exception& e) {
         cmd.result.ok = false;
         cmd.result.error = std::string("DTA eval exception: ") + e.what();
     } catch (const char* msg) {
-        // MILO_FAIL / MILO_ASSERT throw a const char* through TheDebugFailer.
+        // A const char* thrown by anything but the FailScope's own try (which
+        // catches MILO_FAIL / MILO_ASSERT itself).
         cmd.result.ok = false;
         cmd.result.error = std::string("DTA eval failed: ") + (msg ? msg : "");
     } catch (...) {

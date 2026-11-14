@@ -30,3 +30,7 @@ Inside the body (was lines 56-69):
                     // emits a different association from the image's, so it
                     // changes float rounding without reaching the image's.
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.785, 2 non-equal row(s): The two
+register rows are an ASSOCIATION: the sqrtf argument adds (z2+y2)+x2 here vs (z2+x2)+y2
+in the image (0x60/0x64/0x68 = x/y/z). Rounding order only (w26-f8). NOT A BUG.
