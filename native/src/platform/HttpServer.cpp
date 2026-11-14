@@ -303,6 +303,28 @@ void HttpServer::Stop() {
     // Wake any long-polling threads so they can exit
     mWaitCv.notify_all();
 
+    // H-78: answer every command still waiting for the main thread. Stop()
+    // runs after the main loop has left, so nothing will ever process them,
+    // and their handlers sat in QueueAndWait's 10 s wait while join() below
+    // waited for them -- longer than the 5 s quit grace, so a quit with one
+    // request in flight (the playtest kit polls) ended in quit_grace_expired
+    // instead of main_loop_returned. QueueAndWait refuses new ones once
+    // mRunning is false (checked under the same mutex).
+    {
+        std::lock_guard<std::mutex> qlk(mQueueMutex);
+        for (std::vector<Command*>* q : {&mPendingCommands, &mPendingScreenshots}) {
+            for (Command* cmd : *q) {
+                std::lock_guard<std::mutex> lk(cmd->mtx);
+                cmd->result.ok = false;
+                cmd->result.httpStatus = 503;
+                cmd->result.error = "HTTP server stopping (the game is quitting)";
+                cmd->done = true;
+                cmd->cv.notify_one();
+            }
+            q->clear();
+        }
+    }
+
     auto* svr = static_cast<httplib::Server*>(mServer);
     if (svr) svr->stop();
 
@@ -334,6 +356,13 @@ HttpServer::CommandResult HttpServer::QueueAndWait(
     // Enqueue
     {
         std::lock_guard<std::mutex> lk(mQueueMutex);
+        if (!mRunning) {  // H-78: Stop() has drained the queue; nobody will take it
+            CommandResult stopping;
+            stopping.ok = false;
+            stopping.httpStatus = 503;
+            stopping.error = "HTTP server stopping (the game is quitting)";
+            return stopping;
+        }
         if (type == kCmdScreenshot)
             mPendingScreenshots.push_back(&cmd);
         else

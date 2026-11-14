@@ -290,16 +290,41 @@ class Kit:
         for i, b in enumerate(buttons):
             seq.append({"button": b, "delay": MIN_GAP_FRAMES if (i == 0 and wake) else gap,
                         "hold": HOLD_FRAMES})
+        # The sequence runs over FRAMES, so wait for frames, not for a wall
+        # time that assumes a frame rate.  The old sleep assumed ~30 fps; a
+        # window under Xvfb on a loaded box draws 12-22, so a long run of
+        # presses was still landing when list_select read the highlight,
+        # queued more, and overshot -- soak #8 confirmed Right Thurr for Ice
+        # Ice Baby (the previews flip-flopped between the two adjacent rows).
+        frames = sum(e["delay"] for e in seq) + HOLD_FRAMES + 1
+        f0 = self.frame()
         try:
             self._req("/input/sequence", json.dumps(seq), 10)
         except (urllib.error.URLError, OSError) as e:
             self.log(f"press {buttons} failed: {e}")
-        # the sequence runs over frames; give it wall time to land
-        time.sleep(0.15 + 0.04 * gap * len(buttons) / 1.2)
+            return
+        if f0 is None:
+            time.sleep(0.15 + 0.04 * gap * len(buttons) / 1.2)
+            return
+        # bounded: 0.5 s a frame is 2 fps, far below anything playable
+        end = time.time() + 5.0 + 0.5 * frames
+        while time.time() < end:
+            f = self.frame()
+            if f is None or f >= f0 + frames:
+                return
+            time.sleep(0.05)
+        self.log(f"press {buttons}: {frames} frames did not pass in {5.0 + 0.5 * frames:.0f} s")
+
+    def frame(self):
+        """The game's frame counter (/api/health), or None."""
+        h = self.jget("/health", 2)
+        f = ((h or {}).get("data") or {}).get("frame") if isinstance(h, dict) else None
+        return f if isinstance(f, int) else None
 
     def list_select(self, panel_list, sym, timeout=30):
         """Move a HamNavList's highlight to `sym` with up/down presses."""
         end = time.time() + timeout
+        stretched = False
         while time.time() < end:
             want = self.eval(f"{{{panel_list} data_index {sym}}}")
             cur = self.eval(f"{{{panel_list} get_selected}}")
@@ -311,6 +336,12 @@ class Kit:
             if cur == want:
                 return True
             n = int(want) - int(cur)
+            if not stretched:
+                # A far row is many presses: with the DLC songs listed, a song
+                # can be ~100 rows down (np-soak3: milkshake missed in 30 s at
+                # 21 fps windowed).  Allow ~1 s a row on top of the timeout.
+                stretched = True
+                end = max(end, time.time() + timeout + 1.0 * abs(n))
             self.press(*(["down"] * n if n > 0 else ["up"] * -n), gap=12)
             time.sleep(1.0)
         return False
@@ -349,6 +380,7 @@ class Kit:
         hand menus the highlight follows the hand, so it starts wherever the
         person's hand is; this does not assume a starting row."""
         lst = lst or self.focus_list()
+        self.dismiss_identity()
         self.press(wake=True)
         time.sleep(0.6)
         if not self.list_select(lst, sym, timeout):
@@ -356,6 +388,23 @@ class Kit:
             return False
         time.sleep(0.6)
         self.press("confirm", wake=False)
+        return True
+
+    def dismiss_identity(self):
+        """Close the "correct identity" overlay if it is up, as a player
+        holding a pad would: B.  It opens when the person on the sensor holds
+        both hands up in a menu (ShellInput::Poll, the image's code; native
+        keeps it while a camera feeds the sensor, PLAN H-20), and the footage
+        dancer does that.  It is hand-driven: its enter exits controller mode,
+        helpbar_allow_controller FALSE refuses re-entry, and its BUTTON_DOWN_MSG
+        swallows every press but Cancel (ui/correct_identity/
+        correct_identity.dta) -- so the focus list under it never moves.
+        Soak #8 sat on perform_complete_screen for 4.5 min behind it (H-77)."""
+        if self.eval("{correct_identity_panel is_up}", timeout=3) not in (1, True):
+            return False
+        self.log(f"correct identity overlay up on {self.screen()}: cancel")
+        self.press("cancel", wake=False)
+        time.sleep(1.0)
         return True
 
     # ---- routes ----

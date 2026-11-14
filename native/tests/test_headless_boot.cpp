@@ -404,12 +404,35 @@ TEST_F(HeadlessBootTest, DevProfileIsTheDefault) {
     EXPECT_TRUE(Has(out, "development menu on (DC3_DEV_MENU)"));
     EXPECT_TRUE(Has(out, "telemetry sampled for /api/telemetry only"));
     EXPECT_FALSE(Has(out, "DC3_TEL: frame=")) << "DC3_TEL=api must not print telemetry lines";
-    // Boot raises MILO_NOTIFYs (measured: XTitleServerCreateEnumerator,
-    // localization); the dev tap prints them, rate-limited, with no backtraces,
-    // and the corner overlay shows the cheat_display copy.
+    // Boot raises MILO_NOTIFYs (measured: localization, main_screen's
+    // preloads; XTitleServerCreateEnumerator's is silenced on native since
+    // np-polish3 -- the call is a stub that always fails); the dev tap prints
+    // them, rate-limited, with no backtraces, and the corner overlay shows the
+    // cheat_display copy.
     EXPECT_TRUE(Has(out, "\nMILO_NOTIFY: ")) << "the dev console printed no notify";
     EXPECT_FALSE(Has(out, "MILO_BT:")) << "the dev tap must not dump backtraces";
     EXPECT_TRUE(Has(out, "DC3 OVERLAY [cheats] ")) << "cheat_display reached no overlay";
+    EXPECT_TRUE(Has(out, "DC3 OVERLAY: drawn on screen")) << "dev drew no overlay";
+    // A stub that always fails is not news (XLSPConnection, HX_NATIVE).
+    EXPECT_FALSE(Has(out, "XTitleServerCreateEnumerator failed"));
+}
+
+// scripts/play.sh's default (np-polish3): DC3_RND_OVERLAYS=log under the dev
+// profile.  The notices still reach the log, but nothing is drawn over the
+// picture -- a player was reading "XTitleServerCreateEnumerator failed with
+// error 1317" over the main menu's OPTIONS label.  Sabotaged: `log` parsed as
+// draw in DebugPanel::RndOverlaysModeFor -> the "drawn on screen" EXPECT fails.
+TEST_F(HeadlessBootTest, OverlaysLogModeLogsWithoutDrawing) {
+    std::vector<EnvVar> env = ProfileEnv("");
+    for (EnvVar &e : env)
+        if (e.key == "DC3_RND_OVERLAYS") e.value = "log";
+    auto result = RunHeadless(kProfileFrames, nullptr, 180, env);
+    const std::string &out = result.output;
+    ASSERT_EQ(result.signal, 0) << CrashSummary(result);
+    ASSERT_TRUE(HasCompletionMarker(out)) << "no frame-cap line\n" << CrashSummary(result);
+    EXPECT_TRUE(Has(out, "(you set DC3_RND_OVERLAYS=log)")) << "the banner does not say so";
+    EXPECT_TRUE(Has(out, "DC3 OVERLAY [cheats] ")) << "log mode lost the log lines";
+    EXPECT_FALSE(Has(out, "DC3 OVERLAY: drawn on screen")) << "log mode drew the overlay";
 }
 
 TEST_F(HeadlessBootTest, ReleaseProfileIsThePlayerBuild) {

@@ -1,27 +1,53 @@
 # Full flow video: boot → main → choose_mode → song_select → YMCA → game_screen
 #
-# Route: boot screens auto-advance → main_screen (frame ~380)
-#        → choose_mode → song_select → scroll to YMCA → select → game_screen
+# Route: attract → title → main → choose_mode → song_select (1 down: YMCA)
+#        → multiuser → loading → game_screen
 #
-# YMCA is known-working for game_screen entry.
-# YMCA is at song list index 5 (3 downs from default position 2).
+# The same presses as ymca.txt up to multiuser_screen, without its tutorial
+# steps: run it on a console that has seen the move tutorial
+# (DC3_TUTORIALS_SEEN=1, or a seeded DC3_CACHE_DIR), or it stops on
+# tutorial_perform_it_screen_0.  Until 2026-11-14 this file pressed at
+# absolute frames (500/800/1050..1300) with 3 downs and no multiuser confirms:
+# it ended on multiuser_screen with whatever song sat 3 rows down.
 #
 # For video recording:
-#   MILO_HEADLESS=1 MILO_RENDER=1 MILO_MAX_FRAMES=4500 \
+#   MILO_HEADLESS=1 MILO_RENDER=1 MILO_MAX_FRAMES=8000 DC3_TUTORIALS_SEEN=1 \
 #     MILO_VIDEO=archive/screenshots/session62/full_flow.mp4 \
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/video-full-flow.txt \
 #     timeout 300 native/build/dc3-native
 
-# main_screen: select "Dance" (first item = gameplay)
-500 confirm
+# attract_screen: wake, then confirm on the movie overlay's SKIP item
+wait_screen attract_screen
++28 wake
++30 confirm
 
-# choose_mode_screen: select "Perform" (first item)
-800 confirm
+# title_screen: confirm signs pad 0's profile in.  Every first press on a
+# screen waits out its HamNavList enter animation (see ymca.txt).
+wait_screen title_screen
++43 wake
++45 confirm
 
-# song_select_screen: scroll down to YMCA (3 downs from position 2)
-1050 down
-1100 down
-1150 down
+# main_screen: "Dance" (first item = gameplay)
+wait_screen main_screen
++43 wake
++45 confirm
 
-# song_select_screen: select YMCA
-1300 confirm
+# choose_mode_screen: "Perform" (first item)
+wait_screen choose_mode_screen
++43 wake
++45 confirm
+
+# song_select_screen: 1 down to YMCA, then select
+wait_screen song_select_screen
++43 wake
++45 down
++105 confirm
+
+# multiuser_screen: ready the player and start
+wait_screen multiuser_screen
++38 wake
++40 confirm
++150 confirm
++270 confirm
+
+wait_screen game_screen
