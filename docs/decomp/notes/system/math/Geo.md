@@ -337,6 +337,10 @@ Inside the body (was lines 1115-1124):
     // fixed by that temp's sid (C2RS-BRIDGE 8.7), not by the spelling.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 98.784, 9 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
 
 ## `?Update@BSPFace@@QAAXXZ`
 
