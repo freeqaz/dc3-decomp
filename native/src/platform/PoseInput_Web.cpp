@@ -18,6 +18,13 @@
 //       rule).  count 0 is a real frame with nobody in view.  The first push
 //       starts the provider (the sensor leaves the dummy skeleton).
 //   void dc3_pose_stop()          camera gone: back to the dummy skeleton.
+//   void dc3_pose_stats(on)       pose_stats=1 (docs/native/WEB.md "Pose
+//       pipeline"): at the end of each game frame whose Poll latched a new pose
+//       frame, call window.dc3PoseOnConsume(frameId, performance.now(),
+//       overwritten) -- when the game took it, and how many pushed frames were
+//       replaced before any game frame took them.  Off: nothing is called.
+//
+// dc3_pose_push returns the frame id it gave the frame (> 0), 0 if refused.
 //
 // Status: WebPoseStatusTick (main_web.cpp, once per engine frame) publishes
 // window.dc3PoseGame -- what the GAME sees (player 0's bound skeleton, score,
@@ -46,6 +53,13 @@ float sPushBuffer[kPoseMaxPersons * kPoseFloatsPerPerson];
 uint32_t sPushFrameId = 0;
 unsigned sPushCount = 0;
 unsigned sPushPersons = 0; // persons in the last push
+// Consumption (counted always, reported to JS only with dc3_pose_stats(1)):
+// a pushed frame is consumed when a game frame's Poll latches it
+// (FrameId() moves to it), overwritten when the next push lands first.
+uint32_t sLatchedSeen = 0;
+unsigned sConsumed = 0;
+unsigned sOverwritten = 0;
+bool sStatsToJs = false;
 
 JointConfidence ConfidenceFromScore(float score) {
     // Identical to Skeleton_Native.cpp's socket path (and the COCO path).
@@ -88,6 +102,9 @@ int dc3_pose_push(int count, const float *data, double timestamp) {
         }
         persons[i].valid = true;
     }
+    // The previous push was never latched by a game frame: this one replaces it.
+    if (sPushFrameId != 0 && provider->FrameId() != sPushFrameId)
+        sOverwritten++;
     // A browser camera has no accelerometer: the sensor estimates its tilt.
     provider->PublishFrame(persons, count, ++sPushFrameId, timestamp, /*unlevelled*/ true);
     if (!provider->IsRunning()) {
@@ -96,8 +113,11 @@ int dc3_pose_push(int count, const float *data, double timestamp) {
     }
     sPushCount++;
     sPushPersons = (unsigned)count;
-    return 1;
+    return (int)sPushFrameId;
 }
+
+EMSCRIPTEN_KEEPALIVE
+void dc3_pose_stats(int on) { sStatsToJs = on != 0; }
 
 EMSCRIPTEN_KEEPALIVE
 void dc3_pose_stop() {
@@ -109,8 +129,20 @@ void dc3_pose_stop() {
 
 } // extern "C"
 
-// Once per engine frame from main_web.cpp; publishes every 15 frames.
+// Once per engine frame from main_web.cpp, after the frame ran: counts the
+// pose frame this game frame latched; publishes the status every 15 frames.
 void WebPoseStatusTick(int engineFrame) {
+    if (TheSkeletonProvider) {
+        const uint32_t id = TheSkeletonProvider->FrameId();
+        if (id != 0 && id != sLatchedSeen) {
+            sLatchedSeen = id;
+            sConsumed++;
+            if (sStatsToJs) {
+                EM_ASM({ if (window.dc3PoseOnConsume) window.dc3PoseOnConsume($0, performance.now(), $1); },
+                       id, sOverwritten);
+            }
+        }
+    }
     if (engineFrame % 15 != 0)
         return;
     char buf[1024];
@@ -118,8 +150,9 @@ void WebPoseStatusTick(int engineFrame) {
     bool running = TheSkeletonProvider && TheSkeletonProvider->IsRunning();
     n += snprintf(buf + n, sizeof(buf) - n,
                   "{\"frame\":%d,\"providerRunning\":%s,\"pushes\":%u,\"lastPushPersons\":%u,"
-                  "\"players\":[",
-                  engineFrame, running ? "true" : "false", sPushCount, sPushPersons);
+                  "\"consumed\":%u,\"overwritten\":%u,\"players\":[",
+                  engineFrame, running ? "true" : "false", sPushCount, sPushPersons, sConsumed,
+                  sOverwritten);
     for (int p = 0; p < 2 && n < (int)sizeof(buf) - 300; p++) {
         int score = 0;
         const char *rating = "";
