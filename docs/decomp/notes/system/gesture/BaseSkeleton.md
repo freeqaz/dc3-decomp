@@ -70,6 +70,10 @@ Above the definition (was lines 105-157):
 // bone3Len inside the innermost arm is worse on fuzzy (98.0460).
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+and call args equal under symbolic sim.
+
 
 ## `?MakeCameraToPlayerXfm@BaseSkeleton@@SAXW4SkeletonCoordSys@@AAVTransform@@PBVVector3@@ABV4@@Z`
 

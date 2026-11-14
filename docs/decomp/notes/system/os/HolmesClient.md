@@ -71,3 +71,7 @@ Inside the body (was lines 892-912):
     // (3 slots) relative to the writeTime `std`: the image straddles the std,
     // we sink both below it. No source handle was found for a sched0 slot.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.

@@ -84,3 +84,8 @@ Inside the body (was lines 591-620):
                 // (w21-j's earlier stop note: a separate result quat for the
                 // r*d chain was 95.8 -- REFUTED as the lever; association was.)
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.974, 2 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.

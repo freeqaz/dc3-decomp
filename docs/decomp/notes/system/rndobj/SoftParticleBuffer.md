@@ -46,3 +46,7 @@ Inside the body (was lines 65-94):
         // .bss zero) dropped the first tap from the blur.  rb3-xenon's
         // W16-PU (2f6d26cda) reads the same 0.1 out of its retail .data.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: kBlurTaps
+values identical; the target statically initialises [0]=0.1 in .data where we store it.

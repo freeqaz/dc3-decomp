@@ -67,3 +67,7 @@ a 2026-06-02 permuter harvest batch left uncommitted on the GPD
 (`dc3-harvest` worktree, branch `harvest-sweep-wins`), written against a body
 that still had the `continue`/missing-`return` control-flow bugs since fixed.
 The residual is still the vtable-load hoist described in the source comment.
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: subfic vs
+subic mask; both compute `allDone = (state != kNeedsMounting) & allDone` for a bool.

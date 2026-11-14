@@ -120,6 +120,11 @@ Inside the body (was lines 1505-1512):
                     // and qp taken inside the size test, 100.0 (regperm only).
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.711, 18 non-equal row(s): NOT A BUG.
+Every row is register-only; `scripts/analysis/regperm_equivalence.py` raised 2 lead(s),
+each read by hand against the listing: pure register permutation, no operand swap.
+(CALLARG? leads read by hand: deallocate takes r3-r5; the r7/r8 leads are dead
+leftovers.)
 
 ## `?QueueBlacklightPacket@RndText@@KAXPAVRndMesh@@MH@Z`
 
@@ -426,3 +431,22 @@ Inside the body (was lines 3379-3386):
         // addressed through a hoisted r27 instead of living in f31, which cost
         // the image's fourth saved FPR and its 0x150 frame.
 ```
+
+## `?DrawShowing@RndText@@UAAXXZ`
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual:
+sBlacklight/TheUI register swap and store reorder only.
+
+## `?SetupCharacter@FontMap@RndText@@UAAXGAAMMABVStyleState@2@GMW4FitType@2@M@Z`
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
+
+## `?WrapText@RndText@@QAAXPBGHPAMAAV?$vector@VLine@RndText@@V?$StlNodeAlloc@VLine@RndText@@@stlpmtx_std@@@stlpmtx_std@@AAVRect@Hmx@@M@Z`
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: line/word
+struct stores checked by index (words[idx].0x14, line.0x15) and the line-building walk
+w=words[w.next]; register/spill differences only.

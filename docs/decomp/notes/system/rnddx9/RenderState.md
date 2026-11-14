@@ -51,3 +51,8 @@ Above the definition (was lines 107-141):
 // identical statements a different IL shape while emitting the same
 // instruction, or whether the image used a helper that was inlined twice.
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.706, 1 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.

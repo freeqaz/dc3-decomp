@@ -49,3 +49,9 @@ Inside the body (was lines 255-269):
             // dropping the candidate local, per-arm stores and reordered arms
             // change the emitted code.
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.896, 4 non-equal row(s): NOT A BUG.
+Every row is register-only; `scripts/analysis/regperm_equivalence.py` raised 1 lead(s),
+each read by hand against the listing: pure register permutation, no operand swap.
+(CALLARG? leads read by hand: HasPrevAdjacent takes r3/r4; the r10 lead is a dead
+leftover.)

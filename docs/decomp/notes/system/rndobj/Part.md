@@ -245,6 +245,10 @@ Inside the body (was lines 1398-1407):
                 // the hoisted x load stays.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: field
+swaps are consistent; the extra fsubs is block placement; dead home store of f1.
+
 
 ## `?UpdateParticles@RndParticleSys@@IAAXXZ`
 

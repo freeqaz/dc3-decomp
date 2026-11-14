@@ -63,6 +63,8 @@ struct DtaRunResult {
     // Seven gameplay-shaped failure messages for one missing file. They were
     // reported up the chain as a pre-existing gameplay regression.
     std::string setupError;
+    // The cache/save root the run used, so a second boot can reuse it.
+    std::string persistenceRoot;
 };
 
 static bool FileExists(const std::string &p) {
@@ -176,10 +178,13 @@ static bool SeedGlobalOptions(const std::string &root, int tutorialsSeen) {
 // in particular then waits for a confirm instead of auto-advancing.
 // `seedTutorialsSeen` >= 0 starts the run from a console whose global options
 // record those tutorials as seen (SeedGlobalOptions); -1 keeps the empty root.
+// `reuseRoot` non-empty boots against a previous run's persistence root
+// (DtaRunResult::persistenceRoot) instead of a fresh one, without seeding.
 static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeconds,
                                const char *scriptName = "ymca.txt",
                                const char *extraEnv = "", bool fastBoot = true,
-                               int seedTutorialsSeen = -1) {
+                               int seedTutorialsSeen = -1,
+                               const std::string &reuseRoot = std::string()) {
     std::string binary = GetDc3NativePath();
     std::string script = GetScriptDir() + "/" + scriptName;
 
@@ -199,7 +204,7 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeco
         pre.setupError = "input flow script missing:\n    " + script;
         return pre;
     }
-    std::string persistence = MakePersistenceRoot();
+    std::string persistence = reuseRoot.empty() ? MakePersistenceRoot() : reuseRoot;
     if (persistence.empty()) {
         pre.setupError =
             "could not create a temporary persistence root (mkdtemp "
@@ -209,7 +214,8 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeco
             "holds on this machine, and the run would write there.";
         return pre;
     }
-    if (seedTutorialsSeen >= 0 && !SeedGlobalOptions(persistence, seedTutorialsSeen)) {
+    if (reuseRoot.empty() && seedTutorialsSeen >= 0 &&
+        !SeedGlobalOptions(persistence, seedTutorialsSeen)) {
         pre.setupError = "could not write the seeded global options under " + persistence;
         return pre;
     }
@@ -229,7 +235,7 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeco
         << " ${t:+$t " << timeout << "} " << binary << " 2>&1";
 
     FILE *pipe = popen(cmd.str().c_str(), "r");
-    DtaRunResult result = {-1, 0, "", false, ""};
+    DtaRunResult result = {-1, 0, "", false, "", persistence};
     if (!pipe) {
         result.setupError = "popen() failed for:\n    " + cmd.str();
         return result;
@@ -1319,6 +1325,153 @@ TEST_F(LargestSongFlowTest, OmgPreloadsAndReachesGameplay) {
         << "omg reached game_screen but never started playing";
     EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }
+
+// DLC: Milkshake from the Dance Central 2 DLC megapack, mounted from a package
+// directory (scripts/dlc/import.sh) through DC3_DLC_DIR.  It is selected,
+// preloaded from the package's cntNNNNNNNN: drive, and played.  The crash this
+// guards: a song milo's `../../world/shared/director.milo` subdir must resolve
+// to the disc's director (world_objects.dta `change_subdir`, which keys on a
+// drive in the path) -- resolved inside the package it fails to load,
+// song.anim's keys lose their HamDirector target, and game_screen dies in
+// HamDirector::SetupRoutineBuilderAnims.
+//
+// The package is game content and never committed, so these tests exist only
+// in a build whose configure FOUND it: the DC3_DLC_TESTS coverage gate
+// (native/CMakeLists.txt) compiles them in and hands the package root over as
+// DC3_TEST_DLC_DIR.  A box without the package does not register them at all,
+// so its skip count is the same as a box with it.  Registered but absent is a
+// stale configure, and FAILS (TestGates catches the other direction).
+#if DC3_DLC_TESTS
+static std::string GetDlcDir() {
+    const char *env = getenv("DC3_TEST_DLC_DIR");
+    if (env && *env) return env;
+    return GetBinaryDir() + "/../../orig-assets/dlc";
+}
+static constexpr const char *kMilkshakePackage = "dancecentral2dlcmegapack";
+static constexpr int kDlcFlowFrames = 5000;
+
+class DlcSongFlowTest : public ControllerModeFlowTest {
+protected:
+    static DtaRunResult sResult;
+    static DtaRunResult sWarm; // second boot on the same cache and save dirs
+    static bool sRanEngine;
+    static bool sRanWarm;
+    static std::string sEnv;
+    static bool HavePackage() {
+        return FileExists(GetDlcDir() + "/" + kMilkshakePackage +
+                          "/songs/milkshake/milkshake.mogg");
+    }
+    static void SetUpTestSuite() {
+        if (!getenv("DC3_DTA_FLOW_TESTS") || sRanEngine || !HavePackage()) return;
+        // DC3_TAG_MODALS prints the "Could not load:" notify a subdir that
+        // resolved into the package raises.  game_screen ~frame 2000 and
+        // gameStage=playing ~2500 (headless, no GPU) on an idle box -- but the
+        // song intro waits on asynchronous loading, so under gate load it costs
+        // ~3x the frames: a 3600-frame cap was reached at frame 3598, one frame
+        // short of playing.  kDlcFlowFrames leaves room; the wall clock bounds it.
+        // A root holding only this package, so other packages imported next
+        // to it cannot move Milkshake in the song list (the flow counts downs).
+        char tmpl[] = "/tmp/dc3-dlc-root-XXXXXX";
+        const char *root = mkdtemp(tmpl);
+        std::string pkg = GetDlcDir() + "/" + kMilkshakePackage;
+        if (!root || symlink(pkg.c_str(), (std::string(root) + "/" + kMilkshakePackage).c_str())) {
+            sResult.setupError = "could not make a one-package DLC root for " + pkg;
+            sRanEngine = true;
+            return;
+        }
+        sEnv = std::string("DC3_TAG_MODALS=1 DC3_DLC_DIR=") + root;
+        sResult = RunDtaFlow(kDlcFlowFrames, 240, "milkshake.txt", sEnv.c_str(), true, kTutorialGeneral);
+        sRanEngine = true;
+    }
+    // The first boot writes the song cache (SongMgr's "songcache" container,
+    // which only content songs enter); a second boot on the same root reads
+    // it.  Run only by the test that needs it: ctest runs each test in its
+    // own process, so a suite-level second boot would be paid twice.
+    static void EnsureWarmBoot() {
+        if (sRanWarm || !sResult.setupError.empty()) return;
+        sWarm = RunDtaFlow(kDlcFlowFrames, 240, "milkshake.txt", sEnv.c_str(), true, kTutorialGeneral,
+                           sResult.persistenceRoot);
+        sRanWarm = true;
+    }
+    void SetUp() override {
+        ASSERT_TRUE(HavePackage())
+            << "DC3_DLC_TESTS is compiled in but the package is gone: " << GetDlcDir() << "/"
+            << kMilkshakePackage << " -- reconfigure the build (the gate is decided at "
+            << "configure time), or re-import it with scripts/dlc/import.sh <package>";
+        CheckRan(sResult, sRanEngine);
+    }
+    void TearDown() override {
+        if (HasFailure() && sRanEngine) {
+            Dump(sResult);
+            if (sRanWarm) Dump(sWarm);
+        }
+    }
+};
+DtaRunResult DlcSongFlowTest::sResult = {};
+DtaRunResult DlcSongFlowTest::sWarm = {};
+bool DlcSongFlowTest::sRanEngine = false;
+bool DlcSongFlowTest::sRanWarm = false;
+std::string DlcSongFlowTest::sEnv;
+
+TEST_F(DlcSongFlowTest, MilkshakeMountsAndReachesGameplay) {
+    const std::string &out = sResult.output;
+    EXPECT_NE(out.find(std::string("DLC package '") + kMilkshakePackage + "' at cnt"),
+              std::string::npos)
+        << "ContentMgr_Native did not mount the package on a cntNNNNNNNN: drive";
+    ASSERT_NE(out.find("DC3 Input: wait_screen 'song_select_screen' satisfied"),
+              std::string::npos)
+        << "precondition: milkshake.txt never reached song_select_screen";
+    ASSERT_NE(out.find("sym='milkshake'"), std::string::npos)
+        << "the confirm on song select did not pick milkshake -- the song list changed; "
+           "recount the downs in scripts/dc3-input-flows/milkshake.txt";
+    EXPECT_NE(out.find("cnt00000000:/songs/milkshake/gen/milkshake.milo_xbox"),
+              std::string::npos)
+        << "the song milo was not read from the package's drive";
+    for (const char *subdir : {"director.milo", "audio_mixer.milo"}) {
+        size_t at = 0;
+        bool failed = false;
+        while ((at = out.find("Could not load: ", at)) != std::string::npos) {
+            size_t eol = out.find('\n', at);
+            if (out.substr(at, eol - at).find(subdir) != std::string::npos) failed = true;
+            at = eol;
+        }
+        EXPECT_FALSE(failed) << subdir
+                             << " was resolved inside the package instead of on the disc "
+                                "(world_objects.dta change_subdir needs a drive in the path)";
+    }
+    EXPECT_NE(out.find("Screen 'game_screen' Enter (from 'real_loading_screen')"),
+              std::string::npos)
+        << "milkshake never reached game_screen";
+    EXPECT_NE(out.find("gameStage=playing"), std::string::npos)
+        << "milkshake reached game_screen but never started playing";
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
+}
+
+// The second boot finds the package in the song cache and plays it again.
+// DataArraySongInfo::sSaveVer was 1 where the image has 2, so Save wrote a
+// rev-1 record that Load then read with the rev < 2 fields Save never writes:
+// the next boot overran a 512-byte Symbol buffer and crashed at
+// wait_main_after_saveload_screen.
+TEST_F(DlcSongFlowTest, MilkshakePlaysAgainFromTheSongCache) {
+    ASSERT_NE(sResult.output.find("gameStage=playing"), std::string::npos)
+        << "precondition: the first boot did not play Milkshake";
+    EnsureWarmBoot();
+    const std::string &out = sWarm.output;
+    ASSERT_TRUE(sWarm.setupError.empty()) << sWarm.setupError;
+    size_t mount = out.find(std::string("DLC package '") + kMilkshakePackage + "' at cnt");
+    ASSERT_NE(mount, std::string::npos);
+    EXPECT_NE(out.substr(mount, out.find('\n', mount) - mount).find("(cached)"),
+              std::string::npos)
+        << "the second boot did not take the package from the song cache";
+    EXPECT_EQ(out.find("String chars"), std::string::npos)
+        << "the song cache did not read back what it wrote";
+    EXPECT_NE(out.find("sym='milkshake'"), std::string::npos);
+    EXPECT_NE(out.find("Screen 'game_screen' Enter (from 'real_loading_screen')"),
+              std::string::npos);
+    EXPECT_NE(out.find("gameStage=playing"), std::string::npos);
+    EXPECT_EQ(sWarm.signal, 0) << "Engine crashed with signal " << sWarm.signal;
+}
+#endif // DC3_DLC_TESTS
 
 // PLAN H-11: the loading screen plays its loading music.  The image finds the
 // era's .mid only in the persistent file cache App::App builds at boot

@@ -15,6 +15,7 @@ in `../milo-native-engine` (rendering, audio, input, file I/O).
 | [TESTING.md](TESTING.md) | `scripts/native_test.sh`, gates, exit codes, skip budget |
 | [SCORING_ENV_VARS.md](SCORING_ENV_VARS.md) | Scoring and pose env vars |
 | [SAVE_PERSISTENCE_PLAN.md](SAVE_PERSISTENCE_PLAN.md) | Save/cache backend and its on-disk contract |
+| [DLC.md](DLC.md) | Downloadable content: importing a package, `DC3_DLC_DIR`, how it mounts |
 | [reference/](reference/) | Rendering, audio/video, animation, loading and boot, porting, viewer, live-state probing, code style |
 | [../debugging/native.md](../debugging/native.md) | Debugging, and the master env-var table |
 
