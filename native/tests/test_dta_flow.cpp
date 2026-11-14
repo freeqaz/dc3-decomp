@@ -1098,11 +1098,14 @@ TEST_F(ForcedHelpbarAfterSongTest, HelpbarLeavesControllerModeOncePerSong) {
 // options-gameplay.txt enters options_gameplay_screen twice, selecting one
 // checkbox row each time, then selects A/V > Kinect Tuner.  native's
 // {speech_mgr is_speech_supportable} is 0, so the panel shows
-// provider_no_voice.hnp: its four rows, plus -- in a developer run
-// (DC3_DEV_OPTIONS=1) -- the native overlay's two (option_camera_blend,
-// option_debug_panel) = 6.  This suite runs with the developer rows on, so it
-// keeps exercising the overlay's append path; OptionsGameplayPlayerFlowTest
-// below runs the same flow as a player and requires the retail four (G-20).
+// provider_no_voice.hnp: its four rows, plus -- in the dev profile, the
+// default (DC3_PROFILE unset; it sets DC3_DEV_OPTIONS=1) -- the native
+// overlay's two (option_camera_blend, option_debug_panel) = 6.  This suite runs
+// with nothing set, so it pins the DEFAULT and keeps exercising the overlay's
+// append path; OptionsGameplayPlayerFlowTest below runs the same flow under
+// DC3_PROFILE=release and requires the retail four (G-20).  The developer rows
+// are appended after the retail four, so options-gameplay.txt's row walk is the
+// same under both.
 //
 // G-12: the overlay counted rows with `num_data`, a message HamNavProvider has
 // never handled (Handle is 100% matched; the image has no such handler), so
@@ -1118,7 +1121,8 @@ protected:
     static bool sRanEngine;
     static void SetUpTestSuite() {
         if (!getenv("DC3_DTA_FLOW_TESTS")) return;
-        sResult = RunDtaFlow(1500, 180, "options-gameplay.txt", "DC3_DEV_OPTIONS=1");
+        sResult = RunDtaFlow(1500, 180, "options-gameplay.txt",
+                             "env -u DC3_DEV_OPTIONS -u DC3_PROFILE");
         sRanEngine = true;
     }
     void SetUp() override { CheckRan(sResult, sRanEngine); }
@@ -1188,23 +1192,26 @@ TEST_F(OptionsGameplayFlowTest, OverlayAddsItsTwoRowsEachVisit) {
     ASSERT_EQ(counts.size(), 2u)
         << "expected one checkbox select per visit (photo or freestyle)";
     EXPECT_EQ(counts[0], 6)
-        << "first visit: provider_no_voice.hnp's 4 rows + camera blend + debug overlay";
+        << "first visit: provider_no_voice.hnp's 4 rows + camera blend + debug overlay "
+           "(4 = the dev profile, the default, no longer shows the developer rows)";
     EXPECT_EQ(counts[1], 6)
         << "second visit: 6 rows again (fewer: an append was lost; more: the "
            "provider outlived the first visit and the rows doubled)";
 }
 
-// G-20: a player (no DC3_DEV_OPTIONS) sees the retail rows only, as on a 360:
-// provider_no_voice.hnp's option_photo, option_freestyle, autosave,
-// option_choosestorage.  Before the fix every run showed the two developer
-// rows (camera blend, debug overlay) too.
+// G-20: a player (DC3_PROFILE=release, the future player build) sees the
+// retail rows only, as on a 360: provider_no_voice.hnp's option_photo,
+// option_freestyle, autosave, option_choosestorage.  Before G-20 every run
+// showed the two developer rows (camera blend, debug overlay) too; since the
+// dev profile became the default only release hides them.
 class OptionsGameplayPlayerFlowTest : public ControllerModeFlowTest {
 protected:
     static DtaRunResult sResult;
     static bool sRanEngine;
     static void SetUpTestSuite() {
         if (!getenv("DC3_DTA_FLOW_TESTS") || sRanEngine) return;
-        sResult = RunDtaFlow(1500, 180, "options-gameplay.txt", "env -u DC3_DEV_OPTIONS");
+        sResult = RunDtaFlow(1500, 180, "options-gameplay.txt",
+                             "env -u DC3_DEV_OPTIONS DC3_PROFILE=release");
         sRanEngine = true;
     }
     void SetUp() override { CheckRan(sResult, sRanEngine); }

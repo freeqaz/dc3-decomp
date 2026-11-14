@@ -7,6 +7,7 @@
 #include "os/File.h"
 #include "os/System.h"
 #include "platform/ExecutablePath.h"
+#include "NativeSettings.h"
 #include "utl/Loader.h"
 #include "utl/MakeString.h"
 #include "utl/Symbol.h"
@@ -35,6 +36,115 @@ bool Dc3EnvFlag(const char *name, bool defaultOn) {
     if (!v || !*v) return defaultOn;
     return !(strcmp(v, "0") == 0 || strcasecmp(v, "false") == 0 ||
              strcasecmp(v, "off") == 0 || strcasecmp(v, "no") == 0);
+}
+
+// ---------------------------------------------------------------------------
+// DC3_PROFILE -- the native build's defaults, in one place.
+//
+//   unset / empty / "dev" -> dev (the default): everything useful to a
+//                            developer playing and dogfooding is on
+//   "release"             -> the player-facing defaults (each variable's own
+//                            compiled default: retail Options rows, no debug
+//                            server, quiet console)
+//   anything else         -> dev, with a warning
+//
+// A profile is nothing but a set of default VALUES for ordinary variables:
+// Dc3ProfileApply() runs first thing in main() (native and web) and sets each
+// row below that is unset or empty, so every read site -- dc3's, the
+// engine's, presence tests and value parses alike -- sees the profile's value,
+// and a variable already in the environment always wins (DC3_HTTP=0 under dev
+// turns the server off; DC3_DEV_OPTIONS=1 under release shows the rows).  The
+// table is the only place a dev default lives; `release` sets nothing, so it
+// is exactly the build's behaviour without a profile.
+//
+// What a row may NOT be: anything that moves the game away from the original
+// in a way that invalidates testing it -- scoring, timing, song content,
+// skipped screens, faked players (DC3_FAST_TIME, DC3_FAST_BOOT,
+// DC3_POSE_SELFTEST, DC3_POSE_PERFORM, MILO_FATAL_FAILS ...), or a diagnostic
+// with a real cost (DC3_REFRING_AUDIT, DC3_POISON_FREED_OBJECTS,
+// DC3_STUB_TRACE).  Those stay opt-in under every profile.  The full decision
+// table, with the reasons, is in docs/debugging/native.md "Profiles".
+//
+// milo-tests does not call Dc3ProfileApply: an in-process test sees each
+// variable's compiled default (= release) unless it sets one.  dc3-native
+// subprocesses the tests launch DO apply it, so a test that asserts a
+// player-facing default pins DC3_PROFILE=release.
+// ---------------------------------------------------------------------------
+static const Dc3ProfileDefault kDc3DevDefaults[] = {
+    {"DC3_DEV_OPTIONS", "1", false,
+     "Options > Gameplay shows the developer rows (Camera Blend, Debug Overlay)"},
+    {"DC3_DEV_MENU", "1", false,
+     "the original debug build's development menu ({ui show_dev_menu}): its "
+     "extra modes in Choose Mode, its extra campaign difficulty rows"},
+    {"DC3_RND_OVERLAYS", "1", false,
+     "the original's on-screen RndOverlays (cheat_display notices, the "
+     "framerate/stats/timer quick cheats) drawn in the corner"},
+    {"DC3_HTTP", "1", true,
+     "HTTP debug server on 127.0.0.1 (DC3_HTTP_PORT unset: 9090 when free in a "
+     "window, else a kernel-assigned port; printed as DC3_HTTP_PORT=<n>)"},
+    {"DC3_TEL", "api", true,
+     "gameplay telemetry sampled for GET /api/telemetry, no DC3_TEL: lines"},
+    {"DC3_TAG_MODALS", "dev", true,
+     "every MILO_WARN/NOTIFY/FAIL printed as MILO_<KIND>: (rate-limited)"},
+    {"MILO_INPUT_LOG", "1", false, "one Joypad: down/up line per button message"},
+    {"DC3_MOVE_RATING_LOG", "1", false, "one DC3 MOVE_RATING line per passed move"},
+    {"MILO_PERF", "1", false, "a [PERF] fps/frame-time line every 5 s"},
+};
+
+const Dc3ProfileDefault *Dc3ProfileDevDefaults(int *count) {
+    if (count) *count = (int)(sizeof(kDc3DevDefaults) / sizeof(kDc3DevDefaults[0]));
+    return kDc3DevDefaults;
+}
+
+static int sDc3Profile = -1; // kDc3ProfileDev / kDc3ProfileRelease once resolved
+
+int Dc3ProfileResolve() {
+    const char *v = getenv("DC3_PROFILE");
+    if (!v || !*v || strcasecmp(v, "dev") == 0) return kDc3ProfileDev;
+    if (strcasecmp(v, "release") == 0) return kDc3ProfileRelease;
+    fprintf(stderr, "DC3 Native: DC3_PROFILE='%s' is not 'dev' or 'release'; using dev\n", v);
+    return kDc3ProfileDev;
+}
+
+bool Dc3ProfileIsDev() {
+    if (sDc3Profile < 0) sDc3Profile = Dc3ProfileResolve();
+    return sDc3Profile == kDc3ProfileDev;
+}
+
+void Dc3ProfileApply() {
+    sDc3Profile = Dc3ProfileResolve();
+    const bool explicitProfile = getenv("DC3_PROFILE") && *getenv("DC3_PROFILE");
+    if (sDc3Profile == kDc3ProfileRelease) {
+        fprintf(stderr, "DC3 Native: profile=release (player defaults; no developer "
+                        "defaults applied)\n");
+        return;
+    }
+    // Later readers (and anything this process starts) see the resolved name.
+    setenv("DC3_PROFILE", "dev", 1);
+    std::string applied, kept;
+    int n = 0;
+    const Dc3ProfileDefault *rows = Dc3ProfileDevDefaults(&n);
+    for (int i = 0; i < n; i++) {
+#ifdef __EMSCRIPTEN__
+        if (rows[i].desktopOnly) continue;
+#endif
+        // Set and non-empty = the caller's choice; empty counts as unset (as
+        // in Dc3EnvFlag), so it is overwritten.
+        const char *have = getenv(rows[i].name);
+        if (have && *have) {
+            kept += std::string(" ") + rows[i].name + "=" + have;
+            continue;
+        }
+        setenv(rows[i].name, rows[i].value, 1);
+        applied += std::string(" ") + rows[i].name + "=" + rows[i].value;
+    }
+    fprintf(stderr, "DC3 Native: profile=dev (%s; DC3_PROFILE=release for the player "
+                    "defaults)\n", explicitProfile ? "DC3_PROFILE=dev" : "the default");
+    fprintf(stderr, "DC3 Native: profile dev defaults:%s\n",
+            applied.empty() ? " (none)" : applied.c_str());
+    if (!kept.empty())
+        fprintf(stderr, "DC3 Native: profile dev, kept from the environment:%s\n",
+                kept.c_str());
 }
 
 // The native controller-mode policy, DC3_CONTROLLER_MODE.
