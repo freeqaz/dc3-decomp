@@ -35,6 +35,7 @@
 // include path and shadows the engine's.
 bool TextMeshKeepsAtlasRGB(RndMesh *mesh, RndMat *mat, bool skinned);
 bool MeshDrawsAsGlyph(RndMesh *mesh, bool skinned);
+bool MeshShadesAsText(RndMesh *mesh);
 void MarkTextGlyphMesh(RndMesh *mesh);
 bool IsMarkedTextGlyphMesh(RndMesh *mesh);
 
@@ -128,6 +129,56 @@ TEST_F(NativeGlyphRenderTest, UnmarkingGameKeepsInferredGlyphRule) {
     EXPECT_TRUE(unnamedFlat);
     EXPECT_FALSE(unnamedSkinned);
     EXPECT_FALSE(namedFlat);
+    delete named;
+    delete unnamed;
+}
+
+// Lane np-gfx-blend round 2: the text COLOUR path (BuildMaterialParams'
+// isTextMesh: forced prelit, atlas alpha as RGB unless the hook keeps the
+// atlas RGB) follows the same mark. HamRibbon's trail is unnamed and was shaded
+// as text: forced prelit, so its lit material (hamribbon.mat: prelit 0,
+// use_environ 0 -- NgMat::SetupAmbient gives it an ambient of 1 and the shader
+// options no lights) was replaced by the mesh's vertex colour, which is white
+// only by RndMesh::Vert's default. FrameCapture on streetside peak:
+// mesh='' mat='hamribbon.mat' ... prelit=1 heuristics: TextMeshDetect.
+// Sabotage tried:
+//  - MeshShadesAsText back to `!mesh->Name()[0]` -> the unmarked meshes fail;
+//  - MeshShadesAsText returning the mark regardless of the hook ->
+//    UnmarkingGameKeepsTextColourPath fails.
+TEST_F(NativeGlyphRenderTest, OnlyMarkedPagesTakeTextColourPath) {
+    GameRenderHook *hook = GetGameRenderHook();
+    ASSERT_NE(hook, nullptr) << "DC3's render hook is not registered";
+    ASSERT_TRUE(hook->MarksTextGlyphMeshes());
+
+    RndMesh *ribbon = Hmx::Object::New<RndMesh>(); // unnamed, never marked
+    EXPECT_FALSE(MeshShadesAsText(ribbon))
+        << "an unmarked unnamed mesh (HamRibbon trail, beam, billboard) shades with "
+           "its own material, not as a text page";
+    RndMesh *page = Hmx::Object::New<RndMesh>();
+    MarkTextGlyphMesh(page);
+    EXPECT_TRUE(MeshShadesAsText(page)) << "a glyph page keeps the text colour path";
+    RndMesh *named = Hmx::Object::New<RndMesh>();
+    named->SetName("floor.mesh", ObjectDir::Main());
+    EXPECT_FALSE(MeshShadesAsText(named));
+    EXPECT_FALSE(MeshShadesAsText(nullptr));
+    delete named;
+    delete page;
+    delete ribbon;
+}
+
+// Without the mark (rb3-xenon) the colour path is what it was: every unnamed
+// mesh, skinned or not (it never looked at skinning).
+TEST_F(NativeGlyphRenderTest, UnmarkingGameKeepsTextColourPath) {
+    GameRenderHook *saved = GetGameRenderHook();
+    SetGameRenderHook(nullptr);
+    RndMesh *unnamed = Hmx::Object::New<RndMesh>();
+    RndMesh *named = Hmx::Object::New<RndMesh>();
+    named->SetName("floor.mesh", ObjectDir::Main());
+    const bool unnamedText = MeshShadesAsText(unnamed);
+    const bool namedText = MeshShadesAsText(named);
+    SetGameRenderHook(saved);
+    EXPECT_TRUE(unnamedText);
+    EXPECT_FALSE(namedText);
     delete named;
     delete unnamed;
 }
