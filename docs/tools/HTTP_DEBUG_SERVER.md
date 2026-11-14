@@ -4,13 +4,28 @@ Embedded HTTP server for interacting with a running DC3 native engine instance. 
 
 Desktop-only (not available in Emscripten/web builds).
 
+**Loopback only:** the server binds `127.0.0.1` (it listened on `0.0.0.0`
+until 2026-11-14). It evaluates arbitrary DTA, so it never answers another
+machine; drive an engine on another box through a tunnel,
+`ssh -L 9090:127.0.0.1:9090 <box>`.
+
+**On by default** under the dev profile (`DC3_PROFILE`, the default; see
+[debugging/native.md "Profiles"](../debugging/native.md#profiles-dc3_profile)).
+`DC3_HTTP=0` or `DC3_PROFILE=release` turns it off.
+
 ## Quick Start
 
 ```bash
-# Enable the server (off by default)
+# Dev profile: the server is already on. With DC3_HTTP_PORT unset a window
+# takes 9090 if it is free, else a kernel-assigned port (it says which);
+# a headless run always takes a kernel-assigned port. Either way the port is
+# printed on stdout as DC3_HTTP_PORT=<n>.
+./dc3-native
+
+# Under release, or to be explicit
 DC3_HTTP=1 ./dc3-native
 
-# Custom port (default 9090)
+# A fixed port (strict: taken = exit 98)
 DC3_HTTP=1 DC3_HTTP_PORT=8080 ./dc3-native
 
 # Kernel-assigned free port; the chosen one is printed on stdout as
