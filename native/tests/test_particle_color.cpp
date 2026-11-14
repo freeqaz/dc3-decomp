@@ -217,7 +217,14 @@ TEST_F(ParticleColorTest, NonRelativeParticleIsWorld) {
 // alleySteam: 0.7) and the swing arm (throneroom's spinning smoke, start_offset
 // 10), and turned the quad the other way.
 //
-// Sabotage tried (np-gfx-blend residual round 2): see the end of this block.
+// Sabotage tried (np-gfx-blend residual round 2), each caught:
+//   call site passes retailXbox = false      -> RenderedParticleTakes... fails
+//   swing arm dropped                         -> SwingArm... and the render test
+//   screen aspect forced to 1                 -> ScalesUp..., SwingArm..., render
+//   whole turn reversed (sinA -> -sinA)       -> TurnsClockwise, SwingArm, Oblique
+//   one basis row's sign flipped (rotRx)      -> Oblique only (the axis-aligned
+//                                                tests cannot see an x-row slip)
+//   Part.h ScreenAspect() renamed             -> DC3ShapeReads... and the render
 
 namespace {
 const float kR[3] = {1.0f, 0.0f, 0.0f};
@@ -265,6 +272,23 @@ TEST_F(ParticleColorTest, SwingArmMovesTheCentreAlongTurnedUp) {
     // The arm is in the same squashed basis as the quad.
     q = ParticleBillboardAxes(kPos, kR, kU, 2.0f, 0.0f, true, 0.5f, 3.0f);
     ExpectVec(q.centre, 5.0f, 10.0f, 8.5f);
+}
+
+// The same quarter turn under an oblique camera (every component of R and U
+// non-zero in x and z), squashed and swung, so a sign or component slip in
+// any row of the basis shows.
+TEST_F(ParticleColorTest, RetailBillboardUnderAnObliqueCamera) {
+    const float R[3] = {0.6f, 0.0f, 0.8f};
+    const float U[3] = {-0.8f, 0.0f, 0.6f};
+    ParticleQuadAxes q =
+        ParticleBillboardAxes(kPos, R, U, 2.0f, (float)M_PI_2, true, 0.5f, 3.0f);
+    ExpectVec(q.right, 0.8f, 0.0f, -0.6f);  // -0.5 U * 2
+    ExpectVec(q.up, 1.2f, 0.0f, 1.6f);      // R * 2
+    ExpectVec(q.centre, 6.8f, 10.0f, 9.4f); // + R * 3
+    q = ParticleBillboardAxes(kPos, R, U, 2.0f, 0.0f, true, 0.5f, 3.0f);
+    ExpectVec(q.right, 1.2f, 0.0f, 1.6f);   // R * 2
+    ExpectVec(q.up, -0.8f, 0.0f, 0.6f);     // 0.5 U * 2
+    ExpectVec(q.centre, 3.8f, 10.0f, 7.9f); // + 0.5 U * 3
 }
 
 // Without the retail terms (RB3-Wii, rb3-xenon) the billboard is the old one.
