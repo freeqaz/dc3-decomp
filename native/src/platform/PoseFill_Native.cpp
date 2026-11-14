@@ -161,6 +161,7 @@ void Filler::Reset() {
     mLastShows = 0.0;
     mSigma = -1e30;
     mArrivalElapsedMs = 33;
+    mFills = mReals = 0;
 }
 
 double Filler::MedianInterval() const {
