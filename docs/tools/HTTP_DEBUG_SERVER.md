@@ -359,6 +359,28 @@ curl localhost:9090/api/pace                    # {"ok":true,"data":{"fps":120.0
 curl -X PUT 'localhost:9090/api/pace?fps=0'     # unpaced (e.g. for a song nobody gestures in)
 ```
 
+### GPU time per render pass
+
+With `MILO_GPU_TIMERS=1` the engine times every render pass with WebGPU
+timestamp queries (`docs/debugging/native.md`, PLAN H-96); `/api/gputime`
+returns the latest ~1 s window. Without the env var, or on an adapter or build
+without `timestamp-query`, it answers `"active":false` and `unavailable` says
+why.
+
+```bash
+curl localhost:9090/api/gputime
+# {"ok":true,"data":{"requested":true,"active":true,"quantizationOff":1,"window":42,
+#   "windowSeconds":1.004,"frames":137,"skipped":0,"gpuSumMs":0.5780,"gpuSumMaxMs":0.5940,
+#   "gpuSpanMs":0.6970,"gpuSpanMaxMs":0.7210,"unavailable":"",
+#   "passes":[{"name":"MainPassResume","ms":0.3492,"maxMs":0.3626,"n":5.80}, ...]}}
+```
+
+`ms` is the mean per timed frame (passes of one name in a frame add up), `n`
+the passes of that name per frame; `gpuSumMs` sums every pass, `gpuSpanMs` is
+first begin to last end (it includes idle gaps between submits).
+`scripts/playtest/gpu_pass_ab.py` drives a song with this endpoint and
+`/api/dta/eval` to A/B one switch.
+
 ## Example Workflows
 
 ### Wait for engine ready, then screenshot
