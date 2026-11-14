@@ -62,12 +62,17 @@ namespace {
 // (a rest or another player's measure lies between them): hold, do not blend.
 const float kMaxGapSeconds = 0.6f;
 
-// DC3_POSE_PERFORM_KNOT=0: blend frame to frame in a straight chord, as before
-// PLAN H-50, ignoring each frame's authored displacement (ChoreoBlend.h).  For
-// A/B measurement only; the knot is the faithful copy.
+// DC3_POSE_PERFORM_KNOT=1: blend through each frame's displacement knot
+// (ChoreoBlend.h) instead of the straight chord from frame to frame.  Off by
+// default, for measurement only (PLAN H-50).  MEASURED, DC1 Easy + Expert, same
+// binary: on Expert at a move's first occurrence, where the scheduled frames
+// ARE the async detector's reference, the chord is already Perfect on 1,642 of
+// 1,642 ratings (the knot: 1,641).  Every rating the knot changes is where the
+// scheduled frames are not the reference (P-11); it fixed cantgetyou Easy
+// (14 -> 1 not Perfect) but made the DC1 total 332 -> 356.
 const bool sDisplacementKnot = [] {
     const char *v = getenv("DC3_POSE_PERFORM_KNOT");
-    return !(v && v[0] == '0' && v[1] == '\0');
+    return v && v[0] == '1' && v[1] == '\0';
 }();
 
 void AppendJoints(std::string &out, const Vector3 *pos) {

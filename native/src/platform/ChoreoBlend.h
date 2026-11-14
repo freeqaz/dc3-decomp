@@ -19,14 +19,21 @@
 //   straightens -- the two point different ways.  MEASURED on cantgetyou Easy
 //   (Headwrush_cantgetyou, rated Awesome at exactly 0.8000 on every
 //   occurrence): the failing displacement nodes read angles of 2-3 rad between
-//   dancer and player motion.  Dance Central 1 moves have about five frames a
-//   measure, so the chord is long and this is where it shows (H-50: 4.8% of
-//   DC1 moves not Perfect against 0.1% of DC2/DC3 moves).
+//   dancer and player motion.
 //
-//   So the performer puts a second knot ElapsedMs before each frame, at the
-//   frame's pose minus its authored displacement, and blends through it.  A
-//   player who copies the dancer exactly is what the performer plays; this is
-//   only the performer being a more faithful copy.  The scorer is unchanged.
+//   So the performer can put a second knot ElapsedMs before each frame, at the
+//   frame's pose minus its authored displacement, and blend through it.  The
+//   scorer is unchanged.
+//
+//   OFF BY DEFAULT (DC3_POSE_PERFORM_KNOT=1 turns it on): it is not what makes
+//   Dance Central 1 songs score below Perfect.  MEASURED (DC1 Easy + Expert,
+//   FAST_TIME, same binary, knot off / on): at a move's first Expert
+//   occurrence, where the scheduled frames are the async detector's own
+//   reference, the chord is Perfect on 1,642 of 1,642 ratings (knot 1,641).
+//   Every rating not Perfect is where the scheduled frames are NOT the
+//   reference (Easy, or a repeat: P-11), and there the knot only changes which
+//   ones pass (cantgetyou Easy 14 -> 1, straightup Easy 12 -> 15; all of DC1
+//   332 -> 356).  Kept as a measurement tool for that class.
 //
 // The knot is used only when it falls after the previous frame (frames closer
 // together than ElapsedMs keep the plain chord) and when the frame carries a

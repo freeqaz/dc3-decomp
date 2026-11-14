@@ -1,13 +1,13 @@
 // The choreo performer's pose between two scheduled detect frames
 // (native/src/platform/ChoreoBlend.h, PoseTarget_Native.cpp ChoreoAt; PLAN H-50).
 //
-// The bug: the performer blended in a straight chord from one detect frame to
-// the next, so over a frame's displacement window (DancerSkeleton::ElapsedMs,
-// 99 ms on the Dance Central 1 moves measured) the player moved along the chord
+// The straight chord from one detect frame to the next moves the player along
+// the chord over a frame's displacement window (DancerSkeleton::ElapsedMs),
 // while the scorer's displacement nodes compare that motion with the dancer's
-// authored CamJointDisplacement.  Where the dancer's motion curves the two
-// point different ways (measured on cantgetyou Easy: 2-3 rad on the failing
-// nodes), and a perfect copy of the choreography rated Awesome.
+// authored CamJointDisplacement (measured on cantgetyou Easy: 2-3 rad on the
+// failing nodes).  The knot reproduces the authored motion; it is opt-in
+// (DC3_POSE_PERFORM_KNOT=1), since over all of DC1 it does not lower the
+// not-Perfect count (ChoreoBlend.h has the numbers).
 //
 // These tests pin the blend: over the last ElapsedMs before a frame the
 // performer moves by exactly that frame's authored displacement, it still hits
