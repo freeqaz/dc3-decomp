@@ -121,8 +121,9 @@ bool ChoreoAt(const std::vector<DetectFrame> &frames, float t, Vector3 *out) {
             out[j] = sa.CamJointPos((SkeletonJoint)j);
         return true;
     }
-    // Blend toward b through its displacement knot (ChoreoBlend.h, PLAN H-50),
-    // so the player's last ElapsedMs of motion is the dancer's authored motion.
+    // Blend toward b: the straight chord, or with DC3_POSE_PERFORM_KNOT=1
+    // through its displacement knot (ChoreoBlend.h, PLAN H-50), so the player's
+    // last ElapsedMs of motion is the dancer's authored motion.
     Vector3 pa[kNumJoints], pb[kNumJoints], db[kNumJoints];
     const DancerSkeleton &sb = b->GetDancerFrame()->mSkeleton;
     for (int j = 0; j < kNumJoints; j++) {
