@@ -779,7 +779,9 @@ class RealScriptTest(unittest.TestCase):
             import cv2  # noqa: F401
         except ImportError:
             self.skipTest("cv2 not installed for this python")
-        p, secs = self.run_server("--camera", "63")
+        # A path, not an index: an index whose node is missing now falls
+        # back to the auto scan, which finds a real camera on a box that has one.
+        p, secs = self.run_server("--camera", "/dev/video-np-pose-no-such-node")
         self.assertEqual(p.returncode, ps.EXIT_NO_CAMERA, p.stderr[-800:])
         self.assertIn("POSE_SERVER_ERROR exit=3", p.stderr)
         self.assertLess(secs, ps.FIRST_FRAME_TIMEOUT_S + 3.0)
