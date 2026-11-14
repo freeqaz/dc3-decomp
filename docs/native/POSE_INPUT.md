@@ -67,6 +67,53 @@ data. Caveat: ImGui has no display size in headless runs, so the overlay — lik
 the debug panel — is not in `/api/screenshot` captures; it was verified on a
 windowed boot under Xvfb (screen grab).
 
+### How the server is launched: the spawner, and restart-on-death
+
+`dc3-native` never forks `pose_server.py` from the game process. The first
+line of `main()` forks a small **spawner** (`native/src/platform/
+ProcessSpawner_Native.{h,cpp}`, `dc3-spawner` in `ps`) before audio, graphics
+or any thread exists; the provider sends it argv plus the game's *current*
+environment and working directory, it fork+execs the server, reports the pid
+and relays the exit status back (so "crashed (signal N)" still works).
+
+Why (measured on a GPD Pocket, Arch + PipeWire, no rtkit installed): the
+engine's ALSA audio goes through PipeWire's ALSA plugin, whose
+`libpipewire-module-rt` — with no rtkit to ask — lowers `RLIMIT_RTTIME` to
+soft 0 / hard 0 for the whole game process (`/proc/<pid>/limits`: `Max
+realtime timeout 0 0 us`). A child forked after that inherits the hard 0 and,
+unprivileged, can never raise it; MediaPipe's realtime thread then trips the
+check and the kernel SIGKILLs the server at model load. The spawner keeps the
+limits the game was *started* with. (`6fc29da83` stops mediapipe's
+`sounddevice` import setting the same limit inside the server itself; both are
+needed.)
+
+Lifetime: the spawner exits on EOF of its socket (the kernel closes the game's
+end however the game dies, SIGKILL included) or on `PR_SET_PDEATHSIG`; it then
+SIGTERMs the server, waits up to 2 s, SIGKILLs it and reaps it. The server has
+`PR_SET_PDEATHSIG(SIGTERM)` against the spawner, so even a SIGKILLed spawner
+does not leak it. A process that never calls `NativeSpawner::Init()` (unit
+tests that do not opt in) falls back to a direct fork and says so on stderr.
+
+Restart-on-death: a server the game launched that dies **after it had
+connected** is relaunched by the reader thread, at most **3** times per
+session, after 1 s, 2 s, 4 s, with one line on stderr and one on-screen
+notice per attempt (*"The pose server crashed (signal 9) - restarting pose
+tracking (1 of 3)."*); once it reconnects the notice clears and
+`Pose server restarted (pid N): pose tracking resumed` is printed. Exits a
+relaunch cannot fix — model missing (5), packages missing (6), video
+unreadable (4), python3 not runnable (127), a clean exit (0) — are not
+retried; after the last attempt the usual "pose tracking is off" notice
+stands. A server that fails *before* connecting at boot is not retried (that
+is a missing camera/model/package, reported as before).
+
+Tests: `PoseSpawnerTest.*` (milo-tests, no assets: the RTTIME regression with
+its own negative control, exit-status relay, the signal-9 notice, restart and
+its bound, nothing outliving the game however it ends) and
+`NativePoseSpawnTest.*` (the same against a real `dc3-native`: the test lowers
+the running game's `RLIMIT_RTTIME` with `prlimit(2)` after the spawner fork and
+before the pose launch, which is where audio init sits, and a stub `python3`
+on `PATH` records the limits it got).
+
 Env-var reference: [SCORING_ENV_VARS.md](SCORING_ENV_VARS.md) and the master
 table in [../debugging/native.md](../debugging/native.md).
 
