@@ -602,6 +602,18 @@ stage) failed it (15.9, exit 1); the old default `&pose_delegate=CPU` failed
 it (22.0, exit 1). On the GPD or a phone the threshold is not justified yet
 (W-22).
 
+**The check is a quiet-box check.** After the rebase onto main `d02cfb053`
+(which touched nothing on the pose path), at load 48–62 with 5–8 other
+lanes' `dc3-native` on the GPU, MEASURED: default 9.25 and 21.7 (exit 1),
+pose alone with no game 21.2 (was 29.98 at load 25–32), CPU delegate 13.0.
+Everything slowed together and GPU still led CPU. So an exit 1 means "look
+at the load and the GPU's other users first", and the check only means
+something at the load it was set at (≤ ~35 on this rig).
+Rerun on the rebased build when the load fell (MEASURED, load 34 → 27,
+8–11 other `dc3-native` on the GPU): default 25.9 and 24.1 (exit 0),
+sabotage `pose_slow=infer:40` 14.5 (exit 1), `pose_delegate=CPU` 21.6
+(exit 1). The margin over 24 is thin under that GPU contention.
+
 Instrument check, same session, no game (MEASURED): `pose_slow=camera:10`
 moved `draw` 2.13 → 11.98 ms and `busy` 16.2 → 25.4 ms; inference stayed at
 12.0 / 11.5 ms. The default without the game delivered 29.98 of the camera's
