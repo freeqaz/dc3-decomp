@@ -52,7 +52,6 @@
 #include "os/System.h"
 #include "utl/Std.h"
 #include <algorithm>
-#include <cctype>
 #include <climits>
 #include <cstdlib>
 #include <dirent.h>
