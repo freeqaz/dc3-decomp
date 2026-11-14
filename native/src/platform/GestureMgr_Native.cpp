@@ -19,6 +19,7 @@
 #include "hamobj/HamGameData.h"   // TheGameData (player->skeleton binding)
 #include "hamobj/HamPlayerData.h" // GetSkeletonTrackingID
 #include "hamobj/MoveDir.h"       // MoveDir::SongSeconds (DC3_POSE_FILL)
+#include "lazer/game/GamePanel.h"  // TheGamePanel: the stall notice is for a song in play
 #include "PoseFill_Native.h"      // DC3_POSE_FILL
 #include "NativeNotice.h"         // DC3_POSE_STALL_MS
 #include "meta_ham/HamUI.h"          // TheHamUI -> ShellInput -> SkeletonChooser
@@ -981,15 +982,45 @@ static int NativePoseStallMs() {
 namespace {
 struct StallWatch {
     std::chrono::steady_clock::time_point lastNew, lastEmpty;
-    bool haveNew = false;
+    bool haveNew = false;  // the source has delivered a real frame
     bool stalled = false;
+    bool noticeUp = false; // the stall notice is on screen
     unsigned stalls = 0;
 };
 StallWatch gStall;
+int sSongInPlayForTest = -1;
 } // namespace
 
 unsigned NativePoseStalls() { return gStall.stalls; }
 bool NativePoseStalled() { return gStall.stalled; }
+void NativePoseStallTestSetSongInPlay(int inPlay) { sSongInPlayForTest = inPlay; }
+
+// The notice is the player's explanation of the image's skeleton-loss pause,
+// which only a song has (Game::PostUpdate -> CheckForSkeletonLoss).  Song
+// select, the results screens, the menus: the stall is logged, the sensor
+// still reports nobody, nothing is drawn.  Measured before this: a performer
+// replay, silent between songs, put the notice on song select in 153 of 204
+// sweep runs.
+static bool NativeSongInPlay() {
+    if (sSongInPlayForTest >= 0)
+        return sSongInPlayForTest != 0;
+    return TheGamePanel && TheGamePanel->GetState() == UIPanel::kUp
+        && (TheGamePanel->InIntroState() || TheGamePanel->IsPlayingState());
+}
+
+static void StallNoticeTick() {
+    const bool want = gStall.stalled && NativeSongInPlay();
+    if (want == gStall.noticeUp)
+        return;
+    gStall.noticeUp = want;
+    if (want)
+        NativeNotice::Post(kStallNoticeKey,
+                           "The pose stream stopped sending frames - pose tracking is paused until "
+                           "it is back.",
+                           "Pose stream stalled", 20.0f);
+    else
+        NativeNotice::Clear(kStallNoticeKey);
+}
 
 // Called once per BuildSensorFrame with the provider running.  Returns true
 // when it laid an empty frame into the slots (never when this call already
@@ -1000,9 +1031,13 @@ static bool StallWatchTick(bool newFrame, bool delivered) {
         if (gStall.stalled) {
             double secs = std::chrono::duration<double>(now - gStall.lastNew).count();
             fprintf(stderr, "DC3 POSE STALL: frames are back after %.1f s\n", secs);
-            NativeNotice::Clear(kStallNoticeKey);
-            NativeNotice::Post(kStallNoticeKey, "Pose frames are back - tracking resumed.", "", 4.0f);
+            if (gStall.noticeUp) { // only a player who was told hears it is over
+                NativeNotice::Clear(kStallNoticeKey);
+                NativeNotice::Post(kStallNoticeKey, "Pose frames are back - tracking resumed.", "",
+                                   4.0f);
+            }
         }
+        gStall.noticeUp = false;
         gStall.stalled = false;
         gStall.haveNew = true;
         gStall.lastNew = now;
@@ -1020,14 +1055,12 @@ static bool StallWatchTick(bool newFrame, bool delivered) {
         gStall.lastEmpty = now - std::chrono::milliseconds(100);
         fprintf(stderr,
                 "DC3 POSE STALL: no pose frame for %.1f s - the sensor reports nobody until frames "
-                "return (DC3_POSE_STALL_MS=%d)\n",
-                silentMs / 1000.0, stallMs);
-        NativeNotice::Post(kStallNoticeKey,
-                           "The pose stream stopped sending frames - pose tracking is paused until "
-                           "it is back.",
-                           "Pose stream stalled", 20.0f);
+                "return (DC3_POSE_STALL_MS=%d)%s\n",
+                silentMs / 1000.0, stallMs,
+                NativeSongInPlay() ? "" : " [no song in play: no notice]");
         gFill.Reset();
     }
+    StallNoticeTick();
     if (delivered
         || std::chrono::duration<double, std::milli>(now - gStall.lastEmpty).count() < 1000.0 / 30.0)
         return false;
@@ -1124,7 +1157,10 @@ static const SkeletonFrame *BuildSensorFrame() {
                 delivered = true;
             }
         }
-        if (StallWatchTick(newFrame, delivered))
+        // A source that has never published is not "new" on its first poll
+        // (frame id 0 then means nothing yet), so it is not watched: a camera
+        // that never delivers -- or keyboard/pad play -- never sees the stall.
+        if (StallWatchTick(newFrame && TheSkeletonProvider->HasPublished(), delivered))
             delivered = true;
         FillPublishDelay();
         if (!delivered)
