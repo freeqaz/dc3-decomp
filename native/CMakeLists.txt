@@ -2067,6 +2067,7 @@ if(BUILD_TESTS)
         tests/test_flare_point_test.cpp
         tests/test_retail_lighting.cpp
         tests/test_retail_char_shading.cpp
+        tests/test_screen_aligned_texgen.cpp
         tests/test_proj_shadow_caster_pass.cpp
         tests/test_dta_parser.cpp
         tests/test_movegraph.cpp
