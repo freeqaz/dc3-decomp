@@ -88,6 +88,25 @@ TEST_F(DC3RetailPostTest, BloomMaskScaleIsAllowHDRLumaOverThreshold) {
     delete pp;
 }
 
+// The frame alpha is the bloom mask, so how a blended draw combines it matters.
+// DC3 follows the draw's own equation (NgMat::SetBasicState passes the colour
+// factors for alpha), not MAX: under MAX the song-select "debloom" quads and
+// the full-screen Multiply tint (white, AllowHDR) raised the mask to 1 under
+// the cards and ~0.9 over the background, which retail footage refutes
+// (dc3-backend-for-rb3-wii.md 31.5). Asked of the live renderer's pipelines.
+TEST_F(DC3RetailPostTest, BlendedAlphaFollowsTheDrawsEquation) {
+    if (!gWgpuRnd) GTEST_SKIP() << "no renderer";
+    EXPECT_FALSE(gWgpuRnd->Pipelines().AlphaBlendMax());
+    const wgpu::BlendState mul = gWgpuRnd->Pipelines().MapBlend(WgpuBlend::Multiply);
+    EXPECT_EQ(mul.alpha.operation, wgpu::BlendOperation::Add) << "Multiply: dst.a * src.a";
+    EXPECT_EQ(mul.alpha.srcFactor, mul.color.srcFactor);
+    EXPECT_EQ(mul.alpha.dstFactor, mul.color.dstFactor);
+    const wgpu::BlendState add = gWgpuRnd->Pipelines().MapBlend(WgpuBlend::Add);
+    EXPECT_EQ(add.alpha.operation, wgpu::BlendOperation::Add);
+    EXPECT_EQ(add.alpha.srcFactor, wgpu::BlendFactor::One);
+    EXPECT_EQ(add.alpha.dstFactor, wgpu::BlendFactor::One);
+}
+
 TEST_F(DC3RetailPostTest, DisplayRampIsDefaultDtaGamma) {
     // default.dta (#merged by DC3's config/rnd.dta) sets (gamma 0.85), and DC3
     // applies the ramp to every output, so captures are post-ramp.
