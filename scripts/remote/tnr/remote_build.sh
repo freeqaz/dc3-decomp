@@ -40,6 +40,7 @@
 set -u
 B="${TNR_ROOT:?}"
 KEY="${TNR_KEY:?}"
+# barred() below reads $B, so it is set before anything calls it.
 CPUSET="${TNR_CPUSET:-32-63,96-127,160-191,224-254}"
 SLOTS="${TNR_SLOTS:-2}"
 SLOT_WAIT="${TNR_SLOT_WAIT:-1800}"
@@ -55,6 +56,9 @@ barred() {
     # Prints the reason and returns 0 when agent work must not run now.
     if [ -e /run/cmp-measure-window ]; then echo "measurement window (/run/cmp-measure-window)"; return 0; fi
     if [ -e /run/cmp-agent-pause ]; then echo "operator pause (/run/cmp-agent-pause)"; return 0; fi
+    # Ours alone: pauses every dc3 build without touching the host's flags
+    # (and lets the pause path be exercised without a real window).
+    if [ -e "$B/PAUSE" ]; then echo "dc3 builds paused ($B/PAUSE)"; return 0; fi
     if [ -r "$GUARD_JSON" ]; then
         local st
         st="$(python3 -c 'import json,sys,time
