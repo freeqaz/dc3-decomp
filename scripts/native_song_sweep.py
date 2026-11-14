@@ -198,14 +198,31 @@ class Engine:
         return rss
 
 
-def route_script(downs, difficulty_downs=1, song=None):
+# --unlock-all: frames the route waits on main_screen before its confirm, so the
+# sweep can evaluate {toggle_unlock_all} (the debug cheat, MetaPanel::
+# ToggleUnlockAll) before song select builds its list.  play_song runs unpaced.
+UNLOCK_PAUSE_FRAMES = 3000
+UNLOCK_PAUSE_FRAMES_PACED = 300  # discovery runs at DC3_HTTP_PACE_FPS=60
+
+
+def unlock_all(e):
+    """{toggle_unlock_all} once main_screen is up: True if it is now on.  The
+    image's own debug cheat (config/cheats.dta 'Meta: unlock all'): every
+    profile-locked song (Black and Tan, unlocked by rank in the image) lists."""
+    r = e.jget("/screen/wait/main_screen?timeout=120", timeout=130)
+    if not (r and r.get("ok")):
+        return False
+    return e.eval("{toggle_unlock_all}").get("data", {}).get("value") in (1, True)
+
+
+def route_script(downs, difficulty_downs=1, song=None, main_pause=30):
     """title -> main -> choose_mode (perform) -> song select -> multiuser
     (difficulty, play, skip_waiting).  The song is picked by NAME (`highlight`,
     scripts/dc3-input-flows/README.txt) when `song` is given, else by `downs`
     presses from the entry focus.  Spacing as betteroffalone.txt and
     song-select-scroll.txt; no tutorial screens (all marked seen)."""
     lines = ["wait_screen title_screen", "+30 confirm",
-             "wait_screen main_screen", "+30 confirm",
+             "wait_screen main_screen", f"+{main_pause} confirm",
              "wait_screen choose_mode_screen", "+30 confirm",
              "wait_screen song_select_screen"]
     if song:
@@ -228,11 +245,12 @@ def route_script(downs, difficulty_downs=1, song=None):
     return lines
 
 
-def discover(binary, port, out, dlc=""):
+def discover(binary, port, out, dlc="", unlock=False):
     """Song-select rows as the game lists them: [(index, symbol, is_header)]."""
     d = os.path.join(out, "_discover")
+    pause = UNLOCK_PAUSE_FRAMES_PACED if unlock else 30
     lines = ["wait_screen title_screen", "+30 confirm", "wait_screen main_screen",
-             "+30 confirm", "wait_screen choose_mode_screen", "+30 confirm"]
+             f"+{pause} confirm", "wait_screen choose_mode_screen", "+30 confirm"]
     # DC3_DLC=0: the dev profile would otherwise mount <data>/dlc.
     env = {"DC3_HTTP_PACE_FPS": "60", "DC3_DLC": "0"}
     if dlc:
@@ -243,6 +261,8 @@ def discover(binary, port, out, dlc=""):
         deadline = time.time() + 180
         while time.time() < deadline and e.alive() and not e.jget("/health", 2):
             time.sleep(1)
+        if unlock and not unlock_all(e):
+            raise RuntimeError("discovery: {toggle_unlock_all} did not turn unlock-all on")
         r = e.jget("/screen/wait/song_select_screen?timeout=120", timeout=130)
         if not (r and r.get("ok")):
             raise RuntimeError("discovery never reached song_select_screen")
@@ -353,7 +373,8 @@ def play_song(a, song, downs, port, venue, difficulty="easy"):
         extra[k] = v
     e = Engine(a.binary, port, out,
                route_script(downs, DIFFICULTY_DOWNS[difficulty],
-                            None if a.by_position else song),
+                            None if a.by_position else song,
+                            UNLOCK_PAUSE_FRAMES if a.unlock_all else 30),
                gpu=not a.no_gpu, extra_env=extra)
     res = {"song": song, "venue_asked": venue, "difficulty_asked": difficulty,
            "downs": downs, "port": port,
@@ -364,6 +385,8 @@ def play_song(a, song, downs, port, venue, difficulty="easy"):
         deadline = time.time() + 180
         while time.time() < deadline and e.alive() and not e.jget("/health", 2):
             time.sleep(1)
+        if a.unlock_all:
+            res["unlock_all"] = unlock_all(e)
         # menus -> multiuser (driven by the input script)
         venue_done = False
         evals_done = False
@@ -503,6 +526,8 @@ def run_problems(a, r):
     kinds = r.get("modal_kinds") or {}
     if kinds.get("FAIL") or kinds.get("ASSERT"):
         p.append(f"FAIL {kinds.get('FAIL', 0)} / ASSERT {kinds.get('ASSERT', 0)}")
+    if a.unlock_all and not r.get("unlock_all"):
+        p.append("{toggle_unlock_all} did not turn unlock-all on")
     pl = (r.get("players_at_difficulty") or {}).get("p0") or {}
     if r.get("players_at_difficulty") and (pl.get("pad_num") in (-1, None) or not pl.get("player_name")):
         p.append(f"player 1 not signed in at the difficulty screen ({pl})")
@@ -596,6 +621,9 @@ def main():
     ap.add_argument("--by-position", action="store_true",
                     help="pick songs by counted downs instead of `highlight NAME` "
                          "(a binary whose engine predates the directive)")
+    ap.add_argument("--unlock-all", action="store_true",
+                    help="evaluate {toggle_unlock_all} (the debug cheat) on main_screen, so "
+                         "profile-locked songs (blackandtan) are listed and played")
     ap.add_argument("--real-time", action="store_true",
                     help="no DC3_FAST_TIME: song time on the real clock (pair with DC3_HTTP_PACE_FPS)")
     a = ap.parse_args()
@@ -614,10 +642,11 @@ def main():
     a.multi_difficulty = len(a.difficulties) > 1
     if a.dlc:
         a.dlc = ":".join(os.path.abspath(x) for x in a.dlc.split(":") if x)
-    entry, rows = discover(a.binary, a.port_base, a.out, a.dlc)
+    entry, rows = discover(a.binary, a.port_base, a.out, a.dlc, a.unlock_all)
     songs = [(n, s) for n, s, hdr in rows if not hdr and s not in ("playlists", "random_song")]
     if a.dlc and a.only_dlc:
-        _, disc_rows = discover(a.binary, a.port_base, os.path.join(a.out, "_disc"))
+        _, disc_rows = discover(a.binary, a.port_base, os.path.join(a.out, "_disc"),
+                                unlock=a.unlock_all)
         disc = {s for _, s, _ in disc_rows}
         songs = [(n, s) for n, s in songs if s not in disc]
     print(f"[sweep] song select: {len(rows)} rows, {len(songs)} songs, entry focus {entry}", flush=True)
