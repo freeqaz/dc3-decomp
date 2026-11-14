@@ -13,9 +13,9 @@ Work items: [PLAN.md](PLAN.md) track P.
 
 | Stage | Code | Gate |
 |---|---|---|
-| Camera frame | `native/scripts/pose_server.py` (`cv2.VideoCapture`: 640×480 @ 30 fps, 1-frame driver buffer), a Python child spawned by `NativeSkeletonProvider::Start` in `native/src/platform/Skeleton_Native.cpp`. Packet timestamp = capture time (the device's `CAP_PROP_POS_MSEC` when it is on our monotonic clock, as V4L2's is; else when `read()` returned). | `DC3_POSE_CAMERA` (index) |
+| Camera frame | `native/scripts/pose_server.py` (`cv2.VideoCapture`: 640×480 @ 30 fps, 1-frame driver buffer), a Python child spawned by `NativeSkeletonProvider::Start` in `native/src/platform/Skeleton_Native.cpp`. Packet timestamp = capture time (the device's `CAP_PROP_POS_MSEC` when it is on our monotonic clock, as V4L2's is; else when `read()` returned). | `DC3_POSE_CAMERA` (default `auto`; also an index, a `/dev/videoN` path or a `/dev/v4l/by-id` name — [camera selection](#which-camera-and-a-camera-that-goes-away)) |
 | 2D + 3D pose | `native/scripts/pose_mediapipe.py` `MediaPipeBackend`: BlazePose world landmarks (metres), absolute root by PnP, one-euro filter on root depth, centroid tracker. Emits DC3's 20 Kinect joints in camera-space metres. | `DC3_POSE_MODEL` (default `native/models/pose_landmarker_full.task` of the executable's tree, gitignored), `DC3_POSE_HFOV` |
-| Wire | Unix socket, protocol v2, layout 1 (20 DC3 joints). The header's u16 after the layout byte is `flags`; bit 0 `FLAG_UNLEVELLED` = "this camera does not know its gravity, estimate it" (`pose_server.py` always sets it). Layout 0 = COCO, remapped by `MapCOCOToDC3`. | `DC3_POSE_SOCKET`, `DC3_POSE_NO_SPAWN=1` (connect to a server you started) |
+| Wire | Unix socket, protocol v2, layout 1 (20 DC3 joints). The header's u16 after the layout byte is `flags`; bit 0 `FLAG_UNLEVELLED` = "this camera does not know its gravity, estimate it" (`pose_server.py` always sets it); bit 1 `FLAG_NO_CAMERA` = "the camera is gone and the server is reopening it" (zero-person heartbeats every 0.1 s). Layout 0 = COCO, remapped by `MapCOCOToDC3`. | `DC3_POSE_SOCKET`, `DC3_POSE_NO_SPAWN=1` (connect to a server you started) |
 | Socket → slots | `GestureMgr_Native.cpp`: `BuildSensorFrame` → `FillPersonSlots` / `AssignSlots` / `NativeAutoAssignPlayers`. `FillSkeletonData` holds the last good position of joints under 0.3 confidence. No provider → a jittered standing dummy (two in two-player modes, `DC3_DUMMY_PLAYERS`). Every valid person fills its own slot: two people on the socket or in one `dc3_pose_push` frame are two players. | `DC3_POSE` (`off`, `external`, …), `DC3_NATIVE_SCORING` (default on), `DC3_POSE_SELFTEST` |
 | Gravity (np-pose-tilt) | `PoseLevel_Native.cpp` `NativeSensorLevel`, called by `BuildSensorFrame`: for a camera that does not know its gravity (socket packets with header flag bit 0, web pushes, performer `replay:`) it estimates `vNormalToGravity` from the player's standing posture, then runs `SkeletonFrame::Create`'s own gravity step (`sUpVectorSmoother` → `mFloorNormal` → `NuiTransformMatrixLevel` on every joint; `mRawPositions` stays raw). A Kinect-like source (synthetic modes) is levelled by (0,1,0). [Camera tilt](#camera-tilt-np-pose-tilt-2026-11-13) | `DC3_POSE_LEVEL` (default `auto`; `0` off; degrees = fixed), `DC3_POSE_LEVEL_LOG` |
 | Scoring | Decompiled code: SkeletonUpdate → `Skeleton::Poll` → FilterQueue / MoveDir / async MoveDetectors → `move_passed` | `DC3_REAL_MOVE_PASSED` (default on) |
@@ -113,6 +113,44 @@ its bound, nothing outliving the game however it ends) and
 the running game's `RLIMIT_RTTIME` with `prlimit(2)` after the spawner fork and
 before the pose launch, which is where audio init sits, and a stub `python3`
 on `PATH` records the limits it got).
+
+### Which camera, and a camera that goes away
+
+The GPD's integrated camera re-enumerates over USB on its own — eight times in
+two hours on 2026-11-13, `/dev/video0` becoming `/dev/video1` with a metadata
+node beside it. A fixed index then named a node that no longer existed
+(`EXIT_NO_CAMERA` at boot) and a mid-song loss (`VIDIOC_REQBUFS` errno 19) was
+exit 7 with no way back.
+
+`pose_server.py --camera` (from `DC3_POSE_CAMERA`, passed as given) is:
+
+| Value | Opens |
+|---|---|
+| `auto` (default; also unset/empty) | the first `/dev/videoN` whose `VIDIOC_QUERYCAP` says video capture; metadata nodes are skipped and named in the log line (`Camera: using /dev/video1 (Integrated Camera) [auto; skipped …]`) |
+| an index `N` | `/dev/videoN` if it exists and is a capture device, else the `auto` scan, with a log line saying why |
+| `/dev/videoN`, `/dev/v4l/by-id/<name>` or a bare by-id name | that device, following the symlink — `usb-SunplusIT_Inc_Integrated_Camera_JX20250923V2-video-index0` names the GPD camera whatever its number |
+
+Off Linux (no V4L2) an index goes to OpenCV as before and `auto` is 0. The
+spec is resolved again on every open.
+
+When frames stop for 2 s mid-run the server keeps the socket, prints
+`CAMERA_LOST`, and sends zero-person packets with `FLAG_NO_CAMERA` every
+0.1 s while it reopens the camera (re-resolving the spec) at 0.5, 1, 2 s, then
+every 4 s. On success it prints `CAMERA_BACK after N s` and tracking resumes on
+the same connection; after 60 s without a camera it exits 7 as before (*"The
+camera stopped sending pictures and did not come back"*). The game posts one
+notice on the flag's rising edge — *"The camera disconnected - looking for it
+again. Pose tracking is paused until it is back."* (banner, then the corner
+line *"No camera: looking for it"* while it lasts) — and one on the falling
+edge, *"The camera is back - pose tracking resumed."* (banner only).
+
+Tests: `tests/test_pose_server.py` `ResolveCameraTest` (both GPD layouts,
+by-id, the fallbacks, the real `VIDIOC_QUERYCAP` on whatever box runs it) and
+`CameraLossTest` (a camera that vanishes and comes back renumbered is found
+and tracking resumes; one that never comes back is exit 7 after the budget,
+with backed-off rescans); milo-tests
+`PoseSocketReaderTest.ACameraThatGoesAndComesBackPostsOneNoticeEach` and
+`PoseServerStartTest.TheCameraSpecReachesTheServerAsGivenAndDefaultsToAuto`.
 
 Env-var reference: [SCORING_ENV_VARS.md](SCORING_ENV_VARS.md) and the master
 table in [../debugging/native.md](../debugging/native.md).
