@@ -1247,7 +1247,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Cam_Native.cpp
     src/platform/Net_Stub.cpp
     src/platform/Memcard_Stub.cpp
-    src/platform/ContentMgr_Stub.cpp
+    src/platform/ContentMgr_Native.cpp
     src/platform/MapFile_Stub.cpp
     src/platform/VirtualKeyboard_Stub.cpp
     src/platform/Achievements_Stub.cpp
@@ -1434,7 +1434,7 @@ set(DC3_WEB_CORE_SOURCES
     # DC3_WEB_LIFTED_ENGINE_SOURCES below.
     src/platform/MeshFilter.cpp
     src/platform/Memcard_Stub.cpp
-    src/platform/ContentMgr_Stub.cpp
+    src/platform/ContentMgr_Native.cpp
     src/platform/Achievements_Stub.cpp
     src/platform/MemcardMgr_Stub.cpp
     # Native cache backend (CacheMgrNative/CacheNative/CacheIDNative). Needed
