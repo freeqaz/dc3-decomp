@@ -354,6 +354,12 @@ TEST_F(HeadlessBootTest, DevProfileIsTheDefault) {
     EXPECT_TRUE(Has(out, "DC3 Native: profile=dev (the default;"))
         << "the default profile is not dev, or is not announced";
     EXPECT_TRUE(Has(out, "DC3 Native: profile dev defaults: DC3_DEV_OPTIONS=1"));
+    // The banner a person reads: what is on and the switch for each.
+    EXPECT_TRUE(Has(out, "DC3 Native: +-- developer profile (DC3_PROFILE=dev)"))
+        << "no boot banner";
+    EXPECT_TRUE(Has(out, "| on   HTTP debug server")) << "the banner omits a row that is on";
+    EXPECT_TRUE(Has(out, "off: DC3_HTTP=0\n")) << "the banner does not say how to turn it off";
+    EXPECT_TRUE(Has(out, "DC3_PROFILE=release turns all of it off"));
     // The debug server: on, on loopback, and (headless, port unset) on a
     // kernel-assigned port -- a test run must not squat 9090.
     EXPECT_TRUE(Has(out, "DC3_HTTP_PORT=")) << "the HTTP debug server did not start";
@@ -379,6 +385,7 @@ TEST_F(HeadlessBootTest, ReleaseProfileIsThePlayerBuild) {
     ASSERT_TRUE(HasCompletionMarker(out)) << "no frame-cap line\n" << CrashSummary(result);
     EXPECT_TRUE(Has(out, "DC3 Native: profile=release"));
     EXPECT_FALSE(Has(out, "profile dev defaults")) << "release applied the dev table";
+    EXPECT_FALSE(Has(out, "developer profile")) << "release printed the dev banner";
     EXPECT_FALSE(Has(out, "DC3_HTTP_PORT=")) << "release started the HTTP debug server";
     EXPECT_FALSE(Has(out, "[HttpServer]"));
     EXPECT_FALSE(Has(out, "development menu on"));

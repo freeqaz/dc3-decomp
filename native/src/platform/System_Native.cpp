@@ -70,25 +70,36 @@ bool Dc3EnvFlag(const char *name, bool defaultOn) {
 // subprocesses the tests launch DO apply it, so a test that asserts a
 // player-facing default pins DC3_PROFILE=release.
 // ---------------------------------------------------------------------------
+// A label must never contain "DC3_HTTP_PORT=": harnesses find the port by
+// searching the output for that text (NativeExitTest caught a label that did).
 static const Dc3ProfileDefault kDc3DevDefaults[] = {
     {"DC3_DEV_OPTIONS", "1", false,
-     "Options > Gameplay shows the developer rows (Camera Blend, Debug Overlay)"},
+     "Options > Gameplay shows the developer rows (Camera Blend, Debug Overlay)",
+     "Options > Gameplay developer rows (Camera Blend, Debug Overlay)"},
     {"DC3_DEV_MENU", "1", false,
      "the original debug build's development menu ({ui show_dev_menu}): its "
-     "extra modes in Choose Mode, its extra campaign difficulty rows"},
+     "extra modes in Choose Mode, its extra campaign difficulty rows",
+     "the original's dev menu: extra Choose Mode modes, difficulty rows"},
     {"DC3_RND_OVERLAYS", "1", false,
      "the original's on-screen RndOverlays (cheat_display notices, the "
-     "framerate/stats/timer quick cheats) drawn in the corner"},
+     "framerate/stats/timer quick cheats) drawn in the corner",
+     "on-screen notices and quick-cheat stats, top-left"},
     {"DC3_HTTP", "1", true,
      "HTTP debug server on 127.0.0.1 (DC3_HTTP_PORT unset: 9090 when free in a "
-     "window, else a kernel-assigned port; printed as DC3_HTTP_PORT=<n>)"},
+     "window, else a kernel-assigned port; printed as DC3_HTTP_PORT=<n>)",
+     "HTTP debug server, 127.0.0.1 only (its port is printed below)"},
     {"DC3_TEL", "api", true,
-     "gameplay telemetry sampled for GET /api/telemetry, no DC3_TEL: lines"},
+     "gameplay telemetry sampled for GET /api/telemetry, no DC3_TEL: lines",
+     "gameplay telemetry at /api/telemetry (quiet)"},
     {"DC3_TAG_MODALS", "dev", true,
-     "every MILO_WARN/NOTIFY/FAIL printed as MILO_<KIND>: (rate-limited)"},
-    {"MILO_INPUT_LOG", "1", false, "one Joypad: down/up line per button message"},
-    {"DC3_MOVE_RATING_LOG", "1", false, "one DC3 MOVE_RATING line per passed move"},
-    {"MILO_PERF", "1", false, "a [PERF] fps/frame-time line every 5 s", true},
+     "every MILO_WARN/NOTIFY/FAIL printed as MILO_<KIND>: (rate-limited)",
+     "game warnings and notices as MILO_<KIND>: lines"},
+    {"MILO_INPUT_LOG", "1", false, "one Joypad: down/up line per button message",
+     "a Joypad: line per button press"},
+    {"DC3_MOVE_RATING_LOG", "1", false, "one DC3 MOVE_RATING line per passed move",
+     "a DC3 MOVE_RATING line per scored move"},
+    {"MILO_PERF", "1", false, "a [PERF] fps/frame-time line every 5 s",
+     "a [PERF] frame-time line every 5 s", true},
 };
 
 const Dc3ProfileDefault *Dc3ProfileDevDefaults(int *count) {
@@ -109,6 +120,34 @@ int Dc3ProfileResolve() {
 bool Dc3ProfileIsDev() {
     if (sDc3Profile < 0) sDc3Profile = Dc3ProfileResolve();
     return sDc3Profile == kDc3ProfileDev;
+}
+
+// The banner a person reads at boot: what the dev profile turned on, and the
+// switch for each.  The two "profile" lines above it are for scripts.
+static void Dc3ProfileBanner(const Dc3ProfileDefault *rows, int n) {
+    fprintf(stderr, "DC3 Native: +-- developer profile (DC3_PROFILE=dev) --------------------\n");
+    for (int i = 0; i < n; i++) {
+#ifdef __EMSCRIPTEN__
+        if (rows[i].desktopOnly) continue;
+#endif
+        const char *v = getenv(rows[i].name);
+        const bool on = v && *v && Dc3EnvFlag(rows[i].name, false);
+        if (on && strcmp(v, rows[i].value) == 0)
+            fprintf(stderr, "DC3 Native: | on   %-66s off: %s=0\n", rows[i].label,
+                    rows[i].name);
+        else if (on) // the environment's own value, not the profile's
+            fprintf(stderr, "DC3 Native: | on   %-66s (you set %s=%s)\n", rows[i].label,
+                    rows[i].name, v);
+        else if (v && *v)
+            fprintf(stderr, "DC3 Native: | off  %-66s (you set %s=%s)\n", rows[i].label,
+                    rows[i].name, v);
+        else // a presence row the environment switched off (unset above)
+            fprintf(stderr, "DC3 Native: | off  %-66s (you set %s off)\n", rows[i].label,
+                    rows[i].name);
+    }
+    fprintf(stderr, "DC3 Native: | still opt-in: DC3_FAST_BOOT, DC3_FAST_TIME, DC3_SCORING_DEBUG"
+                    " (docs/debugging/native.md \"Profiles\")\n");
+    fprintf(stderr, "DC3 Native: +-- DC3_PROFILE=release turns all of it off ---------------\n");
 }
 
 void Dc3ProfileApply() {
@@ -151,6 +190,7 @@ void Dc3ProfileApply() {
     if (!kept.empty())
         fprintf(stderr, "DC3 Native: profile dev, kept from the environment:%s\n",
                 kept.c_str());
+    Dc3ProfileBanner(rows, n);
 }
 
 // The native controller-mode policy, DC3_CONTROLLER_MODE.

@@ -19,6 +19,7 @@ struct Dc3ProfileDefault {
     const char *value; // its value under dev
     bool desktopOnly;  // not applied on web (no debug server; web tap already on)
     const char *what;
+    const char *label; // one banner line: what the player sees switched on
     // The reader tests presence (getenv != null), so "0" would turn it ON.
     // Dc3ProfileApply unsets such a row when it is set to 0/false/off/no, so
     // MILO_PERF=0 means off under every profile.

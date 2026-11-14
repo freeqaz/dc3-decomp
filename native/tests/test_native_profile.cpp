@@ -156,6 +156,16 @@ TEST(Dc3ProfileTest, ReleaseStillHonoursAnExplicitVariable) {
     EXPECT_EQ(Env("DC3_HTTP"), "<unset>");
 }
 
+// The boot banner prints every label; harnesses find the HTTP port by
+// searching the output for "DC3_HTTP_PORT=", so no label may contain it.
+TEST(Dc3ProfileTest, NoBannerLabelLooksLikeThePortLine) {
+    for (const Dc3ProfileDefault &row : Rows()) {
+        ASSERT_NE(row.label, nullptr) << row.name;
+        EXPECT_EQ(std::string(row.label).find("DC3_HTTP_PORT="), std::string::npos)
+            << row.name << "'s banner label would be read as the port line";
+    }
+}
+
 TEST(Dc3ProfileTest, AnUnknownProfileIsDev) {
     ScopedProfileEnv scope;
     setenv("DC3_PROFILE", "shipping", 1);
