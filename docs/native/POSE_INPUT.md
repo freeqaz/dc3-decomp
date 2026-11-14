@@ -1343,6 +1343,201 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
   measures 7–8 read 0.24/0.20 on web and 0.91/0.84 on desktop — likely when the
   first tracked frames arrived, not scoring.
 
+## Performance (L-3, `np-pose-perf`, 2026-11-13)
+
+Where a pose frame's time goes, on both paths, and what moves it. The target
+is 30 fps at the lowest latency on the GPD Pocket (Ryzen AI 9 HX 370,
+Radeon 890M, the playtest box). Every number is MEASURED unless marked
+INFERRED. GPD runs were taken idle (load average 1–3) under
+`flock -x /tmp/gpd-bench.lock`, between 15:36 and 16:05 PST. The rig
+(32 cores) was running other lanes at load average 50–80, so its numbers
+are only used side by side.
+
+### The answer in one paragraph
+
+Model inference is the frame on both paths; everything else together is
+under 2 ms (desktop) or 5 ms (web). On the desktop, `num_poses 2` with one
+dancer runs MediaPipe's person detector on every frame. That costs the GPD
+17 ms of its 45 ms frame (21.7 fps). `--probe-second-person 0.5` tracks at
+`num_poses 1` and looks for a second person off-thread twice a second:
+**35.2 fps** with one dancer, with output identical to `num_poses 1`. Two
+dancers cost 48 ms whatever is set (19.8 fps; 26.7 with `lite`). The web's
+CPU (WASM) inference takes 73 ms on the GPD (12.7 fps). The GPU delegate
+gets **29.1 fps** (**30.1** with `pose_persons=1`). That is the pose pipeline
+alone: the game did not boot in headless Chromium there.
+Its landmarks differ from the desktop's by 22 mm mean, though, so it stays
+opt-in. Defaults are unchanged; both switches are owner decisions (below).
+
+### Desktop stage breakdown (`scripts/pose_bench/stage_bench.py`)
+
+The real `MediaPipeBackend.process` + `camera_block` + `pack_frame` over a
+640×480 30 fps clip, unpaced, `--frames 320x240`, full model, CPU, p50 ms
+(one dancer: 60 s of the np-video-calib stream; two: the playtest kit's
+macarena duo):
+
+| stage | GPD, poses 2 | GPD, poses 1 / probe 0.5 | GPD, two dancers | rig, poses 2 |
+|---|---|---|---|---|
+| decode (`cv2.read`) | 0.40 | 0.40 | 0.41 | 0.35 |
+| BGR→RGB + `mp.Image` | 0.24 | 0.24 | 0.23 | 0.19 |
+| **inference** | **43.2** | **25.6** | **48.1** | **21.8** |
+| geometry (root, remap, mask copy) | 0.65 | 0.66 | 0.90 | 0.37 |
+| tracker + root filter | 0.06 | 0.06 | 0.10 | 0.04 |
+| v3 picture + mask | 0.52 | 0.53 | 0.68 | 0.45 |
+| pack | 0.07 | 0.07 | 0.08 | 0.06 |
+| **total → fps unpaced** | 45.5 → **21.7** | 27.9 → **35.2** | 50.7 → **19.8** | 23.4 → 42 |
+
+The GPD numbers are from two interleaved runs each, which agree to 0.1 ms.
+The socket write is not in the table: `Outbox` is a non-blocking send of
+about 307 KB, and the engine's reader thread takes it in 12–15 ms from
+arrival to texture (P-4).
+
+Model, `num_poses` and the picture, GPD, inference p50 ms (fps unpaced):
+
+| model | poses 2 | poses 1 | poses 2, `--frames` off | poses 1, `--frames` off |
+|---|---|---|---|---|
+| lite | 36.1 (25.6) | 18.5 (47.2) | 34.3 (27.9) | 16.9 (53.6) |
+| full | 43.1 (21.8) | 25.7 (35.2) | 41.7 (22.9) | 23.9 (38.7) |
+| heavy | 100.6 (9.7) | — | — | — |
+
+- The person detector is the lever, not the model. With one dancer, poses
+  2 → 1 saves 17.5 ms (40%), and full → lite saves 7 ms.
+- The segmentation masks (the player view) cost 1.5–2 ms of inference plus
+  0.5 ms for the picture.
+- MediaPipe keeps about 1.4–1.8 cores busy (`infer_cpu` / wall). mediapipe
+  1.0.0's Python `BaseOptions` has no thread count to raise.
+
+### Web stage breakdown (`scripts/pose_bench/web_pose_fps.mjs`)
+
+The page's own per-stage times (`window.dc3PoseSummary().stages`, added in
+this lane). Headless Chromium 156 on the GPD, the macarena clip as a fake
+640×480 30 fps camera, and a 15 s window after 25 s, p50 ms. **The game did
+not boot in headless Chromium on the GPD.** It stays in `waiting` and
+`dc3FrameCount` never advances; getting the game up there is np-gpd-test's
+browser setup. So this table is the pose pipeline alone, with no game
+sharing the GPU or the CPU:
+
+| URL | pose fps | wait | infer | picture (draw / rgb / mask get / mask) | worker busy |
+|---|---|---|---|---|---|
+| (default: full, CPU, persons 2) | 12.7 | 0.1 | 73.5 | 3.8 / 0.32 / 0 / 0.47 | 78.2 |
+| `pose_persons=1` | 17.7 | 0.1 | 51.6 | 3.6 / 0.32 / 0 / 0.48 | 56.1 |
+| `pose_model=lite` | 15.7 | 0.1 | 58.2 | 3.9 / 0.32 / 0 / 0.47 | 63.1 |
+| `pose_model=lite&pose_persons=1` | 24.5 | 0.1 | 35.8 | 3.7 / 0.32 / 0 / 0.48 | 40.4 |
+| `pose_delegate=GPU` | 29.1 | 2.6 | 22.6 | 3.6 / 0.42 / 2.1 / 0.60 | 29.6 |
+| `pose_delegate=GPU&pose_persons=1` | **30.1** | 10.9 | 15.5 | 3.8 / 0.33 / 1.9 / 0.47 | 22.4 |
+
+Notes on the table:
+- Worker → page transfer is 0.2–0.3 ms, and the page's handler (engine push
+  + preview) is 0.1–0.16 ms.
+- At 30.1 fps the worker waits 10.9 ms a frame for the camera: it is
+  camera-bound.
+- Instrument check: `pose_slow=camera:10` moved `draw` from 3.84 to 13.89 ms
+  and `busy` from 78.2 to 88.3 ms. `infer` was unchanged (73.3), and fps fell
+  12.7 → 11.3.
+
+With the game running: not measured yet. The rig A/B
+(`scripts/pose_bench/web_pose_fps.mjs`, which also reports the game's own
+frame rate over the window) needs the exclusive GPU lock, and it was not
+granted within 30 minutes while other lanes held it shared. Run it again on a
+quiet rig before quoting a game-plus-pose number.
+
+### Ranked levers
+
+1. **Desktop: `--probe-second-person 0.5`.** GPD, one dancer:
+   21.7 → 35.2 fps, inference 43.2 → 25.6 ms. Opt-in.
+   `pose_mediapipe.SecondPersonProbe` keeps a 1-pose and a 2-pose
+   landmarker:
+   - With one dancer, the 1-pose landmarker runs every frame. The 2-pose
+     landmarker gets a copy of the newest frame every 0.5 s on a background
+     thread (MediaPipe releases the GIL).
+   - Once two are seen, the 2-pose landmarker runs every frame. When it has
+     seen fewer than two for 1 s, it goes back.
+   - Cost: the probe's CPU, visible only as `infer_cpu` p95 rising from
+     36 to 56 ms in the frames it overlaps.
+   - Join latency: the second player is found up to one interval later. On
+     a synthetic join (half the duo clip blacked out for 3 s) it took 1 and
+     17 frames, against 0 and 1 for `num_poses 2`.
+2. **Web: `pose_delegate=GPU`.** GPD, pose pipeline alone: 12.7 → 29.1
+   fps (30.0 on a repeat; 30.1 with `pose_persons=1`). Accuracy is not free
+   (below), so it stays opt-in. With the game on the same GPU, it was
+   measured on the rig only (table above).
+3. **`pose_persons=1` / `--max-persons 1`.** The same 40% inference cut
+   as lever 1, but a second player is never found. Web CPU: 12.7 → 17.7 fps.
+4. **`lite`.** GPD desktop: 7 ms saved with one dancer; with two dancers,
+   48 → 34 ms (19.8 → 26.7 fps). Accuracy is unmeasured against the scoring
+   grid, so it stays opt-in.
+
+### Accuracy (`scripts/pose_bench/persons_agreement.py`)
+
+The same frames and timestamps went through two backends, and the joints the
+game would receive were compared (one dancer, 600 frames, full model):
+
+| A vs B | person count differs | joint distance p50 / p95 (3D) | image-plane p50 / p95 |
+|---|---|---|---|
+| poses 2 vs poses 2 (control) | 0 | 0.0 / 0.0 mm | 0.0 / 0.0 mm |
+| probe 0.5 vs poses 1 | 0 | 0.0 / 0.0 mm | 0.0 / 0.0 mm |
+| poses 1 vs poses 2 | 0 | 24.7 / 68.6 mm | 14.2 / 40.2 mm |
+
+- The output is different, not worse. With `num_poses 2` the detector's box
+  re-seeds the landmark region on every frame. `num_poses 1` follows its own
+  landmarks.
+- **The scoring calibration (np-video-calib) was recorded at `num_poses 1`**
+  (`scripts/video_calib/record_segment.py`). So the probe gives the live
+  server the input the calibration measured. INFERRED: its one-player
+  scoring is the calibrated one. The grid was not re-run here.
+- Web GPU delegate vs the desktop reference (`scripts/web/pose_parity.mjs
+  browser`, the 150 np-web-pose fixture frames on the rig): 150/150
+  detections agree, joint error mean 22 mm, p95 52 mm, max 269 mm. On CPU it
+  is mean 0.05 mm, p95 0.14 mm. A one-frame-shift sabotage reads 28 mm. The
+  GPU delegate moves the input about as much as a frame of lag. Its effect
+  on the score is not measured.
+
+### Negative results
+
+- **No capture cliff, so no grabber thread.** I expected OpenCV's 1-buffer
+  V4L2 capture to lose a whole camera period whenever processing outlasts it.
+  It does not, measured on the GPD's camera with `scripts/pose_bench/
+  camera_probe.py`. The room light held that camera at 10–12 fps (YUYV,
+  aperture-priority auto exposure, no frame-rate control).
+  - At 120 ms of work, the sequential loop ran at 8.32 fps = 1000/120, and
+    `read()` returned in 0.2 ms with a buffered frame.
+  - The cost is staleness. Frame age at the loop was p50 100 ms sequential
+    vs 77.6 ms with a newest-wins grabber thread (150 ms work: 129 vs 83).
+  - When the work is shorter than a camera period (60 ms at 81 ms), both
+    shapes read 41.5 ms (age p95 56 vs 46).
+  - So a grabber thread only pays when inference outlasts the camera
+    period. Then it saves up to one period of age. INFERRED: about 12 ms
+    mean at the GPD's 45 ms frame on a 30 fps camera. With the probe, the
+    frame is 28 ms, inside the period, so I did not build it.
+- **No GPU delegate in Python.** The PyPI mediapipe 1.0.0 wheel says
+  `ImageCloneCalculator: GPU processing is disabled in build flags`.
+- **The picture's JS loops are not worth optimising.** RGBA→RGB is 0.32 ms
+  and the ordinal mask 0.47 ms. The picture's cost is `drawImage` +
+  `getImageData` (3.6–3.9 ms) and, on the GPU delegate, the mask readback
+  (2 ms). A rewrite with 32-bit reads and lookup tables was written and not
+  kept.
+- **The camera clock adds latency of its own.** The GPD camera's buffers
+  arrive 41–53 ms after their V4L2 timestamp at 10–12 fps. That is exposure
+  plus USB, before any of our code runs.
+- **`lite` alone barely helps with one dancer.** At `num_poses 2`, `lite`
+  still runs the person detector on every frame, so it saves only 7 ms on
+  the GPD (43.1 → 36.1).
+
+### Reproducing
+
+```bash
+# desktop stage table (any clip; the GPD numbers used a 60 s, 640x480 excerpt)
+.venv/bin/python scripts/pose_bench/stage_bench.py --video clip.mp4 --model full --num-poses 2
+.venv/bin/python scripts/pose_bench/stage_bench.py --video clip.mp4 --probe 0.5
+.venv/bin/python scripts/pose_bench/stage_bench.py --video clip.mp4 --slow infer=20   # instrument check
+# accuracy
+.venv/bin/python scripts/pose_bench/persons_agreement.py --video clip.mp4 --a 1 --b 2
+.venv/bin/python scripts/pose_bench/persons_agreement.py --video duo.mp4 --a probe:0.5 --b 2 --blank left --join 3
+# camera capture shapes (opens /dev/video0)
+.venv/bin/python scripts/pose_bench/camera_probe.py --work 0,60,120,150
+# web (serve a build first: python3 native/web/server.py --port 8451)
+node scripts/pose_bench/web_pose_fps.mjs --port 8451 --camera clip.y4m "" "&pose_persons=1" "&pose_delegate=GPU"
+```
+
 ## Gaps
 
 | # | Gap | Size | Platform |
