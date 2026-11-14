@@ -1359,7 +1359,17 @@ protected:
         // DC3_TAG_MODALS prints the "Could not load:" notify a subdir that
         // resolved into the package raises.  game_screen ~frame 2000 and
         // gameStage=playing ~2500 (headless, no GPU).
-        std::string env = "DC3_TAG_MODALS=1 DC3_DLC_DIR=" + GetDlcDir();
+        // A root holding only this package, so other packages imported next
+        // to it cannot move Milkshake in the song list (the flow counts downs).
+        char tmpl[] = "/tmp/dc3-dlc-root-XXXXXX";
+        const char *root = mkdtemp(tmpl);
+        std::string pkg = GetDlcDir() + "/" + kMilkshakePackage;
+        if (!root || symlink(pkg.c_str(), (std::string(root) + "/" + kMilkshakePackage).c_str())) {
+            sResult.setupError = "could not make a one-package DLC root for " + pkg;
+            sRanEngine = true;
+            return;
+        }
+        std::string env = std::string("DC3_TAG_MODALS=1 DC3_DLC_DIR=") + root;
         sResult = RunDtaFlow(3600, 180, "milkshake.txt", env.c_str(), true, kTutorialGeneral);
         // The first boot writes the song cache (SongMgr's "songcache"
         // container, which only content songs enter); the second reads it.
