@@ -5,6 +5,7 @@
 
 #include "obj/Data.h"
 #include "obj/DataUtl.h"
+#include "os/Debug.h"
 #include "utl/MemMgr.h"
 #include "utl/MemHeap.h"
 #include "utl/Symbol.h"
@@ -458,6 +459,38 @@ ScriptStateGuard::~ScriptStateGuard() {
             "[DtaEval] repaired leaked interpreter state after abnormal exit: %s\n",
             repaired.c_str()
         );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// FailScope
+// ---------------------------------------------------------------------------
+
+bool FailScope::Evaluate(DataArray *parsed, DataNode &result, std::string &error) {
+    TheDebug.SetTry(true);
+    mOpen = true;
+    try {
+        for (int i = 0; i < parsed->Size(); i++) {
+            result = parsed->Evaluate(i);
+        }
+    } catch (const char *) {
+        // Debug::Fail left the scope (mTry--) before it threw. The thrown
+        // pointer is NOT read: it is usually the c_str() of a String local to
+        // the failing frame (DataFail's, MILO_FAIL's MakeString buffer), gone
+        // once the stack has unwound to here. The message is in the log's
+        // FAIL line, printed before the throw.
+        mOpen = false;
+        error = "MILO_FAIL or MILO_ASSERT raised by the script (its FAIL line is in the log)";
+        return false;
+    }
+    Close();
+    return true;
+}
+
+void FailScope::Close() {
+    if (mOpen) {
+        mOpen = false;
+        TheDebug.SetTry(false);
     }
 }
 
