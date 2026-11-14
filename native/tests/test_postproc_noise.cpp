@@ -112,7 +112,10 @@ protected:
                     uint8_t g = x < kW / 2 ? kDark : kLight;
                     uint8_t *p = &px[(y * kW + x) * 4];
                     p[0] = p[1] = p[2] = g;
-                    p[3] = 255;
+                    // Alpha is DC3's pseudo-HDR bloom mask (np-gfx-post's
+                    // retail chain): 0, so this pp's bloom adds nothing and
+                    // the composite is the noise overlay alone.
+                    p[3] = 0;
                 }
             wgpu::TexelCopyTextureInfo dst{};
             dst.texture = mScene;

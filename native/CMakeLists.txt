@@ -2022,6 +2022,7 @@ if(BUILD_TESTS)
         tests/test_charclipgroup.cpp
         tests/test_asset_loading.cpp
         tests/test_postproc_noise.cpp
+        tests/test_dc3_retail_post.cpp
         tests/test_merge_scope_parity.cpp
         tests/test_merge_lifecycle.cpp
         tests/test_cascade_ref_invariant.cpp
