@@ -232,7 +232,7 @@ float Dc3SensorLatencySeconds(float scoringDtaSeconds) {
 // socket to read.  Frames arrive from the page's camera + MediaPipe pipeline
 // (native/web/pose/) through dc3_pose_push (PoseInput_Web.cpp) into
 // PublishFrame; the buffering, slot fill and joint hold below are shared.
-bool NativeSkeletonProvider::Start(const std::string&, const std::string&, int) { return false; }
+bool NativeSkeletonProvider::Start(const std::string&, const std::string&, const std::string&) { return false; }
 std::string NativeSkeletonProvider::DefaultModelPath() { return std::string(); }
 void NativeSkeletonProvider::Stop() {
     mRunning = false;
