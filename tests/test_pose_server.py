@@ -25,6 +25,7 @@ Run: python3 tests/test_pose_server.py
 """
 
 import os
+import re
 import socket
 import struct
 import subprocess
@@ -508,13 +509,25 @@ class CameraLossTest(unittest.TestCase):
         self.assertEqual(second.reads, 60, "the renumbered camera was not read")
         self.assertEqual(cv2.opened_with[0], "/dev/video0")
         self.assertIn("/dev/video1", cv2.opened_with)
-        ids = [p[1] for p in packets]
+        # No packet lost up to the end of the resumed stream. (Not past it:
+        # the second loss sends its 0.1 s heartbeats with no real delay under
+        # the fake clock -- 600 in a burst -- and a starved client lets the
+        # server's Outbox drop some, which a real 0.1 s cadence never does.)
+        upto = resumed[-1] + 1
+        ids = [p[1] for p in packets[:upto]]
         self.assertEqual(ids, list(range(ids[0], ids[0] + len(ids))))
         # The second camera then stops too and stays gone: bounded, exit 7.
         self.assertEqual(result.get("exit"), ps.EXIT_CAMERA_LOST, result)
 
     def test_a_camera_that_never_comes_back_is_exit_7_after_the_budget(self):
-        clock = FakeClock()
+        class HeartbeatClock(FakeClock):
+            heartbeats = 0
+
+            def sleep(self, s):
+                if s == ps.NO_CAMERA_PACKET_S:
+                    HeartbeatClock.heartbeats += 1
+                super().sleep(s)
+        clock = HeartbeatClock()
 
         class Counting(FakeDevices):
             scans = 0
@@ -540,14 +553,25 @@ class CameraLossTest(unittest.TestCase):
         self.assertEqual(result.get("exit"), ps.EXIT_CAMERA_LOST, result)
         lost = [p for p in packets if p[8] & ps.FLAG_NO_CAMERA]
         self.assertTrue(lost)
-        span = lost[-1][3] - lost[0][3]
-        self.assertGreaterEqual(span, ps.CAMERA_REOPEN_BUDGET_S - 5)
-        self.assertLess(span, ps.CAMERA_REOPEN_BUDGET_S + 10)
+        # The budget is measured on the SERVER's clock: from the first
+        # FLAG_NO_CAMERA packet (the first ones always arrive -- the socket
+        # buffer is empty when the loss starts) to the exit. Not from the
+        # last packet the client saw: under the fake clock the heartbeats go
+        # out in a burst, and a client starved of CPU lets the server drop
+        # the tail (Outbox drops rather than queues), which a real 0.1 s
+        # cadence never does.
+        gone_for = clock() - lost[0][3]
+        self.assertGreaterEqual(gone_for, ps.CAMERA_REOPEN_BUDGET_S)
+        # It gives up at the first retry past the budget: at most one backoff late.
+        self.assertLess(gone_for, ps.CAMERA_REOPEN_BUDGET_S + max(ps.CAMERA_REOPEN_DELAYS_S) + 0.5)
+        m = re.search(r"not back after (\d+) s", result.get("msg", ""))
+        self.assertTrue(m, result)
+        self.assertGreaterEqual(int(m.group(1)), ps.CAMERA_REOPEN_BUDGET_S)
         # Retries back off: a rescan per try, far fewer than heartbeats
         # (0.5, 1, 2, then every 4 s over a 60 s budget is ~17).
         self.assertLess(Counting.scans, 25)
         self.assertGreater(Counting.scans, 10)
-        self.assertGreater(len(lost), 100)
+        self.assertGreater(HeartbeatClock.heartbeats, 500)
 
 
 def _have_cv2_numpy():
