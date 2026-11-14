@@ -40,7 +40,7 @@
 //   hue converge (round 2, CheckHueConverge + postprocess.ps bit 62) and the
 //   post-process selection (Rnd::DoPostProcess' overrides): see
 //   HueConvergeIsRetailBit62 / ActivePostProcFollowsRndOverrides and
-//   lanes/post/round2/sab/sab_hue.log
+//   lanes/post/round2/sabotage/sab_hue.log (archive/np-gfx-2026-11-14)
 
 #include "test_helpers.h"
 

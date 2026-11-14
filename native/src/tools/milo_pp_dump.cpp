@@ -9,6 +9,11 @@
 // DoPost would turn on. Written for the np-gfx-post usage inventory
 // (archive/np-gfx-2026-11-14/lanes/post/); loads through the decomp's own
 // RndPostProc::Load, so a field means what the game reads.
+//
+// Also one line per RndEnviron, {"file":..,"name":..,"class":"Environ",
+// "fade_out":..,"fade_start":..,"fade_end":..,"fade_cancels_mask":..}:
+// the last is Shader.cpp's fadeOut (FadeOut() && FadeEnd() != FadeStart()),
+// which turns the pseudo-HDR bloom mask off (np-gfx-post round 2).
 
 #include "os/Debug.h"
 #include "os/System.h"
@@ -16,6 +21,7 @@
 #include "obj/DirLoader.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/PostProc.h"
+#include "rndobj/Env.h"
 #include "rndobj/Tex.h"
 #include "char/Char.h"
 #include "world/World.h"
@@ -268,7 +274,16 @@ int main(int argc, char *argv[]) {
             Dump(argv[i], it);
             n++;
         }
-        fprintf(stderr, "%s: %d post-procs\n", argv[i], n);
+        int envs = 0;
+        for (ObjDirItr<RndEnviron> it(scene, true); it != nullptr; ++it) {
+            const bool cancels = it->FadeOut() && it->FadeEnd() != it->FadeStart();
+            printf("{\"file\":\"%s\",\"name\":\"%s\",\"class\":\"Environ\",\"fade_out\":%d,"
+                   "\"fade_start\":%g,\"fade_end\":%g,\"fade_cancels_mask\":%d}\n",
+                   argv[i], it->Name(), it->FadeOut() ? 1 : 0, it->FadeStart(), it->FadeEnd(),
+                   cancels ? 1 : 0);
+            envs++;
+        }
+        fprintf(stderr, "%s: %d post-procs, %d environs\n", argv[i], n, envs);
         total += n;
     }
     fprintf(stderr, "total %d\n", total);
