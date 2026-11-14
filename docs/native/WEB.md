@@ -336,6 +336,12 @@ GPU delegate also shares the GPU with the game, and its p95 is worse. The
 defaults are unchanged: CPU `full` is what the desktop `pose_server.py` runs,
 and the tracker is np-tracking's. This is an owner decision (PLAN L-3).
 
+np-web4 added `pose_probe=<s>`, the desktop's second-person probe in the
+worker. It matches `pose_persons=1` with one dancer and finds a second on its
+first probe, but run serially in the one worker it was slower than the
+default on the loaded rig (16.9 vs 18.1 fps, 10.9 vs 11.7), so it stays off;
+numbers in [POSE_INPUT.md](POSE_INPUT.md#web-second-person-probe-np-web4-2026-11-14).
+
 ### Heap per venue (W-6)
 
 Decided 2026-11-13: dc3-web links `-sMAXIMUM_MEMORY=1024MB`

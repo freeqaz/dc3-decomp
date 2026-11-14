@@ -1564,6 +1564,39 @@ frame rate over the window) needs the exclusive GPU lock, and it was not
 granted within 30 minutes while other lanes held it shared. Run it again on a
 quiet rig before quoting a game-plus-pose number.
 
+### Web second-person probe (`np-web4`, 2026-11-14)
+
+`?pose_probe=<s>` (with the default `pose_persons=2`): the worker keeps a
+numPoses 1 and a numPoses 2 landmarker, runs numPoses 1 on every frame and
+numPoses 2 on one frame every `s` seconds, switches to numPoses 2 on every
+frame once it sees two people and back after 1 s with fewer
+(`pose_worker.js` `detect`; desktop's `SecondPersonProbe`). Off by default.
+
+Parity (`scripts/web/pose_parity.mjs --probe 0.5`, CPU, MEASURED): one dancer,
+150 frames: joint mean 3.26 mm against the desktop reference, the same as
+`pose_persons=1` (10 probes, 0 switches, person count agrees on 150/150). Two
+dancers, 90 frames: it switched on the first probe, joint mean 2.1 mm, person
+count 90/90; `pose_persons=1` on the same frames agrees on 0/90.
+
+Throughput with the game running (`web_pose_fps.mjs`, rig, attract screen,
+`dance.y4m` fake camera, release, two interleaved rounds, load 30–55 with other
+lanes; fps / inference p50 ms):
+
+| URL | round 1 | round 2 |
+|---|---|---|
+| default (persons 2, CPU) | 18.1 / 41.0 | 11.7 / 63.7 |
+| `pose_probe=0.5` | 16.9 / 28.8 (probe pass 51.1) | 10.9 / 51.4 (probe 70.5) |
+| `pose_persons=1` | 25.3 / 30.3 | 12.3 / 50.9 |
+| `pose_delegate=GPU&pose_probe=0.5` | 13.8 / 30.5 | 11.5 / 31.3 |
+| `pose_frames=off&pose_probe=0.5` | 22.5 / 37.8 | 12.2 / 63.7 |
+
+The probe saves ~12 ms on the frames it does not probe (28.8 vs 41.0 ms) and
+still loses overall: the probe frame pays both passes in the one worker, and
+the single pass's p95 rose to 107 ms (69 ms default). INFERRED: on web the
+probe needs its own worker, as desktop runs it on a thread. Round 2's
+whole-row slowdown is the box, not the settings. Nothing here reached 30 fps,
+so the default is unchanged.
+
 ### Ranked levers
 
 1. **Desktop: `--probe-second-person 0.5`.** GPD, one dancer:
