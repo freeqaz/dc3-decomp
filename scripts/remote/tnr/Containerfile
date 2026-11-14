@@ -1,0 +1,60 @@
+# Build container for the native port on tnr (scripts/remote/tnr_build.sh).
+# docs/native/REMOTE_BUILD.md explains the design; the short version:
+#
+# The toolchain must be BYTE-IDENTICAL to the desk's, not merely the same
+# version, because the build dir is copied back and the desk's
+# scripts/native_toolchain_check.py then compares content hashes of every
+# library and cmake file build.ninja names. So packages come from the Arch
+# Linux Archive snapshot the desk last synced from (desk `pacman -Syu` ran
+# 2026-10-20 02:40Z; the 2026/10/20 snapshot carries exactly the desk's clang
+# 23.1.3-3, llvm-libs 23.1.3-3, cmake 4.4.4-1, ninja 1.13.2-3, gtest 1.18.0-1,
+# ffmpeg 2:9.0.2-2, glfw 1:3.5.1-1, glibc 2.44+r50, gcc 16.2.1+r23, mesa
+# 26.2.5-1). When the desk upgrades, bump ARCH_SNAPSHOT (and the base tag),
+# rebuild with `tnr_build.sh --build-image`, and compare `pacman -Q` on both
+# sides (docs/native/REMOTE_BUILD.md, "When the desk's packages change").
+#
+# vulkan-swrast is Mesa's lavapipe: a CPU Vulkan driver, so the engine can boot
+# headless under Dawn without touching tnr's GPUs (which are not ours).
+FROM docker.io/library/archlinux:base-20261018.0.612668
+
+ARG ARCH_SNAPSHOT=2026/10/20
+
+# Rootless podman on tnr maps a single uid, so pacman cannot drop to its
+# 'alpm' download user: disable the download sandbox.
+RUN echo "Server=https://archive.archlinux.org/repos/${ARCH_SNAPSHOT}/\$repo/os/\$arch" \
+        > /etc/pacman.d/mirrorlist \
+ && sed -i -e 's/^#\?DisableSandbox.*/DisableSandbox/' \
+           -e 's/^DownloadUser/#DownloadUser/' /etc/pacman.conf \
+ && { grep -q '^DisableSandbox' /etc/pacman.conf || echo 'DisableSandbox' >> /etc/pacman.conf; }
+
+RUN pacman -Syyuu --noconfirm --needed \
+        clang llvm-libs compiler-rt lld openmp cmake ninja \
+        gtest ffmpeg glfw \
+        python git rsync which procps-ng diffutils \
+        vulkan-icd-loader vulkan-swrast mesa vulkan-tools \
+ && pacman -Scc --noconfirm
+
+# What the build reads beyond the above. Derived from the desk build, not
+# guessed: every /usr header in `ninja -t deps` mapped through `pacman -Qqo`,
+# plus pkg-config for FFmpeg. onetbb matters even though nothing asks for it:
+# libstdc++'s <execution> checks __has_include(<tbb/tbb.h>), so without it the
+# container would preprocess some TUs differently from the desk.
+# A separate layer, so adding to it does not re-download the toolchain.
+RUN pacman -S --noconfirm --needed pkgconf libx11 libxrandr xorgproto onetbb \
+        curl libjpeg-turbo libvorbis libogg zlib \
+ && pacman -Scc --noconfirm
+
+# Test-only: what native_test.sh's tests run besides our binaries.
+# camera_fixture.py needs numpy; PoseTracker.Python's parity half needs node;
+# the windowed NativeExitTest cases start a private Xvfb and drive it with
+# xdotool. Nothing in the build reads these. The desk has numpy and Pillow
+# from pip in ~/.local, not pacman, so those versions need not match.
+RUN pacman -S --noconfirm --needed python-numpy python-pillow nodejs \
+        xorg-server-xvfb xdotool \
+ && pacman -Scc --noconfirm
+
+# The desk's paths, recreated so bind mounts can land on them (see
+# tnr_build.sh): a CMake build dir records absolute paths, and keeping them
+# identical is what makes the build dir usable on the desk afterwards.
+RUN mkdir -p /home/free/tmp /home/free/code/milohax /home/free/.local/bin /home/free/.cache
+ENV HOME=/home/free
