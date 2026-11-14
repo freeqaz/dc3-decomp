@@ -414,6 +414,60 @@ TEST_F(NativeExitTest, HealthUptimeIsWallClockNotSongTime) {
     e.WaitExit(30);
 }
 
+// H-78: a quit with an HTTP request still waiting for the main thread must
+// leave through the main loop. The server's shutdown used to join a handler
+// parked in QueueAndWait's 10 s wait, so the 5 s quit grace ran out and the
+// process ended in `quit_grace_expired` (soak #10: 2 of 3 windowed quits; the
+// playtest kit always has a request in flight). To park one on purpose, frames
+// are paced to 3.3 s (PUT /api/pace): the main thread takes commands once a
+// frame, so an eval sent just after that is still queued when SIGTERM ends
+// the loop at the end of the frame (under the 5 s grace by itself).
+// Sabotaged once (np-soak3, Stop() skipping the drain): fails with
+// `DC3_EXIT: how=terminating_signal detail=quit_grace_expired`, the soak's
+// exact signature; restored, 3 of 3 repeats pass.
+TEST_F(NativeExitTest, QuitWithARequestInFlightLeavesThroughTheMainLoop) {
+    if (!HaveCurl()) GTEST_SKIP() << "curl not installed";
+    std::string portFile = mRunDir + "/http_port";
+    Engine e;
+    Start(e, mRunDir, {"MILO_HEADLESS=1", "MILO_NORENDER=1", "DC3_HTTP=1", "DC3_HTTP_PORT=0",
+                       "DC3_HTTP_PORT_FILE=" + portFile});
+    ASSERT_TRUE(e.WaitFor("DC3 Native: Entering main loop", 120)) << Tail(e.Output());
+    int port = atoi(ReadAll(portFile).c_str());
+    ASSERT_GT(port, 0) << Tail(e.Output());
+    std::string api = "http://127.0.0.1:" + std::to_string(port) + "/api";
+    std::string pace = Curl("-X PUT '" + api + "/pace?fps=0.3'");
+    ASSERT_NE(pace.find("\"ok\":true"), std::string::npos) << "PUT /api/pace: " << pace;
+    // Let a frame at the new pace start (the next one sleeps out 3.3 s).
+    std::this_thread::sleep_for(std::chrono::milliseconds(4000));
+    // Park an eval in the background, so this thread can quit the game while
+    // it waits; its HTTP status (or curl's failure) lands in a file. Control:
+    // it must still be unanswered 300 ms later, else nothing was in flight.
+    // A frame boundary can fall in those 300 ms (~1 in 11), so up to 4 tries.
+    bool parked = false;
+    std::string replies;
+    for (int i = 0; i < 4 && !parked; i++) {
+        std::string reply = mRunDir + "/eval_reply" + std::to_string(i);
+        std::string cmd = "curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST "
+                          "--data '{+ 1 2}' " + api + "/dta/eval > " + reply +
+                          " 2>/dev/null &";
+        ASSERT_EQ(system(cmd.c_str()), 0);
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        std::string got = ReadAll(reply);
+        parked = got.empty();
+        replies += got + " ";
+    }
+    ASSERT_TRUE(parked) << "every eval was answered at once (" << replies
+                        << "): nothing was in flight, so this run proves nothing";
+    kill(e.pid, SIGTERM);
+    ASSERT_TRUE(e.WaitExit(30)) << "still running 30 s after SIGTERM\n" << Tail(e.Output());
+    std::string out = e.Output();
+    ExpectNoCrash(out);
+    EXPECT_FALSE(Contains(out, "quit_grace_expired"))
+        << "the quit grace ran out with a request in flight\n" << Tail(out);
+    EXPECT_TRUE(Contains(out, "DC3_EXIT: how=main_loop_returned detail=SIGTERM code=143"))
+        << "SIGTERM did not leave through the main loop\n" << Tail(out);
+}
+
 #if defined(__linux__)
 namespace {
 

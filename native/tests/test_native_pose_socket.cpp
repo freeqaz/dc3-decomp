@@ -793,11 +793,21 @@ TEST_F(PoseSensorSlotTest, ARepeatedFrameIdIsNotANewSensorFrame) {
 // frames coming back put the player back.  Sabotaged: NativePoseStallMs()
 // returning 0 -> AStalledSourceReportsNobodyAndRecovers fails (PollNewFrame
 // stays null and the slot stays tracked).
+//
+// The notice is for a song in play only (np-polish3): a performer replay is
+// silent between songs and put it on song select in 153 of 204 sweep runs.
+// The in-process tests have no GamePanel, so each pins the answer with
+// NativePoseStallTestSetSongInPlay (the fixture puts the game's own back).
 // ---------------------------------------------------------------------------
 class PoseSensorStallTest : public PoseSensorHoldTest {
 protected:
+    void SetUp() override {
+        NativePoseStallTestSetSongInPlay(1); // the song is playing, unless a test says not
+        PoseSensorHoldTest::SetUp();
+    }
     void TearDown() override {
         unsetenv("DC3_POSE_STALL_MS");
+        NativePoseStallTestSetSongInPlay(-1);
         PoseSensorHoldTest::TearDown();
     }
     // Poll the sensor for `ms` of wall time without sending anything; the
@@ -852,6 +862,58 @@ TEST_F(PoseSensorStallTest, AStalledSourceReportsNobodyAndRecovers) {
     EXPECT_FALSE(NativePoseStalled());
     EXPECT_NE(NativeNotice::Text("pose-stall").find("back"), std::string::npos)
         << NativeNotice::Text("pose-stall");
+}
+
+// Song select (no song in play): the stall happens -- the sensor reports
+// nobody, as a Kinect with nobody in view would -- but nothing goes on the
+// screen, and the "frames are back" line is not shown to a player who was
+// never told.  A song starting while the source is still silent shows it;
+// leaving the song takes it off.  Sabotaged: StallNoticeTick's
+// `&& NativeSongInPlay()` removed -> the first notice EXPECT fails ("The pose
+// stream stopped sending frames ..." on song select).
+TEST_F(PoseSensorStallTest, OffTheSongTheStallIsNotShown) {
+    setenv("DC3_POSE_STALL_MS", "300", 1);
+    NativePoseStallTestSetSongInPlay(0);
+    ASSERT_GE(Present(73, 0.1f, 31), 0);
+    int delivered = 0;
+    const SkeletonFrame *f = Silence(500, &delivered);
+    ASSERT_NE(f, nullptr) << "the stall itself does not depend on the screen";
+    EXPECT_TRUE(NativePoseStalled());
+    EXPECT_EQ(NativeNotice::Text("pose-stall"), "") << "a stall on song select reached the screen";
+    // A song starts with the source still silent: now the player is told.
+    NativePoseStallTestSetSongInPlay(1);
+    Silence(100, &delivered);
+    EXPECT_NE(NativeNotice::Text("pose-stall").find("stopped sending frames"), std::string::npos)
+        << NativeNotice::Text("pose-stall");
+    // Back to song select, still silent: off the screen again.
+    NativePoseStallTestSetSongInPlay(0);
+    Silence(100, &delivered);
+    EXPECT_EQ(NativeNotice::Text("pose-stall"), "");
+    // Frames return off the song: logged, nothing shown.
+    ASSERT_NE(Frame({ { 73, 0.1f } }), nullptr);
+    EXPECT_FALSE(NativePoseStalled());
+    EXPECT_EQ(NativeNotice::Text("pose-stall"), "") << "'frames are back' for a notice never shown";
+}
+
+// A source that is running but has never sent a frame -- a pose server that
+// connected and whose camera never delivered -- is not watched: the stall
+// needs a frame to be silent after.  The source's first poll used to count
+// as a new frame (frame id 0 vs the sensor's "nothing yet"), so 1.5 s after
+// connecting the watchdog fired for a camera that had never spoken.
+// Sabotaged: `&& TheSkeletonProvider->HasPublished()` removed from the
+// StallWatchTick call -> NativePoseStalled() turns true here.
+TEST_F(PoseSensorStallTest, ASourceThatNeverSentAFrameIsNotWatched) {
+    setenv("DC3_POSE_STALL_MS", "300", 1);
+    unsigned stallsBefore = NativePoseStalls();
+    int delivered = 0;
+    Silence(700, &delivered);
+    EXPECT_FALSE(NativePoseStalled());
+    EXPECT_EQ(NativePoseStalls(), stallsBefore);
+    EXPECT_EQ(NativeNotice::Text("pose-stall"), "");
+    // Its first frame starts the watch.
+    ASSERT_GE(Present(74, 0.0f, 3), 0);
+    Silence(500, &delivered);
+    EXPECT_TRUE(NativePoseStalled()) << "a source that has spoken and gone quiet is watched";
 }
 
 TEST_F(PoseSensorStallTest, ZeroKeepsTheOldFrozenFrame) {

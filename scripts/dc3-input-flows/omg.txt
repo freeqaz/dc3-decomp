@@ -9,9 +9,10 @@
 # (`highlight omg`), so downloadable songs listed before it do not move the
 # flow.  On the disc alone omg is the LAST song in song select (the list is
 # sorted by skill with tier headers, scripts/web/song-order.mjs index 51).
-# Assumes a console that has seen the move tutorial (the flow test seeds the
-# global options cache); otherwise the tutorial panels auto-advance after
-# ~1900 frames each.
+# Assumes a console that has seen the move tutorial: the flow test seeds the
+# global options cache; a standalone run sets DC3_TUTORIALS_SEEN=1 (README).
+# Without either it stops on tutorial_perform_it_screen_0, which this flow
+# never confirms (MEASURED 2026-11-14: 15,000 frames there, no MOVE_RATING).
 wait_screen title_screen
 +30 confirm
 wait_screen main_screen
