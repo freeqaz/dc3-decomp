@@ -2046,6 +2046,8 @@ if(BUILD_TESTS)
         tests/test_preload_budget.cpp
         tests/test_persistent_filecache.cpp
         tests/test_fast_time_audio.cpp
+        tests/test_choreo_blend.cpp
+        tests/test_rhythm_scoring_window.cpp
         tests/test_milo_viewer_screenshot.cpp
         tests/test_object_lifetime.cpp
         tests/test_manual_repro.cpp
