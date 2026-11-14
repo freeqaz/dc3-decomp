@@ -20,6 +20,12 @@
 // DrawShowing queues their draw list for NgPostProc's object velocity
 // (RndVelocityBuffer::DrawMesh; meshes over 40 bones are skipped there) --
 // np-gfx-post round 3.
+//
+// And one line per PropAnim key track whose target is a RndPostProc,
+// {"file":..,"anim":..,"anim_frame":..,"target":..,"prop":..,"type":..,
+// "keys":[[frame,value],...]} (colours as [r,g,b,a]): which post-proc fields a
+// venue animates, and to what, per frame (np-gfx-post round 3, the DCI peak
+// blue lead: environments_master's sub-anims key dci_performance_*.pp).
 
 #include "os/Debug.h"
 #include "os/System.h"
@@ -29,6 +35,8 @@
 #include "rndobj/PostProc.h"
 #include "rndobj/Env.h"
 #include "rndobj/MotionBlur.h"
+#include "rndobj/PropAnim.h"
+#include "rndobj/PropKeys.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/Tex.h"
 #include "char/Char.h"
@@ -247,6 +255,47 @@ void Dump(const char *file, const RndPostProc *pp) {
     printf("%s\n", o.c_str());
 }
 
+struct PAPeek : RndPropAnim {
+    static const PAPeek &Of(const RndPropAnim *p) { return *static_cast<const PAPeek *>(p); }
+    using RndPropAnim::mPropKeys;
+};
+
+void DumpPropAnim(const char *file, RndPropAnim *anim) {
+    const PAPeek &a = PAPeek::Of(anim);
+    for (std::list<PropKeys *>::const_iterator k = a.mPropKeys.begin(); k != a.mPropKeys.end(); ++k) {
+        PropKeys *keys = *k;
+        if (!keys || !dynamic_cast<RndPostProc *>(keys->Target())) continue;
+        String prop;
+        if (keys->Prop()) keys->Prop()->Print(prop, kDataArray, true, 0);
+        char b[160];
+        snprintf(b, sizeof(b), "%g", anim->GetFrame());
+        std::string o = "{\"file\":\"" + Esc(file) + "\",\"anim\":\"" + Esc(anim->Name())
+            + "\",\"anim_frame\":" + b + ",\"target\":\"" + Esc(keys->Target()->Name())
+            + "\",\"prop\":\"" + Esc(prop.c_str()) + "\",\"type\":";
+        snprintf(b, sizeof(b), "%d", (int)keys->KeysType());
+        o += b;
+        o += ",\"keys\":[";
+        if (keys->KeysType() == PropKeys::kFloat) {
+            Keys<float, float> *fk = keys->AsFloatKeys();
+            for (size_t i = 0; fk && i < fk->size(); i++) {
+                snprintf(b, sizeof(b), "[%g,%g],", (*fk)[i].frame, (*fk)[i].value);
+                o += b;
+            }
+        } else if (keys->KeysType() == PropKeys::kColor) {
+            Keys<Hmx::Color, Hmx::Color> *ck = keys->AsColorKeys();
+            for (size_t i = 0; ck && i < ck->size(); i++) {
+                const Hmx::Color &c = (*ck)[i].value;
+                snprintf(b, sizeof(b), "[%g,[%g,%g,%g,%g]],", (*ck)[i].frame, c.red, c.green,
+                         c.blue, c.alpha);
+                o += b;
+            }
+        }
+        Close(o);
+        o += "]}";
+        printf("%s\n", o.c_str());
+    }
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -317,6 +366,7 @@ int main(int argc, char *argv[]) {
             printf("%s\n", o.c_str());
             blurs++;
         }
+        for (ObjDirItr<RndPropAnim> it(scene, true); it != nullptr; ++it) DumpPropAnim(argv[i], it);
         fprintf(stderr, "%s: %d post-procs, %d environs, %d motion blurs\n", argv[i], n, envs, blurs);
         total += n;
     }
