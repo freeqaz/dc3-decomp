@@ -85,6 +85,11 @@ The two halves meet at the drive name.
   - Final score 1,781,040, with the 5-star `acc_gold_star` award.
   - The run reached `perform_endgame_screen`, then the XP reward screen.
 
+Also measured: the Dance Central 2 Import Pack for DC3 (`DC2ExportPackforDC3`,
+45 songs). It imported with the same script. Sandstorm from it scored 61 of 61
+Perfect for 1,659,408 (headless, FAST_TIME). That is one song only; see
+PLAN D-3.
+
 ## Not done
 
 See PLAN Track D.
