@@ -219,6 +219,9 @@ def main():
         env.pop("MILO_HEADLESS", None)
     else:
         env["MILO_HEADLESS"] = "1"
+    # The song is YMCA by one counted down: pin the disc list, which the dev
+    # profile would otherwise extend with <data>/dlc (DC3_DLC); --env wins.
+    env.setdefault("DC3_DLC", "0")
     for kv in a.env:
         k, v = kv.split("=", 1)
         env[k] = v

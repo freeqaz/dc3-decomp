@@ -1387,7 +1387,7 @@ TEST_F(OptionsGameplayFlowTest, KinectTunerGivesFeedback) {
 // 25.20 MiB as the web build reads it (the inflated extraction), which is why
 // loading.dta's 16 MiB `max_cache_size` sent it -- and 33 other songs -- back
 // to the title screen on web until PreloadPanel::SetTypeDef scaled it
-// (185b6f50e).  omg.txt picks it (51 downs: the last row of song select) on a
+// (185b6f50e).  omg.txt picks it by name (`highlight omg`) on a
 // console that has seen the move tutorial, so the run goes straight from
 // multiuser_screen to loading.
 //
@@ -1429,9 +1429,11 @@ TEST_F(LargestSongFlowTest, OmgPreloadsAndReachesGameplay) {
     ASSERT_NE(out.find("DC3 Input: wait_screen 'song_select_screen' satisfied"),
               std::string::npos)
         << "precondition: omg.txt never reached song_select_screen";
+    ASSERT_NE(out.find("DC3 Input: highlight 'omg' satisfied"), std::string::npos)
+        << "the `highlight omg` directive in scripts/dc3-input-flows/omg.txt never put "
+           "song select's highlight on omg (look for 'DC3 Input: TIMEOUT highlight')";
     ASSERT_NE(out.find("sym='omg'"), std::string::npos)
-        << "the confirm on song select did not pick omg -- the song list changed; "
-           "recount the downs in scripts/dc3-input-flows/omg.txt";
+        << "the confirm on song select did not pick omg although the highlight was on it";
     EXPECT_EQ(out.find("Could not cache"), std::string::npos)
         << "PreloadPanel::CheckFileCached failed: the preload cache evicted part of "
            "omg's set (loading.dta max_cache_size vs the bytes this build reads)";
@@ -1543,9 +1545,11 @@ TEST_F(DlcSongFlowTest, MilkshakeMountsAndReachesGameplay) {
     ASSERT_NE(out.find("DC3 Input: wait_screen 'song_select_screen' satisfied"),
               std::string::npos)
         << "precondition: milkshake.txt never reached song_select_screen";
+    ASSERT_NE(out.find("DC3 Input: highlight 'milkshake' satisfied"), std::string::npos)
+        << "the `highlight milkshake` directive in scripts/dc3-input-flows/milkshake.txt never put "
+           "song select's highlight on milkshake (look for 'DC3 Input: TIMEOUT highlight')";
     ASSERT_NE(out.find("sym='milkshake'"), std::string::npos)
-        << "the confirm on song select did not pick milkshake -- the song list changed; "
-           "recount the downs in scripts/dc3-input-flows/milkshake.txt";
+        << "the confirm on song select did not pick milkshake although the highlight was on it";
     EXPECT_NE(out.find("cnt00000000:/songs/milkshake/gen/milkshake.milo_xbox"),
               std::string::npos)
         << "the song milo was not read from the package's drive";

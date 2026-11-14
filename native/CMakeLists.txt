@@ -328,7 +328,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "12718566cc5244004f7c9ad39e28bb2be3b0fe1a"
+set(MILO_ENGINE_PIN "1a488e760532e66e7930bdfc072f836f063c81dc"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -1230,6 +1230,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/ProcessSpawner_Native.cpp # pose_server.py launched from a pristine fork (RLIMIT_RTTIME)
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
+    src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/NuiImageSurface_Native.cpp
@@ -1421,6 +1422,7 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/ProcessSpawner_Native.cpp # pose_server.py launched from a pristine fork (RLIMIT_RTTIME)
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
+    src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/NuiImageSurface_Native.cpp
@@ -2261,6 +2263,12 @@ if(BUILD_TESTS)
     # developer's running game: kernel-assigned unless the test names a port
     # (the port-file helpers read the one it got).
     list(APPEND MILO_TEST_ENV "DC3_HTTP_PORT=0")
+    # The dev profile also mounts every package under <data>/dlc (DC3_DLC=1).
+    # A test mounts DLC only when it names its own DC3_DLC_DIR (the
+    # DC3_DLC_TESTS gate), so a box with imported packages boots the same song
+    # list -- and runs the same tests -- as one without
+    # (ContentMgr_Native.cpp NativeDlcRoots).
+    list(APPEND MILO_TEST_ENV "DC3_DLC=0")
     set(MILO_TEST_GATES_ON "")
     set(MILO_TEST_GATES_OFF "")
     # MILO_TEST_GATE_PROBES records, for every probed gate, the exact path whose

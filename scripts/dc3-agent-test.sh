@@ -121,6 +121,15 @@ done
 # Print active config
 echo "dc3-agent-test: HTTP=:${DC3_HTTP_PORT} fast_boot=${DC3_FAST_BOOT} tel=${DC3_TEL} max_frames=${MILO_MAX_FRAMES}"
 [ -n "${MILO_INPUT_SCRIPT:-}" ] && echo "dc3-agent-test: input_script=${MILO_INPUT_SCRIPT}"
+# The dev profile mounts <data>/dlc (DC3_DLC=1), and DLC songs sort in among
+# the disc's, so a flow that picks its song by counted downs (no `highlight`
+# directive: ymca.txt, song-select-scroll.txt) would land on another song.
+# Such a flow runs without DLC unless the caller asked for it.
+if [ -n "${MILO_INPUT_SCRIPT:-}" ] && [ -z "${DC3_DLC+x}" ] && [ -z "${DC3_DLC_DIR+x}" ] \
+   && ! grep -qE '^[[:space:]]*(\+?[0-9]+[[:space:]]+)?highlight[[:space:]]' "$MILO_INPUT_SCRIPT"; then
+    export DC3_DLC=0
+    echo "dc3-agent-test: DC3_DLC=0 (the input script counts presses to its song; set DC3_DLC or DC3_DLC_DIR to override)"
+fi
 
 cd "$BUILD_DIR"
 exec "$BINARY" "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}"
