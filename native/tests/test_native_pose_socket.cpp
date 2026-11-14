@@ -40,6 +40,7 @@
 #include "platform/NativeNotice.h"
 #include "platform/Skeleton_Native.h"
 #include "platform/PoseLevel_Native.h"
+#include "platform/PoseEstimate_Native.h" // NativePoseEstimateTestSet
 #include "platform/PoseFill_Native.h"
 #include "platform/PoseSession_Native.h"
 #include "gesture/CameraInput.h"
@@ -780,6 +781,162 @@ TEST_F(PoseSensorSlotTest, ARepeatedFrameIdIsNotANewSensorFrame) {
     ASSERT_NE(Frame({ { 51, 0.0f } }), nullptr);
     // Same generation again: the camera has not produced a new picture.
     EXPECT_EQ(mSensor->PollNewFrame(), nullptr);
+}
+
+// ---------------------------------------------------------------------------
+// A pose source that stops sending (np-cutoff, PLAN H-94).  A hung or stopped
+// pose server, a blocked camera read or a web worker that stopped posting
+// used to leave the player's slot at its last frame, tracked, while the song
+// scored a statue.  DC3_POSE_STALL_MS (default 1500): after that much wall
+// time without a new frame the sensor reports nobody, one empty frame per
+// 1/30 s, so P-12's hold and then the image's skeleton-loss pause take over;
+// frames coming back put the player back.  Sabotaged: NativePoseStallMs()
+// returning 0 -> AStalledSourceReportsNobodyAndRecovers fails (PollNewFrame
+// stays null and the slot stays tracked).
+// ---------------------------------------------------------------------------
+class PoseSensorStallTest : public PoseSensorHoldTest {
+protected:
+    void TearDown() override {
+        unsetenv("DC3_POSE_STALL_MS");
+        PoseSensorHoldTest::TearDown();
+    }
+    // Poll the sensor for `ms` of wall time without sending anything; the
+    // last frame it delivered, or null if it delivered none.
+    const SkeletonFrame *Silence(int ms, int *delivered) {
+        const SkeletonFrame *last = nullptr;
+        *delivered = 0;
+        auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
+        while (std::chrono::steady_clock::now() < end) {
+            const SkeletonFrame *f = mSensor->PollNewFrame();
+            if (f) {
+                last = f;
+                (*delivered)++;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return last;
+    }
+};
+
+TEST_F(PoseSensorStallTest, AStalledSourceReportsNobodyAndRecovers) {
+    setenv("DC3_POSE_STALL_MS", "300", 1);
+    unsigned stallsBefore = NativePoseStalls();
+    int slot = Present(71, 0.2f, 31);
+    ASSERT_GE(slot, 0);
+    // Under the threshold: nothing new, as before.
+    int delivered = 0;
+    EXPECT_EQ(Silence(150, &delivered), nullptr);
+    EXPECT_EQ(delivered, 0);
+    EXPECT_FALSE(NativePoseStalled());
+    // Past it, 0.5 s of wall time: empty frames, the player held (P-12).
+    const SkeletonFrame *f = Silence(500, &delivered);
+    ASSERT_NE(f, nullptr) << "a stalled source must still produce sensor frames";
+    EXPECT_GE(delivered, 5);
+    EXPECT_TRUE(NativePoseStalled());
+    EXPECT_EQ(NativePoseStalls(), stallsBefore + 1);
+    EXPECT_EQ(SlotOf(f, 71), slot) << "inside the dropout hold";
+    EXPECT_NE(NativeNotice::Text("pose-stall").find("stopped sending frames"), std::string::npos)
+        << NativeNotice::Text("pose-stall");
+    // A further 1.2 s: past DC3_POSE_HOLD_MS, nobody in view.
+    f = Silence(1200, &delivered);
+    ASSERT_NE(f, nullptr);
+    EXPECT_EQ(SlotOf(f, 71), -1) << "the stalled player is lost, so the game can pause";
+    for (int s = 0; s < NUM_SKELETONS; s++)
+        EXPECT_NE(f->mSkeletonDatas[s].mTracking, kSkeletonTracked) << "slot " << s;
+    // Frames again: she is back, and the stall is over.
+    f = Frame({ { 71, 0.25f } });
+    ASSERT_NE(f, nullptr);
+    f = Frame({ { 71, 0.25f } });
+    ASSERT_NE(f, nullptr);
+    EXPECT_GE(SlotOf(f, 71), 0);
+    EXPECT_FALSE(NativePoseStalled());
+    EXPECT_NE(NativeNotice::Text("pose-stall").find("back"), std::string::npos)
+        << NativeNotice::Text("pose-stall");
+}
+
+TEST_F(PoseSensorStallTest, ZeroKeepsTheOldFrozenFrame) {
+    // The control: with the watchdog off a silent source delivers nothing,
+    // so the slot keeps its last, tracked frame -- the behaviour it fixes.
+    setenv("DC3_POSE_STALL_MS", "0", 1);
+    ASSERT_GE(Present(72, 0.0f, 31), 0);
+    int delivered = 0;
+    EXPECT_EQ(Silence(700, &delivered), nullptr);
+    EXPECT_EQ(delivered, 0);
+    EXPECT_FALSE(NativePoseStalled());
+}
+
+// ---------------------------------------------------------------------------
+// DC3_POSE_ESTIMATE on the real sensor path (np-cutoff, PLAN H-91).  The
+// estimator's math is PoseEstimateTest; this is the wiring: a person whose
+// legs leave the picture (conf 0.1, the tracker's guess 2 m below the hips)
+// while she steps 0.5 m to her side.  With `kinematic` the slot's knee goes
+// with her and reads Inferred; with `off` (the control: the old behaviour)
+// it stays frozen where it was last seen.  Sabotaged: the gEstimate.Apply
+// call in FillPersonSlots removed -> AKnee... fails (the knee stays behind).
+// ---------------------------------------------------------------------------
+class PoseSensorEstimateTest : public PoseSensorSlotTest {
+protected:
+    void TearDown() override {
+        NativePoseEstimateTestSet(-1, -1.0f); // back to the environment
+        PoseSensorSlotTest::TearDown();
+    }
+    // Frames of one person standing at x = dx; with `legsCut`, knees, ankles
+    // and feet arrive not tracked, at a wild guess.
+    const SkeletonFrame *Step(int trackId, float dx, bool legsCut) {
+        WirePerson p = Dc3Person(trackId, dx);
+        if (legsCut) {
+            const int legs[] = { kJointKneeLeft, kJointAnkleLeft, kJointFootLeft,
+                                 kJointKneeRight, kJointAnkleRight, kJointFootRight };
+            for (int j : legs) {
+                p.values[j * 4 + 1] -= 2.0f;
+                p.values[j * 4 + 3] = 0.1f;
+            }
+        }
+        uint32_t id = ++sFrameId;
+        if (!mServer.Send(PacketV2(id, id / 30.0, 640, 480, kNumJoints, 1, { p })))
+            return nullptr;
+        if (!WaitForFrame(mProvider, id))
+            return nullptr;
+        return mSensor->PollNewFrame();
+    }
+    // Walk 0.5 m with the legs cut after 1 s in full view; the slot's left
+    // knee x minus its hip-centre x at the end.
+    float KneeOffsetAfterAStep(int trackId, JointConfidence *conf) {
+        const SkeletonFrame *f = nullptr;
+        for (int i = 0; i < 31; i++)
+            f = Step(trackId, 0.0f, false);
+        for (int i = 1; i <= 30; i++)
+            f = Step(trackId, 0.5f * i / 30.0f, true);
+        EXPECT_NE(f, nullptr);
+        if (!f)
+            return 99.0f;
+        int s = SlotOf(f, trackId);
+        EXPECT_GE(s, 0);
+        if (s < 0)
+            return 99.0f;
+        const SkeletonData &d = f->mSkeletonDatas[s];
+        *conf = (JointConfidence)d.mJointTrackingState[kJointKneeLeft];
+        return d.mJointPositions[kJointKneeLeft].x - d.mJointPositions[kJointHipCenter].x;
+    }
+};
+
+TEST_F(PoseSensorEstimateTest, AKneeOutOfThePictureGoesWithTheDancer) {
+    NativePoseEstimateTestSet(Dc3PoseEstimate::kKinematic, 1.0f);
+    JointConfidence conf = kConfidenceTracked;
+    float off = KneeOffsetAfterAStep(91, &conf);
+    // Standing, the left knee is 0.12 m to the hip centre's left; the solve
+    // (the guess 2 m down is implausible) stands it a little wider (-0.21
+    // MEASURED).  Frozen, it would be 0.62 m to the left.
+    EXPECT_NEAR(off, -0.12f, 0.15f) << "the knee must follow the hips";
+    EXPECT_EQ(conf, kConfidenceInferred);
+}
+
+TEST_F(PoseSensorEstimateTest, OffFreezesTheKneeWhereItWasLastSeen) {
+    NativePoseEstimateTestSet(Dc3PoseEstimate::kOff, 1.0f);
+    JointConfidence conf = kConfidenceTracked;
+    float off = KneeOffsetAfterAStep(92, &conf);
+    // Frozen at x = -0.12 while the hips went to +0.5.
+    EXPECT_NEAR(off, -0.62f, 0.05f) << "the control: the old frozen knee";
 }
 
 // ===========================================================================

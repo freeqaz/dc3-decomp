@@ -16,6 +16,7 @@
 #include "platform/ProcessSpawner_Native.h"
 #include <unistd.h>
 #include <signal.h>
+#include <chrono>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
@@ -717,6 +718,10 @@ bool NativeSkeletonProvider::ServerExitIsRestartable(int waitStatus) {
 // -- say that the stream stopped.  A server we launched is then relaunched,
 // within the restart policy.
 bool NativeSkeletonProvider::ServerGone() {
+    struct ClearStalled {
+        volatile bool &flag;
+        ~ClearStalled() { flag = false; }
+    } clearStalled{mServerStalled};
     NativeCamera::Stop(); // no more camera frames either (PLAN P-4)
     if (mSocketFd >= 0) {
         close(mSocketFd);
@@ -745,6 +750,11 @@ bool NativeSkeletonProvider::ServerGone() {
         return false;
     }
     Problem problem = exited ? DescribeServerExit(status, mCamera, mPython) : streamStopped;
+    if (mServerStalled) {
+        problem.text = std::string("The pose server stopped sending frames - pose tracking is off.")
+            + kStandIn;
+        problem.brief = "Pose server stalled: pose tracking off";
+    }
     if (!exited && mServerPid > 0) {
         // It closed the socket but did not exit: replace it.
         NativeSpawner::Kill(mServerPid, SIGTERM);
@@ -769,7 +779,10 @@ bool NativeSkeletonProvider::ServerGone() {
 
         // One line per restart, on the console and on screen.
         std::string why;
-        if (!exited) {
+        if (mServerStalled) {
+            why = "The pose server stalled";
+            mServerStalled = false; // later rounds say what they saw
+        } else if (!exited) {
             why = "The pose stream stopped";
         } else if (WIFSIGNALED(status)) {
             why = "The pose server crashed (signal " + std::to_string(WTERMSIG(status)) + ")";
@@ -861,13 +874,42 @@ static bool readExact(int fd, void *buf, size_t len) {
 }
 
 void NativeSkeletonProvider::ReaderThread() {
+    int stallMs = mServerStallMs;
+    if (stallMs < 0) {
+        const char *v = getenv("DC3_POSE_SERVER_STALL_MS");
+        stallMs = (v && *v) ? atoi(v) : kDefaultServerStallMs;
+        if (stallMs < 0)
+            stallMs = kDefaultServerStallMs;
+    }
+    auto lastPacket = std::chrono::steady_clock::now();
     while (mRunning && !mStopRequested) {
         // Poll for data with timeout
         struct pollfd pfd;
         pfd.fd = mSocketFd;
         pfd.events = POLLIN;
         int ret = poll(&pfd, 1, 100); // 100ms timeout
-        if (ret <= 0) continue;
+        if (ret <= 0) {
+            // A server we launched that is connected and silent is stuck:
+            // replace it (ServerGone reaps it and relaunches per the policy).
+            double silentMs = std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - lastPacket).count();
+            if (stallMs > 0 && mSpawned && mServerPid > 0 && silentMs >= stallMs) {
+                fprintf(stderr, "Pose server stalled: no frame for %.1f s - replacing it\n",
+                        silentMs / 1000.0);
+                mServerStalls = mServerStalls + 1;
+                mServerStalled = true;
+                // SIGKILL: a stopped process does not act on SIGTERM.
+                NativeSpawner::Kill(mServerPid, SIGKILL);
+                bool back = ServerGone();
+                lastPacket = std::chrono::steady_clock::now();
+                if (back)
+                    continue;
+                mRunning = false;
+                break;
+            }
+            continue;
+        }
+        lastPacket = std::chrono::steady_clock::now();
 
         // Read packet length prefix
         uint32_t packetLen;
