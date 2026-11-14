@@ -24,7 +24,10 @@ to the same scoring (PLAN L-1).
    b. DETERMINISM: the fast-time replays rate every move the same.
    c. RATINGS: every move, live vs each replay and replay vs replay, side by
       side in ratings.tsv, with how many agree.
-   Exit 0 when a and b hold.  c is reported, not gated: the scorer samples the
+   Exit 0 when a and b hold (a on the fast-time replays when there are
+   any: a real-time replay accepts one frame per render frame, as the live
+   game did, so a box rendering below 30 fps drops frames).  c is reported,
+   not gated: the scorer samples the
    skeleton on render frames (MoveDir::PostUpdateFilters enqueues a filter job
    at the song time of the game frame it runs on; FilterQueue::Poll reads the
    skeleton of a later frame), so in real time two runs of the SAME input
@@ -181,17 +184,35 @@ def evaluate(out, results):
             r["stream"] = {"identical": False, "error": str(ex)}
         st = r["stream"]
         # The stream, and the whole song: as many moves rated as live (a
-        # replay whose clock stopped early would rate fewer).
-        if not st.get("identical") or len(r["ratings"]) != len(live["ratings"]):
+        # replay whose clock stopped early would rate fewer).  Gated on the
+        # fast-time replays when there are any: a real-time replay accepts one
+        # frame per render frame, as the live game did, so a box that renders
+        # below the sensor's 30 Hz for a while drops frames (measured on a
+        # loaded box: 5 s windows at 13.6 / 21.5 / 27.7 fps, 72 of 4877
+        # frames dropped); under DC3_FAST_TIME the song waits for the frames.
+        gated = r["name"].startswith("fast") or not any(
+            x["name"].startswith("fast") for x in reps)
+        r["gated"] = gated
+        if gated and (not st.get("identical") or len(r["ratings"]) != len(live["ratings"])):
             ok = False
         same, n = agreement(live["ratings"], r["ratings"])
         r["same_as_live"] = [same, n]
-        say(f"{r['name']}: stream {'IDENTICAL' if st.get('identical') else 'DIFFERENT'} "
+        perf = []
+        try:
+            with open(os.path.join(r["session"], "engine.log"), "rb") as fh:
+                perf = [float(m.group(1)) for m in
+                        re.finditer(rb"DC3 PERF: fps=([\d.]+)", fh.read())]
+        except OSError:
+            pass
+        r["lowest_fps_window"] = min(perf) if perf else None
+        say(f"{r['name']}{'' if gated else ' (reported, not gated)'}: stream "
+            f"{'IDENTICAL' if st.get('identical') else 'DIFFERENT'} "
             f"({st.get('replayed')}/{st.get('source_frames')} frames, {st.get('missing')} "
             f"dropped, {st.get('not_reached')} after the last not reached "
             f"({st.get('not_reached_s')} s of song), "
             f"{st.get('mismatched')} differ, song-time lag {st.get('lag_min')}.."
-            f"{st.get('lag_max')} s); {same}/{n} moves rated as live; card {r['card']}")
+            f"{st.get('lag_max')} s; slowest 5 s at {r['lowest_fps_window']} fps); {same}/{n} "
+            f"moves rated as live; card {r['card']}")
     pairs = {}
     for i in range(len(reps)):
         for j in range(i + 1, len(reps)):
