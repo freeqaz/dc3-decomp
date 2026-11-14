@@ -11,6 +11,7 @@
 #ifndef __EMSCRIPTEN__
 #include "PosePerformer_Native.h"
 #include "platform/ExecutablePath.h"
+#include "platform/ProcessSpawner_Native.h"
 #include <unistd.h>
 #include <signal.h>
 #include <sys/socket.h>
@@ -290,6 +291,17 @@ std::string NativeSkeletonProvider::DefaultModelPath() {
     return NativeTreePath("models/pose_landmarker_full.task");
 }
 
+// How long Start() (and each restart) waits for the server's socket.
+static const int kServerTimeoutMs = 5000;
+
+static NativeSkeletonProvider::Problem StartTimeoutProblem() {
+    NativeSkeletonProvider::Problem p;
+    p.text = std::string("The pose server did not start within 5 seconds - pose tracking is off.")
+        + kStandIn + " Its messages are in the console log.";
+    p.brief = "Pose server did not start: pose tracking off";
+    return p;
+}
+
 bool NativeSkeletonProvider::Start(
     const std::string &socketPath, const std::string &modelPath, int cameraIndex
 ) {
@@ -304,7 +316,10 @@ bool NativeSkeletonProvider::Start(
     }
 
     mSocketPath = socketPath;
+    mModelPath = modelPath;
     mCameraIndex = cameraIndex;
+    mStopRequested = false;
+    mRestarts = 0;
     {
         std::lock_guard<std::mutex> lock(mSwapMutex);
         mProblem = Problem();
@@ -312,55 +327,12 @@ bool NativeSkeletonProvider::Start(
 
     // DC3_POSE_NO_SPAWN=1: connect-only mode — attach to an already-running
     // pose server (e.g. a synthetic one in CI) instead of forking pose_server.py.
-    if (getenv("DC3_POSE_NO_SPAWN")) {
+    mSpawned = !getenv("DC3_POSE_NO_SPAWN");
+    if (!mSpawned) {
         printf("DC3_POSE_NO_SPAWN: connecting to existing pose server at %s\n",
             socketPath.c_str());
-    } else {
-        // Launch pose_server.py as child process, found next to the
-        // executable's tree (native/build/<exe> -> native/scripts), never the
-        // working directory.
-        std::string scriptPath = NativeTreePath("scripts/pose_server.py");
-
-        mServerPid = fork();
-        if (mServerPid == 0) {
-            // Child process. DC3_POSE_HFOV (degrees) calibrates the server to
-            // the real camera's horizontal FOV -- absolute depth scales with
-            // the assumed focal length, and the 58.51-degree Kinect default
-            // measured +0.76..1.73 m of depth bias on real 65-72.5 degree
-            // cameras (bench_model_z.py). Pose SHAPE is FOV-invariant, so the
-            // default stays safe for scoring; calibrate for better absolutes.
-            std::string camArg = std::to_string(cameraIndex);
-            const char *hfov = getenv("DC3_POSE_HFOV");
-            std::vector<const char *> argv = {
-                "python3", scriptPath.c_str(),
-                "--socket", socketPath.c_str(),
-                "--model",  modelPath.c_str(),
-                "--camera", camArg.c_str(),
-            };
-            if (hfov && *hfov) {
-                argv.push_back("--hfov");
-                argv.push_back(hfov);
-            }
-            // PLAN P-4: ask for the camera picture + person mask (protocol v3)
-            // the player view is drawn from.  DC3_CAMERA_FRAMES=off keeps the
-            // pose-only v2 stream; WxH picks the size (default 320x240, the
-            // Kinect depth resolution).
-            std::string framesArg = CameraFramesArg();
-            if (!framesArg.empty()) {
-                argv.push_back("--frames");
-                argv.push_back(framesArg.c_str());
-            }
-            argv.push_back(nullptr);
-            execvp("python3", const_cast<char *const *>(argv.data()));
-            // If exec fails
-            perror("Failed to launch pose_server.py");
-            _exit(kExitExecFailed);
-        } else if (mServerPid < 0) {
-            perror("fork failed");
-            return false;
-        }
-
-        printf("Launched pose_server.py (pid %d)\n", mServerPid);
+    } else if (!LaunchServer()) {
+        return false;
     }
 
     // Wait for the socket to appear, then connect.  pose_server.py binds it
@@ -368,21 +340,89 @@ bool NativeSkeletonProvider::Start(
     // exits with an EXIT_* code if the camera, model or packages are missing;
     // that exit is noticed on the next 50 ms tick instead of after the whole
     // timeout.
+    int status = 0;
+    switch (WaitForServer(kServerTimeoutMs, &status)) {
+    case kConnected:
+        printf("Connected to pose server\n");
+        NativeNotice::Clear(kPoseNoticeKey);
+        mRunning = true;
+        mReaderThread = std::thread(&NativeSkeletonProvider::ReaderThread, this);
+        return true;
+    case kServerExited:
+        ReportProblem(DescribeServerExit(status, cameraIndex));
+        Stop();
+        return false;
+    case kTimedOut:
+    case kStopped:
+        break;
+    }
+
+    fprintf(stderr, "Failed to connect to pose server after %d ms\n", kServerTimeoutMs);
+    ReportProblem(StartTimeoutProblem());
+    Stop();
+    return false;
+}
+
+bool NativeSkeletonProvider::LaunchServer() {
+    // pose_server.py is found next to the executable's tree (native/build/<exe>
+    // -> native/scripts), never the working directory.  DC3_POSE_HFOV
+    // (degrees) calibrates the server to the real camera's horizontal FOV --
+    // absolute depth scales with the assumed focal length, and the
+    // 58.51-degree Kinect default measured +0.76..1.73 m of depth bias on real
+    // 65-72.5 degree cameras (bench_model_z.py). Pose SHAPE is FOV-invariant,
+    // so the default stays safe for scoring; calibrate for better absolutes.
+    std::vector<std::string> argv = {
+        "python3", NativeTreePath("scripts/pose_server.py"),
+        "--socket", mSocketPath,
+        "--model",  mModelPath,
+        "--camera", std::to_string(mCameraIndex),
+    };
+    const char *hfov = getenv("DC3_POSE_HFOV");
+    if (hfov && *hfov) {
+        argv.push_back("--hfov");
+        argv.push_back(hfov);
+    }
+    // PLAN P-4: ask for the camera picture + person mask (protocol v3) the
+    // player view is drawn from.  DC3_CAMERA_FRAMES=off keeps the pose-only v2
+    // stream; WxH picks the size (default 320x240, the Kinect depth
+    // resolution).
+    std::string framesArg = CameraFramesArg();
+    if (!framesArg.empty()) {
+        argv.push_back("--frames");
+        argv.push_back(framesArg);
+    }
+    // Through the spawner forked at the top of main (ProcessSpawner_Native.h):
+    // a child forked from this process now would inherit the RLIMIT_RTTIME of
+    // 0 that PipeWire's ALSA plugin sets on it, and MediaPipe's realtime
+    // thread gets the server SIGKILLed at model load.
+    mServerPid = NativeSpawner::Spawn(argv);
+    if (mServerPid < 0) {
+        perror("Failed to launch pose_server.py");
+        mServerPid = -1;
+        return false;
+    }
+    printf("Launched pose_server.py (pid %d%s)\n", (int)mServerPid,
+        NativeSpawner::Active() ? ", via the spawner" : "");
+    return true;
+}
+
+NativeSkeletonProvider::WaitResult NativeSkeletonProvider::WaitForServer(
+    int timeoutMs, int *exitStatus
+) {
     static const int kPollMs = 50;
-    static const int kTimeoutMs = 5000;
-    for (int waited = 0; waited < kTimeoutMs; waited += kPollMs) {
+    for (int waited = 0; waited < timeoutMs; waited += kPollMs) {
         usleep(kPollMs * 1000);
+        if (mStopRequested)
+            return kStopped;
 
         if (mServerPid > 0) {
             int status = 0;
-            if (waitpid(mServerPid, &status, WNOHANG) == mServerPid) {
+            if (NativeSpawner::TryReap(mServerPid, &status)) {
                 mServerPid = -1;
-                Problem p = DescribeServerExit(status, cameraIndex);
                 fprintf(stderr, "pose_server.py exited after %d ms (status 0x%x)\n",
                     waited + kPollMs, status);
-                ReportProblem(p);
-                Stop();
-                return false;
+                *exitStatus = status;
+                return kServerExited;
             }
         }
 
@@ -392,31 +432,19 @@ bool NativeSkeletonProvider::Start(
         struct sockaddr_un addr;
         memset(&addr, 0, sizeof(addr));
         addr.sun_family = AF_UNIX;
-        strncpy(addr.sun_path, socketPath.c_str(), sizeof(addr.sun_path) - 1);
+        strncpy(addr.sun_path, mSocketPath.c_str(), sizeof(addr.sun_path) - 1);
 
-        if (connect(mSocketFd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
-            printf("Connected to pose server\n");
-            NativeNotice::Clear(kPoseNoticeKey);
-            mRunning = true;
-            mReaderThread = std::thread(&NativeSkeletonProvider::ReaderThread, this);
-            return true;
-        }
+        if (connect(mSocketFd, (struct sockaddr *)&addr, sizeof(addr)) == 0)
+            return kConnected;
 
         close(mSocketFd);
         mSocketFd = -1;
     }
-
-    fprintf(stderr, "Failed to connect to pose server after %d ms\n", kTimeoutMs);
-    Problem p;
-    p.text = std::string("The pose server did not start within 5 seconds - pose tracking is off.")
-        + kStandIn + " Its messages are in the console log.";
-    p.brief = "Pose server did not start: pose tracking off";
-    ReportProblem(p);
-    Stop();
-    return false;
+    return kTimedOut;
 }
 
 void NativeSkeletonProvider::Stop() {
+    mStopRequested = true;
     mRunning = false;
     NativeCamera::Stop(); // the camera picture goes with the pose stream
 
@@ -430,34 +458,134 @@ void NativeSkeletonProvider::Stop() {
     }
 
     if (mServerPid > 0) {
-        kill(mServerPid, SIGTERM);
-        int status;
-        waitpid(mServerPid, &status, WNOHANG);
+        // The spawner reaps it (and SIGKILLs it if it ignores this).
+        NativeSpawner::Kill(mServerPid, SIGTERM);
         mServerPid = -1;
+    }
+}
+
+bool NativeSkeletonProvider::ServerExitIsRestartable(int waitStatus) {
+    if (WIFSIGNALED(waitStatus))
+        return true; // a crash, e.g. the kernel's SIGKILL
+    if (!WIFEXITED(waitStatus))
+        return false;
+    switch (WEXITSTATUS(waitStatus)) {
+    case 0:               // asked to stop, or its video ended
+    case kExitNoVideo:
+    case kExitNoModel:
+    case kExitNoDeps:
+    case kExitExecFailed: // nothing a second try changes
+        return false;
+    default:              // a lost camera, an unexpected error
+        return true;
     }
 }
 
 // The socket closed under the reader.  If we spawned the server, give it a
 // moment to finish exiting so its code can say why (a lost camera exits
 // EXIT_CAMERA_LOST); otherwise -- a connect-only server, or one still running
-// -- say that the stream stopped.
-void NativeSkeletonProvider::ReportServerGone() {
+// -- say that the stream stopped.  A server we launched is then relaunched,
+// within the restart policy.
+bool NativeSkeletonProvider::ServerGone() {
     NativeCamera::Stop(); // no more camera frames either (PLAN P-4)
+    if (mSocketFd >= 0) {
+        close(mSocketFd);
+        mSocketFd = -1;
+    }
+
+    Problem streamStopped;
+    streamStopped.text = std::string("The pose stream stopped - pose tracking is off.") + kStandIn;
+    streamStopped.brief = "Pose stream stopped: pose tracking off";
+
+    bool exited = false;
+    int status = 0;
     if (mServerPid > 0) {
-        for (int i = 0; i < 20; i++) {
-            int status = 0;
-            if (waitpid(mServerPid, &status, WNOHANG) == mServerPid) {
+        for (int i = 0; i < 20 && !mStopRequested; i++) {
+            if (NativeSpawner::TryReap(mServerPid, &status)) {
                 mServerPid = -1;
-                ReportProblem(DescribeServerExit(status, mCameraIndex));
-                return;
+                exited = true;
+                break;
             }
             usleep(25000);
         }
     }
-    Problem p;
-    p.text = std::string("The pose stream stopped - pose tracking is off.") + kStandIn;
-    p.brief = "Pose stream stopped: pose tracking off";
-    ReportProblem(p);
+    if (!mSpawned) {
+        ReportProblem(streamStopped);
+        return false;
+    }
+    Problem problem = exited ? DescribeServerExit(status, mCameraIndex) : streamStopped;
+    if (!exited && mServerPid > 0) {
+        // It closed the socket but did not exit: replace it.
+        NativeSpawner::Kill(mServerPid, SIGTERM);
+        mServerPid = -1;
+    }
+
+    for (;;) {
+        if (mStopRequested)
+            return false;
+        if (exited && !ServerExitIsRestartable(status))
+            break;
+        if (mRestarts >= mMaxRestarts) {
+            if (mMaxRestarts > 0)
+                fprintf(stderr, "Pose server: not restarting it again (%d restarts already)\n",
+                    (int)mRestarts);
+            break;
+        }
+        mRestarts = mRestarts + 1;
+        int delayMs = mRestartBackoffMs << (mRestarts - 1);
+
+        // One line per restart, on the console and on screen.
+        std::string why;
+        if (!exited) {
+            why = "The pose stream stopped";
+        } else if (WIFSIGNALED(status)) {
+            why = "The pose server crashed (signal " + std::to_string(WTERMSIG(status)) + ")";
+        } else {
+            why = "The pose server exited (code " + std::to_string(WEXITSTATUS(status)) + ")";
+        }
+        fprintf(stderr, "%s - restarting it in %d ms (restart %d of %d)\n", why.c_str(), delayMs,
+            (int)mRestarts, mMaxRestarts);
+        char brief[96];
+        snprintf(brief, sizeof(brief), "Pose server restarting (%d of %d)", (int)mRestarts,
+            mMaxRestarts);
+        Problem restarting;
+        restarting.text = why + " - restarting pose tracking (" + std::to_string(mRestarts) + " of "
+            + std::to_string(mMaxRestarts) + ").";
+        restarting.brief = brief;
+        ReportProblem(restarting);
+
+        for (int waited = 0; waited < delayMs && !mStopRequested; waited += 50)
+            usleep(50 * 1000);
+        if (mStopRequested || !LaunchServer())
+            continue; // a failed fork counts as a restart
+
+        switch (WaitForServer(kServerTimeoutMs, &status)) {
+        case kConnected:
+            printf("Pose server restarted (pid %d): pose tracking resumed\n", (int)mServerPid);
+            {
+                std::lock_guard<std::mutex> lock(mSwapMutex);
+                mProblem = Problem();
+            }
+            NativeNotice::Clear(kPoseNoticeKey);
+            return true;
+        case kServerExited:
+            exited = true;
+            problem = DescribeServerExit(status, mCameraIndex);
+            break;
+        case kTimedOut:
+            exited = false;
+            problem = StartTimeoutProblem();
+            if (mServerPid > 0) {
+                NativeSpawner::Kill(mServerPid, SIGTERM);
+                mServerPid = -1;
+            }
+            break;
+        case kStopped:
+            return false;
+        }
+    }
+    ReportProblem(problem);
+    return false;
 }
 
 // The v3 camera block that follows the persons: hand it to the camera stream
@@ -500,7 +628,7 @@ static bool readExact(int fd, void *buf, size_t len) {
 }
 
 void NativeSkeletonProvider::ReaderThread() {
-    while (mRunning) {
+    while (mRunning && !mStopRequested) {
         // Poll for data with timeout
         struct pollfd pfd;
         pfd.fd = mSocketFd;
@@ -512,7 +640,8 @@ void NativeSkeletonProvider::ReaderThread() {
         uint32_t packetLen;
         if (!readExact(mSocketFd, &packetLen, 4)) {
             fprintf(stderr, "Pose server disconnected\n");
-            ReportServerGone();
+            if (ServerGone())
+                continue; // a relaunched server is connected again
             mRunning = false;
             break;
         }
@@ -521,7 +650,8 @@ void NativeSkeletonProvider::ReaderThread() {
         std::vector<uint8_t> packet(packetLen);
         if (!readExact(mSocketFd, packet.data(), packetLen)) {
             fprintf(stderr, "Pose server read error\n");
-            ReportServerGone();
+            if (ServerGone())
+                continue;
             mRunning = false;
             break;
         }

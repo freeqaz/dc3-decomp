@@ -74,6 +74,22 @@ public:
     void Stop();
     bool IsRunning() const { return mRunning; }
 
+    // Restart-on-death.  When a server this provider launched dies after it
+    // had connected, the reader relaunches it -- at most `maxRestarts` times
+    // per Start(), waiting baseBackoffMs, then twice that, and so on -- with a
+    // one-line notice each time.  An exit that a restart cannot fix (the model
+    // or the Python packages missing, python3 not runnable, a clean exit) is
+    // not retried.  Defaults: 3 restarts, 1000 ms.  Call before Start().
+    void SetRestartPolicy(int maxRestarts, int baseBackoffMs) {
+        mMaxRestarts = maxRestarts;
+        mRestartBackoffMs = baseBackoffMs;
+    }
+    int Restarts() const { return mRestarts; }
+    // pid of the pose_server.py this provider launched, or -1.
+    int ServerPid() const { return (int)mServerPid; }
+    // Whether DescribeServerExit's exit is one a relaunch could fix.
+    static bool ServerExitIsRestartable(int waitStatus);
+
     // Publish one frame of persons into the back buffer; the next Poll() latches
     // it.  This is the provider's whole contract with its transports: the
     // desktop socket reader calls it once per packet, and on web the page's
@@ -149,18 +165,33 @@ private:
     void ReaderThread();
     // Record a problem and show it to the player (NativeNotice key "pose").
     void ReportProblem(const Problem &p);
-    void ReportServerGone(); // reader thread: the socket closed
+    // Reader thread: the socket closed.  Reports why and, for a server this
+    // provider launched, relaunches it per the restart policy.  True when a
+    // relaunched server is connected again (mSocketFd is the new socket).
+    bool ServerGone();
+    // Launch pose_server.py through NativeSpawner; sets mServerPid.
+    bool LaunchServer();
+    enum WaitResult { kConnected, kServerExited, kTimedOut, kStopped };
+    // Wait for the server's socket and connect (mSocketFd).  kServerExited
+    // fills *exitStatus.
+    WaitResult WaitForServer(int timeoutMs, int *exitStatus);
     void MapCOCOToDC3(const float cocoKpts[][3], PersonData &out);
     Vector3 NormalizedToMeters(float nx, float ny) const;
 
     std::string mSocketPath;
+    std::string mModelPath;
     int mSocketFd = -1;
     pid_t mServerPid = -1;
+    bool mSpawned = false; // this provider launched the server (not DC3_POSE_NO_SPAWN)
     int mCameraIndex = 0;
+    int mMaxRestarts = 3;
+    int mRestartBackoffMs = 1000;
+    volatile int mRestarts = 0;
     Problem mProblem; // guarded by mSwapMutex
 
     std::thread mReaderThread;
     volatile bool mRunning = false;
+    volatile bool mStopRequested = false;
 
     // Double-buffered: reader writes to mBack, Poll() swaps to mFront
     std::mutex mSwapMutex;
