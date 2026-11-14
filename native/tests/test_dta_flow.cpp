@@ -1277,9 +1277,15 @@ protected:
     static bool sRanEngine;
     static void SetUpTestSuite() {
         if (!getenv("DC3_DTA_FLOW_TESTS") || sRanEngine) return;
-        // game_screen at ~frame 1700, gameStage=playing by ~2100 (headless,
-        // no GPU); 3000 leaves margin and keeps the run to a few seconds.
-        sResult = RunDtaFlow(3000, 180, "omg.txt", "", true, kTutorialGeneral);
+        // game_screen at ~frame 1700, gameStage=playing by ~2100 on an idle
+        // box (headless, no GPU).  The load and the song intro wait on the
+        // wall clock, not on frames, so the frame count they take grows with
+        // box load AND with how cheap a frame is: after the pipeline cache
+        // (np-cpu-perf) a loaded gate reached game_screen at 2049 and was
+        // still in the intro at 3000, in three trees.  The run always goes to
+        // the frame cap (omg.txt does not quit), so 8000 costs an idle box a
+        // few more seconds; 300 s is the wall-clock bound.
+        sResult = RunDtaFlow(8000, 300, "omg.txt", "", true, kTutorialGeneral);
         sRanEngine = true;
     }
     void SetUp() override { CheckRan(sResult, sRanEngine); }
