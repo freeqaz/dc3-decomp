@@ -2,11 +2,11 @@
 """fps_probe.py -- game frame rate and pose rate together, windowed, with the
 real tracker, through the playtest kit (PLAN L-3).
 
-  fps_probe.py --clip CLIP --song SONG --out DIR [--gpu-lock FILE] [--camera N]
+  fps_probe.py --clip CLIP --song SONG --out DIR [--gpu-lock FILE] [--camera auto|N|PATH]
                [--difficulty medium] [--headless]
 
 Starts scripts/play.sh (windowed unless --headless; DISPLAY must name a
-desktop or an Xvfb), plays SONG once with CLIP as the camera (or --camera N, a
+desktop or an Xvfb), plays SONG once with CLIP as the camera (or --camera SPEC, a
 real one), and reads the game's own counters out of the session log:
 
   DC3 PERF: fps=  pose_fps=  persons=   game frames per second, and sensor
@@ -82,7 +82,8 @@ def machine():
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--clip")
-    ap.add_argument("--camera", type=int)
+    ap.add_argument("--camera", default="auto",
+                    help="a real camera instead of --clip: auto (default), an index, a path")
     ap.add_argument("--song", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--difficulty", default="medium")
@@ -95,7 +96,7 @@ def main(argv=None):
     home = os.path.join(out, "home")
     kitdrive.seed_home(home)
     args = ["--fast-boot"] + (["--headless"] if a.headless else [])
-    args += ["--video", os.path.abspath(a.clip)] if a.clip else ["--camera", str(a.camera or 0)]
+    args += ["--video", os.path.abspath(a.clip)] if a.clip else ["--camera", a.camera]
     env = {"MILO_RENDER": "1"} if a.headless else {}
     kit = kitdrive.Kit(os.path.join(out, "session"), home, args=args, env=env,
                        gpu_lock=a.gpu_lock, log=lambda m: print("  ", m, flush=True))

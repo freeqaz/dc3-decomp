@@ -25,6 +25,13 @@ release), the engine at the commit dc3 pins (only if the engine checkout is
 clean), and `native/build/dc3-native`. System packages it only names
 (`pacman -S ...`); it never runs sudo.
 
+The game looks for that venv itself, so `./dc3-native` started any way (not
+only through `play.sh`) runs the tracker in it. Its order: `DC3_POSE_PYTHON`
+if you set it, then `${DC3_POSE_VENV:-~/.local/share/dc3/pose-venv}`, then the
+checkout's `.venv`, then plain `python3`; the console log says which it took
+(`Pose server python: ...`). If that Python lacks the packages, the on-screen
+notice names it and `bootstrap.sh --fix`.
+
 **Game data.** The game reads the archives in `orig-assets/gen`
 (`main_xbox.hdr` + ten `.ark`, 6.6 GB) and, from `orig-assets/extracted`, only
 the song folder list, `songs/songs.dta`, `songs/missing_song_data.dta` and the
@@ -136,6 +143,9 @@ stand-in skeleton and nothing you do is scored.
 - **G-10** audio has not been judged by ear on this port: tell us how it
   sounds.
 - **G-25** a Battle tie is recorded as lost (the original does the same).
+- **H-23** memory grows about 90 MB a song (measured over 3 songs; longer
+  is untested). If a long session slows down or quits, say after how many
+  songs; quitting and restarting clears it.
 - If a song shows no move cards, or you are paused while in view, say which
   song, which number it was in the session, and the time (W-10 and P-12 are
   fixed; a repeat is news).
