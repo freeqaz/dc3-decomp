@@ -54,17 +54,27 @@ namespace Hmx {
                 | ((int)(green * 255.0f) & 0xFF) << 8 | ((int)(red * 255.0f) & 0xFF);
         }
 
+        // Unpack multiplies by 1/255; it does not divide. The image multiplies
+        // by __real@3b808081 (RndLight::SetPackedColor in Lit.s), the nearest
+        // float to 1/255, which sits slightly ABOVE it: the Xenon compiler is
+        // /fp:fast and folds the division into that multiply. Spelled as the
+        // multiply, the Xbox objects are byte-identical and native computes
+        // the same floats. A true division reads some levels back a hair low,
+        // and Pack truncates. Every {light set intensity} re-packs the colour
+        // (PackedColor -> SetPackedColor), so on native a light with animated
+        // intensity lost a level per set and drained to red (throneroom
+        // crow_underlight_light 255/200/4 -> 255/0/0; the image holds 255/200/3).
         void Unpack(int packed) {
-            red = (packed & 255) / 255.0f;
-            green = ((packed >> 8) & 255) / 255.0f;
-            blue = ((packed >> 0x10) & 255) / 255.0f;
+            red = (packed & 255) * (1.0f / 255.0f);
+            green = ((packed >> 8) & 255) * (1.0f / 255.0f);
+            blue = ((packed >> 0x10) & 255) * (1.0f / 255.0f);
         }
 
         void UnpackAlpha(int packed) {
-            red = (packed & 255) / 255.0f;
-            green = ((packed >> 8) & 255) / 255.0f;
-            blue = ((packed >> 0x10) & 255) / 255.0f;
-            alpha = ((packed >> 0x18) & 255) / 255.0f;
+            red = (packed & 255) * (1.0f / 255.0f);
+            green = ((packed >> 8) & 255) * (1.0f / 255.0f);
+            blue = ((packed >> 0x10) & 255) * (1.0f / 255.0f);
+            alpha = ((packed >> 0x18) & 255) * (1.0f / 255.0f);
         }
 
         float &operator[](int i) { return *(&red + i); }
