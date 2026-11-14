@@ -26,6 +26,10 @@ Protocol v2 (little-endian):
              (native/src/platform/PoseLevel_Native.h, DC3_POSE_LEVEL). This
              server always sets it. Older servers sent 0 (pad), which reads
              as a level sensor, as synthetic_kinect.py's Kinect is.
+  flags bit 1 (FLAG_NO_CAMERA) = the camera is gone and this server is looking
+             for it again (see "Camera selection and loss" below): the packet
+             carries no persons and no picture. The game shows a notice while
+             it is set and another when it clears.
 
   layout 0 = COCO-17, normalised [0,1] image coords, z unused. Not emitted by
              this server any more, but the C++ reader keeps the path for any
@@ -62,8 +66,23 @@ own code:
   4. bind the socket (the game connects now)
   5. import mediapipe, load the model        else exit 6 / 5
   6. stream; a camera that stops delivering frames for CAMERA_LOST_AFTER_S
-     exits 7 (EXIT_CAMERA_LOST), so the game notices instead of waiting on a
-     silent socket.
+     is LOST: the server keeps the socket, sends FLAG_NO_CAMERA packets and
+     reopens the camera (re-resolving --camera) with backoff; only if it is
+     still gone after CAMERA_REOPEN_BUDGET_S does it exit 7
+     (EXIT_CAMERA_LOST).
+
+Camera selection and loss. --camera takes `auto` (the default), an index, a
+device path, or a /dev/v4l/by-id name. A USB camera can re-enumerate on its
+own -- the GPD Pocket's integrated camera did 8 times in one afternoon, and
+each time its node numbers moved (video0 -> video1 + video2, one of which is a
+metadata-only node) -- so a fixed index is not a camera:
+  auto      the first /dev/videoN (by N) whose V4L2 device caps include video
+            capture; metadata/output nodes are skipped. Logged.
+  N         /dev/videoN if it is a capture device, else as auto (logged).
+  path      that node (symlinks such as /dev/v4l/by-id/... are followed on
+            every open, so a by-id name survives re-enumeration).
+Every open -- the first, and each reopen after a loss -- resolves again.
+Without V4L2 (macOS), auto is index 0 and an index is passed to OpenCV as is.
 
 Camera mode asks for 640x480 at 30 fps with a one-frame driver buffer (a
 deeper buffer hands MediaPipe stale frames whenever inference is slower than
@@ -74,7 +93,7 @@ timestamp is derived from the same reading and forced strictly increasing (it
 raises "Input timestamp must be monotonically increasing" on a repeat).
 
 Usage:
-  python pose_server.py [--socket /tmp/dc3_pose.sock] [--camera 0]
+  python pose_server.py [--socket /tmp/dc3_pose.sock] [--camera auto|N|/dev/videoN|by-id name]
   python pose_server.py --video clip.mp4 [--loop] [--fps 30]
 """
 
@@ -90,6 +109,7 @@ import time
 PROTOCOL_MAGIC = 0x44503302
 PROTOCOL_MAGIC_V3 = 0x44503303   # v2 + camera block (--frames)
 FLAG_UNLEVELLED = 1 << 0         # header flags: camera gravity unknown (see above)
+FLAG_NO_CAMERA = 1 << 1          # header flags: camera lost, reopening (see above)
 WIRE_RGB888 = 1
 WIRE_MASK_ORDINAL = 1
 MASK_THRESHOLD = 0.5
@@ -111,6 +131,9 @@ EXIT_CAMERA_LOST = 7
 CAMERA_FPS = 30.0
 FIRST_FRAME_TIMEOUT_S = 3.0   # an opened device that never delivers is "no camera"
 CAMERA_LOST_AFTER_S = 2.0     # consecutive failed reads mid-run
+CAMERA_REOPEN_DELAYS_S = (0.5, 1.0, 2.0, 4.0)  # then every 4 s
+CAMERA_REOPEN_BUDGET_S = 60.0  # a camera gone this long is EXIT_CAMERA_LOST
+NO_CAMERA_PACKET_S = 0.1      # FLAG_NO_CAMERA heartbeat while it is gone
 DEVICE_TS_MAX_AGE_S = 0.5     # a device timestamp older than this is not on our clock
 
 
@@ -118,6 +141,108 @@ class ServerExit(Exception):
     def __init__(self, code, message):
         super().__init__(message)
         self.code = code
+
+
+V4L2_CAP_VIDEO_CAPTURE = 0x00000001
+V4L2_CAP_VIDEO_CAPTURE_MPLANE = 0x00001000
+V4L2_CAP_DEVICE_CAPS = 0x80000000
+VIDIOC_QUERYCAP = 0x80685600   # _IOR('V', 0, struct v4l2_capability), 104 bytes
+
+
+class V4L2Devices:
+    """The box's V4L2 nodes. Tests substitute an object with the same three
+    methods (tests/test_pose_server.py FakeDevices)."""
+
+    by_id_dir = "/dev/v4l/by-id"
+
+    def available(self):
+        return sys.platform.startswith("linux")
+
+    def nodes(self):
+        """/dev/videoN paths, by N."""
+        try:
+            names = os.listdir("/dev")
+        except OSError:
+            return []
+        nums = sorted(int(n[5:]) for n in names if n.startswith("video") and n[5:].isdigit())
+        return [f"/dev/video{n}" for n in nums]
+
+    def query(self, path):
+        """(is_capture, description) for a node; (False, why) if it cannot be
+        asked. The description is the V4L2 card name."""
+        import fcntl
+        try:
+            fd = os.open(path, os.O_RDWR | os.O_NONBLOCK)
+        except OSError as e:
+            return False, f"cannot open ({e.strerror})"
+        try:
+            buf = bytearray(104)
+            fcntl.ioctl(fd, VIDIOC_QUERYCAP, buf)
+        except OSError as e:
+            return False, f"not a V4L2 device ({e.strerror})"
+        finally:
+            os.close(fd)
+        card = bytes(buf[16:48]).split(b"\0", 1)[0].decode("utf-8", "replace")
+        caps, dev_caps = struct.unpack_from("<II", buf, 84)
+        if caps & V4L2_CAP_DEVICE_CAPS:
+            caps = dev_caps
+        if caps & (V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VIDEO_CAPTURE_MPLANE):
+            return True, card
+        return False, f"{card}: no video capture (caps 0x{caps:08x}, e.g. a metadata node)"
+
+    def realpath(self, path):
+        return os.path.realpath(path)
+
+    def exists(self, path):
+        return os.path.exists(path)
+
+
+def resolve_camera(spec, devices, log=None):
+    """--camera -> (source for cv2.VideoCapture, description). The source is a
+    /dev/videoN path, or an int index where there is no V4L2 (macOS). Raises
+    ServerExit(EXIT_NO_CAMERA) when nothing matches. Called on every open."""
+    log = log or (lambda msg: print(msg, file=sys.stderr))
+    spec = "auto" if spec is None else str(spec).strip()
+    if not devices.available():
+        return (0 if spec in ("", "auto") else (int(spec) if spec.isdigit() else spec)), \
+            f"camera {spec}"
+
+    def scan(why):
+        skipped = []
+        for node in devices.nodes():
+            ok, desc = devices.query(node)
+            if ok:
+                extra = f"; skipped {', '.join(skipped)}" if skipped else ""
+                return node, f"{node} ({desc}) [{why}{extra}]"
+            skipped.append(f"{node} ({desc})")
+        found = ", ".join(skipped) if skipped else "no /dev/video* nodes"
+        raise ServerExit(EXIT_NO_CAMERA, f"no video-capture camera found ({why}; {found})")
+
+    if spec in ("", "auto"):
+        return scan("auto")
+    if spec.isdigit():
+        node = f"/dev/video{int(spec)}"
+        if not devices.exists(node):
+            log(f"Camera {spec}: {node} does not exist; looking for a camera instead")
+            return scan(f"camera {spec} missing")
+        ok, desc = devices.query(node)
+        if not ok:
+            log(f"Camera {spec}: {node} is not a camera ({desc}); looking for one instead")
+            return scan(f"camera {spec} not a capture device")
+        return node, f"{node} ({desc}) [camera {spec}]"
+    path = spec
+    if not path.startswith("/"):
+        for cand in (os.path.join(devices.by_id_dir, spec), os.path.join("/dev", spec)):
+            if devices.exists(cand):
+                path = cand
+                break
+    if not devices.exists(path):
+        raise ServerExit(EXIT_NO_CAMERA, f"camera {spec} is not present")
+    node = devices.realpath(path)
+    ok, desc = devices.query(node)
+    if not ok:
+        raise ServerExit(EXIT_NO_CAMERA, f"camera {spec} ({node}) is not a camera: {desc}")
+    return node, f"{node} ({desc}) [{spec}]"
 
 
 def open_camera(cv2, index, width, height, fps=CAMERA_FPS,
@@ -128,7 +253,11 @@ def open_camera(cv2, index, width, height, fps=CAMERA_FPS,
     (EXIT_NO_CAMERA) if it will not open or opens but sends nothing -- a
     /dev/video node that is a metadata or output device opens fine and never
     delivers a picture."""
-    cap = cv2.VideoCapture(index)
+    v4l2 = getattr(cv2, "CAP_V4L2", None)
+    if isinstance(index, str) and v4l2 is not None:
+        cap = cv2.VideoCapture(index, v4l2)
+    else:
+        cap = cv2.VideoCapture(index)
     if not cap.isOpened():
         raise ServerExit(EXIT_NO_CAMERA, f"could not open camera {index}")
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
@@ -228,7 +357,7 @@ def camera_block(frame_bgr, masks, size, cv2, np):
 
 
 def pack_frame(frame_id, timestamp, frame_w, frame_h, num_landmarks, layout, persons,
-               image=None):
+               image=None, flags=FLAG_UNLEVELLED):
     """One length-prefixed packet (see module docstring): protocol v2, or v3
     when `image` is given -- (rgb_bytes, mask_bytes, w, h), or () for a v3
     packet with no picture this frame."""
@@ -236,7 +365,7 @@ def pack_frame(frame_id, timestamp, frame_w, frame_h, num_landmarks, layout, per
         "<IIIdHHBBH",
         PROTOCOL_MAGIC if image is None else PROTOCOL_MAGIC_V3,
         frame_id, len(persons), timestamp,
-        int(frame_w), int(frame_h), num_landmarks, layout, FLAG_UNLEVELLED,
+        int(frame_w), int(frame_h), num_landmarks, layout, flags,
     )
     for tid, kpts in persons:
         packet += struct.pack("<i", tid)
@@ -289,7 +418,9 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="DC3 Pose Estimation Server")
     parser.add_argument("--socket", default="/tmp/dc3_pose.sock", help="Unix socket path")
     input_group = parser.add_mutually_exclusive_group()
-    input_group.add_argument("--camera", type=int, default=0, help="Camera index")
+    input_group.add_argument("--camera", default="auto",
+                             help="auto (default: the first V4L2 video-capture device), "
+                                  "an index, a /dev/videoN path or a /dev/v4l/by-id name")
     input_group.add_argument("--video", default=None, help="Path to a video file to use as input instead of a camera")
     parser.add_argument("--loop", action="store_true", help="Loop the video at EOF (video mode only)")
     parser.add_argument("--fps", type=float, default=None,
@@ -334,7 +465,7 @@ def _default_backend(args):
 
 
 def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
-        sleep=time.sleep):
+        sleep=time.sleep, devices=None):
     """The server. Returns normally on a clean shutdown; raises ServerExit for
     a failure the game should report."""
     video_mode = args.video is not None
@@ -366,13 +497,20 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
         print(f"Video pacing at {video_fps:.3f} fps ({frame_period * 1000:.1f} ms/frame), loop={args.loop}",
               file=sys.stderr)
     else:
-        print(f"Opening camera {args.camera}, requesting {args.width}x{args.height} "
-              f"@ {CAMERA_FPS:g} fps", file=sys.stderr)
-        cap, first_frame = open_camera(cv2, args.camera, args.width, args.height,
-                                       clock=clock, sleep=sleep)
-        got_h, got_w = first_frame.shape[:2]
-        print(f"Camera {args.camera} delivering {got_w}x{got_h} "
-              f"(driver reports {cap.get(cv2.CAP_PROP_FPS):g} fps)", file=sys.stderr)
+        if devices is None:
+            devices = V4L2Devices()
+
+        def open_resolved():
+            source, desc = resolve_camera(args.camera, devices)
+            print(f"Camera: using {desc}, requesting {args.width}x{args.height} "
+                  f"@ {CAMERA_FPS:g} fps", file=sys.stderr)
+            c, f = open_camera(cv2, source, args.width, args.height, clock=clock, sleep=sleep)
+            h, w = f.shape[:2]
+            print(f"Camera {source} delivering {w}x{h} "
+                  f"(driver reports {c.get(cv2.CAP_PROP_FPS):g} fps)", file=sys.stderr)
+            return c, f
+
+        cap, first_frame = open_resolved()
         stamps = CaptureClock(cv2)
 
     # Set up Unix socket server. Bound BEFORE the model loads: the game is
@@ -402,6 +540,10 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
         eof_drain_deadline = None  # video-mode, --loop off: send ~2s of zero-person frames after EOF, then exit
         failing_since = None       # camera mode: first of a run of failed reads
         logged_ts_source = None
+        lost_since = None          # camera mode: the camera is gone since (clock)
+        next_reopen = None         # ... and the next reopen attempt is due at
+        reopen_tries = 0
+        flags = FLAG_UNLEVELLED
 
         while True:
             # Accept new connections
@@ -420,6 +562,36 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
                 if clock() >= eof_drain_deadline:
                     print("Video EOF drain complete, exiting", file=sys.stderr)
                     break
+            elif lost_since is not None:
+                # The camera is gone: tell the game (FLAG_NO_CAMERA, no
+                # persons) and reopen it -- re-resolving --camera, so a
+                # re-enumerated device is found under its new node.
+                frame = None
+                now = clock()
+                if now >= next_reopen:
+                    reopen_tries += 1
+                    try:
+                        cap, first_frame = open_resolved()
+                    except ServerExit as e:
+                        if now - lost_since >= CAMERA_REOPEN_BUDGET_S:
+                            raise ServerExit(EXIT_CAMERA_LOST,
+                                             f"camera lost and not back after "
+                                             f"{now - lost_since:.0f} s ({reopen_tries} tries): {e}")
+                        delay = CAMERA_REOPEN_DELAYS_S[min(reopen_tries, len(CAMERA_REOPEN_DELAYS_S) - 1)]
+                        print(f"Camera reopen {reopen_tries} failed ({e}); next try in {delay:g} s",
+                              file=sys.stderr)
+                        next_reopen = clock() + delay
+                    else:
+                        print(f"CAMERA_BACK after {clock() - lost_since:.1f} s "
+                              f"({reopen_tries} tries)", file=sys.stderr)
+                        lost_since = None
+                        flags = FLAG_UNLEVELLED
+                        failing_since = None
+                        continue
+                if lost_since is not None:
+                    timestamp = clock()
+                    ts_ms = None
+                    sleep(NO_CAMERA_PACKET_S)
             elif first_frame is not None:
                 frame, first_frame = first_frame, None
                 read_time = clock()
@@ -441,9 +613,17 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
                         if failing_since is None:
                             failing_since = read_time
                         elif read_time - failing_since >= CAMERA_LOST_AFTER_S:
-                            raise ServerExit(EXIT_CAMERA_LOST,
-                                             f"camera {args.camera} delivered no frame for "
-                                             f"{CAMERA_LOST_AFTER_S:g} s")
+                            print(f"CAMERA_LOST: no frame for {CAMERA_LOST_AFTER_S:g} s; "
+                                  f"reopening (up to {CAMERA_REOPEN_BUDGET_S:g} s)", file=sys.stderr)
+                            try:
+                                cap.release()
+                            except Exception:
+                                pass
+                            lost_since = read_time
+                            next_reopen = read_time + CAMERA_REOPEN_DELAYS_S[0]
+                            reopen_tries = 0
+                            flags = FLAG_UNLEVELLED | FLAG_NO_CAMERA
+                            continue
                         sleep(0.01)
                         continue
                 failing_since = None
@@ -463,7 +643,7 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
                 # Video mode derives MediaPipe's timestamp from frame_id so a
                 # paced run is reproducible.
                 ts_ms = frame_id * frame_period * 1000.0
-            else:
+            elif lost_since is None:
                 timestamp, ts_ms, source = stamps.stamp(cap, read_time)
                 if source != logged_ts_source:
                     logged_ts_source = source
@@ -487,7 +667,7 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
                         masks = list(getattr(backend, "last_masks", []) or [])[:len(persons)]
                         image = camera_block(frame, masks, frames_size, cv2, np)
                 msg = pack_frame(frame_id, timestamp, frame_w, frame_h,
-                                 num_landmarks, layout, persons, image)
+                                 num_landmarks, layout, persons, image, flags=flags)
                 try:
                     outbox.offer(msg)
                 except (BrokenPipeError, ConnectionResetError, OSError):
