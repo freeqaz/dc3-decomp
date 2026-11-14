@@ -26,6 +26,12 @@
 //   --env "K=V;K2=V2"   more engine env vars, merged into the page's one ?env=
 //                   (a second &env= in --extra is ignored by the page), e.g.
 //                   --env DC3_POSE_FILL=off
+//   --no-hold       with a camera, the menus are driven by keyboard while the
+//                   page sends the engine empty pose frames (window.dc3PoseHold),
+//                   released once the song is picked: a dancing fake camera's
+//                   hand cursor picks menu items on its own (measured: Party
+//                   Time from the title, Campaign from main). --no-hold keeps
+//                   the camera live throughout
 //   --chrome-args "A B"  extra Chromium flags, e.g. "--disable-frame-rate-limit
 //                   --disable-gpu-vsync" (an unthrottled rAF: H-34)
 //   --max-timer-errors-per-s R   the song-clock check (W-12): exit 1 when more
@@ -85,6 +91,12 @@ const selectDifficulty = !argv.includes('--no-select-difficulty');
 const unmute = argv.includes('--unmute');
 const maxTimerErrorsArg = arg('max-timer-errors-per-s', null);
 const pacing = argv.includes('--pacing');
+const holdInMenus = camera !== 'none' && !argv.includes('--no-hold');
+const setHold = async (on) => {
+    if (!holdInMenus) return;
+    try { await page.evaluate((v) => window.dc3PoseHold && window.dc3PoseHold(v), on); } catch (e) {}
+    console.log(`[${el()}s] pose hold ${on ? 'on (menus by keyboard)' : 'off'}`);
+};
 const thenSongIndex = arg('then-song-index', null) === null ? null : +arg('then-song-index');
 const thenDifficulty = arg('then-difficulty', difficulty);
 const traceFile = arg('trace', null);
@@ -276,6 +288,7 @@ async function playSong(idx, diff, tag, deadline) {
     for (let i = 0; i < idx; i++) { await press('ArrowDown'); await new Promise((r) => setTimeout(r, 400)); }
     await shot(`${tag}song_select`);
     await press('Enter');
+    await setHold(false);
     const b2 = screens.length;
     const song = { tag, index: idx, difficulty: diff, fromScreen: b2, tStart: el() };
     songs.push(song);
@@ -314,6 +327,11 @@ if (traceFile) {
 try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     const deadline = Date.now() + timeoutS * 1000;
+    for (let i = 0; i < 40; i++) {
+        if (await page.evaluate(() => typeof window.dc3PoseHold === 'function').catch(() => false)) break;
+        await new Promise((r) => setTimeout(r, 250));
+    }
+    await setHold(true);
     if (!await waitFor(() => seen('attract_screen'), 120000)) throw new Error('never reached attract_screen');
     await shot('attract');
     for (const target of ['title_screen', 'main_screen', 'choose_mode_screen', 'song_select_screen']) {
@@ -326,8 +344,17 @@ try {
             // and a dancing camera's hand cursor can leave the highlight on
             // the second: Enter then starts Party Time and its tutorial
             // (measured: console `HamNavList ... sym='start_the_party'
-            // selecting=0`). Up first puts it back on the first item.
-            if (cur() === 'title_screen') { await press('ArrowUp'); await new Promise((r) => setTimeout(r, 300)); }
+            // selecting=0`). Up puts it back on the first item; the first key
+            // press only switches the list to controller mode (one Up was
+            // measured not to move it), so press it twice.
+            // The same on main_screen (5 items, gameplay first; measured
+            // landing on campaign_mode) and choose_mode (perform first): Up
+            // to the top of the list, which does not wrap (HamNavList).
+            // autosave_warning_screen advances on its own: an Enter sent there
+            // lands on the title list as it appears (measured: base5).
+            if (cur() === 'autosave_warning_screen') continue;
+            const ups = { title_screen: 2, main_screen: 6, choose_mode_screen: 5 }[cur()] || 0;
+            for (let u = 0; u < ups; u++) { await press('ArrowUp'); await new Promise((r) => setTimeout(r, 350)); }
             await press('Enter');
         }
         if (!seen(target)) throw new Error(`never reached ${target} (current ${cur()})`);
@@ -335,6 +362,7 @@ try {
     result = await playSong(songIndex, difficulty, '', deadline);
     if (thenSongIndex !== null && /^left_gameplay_/.test(result)) {
         // Through the results screens back to song select (Enter), then song B.
+        await setHold(true);
         const back = screens.length;
         for (let i = 0; i < 14 && !(cur() === 'song_select_screen' && screens.length > back); i++) {
             await new Promise((r) => setTimeout(r, 3000));
