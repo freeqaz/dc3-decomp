@@ -22,6 +22,13 @@
 // the first caster's place (CasterTransformsReachTheShader); not drawing the
 // casters -> CasterCoversTheTexelsUnderIt; one viewport for every tile, or
 // clip offset 0 for every tile -> TwoLightsDrawIntoTheirOwnTiles.
+//
+// And the gobo of a projected_blend 0 light: textures reach the GPU when a
+// material binds them, and a gobo is bound by a light only, so the scene's
+// slot 3 must upload it itself (GoboOnlyALightBindsReachesSlot3). Sabotage:
+// dropping the PresyncBitmap call in WgpuRnd::WriteSceneUniforms fails it --
+// slot 3 falls back to white and the light lights its whole cone flat, which
+// is what the rink floor did (dc3-retail-lighting.md 8.1).
 
 #include "test_helpers.h"
 
@@ -30,7 +37,11 @@
 #include "math/Mtx.h"
 #include "obj/Object.h"
 #include "platform/Rnd_Wgpu.h"
+#include "platform/rndshape/RndShape.h"
+#include "rndobj/Env.h"
+#include "rndobj/Lit.h"
 #include "rndobj/Mesh.h"
+#include "rndobj/Tex.h"
 
 #include <vector>
 
@@ -214,4 +225,33 @@ TEST_F(ProjShadowCasterPassTest, TwoLightsDrawIntoTheirOwnTiles) {
     EXPECT_EQ(sp.GetCasterStats().lastTiles, 2u);
     delete a;
     delete b;
+}
+
+extern wgpu::TextureView GetGpuTexView(RndTex *tex);
+
+TEST_F(ProjShadowCasterPassTest, GoboOnlyALightBindsReachesSlot3) {
+    RndEnviron *env = Hmx::Object::New<RndEnviron>();
+    RndLight *spot = Hmx::Object::New<RndLight>();
+    spot->SetLightType(RndLight::kFakeSpot);
+    spot->SetColor(Hmx::Color(1.0f, 1.0f, 1.0f));
+    spot->SetProjectedBlend(0);
+    RndTex *gobo = Hmx::Object::New<RndTex>();
+    gobo->SetBitmap(4, 4, 32, RndTex::kRegular, false, nullptr);
+    spot->SetProperty("texture", DataNode(gobo));
+    env->LightsReal().push_back(spot);
+    env->RndEnviron::Select(nullptr);
+    ASSERT_FALSE(GetGpuTexView(gobo)) << "precondition: nothing has uploaded the gobo";
+
+    gWgpuRnd->WriteSceneUniforms();
+    ASSERT_EQ(rndshape::SceneProjTexture(), gobo) << "the light is the scene's projected light";
+    wgpu::TextureView view = gWgpuRnd->ProjLightTexView();
+    EXPECT_TRUE(view) << "slot 3 fell back to white: the gobo was never uploaded";
+    EXPECT_EQ(view.Get(), GetGpuTexView(gobo).Get());
+
+    env->LightsReal().clear();
+    delete env;   // clears the current environ
+    gWgpuRnd->WriteSceneUniforms();
+    spot->SetProperty("texture", DataNode((Hmx::Object *)nullptr));
+    delete spot;
+    delete gobo;
 }
