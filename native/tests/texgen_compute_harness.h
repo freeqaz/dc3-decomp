@@ -1,9 +1,11 @@
-// texgen_compute_harness.h -- run the engine's standard WGSL texgen path
-// (texGenSourceUV + computeTexGenUV, the two calls vs_main makes) in a compute
-// shader on a MaterialUniforms block, one vertex per invocation, and read the
-// generated UVs back. Shared by test_screen_aligned_texgen.cpp and
-// test_retail_tex_xfm.cpp. Needs a GPU device; returns an empty vector (with
-// a gtest failure) when the shader does not compile or readback fails.
+// texgen_compute_harness.h -- run a piece of the engine's standard WGSL vertex
+// path in a compute shader on a MaterialUniforms block, one vertex per
+// invocation, and read the result back. RunTexGenCompute runs the texgen calls
+// vs_main makes (texGenSourceUV + computeTexGenUV); RunMaterialCompute takes
+// any compute tail with the same bindings and entry point. Shared by
+// test_screen_aligned_texgen.cpp, test_retail_tex_xfm.cpp and
+// test_retail_flip_normal.cpp. Needs a GPU device; returns an empty vector
+// (with a gtest failure) when the shader does not compile or readback fails.
 #pragma once
 
 #include "gfx/GpuDevice.h"
@@ -22,28 +24,31 @@ struct TexGenVertex {
     float uv[2];
 };
 
-inline std::vector<float> RunTexGenCompute(const MaterialUniforms &mat,
-                                           const std::vector<TexGenVertex> &verts) {
-    static const char *kComputeTail = R"WGSL(
+// The bindings every tail gets: per vertex an input pair (clip, uv) -- read as
+// two vec4fs, the uv's zw free for a tail's own use -- and one vec4f out.
+inline const char *kMaterialComputeTailHeader = R"WGSL(
 struct TexGenTestIn {
     clip: vec4f,
     uv: vec4f,
 }
 @group(3) @binding(1) var<storage, read> texGenTestIn: array<TexGenTestIn>;
 @group(3) @binding(2) var<storage, read_write> texGenTestOut: array<vec4f>;
-
-@compute @workgroup_size(1)
-fn texgen_test_main(@builtin(global_invocation_id) id: vec3u) {
-    let v = texGenTestIn[id.x];
-    let uv = computeTexGenUV(texGenSourceUV(v.uv.xy, v.clip), vec3f(0.0), vec3f(0.0, 0.0, 1.0),
-                             vec3f(0.0, 0.0, 1.0));
-    texGenTestOut[id.x] = vec4f(uv, 0.0, 0.0);
-}
 )WGSL";
+
+// tail: WGSL defining `fn texgen_test_main` (@compute, workgroup_size 1) that
+// reads texGenTestIn[id.x] and writes texGenTestOut[id.x]. Groups 0 (scene)
+// and 1 (material) are bound, so the tail must use both (`_ = scene.x;` is
+// enough), or the derived layout lacks the binding. Returns four floats per
+// vertex.
+inline std::vector<float> RunMaterialCompute(const MaterialUniforms &mat,
+                                             const std::vector<TexGenVertex> &verts,
+                                             const char *tail) {
+    const char *kComputeTail = tail;
     const size_t n = verts.size();
     GpuDevice &gpu = gWgpuRnd->Gpu();
     wgpu::Device &dev = gpu.Device();
-    const std::string src = std::string(StandardWgslSource()) + kComputeTail;
+    const std::string src =
+        std::string(StandardWgslSource()) + kMaterialComputeTailHeader + kComputeTail;
     wgpu::ShaderSourceWGSL wgsl;
     wgsl.code = src.c_str();
     wgpu::ShaderModuleDescriptor md{};
@@ -105,7 +110,7 @@ fn texgen_test_main(@builtin(global_invocation_id) id: vec3u) {
     };
     wgpu::BindGroup g0 = group(0, {entry(0, sceneBuf, sizeof(SceneUniforms))});
     wgpu::BindGroup g1 = group(1, {entry(0, matBuf, sizeof(MaterialUniforms))});
-    wgpu::BindGroup g2 = group(2, {}); // the texgen path reads no object uniforms
+    wgpu::BindGroup g2 = group(2, {}); // tails read no object uniforms
     wgpu::BindGroup g3 = group(3, {entry(1, inBuf, inSize), entry(2, outBuf, outSize)});
 
     SceneUniforms s{};
@@ -141,11 +146,28 @@ fn texgen_test_main(@builtin(global_invocation_id) id: vec3u) {
         return {};
     }
     const float *p = static_cast<const float *>(staging.GetConstMappedRange(0, outSize));
-    std::vector<float> out(2 * n);
-    for (size_t i = 0; i < n; i++) {
-        out[2 * i] = p[4 * i];
-        out[2 * i + 1] = p[4 * i + 1];
-    }
+    std::vector<float> out(p, p + 4 * n);
     staging.Unmap();
+    return out;
+}
+
+inline std::vector<float> RunTexGenCompute(const MaterialUniforms &mat,
+                                           const std::vector<TexGenVertex> &verts) {
+    static const char *kTexGenTail = R"WGSL(
+@compute @workgroup_size(1)
+fn texgen_test_main(@builtin(global_invocation_id) id: vec3u) {
+    let v = texGenTestIn[id.x];
+    let uv = computeTexGenUV(texGenSourceUV(v.uv.xy, v.clip), vec3f(0.0), vec3f(0.0, 0.0, 1.0),
+                             vec3f(0.0, 0.0, 1.0));
+    texGenTestOut[id.x] = vec4f(uv, 0.0, 0.0);
+}
+)WGSL";
+    const std::vector<float> all = RunMaterialCompute(mat, verts, kTexGenTail);
+    if (all.empty()) return {};
+    std::vector<float> out(2 * verts.size());
+    for (size_t i = 0; i < verts.size(); i++) {
+        out[2 * i] = all[4 * i];
+        out[2 * i + 1] = all[4 * i + 1];
+    }
     return out;
 }
