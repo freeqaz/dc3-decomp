@@ -142,7 +142,7 @@ Lane `np-dlc` (2026-11-14). The cold archive at `/srv/torrents/cold-archive/game
 | D-6 | `ContentMgr`'s DTA `add_content` (`mExtraContents`, extra root content) is not honoured by `ContentMgr_Native`; no shipped DTA uses it | S | Honoured, or left with a reason |
 | D-7 | Web: no DLC (`DiscoverPackages` finds none under `__EMSCRIPTEN__`). Needs packaging on the asset server, the drive mapping in the web file layer, and `.webm` transcodes of the `_prev.bik` previews | M | A DLC song plays in the browser |
 | D-8 | `MILO_NOTIFY: UnmountAsync: !IsDone() current op is 3` (`Cache_Stub.cpp:749`) at `main_screen` on every boot that writes the song cache; the cache still reads back (D-2) | S | Root-caused; no notify |
-| D-9 | ~~Land the engine half~~ **DONE.** `NativeMountDrive` / `NativeUnmountDrive` (`File_Native.cpp`) landed in engine `c8abfc0` (merge of engine `np-dlc` `96573fb`), rb3 and rb3-xenon pins bumped and built with it; dc3's pin moves with `np-cpu-perf` | S | Engine landed, pin bumped, dc3 `np-dlc` landed |
+| D-9 | ~~Land the engine half~~ **DONE.** `NativeMountDrive` / `NativeUnmountDrive` (`File_Native.cpp`) landed in engine `c8abfc0` (merge of engine `np-dlc` `96573fb`), rb3 and rb3-xenon pins bumped; dc3's pin moved to it with `np-cpu-perf` (`2b6c82224`) | S | Engine landed, pin bumped, dc3 `np-dlc` landed |
 
 ## Track H — hygiene that unblocks the above
 
