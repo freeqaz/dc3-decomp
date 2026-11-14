@@ -124,7 +124,7 @@ rules:
 The one property not reproduced is `cmpagent.slice`'s idle weight at the
 cgroup root. If that is ever needed, the owner can grant it, by letting
 `decomp-ops` submit to `cmpagent.slice` or with a `CPUWeight` drop-in for
-`user-960.slice`.
+`user-960.slice` (PLAN H-30).
 
 **Do not** on tnr:
 
