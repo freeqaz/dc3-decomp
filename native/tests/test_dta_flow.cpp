@@ -63,6 +63,8 @@ struct DtaRunResult {
     // Seven gameplay-shaped failure messages for one missing file. They were
     // reported up the chain as a pre-existing gameplay regression.
     std::string setupError;
+    // The cache/save root the run used, so a second boot can reuse it.
+    std::string persistenceRoot;
 };
 
 static bool FileExists(const std::string &p) {
@@ -176,10 +178,13 @@ static bool SeedGlobalOptions(const std::string &root, int tutorialsSeen) {
 // in particular then waits for a confirm instead of auto-advancing.
 // `seedTutorialsSeen` >= 0 starts the run from a console whose global options
 // record those tutorials as seen (SeedGlobalOptions); -1 keeps the empty root.
+// `reuseRoot` non-empty boots against a previous run's persistence root
+// (DtaRunResult::persistenceRoot) instead of a fresh one, without seeding.
 static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeconds,
                                const char *scriptName = "ymca.txt",
                                const char *extraEnv = "", bool fastBoot = true,
-                               int seedTutorialsSeen = -1) {
+                               int seedTutorialsSeen = -1,
+                               const std::string &reuseRoot = std::string()) {
     std::string binary = GetDc3NativePath();
     std::string script = GetScriptDir() + "/" + scriptName;
 
@@ -199,7 +204,7 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeco
         pre.setupError = "input flow script missing:\n    " + script;
         return pre;
     }
-    std::string persistence = MakePersistenceRoot();
+    std::string persistence = reuseRoot.empty() ? MakePersistenceRoot() : reuseRoot;
     if (persistence.empty()) {
         pre.setupError =
             "could not create a temporary persistence root (mkdtemp "
@@ -209,7 +214,8 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeco
             "holds on this machine, and the run would write there.";
         return pre;
     }
-    if (seedTutorialsSeen >= 0 && !SeedGlobalOptions(persistence, seedTutorialsSeen)) {
+    if (reuseRoot.empty() && seedTutorialsSeen >= 0 &&
+        !SeedGlobalOptions(persistence, seedTutorialsSeen)) {
         pre.setupError = "could not write the seeded global options under " + persistence;
         return pre;
     }
@@ -229,7 +235,7 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeco
         << " ${t:+$t " << timeout << "} " << binary << " 2>&1";
 
     FILE *pipe = popen(cmd.str().c_str(), "r");
-    DtaRunResult result = {-1, 0, "", false, ""};
+    DtaRunResult result = {-1, 0, "", false, "", persistence};
     if (!pipe) {
         result.setupError = "popen() failed for:\n    " + cmd.str();
         return result;
@@ -1342,6 +1348,7 @@ static constexpr const char *kMilkshakePackage = "dancecentral2dlcmegapack";
 class DlcSongFlowTest : public ControllerModeFlowTest {
 protected:
     static DtaRunResult sResult;
+    static DtaRunResult sWarm; // second boot on the same cache and save dirs
     static bool sRanEngine;
     static bool HavePackage() {
         return FileExists(GetDlcDir() + "/" + kMilkshakePackage +
@@ -1354,6 +1361,11 @@ protected:
         // gameStage=playing ~2500 (headless, no GPU).
         std::string env = "DC3_TAG_MODALS=1 DC3_DLC_DIR=" + GetDlcDir();
         sResult = RunDtaFlow(3600, 180, "milkshake.txt", env.c_str(), true, kTutorialGeneral);
+        // The first boot writes the song cache (SongMgr's "songcache"
+        // container, which only content songs enter); the second reads it.
+        if (sResult.setupError.empty())
+            sWarm = RunDtaFlow(3600, 180, "milkshake.txt", env.c_str(), true, kTutorialGeneral,
+                               sResult.persistenceRoot);
         sRanEngine = true;
     }
     void SetUp() override {
@@ -1363,10 +1375,14 @@ protected:
         CheckRan(sResult, sRanEngine);
     }
     void TearDown() override {
-        if (HasFailure() && sRanEngine) Dump(sResult);
+        if (HasFailure() && sRanEngine) {
+            Dump(sResult);
+            Dump(sWarm);
+        }
     }
 };
 DtaRunResult DlcSongFlowTest::sResult = {};
+DtaRunResult DlcSongFlowTest::sWarm = {};
 bool DlcSongFlowTest::sRanEngine = false;
 
 TEST_F(DlcSongFlowTest, MilkshakeMountsAndReachesGameplay) {
@@ -1401,6 +1417,28 @@ TEST_F(DlcSongFlowTest, MilkshakeMountsAndReachesGameplay) {
     EXPECT_NE(out.find("gameStage=playing"), std::string::npos)
         << "milkshake reached game_screen but never started playing";
     EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
+}
+
+// The second boot finds the package in the song cache and plays it again.
+// DataArraySongInfo::sSaveVer was 1 where the image has 2, so Save wrote a
+// rev-1 record that Load then read with the rev < 2 fields Save never writes:
+// the next boot overran a 512-byte Symbol buffer and crashed at
+// wait_main_after_saveload_screen.
+TEST_F(DlcSongFlowTest, MilkshakePlaysAgainFromTheSongCache) {
+    const std::string &out = sWarm.output;
+    ASSERT_TRUE(sWarm.setupError.empty()) << sWarm.setupError;
+    size_t mount = out.find(std::string("DLC package '") + kMilkshakePackage + "' at cnt");
+    ASSERT_NE(mount, std::string::npos);
+    EXPECT_NE(out.substr(mount, out.find('\n', mount) - mount).find("(cached)"),
+              std::string::npos)
+        << "the second boot did not take the package from the song cache";
+    EXPECT_EQ(out.find("String chars"), std::string::npos)
+        << "the song cache did not read back what it wrote";
+    EXPECT_NE(out.find("sym='milkshake'"), std::string::npos);
+    EXPECT_NE(out.find("Screen 'game_screen' Enter (from 'real_loading_screen')"),
+              std::string::npos);
+    EXPECT_NE(out.find("gameStage=playing"), std::string::npos);
+    EXPECT_EQ(sWarm.signal, 0) << "Engine crashed with signal " << sWarm.signal;
 }
 
 // PLAN H-11: the loading screen plays its loading music.  The image finds the
