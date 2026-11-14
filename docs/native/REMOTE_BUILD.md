@@ -107,6 +107,10 @@ rules:
   - `/run/cmp-agent/guard.json` says `frozen`.
 - They **pause** the container (cgroup freezer) the moment one of those
   appears mid-build, and resume 30 s after all clear, as the guard does.
+  `touch /scratch/dc3-native-build/PAUSE` does the same for dc3 builds only,
+  without touching the host's flags. Exercised: ninja's edge count stayed at
+  909 for the whole pause, and the build resumed 30 s after the file went
+  (60 s paused, exit 0).
 - They run only on the guard's measured agent CPU set
   (`32-63,96-127,160-191,224-254`), under `nice 19` + `SCHED_IDLE` + idle IO,
   with `--cpus` = jobs (default 32, at most 64), a 96 GB memory cap and no
@@ -129,6 +133,16 @@ cgroup root. If that is ever needed, the owner can grant it, by letting
 - use `/srv/decomp`, `tnr`, `tnr-lane` or the GPUs;
 - copy game assets anywhere but `/scratch/dc3-native-build/assets`.
 
+## Image identity scopes the caches
+
+The tnr ccache lives in `ccache/<image id>/`. A build dir records the image
+that built it (`native/build/.tnr-image-id`, fetched along with everything
+else), and a build dir built by another image is `ninja -t clean`ed and
+reconfigured before building. Without this, a rebuilt image goes unnoticed:
+adding `onetbb` changed which headers the PCH read (libstdc++
+`__has_include`s `<tbb/tbb.h>`), yet ninja called the old PCH current and
+ccache would have served compiles made without it.
+
 ## When the desk's packages change
 
 The fetched build is only valid while the image's toolchain is the desk's.
@@ -143,6 +157,26 @@ After a desk `pacman -Syu`:
 
 ## Tests on tnr
 
-See the section added by the test-host work below.
+TODO (deliverable 3, in progress).
 
 ## Measured
+
+2026-11-14, gate required targets (2,557-2,605 ninja edges), default `-j32`,
+image `25e456afa07b`:
+
+| Run | sync | tnr ninja | fetch | total | ccache |
+|---|---|---|---|---|---|
+| cold tree, cold cache | 0.6 s | 79 s | 3.4 s | **91 s** | 2,601 misses |
+| second worktree, same commit | 1.3 s | **10 s** | (not fetched) | 17 s | 2,595 hits / 6 misses |
+| `msvc_compat.h` touched (every TU misses), 60 s paused on purpose | 1.2 s | 139 s | — | — | all misses |
+
+For comparison, the same cold build on the desk took 658 s with the desk at
+load 75-200.
+
+After every fetch:
+
+- `native_toolchain_check.py --check` reported `toolchain current`.
+- `ninja -n` on the desk reported `no work to do`.
+- The 81 tests that read the per-file path defines passed on the desk
+  against tnr-built binaries, including `TestGates.BuildMatchesSources`, which
+  asks the desk's ninja whether the build is current.

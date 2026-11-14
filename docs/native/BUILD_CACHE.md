@@ -113,6 +113,21 @@ letters (`np-bi-cacheB`) fails `NativeOptionsTest.*` and one
 (`.../np-bi-cacheb/native/dta/...`), with or without ccache. Use lower-case
 worktree names.
 
+## The one thing the cache cannot see
+
+`compiler_check` covers clang, `libclang-cpp` and `libLLVM`. It does not cover
+the **set of headers installed on the box**. A compile whose result depends on
+`__has_include` (libstdc++'s `<execution>` asks for `<tbb/tbb.h>`) keys on the
+headers it read, not the ones it looked for and did not find. So installing or
+removing a header-providing package can leave cache entries that a fresh
+compile would no longer produce, and ninja cannot see it either. This was
+measured on tnr's image: adding `onetbb` changed the PCH's dependency set
+while ninja called the old PCH current. The tnr side now scopes its cache and
+build dirs per image ([REMOTE_BUILD.md](REMOTE_BUILD.md)). On the desk, after
+a package install or removal that is not a full toolchain upgrade, run
+`ccache -d ~/.cache/milo-native-ccache -C` and rebuild. A `pacman -Syu` that
+moves clang already changes the compiler hash.
+
 ## What not to do
 
 - Do not share one cache directory between machines with different
