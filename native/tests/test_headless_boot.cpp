@@ -279,13 +279,13 @@ TEST_F(HeadlessBootTest, SurvivesMainLoop) {
     printf("Engine completed all frames: %s\n", completed ? "yes" : "no");
     EXPECT_TRUE(completed) << "Expected engine to complete 2000 frames of main loop";
 
-    // H-23: a headless run is never frame-capped by default -- the flow tests
+    // H-29: a headless run is never frame-capped by default -- the flow tests
     // depend on running faster than real time.
     EXPECT_NE(result.output.find("frame cap: off (headless"), std::string::npos)
         << "headless runs must stay uncapped unless DC3_FPS_CAP asks";
 }
 
-// H-23: DC3_FPS_CAP caps a headless run when asked, by sleeping (the exit line
+// H-29: DC3_FPS_CAP caps a headless run when asked, by sleeping (the exit line
 // reports how many frames the pacer held and for how long).
 TEST_F(HeadlessBootTest, FrameCapWhenAsked) {
     auto result = RunHeadless(150, nullptr, 120, {{"DC3_FPS_CAP", "30"}});

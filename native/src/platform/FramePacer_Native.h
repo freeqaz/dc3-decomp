@@ -1,4 +1,4 @@
-// Native frame cap (PLAN H-23, lane np-cpu-perf).
+// Native frame cap (PLAN H-29, lane np-cpu-perf).
 //
 // The image paces its loop with the GPU's present interval: rnd `sync` is 1 on
 // Xbox (system/run/config/default.dta), DxRnd::SetSync maps it to

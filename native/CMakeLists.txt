@@ -328,7 +328,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "6004736619dff4ae42cd2100c577262125a01069"
+set(MILO_ENGINE_PIN "c8abfc0b9b377db695377cc9b4b57d9b1b0cefa2"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -1268,7 +1268,7 @@ set(DC3_NATIVE_CORE_SOURCES
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/PosePerformer_Native.cpp>  # DC3_POSE_PERFORM
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/PoseSession_Native.cpp>  # DC3_POSE_RECORD, session: replay (PLAN L-1)
     src/platform/DtaEvalSupport.cpp   # DTA eval state guard + result serializer (unit-tested)
-    $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/FramePacer_Native.cpp>  # H-23 frame cap (DC3_FPS_CAP)
+    $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/FramePacer_Native.cpp>  # H-29 frame cap (DC3_FPS_CAP)
     src/engine_stubs_generated.cpp
     src/StubTrace.cpp
     src/native_link_glue.cpp
@@ -2093,7 +2093,7 @@ if(BUILD_TESTS)
         tests/test_native_options.cpp
         tests/test_native_profile.cpp
         tests/test_native_glyph_render.cpp
-        tests/test_frame_pacer.cpp     # H-23 frame cap + engine CPU-use guards
+        tests/test_frame_pacer.cpp     # H-29 frame cap + engine CPU-use guards
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
