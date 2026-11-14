@@ -251,6 +251,11 @@ bool HttpServer::Start(int port) {
             port = preferred;
         } else {
             const int err = errno;
+            // A failed bind marks a cpp-httplib Server decommissioned, and
+            // every later bind on it returns -1 at once (measured: the second
+            // windowed engine exited 98 "cannot bind port 0").  stop() on a
+            // server that is not running only clears that flag.
+            svr->stop();
             port = svr->bind_to_any_port(kHttpBindAddress);
             if (port <= 0)
                 HttpBindFailed(0, errno);
