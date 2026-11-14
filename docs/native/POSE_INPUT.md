@@ -1028,8 +1028,11 @@ StreamRenderer::DrawToTexture, HX_NATIVE body: compose on the CPU
   targets nothing filled, so they drew as flat magenta/blue squares.
   Still hidden, with corrected comments:
   `pose_flash*` (an avatar `TexRenderer` → `projection.rndtex`, not the camera),
-  `preview.mesh` (the song-preview movie `preview.tmov`), `grid_80by60`
-  (`DepthBuffer3D`'s voxel template; its draw is a native stub). The ring that
+  `grid_80by60`
+  (`DepthBuffer3D`'s voxel template; its draw is a native stub). `preview.mesh`
+  (the song-preview movie `preview.tmov`) is no longer hidden (`np-media`): the
+  movie decodes, and the card's opaque album meshes cover it as in Xenia (PLAN
+  G-15). The ring that
   fades at a box's top-left is `cursor.milo`'s own animation (same fade whichever
   meshes are hidden); the left box draws its player in the right box's colour
   at alpha 0 by design (`srcAlphaAdd`).
@@ -1079,34 +1082,53 @@ StreamRenderer::DrawToTexture, HX_NATIVE body: compose on the CPU
 
 ### Left
 
-- **Photos.** The snapshot path runs with the stand-in: `{gesture_mgr init_snapshots 1}` +
-  `{ui take_snapshot}` on `main_screen` (GPU, `MILO_DUMP_RT=1`) leaves `num_snapshots` 1 and
-  the 640×480 snapshot target holding the augmented crew photo (dimmed background,
-  the player in colour, mirrored), but with **alpha 0 everywhere** — whether that
-  matters depends on the blend of the result screens' photo materials
-  (`result_photoshare_photo*.mat`, shown in campaign / battle / holla-back /
-  fitness results only), and no run reached one with photos: a battle run with
-  camera frames finished the song but took no snapshot that the log shows.
-  Party team photos (`store_texture_at` / `store_texture_clip_at` of a
-  `TexRenderer` output) were not reached: `native_assert_harvest.py --route party`
-  stalls on `tutorial_crew_showdown_screen_1` with or without camera frames (a
-  route gap, not this change; seeding the all-tutorials-seen options cache as
+- **Photos: root-caused (`np-media`); the fix is an engine change, not landed.**
+  Where the game shows them: `perform_endgame_panel reveal_photos` puts up to three
+  snapshots on `result_photoshare_photo1..3.mesh` after the results timer, in every
+  mode **except** campaign, rhythm battle, holla back and fitness playlists
+  (`enable_photos` is an `unless`); perform takes 16 in the freestyle section
+  (`photo_taker`, `config/midi_parsers.dta`), Dance Battle one at the final pose
+  (`on_final_pose_photo`); `endgame_photos.milo` (share) shows one through `photo.mat`.
+  Cause: `ui/augmented_photo.milo`'s `TexRenderer.rndtex` renders the crew photo into
+  the snapshot with `clear_buffer 1`, `clear_alpha 1`, and all six of its materials
+  have `alpha_write 0`, so the photo's alpha is that clear. On the 360 it is an
+  immediate `D3DDevice_Clear` of the bound target (`DxRnd::Clear`, `DxCam::Select`
+  100% `name_check`; a rendered `DxTex` is A8R8G8B8 at any bpp). The engine's
+  `WgpuRnd::Clear` only stored the colour for the next frame pass, so the snapshot kept
+  the texture pass's transparent black, and `result_photoshare_photo1..3.mat` are
+  `kBlendSrcAlpha`: the photo was invisible. The render-target alpha rule
+  (engine `17d00b6`) leaves these materials alone, as the image does: all six
+  set `force_alpha_write 1` with `alpha_write 0` (asserted in the test). On `fe22a2e`
+  with the clear disabled, 0 of 307200 texels are opaque. Measured, Dance Battle with two synthetic
+  performers and `--frames 320x240` (GPU, `DC3_HTTP_PACE_FPS=30`, 1 snapshot):
+  pinned engine — the results card shows only its "DC3" backing
+  (`/home/free/tmp/claude-1000/np-media-photoA3/res/r_027_22s.png`); with
+  engine branch `np-media` (`c810e49`; series also in `~/tmp/np-media-engine.patch`) — the two performers in colour over the dimmed
+  background (`…/np-media-photoB3/res/r_029_21s.png`). Guard:
+  `TexRendererClearTest` (`native/tests/test_texrenderer_clear.cpp`, GPU; compiled
+  only against an engine with the patch): 307200 of 307200 texels opaque with it,
+  0 with `WgpuRnd::Clear` reverted. `endgame_photos`' `photo.mat` is `kBlendSrc`, so
+  that screen never depended on alpha. Party team photos (`store_texture_at` /
+  `store_texture_clip_at`) were not reached (`--route party` stalls on
+  `tutorial_crew_showdown_screen_1`; seeding the all-tutorials-seen cache as
   `test_native_twoplayer.cpp` does gets battle past its tutorials).
+  Harness note: under `MILO_HEADLESS` the UI clock advances 1/30 s per frame
+  (`UIManager::Poll`), so an unpaced GPU run passes the results timers in a second or
+  two; pace it (`DC3_HTTP_PACE_FPS=30`) to see them.
 - `DepthBuffer3D`'s draw (native stub), `FreestyleMoveRecorder`'s palette
   (`TexelsLock` on a texture with no CPU texels natively), the
   `TextureStore::StoreColorBuffer` family (same: a 16-bpp `kScratch` `RndTex`
   has no bitmap natively, so `TexelsLock` returns null — unreachable from
   shipped data, but a debug `ui store_color_buff_at` with a stream live would
   write through it).
-- `pose_flash*` and `preview.mesh` are not camera meshes; they belong to the
-  avatar projection and the song-preview movie.
+- `pose_flash*` is not a camera mesh; it belongs to the avatar projection.
 - A live webcam session (P-2), desktop and web.
 
 ## Web
 
 | Stage | Code |
 |---|---|
-| Camera | `native/web/pose/pose_input.js`: `getUserMedia` (640×480 ideal, 30 fps) on page load; states shown in a panel at the canvas's bottom-left: asking → loading model → looking for you / tracking, or blocked / no camera / error with a retry button. Mirrored preview with the BlazePose skeleton drawn (green tracked, amber inferred; joints under 0.3 are not drawn because the engine holds them). |
+| Camera | `native/web/pose/pose_input.js`: `getUserMedia` (640×480 ideal, 30 fps) on page load; states shown in a panel in the canvas's bottom band, centred between the two help bars (W-13): asking → loading model → looking for you / tracking, or blocked / no camera / error with a retry button. Mirrored preview with the BlazePose skeleton drawn (green tracked, amber inferred; joints under 0.3 are not drawn because the engine holds them). |
 | Frames → worker | `MediaStreamTrackProcessor` (max buffer 1, stale frames dropped) transfers the camera stream to the worker; no per-frame main-thread work. Fallback `?pose_transport=bitmap`: `requestVideoFrameCallback` + `createImageBitmap`. |
 | Inference | `native/web/pose/pose_worker.js`, a module worker: `@mediapipe/tasks-vision` 1.0.0 (the Python mediapipe version) `PoseLandmarker`, VIDEO mode, the same `pose_landmarker_full.task` and options as `pose_server.py`. CPU (XNNPACK) delegate by default. |
 | Geometry | `native/web/pose/pose_geometry.js`: line-for-line port of `pose_mediapipe.py` (root DLT/torso fallback, axis flips, centre joints, hands, feet, one-euro on root depth, centroid tracker). Timestamps are the `VideoFrame` capture time. |
@@ -1121,10 +1143,15 @@ URL knobs: `?pose=off|manual`, `pose_model=lite|full|heavy`,
 Assets: `scripts/web/build.sh` vendors tasks-vision (bundle + module wasm, from
 `scripts/web/node_modules`, `npm ci --prefix scripts/web`) and the `lite`/`full`
 `.task` models (from `native/models`) into `native/web/build/pose/`, so the page
-loads nothing cross-origin and needs no CDN inside its COOP/COEP isolation. If
-either is missing the page falls back to jsdelivr / storage.googleapis.com
-(the survey found jsdelivr's headers compatible; storage.googleapis.com is
-unverified).
+loads nothing cross-origin and needs no CDN inside its COOP/COEP isolation.
+Since W-13 a missing piece is a **build failure** (`build.sh` runs `npm ci` when
+tasks-vision is absent and fails `pose-vendor` if it is still missing, or if a
+model is), and the page never falls back on its own: it logs
+`[dc3-pose] pose model not deployed on this server: …` as an error, shows "Pose
+model is not installed on this server — playing without camera", and the game
+plays on the stand-in. `?pose_cdn=1` is the explicit opt-in to jsdelivr /
+storage.googleapis.com (the survey found jsdelivr's headers compatible;
+storage.googleapis.com is unverified).
 
 Tests (no webcam needed):
 
@@ -1238,7 +1265,7 @@ from the probe (its first 40 lines = measures 0–39; the first 5 are
 | P-1 | **Crash on a motionless skeleton.** `RhythmDetector::AnalyzeData` divides by a variance that becomes zero → NaN → `SymbolKeys::SetFrame` segfault (`RhythmBattlePlayer::Poll`). A webcam trips it whenever joints are held (legs out of frame are held all song). | S–M | all |
 | P-2 | Never run against a live webcam. **No-camera part done** (`np-pose-desk`): fast failure + on-screen notice (above); camera request, capture timestamps, HFOV and the lost-camera exit unit-tested against a fake capture (`tests/test_pose_server.py`). Left: a real webcam session. | S | all |
 | P-3 | ~~Gesture menus~~ **Done (`np-gesture-menus`)**, see [Gesture menus](#gesture-menus). Left: a real person on a real webcam has not driven them; the depth image in the player box is P-4. | — | all |
-| P-4 | Player on screen. **Silhouette done** (`np-player-view`): protocol v3 / `dc3_camera_push` carry the picture and a person mask, a `LiveCameraInput` stand-in feeds the decompiled `StreamRenderer`, and the cursor and gameplay boxes draw the player ([Player on screen](#player-on-screen-p-4)). Left: photo moments, `DepthBuffer3D`'s draw, the `pose_flash` / `preview.mesh` entries (not camera), a live webcam. | M | all |
+| P-4 | Player on screen. **Silhouette done** (`np-player-view`): protocol v3 / `dc3_camera_push` carry the picture and a person mask, a `LiveCameraInput` stand-in feeds the decompiled `StreamRenderer`, and the cursor and gameplay boxes draw the player ([Player on screen](#player-on-screen-p-4)). Photos root-caused (`np-media`): the snapshot's alpha is its TexRenderer's clear, which the engine dropped; fix in engine branch `np-media` (`c810e49`; series also in `~/tmp/np-media-engine.patch`), not landed. Left: that engine change, `DepthBuffer3D`'s draw, the `pose_flash` entries (not camera), a live webcam. | M | all |
 | P-5 | ~~Tests~~ **Done** (`np-pose-desk`): ctests `PoseSocketReaderTest`, `PoseCocoMappingTest`, `PoseSensorSlotTest` (no GPU, no game data); keypoint fixture + `PoseFixture.Python`; the gate runs the whole song and judges means, final scores and per-move distances (above). Open: standing still out-scores a different dance (P-7). | — | all |
 | P-6 | ~~Remove the dead ncnn/YOLO path~~ **Done** (`np-pose-desk`). | — | all |
 | P-7 | Scoring believability. **Answered** (`np-scoring`, [above](#scoring-believability-p-7-np-scoring)): the leniency is the original's. Real Kinect data (UTD-MHAD) scores like our inputs, and the scoring code is 100% matched. Added: the 30 Hz in-process performer + matrix, and the `DC3_POSE_LATENCY_MS` knob. **Video calibration** (`np-video-calib`, [above](#video-calibration-np-video-calib-2026-11-13)): 16 story-mode songs from a stream, replayed at Medium against the original's own results cards, 1162 = 1162 moves. Perfect+awesome 0.91 vs 0.96, but perfect 0.54 vs 0.79; score 74% of the original's (78% with a 10° camera-pitch correction). Still-body jitter ~1.7 mm (VIDEO mode). A causal One Euro filter costs 13–26% of the score, so there is no smoothing. Knob default stays unset: a recording cannot measure a live pipeline, and the score curve is flat over ±50 ms. Left: a live webcam's latency (P-2, L-5; `DC3_POSE_LATENCY_LOG` prints the capture → game part, and the fake-camera grid is in [Latency on the live path](#latency-on-the-live-path-l-4)); camera-pitch auto-levelling (whole-body lean +6.9° ± 1.4° over the reference on this camera); the perfect/awesome gap (arms carry the limb error). | S | all |

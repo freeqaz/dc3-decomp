@@ -940,6 +940,34 @@ TEST_F(StoryTutorialGateSeenTest, SavedConsoleSkipsPerformTutorial) {
     EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }
 
+// PLAN G-22: the story profile chooser listed "Sign Into a Gamer Profile"
+// under the local profile.  On a 360 that row opens the guide's sign-in blade
+// (ChooseProfilePanel show_signin -> PlatformMgr::SignInUsers ->
+// XShowSigninUI); a PC has none, so selecting it did nothing.  Natively the
+// row is offered only when no profile is signed in, so with the local
+// profile signed in the list is that one row.
+TEST_F(StoryTutorialGateSeenTest, ChooseProfileOffersNoDeadSignInRow) {
+    std::vector<std::string> lines =
+        LinesFrom(sResult.output, "Screen 'campaign_choose_profile_screen' Enter");
+    ASSERT_FALSE(lines.empty())
+        << "precondition: story-tutorial-gate.txt never reached campaign_choose_profile_screen";
+    int numData = -1;
+    for (const std::string &line : lines) {
+        if (!StartsWith(line, "DC3 HamNavList: select name='right_hand.hnl'")) continue;
+        size_t at = line.find("numData=");
+        if (at != std::string::npos) numData = atoi(line.c_str() + at + strlen("numData="));
+        break;
+    }
+    ASSERT_NE(numData, -1) << "no right_hand.hnl select on campaign_choose_profile_screen";
+    EXPECT_EQ(numData, 1)
+        << "the profile list should be the local profile alone; 2 = the "
+           "'Sign Into a Gamer Profile' row is back, and on a PC it does nothing";
+    EXPECT_NE(sResult.output.find("Screen 'campaign_choose_profile_screen' Exit (to "
+                                  "'campaign_diffselect_screen')"),
+              std::string::npos)
+        << "selecting the local profile did not proceed to difficulty select";
+}
+
 TEST_F(StoryTutorialGateFreshTest, FreshConsoleShowsPerformTutorial) {
     const std::string &out = sResult.output;
     ASSERT_NE(out.find("DC3 Input: wait_screen 'campaign_diffselect_screen' satisfied"),
@@ -1005,14 +1033,76 @@ TEST_F(FitnessPlaylistFlowTest, PlaylistsRowStartsAPlaylist) {
 }
 
 // ===========================================================================
+// The forced help bar survives a song (PLAN G-19)
+// ===========================================================================
+//
+// Under DC3_CONTROLLER_MODE=forced (the default with no camera) the helpbar
+// leaves controller mode for the song and comes back when focus leaves the
+// gameplay panel (G-7, HelpBarPanel.cpp NativeForcedHelpbar*).  Leaving the
+// results, perform_complete_screen hands focus back to game_screen for the
+// frames of its transition to meta_loading_continue_screen; the helpbar used
+// to leave controller mode again there and be put straight back while its
+// exit_controller_mode_immediate.flow was still running, so the exit won and
+// song select came back gesture-styled (LEFT HAND / MODE SELECT) after every
+// song.  The forced exit now waits out a transition.
+
+// song_select_screen came back at frame ~42,300 (MILO_NORENDER, measured);
+// part of the route is wall-clock transitions, so the frame count moves with
+// the box's speed -- leave a wide margin (~25 s at NORENDER rates).
+static constexpr int kSongToSongSelectFrames = 100000;
+
+class ForcedHelpbarAfterSongTest : public ControllerModeFlowTest {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+    static void SetUpTestSuite() {
+        if (!getenv("DC3_DTA_FLOW_TESTS") || sRanEngine) return;
+        sResult = RunDtaFlow(kSongToSongSelectFrames, 180, "song-to-song-select.txt",
+                             "MILO_NORENDER=1 DC3_FAST_TIME=1 DC3_CONTROLLER_MODE=forced",
+                             true, kTutorialGeneral);
+        sRanEngine = true;
+    }
+    void SetUp() override { CheckRan(sResult, sRanEngine); }
+    void TearDown() override {
+        if (HasFailure() && sRanEngine) Dump(sResult);
+    }
+};
+DtaRunResult ForcedHelpbarAfterSongTest::sResult = {};
+bool ForcedHelpbarAfterSongTest::sRanEngine = false;
+
+TEST_F(ForcedHelpbarAfterSongTest, HelpbarLeavesControllerModeOncePerSong) {
+    const std::string &out = sResult.output;
+    const char *kLeave = "DC3 ControllerMode: forced: helpbar leaves controller mode for gameplay";
+    size_t complete = out.find("Screen 'perform_complete_screen' Enter");
+    size_t songSelect = out.find("Screen 'song_select_screen' Enter", complete);
+    ASSERT_NE(complete, std::string::npos)
+        << "precondition: song-to-song-select.txt never reached perform_complete_screen";
+    ASSERT_NE(songSelect, std::string::npos)
+        << "precondition: the flow never returned to song_select_screen after the song";
+    size_t leaves = 0;
+    for (size_t at = out.find(kLeave); at != std::string::npos; at = out.find(kLeave, at + 1))
+        leaves++;
+    EXPECT_EQ(leaves, 1u) << "the helpbar should leave controller mode once, for the song";
+    size_t spurious = out.find(kLeave, complete);
+    EXPECT_TRUE(spurious == std::string::npos || spurious > songSelect)
+        << "the helpbar left controller mode again on the way from the results to "
+           "song select; put straight back while its exit flow is still running, it "
+           "comes back gesture-styled";
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
+}
+
+// ===========================================================================
 // Options > Gameplay and the Kinect Tuner (PLAN G-12, G-16)
 // ===========================================================================
 //
 // options-gameplay.txt enters options_gameplay_screen twice, selecting one
 // checkbox row each time, then selects A/V > Kinect Tuner.  native's
 // {speech_mgr is_speech_supportable} is 0, so the panel shows
-// provider_no_voice.hnp: its four rows plus the native overlay's two
-// (option_camera_blend, option_debug_panel) = 6.
+// provider_no_voice.hnp: its four rows, plus -- in a developer run
+// (DC3_DEV_OPTIONS=1) -- the native overlay's two (option_camera_blend,
+// option_debug_panel) = 6.  This suite runs with the developer rows on, so it
+// keeps exercising the overlay's append path; OptionsGameplayPlayerFlowTest
+// below runs the same flow as a player and requires the retail four (G-20).
 //
 // G-12: the overlay counted rows with `num_data`, a message HamNavProvider has
 // never handled (Handle is 100% matched; the image has no such handler), so
@@ -1028,7 +1118,7 @@ protected:
     static bool sRanEngine;
     static void SetUpTestSuite() {
         if (!getenv("DC3_DTA_FLOW_TESTS")) return;
-        sResult = RunDtaFlow(1500, 180, "options-gameplay.txt");
+        sResult = RunDtaFlow(1500, 180, "options-gameplay.txt", "DC3_DEV_OPTIONS=1");
         sRanEngine = true;
     }
     void SetUp() override { CheckRan(sResult, sRanEngine); }
@@ -1036,16 +1126,33 @@ protected:
         if (HasFailure() && sRanEngine) Dump(sResult);
     }
 
+public:
     // The lines from the first options_gameplay_screen Enter up to (not
     // including) the options_av_screen Enter.
-    static std::vector<std::string> GameplayLines() {
+    static std::vector<std::string> GameplayLines(const DtaRunResult &result = sResult) {
         std::vector<std::string> out;
         for (const std::string &line :
-             LinesFrom(sResult.output, "Screen 'options_gameplay_screen' Enter")) {
+             LinesFrom(result.output, "Screen 'options_gameplay_screen' Enter")) {
             if (line.find("Screen 'options_av_screen' Enter") != std::string::npos) break;
             out.push_back(line);
         }
         return out;
+    }
+
+    // The right-hand list's row count at each checkbox select (one per visit):
+    // HamNavList logs numData with every select.
+    static std::vector<int> RowCountsPerVisit(const std::vector<std::string> &lines) {
+        std::vector<int> counts;
+        for (const std::string &line : lines) {
+            if (!StartsWith(line, "DC3 HamNavList: select name='right_hand.hnl'")) continue;
+            if (line.find("sym='option_photo'") == std::string::npos &&
+                line.find("sym='option_freestyle'") == std::string::npos)
+                continue;
+            size_t at = line.find("numData=");
+            if (at == std::string::npos) continue;
+            counts.push_back(atoi(line.c_str() + at + strlen("numData=")));
+        }
+        return counts;
     }
 };
 DtaRunResult OptionsGameplayFlowTest::sResult = {};
@@ -1077,16 +1184,7 @@ TEST_F(OptionsGameplayFlowTest, OverlayAddsItsTwoRowsEachVisit) {
     std::vector<std::string> lines = GameplayLines();
     ASSERT_FALSE(lines.empty())
         << "precondition: options-gameplay.txt never reached options_gameplay_screen";
-    std::vector<int> counts;
-    for (const std::string &line : lines) {
-        if (!StartsWith(line, "DC3 HamNavList: select name='right_hand.hnl'")) continue;
-        if (line.find("sym='option_photo'") == std::string::npos &&
-            line.find("sym='option_freestyle'") == std::string::npos)
-            continue;
-        size_t at = line.find("numData=");
-        ASSERT_NE(at, std::string::npos) << "select log carries no numData: " << line;
-        counts.push_back(atoi(line.c_str() + at + strlen("numData=")));
-    }
+    std::vector<int> counts = RowCountsPerVisit(lines);
     ASSERT_EQ(counts.size(), 2u)
         << "expected one checkbox select per visit (photo or freestyle)";
     EXPECT_EQ(counts[0], 6)
@@ -1094,6 +1192,44 @@ TEST_F(OptionsGameplayFlowTest, OverlayAddsItsTwoRowsEachVisit) {
     EXPECT_EQ(counts[1], 6)
         << "second visit: 6 rows again (fewer: an append was lost; more: the "
            "provider outlived the first visit and the rows doubled)";
+}
+
+// G-20: a player (no DC3_DEV_OPTIONS) sees the retail rows only, as on a 360:
+// provider_no_voice.hnp's option_photo, option_freestyle, autosave,
+// option_choosestorage.  Before the fix every run showed the two developer
+// rows (camera blend, debug overlay) too.
+class OptionsGameplayPlayerFlowTest : public ControllerModeFlowTest {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+    static void SetUpTestSuite() {
+        if (!getenv("DC3_DTA_FLOW_TESTS") || sRanEngine) return;
+        sResult = RunDtaFlow(1500, 180, "options-gameplay.txt", "env -u DC3_DEV_OPTIONS");
+        sRanEngine = true;
+    }
+    void SetUp() override { CheckRan(sResult, sRanEngine); }
+    void TearDown() override {
+        if (HasFailure() && sRanEngine) Dump(sResult);
+    }
+};
+DtaRunResult OptionsGameplayPlayerFlowTest::sResult = {};
+bool OptionsGameplayPlayerFlowTest::sRanEngine = false;
+
+TEST_F(OptionsGameplayPlayerFlowTest, PlayerSeesTheRetailRowsOnly) {
+    std::vector<std::string> lines = OptionsGameplayFlowTest::GameplayLines(sResult);
+    ASSERT_FALSE(lines.empty())
+        << "precondition: options-gameplay.txt never reached options_gameplay_screen";
+    std::vector<int> counts = OptionsGameplayFlowTest::RowCountsPerVisit(lines);
+    ASSERT_EQ(counts.size(), 2u)
+        << "expected one checkbox select per visit (photo or freestyle)";
+    EXPECT_EQ(counts[0], 4) << "first visit: provider_no_voice.hnp's 4 retail rows only "
+                               "(6 = the developer rows are showing to a player)";
+    EXPECT_EQ(counts[1], 4) << "second visit: the retail 4 again";
+    int fails = 0;
+    for (const std::string &line : lines)
+        if (StartsWith(line, "FAIL:")) fails++;
+    EXPECT_EQ(fails, 0) << "Options > Gameplay raised MILO_FAILs without the developer rows";
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }
 
 TEST_F(OptionsGameplayFlowTest, KinectTunerGivesFeedback) {

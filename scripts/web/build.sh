@@ -25,6 +25,7 @@
 #   scripts/web/build.sh --reconfigure  # force a fresh cmake configure
 #   scripts/web/build.sh --opt O2       # release -O level (default O3)
 #   scripts/web/build.sh --no-sfx       # skip the kXMA SFX sidecars (below)
+#   scripts/web/build.sh --page-only    # deploy the page (index.html, pose/, worklet) only
 #   MILO_ENGINE_PATH=/path/to/engine scripts/web/build.sh   # build against that engine checkout
 #
 # kXMA SFX sidecars: scripts/web/gen_sfx_sidecars.sh fills
@@ -60,6 +61,7 @@ BUILD_RELEASE=1
 OPT_LEVEL="O3"   # release -O level; debug is always -O0
 FORCE_RECONFIGURE=0
 BUILD_SFX=1
+PAGE_ONLY=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --release)     BUILD_DEBUG=0; BUILD_RELEASE=1 ;;
@@ -67,6 +69,7 @@ while [ $# -gt 0 ]; do
         --both|--all)  BUILD_DEBUG=1; BUILD_RELEASE=1 ;;
         --reconfigure) FORCE_RECONFIGURE=1 ;;
         --no-sfx)      BUILD_SFX=0 ;;
+        --page-only)   PAGE_ONLY=1; BUILD_SFX=0; BUILD_DEBUG=0; BUILD_RELEASE=0 ;;
         --opt)         shift; OPT_LEVEL="$1" ;;
         --opt=*)       OPT_LEVEL="${1#--opt=}" ;;
         -h|--help)     sed -n '/^# Usage:/,/^# The page/p' "$0" | sed '$d'; exit 0 ;;
@@ -115,7 +118,7 @@ if [ -n "${MILO_ENGINE_PATH:-}" ]; then
 fi
 MILO_ENGINE_PATH=""
 for candidate in "${ENGINE_PATH_CANDIDATES[@]}"; do
-    if [ -d "$candidate/.git" ]; then
+    if [ -e "$candidate/.git" ]; then
         MILO_ENGINE_PATH="$(cd "$candidate" && pwd)"
         break
     fi
@@ -152,12 +155,22 @@ deploy_page() {
     # The page code is ours; tasks-vision (Apache-2.0) is vendored from
     # scripts/web/node_modules (pinned in scripts/web/package.json, `npm ci
     # --prefix scripts/web`) and the .task models from native/models, so the page
-    # needs no CDN and sits inside its own COOP/COEP origin. Anything missing here
-    # makes pose_input.js fall back to jsdelivr / storage.googleapis.com.
+    # needs no CDN and sits inside its own COOP/COEP origin. The page never
+    # falls back to a CDN on its own (only ?pose_cdn=1), so a missing piece here
+    # is a build failure (W-13): tasks-vision is installed from the lockfile if
+    # absent, and a model that is not in native/models fails the build.
     local POSE_DIR="$DEPLOY_DIR/pose" TV_DIR f m src
     mkdir -p "$POSE_DIR/vendor/tasks-vision/wasm" "$POSE_DIR/models"
     cp "$NATIVE_DIR"/web/pose/*.js "$POSE_DIR/"
     TV_DIR="$REPO_ROOT/scripts/web/node_modules/@mediapipe/tasks-vision"
+    if [ ! -f "$TV_DIR/vision_bundle.mjs" ]; then
+        echo "==> pose: tasks-vision not installed; npm ci --prefix scripts/web"
+        if command -v npm >/dev/null 2>&1; then
+            npm ci --prefix "$REPO_ROOT/scripts/web" || echo "==> pose: npm ci FAILED" >&2
+        else
+            echo "==> pose: npm not found" >&2
+        fi
+    fi
     if [ -f "$TV_DIR/vision_bundle.mjs" ]; then
         cp "$TV_DIR/vision_bundle.mjs" "$TV_DIR/package.json" "$POSE_DIR/vendor/tasks-vision/"
         cp "$TV_DIR/wasm/vision_wasm_module_internal.js" "$TV_DIR/wasm/vision_wasm_module_internal.wasm" \
@@ -170,20 +183,22 @@ deploy_page() {
         done
         echo "==> pose: tasks-vision $(sed -n 's/.*"version": "\(.*\)".*/\1/p' "$TV_DIR/package.json") vendored"
     else
-        echo "==> pose: WARNING tasks-vision not installed (npm ci --prefix scripts/web); the page will use the CDN"
+        echo "==> pose: ERROR tasks-vision is not installed (npm ci --prefix scripts/web); the page's pose input will not load" >&2
+        FAILED+=("pose-vendor")
     fi
     for m in lite full; do
         src="$NATIVE_DIR/models/pose_landmarker_$m.task"
         if [ -f "$src" ]; then
             cp -L "$src" "$POSE_DIR/models/"
         else
-            echo "==> pose: WARNING $src missing; the page will fetch it from storage.googleapis.com"
+            echo "==> pose: ERROR $src missing; the page's pose input will not load with pose_model=$m" >&2
+            FAILED+=("pose-vendor")
         fi
     done
     echo "==> page deployed: $DEPLOY_DIR/index.html (+ audio-worklet.js, pose/)"
 }
-deploy_page
 FAILED=()
+deploy_page
 if [ "$BUILD_SFX" = "1" ]; then
     "$REPO_ROOT/scripts/web/gen_sfx_sidecars.sh" || FAILED+=("sfx-sidecars")
 fi
@@ -241,6 +256,16 @@ build_one() {
         cached_release="$(grep -E '^DC3_WEB_RELEASE:BOOL=' "$bdir/CMakeCache.txt" 2>/dev/null | cut -d= -f2 || echo OFF)"
         cached_opt="$(grep -E '^DC3_WEB_OPT_LEVEL:STRING=' "$bdir/CMakeCache.txt" 2>/dev/null | cut -d= -f2 || echo O0)"
         cached_type="$(grep -E '^CMAKE_BUILD_TYPE:STRING=' "$bdir/CMakeCache.txt" 2>/dev/null | cut -d= -f2 || true)"
+        # The engine checkout too: MILO_ENGINE_PATH has no FORCE in CMake, so
+        # without this an explicit MILO_ENGINE_PATH=... was silently ignored
+        # by an existing build dir, which kept linking the engine it was first
+        # configured with (np-web3: a "sabotage" build that was the fixed one).
+        local cached_engine
+        cached_engine="$(grep -E '^MILO_ENGINE_PATH:[A-Z]+=' "$bdir/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
+        if [ "$cached_engine" != "$MILO_ENGINE_PATH" ]; then
+            echo "==> [$mode] engine checkout changed (${cached_engine:-unset} -> $MILO_ENGINE_PATH); reconfiguring"
+            need_configure=1
+        fi
         if [ "$cached_release" != "$release_flag" ] || [ "$cached_type" != "$build_type" ] \
            || { [ "$mode" = "release" ] && [ "$cached_opt" != "$OPT_LEVEL" ]; }; then
             echo "==> [$mode] build flags changed; reconfiguring + relinking"
@@ -305,7 +330,10 @@ if [ "${#FAILED[@]}" -gt 0 ]; then
     echo "" >&2
     echo "================================================================" >&2
     for mode in "${FAILED[@]}"; do
-        if [ "$mode" = sfx-sidecars ]; then
+        if [ "$mode" = pose-vendor ]; then
+            echo "FAILED: pose input files -- tasks-vision or a .task model is not deployed (see '==> pose: ERROR' above)" >&2
+            continue
+        elif [ "$mode" = sfx-sidecars ]; then
             echo "FAILED: sfx sidecars -- see scripts/web/gen_sfx_sidecars.sh output above (--no-sfx skips)" >&2
         elif [ -f "$DEPLOY_DIR/$mode/dc3-web.wasm" ]; then
             echo "BUILD FAILED: $mode -- $DEPLOY_DIR/$mode/ still holds the PREVIOUS build" >&2

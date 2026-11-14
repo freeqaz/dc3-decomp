@@ -20,6 +20,8 @@
 //   python3 native/web/server.py --port 8435 &      # this tree's native/web/build
 //   node scripts/web/gesture-menus.mjs --port 8435 --out DIR
 //   ... --env DC3_CONTROLLER_MODE=forced   # sabotage: no handover, no select, exit 1
+//   ... --skip-attract   # the performer steps in DURING the 83 s intro movie and
+//                        # skips it with the right hand (W-11), then the route
 //
 // Exit 0: route completed with gesture selects only; 1: failed; 2: setup.
 import { mkdirSync, writeFileSync, appendFileSync } from 'fs';
@@ -31,6 +33,7 @@ const out = arg('out', '/tmp/dc3-web-gesture-menus');
 const timeoutS = +arg('timeout', 300);
 const debug = argv.includes('--debug');
 const env = arg('env', ''); // e.g. DC3_CONTROLLER_MODE=forced (the sabotage: must fail)
+const skipAttract = argv.includes('--skip-attract');
 
 const { chromium } = await import('playwright');
 mkdirSync(out, { recursive: true });
@@ -131,19 +134,43 @@ async function pick(side, h, label) {
 let result = 'fail', failure = '';
 try {
     await page.goto(`http://127.0.0.1:${port}/?x=1${debug ? '&debug=true' : ''}${env ? '&env=' + encodeURIComponent(env) : ''}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const performerIn = async () => {
+        // The performer steps in: the first push starts the provider.
+        await page.evaluate(() => window.__performer.start());
+        // auto -> faithful, then the image's controller_mode_timeout (5000 ms)
+        // hands the UI to the hand cursor.
+        // Recorded, not required: under a forced policy (the sabotage) neither
+        // happens, and the route below is what must then fail.
+        const wentFaithful = await waitFor(() => policy.some((l) => /auto -> faithful/.test(l)), 10000);
+        const handedOver = await waitFor(() => modeLines.some((l) => /exit/.test(l)), wentFaithful ? 12000 : 7000);
+        console.log(`[${el()}s] performer in: auto->faithful=${wentFaithful} handover=${handedOver}`);
+        await sleep(1000);
+    };
+    if (skipAttract) {
+        // The intro movie runs ~83 s; the SKIP item sits at the bottom of the
+        // right-hand list on the movie overlay.
+        if (!await waitFor(() => cur() === 'attract_screen', 120000)) throw new Error(`never reached attract_screen (at ${cur()})`);
+        const enteredAt = el();
+        await sleep(3000);
+        await performerIn();
+        await shot('attract_before_skip');
+        let skipped = false;
+        for (let attempt = 0; attempt < 3 && !skipped; attempt++) {
+            const s = await pick('right', 1.0, 'skip');
+            if (s) console.log(`[${el()}s] attract: right hand selected '${s.sym}'`);
+            skipped = await waitFor(() => cur() !== 'attract_screen', 8000);
+        }
+        const took = el() - enteredAt;
+        if (!skipped) throw new Error('the right hand did not skip the attract movie');
+        if (took > 60) throw new Error(`attract left after ${took.toFixed(0)} s: that is the movie ending, not a skip`);
+        console.log(`[${el()}s] attract skipped by gesture ${took.toFixed(1)} s after it started`);
+    }
     if (!await waitFor(() => screens.includes('title_screen'), 150000)) throw new Error(`never reached title_screen (at ${cur()})`);
     await sleep(2000);
-    await shot('title_before_performer');
-    // The performer steps in: the first push starts the provider.
-    await page.evaluate(() => window.__performer.start());
-    // auto -> faithful, then the image's controller_mode_timeout (5000 ms)
-    // hands the UI to the hand cursor.
-    // Recorded, not required: under a forced policy (the sabotage) neither
-    // happens, and the route below is what must then fail.
-    const wentFaithful = await waitFor(() => policy.some((l) => /auto -> faithful/.test(l)), 10000);
-    const handedOver = await waitFor(() => modeLines.some((l) => /exit/.test(l)), wentFaithful ? 12000 : 7000);
-    console.log(`[${el()}s] performer in: auto->faithful=${wentFaithful} handover=${handedOver}`);
-    await sleep(1000);
+    if (!skipAttract) {
+        await shot('title_before_performer');
+        await performerIn();
+    }
     const route = [
         { side: 'right', h: 0.0, sym: 'title_screen_menu', next: 'main_screen' },
         { side: 'right', h: 0.0, sym: 'gameplay', next: 'choose_mode_screen' },

@@ -209,9 +209,20 @@ void GestureMgr_NativeInit() {
     // The dummy skeleton in GestureMgr_NativePoll provides a neutral standing
     // pose so skeleton-gated paths still work without a real camera.
     // An explicit DC3_POSE overrides the skip so headless CI can exercise the
-    // live-provider path against a synthetic pose server.
-    if (getenv("MILO_HEADLESS") && !getenv("DC3_POSE")) {
+    // live-provider path against a synthetic pose server, and so does the
+    // in-process performer (DC3_POSE_PERFORM, PLAN P-13): it spawns nothing,
+    // and before it counted here a headless DC3_POSE_PERFORM run silently
+    // played the dummy skeleton instead.
+#ifdef __EMSCRIPTEN__
+    const bool performer = false;
+#else
+    const bool performer = Dc3PosePerformerEnabled();
+#endif
+    if (getenv("MILO_HEADLESS") && !getenv("DC3_POSE") && !performer) {
         printf("Native: headless mode, using dummy skeleton (no pose server)\n");
+        if (const char *perform = getenv("DC3_POSE_PERFORM"); perform && *perform)
+            printf("Native: DC3_POSE_PERFORM='%s' is not a performer mode "
+                   "(choreo, wrong, halftempo, still, stand, replay:FILE)\n", perform);
         // Controller-mode policy (DC3_CONTROLLER_MODE, docs/debugging/native.md):
         // only `forced` pins controller mode here; `faithful` boots out of it,
         // as GestureMgr::GestureMgr does on the 360.

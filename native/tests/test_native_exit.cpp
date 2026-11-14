@@ -231,6 +231,21 @@ bool PostEval(int port, const char *body) {
     return ok;
 }
 
+// Runs `curl -s <args>` and returns its stdout ("" when curl is missing).
+std::string Curl(const std::string &args) {
+    std::string cmd = "curl -s -m 30 " + args + " 2>/dev/null";
+    FILE *p = popen(cmd.c_str(), "r");
+    if (!p) return std::string();
+    std::string out;
+    char buf[4096];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof buf, p)) > 0) out.append(buf, n);
+    pclose(p);
+    return out;
+}
+
+bool HaveCurl() { return system("command -v curl >/dev/null 2>&1") == 0; }
+
 } // namespace
 
 // SIGTERM is a request to quit: the loop leaves at a frame boundary and the
@@ -340,6 +355,40 @@ TEST_F(NativeExitTest, SecondEngineOnAPortExitsInsteadOfSharing) {
     EXPECT_EQ(WEXITSTATUS(second.status), 98) << Tail(out);
     EXPECT_TRUE(Contains(out, "detail=http_port_in_use")) << Tail(out);
     EXPECT_FALSE(first.Poll()) << "the first engine died\n" << Tail(first.Output());
+}
+
+// H-13: GET /api/health's uptime_s is wall-clock time.  It was
+// TaskMgr::Seconds(kRealTime), the kTaskSeconds timeline that the game sets
+// to song time during play (kRealTime only skips the A/V offset), so in a song
+// it reported the song position.  The test moves that timeline the way a song
+// does ({taskmgr set_seconds}) and reads it back as the control.
+TEST_F(NativeExitTest, HealthUptimeIsWallClockNotSongTime) {
+    if (!HaveCurl()) GTEST_SKIP() << "curl not installed";
+    std::string portFile = mRunDir + "/http_port";
+    Engine e;
+    auto started = std::chrono::steady_clock::now();
+    Start(e, mRunDir, {"MILO_HEADLESS=1", "MILO_NORENDER=1", "DC3_HTTP=1", "DC3_HTTP_PORT=0",
+                       "DC3_HTTP_PORT_FILE=" + portFile});
+    ASSERT_TRUE(e.WaitFor("DC3 Native: Entering main loop", 120)) << Tail(e.Output());
+    int port = atoi(ReadAll(portFile).c_str());
+    ASSERT_GT(port, 0) << Tail(e.Output());
+    std::string api = "http://127.0.0.1:" + std::to_string(port) + "/api";
+    Curl("-X POST --data '{taskmgr set_seconds 5000 FALSE}' " + api + "/dta/eval");
+    std::string clock = Curl("-X POST --data '{taskmgr seconds}' " + api + "/dta/eval");
+    std::string health = Curl(api + "/health");
+    double wall = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+    size_t at = health.find("\"uptime_s\":");
+    ASSERT_NE(at, std::string::npos) << "health: " << health;
+    double uptime = atof(health.c_str() + at + strlen("\"uptime_s\":"));
+    // Control: the song clock really did move (else this test proves nothing).
+    EXPECT_NE(clock.find("5000"), std::string::npos)
+        << "{taskmgr seconds} did not read back 5000: " << clock;
+    EXPECT_GE(uptime, 0.0) << health;
+    EXPECT_LE(uptime, wall + 1.0)
+        << "uptime_s=" << uptime << " after " << wall << " s of wall clock: it is "
+           "reading the song timeline (set to 5000), not the clock\n" << health;
+    kill(e.pid, SIGTERM);
+    e.WaitExit(30);
 }
 
 #if defined(__linux__)
@@ -564,6 +613,38 @@ TEST_F(NativeExitTest, CtrlQEndsTheLoop) {
     EXPECT_TRUE(Contains(out, "DC3_EXIT: how=main_loop_returned detail=quit_key code=0"))
         << Tail(out);
     EXPECT_FALSE(Contains(out, "button=2 (LB)")) << "Ctrl+Q also pressed LB\n" << Tail(out);
+}
+
+// H-13: /api/screenshot on a windowed engine.  It read only the headless
+// target, so a windowed run answered 500 "headless mode required" and drivers
+// fell back to `import -window`.  It now reads the swapchain texture between
+// the frame's submit and present (WgpuRnd's frame-ready callback).
+TEST_F(NativeExitTest, ScreenshotWorksWindowed) {
+    if (!HaveCurl()) GTEST_SKIP() << "curl not installed";
+    std::string portFile = mRunDir + "/http_port";
+    std::string png = mRunDir + "/shot.png";
+    Engine e;
+    std::string code;
+    RunWindowed(mRunDir, [&](Display *dpy, Window w) {
+        int port = atoi(ReadAll(portFile).c_str());
+        ASSERT_GT(port, 0) << "no DC3_HTTP_PORT_FILE";
+        code = Curl("-o " + png + " -w '%{http_code}' http://127.0.0.1:" +
+                    std::to_string(port) + "/api/screenshot");
+        SendWmDeleteWindow(dpy, w);
+    }, e, {"DC3_HTTP=1", "DC3_HTTP_PORT=0", "DC3_HTTP_PORT_FILE=" + portFile});
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    std::string bytes = ReadAll(png);
+    ASSERT_EQ(code, "200") << "body: " << bytes.substr(0, 200) << "\n" << Tail(out);
+    ASSERT_GE(bytes.size(), (size_t)24);
+    EXPECT_EQ(bytes.compare(0, 8, "\x89PNG\r\n\x1a\n"), 0) << "not a PNG";
+    auto be32 = [&](size_t o) {
+        return ((unsigned)(unsigned char)bytes[o] << 24) | ((unsigned)(unsigned char)bytes[o + 1] << 16) |
+               ((unsigned)(unsigned char)bytes[o + 2] << 8) | (unsigned)(unsigned char)bytes[o + 3];
+    };
+    EXPECT_EQ(be32(16), 1280u) << "PNG width";
+    EXPECT_EQ(be32(20), 720u) << "PNG height";
+    ExpectNoCrash(out);
 }
 
 #endif // __linux__ (window tests)

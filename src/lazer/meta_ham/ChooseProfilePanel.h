@@ -30,6 +30,9 @@ public:
 
 private:
     void UpdateProfiles();
+#ifdef HX_NATIVE
+    bool HasSignInRow() const; // PLAN G-22
+#endif
 
     std::vector<int> mPadNums; // 0x40
 };

@@ -192,7 +192,7 @@ HttpServer::~HttpServer() {
 bool HttpServer::Start(int port) {
     if (mRunning) return true;
 
-    mStartTime = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+    mStartTime = std::chrono::steady_clock::now();
     auto* svr = new httplib::Server();
     // Hard transport ceiling. Anything under this reaches a handler and gets a
     // JSON error naming the real cap (DtaEval::kMaxScriptBytes); anything over
@@ -342,7 +342,15 @@ HttpServer::CommandResult HttpServer::QueueAndWait(
     return cmd.result;
 }
 
+// WgpuRnd's frame-ready callback: after the frame's submit, before present.
+static void HttpServerFrameReady() {
+    if (TheHttpServer) TheHttpServer->ProcessScreenshots();
+}
+
 void HttpServer::ProcessCommands() {
+    // Registered from here because the renderer may not exist yet when the
+    // server starts; idempotent.
+    if (gWgpuRnd) gWgpuRnd->SetFrameReadyCallback(HttpServerFrameReady);
     std::vector<Command*> batch;
     {
         std::lock_guard<std::mutex> lk(mQueueMutex);
@@ -433,6 +441,14 @@ void HttpServer::DispatchInjectedButtons() {
         }
     }
     mInjectedHeld = pressed;
+}
+
+void HttpServer::ProcessScreenshotsWithoutFrame() {
+    // A frame the renderer did not draw never reaches the callback; with no
+    // GPU at all, answer the request (with its error) here instead of letting
+    // it time out.
+    if (!gWgpuRnd || !gWgpuRnd->Gpu().IsReady())
+        ProcessScreenshots();
 }
 
 void HttpServer::ProcessScreenshots() {
@@ -559,9 +575,15 @@ void HttpServer::HandleScreenshot(Command& cmd) {
     size_t pixelSize = (size_t)w * h * 4;
     std::vector<uint8_t> pixels(pixelSize);
 
-    if (!gWgpuRnd->Gpu().ReadbackHeadlessFrame(pixels.data(), pixelSize)) {
+    // Headless: the offscreen target.  Windowed (PLAN H-13): the swapchain
+    // texture, readable only between the frame's submit and its present --
+    // which is why screenshots are taken in the renderer's frame-ready
+    // callback (HttpServerFrameReady) rather than after EndDrawing.
+    if (!gWgpuRnd->Gpu().ReadbackFrame(pixels.data(), pixelSize)) {
         cmd.result.ok = false;
-        cmd.result.error = "Framebuffer readback failed (headless mode required)";
+        cmd.result.error = gWgpuRnd->Gpu().IsHeadless()
+            ? "Framebuffer readback failed"
+            : "Framebuffer readback failed (the window surface has no CopySrc usage)";
         return;
     }
 
@@ -1036,7 +1058,14 @@ void HttpServer::RegisterEndpoints() {
     // GET /api/health
     svr->Get("/api/health", [this](const httplib::Request&, httplib::Response& res) {
         int frame = gWgpuRnd ? gWgpuRnd->FrameID() : 0;
-        float uptime = TheTaskMgr.Seconds(TaskMgr::kRealTime) - mStartTime;
+        // Wall clock since the server started (PLAN H-13).  This used to be
+        // TaskMgr::Seconds(kRealTime), which is NOT a wall clock: it reads the
+        // kTaskSeconds timeline (kRealTime only skips the A/V offset), and the
+        // game sets that timeline to song time during play -- so in a song
+        // uptime_s reported the song position, and under DC3_FAST_TIME raced
+        // ahead of real time.
+        float uptime = std::chrono::duration<float>(
+            std::chrono::steady_clock::now() - mStartTime).count();
         char buf[256];
         snprintf(buf, sizeof(buf),
             "{\"status\":\"ok\",\"frame\":%d,\"uptime_s\":%.1f,\"pid\":%d}", frame, uptime,

@@ -96,12 +96,15 @@ static const char *SkipRule(const char* name) {
     if (!strncmp(name, "pose_flash", 10)) {
         return "pose_flash";
     }
-    // preview.mesh: NOT a camera path either -- it shows the song-preview movie
-    // (preview.tmov), not a Kinect view.  Still hidden; the movie texture path
-    // is the open cause.
-    if (!strcmp(name, "preview.mesh")) {
-        return "preview";
-    }
+    // No preview.mesh rule (G-15, np-media).  It was hidden while the song-
+    // preview movie (preview.tmov -> preview.tex) did not decode on desktop;
+    // it does now, and the image filters nothing.  song_info.milo puts it on
+    // the card's back (dance.grp, under album_spin.grp) and draws it BEFORE
+    // album_black_bg / album.mesh, which are opaque with depth off, so with
+    // the album side up the album covers it.  Measured with the rule lifted:
+    // the song-select box shows the album art at steady state, as the
+    // original does under Xenia (YMCA / Better Off Alone / The Hustle,
+    // 5-171 s after the highlight).
     // Name substrings from the milo-viewer era.  Matched NOTHING on the
     // measured routes (the whole perform route, and a fresh console up to
     // tutorial_perform_it_screen_0), so there is no evidence either way; kept

@@ -10,6 +10,8 @@
 #include "rndobj/Mesh.h"
 #include "rndobj/Rnd.h"
 #include "platform/UiRenderHeuristics.h"
+#include "platform/Rnd_Wgpu.h"
+#include "rndobj/Trans.h"
 #include "ui/UIListMesh.h"
 
 #include <cmath>
@@ -291,4 +293,96 @@ TEST_F(RndCamProjectionTest, TextAlphaFallbackOnlyAppliesToTransparentTextMeshes
     EXPECT_FALSE(NativeShouldForceTextAlpha(false, BaseMaterial::kBlendSrcAlpha, 0.0f));
     EXPECT_FALSE(NativeShouldForceTextAlpha(true, BaseMaterial::kBlendAdd, 0.0f));
     EXPECT_FALSE(NativeShouldForceTextAlpha(true, BaseMaterial::kBlendSrcAlpha, 0.5f));
+}
+
+// G-21: RndDrawable::mClipPlanes clip on native. The main menu's MOTD marquee
+// (motd.lbl) carries two clip planes, motd_clip_left/right.trans; retail
+// DxRnd::PushClipPlanesInternal makes each a D3D user clip plane (through the
+// transform's origin, normal -z, keep the side the normal points at), so the
+// ticker stops at its box. The native renderer ignored them, and the ticker ran
+// to the screen edge. WgpuRnd now turns an edge-on plane into a scissor edge.
+namespace {
+RndTransformable *MakeClipPlane(const Vector3 &origin, const Vector3 &keepDir) {
+    // DxRnd keeps the side -z points at, so z = -keepDir.
+    const Vector3 z(-keepDir.x, -keepDir.y, -keepDir.z);
+    // Any x, y completing a frame; the clip reads only v and z.
+    Vector3 x = std::fabs(z.z) < 0.9f ? Vector3(0.0f, 0.0f, 1.0f) : Vector3(1.0f, 0.0f, 0.0f);
+    Vector3 y(z.y * x.z - z.z * x.y, z.z * x.x - z.x * x.z, z.x * x.y - z.y * x.x);
+    x.Set(y.y * z.z - y.z * z.y, y.z * z.x - y.x * z.z, y.x * z.y - y.y * z.x);
+    RndTransformable *t = Hmx::Object::New<RndTransformable>();
+    t->SetLocalRot(Hmx::Matrix3(x, y, z));
+    t->SetLocalPos(origin);
+    return t;
+}
+}
+
+TEST_F(RndCamProjectionTest, ClipPlanesBecomeAScissorAroundTheDrawable) {
+    ASSERT_NE(gWgpuRnd, nullptr);
+    RndCam *saved = RndCam::Current();
+    RndCam *cam = MakeTestCam("test_cam_clip", 1.0f, 1000.0f, 0.6024178f);
+    cam->Select();
+    ASSERT_EQ(RndCam::Current(), cam);
+
+    // The camera looks down +y from the origin. A box 20 wide and 20 tall
+    // 100 units ahead: keep x >= -10, x <= 10, z <= 10.
+    RndTransformable *left = MakeClipPlane(Vector3(-10.0f, 100.0f, 0.0f), Vector3(1.0f, 0.0f, 0.0f));
+    RndTransformable *right = MakeClipPlane(Vector3(10.0f, 100.0f, 0.0f), Vector3(-1.0f, 0.0f, 0.0f));
+    RndTransformable *top = MakeClipPlane(Vector3(0.0f, 100.0f, 10.0f), Vector3(0.0f, 0.0f, -1.0f));
+    ObjPtrVec<RndTransformable> planes(cam);
+    planes.push_back(right);
+    planes.push_back(left);
+
+    int full[4] = {0, 0, 0, 0};
+    TheRnd.PushClipPlanes(planes);
+    int r[4] = {0, 0, 0, 0};
+    ASSERT_TRUE(gWgpuRnd->ClipScissor(r))
+        << "PushClipPlanes left no clip in effect: the planes were ignored";
+    // The full-target rect, from a push of no usable planes on top of none.
+    {
+        ObjPtrVec<RndTransformable> none(cam);
+        TheRnd.PopClipPlanes(planes);
+        none.push_back(MakeClipPlane(Vector3(0.0f, 100.0f, 0.0f),
+                                     Vector3(-0.70710678f, 0.0f, -0.70710678f)));
+        TheRnd.PushClipPlanes(none); // oblique on screen: no scissor edge
+        ASSERT_TRUE(gWgpuRnd->ClipScissor(full));
+        TheRnd.PopClipPlanes(none);
+        EXPECT_FALSE(gWgpuRnd->ClipScissor(r)) << "PopClipPlanes left a clip in effect";
+        TheRnd.PushClipPlanes(planes);
+        ASSERT_TRUE(gWgpuRnd->ClipScissor(r));
+    }
+    const int W = full[2], H = full[3];
+    ASSERT_GT(W, 0);
+    ASSERT_GT(H, 0);
+    EXPECT_EQ(full[0], 0);
+    EXPECT_EQ(full[1], 0);
+    // x in [-10, 10] at depth 100 is a centred column, narrower than the target.
+    EXPECT_GT(r[0], 0) << "left plane did not clip";
+    EXPECT_LT(r[0] + r[2], W) << "right plane did not clip";
+    EXPECT_LT(r[2], W / 2);
+    EXPECT_NEAR(r[0] + r[0] + r[2], W, 2) << "the column is not centred on the view axis";
+    EXPECT_EQ(r[1], 0);
+    EXPECT_EQ(r[3], H);
+
+    // Nested: the top plane narrows the outer rect, and popping restores it.
+    ObjPtrVec<RndTransformable> inner(cam);
+    inner.push_back(top);
+    TheRnd.PushClipPlanes(inner);
+    int n[4];
+    ASSERT_TRUE(gWgpuRnd->ClipScissor(n));
+    EXPECT_EQ(n[0], r[0]);
+    EXPECT_EQ(n[2], r[2]);
+    EXPECT_GT(n[1], 0) << "top plane (keep z <= 10) did not clip the top of the screen";
+    EXPECT_LT(n[1], H / 2);
+    EXPECT_EQ(n[1] + n[3], H);
+    TheRnd.PopClipPlanes(inner);
+    int back[4];
+    ASSERT_TRUE(gWgpuRnd->ClipScissor(back));
+    EXPECT_EQ(back[1], r[1]);
+    EXPECT_EQ(back[3], r[3]);
+    TheRnd.PopClipPlanes(planes);
+    EXPECT_FALSE(gWgpuRnd->ClipScissor(back));
+    EXPECT_EQ(gWgpuRnd->ClipPlaneDepth(), 0);
+
+    if (saved) saved->Select();
+    else RndCam::ClearCurrent();
 }

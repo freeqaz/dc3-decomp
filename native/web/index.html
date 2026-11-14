@@ -265,6 +265,18 @@
                 if (sv) sv.remove();  // it sits above everything
             }
         }
+        // Console level for one engine stderr line: 'error' | 'warn' | 'log'.
+        // "timer error is large" is the image's song-clock diagnostic
+        // (StandardStream::UpdateTime, a MILO_LOG), a warning, not a failure.
+        const DC3_STDERR_ERROR = /^(FAIL|MILO_FAIL|MILO_ASSERT|Assertion|Aborted|RuntimeError|ERROR|FATAL)\b|\b(error|errors|failed|failure|fatal|exception|abort(ed)?|crash(ed)?)\b/i;
+        const DC3_STDERR_WARN = /^(MILO_WARN|WARN|WARNING)\b|\bwarn(ing)?\b|^timer error is large/i;
+        function dc3StderrLevel(text) {
+            if (DC3_STDERR_WARN.test(text)) return 'warn';
+            if (DC3_STDERR_ERROR.test(text)) return 'error';
+            return 'log';
+        }
+        window.dc3StderrLevel = dc3StderrLevel;  // scripts/web/page-states.mjs checks it
+
         function gameRunning() {
             if (loading.classList.contains('error')) return;
             loading.classList.add('hidden');
@@ -341,8 +353,14 @@
                     }
                 },
                 printErr: function(text) {
-                    console.error(text);
-                    log(text, true);
+                    // The engine writes its diagnostics to stderr (MILO_LOG and
+                    // ~700 fprintf(stderr) trace sites), so stderr is mostly
+                    // log traffic: only lines that report a failure go to
+                    // console.error, warnings to console.warn, the rest to
+                    // console.log (W-13; it used to be all console.error).
+                    const level = dc3StderrLevel(text);
+                    console[level](text);
+                    log(text, level === 'error');
                     // Adapter/device failures from the WebGPU layer arrive on stderr.
                     // Surface them in the status bar so the user knows why nothing renders.
                     if (text.includes('adapter request failed') ||
