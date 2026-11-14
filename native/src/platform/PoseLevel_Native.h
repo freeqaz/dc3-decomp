@@ -118,6 +118,14 @@ NativePoseLevelPolicy NativePoseLevelParse(const char *env);
 void NativeSensorLevel(SkeletonFrame &frame, const NativeSkeletonProvider::PersonData *persons,
                        int numPersons, bool unlevelled, float dtSecs);
 
+// Whether NativeSensorLevel levels frames at all (DC3_POSE_LEVEL not off).
+bool NativeSensorLevelApplies();
+// Level `frame` by a floor normal that was ALREADY smoothed (a recorded
+// frame's mFloorNormal, PoseSession_Native.h): the smoother is forced to it,
+// so the next live frame continues from there, and every tracked slot is
+// levelled exactly as NativeLevelSensorFrame levelled it when it was recorded.
+void NativeLevelSensorFrameAt(SkeletonFrame &frame, const Vector3 &floorNormal);
+
 // The sensor's estimator (read by tests and the HTTP debug surface).
 const NativeGravityEstimator &NativeSensorGravityEstimator();
 // Tests: replace the policy read from DC3_POSE_LEVEL and reset the estimator.

@@ -410,6 +410,15 @@ variables are value-parsed: `0`/`false`/`off`/`no` disable.
 | `DC3_POSE_HFOV` | unset | Horizontal camera FOV passed to the spawned server | `native/src/platform/Skeleton_Native.cpp` |
 | `DC3_POSE_HOLD_MS` | `1000` | Dropout hold (PLAN P-12): a person the detector loses is still reported, same slot and tracking id, every joint inferred at its last pose, for this much sensor time; then the slot is released and the image's own 1 s recovery window runs. `0` = off (lost at once). Not applied to someone seen under 500 ms, or when a new id appears within 0.3 m. Capped at 5000 | `native/src/platform/GestureMgr_Native.cpp` |
 | `DC3_POSE_LATENCY_LOG` | off | `Dc3EnvFlag`. Every 5 s, `DC3 POSE AGE: capture->game median/p10/p90`: the age of a pose frame when the game takes it, from `pose_server.py`'s capture stamp (desktop only) | `native/src/platform/GestureMgr_Native.cpp` |
+| `DC3_POSE_PYTHON` | the game chooses | Interpreter the spawned pose server runs under. Unset, the game takes the first executable of: `${DC3_POSE_VENV:-~/.local/share/dc3/pose-venv}/bin/python3` (what `scripts/playtest/bootstrap.sh --fix` makes), the checkout's `.venv/bin/python3`, a worktree's main-checkout `.venv/bin/python3`, then `python3` from PATH. It logs `Pose server python: PATH (why)`; when that Python lacks mediapipe/opencv the notice names it and `bootstrap.sh --fix`. `scripts/playtest/pose_python.py` is the same order (preflight checks the game's choice) | `native/src/platform/Skeleton_Native.cpp` (`ChoosePosePython`) |
+| `DC3_POSE_VENV` | `~/.local/share/dc3/pose-venv` | The playtest venv the game looks for (step 2 above); replaces the default rather than adding to it | `Skeleton_Native.cpp` (`ChoosePosePython`), `scripts/playtest/bootstrap.sh` |
+| `DC3_POSE_SERVER` | `<tree>/native/scripts/pose_server.py` | A drop-in for `pose_server.py`, started with the same arguments (`scripts/playtest/footage_camera.py` is one) | `native/src/platform/Skeleton_Native.cpp` |
+| `DC3_POSE_VIDEO` | unset | The spawned server reads this video file (looped) instead of `--camera N` (`scripts/play.sh --video`) | `native/src/platform/Skeleton_Native.cpp` (`ServerCommand`) |
+| `DC3_POSE_RECORD` | unset | Write every sensor frame the game accepts, as the scorer receives it (persons, frame id, timestamp, song time, floor normal), to this dc3-pose-session v1 file; flushed per frame. `scripts/play.sh` sets it to `<session>/pose.dc3session` | `native/src/platform/PoseSession_Native.cpp` |
+| `DC3_POSE_SESSION_SYNC` | `song` | With `DC3_POSE_PERFORM=session:FILE`: `song` publishes each recorded frame at its recorded song time (and uses its recorded floor normal); `wall` at its recorded wall offset | `native/src/platform/PoseSession_Native.cpp` |
+| `DC3_PERF_LOG` | off | Every 5 s: `DC3 PERF: fps= pose_fps= persons=` (game frames/s, sensor frames accepted/s, mean people) | `native/src/platform/GestureMgr_Native.cpp` |
+| `DC3_POSE_STATS` | off | Read by `pose_server.py`: every 5 s `POSE_STATS: fps= infer_ms_mean= infer_ms_p95= persons= sent= dropped=` on stderr | `native/scripts/pose_server.py` |
+| `DC3_FOOTAGE_PRE`, `DC3_FOOTAGE_CONTROL` | `8`, unset | `footage_camera.py`: seconds of clip before song time 0; a file holding `CLIP PRE`, re-read every 0.5 s (a driver changes the dancer between songs) | `scripts/playtest/footage_camera.py` |
 
 ### Capture and output
 
@@ -428,6 +437,7 @@ variables are value-parsed: `0`/`false`/`off`/`no` disable.
 | `DC3_HTTP` | desktop: dev profile `1`, release `0` | Non-zero: start the HTTP debug server on **127.0.0.1 only** ([tools/HTTP_DEBUG_SERVER.md](../tools/HTTP_DEBUG_SERVER.md); another box: `ssh -L 9090:127.0.0.1:9090`). Only `dc3-native` is built with `DC3_HTTP_SERVER` | `native/src/platform/HttpServer.cpp` (DC3 glue; the engine copy is not compiled) |
 | `DC3_HTTP_PORT` | window: `9090` if free, else kernel-assigned; headless: kernel-assigned | HTTP debug server port; the one in use is printed on stdout as `DC3_HTTP_PORT=<n>`. `0` or `auto`: kernel-assigned. An explicit port is strict: one that cannot be bound exits 98 (see [Stopping the engine](#stopping-the-engine-h-9)) | `native/src/platform/HttpServer.cpp` |
 | `DC3_HTTP_PORT_FILE` | unset | Once the debug server is bound, write its port to this file (temp file + rename). How harnesses learn a `DC3_HTTP_PORT=0` port | `native/src/platform/HttpServer.cpp` |
+| `DC3_HTTP_HOST` | `127.0.0.1` | Address the HTTP debug server binds. Unset is loopback only; set it (e.g. `0.0.0.0`) only to widen that on purpose: the server evaluates any DTA it is sent. The listen line then says `NOT loopback only`; an ssh tunnel is the safer way to reach another box | `native/src/platform/HttpServer.cpp` |
 
 ### Audio
 

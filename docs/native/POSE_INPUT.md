@@ -170,7 +170,48 @@ python3 scripts/synthetic_kinect.py --perform    # reads GET /api/pose/target
 
 # Gate (GPU, ~13 min): five configs, each the whole song under DC3_FAST_TIME
 scripts/pose_scoring_gate.sh                      # --only replay,still  --out DIR
+
+# A player's session (docs/native/PLAYTEST.md): camera, gesture menus, session folder
+scripts/play.sh                                   # --video clip.mp4 for footage in step with the song
 ```
+
+### Recording a live session and replaying it (PLAN L-1)
+
+`DC3_POSE_RECORD=FILE` (set by `scripts/play.sh` to `<session>/pose.dc3session`)
+writes every sensor frame the game **accepts**, at the point the scorer gets it
+(`BuildSensorFrame`, after the frame-id gate, before levelling): each person's
+20 joints, confidences and tracking id, the frame id, the sensor timestamp, the
+song time, and the floor normal the gravity estimator had reached. Format
+`dc3-pose-session v1`, one `F` line per frame and one `P` line per person,
+flushed per frame (`native/src/platform/PoseSession_Native.cpp`).
+
+`DC3_POSE=external DC3_POSE_PERFORM=session:FILE` replays it through the same
+`PublishFrame` seam the socket reader uses. With `DC3_POSE_SESSION_SYNC=song`
+(the default) a frame is published when the song clock reaches its recorded
+song time, with its recorded timestamp, and the sensor levels it with its
+recorded floor normal instead of re-estimating one (the estimator is session
+state, so a replay that starts fresh would level differently). A whole session
+holds many songs, each with its own clock; `scripts/playtest/pose_session.py`
+lists the song segments and cuts one out. Under song sync the replay holds the
+first frame until the song clock comes down to the cut's first frame (the
+count-in; the menus' clock runs up from zero through the song's own times, and
+a dance played into the menus took the pad's presses, H-20), then publishes
+every frame on a render frame of its own -- catching up one per frame after a
+hitch, as the live game accepted them -- and restarts the sensor noise floor's
+counters so a replay does not depend on how long the menus took. Tests:
+`PoseSessionFileTest`, `PoseSessionTest.AReplayedSessionReachesTheScorerAsItDidLive`,
+`PoseSessionTest.ASongReplayWaitsForTheCountInNotTheMenuClock`,
+`SensorNoiseFloorTest.AResetRestartsTheOffsets`
+(`native/tests/test_pose_session.cpp`, `test_native_pose_socket.cpp`).
+
+A replay records itself as well, and `pose_session.py compare CUT REPLAYED`
+checks that every frame reached the scorer once, in order and unchanged.
+End to end with the real tracker and footage, `scripts/playtest/replay_proof.py`
+(numbers in STATUS): under `DC3_FAST_TIME` a replay is exact -- the same frames,
+the same rating and detector fraction on every move, the same score, three runs
+out of three. In real time two runs of one input differ on a few borderline
+moves (the scorer samples the skeleton on render frames), and a box that
+renders below 30 fps drops frames, as a live game on that box would.
 
 Run from the repo root: the server script and the model are found relative to the
 working directory when `/proc/self/exe` resolution fails.

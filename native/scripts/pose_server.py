@@ -416,6 +416,45 @@ class Outbox:
         return True
 
 
+class Stats:
+    """DC3_POSE_STATS=1 (the playtest kit sets it): every 5 s, one line on
+    stderr -- frames processed per second, MediaPipe's time per frame (mean,
+    95th percentile), people per frame, packets sent / dropped by the outbox.
+    Read with the engine's own DC3 PERF line (PLAN L-3)."""
+
+    PERIOD_S = 5.0
+
+    def __init__(self):
+        self.t0 = time.monotonic()
+        self.infer = []
+        self.persons = 0
+        self.last_sent = 0
+        self.last_dropped = 0
+
+    def frame(self, infer_s, persons):
+        self.infer.append(infer_s)
+        self.persons += persons
+
+    def maybe_print(self, outbox):
+        now = time.monotonic()
+        dt = now - self.t0
+        if dt < self.PERIOD_S:
+            return
+        n = len(self.infer)
+        ms = sorted(x * 1000.0 for x in self.infer)
+        sent = outbox.sent_packets if outbox else 0
+        dropped = outbox.dropped_packets if outbox else 0
+        print("POSE_STATS: fps=%.1f infer_ms_mean=%.1f infer_ms_p95=%.1f persons=%.2f "
+              "sent=%d dropped=%d window_s=%.1f" % (
+                  n / dt, (sum(ms) / n) if n else 0.0, ms[int(0.95 * (n - 1))] if n else 0.0,
+                  (self.persons / n) if n else 0.0, sent - self.last_sent,
+                  dropped - self.last_dropped, dt), file=sys.stderr, flush=True)
+        self.t0 = now
+        self.infer = []
+        self.persons = 0
+        self.last_sent, self.last_dropped = sent, dropped
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="DC3 Pose Estimation Server")
     parser.add_argument("--socket", default="/tmp/dc3_pose.sock", help="Unix socket path")
@@ -544,6 +583,7 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
     try:
         backend, num_landmarks, layout = make_backend(args)
 
+        stats = Stats() if os.environ.get("DC3_POSE_STATS") else None
         frame_id = 0
         next_frame_time = clock()  # video-mode pacing anchor
         eof_drain_deadline = None  # video-mode, --loop off: send ~2s of zero-person frames after EOF, then exit
@@ -662,10 +702,13 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
             frame_w, frame_h = (args.width, args.height)
             if frame is not None:
                 frame_h, frame_w = frame.shape[:2]
+                t_infer = time.perf_counter()
                 for tid, joints in backend.process(frame, ts_ms):
                     if len(persons) >= args.max_persons:
                         break
                     persons.append((tid, joints))
+                if stats:
+                    stats.frame(time.perf_counter() - t_infer, len(persons))
 
             # Pack and send (protocol v2, or v3 with --frames — see module docstring)
             if client is not None:
@@ -691,6 +734,8 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
                     break
 
             frame_id += 1
+            if stats:
+                stats.maybe_print(outbox)
 
     except KeyboardInterrupt:
         print("\nShutting down", file=sys.stderr)

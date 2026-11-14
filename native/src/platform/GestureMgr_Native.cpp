@@ -5,6 +5,7 @@
 #include "PoseLevel_Native.h" // NativeSensorLevel: the camera-tilt step
 #ifndef __EMSCRIPTEN__
 #include "PosePerformer_Native.h" // Dc3PosePerformerEnabled
+#include "PoseSession_Native.h"   // DC3_POSE_RECORD / session replay (PLAN L-1)
 #endif
 #include "gesture/LiveCameraInput.h"
 #include "NativeSettings.h" // Dc3EnvFlag, Dc3ControllerModeForced
@@ -752,6 +753,32 @@ static int NativeDummyPlayerCount() {
 // scoring to the errors=1.0 short-circuit.  A transient 0-person dropout from a
 // running provider stays on the provider branch (every slot reads untracked)
 // and never reaches the dummy.
+// DC3_PERF_LOG=1 (the playtest kit sets it): every 5 s of wall time, the
+// game loop's rate and how many NEW pose frames the sensor accepted per
+// second -- the two numbers PLAN L-3 asks for, measured where they meet.
+// BuildSensorFrame runs once per game frame (SkeletonUpdate's PostUpdate).
+static void PerfTick(bool providerRunning, bool accepted, int persons) {
+    static const bool sOn = Dc3EnvFlag("DC3_PERF_LOG", false);
+    if (!sOn)
+        return;
+    static std::chrono::steady_clock::time_point sStart = std::chrono::steady_clock::now();
+    static unsigned sFrames = 0, sPose = 0, sPersons = 0;
+    sFrames++;
+    if (providerRunning && accepted) {
+        sPose++;
+        sPersons += persons;
+    }
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    double secs = std::chrono::duration<double>(now - sStart).count();
+    if (secs >= 5.0) {
+        fprintf(stderr, "DC3 PERF: fps=%.1f pose_fps=%.1f persons=%.2f window_s=%.1f provider=%d\n",
+                sFrames / secs, sPose / secs, sPose ? (double)sPersons / sPose : 0.0, secs,
+                providerRunning ? 1 : 0);
+        sStart = now;
+        sFrames = sPose = sPersons = 0;
+    }
+}
+
 static const SkeletonFrame *BuildSensorFrame() {
     bool providerRunning = false;
     bool newFrame = false;
@@ -779,7 +806,17 @@ static const SkeletonFrame *BuildSensorFrame() {
             // slots hold raw camera space; a camera that does not know its
             // gravity gets an estimate, everything else (0,1,0).
             bool unlevelled = TheSkeletonProvider->FrameUnlevelled() || PerformerReplaysRecording();
-            NativeSensorLevel(sFrame, sPersons, numPersons, unlevelled, sFrame.mElapsedMs * 0.001f);
+#ifndef __EMSCRIPTEN__
+            // A replayed session frame is levelled as it was when recorded
+            // (the estimate is session state a one-song replay cannot rebuild).
+            if (!Dc3PoseSessionReplayLevel(sFrame, frameId))
+#endif
+                NativeSensorLevel(sFrame, sPersons, numPersons, unlevelled, sFrame.mElapsedMs * 0.001f);
+#ifndef __EMSCRIPTEN__
+            // DC3_POSE_RECORD: what the sensor accepted, for an offline replay.
+            Dc3PoseSessionRecord(sPersons, numPersons, frameId, TheSkeletonProvider->Timestamp(),
+                                 unlevelled, sFrame);
+#endif
         } else {
             ScoringDebugTick(false, true, 0);
         }
@@ -797,6 +834,8 @@ static const SkeletonFrame *BuildSensorFrame() {
         newFrame = true;
     }
 
+    PerfTick(providerRunning, newFrame,
+             providerRunning && TheSkeletonProvider ? TheSkeletonProvider->NumPersons() : 0);
     if (!newFrame)
         return nullptr;
     NativeAutoAssignPlayers();

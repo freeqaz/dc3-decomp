@@ -236,14 +236,16 @@ bool HttpServer::Start(int port) {
     // injects input and reads the framebuffer, and it is on by default in the
     // dev profile (DC3_PROFILE), so it must never answer another machine: it
     // listened on 0.0.0.0 until 2026-11-13.  To drive an engine on another box
-    // (the GPD), tunnel: `ssh -L 9090:127.0.0.1:9090 <box>`.
+    // (the GPD), tunnel: `ssh -L 9090:127.0.0.1:9090 <box>`.  DC3_HTTP_HOST
+    // is the explicit way to widen it (e.g. 0.0.0.0); unset is loopback.
     //
     // A negative port means "this one if it is free, else any": the default
     // when DC3_HTTP_PORT is unset in a window (HttpServerInit), so a second
     // engine, or one started while the owner's game holds 9090, gets a
     // kernel-assigned port and says so instead of exiting 98.  An EXPLICIT
     // port keeps the strict exit-98 contract.
-    static const char *kHttpBindAddress = "127.0.0.1";
+    const char *hostEnv = getenv("DC3_HTTP_HOST");
+    const char *kHttpBindAddress = (hostEnv && *hostEnv) ? hostEnv : "127.0.0.1";
     errno = 0;
     if (port < 0) {
         const int preferred = -port;
@@ -286,8 +288,9 @@ bool HttpServer::Start(int port) {
     // Machine-readable line on stdout for scripts to parse
     fprintf(stdout, "DC3_HTTP_PORT=%d\n", port);
     fflush(stdout);
-    fprintf(stderr, "[HttpServer] Listening on %s:%d (loopback only)\n", kHttpBindAddress,
-            port);
+    fprintf(stderr, "[HttpServer] Listening on %s:%d (%s)\n", kHttpBindAddress, port,
+            strcmp(kHttpBindAddress, "127.0.0.1") == 0 ? "loopback only"
+                                                       : "DC3_HTTP_HOST: NOT loopback only");
     return true;
 }
 
@@ -453,27 +456,29 @@ static JoypadAction HttpButtonAction(JoypadButton btn, Symbol controllerType) {
 }
 
 void HttpServer::DispatchInjectedButtons() {
-    unsigned int pressed = ConsumeHttpButtons();
-    if (!pressed && !mInjectedHeld)
+    int hold[InjectedPadHold::kBits] = {};
+    unsigned int pressed = ConsumeHttpButtons(hold);
+    if (!pressed && !mInjectedHold.held)
         return;
     JoypadData *pad = JoypadGetPadData(0);
     if (!pad)
         return;
+    unsigned int ups = 0, downs = 0;
+    mInjectedHold.Step(pressed, hold, &ups, &downs);
     for (int b = 0; b < kPad_NumButtons; b++) {
-        if (mInjectedHeld & (1u << b)) {
+        if (ups & (1u << b)) {
             JoypadButton btn = (JoypadButton)b;
             ButtonUpMsg msg(pad->mUser, btn, HttpButtonAction(btn, pad->mControllerType), 0);
             JoypadPushThroughMsg(msg);
         }
     }
     for (int b = 0; b < kPad_NumButtons; b++) {
-        if (pressed & (1u << b)) {
+        if (downs & (1u << b)) {
             JoypadButton btn = (JoypadButton)b;
             ButtonDownMsg msg(pad->mUser, btn, HttpButtonAction(btn, pad->mControllerType), 0);
             JoypadPushThroughMsg(msg);
         }
     }
-    mInjectedHeld = pressed;
 }
 
 void HttpServer::ProcessScreenshotsWithoutFrame() {
@@ -571,7 +576,7 @@ void HttpServer::NotifyFrame(const char* screenName, int frame) {
     PaceFrame();
 }
 
-unsigned int HttpServer::ConsumeHttpButtons() {
+unsigned int HttpServer::ConsumeHttpButtons(int *hold) {
     std::lock_guard<std::mutex> lk(mInputMutex);
 
     unsigned int buttons = mImmediateButtons;
@@ -582,6 +587,11 @@ unsigned int HttpServer::ConsumeHttpButtons() {
     while (it != mInputQueue.end()) {
         if (it->framesRemaining <= 0) {
             buttons |= it->buttonBit;
+            if (hold) {
+                for (int b = 0; b < InjectedPadHold::kBits; b++)
+                    if (it->buttonBit == (1u << b) && it->holdFrames > hold[b])
+                        hold[b] = it->holdFrames;
+            }
             it = mInputQueue.erase(it);
         } else {
             it->framesRemaining--;
@@ -1442,8 +1452,10 @@ void HttpServer::RegisterEndpoints() {
 
     // POST /api/input/sequence — queue a button sequence
     svr->Post("/api/input/sequence", [this](const httplib::Request& req, httplib::Response& res) {
-        // Parse JSON array: [{"button":"down","delay":15}, ...]
-        std::vector<std::pair<unsigned int, int>> events; // <buttonBit, delay>
+        // Parse JSON array: [{"button":"down","delay":15,"hold":2}, ...]
+        // delay: frames after the previous event; hold: frames the button
+        // stays down (default 1: released the next frame).
+        std::vector<InputEvent> events; // framesRemaining = the delay, for now
 
         size_t pos = 0;
         while (pos < req.body.size()) {
@@ -1471,6 +1483,14 @@ void HttpServer::RegisterEndpoints() {
                     delay = atoi(req.body.c_str() + dc + 1);
             }
 
+            int holdFrames = 1;
+            auto hp = req.body.find("\"hold\"", q2);
+            if (hp != std::string::npos && (objEnd == std::string::npos || hp < objEnd)) {
+                auto hc = req.body.find(':', hp + 6);
+                if (hc != std::string::npos)
+                    holdFrames = atoi(req.body.c_str() + hc + 1);
+            }
+
             int bit = ParseHttpButtonName(btnName.c_str());
             if (bit < 0) {
                 res.status = 400;
@@ -1478,7 +1498,7 @@ void HttpServer::RegisterEndpoints() {
                 return;
             }
 
-            events.push_back({1u << bit, delay});
+            events.push_back({1u << bit, delay, holdFrames < 1 ? 1 : holdFrames});
             pos = (objEnd != std::string::npos) ? objEnd + 1 : req.body.size();
         }
 
@@ -1492,9 +1512,9 @@ void HttpServer::RegisterEndpoints() {
         {
             std::lock_guard<std::mutex> lk(mInputMutex);
             int accumFrames = 0;
-            for (auto& [btnBit, delay] : events) {
-                accumFrames += delay;
-                mInputQueue.push_back({btnBit, accumFrames});
+            for (InputEvent &e : events) {
+                accumFrames += e.framesRemaining;
+                mInputQueue.push_back({e.buttonBit, accumFrames, e.holdFrames});
             }
         }
 

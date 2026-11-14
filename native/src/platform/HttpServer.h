@@ -4,6 +4,40 @@
 
 #pragma once
 
+// The injected pad's held buttons, one frame at a time.  A press fires on
+// one frame (ButtonDown) and is released (ButtonUp) after `hold` frames --
+// 1, the default, is the next frame.  A button pressed again while still
+// held is released and pressed again that frame.  Pure, so it can be tested
+// without a game (HttpInjectedHoldTest, test_pose_session.cpp); outside the
+// DC3_HTTP_SERVER guard for that reason.
+struct InjectedPadHold {
+    static const int kBits = 32;
+    unsigned int held = 0;
+    int left[kBits] = {};
+
+    // `pressed`: the buttons firing this frame; hold[b] frames each (<1 = 1).
+    // Sets *ups / *downs to the messages to send this frame (ups first).
+    void Step(unsigned int pressed, const int *hold, unsigned int *ups, unsigned int *downs) {
+        *ups = 0;
+        *downs = pressed;
+        for (int b = 0; b < kBits; b++) {
+            unsigned int bit = 1u << b;
+            if (!(held & bit))
+                continue;
+            if ((pressed & bit) || --left[b] <= 0) {
+                *ups |= bit;
+                held &= ~bit;
+            }
+        }
+        for (int b = 0; b < kBits; b++) {
+            if (pressed & (1u << b)) {
+                held |= 1u << b;
+                left[b] = hold && hold[b] > 1 ? hold[b] : 1;
+            }
+        }
+    }
+};
+
 #ifdef DC3_HTTP_SERVER
 
 #include <string>
@@ -78,8 +112,9 @@ public:
 
     // Phase 4: Get HTTP-injected button bits.  Drained once per frame by
     // DispatchInjectedButtons() (below), NOT by JoypadPoll: the engine's
-    // JoypadPoll is compiled without DC3_HTTP_SERVER.
-    unsigned int ConsumeHttpButtons();
+    // JoypadPoll is compiled without DC3_HTTP_SERVER.  `hold`, when given
+    // (InjectedPadHold::kBits ints), receives each fired button's hold.
+    unsigned int ConsumeHttpButtons(int *hold = nullptr);
 
     // Called from main thread each frame (from ProcessCommands): broadcast the
     // drained bits as pad-0 ButtonDownMsg / ButtonUpMsg, like a real press.
@@ -124,11 +159,12 @@ private:
     struct InputEvent {
         unsigned int buttonBit;
         int framesRemaining; // frames until this event fires
+        int holdFrames = 1;  // frames it stays down ("hold" in the sequence)
     };
     std::mutex mInputMutex;
     unsigned int mImmediateButtons = 0;     // buttons to inject this frame
     std::vector<InputEvent> mInputQueue;    // sequence events counting down
-    unsigned int mInjectedHeld = 0;         // pressed last frame; released this frame
+    InjectedPadHold mInjectedHold;          // what is down, and for how long
 
     // Phase 4: Screen/frame state for long-poll waits
     std::mutex mWaitMutex;

@@ -1266,6 +1266,7 @@ set(DC3_NATIVE_CORE_SOURCES
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/HttpServer.cpp>
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/PoseTarget_Native.cpp>
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/PosePerformer_Native.cpp>  # DC3_POSE_PERFORM
+    $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/PoseSession_Native.cpp>  # DC3_POSE_RECORD, session: replay (PLAN L-1)
     src/platform/DtaEvalSupport.cpp   # DTA eval state guard + result serializer (unit-tested)
     src/engine_stubs_generated.cpp
     src/StubTrace.cpp
@@ -2071,6 +2072,7 @@ if(BUILD_TESTS)
         tests/test_native_posesynth.cpp
         tests/test_pose_scoring.cpp
         tests/test_pose_level.cpp
+        tests/test_pose_session.cpp
         tests/test_native_twoplayer.cpp
         tests/test_native_pose_dropout.cpp
         tests/test_native_second_person.cpp
@@ -2402,6 +2404,14 @@ if(BUILD_TESTS)
         add_test(NAME PoseTracker.Python
             COMMAND ${MILO_PYTHON3_LINK} -B ${CMAKE_SOURCE_DIR}/../tests/test_pose_tracker.py)
         set_tests_properties(PoseTracker.Python PROPERTIES
+            LABELS PoseServer TIMEOUT 120 ENVIRONMENT "${MILO_TEST_ENV}")
+        # PlaytestKit.Python: the playtest kit's own tools (scripts/playtest/:
+        # pose-session cutting, the session summary, the player-box asset check,
+        # the kit driver's null-screen guard) on synthetic files
+        # (tests/test_playtest_kit.py; stdlib only, no game data, no GPU).
+        add_test(NAME PlaytestKit.Python
+            COMMAND ${MILO_PYTHON3_LINK} -B ${CMAKE_SOURCE_DIR}/../tests/test_playtest_kit.py)
+        set_tests_properties(PlaytestKit.Python PROPERTIES
             LABELS PoseServer TIMEOUT 120 ENVIRONMENT "${MILO_TEST_ENV}")
     endif()
 

@@ -201,6 +201,7 @@ TEST(NativeTreePaths, PoseServerFindsTheDefaultModel) {
     const char *oldPath = getenv("PATH");
     std::string path = stubDir + ":" + (oldPath ? oldPath : "/usr/bin:/bin");
     ScopedEnvVar envPath("PATH", path.c_str());
+    ScopedEnvVar envPy("DC3_POSE_PYTHON", stub.c_str()); // else the game prefers a venv
     ScopedEnvVar noSpawn("DC3_POSE_NO_SPAWN", nullptr);
     ScopedEnvVar perform("DC3_POSE_PERFORM", nullptr);
     ScopedEnvVar model("DC3_POSE_MODEL", nullptr);

@@ -308,7 +308,17 @@ curl -X POST localhost:9090/api/input/sequence -d '[
   {"button":"dpad_down","delay":15},
   {"button":"confirm","delay":30}
 ]'
+
+# Hold each press down for 2 frames instead of 1 (the playtest kit's driver
+# does, so no press is a one-frame blip)
+curl -X POST localhost:9090/api/input/sequence -d '[{"button":"confirm","delay":3,"hold":2}]'
 ```
+
+`hold` (frames, default 1) is how long a sequence press stays down: its
+`ButtonUpMsg` comes `hold` frames after its `ButtonDownMsg`; 1 is the next
+frame, the behaviour before `hold` existed. A button pressed again while
+still held is released and pressed again on that frame. The per-frame rule is
+`InjectedPadHold` (`HttpServer.h`), tested by `HttpInjectedHoldTest`.
 
 Button names: `confirm`/`a`, `cancel`/`b`, `start`, `select`/`back`/`option`, `up`/`dpad_up`, `down`/`dpad_down`, `left`/`dpad_left`, `right`/`dpad_right`, `l1`/`lb`, `r1`/`rb`, `l2`/`lt`, `r2`/`rt`, `x`, `y`, `l3`/`ls`, `r3`/`rs`.
 

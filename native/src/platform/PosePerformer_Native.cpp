@@ -1,6 +1,7 @@
 // PosePerformer_Native.cpp -- see PosePerformer_Native.h.
 #include "PosePerformer_Native.h"
 #include "Skeleton_Native.h"
+#include "PoseSession_Native.h"
 #include "gesture/StubCameraInput.h"
 #include "hamobj/MoveDir.h"
 #include "rndobj/Rnd.h"
@@ -56,7 +57,7 @@ namespace {
 
 using namespace Dc3PosePerformer;
 
-enum Mode { kNone, kChoreo, kWrong, kHalfTempo, kStill, kStand, kReplay };
+enum Mode { kNone, kChoreo, kWrong, kHalfTempo, kStill, kStand, kReplay, kSession };
 
 struct State {
     bool init = false;
@@ -164,7 +165,14 @@ void Init() {
         gState.mode = kStill;
     else if (!strcmp(m, "stand"))
         gState.mode = kStand;
-    else if (!strncmp(m, "replay:", 7)) {
+    else if (!strncmp(m, "session:", 8)) {
+        // A recorded session (PoseSession_Native.h): it publishes the frames
+        // itself, persons, ids and timestamps as recorded.
+        gState.mode = kSession;
+        Dc3PoseSessionReplayLoad(m + 8);
+        fprintf(stderr, "DC3 PERFORM: mode=%s\n", m);
+        return;
+    } else if (!strncmp(m, "replay:", 7)) {
         gState.mode = kReplay;
         LoadReplay(m + 7);
         const char *sync = getenv("DC3_POSE_PERFORM_REPLAY_SYNC");
@@ -250,6 +258,10 @@ void Dc3PosePerformerPump(NativeSkeletonProvider *provider) {
     Init();
     if (gState.mode == kNone)
         return;
+    if (gState.mode == kSession) {
+        Dc3PoseSessionReplayPump(provider);
+        return;
+    }
     double song = MoveDir::SongSeconds();
     FrameTick tick = FrameDue(song, gState.rateHz, gState.nextDue);
     if (tick == kNotDue)

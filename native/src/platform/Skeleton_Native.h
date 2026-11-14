@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 #include <thread>
+#include <vector>
 #include <mutex>
 // <atomic> not usable with clang + GCC 15 headers; use volatile bool instead
 // #include <atomic>
@@ -56,7 +57,10 @@ public:
     // The problem the server's exit says it had.  `waitStatus` is waitpid's
     // status word; `camera` (pose_server.py --camera: auto, an index, a path or
     // a /dev/v4l/by-id name) names the camera in the message.
-    static Problem DescribeServerExit(int waitStatus, const std::string &camera);
+    // `python` names the interpreter in the notices that are about it (no
+    // packages, cannot start).
+    static Problem DescribeServerExit(int waitStatus, const std::string &camera,
+                                      const std::string &python = "python3");
     static Problem DescribeServerExit(int waitStatus, int cameraIndex) {
         return DescribeServerExit(waitStatus, std::to_string(cameraIndex));
     }
@@ -83,6 +87,40 @@ public:
     // `camera` is passed to pose_server.py --camera as is: "auto" (the first
     // V4L2 video-capture device, re-resolved whenever the server reopens it),
     // an index, a /dev/videoN path or a /dev/v4l/by-id name.
+    //
+    // The pose server's command line, argv[0] first: the interpreter
+    // (ChoosePosePython), the script, --socket, --model, then --video FILE
+    // --loop when DC3_POSE_VIDEO is set (footage instead of the camera; the
+    // playtest kit's --video) or --camera CAMERA, --hfov (DC3_POSE_HFOV),
+    // --frames (DC3_CAMERA_FRAMES).  LaunchServer() runs it; DC3_POSE_SERVER
+    // replaces the script with a drop-in that takes the same arguments.
+    static std::vector<std::string> ServerCommand(const std::string &scriptPath,
+                                                  const std::string &socketPath,
+                                                  const std::string &modelPath,
+                                                  const std::string &camera);
+    static std::vector<std::string> ServerCommand(const std::string &scriptPath,
+                                                  const std::string &socketPath,
+                                                  const std::string &modelPath, int cameraIndex) {
+        return ServerCommand(scriptPath, socketPath, modelPath, std::to_string(cameraIndex));
+    }
+
+    // The Python the pose server runs under, and why it was chosen.  In order:
+    // DC3_POSE_PYTHON if set; the playtest venv
+    // ${DC3_POSE_VENV:-~/.local/share/dc3/pose-venv}/bin/python3 if it is
+    // there (scripts/playtest/bootstrap.sh --fix makes it); the checkout's
+    // .venv/bin/python3 (in a git worktree, the main checkout's) if it is
+    // there; else python3 from PATH.  `treeRoot` is the checkout (the
+    // directory holding native/); `home` is $HOME.  Before 2026-11-14 the game
+    // always ran bare python3, so a game started outside play.sh on a box
+    // whose packages live in the venv had no tracking (exit 6, cv2 missing:
+    // the GPD, main 9a53ff273).
+    struct PythonChoice {
+        std::string path;
+        std::string why;
+    };
+    static PythonChoice ChoosePosePython(const std::string &treeRoot, const char *home);
+    static PythonChoice ChoosePosePython(); // this process's tree and $HOME
+
     bool Start(const std::string &socketPath = "/tmp/dc3_pose.sock",
                const std::string &modelPath = DefaultModelPath(),
                const std::string &camera = "auto");
@@ -179,6 +217,11 @@ public:
     // slot changes occupants, or the incoming person inherits the previous
     // person's held joint positions.
     static void ResetJointHold(int skelIdx);
+    // Restart the sensor noise floor's per-slot frame counters (Skeleton_Native.cpp,
+    // SensorNoiseFloor), so the offsets that follow are those of a fresh
+    // process's first frames.  A session replay calls it when its song starts:
+    // the counters otherwise carry how many frames the menus happened to take.
+    static void ResetSensorNoiseFloor();
 
 private:
     void ReaderThread();
@@ -203,6 +246,7 @@ private:
     pid_t mServerPid = -1;
     bool mSpawned = false; // this provider launched the server (not DC3_POSE_NO_SPAWN)
     std::string mCamera = "auto";
+    std::string mPython = "python3"; // the interpreter LaunchServer chose (for notices)
     volatile bool mNoCamera = false; // the last packet carried FLAG_NO_CAMERA
     int mMaxRestarts = 3;
     int mRestartBackoffMs = 1000;
