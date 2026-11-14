@@ -136,10 +136,23 @@ TEST_F(MoggV0xETest, DecodeBoyfriendMogg) {
 // ============================================================================
 // DLC: a song mogg from the Dance Central 2 DLC megapack (also v0xE) decodes
 // with the same key path.  The package is game content and never committed
-// (scripts/dlc/import.sh puts it in orig-assets/dlc), so it skips when absent.
+// (scripts/dlc/import.sh puts it in orig-assets/dlc), so it skips when absent
+// -- and ONLY then.  Its own fixture opens no audio device: reaching IsReady()
+// is header parse + key derivation + decrypt, none of which plays a sample, so
+// the DC3_AUDIO_TESTS gate (device contention under ctest -j) has nothing to
+// guard here, and a box that has the package runs it in the default gate.
 // ============================================================================
 
-TEST_F(MoggV0xETest, DecodeDlcMilkshakeMogg) {
+class MoggDlcTest : public EngineTestFixture {
+protected:
+    void SetUp() override {
+        if (!StreamReceiver::sFactory)
+            StreamReceiver::sFactory = StreamReceiverNative::Create;
+        TheSynth->Grinder().Init(); // as MoggV0xETest: the v0xE key path's DTA funcs
+    }
+};
+
+TEST_F(MoggDlcTest, DecodeDlcMilkshakeMogg) {
     char exe[4096];
     ssize_t len = ReadExecutablePath(exe, sizeof(exe) - 1);
     ASSERT_GT(len, 0);

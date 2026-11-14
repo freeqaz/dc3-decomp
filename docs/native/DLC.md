@@ -61,7 +61,7 @@ The two halves meet at the drive name.
   - `FileQualifiedFilename` turns `cnt00000000:/songs/...` into `<host dir>/songs/...`, and `FileIsLocal` answers true for a mapped drive.
   - Every engine reader goes through these, including `AsyncFile`, `FileGetStat` and the FFmpeg movie and preview reader.
 - **Formats need no conversion.**
-  - Song audio is mogg v0xE, the same as the disc. It decrypts through the same key path: `MoggV0xETest.DecodeDlcMilkshakeMogg`, 2 channels at 44.1 kHz.
+  - Song audio is mogg v0xE, the same as the disc. It decrypts through the same key path: `MoggDlcTest.DecodeDlcMilkshakeMogg`, 2 channels at 44.1 kHz.
   - Milos are `.milo_xbox` and MIDI is `.mid`, both as on the disc.
   - The 256×256 `_prev.bik` previews open through FFmpeg like the disc's.
   - The disc carries `songs/updates/<song>/` files for DLC songs. The Milkshake run raised no "no associated update file" notify, so they are probably found. Nothing else checks this.
