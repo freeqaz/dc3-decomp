@@ -363,7 +363,9 @@ set(MILO_ENGINE_DECOMP_COMPAT_FLAGS
 # path there is a different file in every worktree, so no TU that uses the PCH
 # could ever be a ccache hit from another worktree (measured: the only
 # difference between two trees' hash inputs was that 2-byte-longer line).
-set(DC3_PCH_HEADER "<decomp_pch.h>")
+# $<ANGLE-R>, not '>': every use wraps this in $<$<COMPILE_LANGUAGE:CXX>:...>,
+# and a bare '>' would close that genex early (C TUs then got `#include ">"`).
+set(DC3_PCH_HEADER "<decomp_pch.h$<ANGLE-R>")
 set(MILO_ENGINE_DECOMP_PCH "${DC3_PCH_HEADER}")
 # GPU backend flavor: DC3's WgpuRnd : NgRnd + the rndobj-coupled gfx TUs. This is
 # the engine's default when a consumer names no backend, but set it explicitly
