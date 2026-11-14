@@ -41,6 +41,8 @@
 #include "hamobj/HamPlayerData.h"
 #include "hamobj/MoveDetector.h"
 #include "hamobj/MoveDir.h"
+#include "hamobj/ErrorNode.h"
+#include "hamobj/HamMove.h"
 #include "hamobj/PoseFatalities.h"
 #include "obj/Task.h"
 #include "utl/TimeConversion.h"
@@ -53,6 +55,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -340,4 +343,44 @@ std::string Dc3PoseTargetJson(float leadMs) {
     }
     out += "]}";
     return out;
+}
+
+// DC3_MOVE_WEIGHTS_LOG=1 (np-cutoff, PLAN H-90): once per move a song rates,
+// which error nodes its frames score and how much of the score each carries
+// -- DetectFrame::LimbPSNR's denominator share, node by node: a node counts
+// in a move frame when its type matches the frame's type mask, with weight
+// |NodeWeight(i, unmirrored)|.  Called from Game::SetHamMove's native block,
+// next to DC3_MOVE_RATING.  Answers "does this move score the feet?".
+void Dc3LogMoveWeights(const HamMove *move) {
+    static std::set<std::string> sSeen;
+    if (!move || !sSeen.insert(move->Name()).second)
+        return;
+    const FilterVersion *fv = move->FilterVer();
+    if (!fv || fv->mType != kFilterVersionHam2)
+        return;
+    const std::vector<MoveFrame> &frames = move->GetMoveFrames();
+    int n = fv->NumNodes();
+    double share[kMaxNumErrorNodes] = {0};
+    double total = 0.0;
+    for (const MoveFrame &mf : frames) {
+        for (int i = 0; i < n; i++) {
+            if (!(fv->mErrorNodes[i]->Type() & mf.TypeMask()))
+                continue;
+            const Vector3 &w = mf.NodeWeight(i, kMirroredNo);
+            double m = std::sqrt((double)w.x * w.x + (double)w.y * w.y + (double)w.z * w.z);
+            share[i] += m;
+            total += m;
+        }
+    }
+    std::string line = "DC3 MOVE_WEIGHTS move=";
+    line += move->Name();
+    char buf[96];
+    snprintf(buf, sizeof(buf), " frames=%d", (int)frames.size());
+    line += buf;
+    for (int i = 0; i < n; i++) {
+        snprintf(buf, sizeof(buf), " %s=%.4f", fv->mErrorNodes[i]->NodeName().Str(),
+                 total > 0.0 ? share[i] / total : 0.0);
+        line += buf;
+    }
+    MILO_LOG("%s\n", line.c_str());
 }

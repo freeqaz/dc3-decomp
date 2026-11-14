@@ -493,6 +493,12 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
                     // The image does the same; SetHamMove's own `currentBeat
                     // == 3` arm above shows it expected the lag.
                     // native_song_sweep.py counts these as known exceptions.
+                    // DC3_MOVE_WEIGHTS_LOG=1: which error nodes this move
+                    // scores (PoseTarget_Native.cpp, np-cutoff).
+                    if (Dc3EnvFlag("DC3_MOVE_WEIGHTS_LOG", false)) {
+                        extern void Dc3LogMoveWeights(const HamMove *);
+                        Dc3LogMoveWeights(current);
+                    }
                     if (Dc3EnvFlag("DC3_MOVE_RATING_LOG", false)) {
                         static Symbol ratingSym("rating");
                         static Symbol scoreSym("score");
