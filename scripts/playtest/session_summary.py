@@ -74,7 +74,8 @@ def parse_log(path):
             m = SCREEN_RE.search(line)
             if m:
                 screens.append((n, m.group(1)))
-                if m.group(1) in RESULT_SCREENS and cur is not None and cur["results_screen"] is None:
+                if (m.group(1) in RESULT_SCREENS or m.group(1).endswith("endgame_screen")) \
+                        and cur is not None and cur["results_screen"] is None:
                     cur["results_screen"] = m.group(1)
                 continue
             m = PERF_RE.search(line)

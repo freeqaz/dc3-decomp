@@ -249,7 +249,9 @@ class Soak:
             end = time.time() + song_timeout
             while time.time() < end and k.alive():
                 s = k.screen()
-                if s in end_screens:
+                # Each mode has its own: perform_, fitness_perform_,
+                # dancebattle_perform_, campaign_perform_endgame_screen ...
+                if s in end_screens or (isinstance(s, str) and s.endswith("endgame_screen")):
                     got = s
                     break
                 if s == "confirm_quit_screen" or (
