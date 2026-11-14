@@ -2059,6 +2059,7 @@ if(BUILD_TESTS)
         tests/test_particle_color.cpp
         tests/test_drawrect_color.cpp
         tests/test_retail_lighting.cpp
+        tests/test_retail_char_shading.cpp
         tests/test_dta_parser.cpp
         tests/test_movegraph.cpp
         tests/test_dta_flow.cpp
