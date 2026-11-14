@@ -3,6 +3,10 @@
 #include "platform/NativeNotice.h"
 #include "rndobj/Overlay.h"
 #include <imgui.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <strings.h>
 #include <map>
 #include <string>
 #include <vector>
@@ -130,15 +134,31 @@ struct OverlayLine {
 std::vector<OverlayLine> sOverlayLines;
 std::map<std::string, std::string> sOverlayLast; // overlay -> its text last frame
 
-bool RndOverlaysEnabled() {
-    static const bool on = Dc3EnvFlag("DC3_RND_OVERLAYS", false);
-    return on;
+DebugPanel::RndOverlaysMode RndOverlaysModeNow() {
+    static const DebugPanel::RndOverlaysMode mode =
+        DebugPanel::RndOverlaysModeFor(getenv("DC3_RND_OVERLAYS"));
+    return mode;
 }
+
+bool RndOverlaysEnabled() { return RndOverlaysModeNow() != DebugPanel::kRndOverlaysOff; }
 
 void CollectLine(void *, const char *overlay, const char *line) {
     sOverlayLines.push_back({overlay, line});
 }
 } // namespace
+
+// unset / empty / 0 / off / false / no -> off; `log` -> collected and logged
+// (`DC3 OVERLAY [<name>] <text>`), nothing drawn: scripts/play.sh's default,
+// so a player sees no debug-build notice over the picture while the session
+// log keeps every line; anything else (`1`) -> logged and drawn.
+DebugPanel::RndOverlaysMode DebugPanel::RndOverlaysModeFor(const char *v) {
+    if (!v || !*v) return kRndOverlaysOff;
+    if (strcasecmp(v, "log") == 0) return kRndOverlaysLog;
+    if (strcmp(v, "0") == 0 || strcasecmp(v, "off") == 0 || strcasecmp(v, "false") == 0
+        || strcasecmp(v, "no") == 0)
+        return kRndOverlaysOff;
+    return kRndOverlaysDraw;
+}
 
 void DebugPanel::PollRndOverlays() {
     if (!RndOverlaysEnabled()) return;
@@ -163,7 +183,13 @@ void DebugPanel::PollRndOverlays() {
 }
 
 void DebugPanel::DrawRndOverlays() {
-    if (!RndOverlaysEnabled() || sOverlayLines.empty()) return;
+    if (RndOverlaysModeNow() != kRndOverlaysDraw || sOverlayLines.empty()) return;
+    static bool sAnnounced = false; // one line, so a log (and a test) can tell log from draw
+    if (!sAnnounced) {
+        sAnnounced = true;
+        fprintf(stderr, "DC3 OVERLAY: drawn on screen (DC3_RND_OVERLAYS=log keeps them in "
+                        "the log only)\n");
+    }
     const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration
         | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize
         | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing
