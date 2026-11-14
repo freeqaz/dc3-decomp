@@ -15,7 +15,7 @@ Work items: [PLAN.md](PLAN.md) track P.
 |---|---|---|
 | Camera frame | `native/scripts/pose_server.py` (`cv2.VideoCapture`: 640×480 @ 30 fps, 1-frame driver buffer), a Python child spawned by `NativeSkeletonProvider::Start` in `native/src/platform/Skeleton_Native.cpp`. Packet timestamp = capture time (the device's `CAP_PROP_POS_MSEC` when it is on our monotonic clock, as V4L2's is; else when `read()` returned). | `DC3_POSE_CAMERA` (default `auto`; also an index, a `/dev/videoN` path or a `/dev/v4l/by-id` name — [camera selection](#which-camera-and-a-camera-that-goes-away)) |
 | 2D + 3D pose | `native/scripts/pose_mediapipe.py` `MediaPipeBackend`: BlazePose world landmarks (metres), absolute root by PnP, one-euro filter on root depth, centroid tracker. Emits DC3's 20 Kinect joints in camera-space metres. | `DC3_POSE_MODEL` (default `native/models/pose_landmarker_full.task` of the executable's tree, gitignored), `DC3_POSE_HFOV` |
-| Wire | Unix socket, protocol v2, layout 1 (20 DC3 joints). The header's u16 after the layout byte is `flags`; bit 0 `FLAG_UNLEVELLED` = "this camera does not know its gravity, estimate it" (`pose_server.py` always sets it); bit 1 `FLAG_NO_CAMERA` = "the camera is gone and the server is reopening it" (zero-person heartbeats every 0.1 s). Layout 0 = COCO, remapped by `MapCOCOToDC3`. | `DC3_POSE_SOCKET`, `DC3_POSE_NO_SPAWN=1` (connect to a server you started) |
+| Wire | Unix socket, protocol v2, layout 1 (20 DC3 joints). The header's u16 after the layout byte is `flags`; bit 0 `FLAG_UNLEVELLED` = "this camera does not know its gravity, estimate it" (`pose_server.py` always sets it); bit 1 `FLAG_NO_CAMERA` = "the camera is gone and the server is reopening it" (zero-person heartbeats every 0.1 s). Bit 2 `FLAG_LATENCY_DECLARED` = "score me at bits 8..15 × 5 ms" (`--video` declares 0; see [Who sets the latency](#who-sets-the-latency-np-latency-harness)). Layout 0 = COCO, remapped by `MapCOCOToDC3`. | `DC3_POSE_SOCKET`, `DC3_POSE_NO_SPAWN=1` (connect to a server you started) |
 | Socket → slots | `GestureMgr_Native.cpp`: `BuildSensorFrame` → `FillPersonSlots` / `AssignSlots` / `NativeAutoAssignPlayers`. `FillSkeletonData` holds the last good position of joints under 0.3 confidence. No provider → a jittered standing dummy (two in two-player modes, `DC3_DUMMY_PLAYERS`). Every valid person fills its own slot: two people on the socket or in one `dc3_pose_push` frame are two players. | `DC3_POSE` (`off`, `external`, …), `DC3_NATIVE_SCORING` (default on), `DC3_POSE_SELFTEST` |
 | Gravity (np-pose-tilt) | `PoseLevel_Native.cpp` `NativeSensorLevel`, called by `BuildSensorFrame`: for a camera that does not know its gravity (socket packets with header flag bit 0, web pushes, performer `replay:`) it estimates `vNormalToGravity` from the player's standing posture, then runs `SkeletonFrame::Create`'s own gravity step (`sUpVectorSmoother` → `mFloorNormal` → `NuiTransformMatrixLevel` on every joint; `mRawPositions` stays raw). A Kinect-like source (synthetic modes) is levelled by (0,1,0). [Camera tilt](#camera-tilt-np-pose-tilt-2026-11-13) | `DC3_POSE_LEVEL` (default `auto`; `0` off; degrees = fixed), `DC3_POSE_LEVEL_LOG` |
 | Scoring | Decompiled code: SkeletonUpdate → `Skeleton::Poll` → FilterQueue / MoveDir / async MoveDetectors → `move_passed` | `DC3_REAL_MOVE_PASSED` (default on) |
@@ -434,7 +434,9 @@ against the choreography at S − `latency_offset`. `latency_offset` is 100 ms i
 `config/scoring.dta`, tuned for the Kinect. `DC3_POSE_LATENCY_MS` replaces it with
 the player's own sensor latency, the same quantity in ms:
 
-- unset: the image's value
+- unset: the pose source's own declaration if it made one (a recorded file
+  declares 0, see [Who sets the latency](#who-sets-the-latency-np-latency-harness)),
+  else the image's value
 - outside 0–1000: ignored, with a warning
 - hook: one `HX_NATIVE` call in `MoveDir::LoadScoring`, still 100.0% `name_check`
 
@@ -452,8 +454,9 @@ That run did measure how much accuracy the knob needs: the score curve is
 flat to ~4% over ±50 ms around its peak. `DC3_POSE_LATENCY_LOG` now prints the
 capture → game part of the delay, and the live fake-camera grid (np-tracking)
 is in [Latency on the live path](#latency-on-the-live-path-l-4). That grid
-prefers 0, for reasons a real webcam does not share, so the default still
-stays unset.
+prefers 0, for reasons a real webcam does not share. So a webcam's default
+stays unset, and recorded footage now declares its own 0
+([Who sets the latency](#who-sets-the-latency-np-latency-harness)).
 
 ### Running the matrix
 
@@ -1071,9 +1074,89 @@ camera has only part of it:
 A real webcam adds the two missing terms, each typically tens of ms. That puts
 a live setup near the image's 100, and the original's 100 was tuned for a
 Kinect, whose own pipeline is of the same order. **Decision: the default stays
-unset (100) for a live webcam.** For the fake-camera harness, pass
-`DC3_POSE_LATENCY_MS=0`. Scores taken at the default on that harness (the
+unset (100) for a live webcam; recorded footage scores at 0.** Since
+`np-latency-harness` nobody has to pass `DC3_POSE_LATENCY_MS=0` for that: the
+source declares it (next section). Scores taken at 100 on recorded footage (the
 dogfood's live-path numbers) read about 30% low.
+
+### Who sets the latency (`np-latency-harness`)
+
+The source says what it is, and the engine believes it unless told otherwise.
+`pose_server.py` puts a declared latency in every packet header (flags bit 2,
+bits 8..15 = ms / 5). The engine applies it on the main thread when the first
+frame arrives, and again whenever it changes
+(`NativeSkeletonProvider::Poll` → `Dc3DeclareSourceLatencyMs`,
+`Skeleton_Native.cpp`). Precedence, highest first:
+
+| What | Latency | Engine log reason |
+|---|---|---|
+| `DC3_POSE_LATENCY_MS` set (0–1000) | that value, whatever the source says | `explicit` |
+| `pose_server.py --video` (and anything built on it: the fake camera, `footage_camera.py`, `play.sh --video`, `pose_scoring_gate.sh`'s video mode) | **0** | `declared` |
+| `pose_server.py --source-latency-ms N` (camera or file; e.g. a loopback camera fed from a file) | N | `declared` |
+| `pose_server.py --camera` (a webcam, what the game spawns) | 100, `scoring.dta` `latency_offset` | `default` |
+| `synthetic_kinect.py`, the in-process performer, an older server, the web page | 100 | `default` |
+
+The engine prints one line each time the value or the reason changes:
+
+```
+DC3 POSE LATENCY: scoring at 100 ms -- default, scoring.dta latency_offset (the source declared nothing, as a live camera does; DC3_POSE_LATENCY_MS overrides)
+DC3 POSE LATENCY: scoring at 0 ms -- declared by the pose source (pose_server.py: 0 for a recorded file, or --source-latency-ms; DC3_POSE_LATENCY_MS overrides)
+```
+
+A boot always prints the `default` line (LoadScoring runs before any pose
+frame); the `declared` line follows on the source's first frame. `pose_server.py`
+says on stderr what it declares (`Scoring latency: declaring 0 ms to the game`).
+
+Not covered:
+
+- **`synthetic_kinect.py --replay`.** The fixture is a different dance from
+  the song's, so it has no right latency to measure, and changing it would
+  move the gate's recorded replay/still numbers for no gain.
+- **`--perform`.** It reads the choreography at the scorer's own latency
+  (`/api/pose/target` `refSeconds`), so it is on time whatever the knob says.
+- **The web page.** It declares nothing. Its harness camera is a looping
+  mjpeg that is not synced to the song.
+
+Tests:
+
+- `SensorLatencyTest` pins the precedence, and a declaration that lands after
+  LoadScoring.
+- `PoseSocketReaderTest.ASourcesDeclaredLatencyReachesTheScorerAndAWebcamsDoesNot`
+  pins the wire path.
+- `tests/test_pose_server.py` `SourceLatencyTest` checks that every packet of a
+  `--video` run declares 0 and no camera packet declares anything.
+
+Each was sabotage-checked: four sabotages, each failing 1–3 tests.
+
+**Grid re-check with no override (2026-11-14). The box was not quiet, so this
+does not reproduce the 0.70.** I waited 29 min for the load to drop below 16, and
+it never did: load average 95–200, from other lanes' builds and engines plus
+`while True: pass` burners. All six songs logged both lines, `default` at boot and
+then `declared … 0 ms` during the intro, before song select, with nothing after it.
+`pose_server` printed `declaring 0 ms` six times. So every song was scored at 0
+with no env var. That part is MEASURED.
+
+The scores are not usable as a latency result. They are a measure of load:
+
+| run | pose frames / log window | median capture → game age | score / card, mean |
+|---|---|---|---|
+| explicit 0, earlier grid (quiet) | ~120 | 65–67 ms | **0.70** |
+| unset → declared 0, this run (load ~165) | ~30 | 182–258 ms | **0.04** |
+
+A same-load control, run side by side (macarena twice at once, plus one more
+engine; age about 148 ms in all three):
+
+| run | score / card |
+|---|---|
+| macarena, declared 0 | 0.33 |
+| macarena, explicit `DC3_POSE_LATENCY_MS=0` | 0.22 |
+| indaclub, explicit `DC3_POSE_LATENCY_MS=0` | 0.17 |
+
+Declared 0 scored no worse than explicit 0 under the same load, so the change
+does what the env var did. INFERRED: the gap between 0.33 and 0.22 is
+run-to-run spread, not an effect (one pair). On this harness, scoring falls steeply with
+the pose rate. Re-run the six-song grid (scratch `lat_grid5.sh`, no env) on a
+quiet box to get the number comparable with 0.70.
 
 **For the owner's session (L-5):** run with `DC3_POSE_LATENCY_LOG=1` and note
 the age. Play one song three times, at `DC3_POSE_LATENCY_MS` 50, 100 and 150,

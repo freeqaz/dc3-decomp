@@ -574,6 +574,100 @@ class CameraLossTest(unittest.TestCase):
         self.assertGreater(HeartbeatClock.heartbeats, 500)
 
 
+def serve_and_read(a, cap, n):
+    """Run the server on `cap` in a thread and return the first `n` headers."""
+    clock = FakeClock()
+    cap.clock = clock
+    backend = FakeBackend()
+    with tempfile.TemporaryDirectory() as d:
+        model = os.path.join(d, "m.task")
+        open(model, "w").close()
+        sock_path = os.path.join(d, "s.sock")
+        a.socket, a.model = sock_path, model
+
+        def serve():
+            try:
+                ps.run(a, cv2=FakeCv2(cap), make_backend=lambda _a: (backend, 20, 1),
+                       clock=clock, sleep=clock.sleep,
+                       devices=FakeDevices({"/dev/video0": (True, "Fake")}))
+            except ps.ServerExit:
+                pass
+
+        th = threading.Thread(target=serve, daemon=True)
+        th.start()
+        deadline = time.monotonic() + 10
+        while not os.path.exists(sock_path) and time.monotonic() < deadline:
+            time.sleep(0.005)
+        c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        c.connect(sock_path)
+        packets = read_packets(c, n)
+        # Keep reading until the server ends on its own (the capture runs out),
+        # so it never waits on accept() for a client that has gone.
+        c.settimeout(0.2)
+        while th.is_alive():
+            try:
+                if not c.recv(1 << 16):
+                    break
+            except socket.timeout:
+                pass
+        th.join(20)
+        c.close()
+    return packets
+
+
+def declared_ms(flags):
+    """The scoring latency a header's flags declare, or None."""
+    if not flags & ps.FLAG_LATENCY_DECLARED:
+        return None
+    return ((flags >> 8) & 0xFF) * ps.LATENCY_UNIT_MS
+
+
+class SourceLatencyTest(unittest.TestCase):
+    """A recorded file declares a 0 ms scoring latency to the game; a camera
+    declares nothing, so the game keeps scoring.dta's 100 ms (PLAN L-4;
+    Skeleton_Native.cpp "Sensor latency")."""
+
+    def test_a_recorded_file_declares_zero_and_a_camera_nothing(self):
+        self.assertEqual(ps.source_latency_ms(ps.parse_args(["--video", "x.mp4"])), 0)
+        self.assertIsNone(ps.source_latency_ms(ps.parse_args([])))
+        self.assertIsNone(ps.source_latency_ms(ps.parse_args(["--camera", "2"])))
+
+    def test_an_explicit_declaration_wins_for_either_source(self):
+        self.assertEqual(ps.source_latency_ms(ps.parse_args(["--source-latency-ms", "150"])), 150)
+        self.assertEqual(
+            ps.source_latency_ms(ps.parse_args(["--video", "x.mp4", "--source-latency-ms", "40"])), 40)
+        for bad in ("-5", "1001", "abc"):
+            with self.assertRaises(SystemExit):
+                ps.parse_args(["--source-latency-ms", bad])
+
+    def test_the_flags_word_carries_it_in_5ms_units(self):
+        self.assertEqual(ps.header_flags(None), ps.FLAG_UNLEVELLED)
+        self.assertEqual(declared_ms(ps.header_flags(None)), None)
+        self.assertEqual(declared_ms(ps.header_flags(0)), 0)
+        self.assertEqual(declared_ms(ps.header_flags(150)), 150)
+        self.assertEqual(declared_ms(ps.header_flags(1000)), 1000)
+        self.assertEqual(declared_ms(ps.header_flags(62)), 60)   # rounded to 5 ms
+        for ms in (None, 0, 150):
+            self.assertTrue(ps.header_flags(ms) & ps.FLAG_UNLEVELLED)
+        # Its own bit: not FLAG_NO_CAMERA's, and clear of the value byte.
+        bits = [ps.FLAG_UNLEVELLED, ps.FLAG_NO_CAMERA, ps.FLAG_LATENCY_DECLARED]
+        self.assertEqual(len(set(bits)), len(bits))
+        self.assertFalse(sum(bits) & 0xFF00)
+        self.assertFalse(ps.header_flags(1000) & ps.FLAG_NO_CAMERA)
+
+    def test_every_packet_of_a_video_run_declares_zero(self):
+        a = ps.parse_args(["--video", "clip.mp4"])
+        packets = serve_and_read(a, FakeCapture(FakeClock(), frames=30, real_delay=0.002), 10)
+        self.assertGreaterEqual(len(packets), 10)
+        self.assertEqual({declared_ms(p[-1]) for p in packets}, {0})
+
+    def test_no_packet_of_a_camera_run_declares_anything(self):
+        a = ps.parse_args([])
+        packets = serve_and_read(a, FakeCapture(FakeClock(), frames=30, real_delay=0.002), 10)
+        self.assertGreaterEqual(len(packets), 10)
+        self.assertEqual({declared_ms(p[-1]) for p in packets}, {None})
+
+
 def _have_cv2_numpy():
     try:
         import cv2  # noqa: F401

@@ -30,6 +30,14 @@ Protocol v2 (little-endian):
              for it again (see "Camera selection and loss" below): the packet
              carries no persons and no picture. The game shows a notice while
              it is set and another when it clears.
+  flags bit 2 (FLAG_LATENCY_DECLARED) = this source declares the scoring
+             latency the game should use, in bits 8..15 as a count of 5 ms.
+             --video declares 0 (RECORDED_SOURCE_LATENCY_MS); a camera
+             declares nothing, so the game keeps scoring.dta's 100 ms;
+             --source-latency-ms N declares N for either (a loopback camera
+             fed from a file is a recorded source). The game's
+             DC3_POSE_LATENCY_MS always wins over a declaration
+             (native/src/platform/Skeleton_Native.cpp, "Sensor latency").
 
   layout 0 = COCO-17, normalised [0,1] image coords, z unused. Not emitted by
              this server any more, but the C++ reader keeps the path for any
@@ -110,6 +118,13 @@ PROTOCOL_MAGIC = 0x44503302
 PROTOCOL_MAGIC_V3 = 0x44503303   # v2 + camera block (--frames)
 FLAG_UNLEVELLED = 1 << 0         # header flags: camera gravity unknown (see above)
 FLAG_NO_CAMERA = 1 << 1          # header flags: camera lost, reopening (see above)
+FLAG_LATENCY_DECLARED = 1 << 2   # header flags: bits 8..15 = scoring latency / 5 ms
+LATENCY_UNIT_MS = 5
+# A recorded file (--video) has no camera delay: frames are decoded, not
+# exposed, and the dancer on it is not reacting to the game's audio. Measured
+# on six songs through this server (docs/native/POSE_INPUT.md, PLAN L-4): 0
+# scored 0.70 of the original's card, the Kinect's 100 ms 0.49-0.52.
+RECORDED_SOURCE_LATENCY_MS = 0
 WIRE_RGB888 = 1
 WIRE_MASK_ORDINAL = 1
 MASK_THRESHOLD = 0.5
@@ -358,11 +373,30 @@ def camera_block(frame_bgr, masks, size, cv2, np):
     return np.ascontiguousarray(rgb).tobytes(), ordinal.tobytes(), w, h
 
 
+def header_flags(latency_ms=None):
+    """The v2/v3 header flags word: always FLAG_UNLEVELLED, plus a declared
+    scoring latency when `latency_ms` is not None (rounded to 5 ms, 0..1000)."""
+    flags = FLAG_UNLEVELLED
+    if latency_ms is not None:
+        units = int(round(max(0.0, min(1000.0, float(latency_ms))) / LATENCY_UNIT_MS))
+        flags |= FLAG_LATENCY_DECLARED | (units << 8)
+    return flags
+
+
+def source_latency_ms(args):
+    """What this run declares (None = nothing, the game's default stands)."""
+    if args.source_latency_ms is not None:
+        return args.source_latency_ms
+    if args.video is not None:
+        return RECORDED_SOURCE_LATENCY_MS
+    return None
+
+
 def pack_frame(frame_id, timestamp, frame_w, frame_h, num_landmarks, layout, persons,
                image=None, flags=FLAG_UNLEVELLED):
     """One length-prefixed packet (see module docstring): protocol v2, or v3
     when `image` is given -- (rgb_bytes, mask_bytes, w, h), or () for a v3
-    packet with no picture this frame."""
+    packet with no picture this frame. `flags`: header_flags()."""
     packet = struct.pack(
         "<IIIdHHBBH",
         PROTOCOL_MAGIC if image is None else PROTOCOL_MAGIC_V3,
@@ -487,10 +521,17 @@ def parse_args(argv=None):
                              "later. 0 (default) = num_poses 2 on every frame "
                              "(docs/native/POSE_INPUT.md#performance)")
     parser.add_argument("--show", action="store_true", help="Show debug visualization window")
+    parser.add_argument("--source-latency-ms", type=float, default=None, metavar="MS",
+                        help="Declare this source's scoring latency to the game (0..1000 ms). "
+                             "Default: 0 for --video (a recorded file has no camera delay), "
+                             "nothing for a camera (the game keeps its 100 ms). The game's "
+                             "DC3_POSE_LATENCY_MS overrides either.")
     parser.add_argument("--frames", default=None, metavar="WxH",
                         help="Also send the camera picture and a person mask at WxH "
                              "(protocol v3, the in-game player view; PLAN P-4)")
     args = parser.parse_args(argv)
+    if args.source_latency_ms is not None and not 0 <= args.source_latency_ms <= 1000:
+        parser.error("--source-latency-ms wants 0..1000")
     if args.frames:
         try:
             args.frames_size = parse_frames(args.frames)
@@ -563,6 +604,16 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
 
     # Set up Unix socket server. Bound BEFORE the model loads: the game is
     # blocked in Start() until it can connect, and loading takes ~1 s.
+    declared = source_latency_ms(args)
+    base_flags = header_flags(declared)   # every packet; FLAG_NO_CAMERA is added while lost
+    if declared is None:
+        print("Scoring latency: not declared (a live camera; the game keeps its default)",
+              file=sys.stderr)
+    else:
+        print(f"Scoring latency: declaring {declared:.0f} ms to the game "
+              f"({'--source-latency-ms' if args.source_latency_ms is not None else 'a recorded file'})",
+              file=sys.stderr)
+
     sock_path = args.socket
     if os.path.exists(sock_path):
         os.unlink(sock_path)
@@ -592,7 +643,7 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
         lost_since = None          # camera mode: the camera is gone since (clock)
         next_reopen = None         # ... and the next reopen attempt is due at
         reopen_tries = 0
-        flags = FLAG_UNLEVELLED
+        flags = base_flags
 
         while True:
             # Accept new connections
@@ -634,7 +685,7 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
                         print(f"CAMERA_BACK after {clock() - lost_since:.1f} s "
                               f"({reopen_tries} tries)", file=sys.stderr)
                         lost_since = None
-                        flags = FLAG_UNLEVELLED
+                        flags = base_flags
                         failing_since = None
                         continue
                 if lost_since is not None:
@@ -671,7 +722,7 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
                             lost_since = read_time
                             next_reopen = read_time + CAMERA_REOPEN_DELAYS_S[0]
                             reopen_tries = 0
-                            flags = FLAG_UNLEVELLED | FLAG_NO_CAMERA
+                            flags = base_flags | FLAG_NO_CAMERA
                             continue
                         sleep(0.01)
                         continue
