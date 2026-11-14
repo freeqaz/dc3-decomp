@@ -1,7 +1,9 @@
 // PLAN G-24: DC3's UI shades the way the Xbox 360 DxRnd shades it (engine
 // MaterialSetup's overlay-phase rules, opted into by dc3_render_hook.cpp).
 //
-//  - Gamma space (GameRenderHook::UiShadesInGammaSpace). DxRnd multiplies
+//  - Gamma space (the DC3 render shape's rndshape::kGammaSpaceShading; the
+//    GameRenderHook::UiShadesInGammaSpace that first carried it for the UI was
+//    retired in np-gfx-light round 3, once every DC3 draw shaded so). DxRnd multiplies
 //    stored texel and colour values into an A8R8G8B8 frame with no encode;
 //    the engine's dc3 shader sRGB-encoded the product, which lifted the move
 //    cards' deep purple (front buffer ~80,20,75) to a washed pink (~164,83,165).
@@ -14,7 +16,7 @@
 //    retail digits are opaque magenta. Native drew them half-transparent white.
 //
 // Sabotages tried (each fails at least one test here): HamRenderHook's
-// UiShadesInGammaSpace or UiUsesRetailMaterialTerms returning false; the
+// UiUsesRetailMaterialTerms returning false; kGammaSpaceShading false; the
 // engine's UiDrawTermsFor ignoring frameInOverlay (world draws would change);
 // MaterialShadesPrelit forcing text prelit regardless of the retail terms;
 // MaterialAlphaScale returning 1.
@@ -45,7 +47,6 @@ bool MaterialShadesPrelit(bool matPrelit, bool isTextMesh, bool isOverlayPass,
                           bool isMultiplyBlend, bool simpleRender,
                           bool retailMaterialTerms);
 float MaterialAlphaScale(bool intensify, bool retailMaterialTerms);
-bool MaterialShadesUnlit(bool matPrelit, bool matUseEnviron, bool retailMaterialTerms);
 
 TEST(NativeUiMaterialTerms, OverlayPhaseTakesRetailTerms) {
     UiDrawTerms ui = UiDrawTermsFor(true);
@@ -85,14 +86,10 @@ TEST(NativeUiMaterialTerms, PrelitAndAlphaRules) {
         << "standard.ps scales the texel's alpha by intensify too";
     EXPECT_FLOAT_EQ(MaterialAlphaScale(true, false), 1.0f);
     EXPECT_FLOAT_EQ(MaterialAlphaScale(false, true), 1.0f);
-
-    // use_environ 0 on a lit material: ambient 1, no lights (NgMat::SetupAmbient).
-    EXPECT_TRUE(MaterialShadesUnlit(false, false, true))
-        << "the move names (EagleLightHeavy, use_environ 0) go dark under "
-           "static_hud.env's black ambient without it";
-    EXPECT_FALSE(MaterialShadesUnlit(false, true, true)) << "the score font uses its environ";
-    EXPECT_FALSE(MaterialShadesUnlit(true, false, true)) << "prelit stays prelit";
-    EXPECT_FALSE(MaterialShadesUnlit(false, false, false)) << "world / no hook: unchanged";
+    // use_environ 0 on a lit material (ambient 1, no lights; the move names)
+    // is pinned through the builders below: MaterialShadesUnlit, which applied
+    // it under the UI terms only, was retired in np-gfx-light round 3 because
+    // the DC3 shape's MatUnlit applies the same rule to every draw.
 }
 
 // The asset facts the rules are for: the score font is lit and intensify, and
@@ -130,27 +127,6 @@ TEST_F(NativeUiMaterialAssetTest, ScoreFontIsLitIntensifyUnderScoreEnv) {
     EXPECT_LT(amb.green, 0.1f);
 }
 
-// The move names above the flashcards draw with EagleLightHeavy(10_00)2x.mat,
-// a lit material that does not use its environ, inside the HUD where
-// static_hud.env (ambient black, two point lights) is current. Retail shows
-// them white because use_environ 0 means ambient 1 and no lights; lit under
-// the environ they drew dark grey. Sabotage: MaterialShadesUnlit returning
-// false fails PrelitAndAlphaRules; this pins the asset fact it is for.
-TEST_F(NativeUiMaterialAssetTest, MoveNameFontIgnoresTheEnviron) {
-    const char *root = getenv("MILO_LIB");
-    if (!root || !root[0])
-        GTEST_SKIP() << "MILO_LIB not set";
-    std::string font = std::string(root)
-        + "/ui/resource/fonts/default/gen/eagle-light-heavy(13_90)s2x.milo_xbox";
-    ObjectDir *dir = DirLoader::LoadObjects(FilePath(font.c_str()), nullptr, nullptr);
-    ASSERT_NE(dir, nullptr) << font;
-    RndMat *mat = dir->Find<RndMat>("EagleLightHeavy(10_00)2x.mat", false);
-    ASSERT_NE(mat, nullptr);
-    EXPECT_FALSE(mat->Prelit());
-    EXPECT_FALSE(mat->GetUseEnviron());
-    EXPECT_TRUE(MaterialShadesUnlit(mat->Prelit(), mat->GetUseEnviron(), true));
-}
-
 // The black diamond on the fitness screens (G-24): MeshFilter's "microphone"
 // rule hid the letterbox mic tab (geo_mic*) but not its backing,
 // ribbon_blocker.mesh: an opaque (kBlendSrc) diamond parented to mic.grp that
@@ -183,7 +159,7 @@ TEST_F(NativeUiMaterialAssetTest, LetterboxMicTabBlockerFollowsTheTab) {
 
 // The rule tests above pin the helpers; these drive the real builders, so a
 // BuildMaterialParams / BuildPassMaterialParams that stops consulting the UI
-// terms (or stops calling MaterialShadesUnlit / MaterialShadesPrelit /
+// terms (or stops calling rndshape::MatUnlit / MaterialShadesPrelit /
 // MaterialAlphaScale) fails here even though the helpers still pass. The
 // three-argument overloads take the terms explicitly; the two-argument entry
 // points the draw path calls forward CurrentUiDrawTerms() to them.
@@ -192,7 +168,8 @@ TEST_F(NativeUiMaterialAssetTest, LetterboxMicTabBlockerFollowsTheTab) {
 //
 // Sabotages tried, each verified to fail a test here (engine d35269e): the
 // primary builder replacing its uiTerms argument with CurrentUiDrawTerms();
-// dropping the MaterialShadesUnlit term from `unlit` (primary, and pass);
+// dropping the MaterialShadesUnlit term from `unlit` (primary, and pass; that
+// helper is retired, MatUnlit now carries the rule);
 // passing retailMaterialTerms=false to MaterialShadesPrelit; not scaling
 // color[3] by MaterialAlphaScale (primary, and pass); CurrentUiDrawTerms()
 // returning the overlay terms unconditionally.
@@ -215,6 +192,31 @@ RndMat *MakeMat(bool prelit, bool useEnviron, bool intensify, float alpha) {
 const UiDrawTerms kRetail{true, true};
 const UiDrawTerms kEngineDefault{false, false};
 } // namespace
+
+// The move names above the flashcards draw with EagleLightHeavy(10_00)2x.mat,
+// a lit material that does not use its environ, inside the HUD where
+// static_hud.env (ambient black, two point lights) is current. Retail shows
+// them white because use_environ 0 means ambient 1 and no lights; lit under
+// the environ they drew dark grey. The rule is rndshape::MatUnlit (the DC3
+// shape, every draw); the builder must apply it in the UI phase and the world.
+// Sabotage (round 3): MatUnlit returning false for DC3 fails this test and
+// both builder tests.
+TEST_F(NativeUiMaterialAssetTest, MoveNameFontIgnoresTheEnviron) {
+    const char *root = getenv("MILO_LIB");
+    if (!root || !root[0])
+        GTEST_SKIP() << "MILO_LIB not set";
+    std::string font = std::string(root)
+        + "/ui/resource/fonts/default/gen/eagle-light-heavy(13_90)s2x.milo_xbox";
+    ObjectDir *dir = DirLoader::LoadObjects(FilePath(font.c_str()), nullptr, nullptr);
+    ASSERT_NE(dir, nullptr) << font;
+    RndMat *mat = dir->Find<RndMat>("EagleLightHeavy(10_00)2x.mat", false);
+    ASSERT_NE(mat, nullptr);
+    EXPECT_FALSE(mat->Prelit());
+    EXPECT_FALSE(mat->GetUseEnviron());
+    ASSERT_NE(gWgpuRnd, nullptr);
+    EXPECT_EQ(BuildMaterialParams(mat, true, kRetail).uniforms.unlit, 1.0f);
+    EXPECT_EQ(BuildMaterialParams(mat, true, kEngineDefault).uniforms.unlit, 1.0f);
+}
 
 class NativeUiMaterialBuilderTest : public EngineTestFixture {};
 
