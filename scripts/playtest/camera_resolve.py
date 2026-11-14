@@ -13,9 +13,7 @@ re-connect under another number on its own (measured on the GPD Pocket:
 fragile choice and auto is the default.
 
 The rule itself is pose_server.resolve_camera (native/scripts/pose_server.py);
-this module only imports it and turns its answer into plain words. Until that
-function exists in this tree (np-pose-camera) a minimal stand-in is used:
-an index is /dev/videoN, auto is the lowest-numbered node.
+this module only imports it and turns its answer into plain words.
 
 Standard library only (preflight.py runs it before any pose package exists).
 """
@@ -27,40 +25,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(REPO, "native", "scripts"))
 
-try:  # pose_server.py imports only the standard library at top level
-    import pose_server as _ps
-except Exception:  # noqa: BLE001 -- an unimportable server is reported by preflight
-    _ps = None
+import pose_server as _ps  # noqa: E402  (standard library only at top level)
 
 BY_ID = "/dev/v4l/by-id"
 
 
-class Devices:
-    """The box's V4L2 nodes (pose_server.V4L2Devices when present). Tests
-    substitute an object with the same methods."""
+class Devices(_ps.V4L2Devices):
+    """The box's V4L2 nodes: pose_server.V4L2Devices plus the card name of a
+    node that cannot be queried and the by-id links. Tests substitute an
+    object with the same methods."""
 
     by_id_dir = BY_ID
-
-    def __init__(self):
-        self._v4l2 = _ps.V4L2Devices() if _ps is not None and hasattr(_ps, "V4L2Devices") else None
-
-    def available(self):
-        return sys.platform.startswith("linux")
-
-    def nodes(self):
-        if self._v4l2 is not None:
-            return self._v4l2.nodes()
-        try:
-            names = os.listdir("/dev")
-        except OSError:
-            return []
-        nums = sorted(int(n[5:]) for n in names if n.startswith("video") and n[5:].isdigit())
-        return [f"/dev/video{n}" for n in nums]
-
-    def query(self, path):
-        if self._v4l2 is not None:
-            return self._v4l2.query(path)
-        return os.path.exists(path), self.name(path)
 
     def name(self, node):
         try:
@@ -68,12 +43,6 @@ class Devices:
                 return f.read().strip()
         except OSError:
             return "?"
-
-    def realpath(self, path):
-        return os.path.realpath(path)
-
-    def exists(self, path):
-        return os.path.exists(path)
 
     def by_id(self):
         """{by-id name: node it points to}."""
@@ -84,24 +53,6 @@ class Devices:
         except OSError:
             pass
         return out
-
-
-def _fallback_resolve(spec, devices, log):
-    """Stand-in for pose_server.resolve_camera in a tree that predates it."""
-    if spec in ("", "auto"):
-        nodes = devices.nodes()
-        if not nodes:
-            raise LookupError("no video-capture camera found (no /dev/video* nodes)")
-        return nodes[0], f"{nodes[0]} [auto]"
-    if spec.isdigit():
-        node = f"/dev/video{int(spec)}"
-        if not devices.exists(node):
-            raise LookupError(f"camera {spec} ({node}) is not present")
-        return node, f"{node} [camera {spec}]"
-    path = spec if spec.startswith("/") else os.path.join(devices.by_id_dir, spec)
-    if not devices.exists(path):
-        raise LookupError(f"camera {spec} is not present")
-    return devices.realpath(path), f"{path} [{spec}]"
 
 
 def resolve(spec="auto", devices=None):
@@ -122,11 +73,8 @@ def resolve(spec="auto", devices=None):
         out["by_id"] = devices.by_id() if hasattr(devices, "by_id") else {}
     notes = []
     try:
-        if _ps is not None and hasattr(_ps, "resolve_camera"):
-            src, desc = _ps.resolve_camera(spec, devices, log=notes.append)
-        else:
-            src, desc = _fallback_resolve(spec, devices, notes.append)
-    except Exception as e:  # noqa: BLE001 -- ServerExit / LookupError: nothing to open
+        src, desc = _ps.resolve_camera(spec, devices, log=notes.append)
+    except _ps.ServerExit as e:  # nothing to open
         out["error"] = str(e)
         return out
     out["node"], out["desc"] = src, desc

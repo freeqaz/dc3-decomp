@@ -24,6 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 import camera_resolve  # noqa: E402  (standard library only)
+import pose_python  # noqa: E402  (standard library only)
 
 MODEL_SHA256 = "4eaa5eb7a98365221087693fcc286334cf0858e2eb6e15b506aa4a7ecdcec4ad"
 PINNED = {"mediapipe": "1.0.0", "numpy": "2.2.6"}  # native/scripts/pose-requirements.txt
@@ -129,11 +130,19 @@ def check_audio(a):
 def check_python(a):
     if a.no_pose:
         return False
-    py = a.python
-    if not py or not os.path.exists(py):
-        add("FAIL", "pose packages", f"no Python for the pose tracker ({py or 'none found'})",
-            "run scripts/playtest/bootstrap.sh --fix (it makes the venv)")
+    # The interpreter the game will run the tracker under (pose_python.py is
+    # its order), unless --python names another.
+    if a.python:
+        py, why = a.python, "--python"
+    else:
+        py, why = pose_python.choose()
+    found = shutil.which(py) if os.sep not in py else (py if os.path.exists(py) else None)
+    a.python = found or py
+    if not found:
+        add("FAIL", "pose packages", f"no Python for the pose tracker ({py}: {why})",
+            "run scripts/playtest/bootstrap.sh --fix (it makes the venv the game looks for)")
         return False
+    py = a.python
     code = ("import json,sys\nout={}\n"
             "for m in ('mediapipe','cv2','numpy'):\n"
             "  try:\n    mod=__import__(m); out[m]=getattr(mod,'__version__','?')\n"
@@ -148,8 +157,10 @@ def check_python(a):
         return False
     bad = [m for m in ("mediapipe", "cv2", "numpy") if str(v.get(m, "")).startswith("MISSING")]
     if bad:
-        add("FAIL", "pose packages", f"{py} lacks {', '.join(bad)}",
-            "run scripts/playtest/bootstrap.sh --fix")
+        add("FAIL", "pose packages", f"{py} lacks {', '.join(bad)} - the game would run "
+            f"without pose tracking (it chose this Python: {why})",
+            "run scripts/playtest/bootstrap.sh --fix (it makes the venv the game looks for), "
+            "or point DC3_POSE_PYTHON at a Python that has them")
         return False
     off = [f"{m} {v[m]} (tested {want})" for m, want in PINNED.items() if v.get(m) != want]
     desc = f"python {v['python']}, mediapipe {v['mediapipe']}, opencv {v['cv2']}, numpy {v['numpy']}"
@@ -158,7 +169,7 @@ def check_python(a):
             "scripts/playtest/bootstrap.sh --fix rebuilds the venv from "
             "native/scripts/pose-requirements.txt")
     else:
-        add("OK", "pose packages", desc + f" ({py})")
+        add("OK", "pose packages", desc + f" ({py}: {why})")
     return True
 
 
@@ -271,7 +282,9 @@ def main(argv=None):
                    help="auto (the first video-capture device), an index, a path or a "
                         "/dev/v4l/by-id name, as pose_server.py --camera")
     g.add_argument("--video")
-    ap.add_argument("--python", default="")
+    ap.add_argument("--python", default="",
+                    help="check this interpreter instead of the one the game will choose "
+                         "(scripts/playtest/pose_python.py)")
     ap.add_argument("--data", default=os.environ.get("DC3_DATA") or os.path.join(REPO, "orig-assets"))
     ap.add_argument("--binary", default=os.path.join(REPO, "native", "build", "dc3-native"))
     ap.add_argument("--model", default=os.path.join(REPO, "native", "models", "pose_landmarker_full.task"))

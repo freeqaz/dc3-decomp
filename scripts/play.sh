@@ -92,19 +92,10 @@ BINARY="$REPO/native/build/dc3-native"
 DATA="${DC3_DATA:-$REPO/orig-assets}"
 MODEL="${DC3_POSE_MODEL:-$REPO/native/models/pose_landmarker_full.task}"
 
-# The tracker's Python: $DC3_POSE_PYTHON, the bootstrap's venv, the main
-# checkout's developer .venv, then whatever python3 is on PATH.
-pick_python() {
-    local c
-    for c in "${DC3_POSE_PYTHON:-}" "${DC3_POSE_VENV:-$HOME/.local/share/dc3/pose-venv}/bin/python3" \
-             "$REPO/.venv/bin/python3" "${MAIN_CHECKOUT:+$MAIN_CHECKOUT/.venv/bin/python3}"; do
-        [ -n "$c" ] && [ -x "$c" ] && "$c" -I -c 'import mediapipe, cv2' >/dev/null 2>&1 && { echo "$c"; return; }
-    done
-    command -v python3
-}
-POSE_PY="$(pick_python)"
-
-pre_args=(--python "$POSE_PY" --data "$DATA" --binary "$BINARY" --model "$MODEL")
+# The tracker's Python is the game's own choice (DC3_POSE_PYTHON if set, the
+# bootstrap's venv, the checkout's .venv, python3: pose_python.py); preflight
+# checks that same one.  A DC3_POSE_PYTHON set by the caller passes through.
+pre_args=(--data "$DATA" --binary "$BINARY" --model "$MODEL")
 [ -n "$VIDEO" ] && pre_args+=(--video "$VIDEO") || pre_args+=(--camera "$CAMERA")
 [ "$NO_POSE" = 1 ] || [ -n "$REPLAY" ] && pre_args+=(--no-pose)
 [ "$NO_PERSON" = 1 ] && pre_args+=(--no-person)
@@ -146,7 +137,6 @@ setdef DC3_SFX_PCM_DIR "$HOME_DIR/cache/sfx_pcm"   # decoded SFX, not into the g
 # The engine passes DC3_POSE_CAMERA to pose_server.py --camera as given;
 # unset is auto (the server re-resolves it on every open).
 if [ "$CAMERA" = auto ]; then unset DC3_POSE_CAMERA; else export DC3_POSE_CAMERA="$CAMERA"; fi
-export DC3_POSE_PYTHON="$POSE_PY"
 export DC3_POSE_MODEL="$MODEL"
 [ "$FAST_BOOT" = 1 ] && export DC3_FAST_BOOT=1
 if [ "$FULLSCREEN" = 1 ]; then

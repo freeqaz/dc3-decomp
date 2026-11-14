@@ -27,6 +27,13 @@ Stdlib unittest, no GPU, no camera, no game data: synthetic files only.
                      use auto) and never called "in use"; "another program is
                      using it" only with a holder; below 15 fps WARNs with the
                      light advice
+  pose_python.py     the game's interpreter order (the same cases as the C++
+                     PosePythonChoiceTest): DC3_POSE_PYTHON, the playtest venv
+                     (DC3_POSE_VENV replaces the default), the checkout's
+                     .venv, a worktree's main checkout, python3; fake
+                     interpreters print which one ran; preflight checks that
+                     interpreter and names bootstrap.sh --fix when it lacks
+                     the packages
 
 Registered as ctest PlaytestKit.Python (native/CMakeLists.txt).
 """
@@ -46,6 +53,7 @@ import asset_manifest  # noqa: E402
 import camera_resolve  # noqa: E402
 import preflight  # noqa: E402
 import kitdrive  # noqa: E402
+import pose_python  # noqa: E402
 import pose_session  # noqa: E402
 import session_summary  # noqa: E402
 
@@ -501,6 +509,85 @@ class CameraChoiceTest(unittest.TestCase):
         preflight.results.clear()
         rows = self.preflight_camera(probe=dict(ok, fps=15.0))
         self.assertFalse([r for r in rows if r[1] == "camera speed"], rows)
+
+
+class PosePythonTest(unittest.TestCase):
+    """Must agree with NativeSkeletonProvider::ChoosePosePython: these are the
+    cases of PosePythonChoiceTest (native/tests/test_pose_session.cpp)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = r = self._tmp.name
+        self.home, self.tree, self.main = f"{r}/home", f"{r}/tree", f"{r}/main"
+        for venv, name in ((f"{self.home}/.local/share/dc3/pose-venv", "home-venv"),
+                           (f"{r}/custom-venv", "custom-venv"),
+                           (f"{self.tree}/.venv", "tree-venv"),
+                           (f"{self.main}/.venv", "main-venv")):
+            os.makedirs(f"{venv}/bin")
+            with open(f"{venv}/bin/python3", "w") as f:
+                f.write(f"#!/bin/sh\necho {name}\n")
+            os.chmod(f"{venv}/bin/python3", 0o755)
+        with open(f"{self.tree}/.git", "w") as f:
+            f.write(f"gitdir: {self.main}/.git/worktrees/tree\n")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def ran(self, env=None, home=None):
+        import subprocess
+        path, _ = pose_python.choose(self.tree, self.home if home is None else home, env or {})
+        if path == "python3":
+            return "python3"
+        return subprocess.run([path], capture_output=True, text=True).stdout.strip()
+
+    def test_the_games_order(self):
+        custom = f"{self.root}/custom-venv"
+        self.assertEqual(self.ran({"DC3_POSE_PYTHON": f"{custom}/bin/python3"}), "custom-venv")
+        self.assertEqual(pose_python.choose(self.tree, self.home,
+                                            {"DC3_POSE_PYTHON": "x"})[1], "DC3_POSE_PYTHON")
+        self.assertEqual(self.ran(), "home-venv")
+        self.assertEqual(self.ran({"DC3_POSE_VENV": custom}), "custom-venv")
+        self.assertEqual(self.ran({"DC3_POSE_VENV": f"{self.root}/no-such-venv"}), "tree-venv")
+        os.unlink(f"{self.home}/.local/share/dc3/pose-venv/bin/python3")
+        self.assertEqual(self.ran(), "tree-venv")
+        os.unlink(f"{self.tree}/.venv/bin/python3")
+        self.assertEqual(self.ran(), "main-venv")
+        self.assertIn("worktree", pose_python.choose(self.tree, self.home, {})[1])
+        os.unlink(f"{self.main}/.venv/bin/python3")
+        path, why = pose_python.choose(self.tree, self.home, {})
+        self.assertEqual(path, "python3")
+        self.assertIn("PATH", why)
+        self.assertEqual(self.ran(home=""), "python3")  # no $HOME at all
+
+    def test_a_file_that_cannot_run_is_skipped(self):
+        os.chmod(f"{self.home}/.local/share/dc3/pose-venv/bin/python3", 0o644)
+        self.assertEqual(self.ran(), "tree-venv")
+
+    def test_preflight_checks_the_games_choice(self):
+        # The game's choice is a Python without the packages: preflight FAILs
+        # naming that interpreter and the fix, instead of finding a better one.
+        bare = f"{self.root}/bare/bin/python3"
+        os.makedirs(os.path.dirname(bare))
+        with open(bare, "w") as f:  # answers preflight's import probe
+            f.write("#!/bin/sh\necho '{\"mediapipe\": \"MISSING: no module\", "
+                    "\"cv2\": \"MISSING: no module\", \"numpy\": \"2.2.6\", "
+                    "\"python\": \"3.12.0\"}'\n")
+        os.chmod(bare, 0o755)
+        real = pose_python.choose
+        pose_python.choose = lambda *a, **k: (bare, "the playtest venv")
+        preflight.results.clear()
+        try:
+            a = argparse.Namespace(no_pose=False, python="")
+            self.assertFalse(preflight.check_python(a))
+        finally:
+            pose_python.choose = real
+        rows = [r for r in preflight.results if r["what"] == "pose packages"]
+        preflight.results.clear()
+        self.assertEqual(len(rows), 1, rows)
+        self.assertEqual(rows[0]["status"], "FAIL")
+        self.assertIn(bare, rows[0]["detail"])
+        self.assertIn("mediapipe", rows[0]["detail"])
+        self.assertIn("bootstrap.sh --fix", rows[0]["fix"])
 
 
 if __name__ == "__main__":
