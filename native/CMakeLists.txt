@@ -2105,6 +2105,7 @@ if(BUILD_TESTS)
         tests/test_native_twoplayer.cpp
         tests/test_native_pose_dropout.cpp
         tests/test_native_second_person.cpp
+        tests/test_native_pad_with_person.cpp  # H-20 pad presses with a person on the sensor
         tests/test_native_pose_socket.cpp
         tests/test_native_pose_spawner.cpp
         tests/test_native_tree_paths.cpp
