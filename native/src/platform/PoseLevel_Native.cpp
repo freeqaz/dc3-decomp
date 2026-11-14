@@ -191,6 +191,11 @@ void NativeLevelSensorFrameAt(SkeletonFrame &frame, const Vector3 &floorNormal) 
     LevelByFloorNormal(frame);
 }
 
+void NativeLevelSensorFrameBy(SkeletonFrame &frame, const Vector3 &floorNormal) {
+    frame.mFloorNormal = floorNormal;
+    LevelByFloorNormal(frame);
+}
+
 static void LevelByFloorNormal(SkeletonFrame &frame) {
     XMVECTOR grav;
     grav.x = frame.mFloorNormal.x;
