@@ -124,7 +124,7 @@ rules:
 The one property not reproduced is `cmpagent.slice`'s idle weight at the
 cgroup root. If that is ever needed, the owner can grant it, by letting
 `decomp-ops` submit to `cmpagent.slice` or with a `CPUWeight` drop-in for
-`user-960.slice` (PLAN H-30).
+`user-960.slice` (PLAN H-37).
 
 **Do not** on tnr:
 
@@ -239,7 +239,7 @@ never reaches its comparison: its flow times out first.
 skips, not exclusions, so a green subset there looks exactly like a green
 gate.
 
-Making this a supported mode needs two things, both tracked as PLAN H-29:
+Making this a supported mode needs two things, both tracked as PLAN H-36:
 
 - the rendered tests labelled in CMake, so `-LE` can select them instead of a
   hand-written name list that would rot;

@@ -208,7 +208,7 @@ echo "----"
 if [ "$MODE" = test ]; then
     echo "tnr: this was NOT the native gate. Under lavapipe the ~43 rendered engine runs" >&2
     echo "     overrun their caps, and an -E/-R subset exits 0 like a full pass." >&2
-    echo "     Gate on a GPU box (docs/native/REMOTE_BUILD.md#tests-on-tnr, PLAN H-29)." >&2
+    echo "     Gate on a GPU box (docs/native/REMOTE_BUILD.md#tests-on-tnr, PLAN H-36)." >&2
 fi
 
 if [ "$FETCH" = 1 ] && [ "$rc" = 0 ]; then
