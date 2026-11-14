@@ -20,6 +20,11 @@ HOW (one engine per song, `--jobs` at a time)
     difficulty Easy (the second row; Beginner schedules no detect frames, so
     the performer would have nothing to follow);
   * a fresh persistence root per song with every tutorial marked seen;
+  * the menus run paced at 60 fps, so the input script's 1800-frame waits are
+    30 s of wall time on a loaded box (unpaced, a DLC boot's main_screen wait
+    timed out at load ~200), and pacing is switched off (PUT /api/pace?fps=0)
+    once game_screen is up; an input-script TIMEOUT before game_screen ends
+    the run at once as a problem ("input route gave up");
   * `--venue V` sets the venue preference on multiuser_screen
     ({meta_performer set_venue_pref V}{meta_performer setup_venue});
     otherwise the profile has no preference and QuickplayPerformer::ChooseVenue
@@ -62,6 +67,12 @@ _GLOBAL_OPTIONS = bytes([
     0, 9, 4, 0, 0, 0, 0, 0, 0])
 
 SCREEN_RE = re.compile(r"DC3 UI: Screen '([^']+)' Enter")
+# The input script gave up on a wait or a highlight (Joypad_Native.cpp): every
+# press after it lands on the wrong screen, so the run cannot reach its song.
+ROUTE_TIMEOUT_RE = re.compile(r"DC3 Input: TIMEOUT .*")
+# Menus run paced so the input script's frame-counted waits (1800 frames) are
+# 30 s of wall time whatever the box load; play_song unpaces at game_screen.
+MENU_PACE_FPS = "60"
 RATING_RE = re.compile(r"DC3 MOVE_RATING p=(\d+) measure=(-?\d+) move=(\S+) rating=(\S+) "
                        r"lastfrac=(-?[\d.]+) score=(-?\d+) diff=(\S+)")
 MODAL_RE = re.compile(r"^MILO_(FAIL|NOTIFY|WARN|ASSERT)\w*: (.*)$")
@@ -119,6 +130,7 @@ class Engine:
         self._off = 0
         self._partial = b""
         self.screens = []  # (wall_s, screen)
+        self.route_timeouts = []  # "DC3 Input: TIMEOUT ..." lines
         self.lines_seen = 0
 
     # ---- http ----
@@ -131,6 +143,14 @@ class Engine:
             return json.loads(self.get(path, timeout))
         except Exception:
             return None
+
+    def put(self, path, timeout=10):
+        try:
+            req = urllib.request.Request(self.base + path, data=b"", method="PUT")
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read())
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": str(e)}
 
     def eval(self, expr, timeout=10):
         try:
@@ -178,9 +198,13 @@ class Engine:
         self._partial = lines.pop()
         now = time.time() - self.t0
         for raw in lines:
-            m = SCREEN_RE.search(raw.decode("utf-8", "replace"))
+            line = raw.decode("utf-8", "replace")
+            m = SCREEN_RE.search(line)
             if m:
                 self.screens.append((round(now, 1), m.group(1)))
+            m = ROUTE_TIMEOUT_RE.search(line)
+            if m:
+                self.route_timeouts.append(m.group(0).strip())
 
     def entered(self, name):
         return next((t for t, s in self.screens if s == name), None)
@@ -200,9 +224,11 @@ class Engine:
 
 # --unlock-all: frames the route waits on main_screen before its confirm, so the
 # sweep can evaluate {toggle_unlock_all} (the debug cheat, MetaPanel::
-# ToggleUnlockAll) before song select builds its list.  play_song runs unpaced.
+# ToggleUnlockAll) before song select builds its list.  Discovery and play_song's
+# menus run paced at 60 fps (300 frames = 5 s); the unpaced figure is for a
+# caller that turned pacing off (--env DC3_HTTP_PACE_FPS=0).
 UNLOCK_PAUSE_FRAMES = 3000
-UNLOCK_PAUSE_FRAMES_PACED = 300  # discovery runs at DC3_HTTP_PACE_FPS=60
+UNLOCK_PAUSE_FRAMES_PACED = 300
 
 
 def unlock_all(e):
@@ -366,15 +392,22 @@ def play_song(a, song, downs, port, venue, difficulty="easy"):
     if a.real_time:
         del extra["DC3_FAST_TIME"]
     extra["DC3_DLC"] = "0"  # only the roots named by --dlc (not the dev profile's <data>/dlc)
+    menu_paced = not a.real_time
+    if menu_paced:
+        extra["DC3_HTTP_PACE_FPS"] = MENU_PACE_FPS
     if a.dlc:
         extra["DC3_DLC_DIR"] = a.dlc
     for kv in a.env:
         k, _, v = kv.partition("=")
         extra[k] = v
+        if k == "DC3_HTTP_PACE_FPS":
+            menu_paced = False  # the caller's pace holds for the whole run
+    paced = extra.get("DC3_HTTP_PACE_FPS", "0") not in ("", "0")
+    main_pause = ((UNLOCK_PAUSE_FRAMES_PACED if paced else UNLOCK_PAUSE_FRAMES)
+                  if a.unlock_all else 30)
     e = Engine(a.binary, port, out,
                route_script(downs, DIFFICULTY_DOWNS[difficulty],
-                            None if a.by_position else song,
-                            UNLOCK_PAUSE_FRAMES if a.unlock_all else 30),
+                            None if a.by_position else song, main_pause),
                gpu=not a.no_gpu, extra_env=extra)
     res = {"song": song, "venue_asked": venue, "difficulty_asked": difficulty,
            "downs": downs, "port": port,
@@ -412,9 +445,14 @@ def play_song(a, song, downs, port, venue, difficulty="easy"):
             if "loading_screen" in names and "title_screen" in names[names.index("loading_screen"):]:
                 res["bounced_to_title"] = True
                 break
+            if e.route_timeouts and "game_screen" not in names:
+                res["route_timeout"] = e.route_timeouts[0]
+                break
             if "game_screen" in names:
                 if game_t is None:
                     game_t = time.time()
+                    if menu_paced:  # song time is 1/120 s per frame: run it unpaced
+                        res["unpaced"] = (e.put("/pace?fps=0") or {}).get("ok")
                     v = e.eval("{gamedata get venue}")
                     res["venue"] = v.get("data", {}).get("value")
                 tel = (e.jget("/telemetry") or {}).get("data", {})
@@ -511,6 +549,8 @@ def run_problems(a, r):
         p.append("bounced to title")
     if r["hang"]:
         p.append("hang: " + r["hang"])
+    if r.get("route_timeout"):
+        p.append("input route gave up: " + r["route_timeout"])
     if r.get("signal_line"):
         p.append("signal: " + r["signal_line"])
     if r.get("alive_at_stop") is False and r.get("exit_code") not in (0, None):
@@ -568,7 +608,7 @@ def summarise(a, results):
             "results": [{k: r.get(k) for k in (
                 "song", "difficulty_asked", "venue", "gameplay", "results", "ratings",
                 "final_score", "card", "modal_kinds", "load_s", "wall_s", "peak_rss_mb",
-                "exit_code", "players_at_difficulty", "problems")} for r in rows],
+                "exit_code", "players_at_difficulty", "unpaced", "route_timeout", "problems")} for r in rows],
         }, f, indent=1)
     if shutil.which("montage"):
         for kind in ("gameplay", "results"):
