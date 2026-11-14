@@ -180,6 +180,11 @@ class Cap:
             return True, self.first.copy()
         t = (time.time() - w0 + self.pre) if w0 is not None else None
         want = int(t * self.fps) if t is not None else self.idx + 1
+        if want < 0:
+            # Before the clip's first frame (a count-in longer than the
+            # pre-roll: Dance Battle starts at -10.3 s): the standing frame.
+            # Reopening here, as below, reopened the file on every read.
+            return True, self.first.copy()
         if want < self.idx - 1:
             self.open(*self.clip)
         while self.idx < want and not self.eof:
