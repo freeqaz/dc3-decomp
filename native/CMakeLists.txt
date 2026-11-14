@@ -2062,6 +2062,7 @@ if(BUILD_TESTS)
         tests/test_rndcam_projection.cpp
         tests/test_particle_color.cpp
         tests/test_drawrect_color.cpp
+        tests/test_flare_point_test.cpp
         tests/test_retail_lighting.cpp
         tests/test_retail_char_shading.cpp
         tests/test_proj_shadow_caster_pass.cpp
@@ -2164,6 +2165,11 @@ if(BUILD_TESTS)
             tests/test_pose_scoring.cpp
         APPEND PROPERTY COMPILE_DEFINITIONS
             "DC3_DECOMP_SRC_DIR=\"${CMAKE_SOURCE_DIR}/../src\"")
+    # The engine's source tree, for the post chain's no-direct-CreateBindGroup
+    # guard (PLAN H-66). Per file, for the same ccache reason.
+    set_property(SOURCE tests/test_dc3_retail_post.cpp
+        APPEND PROPERTY COMPILE_DEFINITIONS
+            "MILO_ENGINE_SRC_DIR=\"${MILO_ENGINE_PATH}/src\"")
     target_include_directories(milo-tests PRIVATE
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/../src

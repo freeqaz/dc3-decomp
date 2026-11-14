@@ -224,3 +224,46 @@ TEST_F(PostProcNoiseTest, AwesomeNoiseIsTheImagesStationaryTextureOverlay) {
     EXPECT_EQ(outside, 0) << "noise is not the image's texture overlay";
     EXPECT_EQ(moved, 0) << "stationary noise changed between frames";
 }
+
+// The post chain uploads its own noise map. A noise texture is bound by no
+// material, so nothing else ever presyncs it: before np-gfx round 4 the test
+// above did that itself and passed while the game ran every "awesome" frame
+// with no noise at all (GetGpuTexView answers only for a resident texture;
+// Xenia's peak frame read 50.5 luma vs native 35.4, all of it this overlay).
+// Here the map is a fresh copy of noise_mono.tex that has never been on the
+// GPU, and the pass must still apply it. Sabotage: dropping the PresyncBitmap
+// from PostProcPass::NoiseConstants leaves the dark half unchanged (o == s).
+TEST_F(PostProcNoiseTest, ThePostChainUploadsANoiseMapNothingElseBinds) {
+    ObjectDir *dir = LoadCameraDir();
+    if (!dir) GTEST_SKIP() << "world/shared/camera.milo not loadable";
+    RndPostProc *pp = dir->Find<RndPostProc>("dci_performance_awesome.pp", false);
+    ASSERT_NE(pp, nullptr);
+    RndTex *authored = pp->GetNoiseMap();
+    ASSERT_NE(authored, nullptr);
+    RndTex *fresh = Hmx::Object::New<RndTex>();
+    fresh->Copy(authored, Hmx::Object::kCopyDeep);
+    ASSERT_GT(fresh->Width(), 0) << "the copy carries the bitmap";
+    ASSERT_FALSE(GetGpuTexView(fresh)) << "precondition: the copy is not resident yet";
+
+    RndPostProc *prev = RndPostProc::Current();
+    pp->Select();
+    PostProcPass pass;
+    pass.Init(gWgpuRnd->Gpu());
+    pp->SetProperty("noise_map", DataNode(fresh));
+    pp->SetProperty("noise_intensity", DataNode(0.0f));
+    Readback base = Run(pass);
+    pp->SetProperty("noise_intensity", DataNode(1.0f));
+    Readback noisy = Run(pass);
+    pass.Terminate();
+    pp->SetProperty("noise_map", DataNode(authored));
+    if (prev) prev->Select(); else pp->Unselect();
+
+    EXPECT_TRUE(GetGpuTexView(fresh)) << "the pass did not upload the noise map";
+    // Dark half, green: 2 n s with n = t^2, t in the texture's range.
+    const float s = base.At(kW / 4, kH / 2, 1), o = noisy.At(kW / 4, kH / 2, 1);
+    printf("PostProcNoise (fresh map): dark %.3f -> %.3f\n", s, o);
+    EXPECT_GE(o, Overlay(s, kTexLo[1]) - 2.0f / 255.0f) << "noise not applied";
+    EXPECT_LE(o, Overlay(s, kTexHi[1]) + 2.0f / 255.0f);
+    EXPECT_GT(o, s * 1.2f) << "the overlay brightens the darks ~1.36x";
+    delete fresh;
+}
