@@ -1328,16 +1328,20 @@ TEST_F(LargestSongFlowTest, OmgPreloadsAndReachesGameplay) {
 
 // DLC: Milkshake from the Dance Central 2 DLC megapack, mounted from a package
 // directory (scripts/dlc/import.sh) through DC3_DLC_DIR.  It is selected,
-// preloaded from the package's cntNNNNNNNN: drive, and played.  The package
-// is game content and is never committed, so on a machine without it the
-// test SKIPS rather than fails.  The crash this guards: a song milo's
-// `../../world/shared/director.milo` subdir must resolve to the disc's
-// director (world_objects.dta `change_subdir`, which keys on a drive in the
-// path) -- resolved inside the package it fails to load, song.anim's keys
-// lose their HamDirector target, and game_screen dies in
+// preloaded from the package's cntNNNNNNNN: drive, and played.  The crash this
+// guards: a song milo's `../../world/shared/director.milo` subdir must resolve
+// to the disc's director (world_objects.dta `change_subdir`, which keys on a
+// drive in the path) -- resolved inside the package it fails to load,
+// song.anim's keys lose their HamDirector target, and game_screen dies in
 // HamDirector::SetupRoutineBuilderAnims.
-// DC3_TEST_DLC_DIR overrides the root (pointing it at an empty dir exercises
-// the skip).
+//
+// The package is game content and never committed, so these tests exist only
+// in a build whose configure FOUND it: the DC3_DLC_TESTS coverage gate
+// (native/CMakeLists.txt) compiles them in and hands the package root over as
+// DC3_TEST_DLC_DIR.  A box without the package does not register them at all,
+// so its skip count is the same as a box with it.  Registered but absent is a
+// stale configure, and FAILS (TestGates catches the other direction).
+#if DC3_DLC_TESTS
 static std::string GetDlcDir() {
     const char *env = getenv("DC3_TEST_DLC_DIR");
     if (env && *env) return env;
@@ -1386,9 +1390,10 @@ protected:
         sRanWarm = true;
     }
     void SetUp() override {
-        if (getenv("DC3_DTA_FLOW_TESTS") && !HavePackage())
-            GTEST_SKIP() << "DLC package absent: " << GetDlcDir() << "/" << kMilkshakePackage
-                         << " (import it with scripts/dlc/import.sh <package>)";
+        ASSERT_TRUE(HavePackage())
+            << "DC3_DLC_TESTS is compiled in but the package is gone: " << GetDlcDir() << "/"
+            << kMilkshakePackage << " -- reconfigure the build (the gate is decided at "
+            << "configure time), or re-import it with scripts/dlc/import.sh <package>";
         CheckRan(sResult, sRanEngine);
     }
     void TearDown() override {
@@ -1462,6 +1467,7 @@ TEST_F(DlcSongFlowTest, MilkshakePlaysAgainFromTheSongCache) {
     EXPECT_NE(out.find("gameStage=playing"), std::string::npos);
     EXPECT_EQ(sWarm.signal, 0) << "Engine crashed with signal " << sWarm.signal;
 }
+#endif // DC3_DLC_TESTS
 
 // PLAN H-11: the loading screen plays its loading music.  The image finds the
 // era's .mid only in the persistent file cache App::App builds at boot

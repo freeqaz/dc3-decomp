@@ -136,12 +136,15 @@ TEST_F(MoggV0xETest, DecodeBoyfriendMogg) {
 // ============================================================================
 // DLC: a song mogg from the Dance Central 2 DLC megapack (also v0xE) decodes
 // with the same key path.  The package is game content and never committed
-// (scripts/dlc/import.sh puts it in orig-assets/dlc), so it skips when absent
-// -- and ONLY then.  Its own fixture opens no audio device: reaching IsReady()
-// is header parse + key derivation + decrypt, none of which plays a sample, so
-// the DC3_AUDIO_TESTS gate (device contention under ctest -j) has nothing to
-// guard here, and a box that has the package runs it in the default gate.
+// (scripts/dlc/import.sh puts it in orig-assets/dlc), so the test exists only
+// in a build whose configure found it (the DC3_DLC_TESTS gate, which also sets
+// DC3_TEST_DLC_DIR); registered but absent fails as a stale configure.  Its own
+// fixture opens no audio device: reaching IsReady() is header parse + key
+// derivation + decrypt, none of which plays a sample, so the DC3_AUDIO_TESTS
+// gate (device contention under ctest -j) has nothing to guard here.
 // ============================================================================
+
+#if DC3_DLC_TESTS
 
 class MoggDlcTest : public EngineTestFixture {
 protected:
@@ -153,16 +156,21 @@ protected:
 };
 
 TEST_F(MoggDlcTest, DecodeDlcMilkshakeMogg) {
-    char exe[4096];
-    ssize_t len = ReadExecutablePath(exe, sizeof(exe) - 1);
-    ASSERT_GT(len, 0);
-    exe[len] = '\0';
-    std::string dir(exe);
-    dir = dir.substr(0, dir.rfind('/'));
-    std::string path =
-        dir + "/../../orig-assets/dlc/dancecentral2dlcmegapack/songs/milkshake/milkshake.mogg";
+    std::string root;
+    if (const char *env = getenv("DC3_TEST_DLC_DIR"); env && *env) {
+        root = env;
+    } else {
+        char exe[4096];
+        ssize_t len = ReadExecutablePath(exe, sizeof(exe) - 1);
+        ASSERT_GT(len, 0);
+        exe[len] = '\0';
+        root = std::string(exe);
+        root = root.substr(0, root.rfind('/')) + "/../../orig-assets/dlc";
+    }
+    std::string path = root + "/dancecentral2dlcmegapack/songs/milkshake/milkshake.mogg";
     FILE *f = fopen(path.c_str(), "rb");
-    if (!f) GTEST_SKIP() << "DLC package absent: " << path;
+    ASSERT_NE(f, nullptr) << "DC3_DLC_TESTS is compiled in but the package is gone: " << path
+                          << " -- reconfigure the build, or re-import the package";
     std::vector<unsigned char> buffer;
     unsigned char chunk[65536];
     size_t n;
@@ -189,6 +197,7 @@ TEST_F(MoggDlcTest, DecodeDlcMilkshakeMogg) {
     EXPECT_GT(stream.GetNumChannels(), 0);
     EXPECT_EQ((int)stream.GetSampleRate(), 44100);
 }
+#endif // DC3_DLC_TESTS
 
 // ============================================================================
 // Test 3: Compare v0xB (working) and v0xE (failing) side by side

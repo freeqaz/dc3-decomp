@@ -488,7 +488,7 @@ Read by `milo-tests`, not by `dc3-native`. See [native/TESTING.md](../native/TES
 
 | Variable | Effect |
 |----------|--------|
-| `MILO_LIB`, `DC3_DTA_FLOW_TESTS`, `DC3_GAMEPLAY_TESTS`, `DC3_AUDIO_TESTS`, `MILO_LONG_TEST` | Test gates |
+| `MILO_LIB`, `DC3_DTA_FLOW_TESTS`, `DC3_DLC_TESTS`, `DC3_GAMEPLAY_TESTS`, `DC3_AUDIO_TESTS`, `MILO_LONG_TEST` | Test gates (`DC3_DLC_TESTS` decides registration, not skipping: see `docs/native/DLC.md`) |
 | `MILO_TEST_BIK`, `MILO_DIAG_FILE`, `MILO_DIAG_OBJECT`, `MILO_POSE_GOLDEN_DIR` | Fixture overrides |
 | `MILO_BULK_CATEGORY`, `MILO_BULK_LIMIT`, `MILO_BULK_ALL` | `BulkLoad` sweep scope |
 | `MILO_TEST_ALLOW_STALE_BUILD` | Skip the `TestGates.BuildMatchesSources` currency check |

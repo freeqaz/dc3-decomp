@@ -76,8 +76,11 @@ The two halves meet at the drive name.
 
 ## Evidence
 
-- **Tests.** `DlcSongFlowTest.MilkshakeMountsAndReachesGameplay` and `.MilkshakePlaysAgainFromTheSongCache` are in `native/tests/test_dta_flow.cpp`. They need `DC3_DTA_FLOW_TESTS`, and they **skip** when `orig-assets/dlc/dancecentral2dlcmegapack` is absent.
-  - `DC3_TEST_DLC_DIR` points them at another root.
+- **Tests.** `DlcSongFlowTest.MilkshakeMountsAndReachesGameplay` and `.MilkshakePlaysAgainFromTheSongCache` (`native/tests/test_dta_flow.cpp`) and `MoggDlcTest.DecodeDlcMilkshakeMogg` (`test_mogg_v0xe.cpp`) sit behind the **`DC3_DLC_TESTS`** coverage gate.
+  - CMake turns it on only when it finds `<DC3_DLC_TEST_DIR>/dancecentral2dlcmegapack/songs/milkshake/milkshake.mogg` (default root `orig-assets/dlc`) and the game assets. Then it compiles the three tests in and passes the root to them as `DC3_TEST_DLC_DIR`.
+  - Without the package the tests are **not registered**. A box without DLC (CI, the GPD) therefore has the same skip count as one with it, and nobody needs to touch `skip_budget.txt`.
+  - The gate is decided at configure time. After importing, reconfigure (`cmake native/build`); `TestGates.GateDecisionsMatchTheSourceRule` fails until you do. Registered-but-absent (package deleted after configure) fails the tests, naming the reconfigure.
+  - To check the absent case on a box that has it: `cmake -DDC3_DLC_TEST_DIR=/some/empty/dir native/build`.
   - The test mounts a one-package root, so other imported packs do not move Milkshake in the list.
 - **Input flow.** `scripts/dc3-input-flows/milkshake.txt`: Milkshake is data index 45, 43 downs from the top.
 - **Full song.** Headless, `DC3_POSE=external DC3_POSE_PERFORM=choreo DC3_FAST_TIME=1`, beginner difficulty:
