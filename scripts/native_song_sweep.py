@@ -86,6 +86,14 @@ RATING_RE = re.compile(r"DC3 MOVE_RATING p=(\d+) measure=(-?\d+) move=(\S+) rati
 # MoveAsyncDetector::MoveRatingFrac all 100% matched); DC3_FAST_TIME's fixed
 # 1/120 s step reproduces it deterministically where a real clock lands on a
 # bar line only by chance.  Counted, and kept out of the non-Perfect count.
+#
+# Its follow-on: when the SAME move is rated again the next measure, that
+# rating is not Perfect either (MEASURED: yeah 56 -> 57 The_Bump 0.1856 on
+# Easy/Medium/Expert, whatislove Expert 58 -> 59 Catch_It 0.3335, Medium
+# No_Worries 0.8082, chingaling Expert 52 -> 53 Kriss_Kross 0.1372), and on the
+# real clock both measures are Perfect (yeah Easy 47/0/0/0, chingaling Medium
+# and Expert 61/0/0/0).  INFERRED: the same late refresh, carried by the move's
+# one detector into its second measure.  Counted separately ("follow_on").
 BAR_LINE_LAG_BEAT = 3
 MODAL_RE = re.compile(r"^MILO_(FAIL|NOTIFY|WARN|ASSERT)\w*: (.*)$")
 FILE_RE = re.compile(r"(could not (open|find|load|cache)|couldn't (open|find|load)|"
@@ -324,7 +332,8 @@ def analyse_log(path):
     ratings = {}
     # ratings taken in the bar-line lag (BAR_LINE_LAG_BEAT): all, the
     # non-Perfect ones (the known exceptions), and which they were
-    lag = {"rated": 0, "not_perfect": 0, "moves": []}
+    lag = {"rated": 0, "not_perfect": 0, "follow_on": 0, "moves": []}
+    prev_lag = None  # (measure, move) of the last rating, if a non-Perfect lag one
     diffs = {}
     kinds = {}
     score = None
@@ -340,11 +349,18 @@ def analyse_log(path):
             if m and m.group(1) == "0":
                 moves += 1
                 ratings[m.group(4)] = ratings.get(m.group(4), 0) + 1
+                here = (int(m.group(2)), m.group(3))
+                follows = prev_lag is not None and here == (prev_lag[0] + 1, prev_lag[1])
+                prev_lag = None
                 if m.group(8) is not None and int(m.group(8)) == BAR_LINE_LAG_BEAT:
                     lag["rated"] += 1
                     if m.group(4) != "move_perfect":
                         lag["not_perfect"] += 1
                         lag["moves"].append(f"{m.group(2)}:{m.group(3)}:{m.group(4)}")
+                        prev_lag = here
+                elif follows and m.group(4) != "move_perfect":
+                    lag["follow_on"] += 1
+                    lag["moves"].append(f"{m.group(2)}:{m.group(3)}:{m.group(4)}:follow-on")
                 diffs[m.group(7)] = diffs.get(m.group(7), 0) + 1
                 score = int(m.group(6))
                 continue
@@ -597,14 +613,18 @@ def run_problems(a, r):
 
 def rating_totals(rows):
     """Player-1 ratings over all runs: rated, not Perfect, and the known
-    exceptions among the not-Perfect (bar-line lag, BAR_LINE_LAG_BEAT)."""
-    t = {"rated": 0, "not_perfect": 0, "known_exceptions": 0}
+    exceptions among the not-Perfect (bar-line lag, BAR_LINE_LAG_BEAT, and its
+    follow-on the next measure)."""
+    t = {"rated": 0, "not_perfect": 0, "known_exceptions": 0, "lag": 0, "follow_on": 0}
     for r in rows:
         rat = r.get("ratings") or {}
         n = sum(rat.values())
         t["rated"] += n
         t["not_perfect"] += n - rat.get("move_perfect", 0)
-        t["known_exceptions"] += (r.get("bar_line_lag") or {}).get("not_perfect", 0)
+        lag = r.get("bar_line_lag") or {}
+        t["lag"] += lag.get("not_perfect", 0)
+        t["follow_on"] += lag.get("follow_on", 0)
+        t["known_exceptions"] += lag.get("not_perfect", 0) + lag.get("follow_on", 0)
     return t
 
 
@@ -618,7 +638,7 @@ def summarise(a, results):
         k = r.get("modal_kinds") or {}
         lag = r.get("bar_line_lag") or {}
         md.append("| {song} | {d} | {venue} | {g} | {res} | {rat} | {ke} | {sc} | {mk} | {fl} | {ld} | {rss} | {w} | {n} |".format(
-            ke=lag.get("not_perfect", 0),
+            ke=lag.get("not_perfect", 0) + lag.get("follow_on", 0),
             song=r["song"], d=r.get("difficulty_asked"), venue=r.get("venue") or "-",
             g="yes" if r["gameplay"] else "NO", res="yes" if r["results"] else ("n/a" if a.song_seconds else "NO"),
             rat=fmt_ratings(r["ratings"]), sc=r["final_score"],
@@ -631,7 +651,8 @@ def summarise(a, results):
             f"commit {a.commit}; difficulties {','.join(a.difficulties)}; "
             f"DLC {a.dlc or 'off'}; performer {a.performer}; jobs {a.jobs}", "",
             f"moves rated {tot['rated']}: not Perfect {tot['not_perfect']}, of which "
-            f"{tot['known_exceptions']} known exceptions (bar-line lag, PLAN H-52) -> "
+            f"{tot['known_exceptions']} known exceptions (bar-line lag {tot['lag']} + "
+            f"next measure of the same move {tot['follow_on']}, PLAN H-52) -> "
             f"{tot['not_perfect'] - tot['known_exceptions']} unexplained", ""]
     with open(os.path.join(a.out, "summary.md"), "w") as f:
         f.write("\n".join(head + md) + "\n")
@@ -677,10 +698,17 @@ def selftest():
         "DC3 MOVE_RATING p=0 measure=24 move=A.move rating=move_perfect lastfrac=1.0000 score=10 diff=easy songbeat=0",
         # the H-52 case: lag, not Perfect -> a known exception
         "DC3 MOVE_RATING p=0 measure=25 move=B.move rating=move_bad lastfrac=0.0000 score=10 diff=easy songbeat=3",
-        # lag but Perfect (stale 1.0): counted as lag, not an exception
-        "DC3 MOVE_RATING p=0 measure=26 move=B.move rating=move_perfect lastfrac=1.0000 score=20 diff=easy songbeat=3",
-        # not Perfect WITHOUT the lag: must stay unexplained
-        "DC3 MOVE_RATING p=0 measure=27 move=B.move rating=move_awesome lastfrac=0.8000 score=30 diff=easy songbeat=0",
+        # the same move the next measure, not Perfect: the follow-on
+        "DC3 MOVE_RATING p=0 measure=26 move=B.move rating=move_bad lastfrac=0.1372 score=10 diff=easy songbeat=0",
+        # and the measure after: no longer a follow-on, unexplained
+        "DC3 MOVE_RATING p=0 measure=27 move=B.move rating=move_ok lastfrac=0.5000 score=10 diff=easy songbeat=0",
+        # lag, not Perfect, but the next measure is ANOTHER move: unexplained
+        "DC3 MOVE_RATING p=0 measure=40 move=C.move rating=move_bad lastfrac=0.0000 score=10 diff=easy songbeat=3",
+        "DC3 MOVE_RATING p=0 measure=41 move=D.move rating=move_bad lastfrac=0.2000 score=10 diff=easy songbeat=0",
+        # lag but Perfect (stale 1.0): counted as lag, not an exception, and
+        # the not-Perfect rating after it is no follow-on
+        "DC3 MOVE_RATING p=0 measure=50 move=E.move rating=move_perfect lastfrac=1.0000 score=20 diff=easy songbeat=3",
+        "DC3 MOVE_RATING p=0 measure=51 move=E.move rating=move_awesome lastfrac=0.8000 score=30 diff=easy songbeat=0",
         # a log from before songbeat= existed: parsed, never an exception
         "DC3 MOVE_RATING p=0 measure=28 move=B.move rating=move_ok lastfrac=0.5000 score=40 diff=easy",
         # player 2: ignored
@@ -695,12 +723,14 @@ def selftest():
         os.unlink(path)
     tot = rating_totals([r])
     checks = [
-        ("moves rated", r["moves_rated"], 5),
-        ("ratings", r["ratings"], {"move_perfect": 2, "move_bad": 1, "move_awesome": 1, "move_ok": 1}),
-        ("lag rated", r["bar_line_lag"]["rated"], 2),
-        ("lag not Perfect", r["bar_line_lag"]["not_perfect"], 1),
-        ("lag moves", r["bar_line_lag"]["moves"], ["25:B.move:move_bad"]),
-        ("totals", tot, {"rated": 5, "not_perfect": 3, "known_exceptions": 1}),
+        ("moves rated", r["moves_rated"], 9),
+        ("ratings", r["ratings"], {"move_perfect": 2, "move_bad": 4, "move_awesome": 1, "move_ok": 2}),
+        ("lag rated", r["bar_line_lag"]["rated"], 3),
+        ("lag not Perfect", r["bar_line_lag"]["not_perfect"], 2),
+        ("follow-on", r["bar_line_lag"]["follow_on"], 1),
+        ("lag moves", r["bar_line_lag"]["moves"],
+         ["25:B.move:move_bad", "26:B.move:move_bad:follow-on", "40:C.move:move_bad"]),
+        ("totals", tot, {"rated": 9, "not_perfect": 7, "known_exceptions": 3, "lag": 2, "follow_on": 1}),
     ]
     bad = 0
     for name, got, want in checks:
