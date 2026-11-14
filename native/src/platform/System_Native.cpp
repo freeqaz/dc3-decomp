@@ -88,7 +88,7 @@ static const Dc3ProfileDefault kDc3DevDefaults[] = {
      "every MILO_WARN/NOTIFY/FAIL printed as MILO_<KIND>: (rate-limited)"},
     {"MILO_INPUT_LOG", "1", false, "one Joypad: down/up line per button message"},
     {"DC3_MOVE_RATING_LOG", "1", false, "one DC3 MOVE_RATING line per passed move"},
-    {"MILO_PERF", "1", false, "a [PERF] fps/frame-time line every 5 s"},
+    {"MILO_PERF", "1", false, "a [PERF] fps/frame-time line every 5 s", true},
 };
 
 const Dc3ProfileDefault *Dc3ProfileDevDefaults(int *count) {
@@ -133,6 +133,12 @@ void Dc3ProfileApply() {
         const char *have = getenv(rows[i].name);
         if (have && *have) {
             kept += std::string(" ") + rows[i].name + "=" + have;
+            // A presence-tested reader would take "0" as on: an explicit off
+            // spelling is removed, so it reads as unset = off.
+            if (rows[i].presence && !Dc3EnvFlag(rows[i].name, true)) {
+                unsetenv(rows[i].name);
+                kept += " (off: unset for its presence test)";
+            }
             continue;
         }
         setenv(rows[i].name, rows[i].value, 1);

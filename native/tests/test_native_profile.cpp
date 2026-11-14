@@ -119,6 +119,24 @@ TEST(Dc3ProfileTest, AnEmptyVariableTakesTheDefault) {
     EXPECT_EQ(Env("DC3_PROFILE"), "dev");
 }
 
+// MILO_PERF is tested for presence by the engine (Rnd_Wgpu.cpp), so a literal
+// "0" would leave it on; the profile removes an explicit off spelling.
+TEST(Dc3ProfileTest, AnExplicitOffReachesAPresenceReader) {
+    ScopedProfileEnv scope;
+    bool sawPresenceRow = false;
+    for (const Dc3ProfileDefault &row : Rows()) {
+        if (!row.presence) continue;
+        sawPresenceRow = true;
+        setenv(row.name, "0", 1);
+    }
+    ASSERT_TRUE(sawPresenceRow) << "MILO_PERF is presence-tested; its row must say so";
+    Dc3ProfileApply();
+    for (const Dc3ProfileDefault &row : Rows())
+        if (row.presence)
+            EXPECT_EQ(Env(row.name), "<unset>") << row.name << "=0 would read as on";
+    EXPECT_EQ(Env("MILO_INPUT_LOG"), "1") << "the other rows still apply";
+}
+
 TEST(Dc3ProfileTest, ReleaseSetsNothing) {
     ScopedProfileEnv scope;
     setenv("DC3_PROFILE", "release", 1);
