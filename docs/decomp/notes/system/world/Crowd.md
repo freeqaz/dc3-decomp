@@ -89,3 +89,10 @@ p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.848, 3 non-equal row(s): NOT A
 Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
 consistent target<->base value pairing at every use (parameters, call arguments, stores,
 compares): pure register permutation, no operand swap.
+
+## `??__F_dw@?CK@??DrawShowing@WorldCrowd@@UAAXXZ@YAXXZ`
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 96.667, 2 non-equal row(s): The 2 charged
+rows are the static's scope ordinal: image `?_dw@?CK@` (42) vs ours `?_dw@?DG@` (54) --
+DrawShowing numbers 12 more scopes than the image before it. Per-function counter, no
+behaviour. NOT A BUG.
