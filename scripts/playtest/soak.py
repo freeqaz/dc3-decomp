@@ -286,10 +286,24 @@ class Soak:
             say("paused: a quit dialog is up; answering no")
             k.choose("no")
         elif k.has_row(k.focus_list(), "pausecommand_resume"):
-            say(f"paused on {s}: choosing Resume")
-            k.choose("pausecommand_resume")
-            if self.watch.pauses:
-                self.watch.pauses[-1].setdefault("resumed_from", s)
+            lst = k.focus_list()
+            i = k.eval(f"{{{lst} data_index pausecommand_resume}}", timeout=3)
+            enabled = k.eval(f"{{{lst} index_enabled {i}}}", timeout=3)
+            if enabled in (0, False):
+                # pause.dta enables Resume only with enough players on the
+                # sensor; record how long a player could not continue.
+                if self.watch.pauses:
+                    self.watch.pauses[-1].setdefault("resume_disabled_at", time.time())
+                say(f"paused on {s}: Resume is DISABLED (no player on the sensor?)")
+            else:
+                if self.watch.pauses and "resume_disabled_at" in self.watch.pauses[-1]:
+                    p = self.watch.pauses[-1]
+                    p["resume_disabled_s"] = round(time.time() - p.pop("resume_disabled_at"), 1)
+                    say(f"Resume came back after {p['resume_disabled_s']} s")
+                say(f"paused on {s}: choosing Resume")
+                k.choose("pausecommand_resume")
+                if self.watch.pauses:
+                    self.watch.pauses[-1].setdefault("resumed_from", s)
         self.watch.paused_since = time.time()
 
     def back_to_main(self):

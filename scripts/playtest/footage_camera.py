@@ -95,7 +95,7 @@ class Sync:
                     self.screen = screen
                 if screen != "game_screen" or secs < -15:
                     if self.w0 is not None:
-                        log("song over: holding the first frame")
+                        log(f"left the song ({screen}): holding the last frame")
                     self.samples, self.w0 = [], None
                     continue
                 self.samples = (self.samples + [(t1 + t2) / 2 - secs])[-15:]
@@ -175,9 +175,14 @@ class Cap:
         self.control()
         w0 = self.sync.get() if self.sync else None
         if self.sync and w0 is None:
-            if self.idx:
-                self.open(*self.clip)  # back to the standing frame for the next song
-            return True, self.first.copy()
+            # Not in a song (menus, a pause, the results): hold the frame
+            # last shown -- the dancer stays where she stopped.  Going back to
+            # the clip's first frame here left a paused Cupid Shuffle with
+            # nobody in view (that clip's first frame is empty), so the pause
+            # menu's Resume stayed disabled for 6 minutes (pause.dta enables
+            # it only with a player on the sensor).  The next song reopens the
+            # clip from its start (want < idx - 1 below).
+            return True, self.cur.copy()
         t = (time.time() - w0 + self.pre) if w0 is not None else None
         want = int(t * self.fps) if t is not None else self.idx + 1
         if want < 0:
