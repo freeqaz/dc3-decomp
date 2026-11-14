@@ -17,7 +17,9 @@
 #
 # Options:
 #   --test [ARGS]    run scripts/native_test.sh on tnr (lavapipe, no GPU)
-#                    instead of a plain build; ARGS go to native_test.sh
+#                    instead of a plain build; ARGS are the dash-arguments
+#                    that follow (e.g. -j8) and go to native_test.sh
+#   --test-args 'S'  same, with S passed as is (e.g. '-R HeadlessBoot -j1')
 #   --no-fetch       leave the build on tnr (only the log comes back)
 #   --reconfigure    re-run scripts/native_configure.sh on tnr first
 #   --jobs N         ninja -j and CPU quota on tnr (default 32, max 64; see
@@ -42,12 +44,13 @@ B="${TNR_ROOT:-/scratch/dc3-native-build}"
 IMAGE="${TNR_IMAGE:-localhost/dc3-native-build:20261020}"
 JOBS=32; FETCH=1; RECONF=0; MODE=build; TEST_ARGS=""; ACTION=build
 
-usage() { sed -n '2,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,37p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
 WT=""; TARGETS=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --test) MODE=test; shift
                 while [ $# -gt 0 ] && [ "${1#-}" != "$1" ] && [ "$1" != "--" ]; do TEST_ARGS="$TEST_ARGS $1"; shift; done ;;
+        --test-args) MODE=test; TEST_ARGS="$TEST_ARGS ${2:?}"; shift 2 ;;
         --no-fetch) FETCH=0; shift ;;
         --reconfigure) RECONF=1; shift ;;
         --jobs) JOBS="${2:?}"; shift 2 ;;
