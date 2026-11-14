@@ -220,6 +220,18 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeco
         return pre;
     }
 
+    // Pace real-time runs.  A frame budget only means time while the frame
+    // rate is bounded: loading and the song intro run on the wall clock, so a
+    // faster renderer spends MORE frames on them.  With cached bind groups
+    // (H-30/H-31) a headless run does 8000 frames in ~11 s and reached the cap
+    // with the intro still 1.4 s from over, so GameplayReachesPlayingState
+    // failed on a healthy run (H-69).  At kFlowFpsCap a budget of N frames is
+    // at least N / kFlowFpsCap seconds on any machine; a slower machine is
+    // unaffected.  Fast-time runs (DC3_FAST_TIME) step game time per frame and
+    // are left alone, as is a caller that sets its own cap.
+    static constexpr int kFlowFpsCap = 240;
+    const bool pace = !strstr(extraEnv, "DC3_FAST_TIME") && !strstr(extraEnv, "DC3_FPS_CAP");
+
     std::ostringstream cmd;
     // DC3_TEL at interval 1: GameplayReachesPlayingState reads the real
     // hamprovider game_stage off the per-frame telemetry line.
@@ -228,6 +240,7 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeco
         << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0"
         << (fastBoot ? " DC3_FAST_BOOT=1" : "")
         << " DC3_TEL=1 DC3_TEL_INTERVAL=1"
+        << (pace ? " DC3_FPS_CAP=" + std::to_string(kFlowFpsCap) : std::string())
         << " DC3_CACHE_DIR=" << persistence << "/cache"
         << " DC3_SAVE_DIR=" << persistence << "/saves"
         << " MILO_INPUT_SCRIPT=" << script
