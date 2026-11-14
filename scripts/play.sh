@@ -62,6 +62,8 @@
 #   --no-pack          do not make the .tar.gz at the end
 #   -- ARGS            passed to dc3-native
 #
+# $DC3_PLAY_BINARY names the dc3-native to run (default native/build/dc3-native).
+#
 # Any DC3_*/MILO_* variable already set in the environment wins over the
 # defaults below (see docs/debugging/native.md for the table).
 #
@@ -107,7 +109,9 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-BINARY="$REPO/native/build/dc3-native"
+# $DC3_PLAY_BINARY: run another build of the game (e.g. a build dir configured
+# against an engine branch; np-soak3 soaked native/build-eng this way).
+BINARY="${DC3_PLAY_BINARY:-$REPO/native/build/dc3-native}"
 DATA="${DC3_DATA:-$REPO/orig-assets}"
 MODEL="${DC3_POSE_MODEL:-$REPO/native/models/pose_landmarker_full.task}"
 [ "$DLC_DEFAULT" = 1 ] && DLC="$DATA/dlc"
