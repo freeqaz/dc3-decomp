@@ -1746,3 +1746,137 @@ TEST_F(DC3RetailPostTest, DOFProcKeepsNgDOFProcSetParameters) {
     delete game;
     delete cam;
 }
+
+// Depth of field and {rnd toggle_all_postprocs} (round 9). NgDOFProc is a
+// registered PostProcessor (NgDOFProc::Init: TheRnd.RegisterPostProcessor), so
+// Rnd::DoPostProcess's !mDisablePostProc gate skips its DoPost with the rest
+// and the frame is the scene unblurred: Xenia's raw frames on houseparty cu02
+// read background sharpness 18.3 against 9.8 graded (lanes/post/round9,
+// measure/hp_toggle_ab.txt). The engine ran DofPass ahead of that gate, so
+// native's "post off" kept the blur (7.6 vs 7.6). A stripe scene, a 4-sample
+// depth at the far plane (blur factor 1), depth of field enabled: graded, the
+// stripes are blurred; toggled off, they come through as drawn.
+// Sabotage: PostProcPass::Run running mDof regardless of PostProcDisabled().
+TEST_F(DC3RetailPostGpuTest, TogglePostProcsSkipsDepthOfField) {
+    ASSERT_TRUE(TheDOFProc);
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    auto &dev = gpu.Device();
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    pp->SetProperty("bloom_intensity", DataNode(0.0f));
+    RndPostProc *prev = RndPostProc::Current();
+    pp->Select();
+    UIScreen *game = Hmx::Object::New<UIScreen>();
+    game->SetName("game_screen", ObjectDir::Main());
+    DofProbeUI ui;
+    UIManager *savedUI = TheUI;
+    TheUI = &ui;
+    ui.SetCurrent(game);
+    TheDOFProc->Set(nullptr, 2.0f, 0.5f, 1.0f, 0.0f);
+    ASSERT_TRUE(TheDOFProc->Enabled());
+
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)kW, (uint32_t)kH, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst |
+        wgpu::TextureUsage::RenderAttachment;
+    wgpu::Texture scene = dev.CreateTexture(&d);
+    std::vector<uint8_t> px(kW * kH * 4);
+    for (int y = 0; y < kH; y++)
+        for (int x = 0; x < kW; x++) {
+            uint8_t v = (x & 1) ? 230 : 20;  // 1-pixel stripes: the 4x4 downsample flattens them
+            uint8_t *p = &px[(y * kW + x) * 4];
+            p[0] = p[1] = p[2] = v;
+            p[3] = 0;
+        }
+    wgpu::TexelCopyTextureInfo dst{};
+    dst.texture = scene;
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = kW * 4;
+    wgpu::Extent3D ext = {(uint32_t)kW, (uint32_t)kH, 1};
+    gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+
+    wgpu::TextureDescriptor zd{};
+    zd.size = {(uint32_t)kW, (uint32_t)kH, 1};
+    zd.format = wgpu::TextureFormat::Depth32Float;
+    zd.sampleCount = 4;
+    zd.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+    wgpu::Texture depth = dev.CreateTexture(&zd);
+    wgpu::TextureView depthView = depth.CreateView();
+    {
+        wgpu::RenderPassDepthStencilAttachment za{};
+        za.view = depthView;
+        za.depthLoadOp = wgpu::LoadOp::Clear;
+        za.depthStoreOp = wgpu::StoreOp::Store;
+        za.depthClearValue = 1.0f;
+        wgpu::RenderPassDescriptor rp{};
+        rp.label = "TestDofDepthClear";
+        rp.depthStencilAttachment = &za;
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        enc.BeginRenderPass(&rp).End();
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+    }
+
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture frame = dev.CreateTexture(&d);
+    wgpu::TextureDescriptor b{};
+    b.size = {1, 1, 1};
+    b.format = wgpu::TextureFormat::RGBA8Unorm;
+    b.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    wgpu::Texture black = dev.CreateTexture(&b);
+    const uint8_t k[4] = {0, 0, 0, 255};
+    dst.texture = black;
+    layout.bytesPerRow = 4;
+    wgpu::Extent3D one = {1, 1, 1};
+    gpu.Queue().WriteTexture(&dst, k, 4, &layout, &one);
+    wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView(),
+                      blackView = black.CreateView();
+
+    PostProcPass pass;
+    pass.Init(gpu);
+    // Mean |difference| between horizontal neighbours across the stripes, in
+    // levels (the scene's own reads 210).
+    auto contrast = [&] {
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        pass.Run(enc, sceneView, scene, kW, kH, depthView, 4, frameView, blackView, gpu);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        std::vector<uint8_t> out(kW * kH * 4);
+        EXPECT_TRUE(gpu.ReadbackTexture(frame, kW, kH, out.data(), out.size()));
+        double sum = 0;
+        int n = 0;
+        for (int y = 16; y < kH - 16; y++)
+            for (int x = 16; x < kW - 16; x++) {
+                sum += std::abs((int)out[(y * kW + x + 1) * 4 + 1] - (int)out[(y * kW + x) * 4 + 1]);
+                n++;
+            }
+        return sum / n;
+    };
+    auto toggle = [] {
+        DataArray *a = DataReadString("{rnd toggle_all_postprocs}");
+        ASSERT_NE(a, nullptr);
+        a->Evaluate(0);
+        a->Release();
+    };
+    ASSERT_FALSE(TheRnd.DisablePP());
+    const double graded = contrast();
+    toggle();
+    ASSERT_TRUE(rndshape::PostProcDisabled());
+    const double off = contrast();
+    toggle();
+    const double again = contrast();
+    printf("DC3RetailPost DOF + toggle_all_postprocs: stripe contrast graded %.2f, post off %.2f, "
+           "again %.2f (scene 210)\n", graded, off, again);
+    EXPECT_LT(graded, 30.0) << "depth of field on at the far plane blurs the stripes (non-vacuous)";
+    EXPECT_GT(off, 180.0) << "post off: Rnd::DoPostProcess skips NgDOFProc::DoPost too";
+    EXPECT_NEAR(again, graded, 1.0);
+
+    pass.Terminate();
+    TheDOFProc->UnSet();
+    TheUI = savedUI;
+    ui.SetCurrent(nullptr);
+    delete game;
+    if (prev) prev->Select(); else pp->Unselect();
+    delete pp;
+}
