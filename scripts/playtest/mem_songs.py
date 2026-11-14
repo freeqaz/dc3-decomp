@@ -157,6 +157,11 @@ def main(argv=None):
             print(f"song select {s['i']:2d} after {str(s['after']):<16} rss {s['rss']:5d} MB "
                   f"inuse {s['inuse']:6.1f} heldfree {s['heldfree']:6.1f} objects {s['objects']:6d} "
                   f"driver {s['driver_mb']} MB gpu {gpu} load {s['load']}", flush=True)
+            if len(samples) == len(a.songs) + 1:
+                # The flow ends at the last song select and the game would idle
+                # there until MILO_MAX_FRAMES (an hour); SIGTERM quits at a
+                # frame boundary (H-9).
+                p.terminate()
     rc = p.wait()
     killer.cancel()
     log.close()
