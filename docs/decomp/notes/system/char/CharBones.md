@@ -166,3 +166,10 @@ Above the definition (was lines 1480-1503):
 // all four share base r10 -- so displacement alone does not explain it. Needs
 // the commutative-key dump (CQT), which the deployed c2rs does not carry.
 ```
+
+## `?RotateBy@CharBones@@QBAXAAV1@@Z`
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.916, 3 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
