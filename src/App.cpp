@@ -862,7 +862,7 @@ void App::RunOneFrame() {
     // w22-ml: the image's per-frame poll sequence (see Dc3NativeFramePoll).
     Dc3NativeFramePoll();
 
-    // Deterministic post-poll foot plant (default ON; opt-out DC3_FEET_POST_PLANT_OFF=1).
+    // Post-poll foot plant: OFF by default (image poll order); see Dc3FeetPostPlant().
     // Same hook as the desktop loop below (App.cpp RunWithoutDebugging): must run after
     // TheTaskMgr.Poll() composes the final leg pose and BEFORE BeginDrawing, or the web
     // build renders the unplanted deep-crouch under-bend (feet in the floor as soon as
@@ -1231,8 +1231,8 @@ void App::RunWithoutDebugging() {
         Dc3NativeFramePoll();
 
 #ifdef HX_NATIVE
-        // WAVE 6 LANE A: deterministic post-poll foot plant (default ON; opt-out
-        // DC3_FEET_POST_PLANT_OFF=1). The world poll above (TheTaskMgr.Poll) composes
+        // WAVE 6 LANE A: post-poll foot plant, OFF by default (fallback only under
+        // DC3_POLL_ORDER_FIX=0 or DC3_FEET_POST_PLANT=1). The world poll above (TheTaskMgr.Poll) composes
         // the FINAL leg pose including the dancer's pelvis/root crouch. Re-plant each
         // dancer's foot here, as the genuine LAST world write before the foot is read/
         // drawn, so the plant bakes the leg for the final-crouch root instead of a
