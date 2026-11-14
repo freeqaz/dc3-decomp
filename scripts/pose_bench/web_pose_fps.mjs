@@ -31,8 +31,14 @@
 //                 workers, GPU process) in a cgroup with CPUQuota=P%
 //                 (systemd-run --user --scope; 400 = four cores' worth): the
 //                 stand-in for a machine with fewer cores.  Per-core speed and
-//                 the GPU are unchanged, so it is still a stand-in
-//   --check-fps F the regression check: exit 1 if any run's delivered rate is
+//                 the GPU are unchanged, so it is still a stand-in.  The
+//                 scope is a new cgroup under the user manager, outside the
+//                 caller's, so compare a quota with --cpu-quota 3200 (the
+//                 same placement, no effective cap) as well as with an
+//                 unscoped run.  Check person-frames on every quota run: a
+//                 run that tracks nobody reads fast and means nothing
+//   --check-fps F the regression check (exit 2 also when a run saw no person:
+//                 an idle MediaPipe is fast): exit 1 if any run's delivered rate is
 //                 below F frames/s -- with the game, pose frames a game frame
 //                 took (PoseInput_Web.cpp consumption); with --no-game, frames
 //                 out of the worker.  Exit 2 if a run produced no pose frames.
@@ -108,8 +114,22 @@ const origin = `http://127.0.0.1:${opt.port}`;
 
 // --cpu-quota: launch the browser through a wrapper that puts it in its own
 // cgroup scope with a CPU quota (Playwright's pipe fds survive the exec).
+// The wrapper must exec the browser Playwright would have launched: for a
+// headless run that is the headless shell, not chromium.executablePath()'s
+// full Chrome (measured 2026-11-14: the full Chrome there saw no person in
+// the fake camera's clip in 6 of 8 runs -- person-frames=0 -- and read a
+// 3-14 ms "inference", MediaPipe idling on an empty frame).
+function browserPath() {
+    if (opt.chromium) return opt.chromium;
+    const full = chromium.executablePath();
+    if (opt.headed) return full;
+    const shell = full.replace(/chromium-(\d+)\/chrome-linux64\/chrome$/,
+        'chromium_headless_shell-$1/chrome-headless-shell-linux64/chrome-headless-shell');
+    if (shell === full || !fs.existsSync(shell)) throw new Error('--cpu-quota: no headless shell next to ' + full + '; pass --chromium');
+    return shell;
+}
 function quotaWrapper(pct) {
-    const real = opt.chromium || chromium.executablePath();
+    const real = browserPath();
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'posebench-'));
     const w = path.join(dir, 'chromium-quota.sh');
     fs.writeFileSync(w, `#!/bin/sh\nexec systemd-run --user --scope -q -p CPUQuota=${pct}% ${JSON.stringify(real)} "$@"\n`);
@@ -184,7 +204,8 @@ if (opt.checkFps !== null) {
     for (const r of results) {
         const got = r.noGame ? r.poseFps : r.deliveredFps;
         const what = r.noGame ? 'pose frames/s out of the worker' : 'pose frames/s delivered to the game';
-        if (!got) { console.log(`CHECK FAIL ${r.extra || '(default)'}: no pose frames (${what} = ${got})`); code = Math.max(code, 2); }
+        if (!r.personFrames) { console.log(`CHECK FAIL ${r.extra || '(default)'} round ${r.round + 1}: no frame with a person -- the camera is not the clip, or nothing is tracked`); code = Math.max(code, 2); }
+        else if (!got) { console.log(`CHECK FAIL ${r.extra || '(default)'}: no pose frames (${what} = ${got})`); code = Math.max(code, 2); }
         else if (got < opt.checkFps) { console.log(`CHECK FAIL ${r.extra || '(default)'} round ${r.round + 1}: ${got} ${what} < ${opt.checkFps} (load ${r.load.join('->')})`); code = Math.max(code, 1); }
         else console.log(`CHECK PASS ${r.extra || '(default)'} round ${r.round + 1}: ${got} ${what} >= ${opt.checkFps}`);
     }
