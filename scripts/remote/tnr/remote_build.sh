@@ -82,6 +82,15 @@ if ! podman image exists "$TNR_IMAGE" 2>/dev/null; then
     log "image $TNR_IMAGE is missing: run scripts/remote/tnr_build.sh --build-image"
     exit 9
 fi
+# The image's identity scopes both caches. A rebuilt image (an added package)
+# can change what a compile sees through __has_include without changing clang,
+# and neither ccache nor ninja would notice: measured 2026-11-14, onetbb added to
+# the image changed the PCH's dependency set while ninja called the old one
+# current. So: one ccache dir per image, and a build dir built by another image
+# is cleaned first (container_build.sh).
+IMAGE_ID="$(podman image inspect --format '{{.Id}}' "$TNR_IMAGE" | cut -c1-12)"
+CCACHE_HOST="$B/ccache/$IMAGE_ID"
+mkdir -p "$CCACHE_HOST"
 
 # Prune files the desk no longer has (the sync only adds and updates). The list
 # is exactly what was sent: git's tracked + untracked-not-ignored files plus the
@@ -122,7 +131,7 @@ if [ -n "${TNR_MILO_LIB:-}" ]; then
 fi
 [ -n "${TNR_IMGUI:-}" ] && MOUNTS+=(-v "$B/deps/imgui-src:$TNR_IMGUI:ro")
 if [ -n "${TNR_CCACHE_BIN:-}" ]; then
-    MOUNTS+=(-v "$B/bin/ccache:$TNR_CCACHE_BIN:ro" -v "$B/ccache:$TNR_CCACHE_DIR")
+    MOUNTS+=(-v "$B/bin/ccache:$TNR_CCACHE_BIN:ro" -v "$CCACHE_HOST:$TNR_CCACHE_DIR")
 fi
 if [ "${TNR_MODE:-build}" = test ] && [ -n "${TNR_ARCHIVE:-}" ] && [ -d "$B/assets/archive" ]; then
     MOUNTS+=(-v "$B/assets/archive:${TNR_ARCHIVE:?}:ro")
@@ -161,7 +170,7 @@ ENVS=(
     -e "DAWN_DIR=$TNR_DAWN/lib/cmake/Dawn"
     -e "MILO_CCACHE=${TNR_MILO_CCACHE:-}"
     -e "MILO_CCACHE_BIN=${TNR_CCACHE_BIN:-}" -e "MILO_CCACHE_DIR=${TNR_CCACHE_DIR:-}"
-    -e "TNR_TEST_ARGS=${TNR_TEST_ARGS:-}"
+    -e "TNR_TEST_ARGS=${TNR_TEST_ARGS:-}" -e "TNR_IMAGE_ID=$IMAGE_ID"
 )
 
 log "slot $slot, container $NAME, -j$TNR_JOBS on CPUs $CPUSET, mem $MEM"
