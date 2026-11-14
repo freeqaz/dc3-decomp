@@ -44,3 +44,5 @@ Inside the body (was lines 132-144):
                 // which of x*x / y*y is fused remains. Native (no fast-math,
                 // no FMA) computes (x*x + y*y) + z*z either way.
 ```
+
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. The Length() sum is the same three squares; only the association order differs (x,y vs y,x under z).

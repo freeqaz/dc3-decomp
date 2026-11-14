@@ -66,3 +66,5 @@ Inside the body (was lines 299-334):
             // per-element scope-bound references 99.21985.  The copy order is
             // c2's, not the source's.
 ```
+
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. The impostor-distance Length() sums the same three squared components (v.x, v.y, v.z); the image accumulates them as y,x,z and we accumulate them as x,z,y. This is association only, with the same values.

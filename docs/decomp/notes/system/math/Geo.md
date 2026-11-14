@@ -73,6 +73,8 @@ Above the definition (was lines 190-194):
 // cross statement order is fully inert.
 ```
 
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. The three cross-product components stored to the stack are identical expressions on both sides. The differing f6-f8 at the Normalize call are dead leftovers, not arguments.
+
 
 ## `?Intersect@@YAXABVTransform@@ABVPlane@@AAVRay@Hmx@@@Z`
 
@@ -360,6 +362,8 @@ Inside the body (was lines 1243-1250):
             // 0x0(r30), 0x8(r30), 0x4(r30) -- x, z, y) and the store order of
             // `normal`.
 ```
+
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. The plane d term is -(n.x*p.x + n.y*p.y + n.z*p.z) on both sides; only the association order differs.
 
 
 ## `?MakeBSPTree@@YA_NAAPAVBSPNode@@AAV?$list@VBSPFace@@V?$StlNodeAlloc@VBSPFace@@@stlpmtx_std@@@stlpmtx_std@@H@Z`
