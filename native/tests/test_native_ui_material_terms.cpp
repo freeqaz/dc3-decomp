@@ -45,6 +45,7 @@ bool MaterialShadesPrelit(bool matPrelit, bool isTextMesh, bool isOverlayPass,
                           bool isMultiplyBlend, bool simpleRender,
                           bool retailMaterialTerms);
 float MaterialAlphaScale(bool intensify, bool retailMaterialTerms);
+bool MaterialShadesUnlit(bool matPrelit, bool matUseEnviron, bool retailMaterialTerms);
 
 TEST(NativeUiMaterialTerms, OverlayPhaseTakesRetailTerms) {
     UiDrawTerms ui = UiDrawTermsFor(true);
@@ -80,6 +81,14 @@ TEST(NativeUiMaterialTerms, PrelitAndAlphaRules) {
         << "standard.ps scales the texel's alpha by intensify too";
     EXPECT_FLOAT_EQ(MaterialAlphaScale(true, false), 1.0f);
     EXPECT_FLOAT_EQ(MaterialAlphaScale(false, true), 1.0f);
+
+    // use_environ 0 on a lit material: ambient 1, no lights (NgMat::SetupAmbient).
+    EXPECT_TRUE(MaterialShadesUnlit(false, false, true))
+        << "the move names (EagleLightHeavy, use_environ 0) go dark under "
+           "static_hud.env's black ambient without it";
+    EXPECT_FALSE(MaterialShadesUnlit(false, true, true)) << "the score font uses its environ";
+    EXPECT_FALSE(MaterialShadesUnlit(true, false, true)) << "prelit stays prelit";
+    EXPECT_FALSE(MaterialShadesUnlit(false, false, false)) << "world / no hook: unchanged";
 }
 
 // The asset facts the rules are for: the score font is lit and intensify, and
@@ -115,6 +124,27 @@ TEST_F(NativeUiMaterialAssetTest, ScoreFontIsLitIntensifyUnderScoreEnv) {
     const Hmx::Color &amb = env->AmbientColor();
     EXPECT_GT(amb.blue, 0.9f);
     EXPECT_LT(amb.green, 0.1f);
+}
+
+// The move names above the flashcards draw with EagleLightHeavy(10_00)2x.mat,
+// a lit material that does not use its environ, inside the HUD where
+// static_hud.env (ambient black, two point lights) is current. Retail shows
+// them white because use_environ 0 means ambient 1 and no lights; lit under
+// the environ they drew dark grey. Sabotage: MaterialShadesUnlit returning
+// false fails PrelitAndAlphaRules; this pins the asset fact it is for.
+TEST_F(NativeUiMaterialAssetTest, MoveNameFontIgnoresTheEnviron) {
+    const char *root = getenv("MILO_LIB");
+    if (!root || !root[0])
+        GTEST_SKIP() << "MILO_LIB not set";
+    std::string font = std::string(root)
+        + "/ui/resource/fonts/default/gen/eagle-light-heavy(13_90)s2x.milo_xbox";
+    ObjectDir *dir = DirLoader::LoadObjects(FilePath(font.c_str()), nullptr, nullptr);
+    ASSERT_NE(dir, nullptr) << font;
+    RndMat *mat = dir->Find<RndMat>("EagleLightHeavy(10_00)2x.mat", false);
+    ASSERT_NE(mat, nullptr);
+    EXPECT_FALSE(mat->Prelit());
+    EXPECT_FALSE(mat->GetUseEnviron());
+    EXPECT_TRUE(MaterialShadesUnlit(mat->Prelit(), mat->GetUseEnviron(), true));
 }
 
 // The black diamond on the fitness screens (G-24): MeshFilter's "microphone"
