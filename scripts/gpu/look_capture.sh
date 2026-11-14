@@ -28,7 +28,9 @@ OUT=$1; shift
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 BIN=$REPO/native/build/dc3-native
 SONG=omg
-VENUES=dci,dclive,glitterati,houseparty,rollerrink,streetside,throneroom
+# The six venues a player can reach.  glitterati is a dev/test set (not in the
+# VENUES macro, in no song); ask for it with --venues if you want it.
+VENUES=dci,dclive,houseparty,rollerrink,streetside,throneroom
 SECONDS_IN=45
 PORT=19300
 STATES=peak,normal
