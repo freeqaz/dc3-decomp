@@ -32,6 +32,11 @@
 //   - BloomMaskScale ignoring the environ's fade-out
 //   - the rect path (RndShaderDrawRect, no fade test) cancelled by it too
 //   - fade-out read as FadeOut() alone (FadeEnd == FadeStart is no fade)
+//   glare (round 2, DoBloom's glare arm, bloom_glare.ps + postprocess.ps bit 37):
+//   - bit 4's screen blend instead of bit 37's add; the add without its 0.5
+//   - nine taps instead of ten; the tap weight not squared; half the step
+//   - the plain harmonic mean (no 2 - 2x); the glare pass skipped
+//   - FillRetailPost never selecting the glare arm
 
 #include "test_helpers.h"
 
@@ -304,6 +309,23 @@ TEST_F(DC3RetailPostTest, MotionBlurParamsFollowDoMotionBlur) {
     delete pp;
 }
 
+// NgPostProc::DoBloom: doGlare = mBloomGlare && !TheHiResScreen.IsActive()
+// takes the glare arm, which also excludes the streak arm.
+TEST_F(DC3RetailPostTest, GlareArmFollowsBloomGlare) {
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    pp->SetProperty("bloom_intensity", DataNode(0.6f));
+    pp->SetProperty("bloom_streak", DataNode(1));
+    RetailPostParams p;
+    rndshape::FillRetailPost(pp, 1.0f, p);
+    EXPECT_FALSE(p.glare);
+    EXPECT_TRUE(p.streak);
+    pp->SetProperty("bloom_glare", DataNode(1));
+    rndshape::FillRetailPost(pp, 1.0f, p);
+    EXPECT_TRUE(p.glare) << "bloom_glare (off the hi-res screen) is the glare arm";
+    EXPECT_FALSE(p.streak) << "glare excludes the streak arm";
+    delete pp;
+}
+
 // The motion-blur composite over flat scenes, frame after frame (RB3RetailPost
 // directly, so the run sequence is the test's): out = sat(c + (prev - c) * k),
 // k = max(r, c105.rgb), r = sat(c105.w * (prev.a - scene.a) / prev.a), and the
@@ -378,6 +400,79 @@ TEST_F(DC3RetailPostGpuTest, MotionBlurIsRetailFeedback) {
     post.Terminate();
 }
 
+// DoBloom's glare arm (bloom_glare.ps) and bit 37's composite over a flat,
+// fully masked field s: set0 = s after the blur, the glare pass's ten taps from
+// uv towards 1 - uv each weigh w = (1 - 4 min(|p - 0.5|^2, 0.25))^2, the result
+// 2 - 20 / sum(1 / (1 - w s)) saturates in the 8-bit set, and the composite
+// ADDS 0.5 * c6 of it (no screen blend). At the centre every tap has w = 1, so
+// the glare is 2s exactly.
+TEST_F(DC3RetailPostGpuTest, GlareIsAdditiveRadialHarmonicMean) {
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    auto &dev = gpu.Device();
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)kW, (uint32_t)kH, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    wgpu::Texture scene = dev.CreateTexture(&d);
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture frame = dev.CreateTexture(&d);
+    wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView();
+    RB3RetailPost post;
+    post.Init(gpu);
+    std::vector<uint8_t> px(kW * kH * 4), out(kW * kH * 4);
+    const uint8_t grey = 77;   // s = 0.302
+    for (size_t i = 0; i < px.size(); i += 4) {
+        px[i] = px[i + 1] = px[i + 2] = grey;
+        px[i + 3] = 255;
+    }
+    wgpu::TexelCopyTextureInfo dst{};
+    dst.texture = scene;
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = kW * 4;
+    wgpu::Extent3D ext = {(uint32_t)kW, (uint32_t)kH, 1};
+    gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+
+    RetailPostParams g;
+    g.dc3 = true;
+    g.bloom = true;
+    g.glare = true;
+    g.bloomColor[0] = g.bloomColor[1] = g.bloomColor[2] = 1.6f;   // c6 can exceed 1
+    wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+    post.Run(enc, sceneView, sceneView, kW, kH, frameView, g, gpu);
+    wgpu::CommandBuffer cmd = enc.Finish();
+    gpu.Queue().Submit(1, &cmd);
+    ASSERT_TRUE(gpu.ReadbackTexture(frame, kW, kH, out.data(), out.size()));
+    post.Terminate();
+
+    const float s = grey / 255.0f, c6 = 1.6f;
+    auto glareAt = [&](float u, float v) {
+        const float su = (1.0f - 2.0f * u) * 0.1f, sv = (1.0f - 2.0f * v) * 0.1f;
+        float acc = 0, pu = u, pv = v;
+        for (int i = 0; i < 10; i++) {
+            const float du = pu - 0.5f, dv = pv - 0.5f;
+            float w = 1.0f - 4.0f * std::min(du * du + dv * dv, 0.25f);
+            w *= w;
+            acc += 1.0f / (1.0f - w * s);
+            pu += su;
+            pv += sv;
+        }
+        return std::min(1.0f, std::max(0.0f, 2.0f - 20.0f / acc));
+    };
+    struct Probe { int x, y; } probes[] = {{kW / 2, kH / 2}, {kW / 4, kH / 2}, {kW / 8, kH / 4}, {4, 4}};
+    for (const Probe &pr : probes) {
+        const float u = (pr.x + 0.5f) / kW, v = (pr.y + 0.5f) / kH;
+        const float gl = glareAt(u, v);
+        const float expected = std::min(1.0f, s + 0.5f * c6 * gl);
+        const float screen = 1.0f - (1.0f - c6 * gl) * (1.0f - s);
+        const float got = out[(pr.y * kW + pr.x) * 4 + 1] / 255.0f;
+        printf("DC3RetailPost glare: uv=(%.3f %.3f) glare=%.4f got=%.4f expected=%.4f (screen blend %.4f)\n",
+               u, v, gl, got, expected, screen);
+        EXPECT_NEAR(got, expected, 3.0f / 255.0f)
+            << "uv=(" << u << "," << v << "): not scene + 0.5 c6 * bloom_glare";
+    }
+}
+
 // Frame cost of the chain's passes at 1280x720 (np-gfx-post performance
 // report): mean GPU+submit time per Run over 200 runs, one sync at the end.
 // Prints the numbers; asserts only that a disabled effect costs nothing
@@ -443,9 +538,13 @@ TEST_F(DC3RetailPostGpuTest, PassCostAt720p) {
     RetailPostParams streakMb = streak;   // a venue's: streak bloom + motion blur
     streakMb.motionBlur = true;
     streakMb.motionBlurParams[0] = streakMb.motionBlurParams[1] = streakMb.motionBlurParams[2] = 0.4f;
+    RetailPostParams glareMb = plain;     // party_mode_hub PostProc_Win: glare + motion blur
+    glareMb.glare = true;
+    glareMb.motionBlur = true;
+    glareMb.motionBlurParams[0] = glareMb.motionBlurParams[1] = glareMb.motionBlurParams[2] = 0.6f;
     const double tBase = timeIt(base), tPlain = timeIt(plain), tStreak = timeIt(streak),
                  tAll = timeIt(all), tMb = timeIt(mbOn), tStreakMb = timeIt(streakMb),
-                 tBase2 = timeIt(base);
+                 tGlareMb = timeIt(glareMb), tBase2 = timeIt(base);
     post.Terminate();
     // The scan-out ramp (WgpuRnd::EndDrawing): a copy and one full-screen pass.
     DisplayRamp ramp;
@@ -466,7 +565,7 @@ TEST_F(DC3RetailPostGpuTest, PassCostAt720p) {
         200.0;
     printf("DC3RetailPost cost @%dx%d (us/frame): composite only %.0f (again %.0f), "
            "+plain bloom %.0f, +streak bloom %.0f, streak+vignette+chroma+xfm %.0f, "
-           "+motion blur %.0f, streak bloom+motion blur %.0f, scan-out ramp %.0f\n",
-           W, H, tBase, tBase2, tPlain, tStreak, tAll, tMb, tStreakMb, tRamp);
+           "+motion blur %.0f, streak bloom+motion blur %.0f, glare+motion blur %.0f, scan-out ramp %.0f\n",
+           W, H, tBase, tBase2, tPlain, tStreak, tAll, tMb, tStreakMb, tGlareMb, tRamp);
     EXPECT_GT(tBase, 0.0);
 }
