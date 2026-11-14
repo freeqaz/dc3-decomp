@@ -429,6 +429,38 @@ TEST(PoseSocketReaderTest, ACameraThatGoesAndComesBackPostsOneNoticeEach) {
     provider.Stop();
 }
 
+// Header flags bit 2 + bits 8..15 (pose_server.py header_flags): the source
+// declares the scoring latency, in 5 ms units.  pose_server.py --video
+// declares 0 (PLAN L-4).  The declaration lands on the main thread's Poll, and
+// a frame that declares nothing (a webcam) takes it back.
+TEST(PoseSocketReaderTest, ASourcesDeclaredLatencyReachesTheScorerAndAWebcamsDoesNot) {
+    FakePoseServer server;
+    ASSERT_TRUE(server.ok());
+    NativeSkeletonProvider provider;
+    ASSERT_TRUE(Connect(provider, server));
+    Dc3DeclareSourceLatencyMs(-1);
+    const uint16_t kUnlevelled = 1u << 0, kNoCamera = 1u << 1, kDeclared = 1u << 2;
+    auto send = [&](uint32_t id, uint16_t flags) {
+        return server.Send(
+            PacketV2(id, id / 30.0, 640, 480, kNumJoints, 1, { Dc3Person(1, 0.0f) }, -1, flags)
+        );
+    };
+    ASSERT_TRUE(send(61, kUnlevelled | kDeclared)); // a recorded file: 0 ms
+    ASSERT_TRUE(WaitForFrame(provider, 61));
+    EXPECT_EQ(Dc3DeclaredSourceLatencyMs(), 0);
+    ASSERT_TRUE(send(62, kUnlevelled | kDeclared | (30u << 8))); // 30 x 5 = 150 ms
+    ASSERT_TRUE(WaitForFrame(provider, 62));
+    EXPECT_EQ(Dc3DeclaredSourceLatencyMs(), 150);
+    // No bit 2: the high byte means nothing, and bit 1 (FLAG_NO_CAMERA) is
+    // not a declaration.
+    ASSERT_TRUE(send(63, kUnlevelled | kNoCamera | (30u << 8)));
+    ASSERT_TRUE(WaitForFrame(provider, 63));
+    EXPECT_EQ(Dc3DeclaredSourceLatencyMs(), -1);
+    provider.Stop();
+    Dc3DeclareSourceLatencyMs(-1);
+    NativeNotice::Clear("pose"); // frame 63's FLAG_NO_CAMERA posted the lost notice
+}
+
 // ===========================================================================
 // PoseCocoMappingTest -- the layout-0 path (any external COCO-17 source)
 // ===========================================================================

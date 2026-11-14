@@ -2,6 +2,7 @@
 #include "gesture/GestureMgr.h" // NUM_SKELETONS
 #include "platform/NativeNotice.h"
 #include "platform/CameraStream_Native.h"
+#include "hamobj/MoveDir.h" // NativeSetLatencySeconds (a source-declared latency)
 #include <cstdint>
 #include <cstring>
 #include <cstdio>
@@ -195,18 +196,32 @@ void NativeSkeletonProvider::ReportProblem(const Problem &p) {
 // with the choreography scheduled at S - latency_offset
 // (MoveDir::PostUpdateFilters).  That constant describes the KINECT's
 // pipeline -- capture to NuiSkeletonGetNextFrame -- plus the display/audio lag
-// it was tuned with.  A webcam + MediaPipe pipeline has its own latency, so
-// DC3_POSE_LATENCY_MS lets the player's sensor say what its latency is; it
-// replaces latency_offset (same units, same meaning).  Unset, the image's
-// value stands.  A value outside [0, 1000] ms is ignored with a warning.
+// it was tuned with.  A native pose source has its own, so three things can
+// set the latency the scorer uses, highest first:
+//
+//   1. explicit  DC3_POSE_LATENCY_MS (0..1000 ms).  Always wins.  Outside
+//                that range it is ignored with a warning.
+//   2. declared  the pose source's own figure, sent in the v2/v3 packet header
+//                (kFlagLatencyDeclared, below).  pose_server.py declares 0 for
+//                a recorded file (--video): the frame is decoded, not
+//                exposed, and nobody is reacting to the game's audio, so
+//                there is no capture delay to correct.  Measured on six songs
+//                (docs/native/POSE_INPUT.md, L-4): 0 scored 0.70 of the
+//                original's card, 100 scored 0.49-0.52.  A webcam declares
+//                nothing.
+//   3. default   latency_offset as scoring.dta gave it: the image's 100.
+//
+// The engine log says which one is in force, once per change:
+//   DC3 POSE LATENCY: scoring at 0 ms -- declared by the pose source (...)
 // Measured, docs/native/POSE_INPUT.md (Better Off Alone, Easy): a correct
 // performance 300 ms later than latency_offset assumes rates 29 perfect / 28
 // awesome / 20 bad of 77; the same with DC3_POSE_LATENCY_MS=400 rates 77/77
 // perfect, score identical to an on-time sensor.
 // ---------------------------------------------------------------------------
 static float sScoringDtaLatency = -1.0f;
+static int sSourceLatencyMs = -1; // -1 = the source declared nothing
 
-// latency_offset as config/scoring.dta gave it, before DC3_POSE_LATENCY_MS:
+// latency_offset as config/scoring.dta gave it, before any override:
 // the latency of the sensor the game was tuned for.  The in-process performer
 // (PosePerformer_Native.cpp) is a sensor of exactly that latency, so the knob
 // has something to correct when it is told to be late.  Before LoadScoring has
@@ -215,21 +230,101 @@ float Dc3ScoringDtaLatencySeconds(float scorerSeconds) {
     return sScoringDtaLatency >= 0.0f ? sScoringDtaLatency : scorerSeconds;
 }
 
-float Dc3SensorLatencySeconds(float scoringDtaSeconds) {
-    sScoringDtaLatency = scoringDtaSeconds;
+// DC3_POSE_LATENCY_MS, parsed.  False when unset, empty or out of range.
+static bool ExplicitLatencyMs(double *ms) {
     const char *v = getenv("DC3_POSE_LATENCY_MS");
     if (!v || !*v)
-        return scoringDtaSeconds;
+        return false;
     char *end = nullptr;
-    double ms = strtod(v, &end);
-    if (end == v || ms < 0.0 || ms > 1000.0) {
+    double d = strtod(v, &end);
+    if (end == v || d < 0.0 || d > 1000.0) {
         fprintf(stderr, "DC3_POSE_LATENCY_MS='%s' ignored (want 0..1000 ms)\n", v);
-        return scoringDtaSeconds;
+        return false;
     }
-    fprintf(stderr, "DC3_POSE_LATENCY_MS: scoring latency %.0f ms (latency_offset %.0f ms)\n", ms,
-            scoringDtaSeconds * 1000.0f);
-    return (float)(ms * 0.001);
+    *ms = d;
+    return true;
 }
+
+Dc3LatencySource Dc3ResolveSensorLatency(float scoringDtaSeconds, float *seconds) {
+    double ms = 0.0;
+    if (ExplicitLatencyMs(&ms)) {
+        *seconds = (float)(ms * 0.001);
+        return kLatencyExplicit;
+    }
+    if (sSourceLatencyMs >= 0) {
+        *seconds = sSourceLatencyMs * 0.001f;
+        return kLatencyDeclared;
+    }
+    *seconds = scoringDtaSeconds;
+    return kLatencyDefault;
+}
+
+const char *Dc3LatencySourceName(Dc3LatencySource source) {
+    switch (source) {
+    case kLatencyExplicit: return "explicit";
+    case kLatencyDeclared: return "declared";
+    default: return "default";
+    }
+}
+
+// One line per change of value or reason (LoadScoring runs at boot and on a
+// scoring reload; the source declares on its first frame).
+static void LogLatency(Dc3LatencySource source, float seconds) {
+    static int sLoggedMs = -2;
+    static int sLoggedSource = -1;
+    int ms = (int)(seconds * 1000.0f + 0.5f);
+    if (ms == sLoggedMs && (int)source == sLoggedSource)
+        return;
+    sLoggedMs = ms;
+    sLoggedSource = (int)source;
+    const float dtaMs = sScoringDtaLatency * 1000.0f;
+    switch (source) {
+    case kLatencyExplicit:
+        fprintf(stderr,
+                "DC3 POSE LATENCY: scoring at %d ms -- explicit DC3_POSE_LATENCY_MS "
+                "(scoring.dta latency_offset %.0f ms)\n",
+                ms, dtaMs);
+        break;
+    case kLatencyDeclared:
+        fprintf(stderr,
+                "DC3 POSE LATENCY: scoring at %d ms -- declared by the pose source "
+                "(pose_server.py: 0 for a recorded file, or --source-latency-ms; "
+                "DC3_POSE_LATENCY_MS overrides)\n",
+                ms);
+        break;
+    default:
+        fprintf(stderr,
+                "DC3 POSE LATENCY: scoring at %d ms -- default, scoring.dta latency_offset "
+                "(the source declared nothing, as a live camera does; DC3_POSE_LATENCY_MS "
+                "overrides)\n",
+                ms);
+        break;
+    }
+}
+
+float Dc3SensorLatencySeconds(float scoringDtaSeconds) {
+    sScoringDtaLatency = scoringDtaSeconds;
+    float seconds = scoringDtaSeconds;
+    Dc3LatencySource source = Dc3ResolveSensorLatency(scoringDtaSeconds, &seconds);
+    LogLatency(source, seconds);
+    return seconds;
+}
+
+void Dc3DeclareSourceLatencyMs(int ms) {
+    if (ms < -1 || ms > 1000)
+        ms = -1;
+    if (ms == sSourceLatencyMs)
+        return;
+    sSourceLatencyMs = ms;
+    if (sScoringDtaLatency < 0.0f)
+        return; // LoadScoring has not run; it will resolve with this declaration
+    float seconds = sScoringDtaLatency;
+    Dc3LatencySource source = Dc3ResolveSensorLatency(sScoringDtaLatency, &seconds);
+    MoveDir::NativeSetLatencySeconds(seconds);
+    LogLatency(source, seconds);
+}
+
+int Dc3DeclaredSourceLatencyMs() { return sSourceLatencyMs; }
 
 #ifdef __EMSCRIPTEN__
 // Web: only the TRANSPORT is absent -- no pose_server.py to spawn, no Unix
@@ -268,6 +363,14 @@ enum COCOKeypoint {
 // v2/v3 header flag bits (native/scripts/pose_server.py FLAG_*).
 static const uint16_t kFlagUnlevelled = 1u << 0;
 static const uint16_t kFlagNoCamera = 1u << 1;  // camera gone; the server is reopening it
+// bit 2: the source declares its own scoring latency, in bits 8..15 as a
+// count of 5 ms (0..1275; above 1000 is treated as undeclared).  pose_server.py
+// declares 0 for --video (Dc3SensorLatencySeconds above).  Older servers, and
+// synthetic_kinect.py's live sensor, send neither bit.
+static const uint16_t kFlagLatencyDeclared = 1u << 2;
+static int DeclaredLatencyMsFromFlags(uint16_t flags) {
+    return (flags & kFlagLatencyDeclared) ? ((flags >> 8) & 0xff) * 5 : -1;
+}
 
 // Wire layout ids (see native/scripts/pose_server.py protocol v2).
 enum PoseLayout {
@@ -895,7 +998,8 @@ void NativeSkeletonProvider::ReaderThread() {
             }
         }
 
-        PublishFrame(newBack, (int)numPersons, frameId, timestamp, (flags & kFlagUnlevelled) != 0);
+        PublishFrame(newBack, (int)numPersons, frameId, timestamp, (flags & kFlagUnlevelled) != 0,
+                     DeclaredLatencyMsFromFlags(flags));
     }
 }
 
@@ -903,7 +1007,7 @@ void NativeSkeletonProvider::ReaderThread() {
 
 void NativeSkeletonProvider::PublishFrame(
     const PersonData *persons, int numPersons, uint32_t frameId, double timestamp,
-    bool unlevelled
+    bool unlevelled, int declaredLatencyMs
 ) {
     if (numPersons < 0)
         numPersons = 0;
@@ -916,6 +1020,7 @@ void NativeSkeletonProvider::PublishFrame(
     mFrameIdBack = frameId;
     mTimestampBack = timestamp;
     mUnlevelledBack = unlevelled;
+    mDeclaredLatencyMsBack = declaredLatencyMs;
 }
 
 void NativeSkeletonProvider::Poll() {
@@ -923,12 +1028,22 @@ void NativeSkeletonProvider::Poll() {
     if (mRunning && mSocketFd < 0 && Dc3PosePerformerEnabled())
         Dc3PosePerformerPump(this); // publishes; latched below
 #endif
-    std::lock_guard<std::mutex> lock(mSwapMutex);
-    memcpy(mPersons, mBack, sizeof(mPersons));
-    mNumPersons = mNumPersonsBack;
-    mFrameIdFront = mFrameIdBack;
-    mTimestampFront = mTimestampBack;
-    mUnlevelledFront = mUnlevelledBack;
+    int declaredLatencyMs;
+    uint32_t frameId;
+    {
+        std::lock_guard<std::mutex> lock(mSwapMutex);
+        memcpy(mPersons, mBack, sizeof(mPersons));
+        mNumPersons = mNumPersonsBack;
+        mFrameIdFront = mFrameIdBack;
+        mTimestampFront = mTimestampBack;
+        mUnlevelledFront = mUnlevelledBack;
+        declaredLatencyMs = mDeclaredLatencyMsBack;
+        frameId = mFrameIdBack;
+    }
+    // On the main thread, which is where the scorer reads its latency.  Only
+    // once a frame has arrived: before that the source has said nothing.
+    if (frameId != 0 && declaredLatencyMs != Dc3DeclaredSourceLatencyMs())
+        Dc3DeclareSourceLatencyMs(declaredLatencyMs);
 }
 
 int NativeSkeletonProvider::FindByTrackId(int trackId) const {

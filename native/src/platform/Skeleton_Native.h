@@ -156,8 +156,11 @@ public:
     // `unlevelled`: the frame comes from a camera that does not know its own
     // gravity (pose_server.py's header flag, every web push), so the sensor
     // estimates the camera's tilt and levels it (platform/PoseLevel_Native.h).
+    // `declaredLatencyMs`: the source's own scoring latency (pose_server.py
+    // declares 0 for a recorded file), or -1 for none -- see
+    // Dc3SensorLatencySeconds.
     void PublishFrame(const PersonData *persons, int numPersons, uint32_t frameId,
-                      double timestamp, bool unlevelled = false);
+                      double timestamp, bool unlevelled = false, int declaredLatencyMs = -1);
 
 #ifdef __EMSCRIPTEN__
     // Web has no server to spawn or socket to read: the provider is "running"
@@ -273,6 +276,7 @@ private:
     double mTimestampFront = 0.0;
     bool mUnlevelledBack = false;
     bool mUnlevelledFront = false;
+    int mDeclaredLatencyMsBack = -1;
 
     // Coordinate mapping: camera view extent in metres at mViewDepth.
     //
@@ -311,3 +315,17 @@ extern NativeSkeletonProvider *TheSkeletonProvider;
 // The model GestureMgr_NativeInit passes to Start(): $DC3_POSE_MODEL, else
 // NativeSkeletonProvider::DefaultModelPath() (GestureMgr_Native.cpp).
 std::string GestureMgr_NativePoseModelPath();
+
+// Scoring latency (Skeleton_Native.cpp, "Sensor latency"): explicit
+// DC3_POSE_LATENCY_MS beats the source's declaration beats scoring.dta's
+// latency_offset.
+enum Dc3LatencySource { kLatencyDefault = 0, kLatencyDeclared = 1, kLatencyExplicit = 2 };
+// MoveDir::LoadScoring's hook: the latency the scorer should use.
+float Dc3SensorLatencySeconds(float scoringDtaSeconds);
+// The latency in force for `scoringDtaSeconds`, and why (no logging).
+Dc3LatencySource Dc3ResolveSensorLatency(float scoringDtaSeconds, float *seconds);
+const char *Dc3LatencySourceName(Dc3LatencySource source);
+// The pose source declared `ms` (-1 = nothing).  Main thread; applied to the
+// scorer at once if LoadScoring has run.  NativeSkeletonProvider::Poll calls it.
+void Dc3DeclareSourceLatencyMs(int ms);
+int Dc3DeclaredSourceLatencyMs();
