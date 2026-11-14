@@ -647,5 +647,283 @@ TEST_F(NativeExitTest, ScreenshotWorksWindowed) {
     ExpectNoCrash(out);
 }
 
+// np-defaults: with DC3_HTTP_PORT unset, a window prefers 9090 and falls back
+// to a kernel-assigned port when 9090 is taken (the owner's game, a second
+// engine), instead of exiting 98 -- the debug server is on by default in the
+// dev profile, so a second windowed run must still start.  The first cut
+// exited 98 "cannot bind port 0": a failed bind decommissions a cpp-httplib
+// Server and its next bind returns -1 at once.
+TEST_F(NativeExitTest, WindowedDefaultPortFallsBackWhen9090IsTaken) {
+    int holder = socket(AF_INET, SOCK_STREAM, 0);
+    ASSERT_GE(holder, 0);
+    sockaddr_in addr = {};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons(9090);
+    // Taken by this test, or already by someone else: 9090 is busy either way.
+    if (bind(holder, (sockaddr *)&addr, sizeof(addr)) == 0) {
+        ASSERT_EQ(listen(holder, 1), 0);
+    } else if (errno != EADDRINUSE) {
+        int err = errno;
+        close(holder);
+        GTEST_SKIP() << "cannot bind 127.0.0.1:9090: " << strerror(err);
+    }
+    std::string portFile = mRunDir + "/http_port";
+    Engine e;
+    int port = 0;
+    RunWindowed(mRunDir, [&](Display *dpy, Window w) {
+        port = atoi(ReadAll(portFile).c_str());
+        SendWmDeleteWindow(dpy, w);
+    }, e, {"DC3_HTTP=1", "DC3_HTTP_PORT=", "DC3_HTTP_PORT_FILE=" + portFile});
+    close(holder);
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_FALSE(Contains(out, "detail=http_port")) << "the busy default port was fatal\n"
+                                                    << Tail(out);
+    EXPECT_GT(port, 0) << "no DC3_HTTP_PORT_FILE\n" << Tail(out);
+    EXPECT_NE(port, 9090) << Tail(out);
+    EXPECT_TRUE(Contains(out, "port 9090 is taken")) << "the fallback was not announced\n"
+                                                     << Tail(out);
+    EXPECT_TRUE(Contains(out, "(loopback only)")) << Tail(out);
+    ASSERT_TRUE(WIFEXITED(e.status)) << Tail(out);
+    EXPECT_EQ(WEXITSTATUS(e.status), 0) << Tail(out);
+    ExpectNoCrash(out);
+}
+
 #endif // __linux__ (window tests)
+
+#if defined(__linux__)
+// ===========================================================================
+// The pose server dc3-native launches (platform/ProcessSpawner_Native.h).
+//
+// On a PipeWire box without rtkit, opening audio lowers the game's
+// RLIMIT_RTTIME to 0:0, and a pose_server.py fork+exec'd from the game
+// afterwards inherited it and was SIGKILLed at MediaPipe model load.  These
+// tests make that happen on any Linux box: as soon as dc3-native's spawner
+// exists, the test lowers the GAME's limit with prlimit(2) -- after the
+// spawner fork, before the pose server launch, which is where audio init sits
+// -- and a stub "python3" first on PATH records the limits it was given.
+// ===========================================================================
+#include <sys/resource.h>
+
+namespace {
+
+std::string SpawnRealPython() {
+    const char *path = getenv("PATH");
+    std::istringstream ss(path ? path : "/usr/bin:/bin");
+    std::string dir;
+    while (std::getline(ss, dir, ':')) {
+        std::string cand = dir + "/python3";
+        if (!dir.empty() && access(cand.c_str(), X_OK) == 0)
+            return cand;
+    }
+    return std::string();
+}
+
+std::vector<pid_t> ChildrenOf(pid_t pid) {
+    std::string s = ReadAll("/proc/" + std::to_string(pid) + "/task/" + std::to_string(pid) + "/children");
+    std::istringstream ss(s);
+    std::vector<pid_t> out;
+    int c;
+    while (ss >> c)
+        out.push_back(c);
+    return out;
+}
+
+bool PidGone(pid_t pid) {
+    if (kill(pid, 0) != 0 && errno == ESRCH)
+        return true;
+    std::string stat = ReadAll("/proc/" + std::to_string(pid) + "/stat");
+    size_t paren = stat.rfind(')');
+    return stat.empty() || (paren != std::string::npos && paren + 2 < stat.size() && stat[paren + 2] == 'Z');
+}
+
+bool WaitGone(pid_t pid, int ms) {
+    for (int i = 0; i < ms / 50; i++) {
+        if (PidGone(pid))
+            return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    return PidGone(pid);
+}
+
+std::string RtTime(const std::string &limits) {
+    size_t at = limits.find("Max realtime timeout");
+    if (at == std::string::npos)
+        return std::string();
+    size_t eol = limits.find('\n', at);
+    return limits.substr(at, eol == std::string::npos ? std::string::npos : eol - at);
+}
+
+bool RtTimeUnlimited(const std::string &line) {
+    std::istringstream ss(line.size() > 20 ? line.substr(20) : std::string());
+    std::string soft, hard;
+    ss >> soft >> hard;
+    return soft == "unlimited" && hard == "unlimited";
+}
+
+// The pid in "Launched pose_server.py (pid N, via the spawner)", or -1 (also
+// when it was launched without the spawner).
+pid_t SpawnedServerPid(const std::string &out, size_t from = 0) {
+    size_t at = out.find("Launched pose_server.py (pid ", from);
+    if (at == std::string::npos)
+        return -1;
+    size_t eol = out.find('\n', at);
+    if (out.substr(at, eol - at).find("via the spawner") == std::string::npos)
+        return -1;
+    return atoi(out.c_str() + at + strlen("Launched pose_server.py (pid "));
+}
+
+// Records each run's limits, binds the socket and streams empty v1 frames;
+// DC3_STUB_MODE=die-once SIGKILLs the first run 0.5 s after the game connects.
+const char *kEnginePoseStub = R"PY(
+import os, signal, socket, struct, sys, time
+d = os.environ["DC3_STUB_DIR"]
+with open(os.path.join(d, "runs"), "a") as f:
+    f.write("%d\n" % os.getpid())
+run = sum(1 for _ in open(os.path.join(d, "runs")))
+with open("/proc/self/limits") as src, open(os.path.join(d, "limits.%d" % run), "w") as dst:
+    dst.write(src.read())
+path = sys.argv[sys.argv.index("--socket") + 1]
+if os.path.exists(path):
+    os.unlink(path)
+srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+srv.bind(path)
+srv.listen(1)
+c, _ = srv.accept()
+if os.environ.get("DC3_STUB_MODE") == "die-once" and run == 1:
+    time.sleep(0.5)
+    os.kill(os.getpid(), signal.SIGKILL)
+n = 0
+while True:
+    n += 1
+    body = struct.pack("<IId", run * 1000 + n, 0, time.time())
+    c.sendall(struct.pack("<I", len(body)) + body)
+    time.sleep(0.05)
+)PY";
+
+class NativePoseSpawnTest : public NativeExitTest {
+protected:
+    std::string mStub;
+    std::vector<std::string> mEnv;
+
+    void SetUp() override {
+        NativeExitTest::SetUp();
+        if (IsSkipped() || HasFatalFailure())
+            return;
+        std::string py = SpawnRealPython();
+        if (py.empty())
+            GTEST_SKIP() << "no python3 to run the stub pose server";
+        mStub = mRunDir + "/stub";
+        ASSERT_EQ(mkdir(mStub.c_str(), 0755), 0);
+        {
+            std::ofstream f(mStub + "/stub.py");
+            f << kEnginePoseStub;
+        }
+        {
+            std::ofstream f(mStub + "/python3");
+            f << "#!/bin/sh\nexec " << py << " \"$DC3_STUB_DIR/stub.py\" \"$@\"\n";
+        }
+        chmod((mStub + "/python3").c_str(), 0755);
+        const char *path = getenv("PATH");
+        mEnv = {
+            "MILO_HEADLESS=1",
+            "DC3_POSE=external", // headless skips the pose server unless DC3_POSE is set
+            "DC3_POSE_NO_SPAWN",
+            "DC3_POSE_SOCKET=" + mStub + "/pose.sock",
+            "DC3_CAMERA_FRAMES=off",
+            "DC3_STUB_DIR=" + mStub,
+            "PATH=" + mStub + ":" + (path ? path : "/usr/bin:/bin"),
+            "DC3_POSE_PYTHON=" + mStub + "/python3", // else the game prefers a venv
+        };
+    }
+
+    // The engine's spawner (its first child), within `ms`.
+    pid_t WaitForSpawner(const Engine &e, int ms) {
+        for (int i = 0; i < ms; i++) {
+            std::vector<pid_t> kids = ChildrenOf(e.pid);
+            if (!kids.empty())
+                return kids[0];
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return -1;
+    }
+};
+
+} // namespace
+
+// The GPD bug, reproduced on any box: the game's RLIMIT_RTTIME is lowered to
+// 0:0 after startup, and the pose server it launches must not inherit that.
+// Then the game quits, and neither the spawner nor the server outlives it.
+TEST_F(NativePoseSpawnTest, ThePoseServerKeepsTheLimitsTheGameStartedWith) {
+    struct rlimit own;
+    ASSERT_EQ(getrlimit(RLIMIT_RTTIME, &own), 0);
+    if (own.rlim_max != RLIM_INFINITY)
+        GTEST_SKIP() << "the test runs under RLIMIT_RTTIME hard " << own.rlim_max
+                     << ", so dc3-native starts with no limit left to lose";
+    Engine e;
+    Start(e, mRunDir, mEnv);
+    // main() has started (its first line forks the spawner); audio has not.
+    ASSERT_TRUE(e.WaitFor("DC3 Native Port - Starting", 20)) << Tail(e.Output());
+    std::vector<pid_t> kids = ChildrenOf(e.pid);
+    pid_t spawner = kids.empty() ? -1 : kids[0];
+
+    // What PipeWire's module-rt does to the game at audio init.
+    struct rlimit zero = { 0, 0 };
+    ASSERT_EQ(prlimit(e.pid, RLIMIT_RTTIME, &zero, nullptr), 0) << strerror(errno);
+    std::string gameLine = RtTime(ReadAll("/proc/" + std::to_string(e.pid) + "/limits"));
+    ASSERT_FALSE(RtTimeUnlimited(gameLine)) << "control: the game's limit did not drop: " << gameLine;
+    ASSERT_NE(access((mStub + "/limits.1").c_str(), F_OK), 0)
+        << "the pose server ran before the limit dropped; the test proves nothing";
+
+    ASSERT_TRUE(e.WaitFor("Connected to pose server", 120)) << Tail(e.Output());
+    std::string out = e.Output();
+    pid_t server = SpawnedServerPid(out);
+    EXPECT_GT(server, 0) << "the server was not launched through the spawner\n" << Tail(out);
+    std::string serverLine = RtTime(ReadAll(mStub + "/limits.1"));
+    ASSERT_FALSE(serverLine.empty());
+    EXPECT_TRUE(RtTimeUnlimited(serverLine))
+        << "the pose server inherited the game's lowered RLIMIT_RTTIME: " << serverLine;
+    ASSERT_GT(spawner, 0) << "dc3-native forked no spawner\n" << Tail(out);
+
+    ASSERT_TRUE(e.WaitFor("DC3 Native: Entering main loop", 120)) << Tail(e.Output());
+    kill(e.pid, SIGTERM);
+    ASSERT_TRUE(e.WaitExit(30)) << Tail(e.Output());
+    EXPECT_TRUE(WaitGone(spawner, 5000)) << "the spawner outlived the game";
+    if (server > 0)
+        EXPECT_TRUE(WaitGone(server, 5000)) << "the pose server outlived the game";
+    if (!PidGone(spawner)) kill(spawner, SIGKILL);
+    if (server > 0 && !PidGone(server)) kill(server, SIGKILL);
+}
+
+// A pose server SIGKILLed mid-session: the game says it crashed with signal 9,
+// relaunches it, and tracking resumes.  A SIGKILLed game takes both the
+// spawner and the relaunched server with it.
+TEST_F(NativePoseSpawnTest, APoseServerKilledMidSessionIsReportedAndRelaunched) {
+    mEnv.push_back("DC3_STUB_MODE=die-once");
+    Engine e;
+    Start(e, mRunDir, mEnv);
+    pid_t spawner = WaitForSpawner(e, 20000);
+    ASSERT_GT(spawner, 0) << Tail(e.Output());
+    ASSERT_TRUE(e.WaitFor("Pose server restarted (pid", 150)) << Tail(e.Output());
+    std::string out = e.Output();
+    EXPECT_TRUE(Contains(out, "The pose server crashed (signal 9) - restarting it in 1000 ms (restart 1 of 3)"))
+        << Tail(out);
+    pid_t first = SpawnedServerPid(out);
+    size_t second_at = out.find("Launched pose_server.py (pid ", out.find("restart 1 of 3"));
+    pid_t second = SpawnedServerPid(out, second_at);
+    EXPECT_GT(first, 0);
+    ASSERT_GT(second, 0) << Tail(out);
+    EXPECT_NE(first, second);
+    EXPECT_FALSE(PidGone(second)) << "the relaunched server is not running";
+
+    kill(e.pid, SIGKILL);
+    e.WaitExit(10);
+    EXPECT_TRUE(WaitGone(spawner, 5000)) << "the spawner outlived a SIGKILLed game";
+    EXPECT_TRUE(WaitGone(second, 5000)) << "the pose server outlived a SIGKILLed game";
+    if (!PidGone(spawner)) kill(spawner, SIGKILL);
+    if (!PidGone(second)) kill(second, SIGKILL);
+}
+#endif // __linux__ (pose spawner)
+
 #endif // __linux__ || __APPLE__

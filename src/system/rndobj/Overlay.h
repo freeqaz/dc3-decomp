@@ -42,6 +42,17 @@ public:
     static void TogglePosition();
     static void DrawAll(bool);
     static RndOverlay *Find(Symbol name, bool fail = true);
+#ifdef HX_NATIVE
+    // DC3_RND_OVERLAYS (native/src/platform/DebugPanel.cpp).  The image draws
+    // the overlays from Rnd::EndDrawing (DrawAll); WgpuRnd::EndDrawing
+    // replaces it and never called DrawAll, so cheat_display and every
+    // quick-cheat overlay were invisible natively.  This runs Draw()'s
+    // bookkeeping in DrawAll's order -- the timeout, then the callback, which
+    // fills or draws the overlay -- and hands each showing overlay's non-empty
+    // lines to `fn` instead of drawing them with DrawStringScreen.
+    typedef void (*NativeLineFn)(void *ctx, const char *overlay, const char *line);
+    static void NativeCollect(NativeLineFn fn, void *ctx);
+#endif
 
 private:
     RndOverlay(const DataArray *);

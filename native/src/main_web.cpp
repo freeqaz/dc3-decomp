@@ -294,8 +294,13 @@ void dc3MainLoopTick() {
 // Entry point
 // ============================================================================
 
+void Dc3ProfileApply(); // platform/System_Native.cpp, DC3_PROFILE
+
 int main(int argc, char **argv) {
     printf("DC3 Web Port — Initializing\n");
+    // DC3_PROFILE (dev by default; ?profile=release or ?env=DC3_PROFILE=release,
+    // dc3_pre.js): the profile's defaults go into ENV before the App reads any.
+    Dc3ProfileApply();
 #ifdef MILO_WEB_ASYNCIFY
     // JSPI mode: JS drives the frame loop via requestAnimationFrame + await.
     // Each tick calls dc3MainLoopTick() which can yield to the browser

@@ -25,6 +25,7 @@ Run: python3 tests/test_pose_server.py
 """
 
 import os
+import re
 import socket
 import struct
 import subprocess
@@ -70,9 +71,52 @@ class FakeCv2:
         self.capture = capture
         self.opened_with = []
 
-    def VideoCapture(self, source):
+    def VideoCapture(self, source, *api):
         self.opened_with.append(source)
         return self.capture
+
+
+class FakeDevices:
+    """V4L2Devices' interface over a dict {node: (is_capture, card)} plus
+    by-id symlinks {name: node}; `replace` swaps the set, as a USB camera
+    re-enumerating under new node numbers does."""
+    by_id_dir = "/dev/v4l/by-id"
+
+    def __init__(self, nodes=None, by_id=None, available=True):
+        self.replace(nodes or {}, by_id or {})
+        self._available = available
+
+    def replace(self, nodes, by_id=None):
+        self._nodes = dict(nodes)
+        self._by_id = dict(by_id or {})
+
+    def available(self):
+        return self._available
+
+    def nodes(self):
+        return sorted(self._nodes, key=lambda n: int(n[len("/dev/video"):]))
+
+    def query(self, path):
+        if path not in self._nodes:
+            return False, "cannot open (No such device)"
+        ok, card = self._nodes[path]
+        return (True, card) if ok else (False, f"{card}: no video capture")
+
+    def realpath(self, path):
+        name = os.path.basename(path)
+        if path.startswith(self.by_id_dir + "/") and name in self._by_id:
+            return self._by_id[name]
+        return path
+
+    def exists(self, path):
+        if path.startswith(self.by_id_dir + "/"):
+            return os.path.basename(path) in self._by_id
+        return path in self._nodes
+
+
+GPD_BEFORE = {"/dev/video0": (True, "Integrated Camera"), "/dev/video1": (False, "Integrated Camera")}
+GPD_AFTER = {"/dev/video1": (True, "Integrated Camera"), "/dev/video2": (False, "Integrated Camera")}
+BY_ID = "usb-SunplusIT_Inc_Integrated_Camera_JX20250923V2-video-index0"
 
 
 class FakeCapture:
@@ -259,7 +303,8 @@ class ServerLoopTest(unittest.TestCase):
             def serve():
                 try:
                     ps.run(a, cv2=FakeCv2(cap), make_backend=lambda _a: (backend, 20, 1),
-                           clock=clock, sleep=clock.sleep)
+                           clock=clock, sleep=clock.sleep,
+                           devices=FakeDevices({"/dev/video0": (True, "Fake")}))
                     result["exit"] = None
                 except ps.ServerExit as e:
                     result["exit"] = e.code
@@ -296,6 +341,331 @@ class ServerLoopTest(unittest.TestCase):
         mp_ts = backend.timestamps
         self.assertTrue(all(isinstance(t, int) for t in mp_ts))
         self.assertTrue(all(b > a for a, b in zip(mp_ts, mp_ts[1:])))
+
+
+class ResolveCameraTest(unittest.TestCase):
+    """--camera -> device, on the GPD's two layouts (its integrated camera
+    re-enumerates: video0 + metadata video1, then video1 + metadata video2)."""
+
+    def resolve(self, spec, devices):
+        logs = []
+        source, desc = ps.resolve_camera(spec, devices, log=logs.append)
+        return source, desc, logs
+
+    def test_auto_takes_the_first_capture_node_and_skips_metadata(self):
+        src, desc, _ = self.resolve("auto", FakeDevices(GPD_BEFORE))
+        self.assertEqual(src, "/dev/video0")
+        meta_first = {"/dev/video1": (False, "Integrated Camera"),
+                      "/dev/video2": (True, "Integrated Camera")}
+        src, desc, _ = self.resolve("auto", FakeDevices(meta_first))
+        self.assertEqual(src, "/dev/video2")
+        self.assertIn("skipped /dev/video1", desc)
+        self.assertEqual(self.resolve(None, FakeDevices(GPD_AFTER))[0], "/dev/video1")
+
+    def test_the_default_is_auto(self):
+        self.assertEqual(ps.parse_args([]).camera, "auto")
+
+    def test_a_missing_index_falls_back_to_the_scan_and_says_so(self):
+        src, desc, logs = self.resolve("0", FakeDevices(GPD_AFTER))
+        self.assertEqual(src, "/dev/video1")
+        self.assertTrue(any("/dev/video0 does not exist" in l for l in logs), logs)
+
+    def test_an_index_that_is_not_a_camera_falls_back_to_the_scan(self):
+        src, _, logs = self.resolve("2", FakeDevices(GPD_AFTER))
+        self.assertEqual(src, "/dev/video1")
+        self.assertTrue(any("not a camera" in l for l in logs), logs)
+
+    def test_a_present_index_is_used(self):
+        self.assertEqual(self.resolve("1", FakeDevices(GPD_AFTER))[0], "/dev/video1")
+
+    def test_by_id_names_and_paths_follow_the_device(self):
+        for nodes, node in ((GPD_BEFORE, "/dev/video0"), (GPD_AFTER, "/dev/video1")):
+            devs = FakeDevices(nodes, {BY_ID: node})
+            self.assertEqual(self.resolve(BY_ID, devs)[0], node)
+            self.assertEqual(self.resolve("/dev/v4l/by-id/" + BY_ID, devs)[0], node)
+        self.assertEqual(self.resolve("/dev/video1", FakeDevices(GPD_AFTER))[0], "/dev/video1")
+
+    def test_nothing_to_open_is_no_camera(self):
+        for spec, devs in (("auto", FakeDevices({})),
+                           ("auto", FakeDevices({"/dev/video3": (False, "meta")})),
+                           ("/dev/video7", FakeDevices(GPD_AFTER)),
+                           (BY_ID, FakeDevices(GPD_AFTER)),
+                           ("/dev/video2", FakeDevices(GPD_AFTER))):
+            with self.assertRaises(ps.ServerExit, msg=spec) as cm:
+                ps.resolve_camera(spec, devs, log=lambda _m: None)
+            self.assertEqual(cm.exception.code, ps.EXIT_NO_CAMERA)
+
+    def test_without_v4l2_an_index_goes_to_opencv(self):
+        devs = FakeDevices(available=False)
+        self.assertEqual(ps.resolve_camera("auto", devs)[0], 0)
+        self.assertEqual(ps.resolve_camera("2", devs)[0], 2)
+
+    def test_a_path_opens_through_v4l2(self):
+        clock = FakeClock()
+        cv2 = FakeCv2(FakeCapture(clock))
+        cv2.CAP_V4L2 = 200
+        calls = []
+        orig = cv2.VideoCapture
+        cv2.VideoCapture = lambda *a: (calls.append(a), orig(*a))[1]
+        ps.open_camera(cv2, "/dev/video1", 640, 480, clock=clock, sleep=clock.sleep)
+        ps.open_camera(cv2, 3, 640, 480, clock=clock, sleep=clock.sleep)
+        self.assertEqual(calls, [("/dev/video1", 200), (3,)])
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "V4L2 is Linux")
+    def test_the_real_query_reads_this_boxs_nodes(self):
+        devs = ps.V4L2Devices()
+        nodes = devs.nodes()
+        for n in nodes:
+            ok, desc = devs.query(n)
+            self.assertIsInstance(ok, bool)
+            self.assertTrue(desc)
+        if not nodes:
+            with self.assertRaises(ps.ServerExit):
+                ps.resolve_camera("auto", devs, log=lambda _m: None)
+
+
+class SwitchingCv2(FakeCv2):
+    """A cv2 whose VideoCapture hands out a capture per device path; any other
+    path opens nothing (the node is gone)."""
+
+    def __init__(self, captures):
+        super().__init__(None)
+        self.captures = captures
+
+    def VideoCapture(self, source, *api):
+        self.opened_with.append(source)
+        cap = self.captures.get(source)
+        return cap if cap is not None else FakeCapture(FakeClock(), opens=False)
+
+
+class CameraLossTest(unittest.TestCase):
+    """A camera that vanishes mid-stream and comes back under a new node (the
+    GPD's re-enumeration): the server keeps the socket, flags FLAG_NO_CAMERA
+    packets while it is gone, finds the camera again, and only exits 7 when it
+    stays gone past the budget."""
+
+    def serve(self, cv2, devices, clock, n_packets, camera="auto"):
+        backend = FakeBackend()
+        result = {}
+        with tempfile.TemporaryDirectory() as d:
+            model = os.path.join(d, "m.task")
+            open(model, "w").close()
+            sock_path = os.path.join(d, "s.sock")
+            a = args_for(socket=sock_path, model=model, camera=camera)
+
+            def run():
+                try:
+                    ps.run(a, cv2=cv2, make_backend=lambda _a: (backend, 20, 1),
+                           clock=clock, sleep=clock.sleep, devices=devices)
+                    result["exit"] = None
+                except ps.ServerExit as e:
+                    result["exit"] = e.code
+                    result["msg"] = str(e)
+
+            th = threading.Thread(target=run, daemon=True)
+            th.start()
+            deadline = time.monotonic() + 10
+            while not os.path.exists(sock_path) and time.monotonic() < deadline:
+                time.sleep(0.005)
+            c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            c.connect(sock_path)
+            packets = read_packets(c, n_packets, timeout=20)
+            th.join(30)
+            c.close()
+        self.assertFalse(th.is_alive(), "server still running")
+        return packets, result
+
+    def test_a_re_enumerated_camera_is_found_again_under_its_new_node(self):
+        clock = FakeClock()
+        devices = FakeDevices(GPD_BEFORE)
+
+        class Vanishing(FakeCapture):
+            def read(self):
+                ok, frame = super().read()
+                if not ok:
+                    # Mid-stream: the device goes away and comes back renumbered.
+                    devices.replace(GPD_AFTER)
+                return ok, frame
+
+        first = Vanishing(clock, frames=60, real_delay=0.004)
+        second = FakeCapture(clock, frames=60, real_delay=0.004)
+        cv2 = SwitchingCv2({"/dev/video0": first, "/dev/video1": second})
+        packets, result = self.serve(cv2, devices, clock, 10 ** 6)
+
+        flags = [p[8] for p in packets]
+        persons = [p[2] for p in packets]
+        lost = [i for i, f in enumerate(flags) if f & ps.FLAG_NO_CAMERA]
+        self.assertTrue(lost, "no FLAG_NO_CAMERA packet while the camera was gone")
+        self.assertTrue(all(persons[i] == 0 for i in lost))
+        self.assertTrue(all(f & ps.FLAG_UNLEVELLED for f in flags))
+        # Frames before the loss, flagged packets during it, frames after it
+        # (then a second loss: the renumbered camera runs out too).
+        self.assertGreater(lost[0], 0)
+        end = lost[0]
+        while end < len(packets) and flags[end] & ps.FLAG_NO_CAMERA:
+            end += 1
+        resumed = [i for i in range(end, len(packets)) if persons[i] == 1]
+        self.assertGreaterEqual(len(resumed), 50, "tracking did not resume after the camera came back")
+        self.assertEqual(second.reads, 60, "the renumbered camera was not read")
+        self.assertEqual(cv2.opened_with[0], "/dev/video0")
+        self.assertIn("/dev/video1", cv2.opened_with)
+        # No packet lost up to the end of the resumed stream. (Not past it:
+        # the second loss sends its 0.1 s heartbeats with no real delay under
+        # the fake clock -- 600 in a burst -- and a starved client lets the
+        # server's Outbox drop some, which a real 0.1 s cadence never does.)
+        upto = resumed[-1] + 1
+        ids = [p[1] for p in packets[:upto]]
+        self.assertEqual(ids, list(range(ids[0], ids[0] + len(ids))))
+        # The second camera then stops too and stays gone: bounded, exit 7.
+        self.assertEqual(result.get("exit"), ps.EXIT_CAMERA_LOST, result)
+
+    def test_a_camera_that_never_comes_back_is_exit_7_after_the_budget(self):
+        class HeartbeatClock(FakeClock):
+            heartbeats = 0
+
+            def sleep(self, s):
+                if s == ps.NO_CAMERA_PACKET_S:
+                    HeartbeatClock.heartbeats += 1
+                super().sleep(s)
+        clock = HeartbeatClock()
+
+        class Counting(FakeDevices):
+            scans = 0
+
+            def nodes(self):
+                Counting.scans += 1
+                return super().nodes()
+        devices = Counting(GPD_BEFORE)
+        cap = FakeCapture(clock, frames=30, real_delay=0.004)
+        cv2 = SwitchingCv2({"/dev/video0": cap})
+
+        def vanish():
+            devices.replace({})
+        orig_read = cap.read
+
+        def read():
+            ok, f = orig_read()
+            if not ok:
+                vanish()
+            return ok, f
+        cap.read = read
+        packets, result = self.serve(cv2, devices, clock, 10 ** 6)
+        self.assertEqual(result.get("exit"), ps.EXIT_CAMERA_LOST, result)
+        lost = [p for p in packets if p[8] & ps.FLAG_NO_CAMERA]
+        self.assertTrue(lost)
+        # The budget is measured on the SERVER's clock: from the first
+        # FLAG_NO_CAMERA packet (the first ones always arrive -- the socket
+        # buffer is empty when the loss starts) to the exit. Not from the
+        # last packet the client saw: under the fake clock the heartbeats go
+        # out in a burst, and a client starved of CPU lets the server drop
+        # the tail (Outbox drops rather than queues), which a real 0.1 s
+        # cadence never does.
+        gone_for = clock() - lost[0][3]
+        self.assertGreaterEqual(gone_for, ps.CAMERA_REOPEN_BUDGET_S)
+        # It gives up at the first retry past the budget: at most one backoff late.
+        self.assertLess(gone_for, ps.CAMERA_REOPEN_BUDGET_S + max(ps.CAMERA_REOPEN_DELAYS_S) + 0.5)
+        m = re.search(r"not back after (\d+) s", result.get("msg", ""))
+        self.assertTrue(m, result)
+        self.assertGreaterEqual(int(m.group(1)), ps.CAMERA_REOPEN_BUDGET_S)
+        # Retries back off: a rescan per try, far fewer than heartbeats
+        # (0.5, 1, 2, then every 4 s over a 60 s budget is ~17).
+        self.assertLess(Counting.scans, 25)
+        self.assertGreater(Counting.scans, 10)
+        self.assertGreater(HeartbeatClock.heartbeats, 500)
+
+
+def serve_and_read(a, cap, n):
+    """Run the server on `cap` in a thread and return the first `n` headers."""
+    clock = FakeClock()
+    cap.clock = clock
+    backend = FakeBackend()
+    with tempfile.TemporaryDirectory() as d:
+        model = os.path.join(d, "m.task")
+        open(model, "w").close()
+        sock_path = os.path.join(d, "s.sock")
+        a.socket, a.model = sock_path, model
+
+        def serve():
+            try:
+                ps.run(a, cv2=FakeCv2(cap), make_backend=lambda _a: (backend, 20, 1),
+                       clock=clock, sleep=clock.sleep,
+                       devices=FakeDevices({"/dev/video0": (True, "Fake")}))
+            except ps.ServerExit:
+                pass
+
+        th = threading.Thread(target=serve, daemon=True)
+        th.start()
+        deadline = time.monotonic() + 10
+        while not os.path.exists(sock_path) and time.monotonic() < deadline:
+            time.sleep(0.005)
+        c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        c.connect(sock_path)
+        packets = read_packets(c, n)
+        # Keep reading until the server ends on its own (the capture runs out),
+        # so it never waits on accept() for a client that has gone.
+        c.settimeout(0.2)
+        while th.is_alive():
+            try:
+                if not c.recv(1 << 16):
+                    break
+            except socket.timeout:
+                pass
+        th.join(20)
+        c.close()
+    return packets
+
+
+def declared_ms(flags):
+    """The scoring latency a header's flags declare, or None."""
+    if not flags & ps.FLAG_LATENCY_DECLARED:
+        return None
+    return ((flags >> 8) & 0xFF) * ps.LATENCY_UNIT_MS
+
+
+class SourceLatencyTest(unittest.TestCase):
+    """A recorded file declares a 0 ms scoring latency to the game; a camera
+    declares nothing, so the game keeps scoring.dta's 100 ms (PLAN L-4;
+    Skeleton_Native.cpp "Sensor latency")."""
+
+    def test_a_recorded_file_declares_zero_and_a_camera_nothing(self):
+        self.assertEqual(ps.source_latency_ms(ps.parse_args(["--video", "x.mp4"])), 0)
+        self.assertIsNone(ps.source_latency_ms(ps.parse_args([])))
+        self.assertIsNone(ps.source_latency_ms(ps.parse_args(["--camera", "2"])))
+
+    def test_an_explicit_declaration_wins_for_either_source(self):
+        self.assertEqual(ps.source_latency_ms(ps.parse_args(["--source-latency-ms", "150"])), 150)
+        self.assertEqual(
+            ps.source_latency_ms(ps.parse_args(["--video", "x.mp4", "--source-latency-ms", "40"])), 40)
+        for bad in ("-5", "1001", "abc"):
+            with self.assertRaises(SystemExit):
+                ps.parse_args(["--source-latency-ms", bad])
+
+    def test_the_flags_word_carries_it_in_5ms_units(self):
+        self.assertEqual(ps.header_flags(None), ps.FLAG_UNLEVELLED)
+        self.assertEqual(declared_ms(ps.header_flags(None)), None)
+        self.assertEqual(declared_ms(ps.header_flags(0)), 0)
+        self.assertEqual(declared_ms(ps.header_flags(150)), 150)
+        self.assertEqual(declared_ms(ps.header_flags(1000)), 1000)
+        self.assertEqual(declared_ms(ps.header_flags(62)), 60)   # rounded to 5 ms
+        for ms in (None, 0, 150):
+            self.assertTrue(ps.header_flags(ms) & ps.FLAG_UNLEVELLED)
+        # Its own bit: not FLAG_NO_CAMERA's, and clear of the value byte.
+        bits = [ps.FLAG_UNLEVELLED, ps.FLAG_NO_CAMERA, ps.FLAG_LATENCY_DECLARED]
+        self.assertEqual(len(set(bits)), len(bits))
+        self.assertFalse(sum(bits) & 0xFF00)
+        self.assertFalse(ps.header_flags(1000) & ps.FLAG_NO_CAMERA)
+
+    def test_every_packet_of_a_video_run_declares_zero(self):
+        a = ps.parse_args(["--video", "clip.mp4"])
+        packets = serve_and_read(a, FakeCapture(FakeClock(), frames=30, real_delay=0.002), 10)
+        self.assertGreaterEqual(len(packets), 10)
+        self.assertEqual({declared_ms(p[-1]) for p in packets}, {0})
+
+    def test_no_packet_of_a_camera_run_declares_anything(self):
+        a = ps.parse_args([])
+        packets = serve_and_read(a, FakeCapture(FakeClock(), frames=30, real_delay=0.002), 10)
+        self.assertGreaterEqual(len(packets), 10)
+        self.assertEqual({declared_ms(p[-1]) for p in packets}, {None})
 
 
 def _have_cv2_numpy():
@@ -482,6 +852,7 @@ class CameraFramesTest(unittest.TestCase):
     def _serve(a, cap, clock, backend):
         try:
             ps.run(a, cv2=_RealCv2WithCapture(cap), make_backend=lambda _a: (backend, 20, 1),
+                   devices=FakeDevices({"/dev/video0": (True, "Fake")}),
                    clock=clock, sleep=clock.sleep)
         except ps.ServerExit:
             pass
@@ -495,7 +866,7 @@ class _RealCv2WithCapture:
         self._cv2 = cv2
         self._capture = capture
 
-    def VideoCapture(self, source):
+    def VideoCapture(self, source, *api):
         return self._capture
 
     def __getattr__(self, name):
@@ -526,7 +897,9 @@ class RealScriptTest(unittest.TestCase):
             import cv2  # noqa: F401
         except ImportError:
             self.skipTest("cv2 not installed for this python")
-        p, secs = self.run_server("--camera", "63")
+        # A path, not an index: an index whose node is missing now falls
+        # back to the auto scan, which finds a real camera on a box that has one.
+        p, secs = self.run_server("--camera", "/dev/video-np-pose-no-such-node")
         self.assertEqual(p.returncode, ps.EXIT_NO_CAMERA, p.stderr[-800:])
         self.assertIn("POSE_SERVER_ERROR exit=3", p.stderr)
         self.assertLess(secs, ps.FIRST_FRAME_TIMEOUT_S + 3.0)
@@ -570,6 +943,106 @@ class NoAudioImportTest(unittest.TestCase):
             # Control: with the guard disabled the same probe loads it, so the
             # assertion above is not vacuous on this python.
             self.assertEqual(self.probe("pm.block_audio_import = lambda: None"), "module")
+
+
+class _FakeResult:
+    def __init__(self, n, who):
+        self.pose_landmarks = [[who]] * n
+
+
+class _FakeLandmarker:
+    """A PoseLandmarker that sees `scene(ts_ms)` people, never more than its
+    num_poses, and records which thread called it and when."""
+
+    def __init__(self, num_poses, scene, log, busy):
+        self.num_poses, self.scene, self.log, self.busy = num_poses, scene, log, busy
+        self.ts = []
+        self.closed = False
+
+    def detect_for_video(self, image, ts_ms):
+        key = id(self)
+        if key in self.busy:
+            raise AssertionError("one landmarker used from two threads at once")
+        self.busy.add(key)
+        try:
+            time.sleep(0.001)
+            if self.ts and ts_ms <= self.ts[-1]:
+                raise AssertionError(f"VIDEO timestamps must increase: {self.ts[-1]} then {ts_ms}")
+            self.ts.append(ts_ms)
+            self.log.append((self.num_poses, threading.current_thread().name, ts_ms, image))
+            return _FakeResult(min(self.num_poses, self.scene(ts_ms)), self.num_poses)
+        finally:
+            self.busy.discard(key)
+
+    def close(self):
+        self.closed = True
+
+
+class SecondPersonProbeTest(unittest.TestCase):
+    """pose_server.py --probe-second-person (PLAN L-3): num_poses 1 on every
+    frame while one person is seen, a num_poses-2 probe off the main thread
+    every interval, num_poses 2 on every frame while two are seen."""
+
+    def setUp(self):
+        try:
+            import numpy  # noqa: F401  (pose_mediapipe imports it)
+        except ImportError:
+            self.skipTest("numpy not installed")
+        from pose_mediapipe import SecondPersonProbe
+        self.SecondPersonProbe = SecondPersonProbe
+
+    def run_scene(self, scene, frames=300, period_ms=33, interval_s=0.5, hold_s=1.0):
+        log, busy = [], set()
+        made = {}
+
+        def make(n):
+            made[n] = _FakeLandmarker(n, scene, log, busy)
+            return made[n]
+        p = self.SecondPersonProbe(make, 2, interval_s=interval_s, hold_s=hold_s)
+        out = []
+        for i in range(frames):
+            ts = i * period_ms
+            res = p.detect_for_video(("frame", ts), ts, make_copy=lambda ts=ts: ("copy", ts))
+            out.append((ts, res.pose_landmarks[0][0] if res.pose_landmarks else None,
+                        len(res.pose_landmarks)))
+            if p._probe is not None:        # let the fake probe finish: deterministic
+                p._probe.exception(timeout=5)
+        p.close()
+        self.assertTrue(made[1].closed and made[2].closed)
+        return p, out, log
+
+    def test_one_dancer_is_tracked_by_num_poses_1_and_probed_off_thread(self):
+        p, out, log = self.run_scene(lambda ts: 1)
+        self.assertTrue(all(who == 1 for _, who, _ in out), "a frame came from the 2-pose landmarker")
+        main = threading.current_thread().name
+        multi_calls = [c for c in log if c[0] == 2]
+        self.assertTrue(multi_calls)
+        self.assertTrue(all(thread != main for _, thread, _, _ in multi_calls),
+                        "the probe ran on the main thread")
+        self.assertTrue(all(img[0] == "copy" for *_, img in multi_calls),
+                        "the probe was handed the main thread's image, not a copy")
+        # a probe on the first frame >= 0.5 s after the last: every 16th
+        # 33 ms frame, frames 0, 16, ..., 288 -> 19
+        self.assertEqual(p.probes, 19)
+        steps = [b[2] - a[2] for a, b in zip(multi_calls, multi_calls[1:])]
+        self.assertTrue(all(s >= 500 for s in steps), steps)
+
+    def test_a_second_dancer_switches_to_num_poses_2_within_one_interval(self):
+        join = 3000
+        _, out, _ = self.run_scene(lambda ts: 2 if ts >= join else 1)
+        first_two = next(ts for ts, _, n in out if n >= 2)
+        self.assertGreaterEqual(first_two, join)
+        self.assertLessEqual(first_two - join, 500 + 2 * 33)
+        after = [(who, n) for ts, who, n in out if ts > first_two]
+        self.assertTrue(all(who == 2 and n == 2 for who, n in after))
+
+    def test_back_to_num_poses_1_after_hold_when_the_second_dancer_leaves(self):
+        p, out, _ = self.run_scene(lambda ts: 2 if 1000 <= ts < 4000 else 1)
+        whos = {ts: who for ts, who, _ in out}
+        self.assertEqual(whos[3960], 2)                # still two
+        self.assertEqual(whos[4950], 2)                # one, but within hold_s
+        self.assertTrue(all(whos[ts] == 1 for ts in whos if ts >= 5100), "never went back")
+        self.assertEqual(p.switches, 2)
 
 
 if __name__ == "__main__":

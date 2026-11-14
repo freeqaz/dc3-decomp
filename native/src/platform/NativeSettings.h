@@ -8,6 +8,28 @@
 //   can disable them (plain getenv() truthiness treats DC3_FOO=0 as "set" = on).
 bool Dc3EnvFlag(const char *name, bool defaultOn);
 
+// DC3_PROFILE=dev (default) | release -- the native build's defaults, defined
+// in one table in System_Native.cpp (docs/debugging/native.md "Profiles").
+// Dc3ProfileApply() runs first thing in main(): it sets each dev row that is
+// unset or empty, so a variable already set (non-empty) always wins.  release sets
+// nothing (each variable's compiled default = the player-facing build).
+enum { kDc3ProfileDev = 0, kDc3ProfileRelease = 1 };
+struct Dc3ProfileDefault {
+    const char *name;  // the ordinary variable the row defaults
+    const char *value; // its value under dev
+    bool desktopOnly;  // not applied on web (no debug server; web tap already on)
+    const char *what;
+    const char *label; // one banner line: what the player sees switched on
+    // The reader tests presence (getenv != null), so "0" would turn it ON.
+    // Dc3ProfileApply unsets such a row when it is set to 0/false/off/no, so
+    // MILO_PERF=0 means off under every profile.
+    bool presence;
+};
+const Dc3ProfileDefault *Dc3ProfileDevDefaults(int *count);
+int Dc3ProfileResolve();  // parses DC3_PROFILE now (warns on an unknown value)
+bool Dc3ProfileIsDev();   // the resolved profile
+void Dc3ProfileApply();
+
 // Controller-mode policy, DC3_CONTROLLER_MODE=auto (default) | forced |
 // faithful (defined in System_Native.cpp; see docs/debugging/native.md
 // "Controller mode policy").
