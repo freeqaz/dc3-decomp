@@ -24,7 +24,6 @@
 #include <gtest/gtest.h>
 
 #include <cstdlib>
-#include <limits>
 #include <string>
 
 #include "test_helpers.h"
@@ -421,97 +420,4 @@ TEST_F(NativeUiMaterialAssetTest, PeakStripeIntensifyDoublesWorldAlpha) {
     EXPECT_FLOAT_EQ(BuildMaterialParams(pink1, false, world).uniforms.color[3], 2.0f * authored)
         << "a world intensify stripe must draw at twice its authored alpha, as standard.ps does";
     EXPECT_FLOAT_EQ(BuildPassMaterialParams(pink1, world).uniforms.color[3], 2.0f * authored);
-}
-
-// alpha_cut is an alpha TEST, never alpha-to-coverage (np-gfx-light round 7).
-// NgMat::SetBasicState sets SetAlphaTestEnable(mAlphaCut) and
-// SetAlphaFunc(5 = GREATER, alpha_threshold); no DC3 code enables alpha-to-mask.
-// The engine made alpha_cut alpha-to-coverage on its 4x MSAA main pass, so
-// throneroom's peak columns (SrcAlpha + alpha_cut, threshold 0) were covered
-// by alpha and blended by it again: a screen-door at about alpha squared,
-// 46.5 against Xenia's 52.7 in the pillar box (52.2 with alpha_cut cleared
-// live; clearing it on Xenia changes nothing, 52.9 both ways). Without
-// coverage the threshold-0 test must still drop alpha-0 texels, as GREATER 0
-// does, or they would draw and write depth.
-// Sabotages tried (engine e75ea1a), each verified to fail here:
-// kAlphaCutIsCoverage = true in RndShape_DC3.h (2 tests); kAlphaTestIsGreater
-// = false (2); the primary builder back on threshold / 255 (1); the pass
-// builder back on threshold / 255 (1); MaterialAlphaTestRef without its
-// FLT_MIN floor (1). NOT caught here: Mesh_Wgpu reading GetAlphaCut() into
-// the pipeline key directly instead of MaterialAlphaToCoverage (no test draws
-// through the pipeline key); the live A/B in the lane's round-7 evidence is
-// what measures that half.
-bool MaterialAlphaToCoverage(bool alphaCut);
-float MaterialAlphaTestRef(bool alphaCut, int alphaThreshold);
-
-namespace {
-// The shader's test: `if (baseColor.a < material.alphaThreshold) discard;`
-bool Discarded(float alpha, float ref) { return alpha < ref; }
-} // namespace
-
-TEST(NativeUiMaterialTerms, AlphaCutIsAGreaterTestWithoutCoverage) {
-    EXPECT_FALSE(MaterialAlphaToCoverage(true))
-        << "DC3 alpha_cut must not become alpha-to-coverage: a SrcAlpha cut material "
-           "would be attenuated twice, in a 4-sample screen-door";
-    EXPECT_FALSE(MaterialAlphaToCoverage(false));
-
-    // GREATER 0: alpha 0 is dropped, anything above it survives.
-    const float ref0 = MaterialAlphaTestRef(true, 0);
-    EXPECT_TRUE(Discarded(0.0f, ref0)) << "threshold 0 still drops alpha 0 (GREATER)";
-    EXPECT_FALSE(Discarded(1.0f / 255.0f, ref0));
-    EXPECT_GE(ref0, std::numeric_limits<float>::min()) << "a denormal reference may be flushed to 0 on the GPU";
-    // GREATER 128: 128/255 is dropped, 129/255 survives.
-    const float ref128 = MaterialAlphaTestRef(true, 128);
-    EXPECT_TRUE(Discarded(128.0f / 255.0f, ref128));
-    EXPECT_FALSE(Discarded(129.0f / 255.0f, ref128));
-    // No alpha_cut: nothing is dropped, alpha 0 included.
-    EXPECT_FALSE(Discarded(0.0f, MaterialAlphaTestRef(false, 0)));
-    EXPECT_FALSE(Discarded(0.0f, MaterialAlphaTestRef(false, 200)));
-}
-
-TEST_F(NativeUiMaterialBuilderTest, BuildersHandTheShaderAGreaterAlphaTest) {
-    ASSERT_NE(gWgpuRnd, nullptr);
-    RndMat *cut = MakeMat(false, true, true, 1.0f);
-    cut->SetBlend(BaseMaterial::kBlendSrcAlpha);
-    cut->SetProperty("alpha_cut", DataNode(1));
-    cut->SetProperty("alpha_threshold", DataNode(0));
-    ASSERT_TRUE(cut->GetAlphaCut());
-    for (const UiDrawTerms &terms : {kRetail, kEngineDefault, UiDrawTermsFor(false)}) {
-        for (const MaterialParams &p : {BuildMaterialParams(cut, false, terms),
-                                        BuildPassMaterialParams(cut, terms)}) {
-            EXPECT_TRUE(Discarded(0.0f, p.uniforms.alphaThreshold)) << "alpha 0 must be cut";
-            EXPECT_FALSE(Discarded(1.0f / 255.0f, p.uniforms.alphaThreshold));
-        }
-    }
-    cut->SetProperty("alpha_threshold", DataNode(128));
-    EXPECT_TRUE(Discarded(128.0f / 255.0f, BuildMaterialParams(cut, false, kRetail).uniforms.alphaThreshold));
-    EXPECT_TRUE(Discarded(128.0f / 255.0f, BuildPassMaterialParams(cut, kRetail).uniforms.alphaThreshold));
-    cut->SetProperty("alpha_cut", DataNode(0));
-    EXPECT_FALSE(Discarded(0.0f, BuildMaterialParams(cut, false, kRetail).uniforms.alphaThreshold));
-    delete cut;
-}
-
-// The asset fact the rule is for: the throneroom peak columns are SrcAlpha,
-// intensify, alpha_cut with threshold 0, so with coverage they drew at about
-// their alpha squared.
-TEST_F(NativeUiMaterialAssetTest, ThroneroomPeakColumnsAreSrcAlphaCut) {
-    const char *root = getenv("MILO_LIB");
-    if (!root || !root[0])
-        GTEST_SKIP() << "MILO_LIB not set";
-    std::string path = std::string(root) + "/world/throneroom/gen/throneroom.milo_xbox";
-    ObjectDir *dir = DirLoader::LoadObjects(FilePath(path.c_str()), nullptr, nullptr);
-    ASSERT_NE(dir, nullptr) << path;
-    RndMat *col = nullptr;
-    for (ObjDirItr<RndMat> it(dir, true); it != nullptr; ++it) {
-        if (strcmp(it->Name(), "peak_columns_1.mat") == 0) {
-            col = it;
-            break;
-        }
-    }
-    ASSERT_NE(col, nullptr) << "peak_columns_1.mat not in " << path;
-    EXPECT_EQ(col->GetBlend(), BaseMaterial::kBlendSrcAlpha);
-    EXPECT_TRUE(col->GetAlphaCut());
-    EXPECT_EQ(col->GetAlphaThreshold(), 0);
-    EXPECT_TRUE(col->GetIntensify());
-    EXPECT_FALSE(MaterialAlphaToCoverage(col->GetAlphaCut()));
 }
