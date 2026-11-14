@@ -78,6 +78,11 @@ Above the definition (was lines 252-291):
 // ties; the source cannot have the ordering without the recolour.  Reverted.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.733, 4 non-equal row(s): NOT A BUG.
+Every row is register-only; `scripts/analysis/regperm_equivalence.py` raised 1 lead(s),
+each read by hand against the listing: pure register permutation, no operand swap.
+(CALLARG? leads read by hand: MemHeap::Truncate takes r3-r6; the r10 lead is a dead
+leftover.)
 
 ## `?MemFindAddrHeap@@YAHPAX@Z`
 
