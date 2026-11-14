@@ -100,3 +100,9 @@ Inside the body (was lines 1496-1508):
                 // scratch values. Reordering the two tests is not a spelling:
                 // it is a different branch structure (and a different program).
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.845, 6 non-equal row(s): One
+BRANCHDEST row (idx 149): the image jumps past the `cmpwi cr6, type, 0x2` re-test it
+already knows is true on that edge; ours lands on it (r10 still holds the type) and
+falls through to the same block. The 5 register rows are that r10/r11 choice. Jump
+threading, NOT A BUG.
