@@ -147,13 +147,16 @@ def advance(kit, targets, timeout, prefer=("continue", "done", "play_again_no", 
     return None
 
 
-# Song time (s) at which the footage's dancer stops dancing, where a mode can
-# play past it.  The clips come from a Perform session; Dance Battle's
-# Macarena runs past Perform's end (155.8 s) and the dancer walks out of the
-# picture from clip 161 s = song 153 s (frames checked, PLAN H-26).  The
-# feeder holds her last dancing frame from here on.
-# Only the Battle (duo) clips are held: Perform ends inside the dance.
-DANCE_END = {"macarena": 153.0}
+# Song time (s) at which the footage's dancer stops dancing.  The clips come
+# from a Perform session, and after its last move the dancer walks up to the
+# camera and out of the picture -- and the game pauses, as it should with
+# nobody on the sensor.  Modes that play past Perform's end meet that: Dance
+# Battle's Macarena (she leaves from song 153 s, Perform ends 155.8 s; frames
+# checked, PLAN H-26) and Rehearse's Get Low (she stops at ~187.5 s, gone by
+# 192 s; frames checked, the full soak's Rehearse paused at song 193.2 s with
+# Resume disabled).  The feeder holds her last dancing frame from here on, for
+# every mode: a held frame after the dance costs no move.
+DANCE_END = {"macarena": 153.0, "getlow": 187.0}
 
 
 def footage(dirn, song, duo=False):
@@ -177,7 +180,7 @@ class Soak:
     def clip(self, path):
         self.current_clip = path
         name = os.path.basename(path).rsplit(".", 1)[0]
-        end = DANCE_END.get(name[:-4]) if name.endswith("_duo") else None
+        end = DANCE_END.get(name[:-4] if name.endswith("_duo") else name)
         with open(self.control + ".tmp", "w") as f:
             f.write(f"{path} {self.a.pre}" + (f" {self.a.pre + end}" if end else "") + "\n")
         os.replace(self.control + ".tmp", self.control)
@@ -408,6 +411,11 @@ class Soak:
                     say(f"rehearse: {s}")
                 if s == "practice_endgame_screen":
                     break
+                # The same as a song: a pause the player sees is continued
+                # (the full soak sat 2.8 min on practice_pause_screen).
+                if s == "confirm_quit_screen" or (
+                        self.watch.paused_since and time.time() - self.watch.paused_since > 4):
+                    self.resume()
                 time.sleep(3)
         finally:
             self.watch.in_song = False
