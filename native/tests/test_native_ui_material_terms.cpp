@@ -234,12 +234,15 @@ TEST_F(NativeUiMaterialBuilderTest, PrimaryBuilderAppliesTheUiTerms) {
     EXPECT_EQ(p.uniforms.prelit, 1.0f);
     EXPECT_EQ(p.uniforms.gammaShading, 0.0f);
 
-    // A lit material that ignores its environ: unlit (ambient 1, no lights)
-    // under the retail terms (the move names), not under the default.
+    // A lit material that ignores its environ: unlit (ambient 1, no lights),
+    // as NgMat::SetupAmbient does (the move names). Under the UI terms and
+    // without them: the DC3 retail light model (np-gfx-light) applies the same
+    // rule to the world, where the phrase-meter ring and the hand ribbons
+    // depend on it.
     RndMat *noEnv = MakeMat(false, false, false, 1.0f);
     ASSERT_FALSE(noEnv->GetUseEnviron());
     EXPECT_EQ(BuildMaterialParams(noEnv, true, kRetail).uniforms.unlit, 1.0f);
-    EXPECT_EQ(BuildMaterialParams(noEnv, true, kEngineDefault).uniforms.unlit, 0.0f);
+    EXPECT_EQ(BuildMaterialParams(noEnv, true, kEngineDefault).uniforms.unlit, 1.0f);
     // An authored prelit material is not "unlit", whatever its environ.
     RndMat *prelitNoEnv = MakeMat(true, false, false, 1.0f);
     EXPECT_EQ(BuildMaterialParams(prelitNoEnv, false, kRetail).uniforms.unlit, 0.0f);
@@ -263,8 +266,9 @@ TEST_F(NativeUiMaterialBuilderTest, PrimaryBuilderAppliesTheUiTerms) {
 TEST_F(NativeUiMaterialBuilderTest, PassBuilderAppliesTheUiTerms) {
     ASSERT_NE(gWgpuRnd, nullptr);
     RndMat *noEnv = MakeMat(false, false, false, 1.0f);
+    // use_environ 0 is unlit under either term set (see the primary builder).
     EXPECT_EQ(BuildPassMaterialParams(noEnv, kRetail).uniforms.unlit, 1.0f);
-    EXPECT_EQ(BuildPassMaterialParams(noEnv, kEngineDefault).uniforms.unlit, 0.0f);
+    EXPECT_EQ(BuildPassMaterialParams(noEnv, kEngineDefault).uniforms.unlit, 1.0f);
     EXPECT_EQ(BuildPassMaterialParams(noEnv, kRetail).uniforms.gammaShading, 1.0f);
     EXPECT_EQ(BuildPassMaterialParams(noEnv, kEngineDefault).uniforms.gammaShading, 0.0f);
 
@@ -323,13 +327,14 @@ TEST_F(NativeUiMaterialBuilderTest, PremultipliedAlphaColourIsScaledByAlpha) {
 }
 
 // The two-argument entry point the draw path uses must forward the current
-// phase's terms: outside the overlay phase it equals the engine default.
+// phase's terms: outside the overlay phase those are the world's
+// (UiDrawTermsFor(false): the shape's shading space, no UI material terms).
 TEST_F(NativeUiMaterialBuilderTest, DrawPathEntryPointForwardsTheCurrentTerms) {
     ASSERT_NE(gWgpuRnd, nullptr);
     ASSERT_FALSE(gWgpuRnd->FrameInOverlay()) << "test runs outside a frame";
     RndMat *noEnv = MakeMat(false, false, false, 1.0f);
     MaterialParams viaDrawPath = BuildMaterialParams(noEnv, true);
-    MaterialParams viaDefault = BuildMaterialParams(noEnv, true, kEngineDefault);
+    MaterialParams viaDefault = BuildMaterialParams(noEnv, true, UiDrawTermsFor(false));
     EXPECT_EQ(viaDrawPath.uniforms.unlit, viaDefault.uniforms.unlit);
     EXPECT_EQ(viaDrawPath.uniforms.prelit, viaDefault.uniforms.prelit);
     EXPECT_EQ(viaDrawPath.uniforms.gammaShading, viaDefault.uniforms.gammaShading);
