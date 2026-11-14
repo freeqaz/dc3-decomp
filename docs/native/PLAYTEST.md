@@ -51,9 +51,19 @@ scripts/play.sh --check
 
 Each line is OK, WARN (plays, something is lost) or FAIL (fix first), with
 what to do. It checks the build, the game data, the desktop session, the GPU
-(Vulkan), sound, the pose packages and model, and the camera: it opens it,
-measures its frame rate and looks for a person (stand where you will dance).
-`--no-person` skips that last part.
+(Vulkan), sound, the pose packages and model, and the camera: it picks the
+camera the way the tracker will (`--camera auto`, the default: the first
+video-capture device), opens it, measures its frame rate and looks for a
+person (stand where you will dance). `--no-person` skips that last part.
+
+**Camera frame rate matters more than anything else on this list.** The game
+scores each move from the poses it receives; a camera delivering 8 pictures
+a second shows it a quarter of what 30 do, and the moves score rough and late
+(a session at 7.7 accepted frames a second scored badly). The check WARNs
+below 15. The usual cause is light: in a dim room a webcam lengthens its
+exposure and slows down, so turn on more light or face a window, and check
+again. (Do not change the camera's exposure settings by hand; camera
+settings are being worked out in `np-pose-perf`.)
 
 ## Where to stand
 
@@ -65,15 +75,15 @@ below are starting points.
 |---|---|---|
 | Distance | **2.3–2.7 m** from the camera (guess) | A Kinect plays at 1.8–3 m with a 58.5° x 45.6° view. A typical webcam's view is similar (~60–70° wide, ~45° high at 4:3); whole body plus raised hands at 45° high needs about 2.3 m for a 1.75 m person. Measured on the footage clip: 2.45 m left no room for raised hands, 2.66 m was "Looks good" |
 | Camera height | Waist to chest, **0.8–1.2 m**, level (guess) | Looking down shortens the legs and the game's floor estimate tilts; the game levels a tilted camera but works best when it does not have to |
-| Light | In front of you or from the side; no bright window behind you | MediaPipe loses limbs against a bright background; webcams also slow down in the dark (the check warns under 24 fps) |
+| Light | Bright, in front of you or from the side; no bright window behind you | MediaPipe loses limbs against a bright background; webcams slow down in the dark (the check warns under 15 fps, see above) |
 | Background | Plain, nobody else in the picture | A second person is a second player (Battle wants exactly that; Perform does not) |
 | Two players | Side by side, a step apart, both whole in the picture | Dance Battle starts only with two people on the sensor |
 
 ## Playing
 
 ```sh
-scripts/play.sh                  # check, then play: 1280x720 window, camera 0
-scripts/play.sh --camera 1       # another camera
+scripts/play.sh                  # check, then play: 1280x720 window, the first camera
+scripts/play.sh --camera /dev/v4l/by-id/usb-...   # one particular camera (ls /dev/v4l/by-id)
 scripts/play.sh --no-pose        # keyboard only, nothing scored
 ```
 
@@ -108,28 +118,27 @@ stand-in skeleton and nothing you do is scored.
 
 | Notice | Meaning | What to do |
 |---|---|---|
-| No camera: pose tracking off | No `/dev/video` device at that index | Plug in the camera, quit, start again (or `--camera N`) |
-| Camera lost | The camera stopped sending pictures mid-session | Check the cable; quit and start again |
+| No camera: pose tracking off | No video-capture device (or, with `--camera N`, none at that number: a camera that re-connects can come back under another number, so `auto` is the default) | Plug in the camera, quit, start again with no `--camera` |
+| Camera lost | The camera stopped sending pictures mid-session; the tracker looks for it again (by the same `--camera` rule) for about a minute | Check the cable; if it does not come back, quit and start again |
 | Pose packages missing / Pose model missing / No python3 | The tracker could not start | `scripts/playtest/bootstrap.sh --fix` |
 | Pose server did not start / exited / crashed | The tracker died; its own words are in the log | Send the session back |
-| "Stand in front of the sensor" mid-song while you are in view | Known bug P-12 (the tracker loses you briefly) | Press Continue (Enter), keep dancing, mention the time |
+| "Stand in front of the sensor" mid-song | You left the picture (or the tracker lost you) for about 2 s. Shorter losses are held (P-12, fixed). Continue is greyed out until the game sees you again | Step back into view, then Continue. If you were in view the whole time, mention the time |
 | "Raise both hands to change Profile" bubbles | The game's sign-in hint; it lingers with two people (G-18) | Ignore |
 | Kinect Tuner notice | That screen belongs to the 360 dashboard | Ignore |
 
-## Known issues (PLAN open rows, 2026-11-13)
+## Known issues (PLAN open rows, 2026-11-14)
 
-- **P-12** a dancer fully in view can be paused mid-song (above). Lane
-  `np-tracking`.
-- **W-10** once, the second song with the camera was never scored. If a song
-  shows no move cards, say which song and which number it was.
-- **L-4** the latency default for a live camera is not settled; scores may run
-  low or high.
+- **Camera frame rate**: the main suspect for rough live scores (a session
+  at 7.7 accepted frames a second). Light first; see the check above.
 - **H-18** no fullscreen; a maximised window shows the game in a corner.
+- **H-20** with a person moving in view, only the first pad press on a menu
+  may land: use your hands for the menus, or step out of view to use a pad.
 - **G-10** audio has not been judged by ear on this port: tell us how it
-  sounds. **G-26** movies have no sound.
-- **G-11** Rehearse shows no dancer.
-- **G-22** Story's "Sign Into a Gamer Profile" does nothing. **G-25** a Battle
-  tie is recorded as lost.
+  sounds.
+- **G-25** a Battle tie is recorded as lost (the original does the same).
+- If a song shows no move cards, or you are paused while in view, say which
+  song, which number it was in the session, and the time (W-10 and P-12 are
+  fixed; a repeat is news).
 
 ## After the session: what to send back
 

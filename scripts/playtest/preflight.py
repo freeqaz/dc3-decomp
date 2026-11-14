@@ -4,7 +4,7 @@ in plain words, what is wrong and what to do about it.  Run by scripts/play.sh
 (always, and alone with --check).  Standard library only: it must run on a box
 where the pose packages are the thing that is missing.
 
-  preflight.py [--camera N | --video FILE] [--python PY] [--data DIR]
+  preflight.py [--camera auto|N|PATH | --video FILE] [--python PY] [--data DIR]
                [--binary EXE] [--model M] [--no-pose] [--windowed|--headless]
                [--json OUT] [--no-person]
 
@@ -22,6 +22,9 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
+sys.path.insert(0, HERE)
+import camera_resolve  # noqa: E402  (standard library only)
+
 MODEL_SHA256 = "4eaa5eb7a98365221087693fcc286334cf0858e2eb6e15b506aa4a7ecdcec4ad"
 PINNED = {"mediapipe": "1.0.0", "numpy": "2.2.6"}  # native/scripts/pose-requirements.txt
 
@@ -174,15 +177,13 @@ def check_model(a):
     return True
 
 
-def camera_names():
-    out = []
-    for d in sorted(glob.glob("/sys/class/video4linux/video*")):
-        try:
-            name = open(os.path.join(d, "name")).read().strip()
-        except OSError:
-            name = "?"
-        out.append((os.path.basename(d), name))
-    return out
+MIN_CAMERA_FPS = 15   # below this the scorer sees too little of each move
+WANT_CAMERA_FPS = 30
+
+
+def camera_list(r):
+    return ", ".join(f"{os.path.basename(n)} '{d}'" + ("" if ok else " (not a camera)")
+                     for n, d, ok in r["cameras"]) or "none"
 
 
 def check_camera(a, have_py, have_model):
@@ -197,13 +198,24 @@ def check_camera(a, have_py, have_model):
             return
     else:
         what = "camera"
-        cams = camera_names()
-        if not cams:
-            add("FAIL", what, "no camera found (no /dev/video* device)",
-                "plug in a webcam, check it is not switched off (some laptops have a key or "
-                "a shutter), then run the check again")
+        r = camera_resolve.resolve(a.camera)
+        if r["node"] is None:
+            if not any(ok for _, _, ok in r["cameras"]):
+                add("FAIL", what, "no camera found (no video-capture device"
+                    + (f"; devices: {camera_list(r)})" if r["cameras"] else ")"),
+                    "plug in a webcam, check it is not switched off (some laptops have a key "
+                    "or a shutter), then run the check again")
+            elif str(a.camera).isdigit():
+                add("FAIL", what, camera_resolve.missing_index_words(a.camera, r), "")
+            else:
+                add("FAIL", what, f"{r['error']}; devices: {camera_list(r)}",
+                    f"use --camera auto (the default) or the {camera_resolve.BY_ID} name")
             return
-        src = ["--camera", str(a.camera)]
+        if r["fallback"]:
+            # The server falls back to a scan, so the game still gets a
+            # camera -- but not the one asked for, and maybe not next time.
+            add("WARN", what, r["fallback"] + f"; the game will use {r['node']}", "")
+        src = ["--camera", a.camera]
     if not have_py:
         add("WARN", what, "not tested: the pose packages are missing", "")
         return
@@ -211,33 +223,53 @@ def check_camera(a, have_py, have_model):
     cmd += ["--model", a.model] if (have_model and not a.no_person) else ["--no-pose"]
     rc, out, err = run(cmd, timeout=90)
     try:
-        r = json.loads(out.strip().splitlines()[-1])
+        p = json.loads(out.strip().splitlines()[-1])
     except (ValueError, IndexError):
         add("FAIL", what, f"the probe crashed: {err.strip()[-300:]}", "")
         return
-    if not r.get("ok"):
-        devs = ", ".join(f"{d} ({n})" for d, n in camera_names()) or "none"
-        add("FAIL", what, f"{r.get('error', 'unknown error')}; devices: {devs}",
-            "close any other program using the camera (browser, video call), or pick "
-            "another one with --camera N")
+    if not p.get("ok"):
+        kind = p.get("kind")
+        devs = camera_list(p["camera"]) if p.get("camera") else ""
+        if kind == "busy":
+            users = ", ".join(f"{n} (pid {pid})" for pid, n in p.get("holders", []))
+            add("FAIL", what, f"another program is using the camera: {users}",
+                "close it (a browser tab, a video call, another game), then run the check again")
+        elif kind == "no_frames":
+            add("FAIL", what, f"{p.get('error')}: it opened but sent no picture"
+                + (f"; devices: {devs}" if devs else ""),
+                "check the camera's shutter or privacy switch; if the box has several "
+                "cameras, pick one with --camera N or its /dev/v4l/by-id name")
+        else:
+            add("FAIL", what, f"{p.get('error', 'unknown error')}"
+                + (f"; devices: {devs}" if devs else ""),
+                "use --camera auto (the default); unplug and replug the camera")
         return
-    desc = f"{r['width']}x{r['height']}"
-    if r.get("fps"):
-        desc += f" at {r['fps']} fps measured"
-        if r["fps"] < 24 and not a.video:
-            add("WARN", what + " speed", f"the camera delivers only {r['fps']} fps (30 wanted)",
-                "more light usually helps: webcams slow down in the dark")
+    desc = f"{p['width']}x{p['height']}"
+    if p.get("camera"):
+        desc = f"{p['camera'].get('desc') or p['camera'].get('node')}, " + desc
+    if p.get("fps"):
+        desc += f" at {p['fps']} fps measured"
+        if p["fps"] < MIN_CAMERA_FPS and not a.video:
+            add("WARN", what + " speed",
+                f"the camera delivers only {p['fps']} pictures a second ({WANT_CAMERA_FPS} "
+                "wanted). The game scores each move from the poses it sees, so at this rate "
+                "it misses much of every move and scores feel rough and late (a session at "
+                "7.7 a second scored badly)",
+                "turn on more light or face a window: in dim light a webcam lengthens its "
+                "exposure and slows down. Then run the check again")
     add("OK", what, desc)
-    if "advice" in r:
-        status = "OK" if r.get("advice", "").startswith("Looks good") else "WARN"
-        add(status, "you, in the picture", r["advice"],
+    if "advice" in p:
+        status = "OK" if p.get("advice", "").startswith("Looks good") else "WARN"
+        add(status, "you, in the picture", p["advice"],
             "" if status == "OK" else "see docs/native/PLAYTEST.md, 'Where to stand'")
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
     g = ap.add_mutually_exclusive_group()
-    g.add_argument("--camera", type=int, default=0)
+    g.add_argument("--camera", default="auto",
+                   help="auto (the first video-capture device), an index, a path or a "
+                        "/dev/v4l/by-id name, as pose_server.py --camera")
     g.add_argument("--video")
     ap.add_argument("--python", default="")
     ap.add_argument("--data", default=os.environ.get("DC3_DATA") or os.path.join(REPO, "orig-assets"))

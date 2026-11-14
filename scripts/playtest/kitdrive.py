@@ -8,6 +8,19 @@ A press is preceded by the controller-mode wake button (l3), as a player
 picking up a pad would: under DC3_CONTROLLER_MODE=auto with a tracker running
 the shell is in the hand menus, and the first pad press only wakes it
 (docs/debugging/native.md, Controller Mode Policy).
+
+It only ever drives -- and only ever quits -- a game it started itself: the
+session folder must be new (no game.pid / http_port from an earlier game),
+the debug server it talks to must report the pid of the game its own
+play.sh launched, and quit() refuses any pid that is not a descendant of
+that play.sh.  A driver that "fell back" to whatever game answered once quit
+a person's song mid-way (np-gpd-test, 2026-11-14).
+
+Presses go through POST /api/input/sequence: the game turns each into a
+ButtonDown message on one frame and the ButtonUp on the next (HttpServer.cpp
+DispatchInjectedButtons), so a press can never fall between two frames the
+way a window-system key tap can.  Presses are spaced at least MIN_GAP_FRAMES
+apart, so two presses of one button are never merged into one.
 """
 import json
 import os
@@ -29,6 +42,28 @@ _GLOBAL_OPTIONS = bytes([
     0, 9, 4, 0, 0, 0, 0, 0, 0])
 
 
+MIN_GAP_FRAMES = 3
+
+
+class NotOurGame(RuntimeError):
+    """The game in front of the driver is not one it started."""
+
+
+def descends_from(pid, ancestor):
+    """Whether process `pid` is `ancestor` or one of its descendants."""
+    seen = 0
+    while pid and pid > 1 and seen < 64:
+        if pid == ancestor:
+            return True
+        try:
+            with open(f"/proc/{pid}/stat") as f:
+                pid = int(f.read().rsplit(")", 1)[1].split()[1])
+        except (OSError, ValueError, IndexError):
+            return False
+        seen += 1
+    return False
+
+
 def seed_home(home, tutorials_seen=True):
     """A playtest home (saves, cache) as a console that has seen every tutorial."""
     os.makedirs(os.path.join(home, "cache", "global"), exist_ok=True)
@@ -46,6 +81,12 @@ class Kit:
         self.home = os.path.abspath(home)
         self.log = log
         os.makedirs(self.session, exist_ok=True)
+        for leftover in ("game.pid", "http_port"):
+            if os.path.exists(os.path.join(self.session, leftover)):
+                # An earlier game's files: its pid or port would point the
+                # driver at a game it did not start (maybe one being played).
+                raise NotOurGame(f"{self.session} already holds {leftover} from another game; "
+                                 "a driven session needs a new folder")
         e = dict(os.environ)
         e.update(env or {})
         cmd = [os.path.join(REPO, "scripts", "play.sh"), "--home", self.home,
@@ -63,10 +104,16 @@ class Kit:
 
     # ---- process ----
     def game_pid(self):
+        """The pid play.sh recorded -- only if it is this driver's game."""
         try:
-            return int(open(os.path.join(self.session, "game.pid")).read())
+            with open(os.path.join(self.session, "game.pid")) as f:
+                pid = int(f.read())
         except (OSError, ValueError):
             return None
+        return pid if self.owns(pid) else None
+
+    def owns(self, pid):
+        return descends_from(pid, self.proc.pid)
 
     def alive(self):
         pid = self.game_pid()
@@ -102,7 +149,13 @@ class Kit:
                                    f"(see {self.session}/play_sh.out)")
             try:
                 self.port = int(open(pf).read().split()[0])
-                if self.jget("/health", 2):
+                h = self.jget("/health", 2)
+                if h:
+                    pid = (h.get("data") or {}).get("pid")
+                    if pid is not None and not self.owns(int(pid)):
+                        self.port = None
+                        raise NotOurGame(f"port {pf} answers for pid {pid}, which this driver "
+                                         "did not start; not driving it")
                     return self.port
             except (OSError, ValueError, IndexError):
                 pass
@@ -110,15 +163,16 @@ class Kit:
         raise RuntimeError("the game's debug server never answered")
 
     def quit(self, timeout=60):
-        """SIGTERM the game (it quits at a frame boundary, H-9), then let
-        play.sh write its summary."""
-        pid = self.game_pid()
+        """SIGTERM this driver's own game (it quits at a frame boundary,
+        H-9), then let play.sh write its summary.  Never anything else: a
+        pid that is not a descendant of our play.sh is left alone."""
+        pid = self.game_pid()  # None unless it is ours
         if pid and self.alive():
             os.kill(pid, signal.SIGTERM)
         try:
             return self.proc.wait(timeout)
         except subprocess.TimeoutExpired:
-            if pid:
+            if pid and self.owns(pid):
                 try:
                     os.kill(pid, signal.SIGKILL)
                 except OSError:
@@ -179,12 +233,14 @@ class Kit:
         return None
 
     def press(self, *buttons, gap=20, wake=True):
-        """Press buttons in order, `gap` frames apart, after a wake."""
+        """Press buttons in order, `gap` frames apart (at least
+        MIN_GAP_FRAMES), after a wake."""
+        gap = max(int(gap), MIN_GAP_FRAMES)
         seq = [{"button": "l3", "delay": 0}] if wake else []
         if not buttons and not seq:
             return
         for i, b in enumerate(buttons):
-            seq.append({"button": b, "delay": 3 if (i == 0 and wake) else gap})
+            seq.append({"button": b, "delay": MIN_GAP_FRAMES if (i == 0 and wake) else gap})
         try:
             self._req("/input/sequence", json.dumps(seq), 10)
         except (urllib.error.URLError, OSError) as e:

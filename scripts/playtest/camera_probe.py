@@ -4,11 +4,18 @@ a person is in view the way the game needs them: whole body, at a distance it
 can score.  Run by scripts/playtest/preflight.py with the POSE venv's python
 (it needs cv2 and mediapipe); prints one JSON object on stdout.
 
-  camera_probe.py --camera 0 [--seconds 3] [--model M] [--no-pose]
+  camera_probe.py [--camera auto|N|PATH] [--seconds 4] [--model M] [--no-pose]
   camera_probe.py --video clip.mp4 [--at 30]
 
+--camera is resolved exactly as the pose server resolves it
+(camera_resolve.py -> pose_server.resolve_camera) and opened with the
+server's own open_camera, so the probe tests the device the game will use.
+
 Keys of the JSON: ok, opened, frames, width, height, fps (measured over the
-probe), backend_fps (what the driver reports), error, and with pose: persons,
+probe after its first second, while auto-exposure settles), backend_fps (what
+the driver reports), error, kind (missing | busy | no_frames | cannot_open),
+holders (other programs with the device open), camera (the resolver's
+answer: node, desc, fallback, cameras, by_id), and with pose: persons,
 distance_m, head_in_view, feet_in_view, hands_up_room, advice (plain words).
 
 Framing is read from the DC3 joints MediaPipeBackend emits (camera-space
@@ -24,17 +31,44 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(REPO, "native", "scripts"))
+sys.path.insert(0, HERE)
+import camera_resolve  # noqa: E402
 
 HEAD, HAND_L, HAND_R, FOOT_L, FOOT_R, HIP_C = 3, 7, 11, 18, 19, 0
+SETTLE_S = 1.0  # auto-exposure: the first second's rate is not the camera's
+
+
+def holders(node):
+    """Other processes with `node` open: [(pid, name)]. A V4L2 device lets
+    a second program open it but not stream, so this is how "another program
+    is using it" is told apart from a camera that is not there."""
+    out = []
+    try:
+        real = os.path.realpath(node)
+    except OSError:
+        return out
+    me = os.getpid()
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit() or int(pid) == me:
+            continue
+        try:
+            for fd in os.listdir(f"/proc/{pid}/fd"):
+                if os.path.realpath(f"/proc/{pid}/fd/{fd}") == real:
+                    with open(f"/proc/{pid}/comm") as f:
+                        out.append((int(pid), f.read().strip()))
+                    break
+        except OSError:
+            continue
+    return out
 
 
 def main():
     ap = argparse.ArgumentParser()
     g = ap.add_mutually_exclusive_group()
-    g.add_argument("--camera", type=int, default=0)
+    g.add_argument("--camera", default="auto")
     g.add_argument("--video")
     ap.add_argument("--at", type=float, default=0.0, help="video: seconds into the file")
-    ap.add_argument("--seconds", type=float, default=3.0)
+    ap.add_argument("--seconds", type=float, default=4.0)
     ap.add_argument("--model", default=os.path.join(REPO, "native/models/pose_landmarker_full.task"))
     ap.add_argument("--no-pose", action="store_true")
     a = ap.parse_args()
@@ -50,21 +84,31 @@ def main():
         cap = cv2.VideoCapture(a.video)
         if cap.isOpened() and a.at > 0:
             cap.set(cv2.CAP_PROP_POS_MSEC, a.at * 1000.0)
+        if not cap.isOpened():
+            out["error"] = f"could not open {a.video}"
+            out["kind"] = "cannot_open"
+            print(json.dumps(out))
+            return 1
     else:
-        cap = cv2.VideoCapture(a.camera)
-        if cap.isOpened():
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            cap.set(cv2.CAP_PROP_FPS, 30)
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    if not cap.isOpened():
-        out["error"] = ("could not open " + (a.video if a.video else f"camera {a.camera}")
-                        + " (another program may be using it)")
-        print(json.dumps(out))
-        return 1
+        r = camera_resolve.resolve(a.camera)
+        out["camera"] = r
+        if r["node"] is None:
+            out["error"], out["kind"] = r["error"], "missing"
+            print(json.dumps(out))
+            return 1
+        import pose_server
+        try:
+            cap, _ = pose_server.open_camera(cv2, r["node"], 640, 480)
+        except pose_server.ServerExit as e:
+            out["holders"] = holders(r["node"]) if isinstance(r["node"], str) else []
+            out["kind"] = "busy" if out["holders"] else (
+                "no_frames" if "sent no frame" in str(e) else "cannot_open")
+            out["error"] = str(e)
+            print(json.dumps(out))
+            return 1
     out["opened"] = True
     out["backend_fps"] = cap.get(cv2.CAP_PROP_FPS)
-    frames = []
+    frames, stamps = [], []
     t0 = time.monotonic()
     deadline = t0 + max(a.seconds, 0.5) + 3.0
     first = None
@@ -77,19 +121,25 @@ def main():
             continue
         if first is None:
             first = time.monotonic()
-        frames.append(fr)
-        if time.monotonic() - first >= a.seconds or (a.video and len(frames) >= 30):
+        frames = (frames + [fr])[-15:]  # the pose check reads the last 15
+        stamps.append(time.monotonic())
+        if time.monotonic() - first >= a.seconds or (a.video and len(stamps) >= 30):
             break
     cap.release()
-    out["frames"] = len(frames)
+    out["frames"] = len(stamps)
     if not frames:
         out["error"] = "the camera opened but sent no picture (is it the right device?)"
         print(json.dumps(out))
         return 1
     h, w = frames[-1].shape[:2]
     out["width"], out["height"] = w, h
-    if not a.video and len(frames) > 1:
-        out["fps"] = round((len(frames) - 1) / max(time.monotonic() - first, 1e-3), 1)
+    if not a.video and len(stamps) > 1:
+        settled = [t for t in stamps if t - stamps[0] >= SETTLE_S] or stamps
+        span = settled[-1] - settled[0]
+        if len(settled) > 1 and span > 0:
+            out["fps"] = round((len(settled) - 1) / span, 1)
+        else:
+            out["fps"] = round((len(stamps) - 1) / max(stamps[-1] - stamps[0], 1e-3), 1)
     out["ok"] = True
     if a.no_pose:
         print(json.dumps(out))

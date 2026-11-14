@@ -3,10 +3,10 @@
 # sound, the webcam pose tracker, menus by gesture, and a session folder with
 # everything needed to look at a problem afterwards (docs/native/PLAYTEST.md).
 #
-#   scripts/play.sh                 check, then play (windowed, camera 0)
+#   scripts/play.sh                 check, then play (windowed, the first camera)
 #   scripts/play.sh --check         only check the machine, camera and player
 #   scripts/play.sh --fullscreen    fill the screen
-#   scripts/play.sh --camera 1      another camera
+#   scripts/play.sh --camera /dev/v4l/by-id/usb-...   a particular camera
 #   scripts/play.sh --video F.mp4   a video file instead of the camera (testing)
 #
 # Quit with Ctrl+Q or by closing the window. When the game ends, the session
@@ -15,7 +15,10 @@
 # Options:
 #   --check            run the checks and stop
 #   --no-person        (with --check) do not look for a person in the picture
-#   --camera N         camera index (default 0, or $DC3_POSE_CAMERA)
+#   --camera auto|N|PATH (default auto: the first video-capture device;
+#                      or $DC3_POSE_CAMERA). A camera can come back under
+#                      another number after it re-connects, so prefer auto
+#                      or the /dev/v4l/by-id name to an index
 #   --video FILE       footage instead of a camera: frame 0 (the dancer
 #                      standing) in the menus, then the clip in step with the
 #                      song clock (scripts/playtest/footage_camera.py)
@@ -55,7 +58,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMMON="$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
 MAIN_CHECKOUT="${COMMON:+$(dirname "$COMMON")}"
 
-CHECK=0; NO_PERSON=0; CAMERA="${DC3_POSE_CAMERA:-0}"; VIDEO=""; FULLSCREEN=0; SIZE=""
+CHECK=0; NO_PERSON=0; CAMERA="${DC3_POSE_CAMERA:-auto}"; VIDEO=""; FULLSCREEN=0; SIZE=""
 NO_POSE=0; FAST_BOOT=0; HOME_DIR="${DC3_PLAYTEST_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/dc3/playtest}"
 SESSION=""; REPLAY=""; REPLAY_SYNC="song"; HEADLESS=0; PACK=1; ENGINE_ARGS=()
 VIDEO_PRE=8; VIDEO_LOOP=0; WAYLAND=0
@@ -79,7 +82,7 @@ while [ $# -gt 0 ]; do
         --headless) HEADLESS=1 ;;
         --no-pack) PACK=0 ;;
         --) shift; ENGINE_ARGS=("$@"); break ;;
-        -h|--help) sed -n '2,53p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,/^$/p' "$0"; exit 0 ;;   # the header comment
         *) echo "unknown option: $1 (see --help)" >&2; exit 1 ;;
     esac
     shift
@@ -140,7 +143,9 @@ setdef DC3_HTTP_PORT 0
 export DC3_HTTP_PORT_FILE="$SESSION/http_port"
 setdef MILO_MAX_FRAMES 0
 setdef DC3_SFX_PCM_DIR "$HOME_DIR/cache/sfx_pcm"   # decoded SFX, not into the game data
-export DC3_POSE_CAMERA="$CAMERA"
+# The engine passes DC3_POSE_CAMERA to pose_server.py --camera as given;
+# unset is auto (the server re-resolves it on every open).
+if [ "$CAMERA" = auto ]; then unset DC3_POSE_CAMERA; else export DC3_POSE_CAMERA="$CAMERA"; fi
 export DC3_POSE_PYTHON="$POSE_PY"
 export DC3_POSE_MODEL="$MODEL"
 [ "$FAST_BOOT" = 1 ] && export DC3_FAST_BOOT=1
@@ -185,7 +190,12 @@ mkdir -p "$DC3_SFX_PCM_DIR"
     echo "binary $(stat -c '%y' "$BINARY" 2>/dev/null) $(sha256sum "$BINARY" 2>/dev/null | cut -c1-16)"
     command -v vulkaninfo >/dev/null && vulkaninfo --summary 2>/dev/null | grep -E 'deviceName|driverName|driverInfo' | sort -u
     for d in /sys/class/video4linux/video*; do [ -e "$d/name" ] && echo "camera $(basename "$d"): $(cat "$d/name")"; done
-    command -v v4l2-ctl >/dev/null && [ -z "$VIDEO" ] && v4l2-ctl -d "/dev/video$CAMERA" --get-fmt-video --get-parm 2>/dev/null
+    if [ -z "$VIDEO" ]; then
+        CAM_NODE="$(python3 -I "$REPO/scripts/playtest/camera_resolve.py" "$CAMERA" 2>&1)" \
+            && echo "camera --camera $CAMERA -> $CAM_NODE" || { echo "camera --camera $CAMERA: $CAM_NODE"; CAM_NODE=""; }
+        ls -l /dev/v4l/by-id 2>/dev/null
+        command -v v4l2-ctl >/dev/null && [ -n "$CAM_NODE" ] && v4l2-ctl -d "$CAM_NODE" --get-fmt-video --get-parm --list-ctrls 2>/dev/null
+    fi
     command -v pactl >/dev/null && pactl info 2>/dev/null | grep -E 'Server Name|Default Sink'
 } >"$SESSION/system.txt" 2>&1
 env | grep -E '^(DC3|MILO)_' | sort >"$SESSION/env.txt"

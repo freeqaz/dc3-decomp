@@ -18,20 +18,33 @@ Stdlib unittest, no GPU, no camera, no game data: synthetic files only.
                      path with capitals (H-17)
   kitdrive.Kit.guarded  only expressions built on {ui current_screen} get the
                      null-screen guard
+  kitdrive ownership a used session folder is refused; quit() leaves a game it
+                     did not start and stops its own; a debug port answered by
+                     another game is not driven; presses are >= 3 frames apart
+  camera_resolve / preflight camera
+                     auto and a by-id name find a camera that came back as
+                     /dev/video1; a missing index is explained (re-connected,
+                     use auto) and never called "in use"; "another program is
+                     using it" only with a holder; below 15 fps WARNs with the
+                     light advice
 
 Registered as ctest PlaytestKit.Python (native/CMakeLists.txt).
 """
+import argparse
 import io
 import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stdout
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "scripts", "playtest"))
 import asset_manifest  # noqa: E402
+import camera_resolve  # noqa: E402
+import preflight  # noqa: E402
 import kitdrive  # noqa: E402
 import pose_session  # noqa: E402
 import session_summary  # noqa: E402
@@ -277,6 +290,217 @@ class KitDriveTest(unittest.TestCase):
         self.assertEqual(g("{taskmgr seconds}"), "{taskmgr seconds}")
         self.assertEqual(g("{{ui current_screen} name}"),
                          "{if_else {ui current_screen} {{ui current_screen} name} -2}")
+
+
+class KitDriveOwnershipTest(unittest.TestCase):
+    """The driver only drives and quits a game it started (a fallback in
+    another driver quit a person's live song, np-gpd-test 2026-11-14)."""
+
+    def kit(self, session, proc):
+        k = kitdrive.Kit.__new__(kitdrive.Kit)
+        k.session, k.proc, k.log, k.port = session, proc, lambda *a: None, None
+        return k
+
+    def test_descends_from(self):
+        self.assertTrue(kitdrive.descends_from(os.getpid(), os.getppid()))
+        self.assertTrue(kitdrive.descends_from(os.getpid(), os.getpid()))
+        self.assertFalse(kitdrive.descends_from(os.getppid(), os.getpid()))
+
+    def test_a_used_session_folder_is_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            for name in ("game.pid", "http_port"):
+                path = os.path.join(d, name)
+                with open(path, "w") as f:
+                    f.write("1\n")
+                def no_launch(*a, **k):
+                    raise AssertionError("the driver went on to launch a game")
+                real, kitdrive.subprocess.Popen = kitdrive.subprocess.Popen, no_launch
+                try:
+                    with self.assertRaises(kitdrive.NotOurGame):
+                        kitdrive.Kit(d, os.path.join(d, "home"))
+                finally:
+                    kitdrive.subprocess.Popen = real
+                os.unlink(path)
+
+    def test_quit_leaves_a_game_it_did_not_start(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            foreign = subprocess.Popen(["sleep", "30"])
+            try:
+                with open(os.path.join(d, "game.pid"), "w") as f:
+                    f.write(str(foreign.pid))
+                launcher = subprocess.Popen(["sleep", "0.2"])
+                self.kit(d, launcher).quit(timeout=10)
+                self.assertIsNone(foreign.poll(), "quit() killed a game it did not start")
+            finally:
+                foreign.kill()
+                foreign.wait()
+
+    def test_quit_stops_its_own_game(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            pidfile = os.path.join(d, "game.pid")
+            launcher = subprocess.Popen(["sh", "-c", f"sleep 30 & echo $! > {pidfile}; wait"])
+            for _ in range(100):
+                if os.path.getsize(pidfile) if os.path.exists(pidfile) else 0:
+                    break
+                time.sleep(0.02)
+            t0 = time.monotonic()
+            rc = self.kit(d, launcher).quit(timeout=10)
+            self.assertIsNotNone(rc)
+            self.assertLess(time.monotonic() - t0, 5.0, "its own game was not stopped by SIGTERM")
+
+    def test_a_port_answered_by_another_game_is_not_driven(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "http_port"), "w") as f:
+                f.write("9\n")
+            k = self.kit(d, type("P", (), {"pid": os.getpid(), "poll": lambda self: None})())
+            k.jget = lambda path, timeout=10: {"data": {"pid": os.getppid()}}
+            with self.assertRaises(kitdrive.NotOurGame):
+                k.wait_port(timeout=5)
+            k.jget = lambda path, timeout=10: {"data": {"pid": os.getpid()}}
+            self.assertEqual(k.wait_port(timeout=5), 9)
+
+    def test_presses_are_spaced(self):
+        k = self.kit("/nonexistent", None)
+        sent = []
+        k._req = lambda path, data=None, timeout=10: sent.append(json.loads(data))
+        real_sleep, time.sleep = time.sleep, lambda s: None
+        try:
+            k.press("down", "down", gap=0)
+            k.press("confirm", gap=1, wake=False)
+        finally:
+            time.sleep = real_sleep
+        delays = [e["delay"] for seq in sent for e in seq if e["button"] != "l3"]
+        self.assertEqual(len(delays), 3)
+        self.assertTrue(all(x >= kitdrive.MIN_GAP_FRAMES for x in delays), delays)
+
+
+class FakeCameras:
+    """The V4L2 surface camera_resolve (and pose_server.resolve_camera) asks."""
+    by_id_dir = "/dev/v4l/by-id"
+
+    def __init__(self, nodes, by_id=None):
+        self._nodes = nodes  # {node: (is_capture, card)}
+        self._by_id = by_id or {}
+
+    def available(self):
+        return True
+
+    def nodes(self):
+        return sorted(self._nodes, key=lambda n: int(n[10:]))
+
+    def query(self, node):
+        ok, card = self._nodes[node]
+        return ok, card if ok else f"{card}: no video capture"
+
+    def name(self, node):
+        return self._nodes.get(node, (False, "?"))[1]
+
+    def exists(self, path):
+        return path in self._nodes or path in [os.path.join(self.by_id_dir, n)
+                                               for n in self._by_id]
+
+    def realpath(self, path):
+        return self._by_id.get(os.path.basename(path), path)
+
+    def by_id(self):
+        return dict(self._by_id)
+
+
+class CameraChoiceTest(unittest.TestCase):
+    """--camera auto|N|PATH is resolved as the pose server resolves it, and the
+    preflight says in plain words what is wrong (the GPD's camera came back as
+    /dev/video1 eight times in a day)."""
+
+    GPD = {"/dev/video1": (True, "Integrated Camera"), "/dev/video2": (False, "Integrated Camera")}
+    BY_ID = {"usb-Generic_Integrated_Camera-video-index0": "/dev/video1"}
+
+    def setUp(self):
+        self.fake = FakeCameras(self.GPD, self.BY_ID)
+        self._devices = camera_resolve.Devices
+        camera_resolve.Devices = lambda: self.fake
+        preflight.results.clear()
+
+    def tearDown(self):
+        camera_resolve.Devices = self._devices
+        preflight.results.clear()
+
+    def test_auto_and_by_id_find_the_camera(self):
+        self.assertEqual(camera_resolve.resolve("auto")["node"], "/dev/video1")
+        self.assertEqual(camera_resolve.resolve(None)["node"], "/dev/video1")
+        self.assertEqual(camera_resolve.resolve(
+            "usb-Generic_Integrated_Camera-video-index0")["node"], "/dev/video1")
+
+    def test_a_missing_index_says_what_happened(self):
+        r = camera_resolve.resolve("0")
+        words = r["fallback"] if r["node"] else camera_resolve.missing_index_words("0", r)
+        for want in ("camera 0 (/dev/video0) does not exist", "re-connected under another number",
+                     "now: video1 'Integrated Camera'", "--camera auto",
+                     "/dev/v4l/by-id", "usb-Generic_Integrated_Camera-video-index0"):
+            self.assertIn(want, words)
+        self.assertNotIn("another program", words)
+
+    def preflight_camera(self, camera="auto", probe=None):
+        a = argparse.Namespace(no_pose=False, video=None, camera=camera, python=sys.executable,
+                               model="m", no_person=True)
+        if probe is not None:
+            preflight.run = lambda cmd, timeout=20, env=None: (0, json.dumps(probe), "")
+        try:
+            preflight.check_camera(a, probe is not None, False)
+        finally:
+            preflight.run = self._run
+        return [(r["status"], r["what"], r["detail"], r["fix"]) for r in preflight.results]
+
+    _run = staticmethod(preflight.run)
+
+    def test_preflight_missing_index(self):
+        rows = self.preflight_camera("0")
+        text = " ".join(" ".join(r) for r in rows)
+        self.assertIn("camera 0 (/dev/video0) does not exist", text)
+        self.assertNotIn("another program", text)
+
+    def test_preflight_busy_only_when_held(self):
+        cam = camera_resolve.resolve("auto")
+        rows = self.preflight_camera(probe={"ok": False, "kind": "busy", "camera": cam,
+                                            "holders": [[4242, "firefox"]],
+                                            "error": "could not open camera /dev/video1"})
+        self.assertEqual(rows[-1][0], "FAIL")
+        self.assertIn("another program is using the camera: firefox (pid 4242)", rows[-1][2])
+        preflight.results.clear()
+        rows = self.preflight_camera(probe={"ok": False, "kind": "no_frames", "camera": cam,
+                                            "error": "camera /dev/video1 opened but sent no frame"})
+        self.assertNotIn("another program", " ".join(rows[-1]))
+
+    def test_probe_names_the_program_holding_the_device(self):
+        import subprocess
+        import camera_probe
+        with tempfile.NamedTemporaryFile() as node:
+            holder = subprocess.Popen([sys.executable, "-c",
+                                       f"f = open({node.name!r}); import time; time.sleep(30)"])
+            try:
+                for _ in range(200):
+                    got = camera_probe.holders(node.name)
+                    if got:
+                        break
+                    time.sleep(0.02)
+                self.assertIn(holder.pid, [pid for pid, _ in got])
+            finally:
+                holder.kill()
+                holder.wait()
+            self.assertEqual(camera_probe.holders(node.name), [])
+
+    def test_preflight_slow_camera_warns(self):
+        cam = camera_resolve.resolve("auto")
+        ok = {"ok": True, "width": 640, "height": 480, "camera": cam}
+        rows = self.preflight_camera(probe=dict(ok, fps=7.7))
+        speed = [r for r in rows if r[1] == "camera speed"]
+        self.assertEqual(len(speed), 1, rows)
+        self.assertEqual(speed[0][0], "WARN")
+        self.assertIn("more light", speed[0][3])
+        preflight.results.clear()
+        rows = self.preflight_camera(probe=dict(ok, fps=15.0))
+        self.assertFalse([r for r in rows if r[1] == "camera speed"], rows)
 
 
 if __name__ == "__main__":
