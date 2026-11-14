@@ -483,3 +483,92 @@ TEST_F(RetailLightingTest, SpotlightListAndBoxMapHoldOnlyThisFramesLights) {
     drawer->DeSelect();
     delete drawer;
 }
+
+// The NG spotlight post (np-gfx spot lane, round 2). Retail
+// NgSpotlightDrawer::RenderScene draws every listed spotlight's beam
+// (mLength > 0, its NG shaft mesh drawn with DrawShowing) into a half-res
+// target against the world's depth, blurs it, and postprocess.ps option bit 51
+// adds it to the frame: c += beam * (fog.r * smoke + base) * mIntensity * 32.
+// Native hands those beams to the engine (platform/SpotBeamHook.h); this pins
+// what RenderScene hands over -- one beam per listed spotlight with a length,
+// its shape, length, colour owner's colour and intensity, the drawer's
+// total / base / smoke -- and that the list still ends its frame.
+// Sabotage: restoring the clear-only native RenderScene in SpotlightDrawer_NG.cpp
+// submits nothing (calls 0, beams 0).
+#include "platform/SpotBeamHook.h"
+
+namespace {
+struct RecordingBeamRenderer : NativeSpotBeamRenderer {
+    int calls = 0;
+    NativeSpotBeamFrame frame{};
+    std::vector<NativeSpotBeam> beams;
+    bool SubmitSpotBeams(const NativeSpotBeamFrame &f, const NativeSpotBeam *b, int count) override {
+        calls++;
+        frame = f;
+        beams.assign(b, b + count);
+        return true;
+    }
+};
+} // namespace
+
+TEST_F(RetailLightingTest, SpotlightPostHandsEachBeamToTheBackend) {
+    NativeSpotBeamRenderer *prev = GetNativeSpotBeamRenderer();
+    RecordingBeamRenderer rec;
+    SetNativeSpotBeamRenderer(&rec);
+
+    InspectableSpotDrawer *drawer = new InspectableSpotDrawer();
+    drawer->SetProperty("total", 0.6f);
+    drawer->SetProperty("base_intensity", 40.0f);
+    drawer->SetProperty("smoke_intensity", 25.0f);
+    drawer->SetShowing(true);
+    ASSERT_TRUE(SpotlightDrawer::DrawNGSpotlights()) << "native runs the NG (kNewGfx) path";
+
+    Spotlight *lit = Hmx::Object::New<Spotlight>();
+    lit->SetProperty("length", 150.0f);    // Generate -> BuildNGShaft
+    lit->SetProperty("shape", 2);          // kBeamSheet
+    lit->SetProperty("brighten", 1.5f);
+    lit->SetColorIntensity(Hmx::Color(0.9f, 0.5f, 0.25f), 0.75f);
+    lit->SetShowing(true);
+    Spotlight *flat = Hmx::Object::New<Spotlight>();   // no length: no beam
+    flat->SetColorIntensity(Hmx::Color(1.0f, 1.0f, 1.0f), 1.0f);
+    flat->SetShowing(true);
+
+    drawer->Select();
+    SpotlightDrawer::DrawLight(lit);
+    SpotlightDrawer::DrawLight(flat);
+    drawer->EndWorld();
+    drawer->DoPost();
+
+    EXPECT_EQ(InspectableSpotDrawer::Lights(), 0u) << "DoPost still ends the list's frame";
+    ASSERT_EQ(rec.calls, 1) << "RenderScene hands the frame's beams to the backend once";
+    ASSERT_EQ(rec.beams.size(), 1u) << "only the spotlight with a length has a beam";
+    const NativeSpotBeam &b = rec.beams[0];
+    EXPECT_NE(b.mesh, nullptr);
+    EXPECT_EQ(b.shape, 2);
+    EXPECT_FLOAT_EQ(b.length, 150.0f);
+    EXPECT_FLOAT_EQ(b.brighten, 1.5f);
+    EXPECT_NEAR(b.color[0], 0.9f, 1e-6f);
+    EXPECT_NEAR(b.color[1], 0.5f, 1e-6f);
+    EXPECT_NEAR(b.color[2], 0.25f, 1e-6f);
+    EXPECT_FLOAT_EQ(b.intensity, 0.75f);
+    EXPECT_FLOAT_EQ(b.matColor[0], 1.0f) << "no beam material: white";
+    EXPECT_FLOAT_EQ(rec.frame.intensity, 0.6f);
+    EXPECT_FLOAT_EQ(rec.frame.baseIntensity, 40.0f);
+    EXPECT_FLOAT_EQ(rec.frame.smokeIntensity, 25.0f);
+    EXPECT_FALSE(rec.frame.hasProxy);
+
+    // A hidden drawer renders nothing (RenderScene's Showing() test).
+    drawer->SetShowing(false);
+    drawer->Select();
+    SpotlightDrawer::DrawLight(lit);
+    drawer->EndWorld();
+    drawer->DoPost();
+    EXPECT_EQ(rec.calls, 1) << "a hidden drawer submits no beams";
+    EXPECT_EQ(InspectableSpotDrawer::Lights(), 0u);
+
+    SetNativeSpotBeamRenderer(prev);
+    delete lit;
+    delete flat;
+    drawer->DeSelect();
+    delete drawer;
+}
