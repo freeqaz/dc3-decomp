@@ -59,11 +59,14 @@
 #include "math/Rot.h"
 #include "obj/DataFile.h"
 #include "rndobj/Cam.h"
+#include "rndobj/DOFProc.h"
 #include "rndobj/Env.h"
 #include "rndobj/Mat.h"
 #include "rndobj/PostProc.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/VelocityBuffer.h"
+#include "ui/UI.h"
+#include "ui/UIScreen.h"
 
 #include <algorithm>
 #include <chrono>
@@ -1677,4 +1680,69 @@ TEST(DC3RetailPostSource, EveryPostChainBindGroupGoesThroughTheCache) {
         }
     }
     EXPECT_GE(fallbacks, 6) << "the scan found the fallbacks it expects (non-vacuous)";
+}
+
+// Depth of field (round 6). Retail installs NgDOFProc from rnddx9's NgRnd
+// init, which native does not run, so DC3 native's TheDOFProc was the base
+// DOFProc: CameraShot's Set(cam, focal, blurDepth, maxBlur, minBlur) was
+// dropped, Enabled() was 0, and the engine's DofPass (NgDOFProc::DoPost and
+// postprocess.ps bit 3) never ran for an intro shot with use_depth_of_field.
+// DOFProc::Init now installs a native DOFProc that keeps what NgDOFProc::Set
+// (dc3-decomp rndobj/DOFProc_NG.cpp) keeps, with its enable rule. Sabotages
+// that fail here (lanes/post/round6/sabotage, archive/np-gfx-2026-11-14):
+//   S1 DOFProc::Init registering the base DOFProc (the shipped-before state)
+//   S2 Set enabling without TheUI->IsGameScreenActive()
+//   S3 Set clearing the enable when maxBlur is 0 (rb3's NativeDOFProc rule;
+//      retail clears it only in UnSet)
+//   S4 the blur range not clamped to [0, 1]
+namespace {
+class DofProbeUI : public UIManager {
+public:
+    void SetCurrent(UIScreen *s) { mCurrentScreen = s; }
+};
+} // namespace
+
+TEST_F(DC3RetailPostTest, DOFProcKeepsNgDOFProcSetParameters) {
+    ASSERT_TRUE(TheDOFProc);
+    RndCam *cam = Hmx::Object::New<RndCam>();
+    UIScreen *game = Hmx::Object::New<UIScreen>();
+    game->SetName("game_screen", ObjectDir::Main());
+    UIScreen *menu = Hmx::Object::New<UIScreen>();
+    menu->SetName("dof_probe_screen", ObjectDir::Main());
+    DofProbeUI ui;
+    UIManager *savedUI = TheUI;
+    TheUI = &ui;
+
+    TheDOFProc->UnSet();
+    ui.SetCurrent(menu);
+    TheDOFProc->Set(cam, 12.0f, 0.5f, 0.8f, 0.2f);
+    EXPECT_FLOAT_EQ(TheDOFProc->FocalPlane(), 12.0f) << "Set's focal plane was dropped";
+    EXPECT_FLOAT_EQ(TheDOFProc->BlurDepth(), 0.5f);
+    EXPECT_FLOAT_EQ(TheDOFProc->MaxBlur(), 0.8f);
+    EXPECT_FLOAT_EQ(TheDOFProc->MinBlur(), 0.2f);
+    EXPECT_FALSE(TheDOFProc->Enabled()) << "off the game screen NgDOFProc::Set does not enable";
+
+    ui.SetCurrent(game);
+    TheDOFProc->Set(cam, 12.0f, 0.5f, 0.8f, 0.2f);
+    EXPECT_TRUE(TheDOFProc->Enabled()) << "maxBlur > 0 on the game screen enables depth of field";
+
+    TheDOFProc->Set(cam, 30.0f, 0.0f, 0.0f, 0.0f);
+    EXPECT_TRUE(TheDOFProc->Enabled()) << "retail clears the enable only in UnSet";
+    EXPECT_FLOAT_EQ(TheDOFProc->FocalPlane(), 30.0f);
+    EXPECT_FLOAT_EQ(TheDOFProc->BlurDepth(), 0.001f) << "blur depth floor";
+    EXPECT_FLOAT_EQ(TheDOFProc->MaxBlur(), 0.0f);
+
+    TheDOFProc->Set(cam, 30.0f, 2.0f, 1.5f, -1.0f);
+    EXPECT_FLOAT_EQ(TheDOFProc->MaxBlur(), 1.0f) << "blur range clamps to [0, 1]";
+    EXPECT_FLOAT_EQ(TheDOFProc->MinBlur(), 0.0f);
+    EXPECT_FLOAT_EQ(TheDOFProc->BlurDepth(), 2.0f);
+
+    TheDOFProc->UnSet();
+    EXPECT_FALSE(TheDOFProc->Enabled());
+
+    TheUI = savedUI;
+    ui.SetCurrent(nullptr);
+    delete menu;
+    delete game;
+    delete cam;
 }
