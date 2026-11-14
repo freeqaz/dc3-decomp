@@ -14,7 +14,9 @@ game's own detector rates the replayed skeleton, Medium, freestyle off.
 
 The table prints, per label and variant: summed final score, per-rating
 counts, and the mean last-frame detect fraction (`lastfrac`) over rated
-moves, from the engine's DC3 MOVE_RATING lines.  A session variant (a
+moves, from the engine's DC3 MOVE_RATING lines.  --measures 4-27,28-39 splits
+the rating counts by measure range (the owner's YMCA session: legs cut, then
+legs seen).  A session variant (a
 .dc3session file instead of a directory) runs with --performer session:.
 """
 import argparse
@@ -80,7 +82,7 @@ def ratings(song_dir, max_measure=None, min_measure=None):
     return rows
 
 
-def summarize(vdir):
+def summarize(vdir, measures=None):
     tot = {"score": 0, "n": 0, "bad": 0, "ok": 0, "awesome": 0, "perfect": 0, "frac": 0.0,
            "songs": 0, "failed": 0}
     if not os.path.isdir(vdir):
@@ -95,7 +97,8 @@ def summarize(vdir):
         if not r.get("results"):
             tot["failed"] += 1
         tot["score"] += r.get("final_score") or 0
-        for meas, move, rating, frac, score in ratings(sd):
+        lo, hi = measures if measures else (None, None)
+        for meas, move, rating, frac, score in ratings(sd, max_measure=hi, min_measure=lo):
             tot["n"] += 1
             key = rating.replace("move_", "")
             if key in tot:
@@ -108,6 +111,9 @@ def summarize(vdir):
 
 def cmd_table(a):
     labels = [a.label] if a.label else sorted(os.listdir(a.out))
+    ranges = [None]
+    if a.measures:
+        ranges = [tuple(int(x) for x in r.split("-")) for r in a.measures.split(",")]
     print(f"{'label':10s} {'variant':16s} {'songs':>5s} {'score':>8s} {'bad':>4s} {'ok':>4s} "
           f"{'awe':>4s} {'perf':>4s} {'frac':>5s}")
     for lab in labels:
@@ -115,12 +121,15 @@ def cmd_table(a):
         if not os.path.isdir(ld):
             continue
         for v in sorted(os.listdir(ld)):
-            t = summarize(os.path.join(ld, v))
-            if not t:
-                continue
-            flag = f" ({t['failed']} no results)" if t["failed"] else ""
-            print(f"{lab:10s} {v:16s} {t['songs']:5d} {t['score']:8d} {t['bad']:4d} {t['ok']:4d} "
-                  f"{t['awesome']:4d} {t['perfect']:4d} {t['frac']:5.3f}{flag}")
+            for rg in ranges:
+                t = summarize(os.path.join(ld, v), rg)
+                if not t:
+                    continue
+                flag = f" ({t['failed']} no results)" if t["failed"] else ""
+                if rg:
+                    flag += f" measures {rg[0]}-{rg[1]}"
+                print(f"{lab:10s} {v:16s} {t['songs']:5d} {t['score']:8d} {t['bad']:4d} {t['ok']:4d} "
+                      f"{t['awesome']:4d} {t['perfect']:4d} {t['frac']:5.3f}{flag}")
     return 0
 
 
@@ -143,6 +152,8 @@ def main():
     t = sub.add_parser("table")
     t.add_argument("out")
     t.add_argument("--label")
+    t.add_argument("--measures", help="comma list of LO-HI measure ranges: rating counts per "
+                   "range (the score column stays the whole run's)")
     a = ap.parse_args()
     return cmd_run(a) if a.cmd == "run" else cmd_table(a)
 
