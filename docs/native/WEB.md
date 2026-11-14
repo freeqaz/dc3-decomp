@@ -282,6 +282,15 @@ either (they use only `#dc3-canvas`, the console, `window.dc3FrameCount` and
 the pose globals). `scripts/web/page-states.mjs` checks both layouts and the
 error card (exit 1 if the player page shows any harness element).
 
+The page layout and the engine's defaults are separate switches. The engine
+runs the **dev profile** in either layout (developer Options rows, the
+original's dev menu and overlays, input/move-rating/frame-time console lines;
+[debugging/native.md "Profiles"](../debugging/native.md#profiles-dc3_profile)).
+`?profile=release` gives the player defaults (`dc3_pre.js` sets
+`DC3_PROFILE`; `?env=DC3_PROFILE=release` works too). The player page stays the
+default layout (W-8): the `?dev` harness is one parameter away, and proposed as
+such rather than made the default.
+
 Pose panel (W-13): it used to sit bottom-left, over the left help bar, and
 its status text ran out of its box at small sizes. It is now centred in the
 bottom 14% of the canvas, no wider than 48% of it (the help bars hold the

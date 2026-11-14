@@ -647,6 +647,49 @@ TEST_F(NativeExitTest, ScreenshotWorksWindowed) {
     ExpectNoCrash(out);
 }
 
+// np-defaults: with DC3_HTTP_PORT unset, a window prefers 9090 and falls back
+// to a kernel-assigned port when 9090 is taken (the owner's game, a second
+// engine), instead of exiting 98 -- the debug server is on by default in the
+// dev profile, so a second windowed run must still start.  The first cut
+// exited 98 "cannot bind port 0": a failed bind decommissions a cpp-httplib
+// Server and its next bind returns -1 at once.
+TEST_F(NativeExitTest, WindowedDefaultPortFallsBackWhen9090IsTaken) {
+    int holder = socket(AF_INET, SOCK_STREAM, 0);
+    ASSERT_GE(holder, 0);
+    sockaddr_in addr = {};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons(9090);
+    // Taken by this test, or already by someone else: 9090 is busy either way.
+    if (bind(holder, (sockaddr *)&addr, sizeof(addr)) == 0) {
+        ASSERT_EQ(listen(holder, 1), 0);
+    } else if (errno != EADDRINUSE) {
+        int err = errno;
+        close(holder);
+        GTEST_SKIP() << "cannot bind 127.0.0.1:9090: " << strerror(err);
+    }
+    std::string portFile = mRunDir + "/http_port";
+    Engine e;
+    int port = 0;
+    RunWindowed(mRunDir, [&](Display *dpy, Window w) {
+        port = atoi(ReadAll(portFile).c_str());
+        SendWmDeleteWindow(dpy, w);
+    }, e, {"DC3_HTTP=1", "DC3_HTTP_PORT=", "DC3_HTTP_PORT_FILE=" + portFile});
+    close(holder);
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_FALSE(Contains(out, "detail=http_port")) << "the busy default port was fatal\n"
+                                                    << Tail(out);
+    EXPECT_GT(port, 0) << "no DC3_HTTP_PORT_FILE\n" << Tail(out);
+    EXPECT_NE(port, 9090) << Tail(out);
+    EXPECT_TRUE(Contains(out, "port 9090 is taken")) << "the fallback was not announced\n"
+                                                     << Tail(out);
+    EXPECT_TRUE(Contains(out, "(loopback only)")) << Tail(out);
+    ASSERT_TRUE(WIFEXITED(e.status)) << Tail(out);
+    EXPECT_EQ(WEXITSTATUS(e.status), 0) << Tail(out);
+    ExpectNoCrash(out);
+}
+
 #endif // __linux__ (window tests)
 
 #if defined(__linux__)

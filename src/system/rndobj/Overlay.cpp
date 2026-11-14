@@ -159,3 +159,30 @@ void RndOverlay::DrawAll(bool b) {
         }
     }
 }
+
+#ifdef HX_NATIVE
+void RndOverlay::NativeCollect(NativeLineFn fn, void *ctx) {
+    float y = sTopAligned ? 0.0212f : 0.9788f;
+    FOREACH (it, sOverlays) {
+        RndOverlay *o = *it;
+        if (o->mTimeout > 0 && o->mShowing && SystemMs() > o->mTimeout) {
+            o->mShowing = false;
+            o->mTimeout = 0;
+        }
+        if (!o->mShowing)
+            continue;
+        if (o->mCallback) {
+            float updated = o->mCallback->UpdateOverlay(o, y);
+            if (updated != y) { // the callback drew the overlay itself
+                y = updated;
+                continue;
+            }
+        }
+        FOREACH (line, o->mLines) {
+            if (!line->empty())
+                fn(ctx, o->mName ? o->mName : "?", line->c_str());
+        }
+        y += o->Height();
+    }
+}
+#endif

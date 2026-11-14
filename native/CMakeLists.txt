@@ -2068,6 +2068,7 @@ if(BUILD_TESTS)
         tests/test_cache_native.cpp
         tests/test_copy_poll_semantics.cpp
         tests/test_native_options.cpp
+        tests/test_native_profile.cpp
         tests/test_native_glyph_render.cpp
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
@@ -2191,6 +2192,11 @@ if(BUILD_TESTS)
     # MILO_TEST_GATE_STATUS is compiled into the binary so a test can check that
     # what CMake decided actually reached the test process (see TestGates below).
     set(MILO_TEST_ENV "TMPDIR=${CMAKE_CURRENT_BINARY_DIR}/tmp")
+    # The dev profile (DC3_PROFILE, the default) starts the HTTP debug server,
+    # and a windowed run prefers port 9090.  A test never takes 9090 from a
+    # developer's running game: kernel-assigned unless the test names a port
+    # (the port-file helpers read the one it got).
+    list(APPEND MILO_TEST_ENV "DC3_HTTP_PORT=0")
     set(MILO_TEST_GATES_ON "")
     set(MILO_TEST_GATES_OFF "")
     # MILO_TEST_GATE_PROBES records, for every probed gate, the exact path whose
