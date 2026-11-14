@@ -277,6 +277,39 @@ and differs between runs):
 | yougotittherightstuff | streetside | 69/0/0/0 | 2,393,070 | 454 | 735 | 2.9 | 435.5 |
 | youmakemefeeldc | dci | 73/0/0/0 | 2,522,663 | 502 | 835 | 4.1 | 522.6 |
 
+## GPD Pocket 4
+
+**Measured 2026-11-13 by lane `np-gpd-test`.** These are the first runs with a
+real webcam.
+
+The box:
+- GPD Pocket 4 (G1628-04): Ryzen AI 9 HX 370, Radeon 890M (RADV STRIX1, Mesa 26.2.5), 25 GB RAM.
+- Panel 2560x1600 at scale 2 (1280x800 logical). It refreshes at 144 Hz, or 60 Hz in power-saver.
+- Arch, Hyprland 0.56 (Wayland and Xwayland), PipeWire 1.6.10, **no rtkit**.
+- Camera: SunplusIT 1e08:5520 (UVC, MJPG up to 2592x1944).
+
+Desktop runs:
+- Through the playtest kit (`scripts/play.sh` via `scripts/playtest/kitdrive.py`, branch `np-playtest-kit` merged with main `7e3823a1e`).
+- In the owner's live session, mostly on battery, under `/tmp/gpd-bench.lock`.
+- Engine fps is `DC3 PERF` and tracker fps is `POSE_STATS`. System load came from sysfs/hwmon every 2 s.
+
+The browser is in [WEB.md](WEB.md#linux-chromium-needs-vulkan-flags-gpd-pocket-4-measured-2026-11-13).
+
+| Area | State | How measured |
+|---|---|---|
+| **Pose server under the game** | **SIGKILLed while loading the model, every launch (4 of 4), so no tracking.** Cause: dc3-native carries `RLIMIT_RTTIME` = 0 (soft and hard). The engine's ALSA output goes through PipeWire's ALSA plugin, whose `module-rt` lowers the limit to 0 when rtkit is absent. The spawned server inherits the limit, and the kernel kills a mediapipe thread (`signal_generate sig=9 code=SI_KERNEL`, sent by the `drishti` thread to itself). Standalone A/B with the same arguments: `prlimit --rttime=unlimited` survives, `--rttime=0:0` dies with exit 137. `aplay -D default` reads 0/0 while playing and `paplay` stays unlimited. np-pose-perf's `7fce43c37` (no `sounddevice` import) cures the standalone case only. **Workaround: `MILO_AUDIO_BACKEND=pulseaudio`.** Fix in flight: PLAN P-14 | ftrace, `/proc/PID/limits`, A/B |
+| Engine fps, 1280x720 Xwayland window | No tracker (N1, the server dead): menus 57.6–59.4 (60 Hz), song mean 48.6, p10 44.5. With the tracker (N4, workaround): menus 47.4, song mean 49.7, p10 45.6. The tracker costs the song ~nothing. In the menus it costs ~10 fps against the 60 Hz cap | 2 whole songs |
+| Fullscreen | `play.sh --fullscreen` says "not available" (H-17). **The compositor's fullscreen (the owner's Super+F) on the Xwayland window works**: 1280x800, the picture fills it, no corner, menus at 144 fps on a 144 Hz panel. The native Wayland window (`--wayland`) never took focus in the owner's session, so it was not driven | `hyprctl` fullscreen + screenshot |
+| Hidden window | Engine falls to 1.0 fps while the window is on another workspace (Hyprland stops frame callbacks). Not a game bug, but it reads like a hang in a log | N7, `DC3 PERF` |
+| Pose fps, real camera | Tracker 13.4–15.6 fps on the CPU (XNNPACK, full model), inference 40–52 ms mean, p95 ≤ 65 ms. The game accepted 10–12 frames/s. Bounded by the camera, not by MediaPipe: with auto exposure in a dim room the camera delivers 10–19 fps. Fixed exposure (16.6 or 30 ms) gives 28.6–29 fps but a picture too dark (mean luma 23 against 119) | `POSE_STATS`, `v4l2-ctl`, kit preflight |
+| Scoring, real camera | YMCA Easy (N7, keyboard menus under `DC3_CONTROLLER_MODE=forced`, tracking on): all 67 moves rated, 123,603 (19 awesome / 9 ok / 39 bad), with an unbriefed person in view. N4, the same before `np-tracking` landed: 11 moves rated, score 0 | `play.sh` summary |
+| CPU / GPU / thermal, whole song | With the tracker: CPU p50 8–9% (max 41%), GPU busy p50 44–50% at ~700 MHz, SoC 7.3 W (max 8.7), GPU edge 45–51 °C, Tctl 49–60 °C, battery draw 17 W, CPU clock capped at 2.0 GHz in power-saver. No throttling | sysmon, N1/N4/N7 |
+| Audio | PipeWire sink at quantum 256 / 48 kHz (5.3 ms). The game's stream is 44.1 kHz, period 512 frames (11.6 ms), node latency 236/44100 under PulseAudio. No underrun messages in the engine log. The owner's sink volume is 0% (left as set). INFERRED output latency 20–30 ms | `pactl`, `pw-top` |
+| Keyboard | Real key events into the window: Enter on main opens choose-mode, Esc goes back, **Ctrl+Q quits** (`DC3_EXIT detail=quit_key`, exit 0). Taps shorter than a frame (xdotool's default 12 ms, wtype) are missed and 150 ms holds work: the game reads key state once a frame | XTEST into Xwayland |
+| Camera stability | The camera re-enumerates by itself. `usb 3-4` disconnected at 13:57:07, 13:59:31, 13:59:35, 14:45:20, 14:45:33, 14:56:43, 15:19:23 and 16:15:24 (the last mid-stream). It then comes back as `/dev/video1`, so index 0 fails. `play.sh --check` says FAIL "could not open camera 0 (another program may be using it)". The hint is wrong. Loss mid-song: server exit 7, notice "The camera stopped sending pictures", no reconnect. Idle autosuspend did not trigger a drop (90 s suspended, one resume). Stable name: `/dev/v4l/by-id/…-video-index0`. PLAN P-15 | `journalctl -k`, sysfs |
+| A person in view, faithful menus | With a person in view on main `7e3823a1e`, the kit's keyboard driver failed twice. Once `multiuser_screen` offered only `skip_waiting` (p1 not signed in). Once `main_screen` had no perform row while the person's hand moved the highlight. N4 (before `np-tracking`) signed the same person in. PLAN P-16 | N5, N6 |
+| Camera placement | HFOV not measured (needs a target), INFERRED ~65° for this 5 MP module. With the GPD on a table (~0.85 m), a 1.75 m dancer with raised hands fits at 2.4–3 m with the screen tilted back slightly. The runbook's 2.3–2.7 m is at the near end | geometry |
+
 ## Playtest kit (PLAN L) — see [PLAYTEST.md](PLAYTEST.md)
 
 Measured 2026-11-13/14 by `np-playtest-kit` on the development box (Ryzen,

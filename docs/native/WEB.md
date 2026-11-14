@@ -1352,6 +1352,73 @@ desktop socket feeds — see [POSE_INPUT.md](POSE_INPUT.md#web). No camera,
 permission refused, or `?pose=off`: the game scores the stand-in skeleton, as
 before.
 
+## Linux Chromium needs Vulkan flags (GPD Pocket 4, measured 2026-11-13)
+
+Lane `np-gpd-test`. Box: GPD Pocket 4 (Ryzen AI 9 HX 370, Radeon 890M, RADV
+STRIX1, Mesa 26.2.5). Session: Hyprland 0.56 on Wayland with Xwayland.
+Browser: Arch `chromium` 156.0.8078.47. Firefox 158 is also installed and was
+not tried for the game.
+
+**Out of the box, Chromium on Linux has no WebGPU, and the game cannot start.**
+Without flags, Chromium's GPU process runs GL through ANGLE-on-GL, and Dawn
+blocks Vulkan when it has to interop with GL. chrome://gpu then reports only an
+OpenGLES compat adapter, and both `requestAdapter()` and
+`requestAdapter({featureLevel: 'compatibility'})` return `null`. The flags have
+to put ANGLE itself on Vulkan.
+
+Each configuration below was measured headed in the real session with a fresh
+profile. The test checked chrome://gpu, the adapter and `requestDevice`, and
+read back a VP9 `<video>` (the game's movies) through a 2D canvas. The decoder
+came from CDP `Media`.
+
+| Flags | WebGPU adapter | `<video>` | Decoder |
+|---|---|---|---|
+| none | null | ok | VA-API (hw) |
+| `--disable-features=Vulkan` (what the GPD's file had) | null | ok | VA-API |
+| `--enable-unsafe-webgpu` | SwiftShader (CPU fallback) | ok | VA-API |
+| `--enable-features=Vulkan` | amd / rdna-3 | **blank**: zero readback; the GPU process logs Skia backing errors | VpxVideoDecoder (sw) |
+| **`--use-angle=vulkan --enable-features=Vulkan,VulkanFromANGLE`** | **amd / rdna-3** | ok | VpxVideoDecoder (sw) |
+| `--ozone-platform=x11 --enable-features=Vulkan` | amd / rdna-3 | ok | sw |
+| the bold row + `AcceleratedVideoDecodeLinuxGL,AcceleratedVideoDecodeLinuxZeroCopyGL,VaapiIgnoreDriverChecks` | amd / rdna-3 | ok | still sw |
+| `--enable-features=Vulkan,VulkanFromANGLE,DefaultANGLEVulkan` | amd / rdna-3 | ok | sw |
+
+The cost of the bold row is that video decode moves from VA-API to software.
+None of the tried flags got it back. On this CPU that is cheap: the whole song
+below ran at 12% CPU.
+
+**What changed on the GPD.** `~/.config/chromium-flags.conf` is read by Arch's
+`/usr/bin/chromium` for every launch and every profile.
+- Its one active line was `--disable-features=Vulkan`, left from an August setup
+  that also added a separate `chromium-webgpu` launcher and profile. That line
+  is now replaced by the two flags of the bold row.
+- The rest of the file is kept, plus a dated comment that says how to revert.
+- Backup: `~/.config/chromium-flags.conf.bak-20261113`.
+- The `chromium-webgpu` launcher is untouched and still works.
+
+Cold-start check: the browser was quit, then started again from the desktop
+launcher (`chromium.desktop`), not from a shell.
+- Its command line was `chromium --use-angle=vulkan --enable-features=Vulkan,VulkanFromANGLE`.
+- The check page read `WebGPU adapter: amd / rdna-3`.
+
+The check also works by hand: in chrome://gpu, "WebGPU: Hardware accelerated"
+means the flags took. "Disabled" means they did not.
+
+**Whole song in that browser** (YMCA, Easy, real webcam granted, audio on, on
+battery in power-saver):
+- Played to `perform_final_results` with 0 page errors.
+- Engine fps p50 53.8, p5 20.6, p95 59.8.
+- 10% of rAF frames took over 25 ms (880 of 8,503), and single stalls reached 1.37 s.
+- CPU p50 12%. GPU busy p50 50% at ~700 MHz, SoC power 8.8 W, edge 45–48 °C, no throttling.
+- Audio really played: the Chromium stream was RUNNING and the sink monitor
+  read −14 to −17 dBFS. The WebAudio callback was 10.67 ms at ~1% render capacity.
+- Pose ran on the default CPU delegate with the full model: 10.1 fps, inference
+  p50 86 ms / p95 115 ms. The webcam itself delivered only ~10 fps (auto
+  exposure in a dim room, see [STATUS](STATUS.md#gpd-pocket-4)).
+- Two real people walked through the view. Tracking ids churned (15 → 30 in
+  about a minute), a second player slot opened, and p1's score froze at 25,409
+  while the new slot sat at 0. This is the W-10 class. The fix landed on main
+  afterwards (`np-tracking`), and this deploy predates it.
+
 ## Deployment
 
 `dc3-web.service` (a user unit) serves the **main checkout's**
