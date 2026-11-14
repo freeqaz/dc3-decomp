@@ -84,7 +84,10 @@ TEST(NativeUiMaterialTerms, PrelitAndAlphaRules) {
 
     EXPECT_FLOAT_EQ(MaterialAlphaScale(true, true), 2.0f)
         << "standard.ps scales the texel's alpha by intensify too";
-    EXPECT_FLOAT_EQ(MaterialAlphaScale(true, false), 1.0f);
+    // Outside the UI terms too, for DC3 (rndshape::kIntensifyScalesAlpha,
+    // np-gfx-light round 4): the world draws with the same standard.ps.
+    EXPECT_FLOAT_EQ(MaterialAlphaScale(true, false), 2.0f)
+        << "DC3 world intensify materials double their alpha as well";
     EXPECT_FLOAT_EQ(MaterialAlphaScale(false, true), 1.0f);
     // use_environ 0 on a lit material (ambient 1, no lights; the move names)
     // is pinned through the builders below: MaterialShadesUnlit, which applied
@@ -258,7 +261,8 @@ TEST_F(NativeUiMaterialBuilderTest, PrimaryBuilderAppliesTheUiTerms) {
     p = BuildMaterialParams(bright, true, kRetail);
     EXPECT_FLOAT_EQ(p.uniforms.color[3], 1.0f);
     EXPECT_FLOAT_EQ(p.uniforms.intensify, 2.0f);
-    EXPECT_FLOAT_EQ(BuildMaterialParams(bright, true, kEngineDefault).uniforms.color[3], 0.5f);
+    // And without them: DC3's world takes the same rule (kIntensifyScalesAlpha).
+    EXPECT_FLOAT_EQ(BuildMaterialParams(bright, true, kEngineDefault).uniforms.color[3], 1.0f);
 
     delete litText;
     delete noEnv;
@@ -307,7 +311,7 @@ TEST_F(NativeUiMaterialBuilderTest, PassBuilderAppliesTheUiTerms) {
 
     RndMat *bright = MakeMat(false, true, true, 0.5f);
     EXPECT_FLOAT_EQ(BuildPassMaterialParams(bright, kRetail).uniforms.color[3], 1.0f);
-    EXPECT_FLOAT_EQ(BuildPassMaterialParams(bright, kEngineDefault).uniforms.color[3], 0.5f);
+    EXPECT_FLOAT_EQ(BuildPassMaterialParams(bright, kEngineDefault).uniforms.color[3], 1.0f);
     delete noEnv;
     delete bright;
 }
@@ -372,4 +376,48 @@ TEST_F(NativeUiMaterialBuilderTest, DrawPathEntryPointForwardsTheCurrentTerms) {
     EXPECT_EQ(viaDrawPath.uniforms.prelit, viaDefault.uniforms.prelit);
     EXPECT_EQ(viaDrawPath.uniforms.gammaShading, viaDefault.uniforms.gammaShading);
     delete noEnv;
+}
+
+// Streetside's peak stripes (np-gfx-light round 4). streetside_peek_pink1..16
+// are SrcAlpha, intensify, alpha_write world materials with alpha 0.57 falling
+// to 0.025. Retail's standard.ps with option bit 53 (intensify) scales the
+// whole texel by c5.y = intensify + 1, alpha included:
+// standard_0020000000020010.ps is `mul r0, r0, c5.yyyy` then
+// `mul oC0.___w, r0.wwww, r2.wwww`, against `r0.w * r2.w` for the same key
+// without bit 53. So each stripe draws twice as opaque as its authored alpha
+// and writes twice the bloom mask (alpha_write), which is what the
+// streetside_performance_awesome.pp red bloom (0.91, 0, 0) x 1.4 feeds on.
+// The engine used to double alpha in the UI phase only; under the world terms
+// the stripes drew at half opacity and half bloom.
+// Sabotage (round 4): rndshape::kIntensifyScalesAlpha = false in
+// RndShape_DC3.h fails this test and the two builder tests above.
+TEST_F(NativeUiMaterialAssetTest, PeakStripeIntensifyDoublesWorldAlpha) {
+    const char *root = getenv("MILO_LIB");
+    if (!root || !root[0])
+        GTEST_SKIP() << "MILO_LIB not set";
+    std::string path = std::string(root) + "/world/streetside/gen/streetside.milo_xbox";
+    ObjectDir *dir = DirLoader::LoadObjects(FilePath(path.c_str()), nullptr, nullptr);
+    ASSERT_NE(dir, nullptr) << path;
+    RndMat *pink1 = nullptr;
+    for (ObjDirItr<RndMat> it(dir, true); it != nullptr; ++it) {
+        if (strcmp(it->Name(), "streetside_peek_pink1.mat") == 0) {
+            pink1 = it;
+            break;
+        }
+    }
+    ASSERT_NE(pink1, nullptr) << "streetside_peek_pink1.mat not in " << path;
+    EXPECT_EQ(pink1->GetBlend(), BaseMaterial::kBlendSrcAlpha);
+    EXPECT_TRUE(pink1->GetIntensify());
+    EXPECT_TRUE(pink1->GetAlphaWrite()) << "the stripe's alpha is the bloom mask";
+    // The milo stores alpha 0; the venue's peak animation keys it at runtime
+    // (0.57 on pink1, measured live over /api/dta/eval in the awesome state).
+    pink1->SetAlpha(0.57f);
+    const float authored = pink1->Alpha();
+    ASSERT_NE(gWgpuRnd, nullptr);
+    // The world phase's terms (no UI material terms).
+    const UiDrawTerms world = UiDrawTermsFor(false);
+    ASSERT_FALSE(world.retailMaterialTerms);
+    EXPECT_FLOAT_EQ(BuildMaterialParams(pink1, false, world).uniforms.color[3], 2.0f * authored)
+        << "a world intensify stripe must draw at twice its authored alpha, as standard.ps does";
+    EXPECT_FLOAT_EQ(BuildPassMaterialParams(pink1, world).uniforms.color[3], 2.0f * authored);
 }
