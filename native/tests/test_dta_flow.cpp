@@ -1320,6 +1320,89 @@ TEST_F(LargestSongFlowTest, OmgPreloadsAndReachesGameplay) {
     EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }
 
+// DLC: Milkshake from the Dance Central 2 DLC megapack, mounted from a package
+// directory (scripts/dlc/import.sh) through DC3_DLC_DIR.  It is selected,
+// preloaded from the package's cntNNNNNNNN: drive, and played.  The package
+// is game content and is never committed, so on a machine without it the
+// test SKIPS rather than fails.  The crash this guards: a song milo's
+// `../../world/shared/director.milo` subdir must resolve to the disc's
+// director (world_objects.dta `change_subdir`, which keys on a drive in the
+// path) -- resolved inside the package it fails to load, song.anim's keys
+// lose their HamDirector target, and game_screen dies in
+// HamDirector::SetupRoutineBuilderAnims.
+// DC3_TEST_DLC_DIR overrides the root (pointing it at an empty dir exercises
+// the skip).
+static std::string GetDlcDir() {
+    const char *env = getenv("DC3_TEST_DLC_DIR");
+    if (env && *env) return env;
+    return GetBinaryDir() + "/../../orig-assets/dlc";
+}
+static constexpr const char *kMilkshakePackage = "dancecentral2dlcmegapack";
+
+class DlcSongFlowTest : public ControllerModeFlowTest {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+    static bool HavePackage() {
+        return FileExists(GetDlcDir() + "/" + kMilkshakePackage +
+                          "/songs/milkshake/milkshake.mogg");
+    }
+    static void SetUpTestSuite() {
+        if (!getenv("DC3_DTA_FLOW_TESTS") || sRanEngine || !HavePackage()) return;
+        // DC3_TAG_MODALS prints the "Could not load:" notify a subdir that
+        // resolved into the package raises.  game_screen ~frame 2000 and
+        // gameStage=playing ~2500 (headless, no GPU).
+        std::string env = "DC3_TAG_MODALS=1 DC3_DLC_DIR=" + GetDlcDir();
+        sResult = RunDtaFlow(3600, 180, "milkshake.txt", env.c_str(), true, kTutorialGeneral);
+        sRanEngine = true;
+    }
+    void SetUp() override {
+        if (getenv("DC3_DTA_FLOW_TESTS") && !HavePackage())
+            GTEST_SKIP() << "DLC package absent: " << GetDlcDir() << "/" << kMilkshakePackage
+                         << " (import it with scripts/dlc/import.sh <package>)";
+        CheckRan(sResult, sRanEngine);
+    }
+    void TearDown() override {
+        if (HasFailure() && sRanEngine) Dump(sResult);
+    }
+};
+DtaRunResult DlcSongFlowTest::sResult = {};
+bool DlcSongFlowTest::sRanEngine = false;
+
+TEST_F(DlcSongFlowTest, MilkshakeMountsAndReachesGameplay) {
+    const std::string &out = sResult.output;
+    EXPECT_NE(out.find(std::string("DLC package '") + kMilkshakePackage + "' at cnt"),
+              std::string::npos)
+        << "ContentMgr_Native did not mount the package on a cntNNNNNNNN: drive";
+    ASSERT_NE(out.find("DC3 Input: wait_screen 'song_select_screen' satisfied"),
+              std::string::npos)
+        << "precondition: milkshake.txt never reached song_select_screen";
+    ASSERT_NE(out.find("sym='milkshake'"), std::string::npos)
+        << "the confirm on song select did not pick milkshake -- the song list changed; "
+           "recount the downs in scripts/dc3-input-flows/milkshake.txt";
+    EXPECT_NE(out.find("cnt00000000:/songs/milkshake/gen/milkshake.milo_xbox"),
+              std::string::npos)
+        << "the song milo was not read from the package's drive";
+    for (const char *subdir : {"director.milo", "audio_mixer.milo"}) {
+        size_t at = 0;
+        bool failed = false;
+        while ((at = out.find("Could not load: ", at)) != std::string::npos) {
+            size_t eol = out.find('\n', at);
+            if (out.substr(at, eol - at).find(subdir) != std::string::npos) failed = true;
+            at = eol;
+        }
+        EXPECT_FALSE(failed) << subdir
+                             << " was resolved inside the package instead of on the disc "
+                                "(world_objects.dta change_subdir needs a drive in the path)";
+    }
+    EXPECT_NE(out.find("Screen 'game_screen' Enter (from 'real_loading_screen')"),
+              std::string::npos)
+        << "milkshake never reached game_screen";
+    EXPECT_NE(out.find("gameStage=playing"), std::string::npos)
+        << "milkshake reached game_screen but never started playing";
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
+}
+
 // PLAN H-11: the loading screen plays its loading music.  The image finds the
 // era's .mid only in the persistent file cache App::App builds at boot
 // (config/persistent_filecache.dta); without it native loaded every song in
