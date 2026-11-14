@@ -2123,6 +2123,7 @@ if(BUILD_TESTS)
         tests/test_native_glyph_render.cpp
         tests/test_native_ui_material_terms.cpp
         tests/test_frame_pacer.cpp     # H-29 frame cap + engine CPU-use guards
+        tests/test_bind_group_cache.cpp # H-30/H-31 cached bind groups, staged uniform rings
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
