@@ -357,7 +357,14 @@ set(MILO_ENGINE_DECOMP_INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/../include)
 set(MILO_ENGINE_DECOMP_COMPAT_FLAGS
     ${DC3_MSVC_COMPAT_FLAGS} ${DC3_ATOMIC_COMPAT_FLAGS} ${DC3_DECOMP_FLAGS})
-set(MILO_ENGINE_DECOMP_PCH ${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h)
+# The PCH header is named in ANGLE-BRACKET form, found through the targets'
+# include path (../src/system), on purpose: CMake writes the header's name
+# verbatim into the generated cmake_pch.hxx that every PCH user includes. A full
+# path there is a different file in every worktree, so no TU that uses the PCH
+# could ever be a ccache hit from another worktree (measured: the only
+# difference between two trees' hash inputs was that 2-byte-longer line).
+set(DC3_PCH_HEADER "<decomp_pch.h>")
+set(MILO_ENGINE_DECOMP_PCH "${DC3_PCH_HEADER}")
 # GPU backend flavor: DC3's WgpuRnd : NgRnd + the rndobj-coupled gfx TUs. This is
 # the engine's default when a consumer names no backend, but set it explicitly
 # (the engine now also ships a `rb3` BandRnd flavor — see the engine CMakeLists
@@ -1570,7 +1577,7 @@ target_link_libraries(dc3-web PRIVATE milo-engine imgui)
 # MILO_ENGINE_DECOMP_PLATFORM_EXCLUDE note above: the PCH locks <sys/stat.h>'s
 # st_mtime macro state).
 target_precompile_headers(dc3-web PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 set_source_files_properties(${DC3_WEB_LIFTED_ENGINE_SOURCES}
     PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
@@ -1772,7 +1779,7 @@ set_source_files_properties(
 # Covers Object.h, Debug.h and their heavy transitive includes (Data.h, BinStream,
 # Symbol, STL containers). Applies to all engine targets.
 target_precompile_headers(dc3-native PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # ============================================================================
@@ -1834,7 +1841,7 @@ target_link_libraries(milo-viewer PRIVATE
     $<$<BOOL:${ENABLE_FFMPEG}>:${FFMPEG_LIBRARIES}>
 )
 target_precompile_headers(milo-viewer PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # ============================================================================
@@ -1881,7 +1888,7 @@ target_link_libraries(render-test PRIVATE
     ${DC3_PLATFORM_LIBS}
 )
 target_precompile_headers(render-test PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # ============================================================================
@@ -1933,7 +1940,7 @@ target_include_directories(milo-tex-export PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
 target_link_options(milo-tex-export PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
 target_link_libraries(milo-tex-export PRIVATE ${DC3_EXPORT_TOOL_LIBS})
 target_precompile_headers(milo-tex-export PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # --- milo-mat-export ---
@@ -1951,7 +1958,7 @@ target_include_directories(milo-mat-export PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
 target_link_options(milo-mat-export PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
 target_link_libraries(milo-mat-export PRIVATE ${DC3_EXPORT_TOOL_LIBS})
 target_precompile_headers(milo-mat-export PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # --- milo2gltf ---
@@ -1969,7 +1976,7 @@ target_include_directories(milo2gltf PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
 target_link_options(milo2gltf PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
 target_link_libraries(milo2gltf PRIVATE ${DC3_EXPORT_TOOL_LIBS})
 target_precompile_headers(milo2gltf PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
 )
 
 # ============================================================================
@@ -2132,7 +2139,7 @@ if(BUILD_TESTS)
         ${FFMPEG_LIBRARIES}
     )
     target_precompile_headers(milo-tests PRIVATE
-        "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+        "$<$<COMPILE_LANGUAGE:CXX>:${DC3_PCH_HEADER}>"
     )
     # H-9 exit tests: Xlib (a second X client acting on the engine's window)
     # and no decomp header, so no PCH and no MSVC compat.

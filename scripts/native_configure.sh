@@ -230,6 +230,8 @@ fi
 #                          under ccache. Code must not locate files from it.)
 #   hash_dir=false         -g puts the cwd in DWARF; do not hash it. A hit may
 #                          carry another worktree's DW_AT_comp_dir.
+#   pch_external_checksum  hash <pch>.sum (written by native_ccache_launcher.sh)
+#                          instead of the .pch, which differs per tree.
 #   sloppiness             pch_defines,time_macros: what ccache requires to cache
 #                          PCH users at all; include_file_m/ctime: fresh
 #                          worktree files are all "too new" otherwise.
@@ -268,8 +270,12 @@ if [ -n "$ccache_bin" ]; then
                  | sha256sum | cut -c1-16)"
         [ -n "$_sum" ] && cc_check="compiler_check=string:clang-$_sum"
     fi
-    _launcher="$ccache_bin;cache_dir=$ccache_dir;max_size=${MILO_CCACHE_MAXSIZE:-16G}"
-    _launcher="$_launcher;base_dir=$REPO_ROOT;hash_dir=false"
+    # The wrapper builds PCHs without ccache and writes the <pch>.sum digest
+    # that pch_external_checksum=true makes ccache hash instead of the .pch
+    # (whose bytes embed this tree's absolute paths); see its header.
+    _launcher="$REPO_ROOT/scripts/native_ccache_launcher.sh;$ccache_bin"
+    _launcher="$_launcher;cache_dir=$ccache_dir;max_size=${MILO_CCACHE_MAXSIZE:-16G}"
+    _launcher="$_launcher;base_dir=$REPO_ROOT;hash_dir=false;pch_external_checksum=true"
     _launcher="$_launcher;sloppiness=pch_defines,time_macros,include_file_mtime,include_file_ctime"
     [ -n "$cc_check" ] && _launcher="$_launcher;$cc_check"
     LAUNCHER_ARGS=(-DCMAKE_C_COMPILER_LAUNCHER="$_launcher" -DCMAKE_CXX_COMPILER_LAUNCHER="$_launcher")
