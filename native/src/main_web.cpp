@@ -21,6 +21,7 @@
 #include <string>
 
 #include "App.h"
+#include "platform/FrameTraceCounters.h"
 #include "platform/WebAssets.h"
 #include "platform/Rnd_Wgpu.h"
 #include "ui/UI.h"
@@ -184,6 +185,58 @@ static void WebScreenBundleHook() {
 }
 
 // ============================================================================
+// Per-frame cost trace (PLAN W-14): ?env=DC3_FRAME_TRACE=1
+//
+// The engine already times its web choke points into the FrameTraceCounters.h
+// accumulators (blocking asset fetch, texture/mesh upload, vertex unpack,
+// pipeline creation), gated on gFrameTraceActive; rb3 has the recorder, dc3 had
+// none, so the counters never ran here. With DC3_FRAME_TRACE set, each game
+// frame hands its wall time (RunOneFrame, JSPI suspensions included) and the
+// counters to window.dc3FrameTraceSink (scripts/web/lib/pacing.mjs installs
+// it), then zeroes them. Off: one predicted branch a frame.
+// ============================================================================
+
+static bool FrameTraceEnabled() {
+    static int s = -1;
+    if (s < 0) {
+        const char *e = ::getenv("DC3_FRAME_TRACE");
+        s = (e && e[0] && e[0] != '0') ? 1 : 0;
+        if (s)
+            printf("DC3 Web: frame trace on (DC3_FRAME_TRACE)\n");
+    }
+    return s != 0;
+}
+
+static void FrameTraceRecord(int frame, double t0, double t1) {
+    EM_ASM(
+        {
+            var f = window.dc3FrameTraceSink;
+            if (f)
+                f({frame : $0, t0 : $1, t1 : $2, fetchMs : $3, fetchN : $4, fetchBytes : $5,
+                   texMs : $6, texN : $7, meshMs : $8, meshN : $9, pipeMs : $10, pipeN : $11,
+                   unpackMs : $12, dtaMs : $13, streamMs : $14});
+        },
+        frame, t0, t1, gFetchSyncMsThisFrame, gFetchSyncCountThisFrame,
+        gFetchSyncBytesThisFrame, gTexUploadMsThisFrame, gTexUploadCountThisFrame,
+        gMeshUploadMsThisFrame, gMeshUploadCountThisFrame, gPipelineCreateMsThisFrame,
+        gPipelineCreateCountThisFrame, gVertUnpackMsThisFrame, gDtaParseMsThisFrame,
+        gStreamReadMsThisFrame);
+    gFetchSyncMsThisFrame = 0;
+    gFetchSyncCountThisFrame = 0;
+    gFetchSyncBytesThisFrame = 0;
+    gTexUploadMsThisFrame = 0;
+    gTexUploadCountThisFrame = 0;
+    gMeshUploadMsThisFrame = 0;
+    gMeshUploadCountThisFrame = 0;
+    gPipelineCreateMsThisFrame = 0;
+    gPipelineCreateCountThisFrame = 0;
+    gVertUnpackMsThisFrame = 0;
+    gVertUnpackCountThisFrame = 0;
+    gDtaParseMsThisFrame = 0;
+    gStreamReadMsThisFrame = 0;
+}
+
+// ============================================================================
 // Main loop — drives the boot state machine
 // ============================================================================
 
@@ -258,7 +311,13 @@ static void mainLoop() {
 
     case BOOT_RUNNING: {
         sFrameCount++;
+        const bool trace = FrameTraceEnabled();
+        if (trace)
+            gFrameTraceActive = true;
+        const double t0 = trace ? emscripten_get_now() : 0.0;
         sApp->RunOneFrame();
+        if (trace)
+            FrameTraceRecord(sFrameCount, t0, emscripten_get_now());
         WebScreenBundleHook();
         WebPoseStatusTick(sFrameCount);
         EM_ASM({ window.dc3FrameCount = $0; }, sFrameCount);
