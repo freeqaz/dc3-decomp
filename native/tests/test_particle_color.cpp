@@ -34,6 +34,7 @@
 
 #include "platform/Part_Wgpu.h"
 #include "platform/Rnd_Wgpu.h"
+#include "platform/rndshape/RndShape.h"
 
 #include "obj/Object.h"
 #include "rndobj/Cam.h"
@@ -42,6 +43,7 @@
 #include "rndobj/Part.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/Tex.h"
+#include "rndobj/Trans.h"
 
 #include <cmath>
 #include <vector>
@@ -109,6 +111,93 @@ TEST_F(ParticleColorTest, IntensifyDoubles) {
     mat->SetProperty("intensify", DataNode(1));
     ExpectColor(ParticleShaderColor(mat, nullptr), 1.0f, 0.5f, 0.25f, 0.5f);
     delete mat;
+}
+
+// ---- particle positions are in the system's relative space ------------------
+//
+// Retail DxParticleSys::DrawShowing (src/system/rnddx9/Part.cpp) draws the
+// particles under TheShaderMgr.SetTransform(mRelativeXfm), so the world
+// position of a particle is mRelativeXfm * p->pos. The engine billboard used
+// p->pos raw, which put streetside's manholeSteam (relative_motion 0.8, its
+// motion parent placed after SetRelativeMotion ran) in the middle of the
+// stage: the opaque cyan cloud in front of the right backup dancer at peak.
+//
+// Sabotage tried (np-gfx-blend residual): rndshape::PartWorldPos back to
+// "return p->pos" -> FullyRelative... and PartlyRelative... fail (world
+// (1,2,3) where (8,21,33) / (9,2,3) is expected); renaming Part.h's
+// RelativeXfm() accessor -> those two and DC3ShapeReadsRelativeXfm fail (the
+// SFINAE fallback compiles fine and would otherwise silently restore the bug).
+
+namespace {
+// UpdateRelativeXfm is protected; the probe only re-exports it.
+class RelativeProbeSys : public RndParticleSys {
+public:
+    RelativeProbeSys() {}
+    using RndParticleSys::UpdateRelativeXfm;
+};
+} // namespace
+
+TEST_F(ParticleColorTest, DC3ShapeReadsRelativeXfm) {
+    EXPECT_TRUE(rndshape::PartHasRelativeXfm<RndParticleSys>::value)
+        << "RndParticleSys::RelativeXfm() is not visible to the DC3 shape; "
+           "PartWorldPos would fall back to drawing relative positions as world";
+}
+
+// relative_motion 1: mRelativeXfm is the motion parent's world xfm.
+TEST_F(ParticleColorTest, FullyRelativeParticleFollowsParent) {
+    RndTransformable *parent = Hmx::Object::New<RndTransformable>();
+    Hmx::Matrix3 rot; // 90 degrees about +z: x -> y, y -> -x
+    rot.Set(0.0f, 1.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+    parent->SetLocalRot(rot);
+    parent->SetLocalPos(Vector3(10.0f, 20.0f, 30.0f));
+    RndParticleSys *sys = Hmx::Object::New<RndParticleSys>();
+    sys->SetPool(4, RndParticleSys::kBasic);
+    sys->SetRelativeMotion(1.0f, parent);
+    RndParticle *p = sys->AllocParticle();
+    ASSERT_NE(p, nullptr);
+    p->pos = Vector4(1.0f, 2.0f, 3.0f, 1.0f);
+    Vector3 w = rndshape::PartWorldPos(sys, p);
+    // rot * (1,2,3) = (-2, 1, 3); + (10,20,30)
+    EXPECT_NEAR(w.x, 8.0f, kEps);
+    EXPECT_NEAR(w.y, 21.0f, kEps);
+    EXPECT_NEAR(w.z, 33.0f, kEps);
+    delete sys;
+    delete parent;
+}
+
+// relative_motion 0.8 and a parent that moves after SetRelativeMotion (a venue
+// placing the system): UpdateRelativeXfm accumulates 0.8 of the displacement.
+TEST_F(ParticleColorTest, PartlyRelativeParticleIsOffsetByAccumulatedMotion) {
+    RndTransformable *parent = Hmx::Object::New<RndTransformable>();
+    RelativeProbeSys *sys = new RelativeProbeSys();
+    sys->SetPool(4, RndParticleSys::kBasic);
+    sys->SetRelativeMotion(0.8f, parent);
+    parent->SetLocalPos(Vector3(10.0f, 0.0f, 0.0f));
+    sys->UpdateRelativeXfm();
+    RndParticle *p = sys->AllocParticle();
+    ASSERT_NE(p, nullptr);
+    p->pos = Vector4(1.0f, 2.0f, 3.0f, 1.0f);
+    Vector3 w = rndshape::PartWorldPos(sys, p);
+    EXPECT_NEAR(w.x, 9.0f, kEps); // 1 + 0.8 * 10
+    EXPECT_NEAR(w.y, 2.0f, kEps);
+    EXPECT_NEAR(w.z, 3.0f, kEps);
+    delete sys;
+    delete parent;
+}
+
+// relative_motion 0 (the default): positions are already world.
+TEST_F(ParticleColorTest, NonRelativeParticleIsWorld) {
+    RndParticleSys *sys = Hmx::Object::New<RndParticleSys>();
+    sys->SetPool(4, RndParticleSys::kBasic);
+    sys->SetLocalPos(Vector3(5.0f, 5.0f, 5.0f));
+    RndParticle *p = sys->AllocParticle();
+    ASSERT_NE(p, nullptr);
+    p->pos = Vector4(1.0f, 2.0f, 3.0f, 1.0f);
+    Vector3 w = rndshape::PartWorldPos(sys, p);
+    EXPECT_NEAR(w.x, 1.0f, kEps);
+    EXPECT_NEAR(w.y, 2.0f, kEps);
+    EXPECT_NEAR(w.z, 3.0f, kEps);
+    delete sys;
 }
 
 #ifdef MILO_READBACK_GPU_RENDER_TARGET

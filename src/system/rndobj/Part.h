@@ -187,6 +187,9 @@ public:
     void InitParticle(RndParticle *, const Transform *);
     void SetMat(RndMat *mat) { mMat = mat; }
     RndMat *GetMat() const { return mMat; }
+    // The space particle positions live in: DxParticleSys::DrawShowing draws
+    // them under TheShaderMgr.SetTransform(mRelativeXfm).
+    const Transform &RelativeXfm() const { return mRelativeXfm; }
 
     float CalcFrame() {
         if (mFrameDrive)
