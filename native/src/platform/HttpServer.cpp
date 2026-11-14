@@ -231,12 +231,39 @@ bool HttpServer::Start(int port) {
     // http_port_bind_failed), so a harness can tell "my port was taken" from
     // a crash.  The "already in use" wording is kept: tools/state_diff/golden.py
     // matches it.
+    //
+    // Loopback only.  The server evaluates arbitrary DTA (/api/dta/eval),
+    // injects input and reads the framebuffer, and it is on by default in the
+    // dev profile (DC3_PROFILE), so it must never answer another machine: it
+    // listened on 0.0.0.0 until 2026-11-13.  To drive an engine on another box
+    // (the GPD), tunnel: `ssh -L 9090:127.0.0.1:9090 <box>`.
+    //
+    // A negative port means "this one if it is free, else any": the default
+    // when DC3_HTTP_PORT is unset in a window (HttpServerInit), so a second
+    // engine, or one started while the owner's game holds 9090, gets a
+    // kernel-assigned port and says so instead of exiting 98.  An EXPLICIT
+    // port keeps the strict exit-98 contract.
+    static const char *kHttpBindAddress = "127.0.0.1";
     errno = 0;
-    if (port == 0) {
-        port = svr->bind_to_any_port("0.0.0.0");
+    if (port < 0) {
+        const int preferred = -port;
+        if (svr->bind_to_port(kHttpBindAddress, preferred)) {
+            port = preferred;
+        } else {
+            const int err = errno;
+            port = svr->bind_to_any_port(kHttpBindAddress);
+            if (port <= 0)
+                HttpBindFailed(0, errno);
+            fprintf(stderr,
+                    "DC3 Native: HTTP debug server: port %d is taken (%s); using "
+                    "kernel-assigned port %d instead (set DC3_HTTP_PORT to insist)\n",
+                    preferred, err ? strerror(err) : "bind failed", port);
+        }
+    } else if (port == 0) {
+        port = svr->bind_to_any_port(kHttpBindAddress);
         if (port <= 0)
             HttpBindFailed(0, errno);
-    } else if (!svr->bind_to_port("0.0.0.0", port)) {
+    } else if (!svr->bind_to_port(kHttpBindAddress, port)) {
         HttpBindFailed(port, errno);
     }
 
@@ -254,7 +281,8 @@ bool HttpServer::Start(int port) {
     // Machine-readable line on stdout for scripts to parse
     fprintf(stdout, "DC3_HTTP_PORT=%d\n", port);
     fflush(stdout);
-    fprintf(stderr, "[HttpServer] Listening on port %d\n", port);
+    fprintf(stderr, "[HttpServer] Listening on %s:%d (loopback only)\n", kHttpBindAddress,
+            port);
     return true;
 }
 
@@ -1597,16 +1625,23 @@ void HttpServer::RegisterEndpoints() {
 // Init/shutdown helper (called from App.cpp)
 // ---------------------------------------------------------------------------
 
+struct GLFWwindow;
+extern GLFWwindow *gNativeWindow; // engine Rnd_Wgpu.cpp; null when headless
+
 void HttpServerInit() {
     const char* env = getenv("DC3_HTTP");
     if (!env || atoi(env) == 0) return;
 
-    // Unset -> 9090. "0" or "auto" -> kernel-assigned ephemeral port, reported
-    // on stdout as DC3_HTTP_PORT=<n> (see Start). Anything else unparseable or
-    // non-positive keeps the historical 9090 fallback.
-    int port = 9090;
+    // Unset -> in a window, 9090 if it is free, else a kernel-assigned port
+    // (Start's negative-port case); headless, a kernel-assigned port, so a
+    // test or agent run never squats the 9090 a person or a script that names
+    // it expects.  Either way the port is printed on stdout as
+    // DC3_HTTP_PORT=<n> and written to DC3_HTTP_PORT_FILE.  "0" or "auto" ->
+    // kernel-assigned.  An explicit port is strict: taken = exit 98.  Anything
+    // else unparseable or non-positive keeps the historical 9090.
+    int port = gNativeWindow ? -9090 : 0;
     const char* portEnv = getenv("DC3_HTTP_PORT");
-    if (portEnv) {
+    if (portEnv && *portEnv) {
         if (strcmp(portEnv, "auto") == 0 || strcmp(portEnv, "0") == 0) {
             port = 0;
         } else {

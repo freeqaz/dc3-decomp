@@ -20,7 +20,9 @@ public:
     HttpServer();
     ~HttpServer();
 
-    // Start the server on the given port. Returns true if started.
+    // Start the server on 127.0.0.1 (never another interface). port > 0: that
+    // port, or exit 98; 0: kernel-assigned; < 0: -port if free, else
+    // kernel-assigned (DC3_HTTP_PORT unset in a window). Returns true if started.
     bool Start(int port = 9090);
 
     // Stop the server and join the background thread.
