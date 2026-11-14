@@ -7,6 +7,7 @@
 #include "rndobj/Rnd.h"
 #include "utl/TimeConversion.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -83,6 +84,10 @@ struct State {
     double pInfer = 0, pUntracked = 0, pFlip = 0, pDrop = 0;
     uint64_t glitchSeed = 7;
     Rng glitchRng{7};
+    // DC3_POSE_PERFORM_STALL: the source goes silent (np-cutoff, PLAN H-94)
+    double stallFrom = -1.0, stallWallSecs = 0.0;
+    bool stallStarted = false, stallLogged = false;
+    std::chrono::steady_clock::time_point stallStart;
     // per-run summary
     int published = 0, fromTarget = 0, held = 0, dropped = 0, flipped = 0;
 };
@@ -221,6 +226,21 @@ void Init() {
             gState.glitchRng = Rng(gState.glitchSeed);
         }
     }
+    // DC3_POSE_PERFORM_STALL=from,secs: from song second `from` on, publish
+    // nothing for `secs` of WALL time -- a pose server hung in inference, a
+    // camera that blocks.  Wall time because a paused song's clock stops, and
+    // a real hang does not end when the song pauses (GestureMgr_Native.cpp's
+    // stall watchdog, test_native_pose_dropout.cpp PoseStallTest).
+    if (const char *v = getenv("DC3_POSE_PERFORM_STALL")) {
+        double from = -1, secs = 0;
+        if (sscanf(v, "%lf,%lf", &from, &secs) == 2 && from >= 0 && secs > 0) {
+            gState.stallFrom = from;
+            gState.stallWallSecs = secs;
+            fprintf(stderr, "DC3 PERFORM: stall from song %.2f s for %.1f s of wall time\n", from, secs);
+        } else {
+            fprintf(stderr, "DC3 PERFORM: DC3_POSE_PERFORM_STALL='%s' is not from,secs -- ignored\n", v);
+        }
+    }
     if (gState.glitch)
         fprintf(stderr, "DC3 PERFORM: glitch infer=%.3f untracked=%.3f flip=%.3f drop=%.3f\n",
                 gState.pInfer, gState.pUntracked, gState.pFlip, gState.pDrop);
@@ -290,6 +310,20 @@ void Dc3PosePerformerPump(NativeSkeletonProvider *provider) {
         return;
     }
     double song = MoveDir::SongSeconds();
+    if (gState.stallFrom >= 0.0 && (gState.stallStarted || song >= gState.stallFrom)) {
+        auto now = std::chrono::steady_clock::now();
+        if (!gState.stallStarted) {
+            gState.stallStarted = true;
+            gState.stallStart = now;
+            fprintf(stderr, "DC3 PERFORM: stalled at song %.2f s\n", song);
+        }
+        if (std::chrono::duration<double>(now - gState.stallStart).count() < gState.stallWallSecs)
+            return; // silent: not even a frame with nobody in it
+        if (!gState.stallLogged) {
+            gState.stallLogged = true;
+            fprintf(stderr, "DC3 PERFORM: stall over at song %.2f s\n", song);
+        }
+    }
     FrameTick tick = FrameDue(song, gState.rateHz, gState.nextDue);
     if (tick == kNotDue)
         return;
