@@ -328,7 +328,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "e16bce7d51840d3417bb67075a0c9f76d4ce9d2e"
+set(MILO_ENGINE_PIN "a80603fc52265f7daa02dce391764dd1ea7c61e5"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -2046,6 +2046,8 @@ if(BUILD_TESTS)
         tests/test_preload_budget.cpp
         tests/test_persistent_filecache.cpp
         tests/test_fast_time_audio.cpp
+        tests/test_choreo_blend.cpp
+        tests/test_rhythm_scoring_window.cpp
         tests/test_milo_viewer_screenshot.cpp
         tests/test_object_lifetime.cpp
         tests/test_manual_repro.cpp
@@ -2122,6 +2124,7 @@ if(BUILD_TESTS)
         tests/test_native_notables.cpp
         tests/test_lp64_literals.cpp
         tests/test_clamp_fsel_nan.cpp
+        tests/test_keys_nan_frame.cpp  # H-60 Keys::AtFrame(NaN) stays inside the keys
         tests/test_native_memory_lp64.cpp
         tests/test_cache_native.cpp
         tests/test_copy_poll_semantics.cpp

@@ -364,27 +364,48 @@ TEST_F(NativeExitTest, SecondEngineOnAPortExitsInsteadOfSharing) {
 // to song time during play (kRealTime only skips the A/V offset), so in a song
 // it reported the song position.  The test moves that timeline the way a song
 // does ({taskmgr set_seconds}) and reads it back as the control.
+//
+// The game drives that same timeline itself, so the control has to win a
+// race against it unless the engine is held where nothing does.  MetaPanel::
+// Poll sets it from the shell music's stream position on every frame once the
+// boot reaches main_screen, and a headless DC3_FAST_BOOT engine gets there
+// ~0.3 s after its main loop starts (MEASURED np-crash, H-71): with every curl
+// started 0.3 s late (a PATH stand-in for a test process descheduled under
+// load) the read-back was 0.26 instead of 5000, every time.  That was the
+// 1.9 s failure seen once in a loaded gate.  So the engine boots WITHOUT
+// DC3_FAST_BOOT and stays on attract_screen, whose movie (~83 s) leaves the
+// timeline alone; the set and the read-back are one eval; and the timeline is
+// read again after /api/health, so the health read is known to have happened
+// with the song clock at 5000 rather than assumed to.
 TEST_F(NativeExitTest, HealthUptimeIsWallClockNotSongTime) {
     if (!HaveCurl()) GTEST_SKIP() << "curl not installed";
     std::string portFile = mRunDir + "/http_port";
     Engine e;
     auto started = std::chrono::steady_clock::now();
     Start(e, mRunDir, {"MILO_HEADLESS=1", "MILO_NORENDER=1", "DC3_HTTP=1", "DC3_HTTP_PORT=0",
-                       "DC3_HTTP_PORT_FILE=" + portFile});
+                       "DC3_HTTP_PORT_FILE=" + portFile, "DC3_FAST_BOOT"});
     ASSERT_TRUE(e.WaitFor("DC3 Native: Entering main loop", 120)) << Tail(e.Output());
     int port = atoi(ReadAll(portFile).c_str());
     ASSERT_GT(port, 0) << Tail(e.Output());
     std::string api = "http://127.0.0.1:" + std::to_string(port) + "/api";
-    Curl("-X POST --data '{taskmgr set_seconds 5000 FALSE}' " + api + "/dta/eval");
-    std::string clock = Curl("-X POST --data '{taskmgr seconds}' " + api + "/dta/eval");
+    std::string clock = Curl("-X POST --data '{do {taskmgr set_seconds 5000 FALSE} "
+                             "{taskmgr seconds}}' " + api + "/dta/eval");
     std::string health = Curl(api + "/health");
+    std::string after = Curl("-X POST --data '{taskmgr seconds}' " + api + "/dta/eval");
+    std::string screen = Curl("-X POST --data '{ui current_screen}' " + api + "/dta/eval");
     double wall = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
     size_t at = health.find("\"uptime_s\":");
     ASSERT_NE(at, std::string::npos) << "health: " << health;
     double uptime = atof(health.c_str() + at + strlen("\"uptime_s\":"));
     // Control: the song clock really did move (else this test proves nothing).
-    EXPECT_NE(clock.find("5000"), std::string::npos)
+    EXPECT_NE(clock.find("\"value\":5000"), std::string::npos)
         << "{taskmgr seconds} did not read back 5000: " << clock;
+    // ...and it was still there after the health read: nothing reset it in
+    // between, so uptime_s was read while the song timeline said 5000.
+    EXPECT_NE(after.find("\"value\":5000"), std::string::npos)
+        << "the game moved the song timeline between the set and the health "
+           "read, so this run says nothing about uptime_s; screen: " << screen
+        << "\ntimeline after the health read: " << after;
     EXPECT_GE(uptime, 0.0) << health;
     EXPECT_LE(uptime, wall + 1.0)
         << "uptime_s=" << uptime << " after " << wall << " s of wall clock: it is "

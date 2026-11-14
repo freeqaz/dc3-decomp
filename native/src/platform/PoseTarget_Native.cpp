@@ -45,10 +45,13 @@
 #include "obj/Task.h"
 #include "utl/TimeConversion.h"
 
+#include "platform/ChoreoBlend.h"
+
 #include <cmath>
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -58,6 +61,19 @@ namespace {
 // Two scheduled frames further apart than this are not one continuous motion
 // (a rest or another player's measure lies between them): hold, do not blend.
 const float kMaxGapSeconds = 0.6f;
+
+// DC3_POSE_PERFORM_KNOT=1: blend through each frame's displacement knot
+// (ChoreoBlend.h) instead of the straight chord from frame to frame.  Off by
+// default, for measurement only (PLAN H-50).  MEASURED, DC1 Easy + Expert, same
+// binary: on Expert at a move's first occurrence, where the scheduled frames
+// ARE the async detector's reference, the chord is already Perfect on 1,642 of
+// 1,642 ratings (the knot: 1,641).  Every rating the knot changes is where the
+// scheduled frames are not the reference (P-11); it fixed cantgetyou Easy
+// (14 -> 1 not Perfect) but made the DC1 total 332 -> 356.
+const bool sDisplacementKnot = [] {
+    const char *v = getenv("DC3_POSE_PERFORM_KNOT");
+    return v && v[0] == '1' && v[1] == '\0';
+}();
 
 void AppendJoints(std::string &out, const Vector3 *pos) {
     out += "[";
@@ -98,22 +114,29 @@ bool ChoreoAt(const std::vector<DetectFrame> &frames, float t, Vector3 *out) {
         return false;
     if (!a && !b)
         return false;
-    float w = 0.0f;
-    if (a && b && b->Seconds() > a->Seconds())
-        w = (t - a->Seconds()) / (b->Seconds() - a->Seconds());
-    if (!a) {
-        a = b;
-        w = 0.0f;
+    if (!b) {
+        // past the last frame of this motion: hold it
+        const DancerSkeleton &sa = a->GetDancerFrame()->mSkeleton;
+        for (int j = 0; j < kNumJoints; j++)
+            out[j] = sa.CamJointPos((SkeletonJoint)j);
+        return true;
     }
-    if (!b)
-        b = a;
-    const DancerSkeleton &sa = a->GetDancerFrame()->mSkeleton;
+    // Blend toward b: the straight chord, or with DC3_POSE_PERFORM_KNOT=1
+    // through its displacement knot (ChoreoBlend.h, PLAN H-50), so the player's
+    // last ElapsedMs of motion is the dancer's authored motion.
+    Vector3 pa[kNumJoints], pb[kNumJoints], db[kNumJoints];
     const DancerSkeleton &sb = b->GetDancerFrame()->mSkeleton;
     for (int j = 0; j < kNumJoints; j++) {
-        const Vector3 &pa = sa.CamJointPos((SkeletonJoint)j);
-        const Vector3 &pb = sb.CamJointPos((SkeletonJoint)j);
-        out[j].Set(pa.x + (pb.x - pa.x) * w, pa.y + (pb.y - pa.y) * w, pa.z + (pb.z - pa.z) * w);
+        pb[j] = sb.CamJointPos((SkeletonJoint)j);
+        db[j] = sb.CamJointDisplacement((SkeletonJoint)j);
     }
+    if (a) {
+        const DancerSkeleton &sa = a->GetDancerFrame()->mSkeleton;
+        for (int j = 0; j < kNumJoints; j++)
+            pa[j] = sa.CamJointPos((SkeletonJoint)j);
+    }
+    ChoreoBlend::Blend(a ? a->Seconds() : 0.0f, a ? pa : nullptr, b->Seconds(), pb,
+                       sDisplacementKnot ? db : nullptr, sb.ElapsedMs(), t, kNumJoints, out);
     return true;
 }
 
