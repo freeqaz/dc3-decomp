@@ -1194,6 +1194,102 @@ TEST_F(DC3VelocityGpuTest, MotionBlurReadsTheVelocityBlurredAlpha) {
     pass.Terminate();
 }
 
+// The velocity blur's cost at 720p through PostProcPass (the half-res camera
+// velocity pass from the 4x depth, and the composite's ten taps where tf10.z
+// >= 0.003): wall time per frame over 200 submitted frames, the camera moving
+// every frame so every texel carries velocity (the worst case), against the
+// same chain with velocity off. No geometry is drawn by the pass, so the
+// draw count of the frame does not enter; the CPU side is FeedVelocity's
+// matrix product and inverse, timed separately.
+TEST_F(DC3VelocityGpuTest, VelocityCostAt720p) {
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    auto &dev = gpu.Device();
+    const int W = 1280, H = 720;
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)W, (uint32_t)H, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst |
+              wgpu::TextureUsage::RenderAttachment;
+    wgpu::Texture scene = dev.CreateTexture(&d);
+    std::vector<uint8_t> px((size_t)W * H * 4);
+    for (size_t i = 0; i < px.size(); i++) px[i] = (uint8_t)((i * 2654435761u) >> 24);
+    wgpu::TexelCopyTextureInfo dst{};
+    dst.texture = scene;
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = W * 4;
+    wgpu::Extent3D ext = {(uint32_t)W, (uint32_t)H, 1};
+    gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture frame = dev.CreateTexture(&d);
+    wgpu::TextureDescriptor b{};
+    b.size = {1, 1, 1};
+    b.format = wgpu::TextureFormat::RGBA8Unorm;
+    b.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    wgpu::Texture black = dev.CreateTexture(&b);
+    const double n = 1.0, f = 1000.0, z = 8.0;
+    wgpu::Texture depthTex = ClearedDepth(gpu, W, H, (float)(f * (z - n) / (z * (f - n))));
+    wgpu::TextureViewDescriptor dvd{};
+    dvd.aspect = wgpu::TextureAspect::DepthOnly;
+    wgpu::TextureView depthView = depthTex.CreateView(&dvd);
+    wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView(),
+                      blackView = black.CreateView();
+    float vpA[16], vpB[16];
+    Place(prev, -0.2f, 0.0f, 0.01f);
+    Place(cur, 0.0f, 0.0f, 0.0f);
+    CamVP(prev, vpA);
+    CamVP(cur, vpB);
+    std::vector<uint8_t> sink((size_t)W * H * 4);
+    PostProcPass pass;
+    pass.Init(gpu);
+    auto timeIt = [&](bool velocity) {
+        auto runN = [&](int count) {
+            for (int i = 0; i < count; i++) {
+                if (velocity) pass.SetVelocity(true, 2.0f, (i & 1) ? vpA : vpB);
+                wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+                pass.Run(enc, sceneView, scene, W, H, depthView, 4, frameView, blackView, gpu);
+                wgpu::CommandBuffer cmd = enc.Finish();
+                gpu.Queue().Submit(1, &cmd);
+            }
+            EXPECT_TRUE(gpu.ReadbackTexture(frame, W, H, sink.data(), sink.size()));
+        };
+        runN(10);
+        const auto t0 = std::chrono::steady_clock::now();
+        runN(200);
+        return std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count() /
+               200.0;
+    };
+    // Five alternations, the median of each side (wall time on a fast GPU is
+    // within submission noise of the pass itself).
+    std::vector<double> offs, ons;
+    int passes = 0;
+    for (int rep = 0; rep < 5; rep++) {
+        offs.push_back(timeIt(false));
+        const int p0 = pass.Retail().VelocityPasses();
+        ons.push_back(timeIt(true));
+        passes = pass.Retail().VelocityPasses() - p0;
+    }
+    std::sort(offs.begin(), offs.end());
+    std::sort(ons.begin(), ons.end());
+    const double tOff = offs[2], tOn = ons[2], tOff2 = offs[0];
+    // CPU: CamSceneMatrices' equivalent and SetVelocity's double inverse.
+    const auto c0 = std::chrono::steady_clock::now();
+    float sinkVP[16];
+    for (int i = 0; i < 1000; i++) {
+        CamVP((i & 1) ? prev : cur, sinkVP);
+        pass.SetVelocity(true, 2.0f, sinkVP);
+    }
+    const double tCpu =
+        std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - c0).count() / 1000.0;
+    printf("DC3 velocity cost @%dx%d (us/frame, wall over 200 frames, median of 5): off %.0f, on %.0f (fastest off %.0f); "
+           "velocity passes %d; CPU per frame (view-proj + inverse) %.2f us\n",
+           W, H, tOff, tOn, tOff2, passes, tCpu);
+    // 210 frames per timed run; the first has no previous view-projection
+    // in the first alternation (no Draw had recorded one yet).
+    EXPECT_GE(passes, 209) << "every timed frame with velocity on ran the pass";
+    pass.Terminate();
+}
+
 // Off costs nothing: no velocity target, no pass, the same composite; and the
 // frame after a cut (not ready), a first frame with no previous VP, or a depth
 // that is not multisampled, add none either.
