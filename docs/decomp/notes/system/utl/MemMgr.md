@@ -288,3 +288,7 @@ Above the definition (was lines 1069-1087):
 // spelling that preserves the instruction sequence preserves the candidate
 // set, and the candidate set is what sets priority.
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.055, 21 non-equal row(s): The 4 SYM
+rows are lbl_82F189CC vs sMinPhysFree: the image's .data word is 0xFFFFFFFF = our
+`(SIZE_T)-1` initialiser. The 17 register rows are pure permutation. NOT A BUG.
