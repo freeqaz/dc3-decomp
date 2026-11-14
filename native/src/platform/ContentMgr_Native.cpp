@@ -31,13 +31,19 @@
 //      MountContent   play time: PreloadPanel / TexLoadPanel / SongPreview
 //                     mount the song's package and wait for ContentMounted.
 //
-//    The root a package reports is the path the file layer resolves: relative
-//    to the data dir (`dlc/<pack>`) when the DLC root is under it, else the
-//    absolute host path. Either way FileIsLocal() is true for its files (the
-//    engine's loose-file rule: not in the ark, present on disk), which is the
-//    native counterpart of the 360's `cntNNNNNNNN:` drive being local.
-//    FileMakePathBuf lowercases every path, so a root must be lowercase;
-//    import.sh names packages that way and a mixed-case root is refused here.
+//    A package's root is the 360's: the drive `cntNNNNNNNN:` (XboxContent's
+//    kContentRootFormat, numbered in discovery order), mapped to the package's
+//    host directory while it is mounted (NativeMountDrive in the engine's
+//    File_Native.cpp, the counterpart of XContentCreate / XContentClose).
+//    The drive is not cosmetic: the `song` ObjectDir type's change_subdir
+//    (world/world_objects.dta) sends a downloaded song's
+//    `../../world/shared/director.milo` subdir -- which holds the HamDirector
+//    every song.anim key targets -- back to the disc's copy only when the path
+//    has a ':' in it. With a drive-less root the subdir resolved inside the
+//    package, did not load, and HamDirector::SetupRoutineBuilderAnims crashed
+//    on the unbound keys.
+//    FileMakePathBuf lowercases every path, so the files inside a package must
+//    be lowercase on disk; scripts/dlc/import.sh extracts them that way.
 
 #include "obj/Data.h"
 #include "os/ContentMgr.h"
@@ -54,7 +60,11 @@
 #include <sys/stat.h>
 #include <vector>
 
-extern const char *NativeGetDataDir();
+#ifndef __EMSCRIPTEN__
+// milo-native-engine src/platform/File_Native.cpp: content drives.
+extern bool NativeMountDrive(const char *drive, const char *hostDir);
+extern void NativeUnmountDrive(const char *drive);
+#endif
 
 namespace {
 
@@ -63,44 +73,19 @@ bool IsDirectory(const char *path) {
     return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
-bool HasUpperCase(const char *s) {
-    for (; *s; s++) {
-        if (isupper((unsigned char)*s)) return true;
-    }
-    return false;
-}
+// XboxContent's kContentRootFormat.
+const char *const kContentRootFormat = "cnt%08x";
 
-// The package root as the file layer must see it (see the header comment).
-// Returns false, with a reason, when the package cannot be mounted.
-bool PackageRoot(const std::string &packDir, std::string &root, std::string &why) {
-    char packReal[PATH_MAX];
-    if (!realpath(packDir.c_str(), packReal)) {
-        why = "cannot resolve path";
-        return false;
-    }
-    char dataReal[PATH_MAX];
-    const char *dataDir = NativeGetDataDir();
-    if (dataDir && realpath(dataDir, dataReal)) {
-        size_t n = strlen(dataReal);
-        if (strncmp(packReal, dataReal, n) == 0 && packReal[n] == '/') {
-            root = packReal + n + 1;
-        } else {
-            root = packReal;
-        }
-    } else {
-        root = packReal;
-    }
-    if (HasUpperCase(root.c_str())) {
-        why = "path has upper-case letters, and every engine path is lowercased "
-              "(FileMakePathBuf); re-import with scripts/dlc/import.sh or rename it";
-        return false;
-    }
-    if (root.size() > 160) {
-        why = "path is too long for the engine's 256-byte file names";
-        return false;
-    }
-    return true;
+#ifndef __EMSCRIPTEN__
+bool MountDrive(const char *drive, const char *hostDir) {
+    return NativeMountDrive(drive, hostDir);
 }
+void UnmountDrive(const char *drive) { NativeUnmountDrive(drive); }
+#else
+// No DLC on web yet (PLAN D-7): DiscoverPackages finds none, so these never run.
+bool MountDrive(const char *, const char *) { return false; }
+void UnmountDrive(const char *) {}
+#endif
 
 } // namespace
 
@@ -110,21 +95,30 @@ bool PackageRoot(const std::string &packDir, std::string &root, std::string &why
 // transition it keys its notifications on.
 class NativeContent : public Content {
 public:
-    NativeContent(const char *name, const char *root, const char *hostDir, bool discovered)
-        : mName(name), mRoot(root), mHostDir(hostDir),
+    NativeContent(const char *name, int index, const char *hostDir, bool discovered)
+        : mName(name), mRoot(MakeString(kContentRootFormat, index)),
+          mContentPath(MakeString("%s:", mRoot.c_str())), mHostDir(hostDir),
           mState(discovered ? kNeedsMounting : kUnmounted), mLRM(0) {}
-    virtual ~NativeContent() {}
-    virtual const char *Root() { return mRoot.c_str(); }
+    virtual ~NativeContent() {
+        if (mState == kMounting || mState == kMounted) UnmountDrive(mRoot.c_str());
+    }
+    virtual const char *Root() { return mContentPath.c_str(); }
     virtual bool OnMemcard() { return false; }
     virtual ContentLocT Location() { return kLocationHDD; }
     virtual State GetState() { return mState; }
     virtual void Poll() {
         if (mState == kNeedsMounting) {
             MILO_LOG("Mounting content '%s'\n", mName.Str());
-            mState = IsDirectory(mHostDir.c_str()) ? kMounting : kContentDeleting;
+            // XContentCreate: a package that has gone away fails here.
+            if (IsDirectory(mHostDir.c_str()) && MountDrive(mRoot.c_str(), mHostDir.c_str())) {
+                mState = kMounting;
+            } else {
+                mState = kContentDeleting;
+            }
         } else if (mState == kMounting) {
             mState = kMounted;
         } else if (mState == kUnmounting) {
+            UnmountDrive(mRoot.c_str()); // XContentClose
             mState = kUnmounted;
         }
     }
@@ -150,7 +144,8 @@ public:
 
 private:
     Symbol mName;
-    String mRoot;
+    String mRoot; // cntNNNNNNNN
+    String mContentPath; // cntNNNNNNNN:, what Root() reports
     String mHostDir;
     State mState;
     unsigned int mLRM;
@@ -158,7 +153,7 @@ private:
 
 class NativeContentMgr : public ContentMgr {
 public:
-    NativeContentMgr() {}
+    NativeContentMgr() : mNextRoot(0) {}
     virtual ~NativeContentMgr() = default;
 
     virtual void Init() {
@@ -374,10 +369,10 @@ private:
                 return 0;
             }
         }
-        std::string root, why;
-        if (!PackageRoot(packDir, root, why)) {
-            MILO_LOG("DC3 Native: DLC package '%s' skipped: %s\n", packDir.c_str(),
-                     why.c_str());
+        char hostDir[PATH_MAX];
+        if (!realpath(packDir.c_str(), hostDir)) {
+            MILO_LOG("DC3 Native: DLC package '%s' skipped: cannot resolve path\n",
+                     packDir.c_str());
             return 0;
         }
         // ContentDiscovered returns true when the callback already has the
@@ -387,11 +382,11 @@ private:
         FOREACH (it, mCallbacks) {
             discovered = !(*it)->ContentDiscovered(Symbol(name.c_str())) || discovered;
         }
-        MILO_LOG("DC3 Native: DLC package '%s' root '%s'%s\n", name.c_str(),
-                 root.c_str(), discovered ? "" : " (cached)");
-        mContents.push_back(
-            new NativeContent(name.c_str(), root.c_str(), packDir.c_str(), discovered)
-        );
+        NativeContent *content =
+            new NativeContent(name.c_str(), mNextRoot++, hostDir, discovered);
+        MILO_LOG("DC3 Native: DLC package '%s' at %s -> %s%s\n", name.c_str(),
+                 content->Root(), hostDir, discovered ? "" : " (cached)");
+        mContents.push_back(content);
         return discovered ? 1 : 0;
     }
 
@@ -423,12 +418,11 @@ private:
 
     void QueuePackageDir(NativeContent *content, const char *subdir, const char *pattern) {
         std::string hostDir = content->HostDir();
-        std::string virtualDir = content->Root();
+        // What FileMakePath(Root(), subdir) gives the base: `cntNNNNNNNN:/songs`.
+        std::string virtualDir = FileMakePath(content->Root(), subdir ? subdir : ".");
         if (subdir && *subdir && strcmp(subdir, ".") != 0) {
             hostDir += "/";
             hostDir += subdir;
-            virtualDir += "/";
-            virtualDir += subdir;
         }
         DIR *dir = opendir(hostDir.c_str());
         if (!dir) return;
@@ -526,6 +520,7 @@ private:
     }
 
     std::vector<String> mIgnored;
+    int mNextRoot; // XboxContentMgr's unk934: the next cntNNNNNNNN
 };
 
 static NativeContentMgr gContentMgr;
