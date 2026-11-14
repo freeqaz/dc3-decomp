@@ -19,6 +19,7 @@
 
 #include "test_helpers.h"
 #include "gfx/PipelineManager.h"
+#include "gfx/ShippedWgsl.h"
 #include "obj/Object.h"
 #include "rndobj/BaseMaterial.h"
 #include "rndobj/Mat.h"
@@ -347,6 +348,46 @@ TEST(NativeGlyphRender, AlphaTestIsRetailsGreater) {
     EXPECT_GT(MaterialAlphaThreshold(true, 0), 0.0f) << "alpha 0 passed a cut at 0";
     EXPECT_GT(MaterialAlphaThreshold(true, 110), 110.0f / 255.0f) << "alpha == threshold passed";
     EXPECT_LT(MaterialAlphaThreshold(true, 110), 110.5f / 255.0f) << "the nudge ate a texel step";
+}
+
+// The sharpened cutout (fs_cutout) must test what retail's alpha test tests:
+// texel alpha x material fade x vertex alpha, the alpha baseColor holds once
+// the texel is multiplied in, sharpened over that product's own footprint. A
+// coverage taken from the texel alpha alone keeps a faded cutout whole where
+// the original erodes it (Eagle-Light rows, tshirt fades to 0.917). This
+// reads the WGSL the dc3 flavor compiles: a structural check (fwidth runs
+// only in a fragment stage, so the compute harness cannot run this line);
+// the frames are the behavioural evidence.
+TEST(NativeGlyphRender, CutoutCoverageTestsTheFadedAlpha) {
+    const std::string s = StandardWgslSource();
+    const size_t fn = s.find("fn shadeStandard(");
+    ASSERT_NE(fn, std::string::npos) << "no shadeStandard in the standard WGSL";
+    const size_t call = s.find("gCutCoverage = cutoutCoverage(", fn);
+    ASSERT_NE(call, std::string::npos) << "shadeStandard sets no cutout coverage";
+    const size_t argBegin = s.find('(', call) + 1;
+    const size_t argEnd = s.find_first_of(",)", argBegin);
+    const std::string arg = s.substr(argBegin, argEnd - argBegin);
+    const std::string def = "let " + arg + " = baseColor.a;";
+    const size_t defAt = s.find(def, fn);
+    ASSERT_NE(defAt, std::string::npos)
+        << "coverage tests '" << arg << "', which is not baseColor.a (the faded product)";
+    EXPECT_LT(defAt, call);
+    // Taken after the texel multiplies in: the last texel-alpha use before
+    // the definition sits after the texture sample.
+    const size_t sample = s.find("textureSample(diffuseTex", fn);
+    ASSERT_NE(sample, std::string::npos);
+    const size_t texelMul = s.rfind("diffuseSample.a", defAt);
+    EXPECT_TRUE(texelMul != std::string::npos && texelMul > sample)
+        << "'" << arg << "' is read before the texel alpha multiplies in";
+    // Its footprint (the third argument) is the product's.
+    const size_t argsEnd = s.find(')', argBegin);
+    const size_t argW = s.rfind(',', argsEnd) + 1;
+    std::string w = s.substr(argW, argsEnd - argW);
+    w.erase(0, w.find_first_not_of(' '));
+    EXPECT_NE(s.find("let " + w + " = fwidth(" + arg + ");", fn), std::string::npos)
+        << "coverage footprint '" << w << "' is not fwidth(" << arg << ")";
+    // No second test of a separate fade alpha in front of it.
+    EXPECT_EQ(s.find("cutFadeA", fn), std::string::npos) << "a separate fade test is back";
 }
 
 // Real materials as the game loads them, through MaterialCutCoverage under
