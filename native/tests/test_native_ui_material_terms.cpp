@@ -30,6 +30,8 @@
 #include "rndobj/Env.h"
 #include "rndobj/Group.h"
 #include "rndobj/Mat.h"
+#include "rndobj/Mesh.h"
+#include <cstring>
 
 // Declared here, not via "platform/MaterialSetup.h": dc3's own
 // native/src/platform/MaterialSetup.h (a pre-engine copy) is earlier on the
@@ -113,4 +115,34 @@ TEST_F(NativeUiMaterialAssetTest, ScoreFontIsLitIntensifyUnderScoreEnv) {
     const Hmx::Color &amb = env->AmbientColor();
     EXPECT_GT(amb.blue, 0.9f);
     EXPECT_LT(amb.green, 0.1f);
+}
+
+// The black diamond on the fitness screens (G-24): MeshFilter's "microphone"
+// rule hid the letterbox mic tab (geo_mic*) but not its backing,
+// ribbon_blocker.mesh: an opaque (kBlendSrc) diamond parented to mic.grp that
+// masks the help-bar rays under the tab. With the tab hidden the blocker drew
+// alone, black. It has to follow the tab. (mic.grp itself is the whole
+// bottom-right cluster, rays and hand-help shield included, so the rule is
+// not "the whole group".) Sabotage: dropping ribbon_blocker.mesh from the rule
+// fails this test.
+bool ShouldSkipMesh(const char *meshName, RndMat *mat);
+
+TEST_F(NativeUiMaterialAssetTest, LetterboxMicTabBlockerFollowsTheTab) {
+    const char *root = getenv("MILO_LIB");
+    if (!root || !root[0])
+        GTEST_SKIP() << "MILO_LIB not set";
+    std::string path = std::string(root) + "/ui/letterbox/gen/letterbox.milo_xbox";
+    ObjectDir *dir = DirLoader::LoadObjects(FilePath(path.c_str()), nullptr, nullptr);
+    ASSERT_NE(dir, nullptr) << path;
+    RndGroup *mic = dir->Find<RndGroup>("mic.grp", false);
+    RndMesh *tab = dir->Find<RndMesh>("geo_mictab_scaled.mesh", false);
+    RndMesh *blocker = dir->Find<RndMesh>("ribbon_blocker.mesh", false);
+    ASSERT_NE(mic, nullptr);
+    ASSERT_NE(tab, nullptr);
+    ASSERT_NE(blocker, nullptr);
+    EXPECT_EQ(blocker->TransParent(), mic) << "the blocker is no longer the mic tab's";
+    ASSERT_NE(blocker->Mat(), nullptr);
+    EXPECT_EQ(blocker->Mat()->GetBlend(), BaseMaterial::kBlendSrc) << "the blocker is opaque";
+    EXPECT_EQ(ShouldSkipMesh(blocker->Name(), nullptr), ShouldSkipMesh(tab->Name(), nullptr))
+        << "the mic tab and its black backing must be drawn or hidden together";
 }
