@@ -312,6 +312,20 @@ void NgLight::RenderShadows(std::vector<RndDrawable *> &shadowCasters) {
     if (!mShadowRT || !unk188) {
         return;
     }
+    // And with the target present there is still nothing to draw it FOR. The
+    // map's one reader is NgEnviron::SetProjLightRegisters, which binds
+    // GetShadowMapTex() through SetPConstant(PShaderConstant, RndTex *) --
+    // and the native renderer's override of that is empty (milo-native-engine
+    // src/platform/Rnd_Wgpu.h). Native receivers sample the engine's own caster
+    // map instead (ShadowPass::RenderCasters, fed by rndshape::
+    // CollectProjShadowCasters from this light's same shadow-object list). So
+    // the draw below -- every caster in kDrawOcclusion into a 256x256 target,
+    // then BlurShadowRT's passes -- produced a texture no shader read: ~0.2 ms
+    // CPU a frame on streetside (np-gfx-light round 3). mShadowMap still
+    // becomes mShadowRT in CheckShadowMap, as on retail; it is just never
+    // drawn. Guarded by RetailLightingTest.NgLightRenderShadowsDraws-
+    // NoCastersOnNative (native/tests/test_retail_lighting.cpp).
+    return;
 #endif
     RndCam *savedCam = RndCam::Current();
     mShadowRT->MakeDrawTarget();
