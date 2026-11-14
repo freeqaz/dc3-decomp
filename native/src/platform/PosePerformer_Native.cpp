@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
 
 const char *Dc3PoseChoreoTarget(int p, float refSecs, Vector3 *out, const char **moveName);
@@ -77,8 +78,13 @@ struct State {
     bool replaySync = false;
     bool clockLog = false;
     std::vector<ReplayFrame> replay;
+    // DC3_POSE_PERFORM_GLITCH: a tracker's other faults, per published frame
+    bool glitch = false;
+    double pInfer = 0, pUntracked = 0, pFlip = 0, pDrop = 0;
+    uint64_t glitchSeed = 7;
+    Rng glitchRng{7};
     // per-run summary
-    int published = 0, fromTarget = 0, held = 0;
+    int published = 0, fromTarget = 0, held = 0, dropped = 0, flipped = 0;
 };
 
 State gState;
@@ -197,6 +203,27 @@ void Init() {
             gState.rng = Rng(gState.seed);
         }
     }
+    // DC3_POSE_PERFORM_GLITCH=infer,untracked,flip,drop[,seed]: per published
+    // frame, each joint is INFERRED (score 0.45, 5 cm off) with probability
+    // `infer` or NOT TRACKED (score 0.1, 30 cm off: a joint the tracker lost
+    // is a guess) with probability `untracked`; the whole body's left and
+    // right swap with probability `flip`; and the frame is not published at
+    // all (a dropped camera frame) with probability `drop`.  The rates are per
+    // camera frame, as a tracker's are, so an 8 Hz and a 30 Hz performer have
+    // the same faults per frame (np-pose-fill's noise matrix).
+    if (const char *v = getenv("DC3_POSE_PERFORM_GLITCH")) {
+        double seed = 7;
+        int n = sscanf(v, "%lf,%lf,%lf,%lf,%lf", &gState.pInfer, &gState.pUntracked, &gState.pFlip,
+                       &gState.pDrop, &seed);
+        if (n >= 4) {
+            gState.glitch = true;
+            gState.glitchSeed = (uint64_t)seed;
+            gState.glitchRng = Rng(gState.glitchSeed);
+        }
+    }
+    if (gState.glitch)
+        fprintf(stderr, "DC3 PERFORM: glitch infer=%.3f untracked=%.3f flip=%.3f drop=%.3f\n",
+                gState.pInfer, gState.pUntracked, gState.pFlip, gState.pDrop);
     fprintf(stderr,
             "DC3 PERFORM: mode=%s rate=%.1fHz lead=%.0fms shift=%.1fbeats noise=%s(%.3f,%.3f,%.2f)\n",
             m, gState.rateHz, gState.leadSecs * 1000.0f, gState.shiftBeats,
@@ -273,6 +300,7 @@ void Dc3PosePerformerPump(NativeSkeletonProvider *provider) {
         // load before it happened to take (measured: two runs of one noisy
         // cell scored 2,391,589 and 2,412,351 before this reset).
         gState.rng = Rng(gState.seed);
+        gState.glitchRng = Rng(gState.glitchSeed);
         memset(gState.err, 0, sizeof(gState.err));
     }
 
@@ -348,6 +376,42 @@ void Dc3PosePerformerPump(NativeSkeletonProvider *provider) {
         }
     }
 
+    if (gState.glitch) {
+        Rng &g = gState.glitchRng;
+        if (g.Uniform() < gState.pDrop) {
+            gState.dropped++;
+            return; // the camera frame never arrives
+        }
+        if (g.Uniform() < gState.pFlip) {
+            static const int kPairs[][2] = {
+                { kJointShoulderLeft, kJointShoulderRight }, { kJointElbowLeft, kJointElbowRight },
+                { kJointWristLeft, kJointWristRight },       { kJointHandLeft, kJointHandRight },
+                { kJointHipLeft, kJointHipRight },           { kJointKneeLeft, kJointKneeRight },
+                { kJointAnkleLeft, kJointAnkleRight },       { kJointFootLeft, kJointFootRight },
+            };
+            for (const auto &pr : kPairs) {
+                std::swap(joints[pr[0]], joints[pr[1]]);
+                std::swap(conf[pr[0]], conf[pr[1]]);
+            }
+            gState.flipped++;
+        }
+        for (int j = 0; j < kNumJoints; j++) {
+            double u = g.Uniform();
+            double off;
+            if (u < gState.pUntracked) {
+                conf[j] = conf[j] < 0.1f ? conf[j] : 0.1f;
+                off = 0.30;
+            } else if (u < gState.pUntracked + gState.pInfer) {
+                conf[j] = conf[j] < 0.45f ? conf[j] : 0.45f;
+                off = 0.05;
+            } else {
+                continue;
+            }
+            joints[j].Set(joints[j].x + (float)(off * g.Gauss()), joints[j].y + (float)(off * g.Gauss()),
+                          joints[j].z + (float)(off * g.Gauss()));
+        }
+    }
+
     if (gState.clockLog) // render frame -> song time, to key screenshots to the song
         fprintf(stderr, "DC3 PERFORM CLOCK rnd=%u song=%.4f ref=%.4f\n", TheRnd.GetFrameID(), song,
                 refSecs);
@@ -372,6 +436,7 @@ void Dc3PosePerformerPump(NativeSkeletonProvider *provider) {
     provider->PublishFrame(&person, numPersons, ++gState.frameId, song);
     gState.published++;
     if ((gState.published % 1800) == 0)
-        fprintf(stderr, "DC3 PERFORM: frames=%d target=%d held=%d song=%.2f\n",
-                gState.published, gState.fromTarget, gState.held, song);
+        fprintf(stderr, "DC3 PERFORM: frames=%d target=%d held=%d dropped=%d flipped=%d song=%.2f\n",
+                gState.published, gState.fromTarget, gState.held, gState.dropped, gState.flipped,
+                song);
 }
