@@ -2029,6 +2029,8 @@ if(BUILD_TESTS)
         tests/test_archive_enumeration.cpp
         tests/test_mesh_loading.cpp
         tests/test_rndcam_projection.cpp
+        tests/test_particle_color.cpp
+        tests/test_drawrect_color.cpp
         tests/test_dta_parser.cpp
         tests/test_movegraph.cpp
         tests/test_dta_flow.cpp
@@ -2086,6 +2088,7 @@ if(BUILD_TESTS)
         tests/test_copy_poll_semantics.cpp
         tests/test_native_options.cpp
         tests/test_native_glyph_render.cpp
+        tests/test_native_ui_material_terms.cpp
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}

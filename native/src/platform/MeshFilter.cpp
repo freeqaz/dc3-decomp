@@ -83,9 +83,15 @@ static const char *SkipRule(const char* name) {
     // grey_alpha.mesh): there is no speech recognizer natively; allowed, the
     // mic tab draws as a stray icon in the bottom-right corner of every
     // screen, gameplay included.  Not gesture UI.
+    // ribbon_blocker.mesh is the tab's own backing (letterbox.milo: parented
+    // to mic.grp and a member of it, the only milo that has one): an opaque
+    // black diamond that masks the help-bar ribbon under the tab.  Hiding the
+    // tab but not its blocker left that diamond alone on every screen that
+    // shows mic.grp -- the "black diamond on fitness screens" (PLAN G-24).
     if (!strncmp(name, "mic_", 4) ||
         !strncmp(name, "geo_mic", 7) ||
-        !strcmp(name, "grey_alpha.mesh")) {
+        !strcmp(name, "grey_alpha.mesh") ||
+        !strcmp(name, "ribbon_blocker.mesh")) {
         return "microphone";
     }
     // pose_flash_p0/p1: NOT a camera path (PLAN P-4 survey, 2026-11-13).  Their
