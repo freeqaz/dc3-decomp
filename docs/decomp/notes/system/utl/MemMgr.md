@@ -251,6 +251,10 @@ Inside the body (was lines 964-1011):
     // 98.64 -> 95.92.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual:
+gNullMemStack/gThreadIds named lbl_ on target side; one addi in a different register.
+
 
 ## `?MemPrintOverview@@YAXHQAD@Z`
 

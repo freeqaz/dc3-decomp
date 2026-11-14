@@ -110,3 +110,7 @@ Inside the body (was lines 398-406):
         // emits `mr r3, r30`: 91.8) and a local copy of mNumLightsApprox in
         // the early-return tail (moves both stats loads, not one).
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual:
+DebugNotifyOncer static named lbl_ on target side; stores equal.

@@ -40,3 +40,7 @@ Inside the body (was lines 233-256):
     // (83.139), merging the two `if`s into one `&&` chain (byte-identical), and
     // hoisting the colour test above the radius test (79.722).
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: target
+re-reads mBeamLength; same values stored.

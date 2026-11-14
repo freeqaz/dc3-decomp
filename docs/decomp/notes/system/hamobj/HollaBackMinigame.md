@@ -99,6 +99,10 @@ Added after the move (lane w-five-clean):
 // test (needs TheGameData + TheHamDirector).  Code unchanged.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: `lwz
+r3,TheHamDirector@l(r30)` vs `lwz r3,0(r30)` after a full lis+addi; same address.
+
 ## `Dc3W8bHollaProbe()`
 
 `Dc3W8bHollaProbe` -- moved verbatim from `src/system/hamobj/HollaBackMinigame.cpp` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of 721dc5a22)

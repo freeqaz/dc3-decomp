@@ -142,6 +142,10 @@ Above the definition (was lines 1004-1035):
 // 0..5), so this is a placement residual, not a decode error.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
+
 
 ## `?DxtColor@RndBitmap@@ABAXHHAAE000@Z`
 
@@ -213,3 +217,7 @@ Inside the body (was lines 1374-1390):
     // top 95.402, paletteBytes after `pixelBytes` 90.057, after `rowBytes`
     // 88.902.  No value, store or call changes in any of them.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.

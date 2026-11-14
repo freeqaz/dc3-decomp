@@ -56,3 +56,8 @@ Inside the body (was lines 666-684):
         // chains on f0.  The image itself uses TWO temps at the blurRect site
         // 80 instructions below, so one temp is not a property of Hmx::Rect.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: 0x58/0x5c
+-> 0x198/0x19c fcfid conversions equal (stack temp 0x50 reused on target);
+DebugNotifyOncer static named lbl_ on target side.

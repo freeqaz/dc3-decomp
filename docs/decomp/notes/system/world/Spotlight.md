@@ -114,6 +114,10 @@ Inside the body (was lines 518-574):
     // early stores; no value, call, branch or store is missing.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: AutoTimer
+static named lbl_ on target side; stores equal.
+
 
 ## `?SetColorIntensity@Spotlight@@QAAXABVColor@Hmx@@M@Z`
 
@@ -425,6 +429,11 @@ Inside the body (was lines 1470-1497):
         // build (93.29825 / 92.89474), so the gain is the corner expressions,
         // not the extra declaration.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: face
+indices verified (i,i+16,i+17 / i,i+17,i+1 / i+16,i+32,i+33 / i+16,i+33,i+17); the
+0x5a0/0x5a4 order is the only difference.
 
 
 ## `?BuildNGCone@Spotlight@@IAAXAAUBeamDef@1@H@Z`

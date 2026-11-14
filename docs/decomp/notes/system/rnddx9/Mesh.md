@@ -84,6 +84,10 @@ Above the definition (was lines 201-217):
 // we land one row earlier on a reload of the same member. Same return value.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
+
 
 ## `?CacheFurTransform@DxMesh@@IAAXABVTransform@@HM@Z`
 
@@ -170,3 +174,8 @@ Inside the body (was lines 506-512):
             // `*dst++ = face.vN;` x3 (moves the `lwz r10,0x68(r31)` reload of
             // lock.mDataAddr INTO the loop, 95.08 -> 94.2).
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: index
+copy loop: target uses a dst-relative cursor, ours a src offset; both write
+buf[i*6+0..4] = faces[i].v1..v3.

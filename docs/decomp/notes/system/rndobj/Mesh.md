@@ -659,6 +659,10 @@ Inside the body (was lines 2131-2146):
     // 7-pair callee-saved cascade (46 rows) behind that.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
+
 
 ## `?SaveVertices@RndMesh@@UAAXAAVBinStream@@@Z`
 
@@ -705,3 +709,7 @@ Inside the body (was lines 2283-2302):
     // remaining 22 register-swap rows (r26/r27, r24/r25, r10/r11) follow the
     // same placement: once the arm moves, `cached` and &TheDebug swap.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: block
+placement only: the XBox arm (li 0x24 / li 1) sits out of line at a different spot.
