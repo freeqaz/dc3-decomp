@@ -321,20 +321,21 @@ int Estimator::Apply(int slot, Person &p, float seconds, bool learn) {
             Vector3 mid, end;
             // The tracker's guess for a joint out of the picture is usually
             // close (MEASURED on cropped footage: knees 0.12 m median, half
-            // the solve's error), so where it is plausible -- a bone about
-            // the length learned for it -- the bone keeps the guess's
-            // direction and only its length and the floor are imposed.  A
-            // guess that is not plausible (or a stream with no guesses) gets
-            // the solve.
+            // the solve's error), so where it is plausible -- a bone within
+            // 0.5-1.6x the length learned for it -- the guess is kept as it
+            // is, under the hold.  Rescaling it to the learned length was
+            // closer in metres (ankles 0.177 vs 0.189 m on the knees crop)
+            // but scored lower in the game (owner's YMCA 38,853 vs 40,947;
+            // knees crop 4,447,405 vs 4,486,820; POSE_INPUT.md "Cut-off
+            // joints").  A guess that is not plausible (or a stream with no
+            // guesses) gets the solve.
             V knee = joint[K];
             bool kneeGuess = missing[K] && Plausible(knee - hip, a);
-            if (kneeGuess)
-                knee = hip + Unit(knee - hip, u * -1.0f) * a;
             V kneeFrom = missing[K] ? knee : joint[K];
             bool ankleGuess = missing[A] && (kneeGuess || !missing[K])
                 && Plausible(joint[A] - kneeFrom, sh);
             if (kneeGuess || ankleGuess) {
-                V ankle = missing[A] ? (ankleGuess ? kneeFrom + Unit(joint[A] - kneeFrom, u * -1.0f) * sh
+                V ankle = missing[A] ? (ankleGuess ? joint[A]
                                                    : kneeFrom + Unit(target - kneeFrom, u * -1.0f) * sh)
                                      : joint[A];
                 // No floor here: standing a guessed ankle on the estimated
@@ -371,9 +372,12 @@ int Estimator::Apply(int slot, Person &p, float seconds, bool learn) {
             if (missing[F]) {
                 V dir = Unit(r * (side * kFootDirOut) + u * kFootDirUp + f * kFootDirFwd, u * -1.0f);
                 V rawFoot = joint[F] - joint[A];
+                // a plausible guess keeps its own offset from the ankle as
+                // estimated (as the knee and ankle above keep theirs)
                 if (Plausible(rawFoot, ft))
-                    dir = Unit(rawFoot, dir);
-                est[F] = holdBlend(F, est[A] + dir * ft);
+                    est[F] = est[A] + rawFoot;
+                else
+                    est[F] = holdBlend(F, est[A] + dir * ft);
             }
         }
         if (missing[kJointHead] && !missing[kJointShoulderCenter]) {

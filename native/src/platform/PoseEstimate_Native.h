@@ -25,10 +25,11 @@
 //   kinematic  (the default) legs and head completed from the visible body:
 //              per-player bone lengths (learned from tracked frames, else
 //              torso proportions measured on the footage fixtures).  Where
-//              the tracker's guess implies a bone within 0.5-1.6x its length
-//              the bone keeps the guess's direction at the learned length
-//              (on cropped footage the guess is the best direction there is:
-//              MEASURED, POSE_INPUT.md "Cut-off joints"); where it does not
+//              the tracker's guess implies a leg bone within 0.5-1.6x its
+//              length the guess is kept as it is (on cropped footage it
+//              scores best: MEASURED, POSE_INPUT.md "Cut-off joints"; the
+//              head keeps the guess's direction at the head length); where
+//              it does not
 //              (no guess, or a wild one) a floor the ankles stand on (from
 //              the standing hip height) and a two-bone solve for the knee
 //              that bends it forward when the hips drop.  The last tracked

@@ -27,11 +27,11 @@
 //                                      2 s later it is the estimate.
 //                                      Sabotaged: no decay (w = 1) -> this
 //                                      test and FloorHoldsAnkles fail.
-//   PoseEstimateTest.APlausibleGuessKeepsItsDirection
-//                                      a knee guess near the learned thigh
-//                                      length gives the direction, the length
-//                                      is the learned one; a guess 4 m off is
-//                                      ignored.  Sabotaged: Plausible()
+//   PoseEstimateTest.APlausibleGuessIsKept
+//                                      a knee guess within 0.5-1.6x the
+//                                      learned thigh is kept as it is; a
+//                                      guess 3 m off is ignored for the
+//                                      solve.  Sabotaged: Plausible()
 //                                      always false -> fails.
 //   PoseEstimateTest.MarksInferred     every written joint reads Inferred,
 //                                      seen joints are not touched, `off`
@@ -236,7 +236,7 @@ TEST(PoseEstimateTest, MarksInferred) {
     }
 }
 
-TEST(PoseEstimateTest, APlausibleGuessKeepsItsDirection) {
+TEST(PoseEstimateTest, APlausibleGuessIsKept) {
     Estimator e;
     e.SetMode(kKinematic);
     Teach(e, MakeBody(1.0f, 0.50f), 120);
@@ -250,11 +250,11 @@ TEST(PoseEstimateTest, APlausibleGuessKeepsItsDirection) {
         q.joints[kJointKneeLeft] = guess;
         e.Apply(0, q, 1.0f / 30.0f, true);
     }
-    const Vector3 &hip = q.joints[kJointHipLeft], &knee = q.joints[kJointKneeLeft];
-    EXPECT_NEAR(Dist(hip, knee), 0.50f, 0.01f) << "the learned thigh, not the guess's";
-    // the guess's direction: 60 degrees forward of straight down
-    EXPECT_NEAR((knee.y - hip.y) / 0.50f, -0.5f, 0.03f);
-    EXPECT_NEAR((knee.z - hip.z) / 0.50f, -0.866f, 0.03f);
+    const Vector3 &knee = q.joints[kJointKneeLeft];
+    // a 0.40 m thigh guess against a learned 0.50 is plausible: kept as it is
+    // (rescaling it to the learned length scored lower in the game)
+    EXPECT_NEAR(Dist(knee, guess), 0.0f, 0.01f) << "the guess itself";
+    EXPECT_EQ(q.confidence[kJointKneeLeft], kConfidenceInferred);
     // the right knee's guess (-3 m) is not plausible: the solve, under the hip
     EXPECT_NEAR(q.joints[kJointKneeRight].y, 1.0f - 0.50f, 0.06f);
 }
