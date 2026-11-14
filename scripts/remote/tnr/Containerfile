@@ -33,6 +33,16 @@ RUN pacman -Syyuu --noconfirm --needed \
         vulkan-icd-loader vulkan-swrast mesa vulkan-tools \
  && pacman -Scc --noconfirm
 
+# What the build reads beyond the above. Derived from the desk build, not
+# guessed: every /usr header in `ninja -t deps` mapped through `pacman -Qqo`,
+# plus pkg-config for FFmpeg. onetbb matters even though nothing asks for it:
+# libstdc++'s <execution> checks __has_include(<tbb/tbb.h>), so without it the
+# container would preprocess some TUs differently from the desk.
+# A separate layer, so adding to it does not re-download the toolchain.
+RUN pacman -S --noconfirm --needed pkgconf libx11 libxrandr xorgproto onetbb \
+        curl libjpeg-turbo libvorbis libogg zlib \
+ && pacman -Scc --noconfirm
+
 # The desk's paths, recreated so bind mounts can land on them (see
 # tnr_build.sh): a CMake build dir records absolute paths, and keeping them
 # identical is what makes the build dir usable on the desk afterwards.
