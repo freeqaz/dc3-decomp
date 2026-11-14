@@ -2121,6 +2121,7 @@ if(BUILD_TESTS)
         tests/test_native_notables.cpp
         tests/test_lp64_literals.cpp
         tests/test_clamp_fsel_nan.cpp
+        tests/test_keys_nan_frame.cpp  # H-60 Keys::AtFrame(NaN) stays inside the keys
         tests/test_native_memory_lp64.cpp
         tests/test_cache_native.cpp
         tests/test_copy_poll_semantics.cpp
