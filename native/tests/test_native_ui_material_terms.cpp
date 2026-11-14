@@ -173,6 +173,7 @@ TEST_F(NativeUiMaterialAssetTest, LetterboxMicTabBlockerFollowsTheTab) {
 // passing retailMaterialTerms=false to MaterialShadesPrelit; not scaling
 // color[3] by MaterialAlphaScale (primary, and pass); CurrentUiDrawTerms()
 // returning the overlay terms unconditionally.
+#include "gfx/FrameCapture.h"
 #include "platform/MaterialSetup.h"
 #include "rndobj/BaseMaterial.h"
 
@@ -263,6 +264,36 @@ TEST_F(NativeUiMaterialBuilderTest, PrimaryBuilderAppliesTheUiTerms) {
     delete noEnv;
     delete prelitNoEnv;
     delete bright;
+}
+
+// Rink_lightCatcher.mat (rollerrink, on the six Rink*_overlay.mesh) is a white
+// Multiply material that uses its environ: retail lights it like any other
+// material (Mat_NG SetBasicState, src ZERO / dest SRCCOLOR), so the floor is
+// multiplied by ambient 0.365 plus the mirrorball gobo, which is the pool of
+// light retail shows around the dancers. The engine heuristic used to force a
+// lit Multiply material prelit, making it multiply by white (a no-op). Under
+// the DC3 model (rndshape::kMultiplyBlendIsLit) it must stay lit.
+// Sabotage (round 3): kMultiplyBlendIsLit = false in RndShape_DC3.h fails this.
+TEST_F(NativeUiMaterialBuilderTest, MultiplyMaterialIsLitUnderTheDC3Model) {
+    ASSERT_NE(gWgpuRnd, nullptr);
+    RndMat *catcher = MakeMat(false, true, false, 1.0f);
+    catcher->SetBlend(BaseMaterial::kBlendMultiply);
+    ASSERT_TRUE(catcher->GetUseEnviron());
+    // kRetail: the world pass's terms do not force prelit, so only the
+    // multiply heuristic could.
+    MaterialParams p = BuildMaterialParams(catcher, false, kRetail);
+    EXPECT_EQ(p.uniforms.prelit, 0.0f) << "a lit Multiply material is lit by its environ";
+    EXPECT_EQ(p.uniforms.unlit, 0.0f);
+    EXPECT_EQ(p.heuristics & kHeuristicMultiplyPrelit, 0u);
+    // As a later pass of a multi-pass material, the same rule.
+    EXPECT_EQ(BuildPassMaterialParams(catcher, kRetail).uniforms.prelit, 0.0f)
+        << "a lit Multiply pass is lit too";
+    // An unlit Multiply material (use_environ 0) stays unlit.
+    RndMat *unlitMul = MakeMat(false, false, false, 1.0f);
+    unlitMul->SetBlend(BaseMaterial::kBlendMultiply);
+    EXPECT_EQ(BuildMaterialParams(unlitMul, false, kRetail).uniforms.unlit, 1.0f);
+    delete catcher;
+    delete unlitMul;
 }
 
 TEST_F(NativeUiMaterialBuilderTest, PassBuilderAppliesTheUiTerms) {
