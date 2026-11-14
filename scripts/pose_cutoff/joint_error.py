@@ -15,6 +15,9 @@ estimate and in TRUTH, metres.  Rows:
            the tracker's guess if it was never seen;
   tracker  the tracker's guess (CUT's own position);
   NAME     each --est file (estimate_tool output over CUT).
+
+TRUTH, CUT and each --est FILE may be comma lists of the same length (one
+entry per take); the errors are then pooled over the takes.
 """
 import argparse
 import sys
@@ -57,24 +60,28 @@ def main():
     ap.add_argument("--est", action="append", default=[])
     ap.add_argument("--label", default="")
     a = ap.parse_args()
-    truth, cut = load(a.truth), load(a.cut)
-    rows = [("off", freeze(cut)), ("tracker", cut)]
+    truths = [load(p) for p in a.truth.split(",")]
+    cuts = [load(p) for p in a.cut.split(",")]
+    if len(truths) != len(cuts):
+        sys.exit("TRUTH and CUT lists differ in length")
+    rows = [("off", [freeze(c) for c in cuts]), ("tracker", cuts)]
     for e in a.est:
         n, p = e.split("=", 1)
-        rows.append((n, load(p)))
-    keys = sorted(set(truth) & set(cut))
+        ests = [load(x) for x in p.split(",")]
+        if len(ests) != len(cuts):
+            sys.exit(f"--est {n}: {len(ests)} files for {len(cuts)} takes")
+        rows.append((n, ests))
     print(f"{a.label:22s} {'method':10s} " + " ".join(f"{g:>12s}" for g in GROUPS))
-    for name, est in rows:
+    for name, ests in rows:
         cells = []
         for g, js in GROUPS.items():
             errs = []
-            for k in keys:
-                if k not in est:
-                    continue
-                T, C, E = truth[k], cut[k], est[k]
-                for j in js:
-                    if C[j, 3] < 0.3 and T[j, 3] >= 0.6:
-                        errs.append(np.linalg.norm((E[j, :3] - E[0, :3]) - (T[j, :3] - T[0, :3])))
+            for truth, cut, est in zip(truths, cuts, ests):
+                for k in sorted(set(truth) & set(cut) & set(est)):
+                    T, C, E = truth[k], cut[k], est[k]
+                    for j in js:
+                        if C[j, 3] < 0.3 and T[j, 3] >= 0.6:
+                            errs.append(np.linalg.norm((E[j, :3] - E[0, :3]) - (T[j, :3] - T[0, :3])))
             cells.append(f"{np.median(errs):6.3f} n{len(errs):<5d}" if len(errs) >= 30 else f"{'-':>12s}")
         print(f"{a.label:22s} {name:10s} " + " ".join(cells))
     return 0

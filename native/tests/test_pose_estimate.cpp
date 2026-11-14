@@ -22,6 +22,12 @@
 //                                      2 s later it is the estimate.
 //                                      Sabotaged: no decay (w = 1) -> this
 //                                      test and FloorHoldsAnkles fail.
+//   PoseEstimateTest.APlausibleGuessKeepsItsDirection
+//                                      a knee guess near the learned thigh
+//                                      length gives the direction, the length
+//                                      is the learned one; a guess 4 m off is
+//                                      ignored.  Sabotaged: Plausible()
+//                                      always false -> fails.
 //   PoseEstimateTest.MarksInferred     every written joint reads Inferred,
 //                                      seen joints are not touched, `off`
 //                                      writes nothing, `tracker` only
@@ -205,6 +211,29 @@ TEST(PoseEstimateTest, MarksInferred) {
             }
         }
     }
+}
+
+TEST(PoseEstimateTest, APlausibleGuessKeepsItsDirection) {
+    Estimator e;
+    e.SetMode(kKinematic);
+    Teach(e, MakeBody(1.0f, 0.50f), 120);
+    // long enough cut that the hold has decayed; the tracker guesses the
+    // left knee raised forward, its bone 20 % short
+    Person q;
+    Vector3 guess(-0.10f, 1.0f - 0.40f * 0.5f, 2.5f - 0.40f * 0.866f);
+    for (int i = 0; i < 90; i++) {
+        q = MakeBody(1.0f, 0.50f);
+        CutLegs(q);
+        q.joints[kJointKneeLeft] = guess;
+        e.Apply(0, q, 1.0f / 30.0f, true);
+    }
+    const Vector3 &hip = q.joints[kJointHipLeft], &knee = q.joints[kJointKneeLeft];
+    EXPECT_NEAR(Dist(hip, knee), 0.50f, 0.01f) << "the learned thigh, not the guess's";
+    // the guess's direction: 60 degrees forward of straight down
+    EXPECT_NEAR((knee.y - hip.y) / 0.50f, -0.5f, 0.03f);
+    EXPECT_NEAR((knee.z - hip.z) / 0.50f, -0.866f, 0.03f);
+    // the right knee's guess (-3 m) is not plausible: the solve, under the hip
+    EXPECT_NEAR(q.joints[kJointKneeRight].y, 1.0f - 0.50f, 0.06f);
 }
 
 TEST(PoseEstimateTest, GainBlendsFromTheTrackersGuess) {

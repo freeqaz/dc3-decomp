@@ -24,11 +24,16 @@
 //              out-of-frame landmark instead of the frozen last position.
 //   kinematic  (the default) legs and head completed from the visible body:
 //              per-player bone lengths (learned from tracked frames, else
-//              torso proportions measured on the footage fixtures), a floor
-//              the ankles stand on (from the standing hip height), a two-bone
-//              solve for the knee that bends it forward when the hips drop,
-//              and the last tracked pose of each joint held relative to the
-//              body, decaying to that solution (kHoldSeconds).  Arms have no
+//              torso proportions measured on the footage fixtures).  Where
+//              the tracker's guess implies a bone within 0.5-1.6x its length
+//              the bone keeps the guess's direction at the learned length
+//              (on cropped footage the guess is the best direction there is:
+//              MEASURED, POSE_INPUT.md "Cut-off joints"); where it does not
+//              (no guess, or a wild one) a floor the ankles stand on (from
+//              the standing hip height) and a two-bone solve for the knee
+//              that bends it forward when the hips drop.  The last tracked
+//              pose of each joint is held relative to the body, decaying to
+//              that estimate (kHoldSeconds).  Arms have no
 //              kinematic answer: they get the hold, decaying to the tracker's
 //              guess.  DC3_POSE_ESTIMATE_GAIN (0..1, default 1) blends from
 //              the tracker's guess (0) to the completion (1).

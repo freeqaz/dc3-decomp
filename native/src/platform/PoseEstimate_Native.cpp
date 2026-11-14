@@ -78,6 +78,14 @@ const float kKneeBendOut = 0.3f; // the knee bends forward and a little outward
 
 void Learn(float &v, float sample, float alpha) { v = v > 0.0f ? v + (sample - v) * alpha : sample; }
 
+// A tracker's guess for a bone is used for its direction when the bone it
+// implies is within this range of the bone's length: a guess 2 m from its
+// parent (a stream with no real guesses) is not.
+const float kGuessMin = 0.5f, kGuessMax = 1.6f;
+bool Plausible(const V &bone, float length) {
+    float l = Len(bone);
+    return length > 0.0f && l >= kGuessMin * length && l <= kGuessMax * length;
+}
 } // namespace
 
 Mode ParseMode(const char *env, bool *ok) {
@@ -302,7 +310,32 @@ int Estimator::Apply(int slot, Person &p, float seconds, bool learn) {
             target = target + u * (floorUp - Dot(target, u));
             V bend = Unit(f + r * (side * kKneeBendOut), f);
             Vector3 mid, end;
-            if (missing[K] && missing[A]) {
+            // The tracker's guess for a joint out of the picture is usually
+            // close (MEASURED on cropped footage: knees 0.12 m median, half
+            // the solve's error), so where it is plausible -- a bone about
+            // the length learned for it -- the bone keeps the guess's
+            // direction and only its length and the floor are imposed.  A
+            // guess that is not plausible (or a stream with no guesses) gets
+            // the solve.
+            V knee = joint[K];
+            bool kneeGuess = missing[K] && Plausible(knee - hip, a);
+            if (kneeGuess)
+                knee = hip + Unit(knee - hip, u * -1.0f) * a;
+            V kneeFrom = missing[K] ? knee : joint[K];
+            bool ankleGuess = missing[A] && (kneeGuess || !missing[K])
+                && Plausible(joint[A] - kneeFrom, sh);
+            if (kneeGuess || ankleGuess) {
+                V ankle = missing[A] ? (ankleGuess ? kneeFrom + Unit(joint[A] - kneeFrom, u * -1.0f) * sh
+                                                   : kneeFrom + Unit(target - kneeFrom, u * -1.0f) * sh)
+                                     : joint[A];
+                // No floor here: standing a guessed ankle on the estimated
+                // floor made it worse (MEASURED, knees cut, knee error 0.12 ->
+                // 0.18-0.21 m with a 5 cm slack, 0.13 with 30 cm).
+                if (missing[K])
+                    est[K] = holdBlend(K, knee);
+                if (missing[A])
+                    est[A] = holdBlend(A, ankle);
+            } else if (missing[K] && missing[A]) {
                 Vector3 tgt;
                 target.To(tgt);
                 Vector3 bendV;
@@ -328,11 +361,18 @@ int Estimator::Apply(int slot, Person &p, float seconds, bool learn) {
             }
             if (missing[F]) {
                 V dir = Unit(r * (side * kFootDirOut) + u * kFootDirUp + f * kFootDirFwd, u * -1.0f);
+                V rawFoot = joint[F] - joint[A];
+                if (Plausible(rawFoot, ft))
+                    dir = Unit(rawFoot, dir);
                 est[F] = holdBlend(F, est[A] + dir * ft);
             }
         }
-        if (missing[kJointHead] && !missing[kJointShoulderCenter])
-            est[kJointHead] = holdBlend(kJointHead, shC + u * (kHeadPerTorso * T));
+        if (missing[kJointHead] && !missing[kJointShoulderCenter]) {
+            float hl = kHeadPerTorso * T;
+            V rawHead = joint[kJointHead] - shC;
+            V dir = Plausible(rawHead, hl) ? Unit(rawHead, u) : u;
+            est[kJointHead] = holdBlend(kJointHead, shC + dir * hl);
+        }
     }
     // the arms (and the legs and head when the body cannot be stood up): the
     // tracker's guess, under the hold
