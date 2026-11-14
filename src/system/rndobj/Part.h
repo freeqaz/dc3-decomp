@@ -190,6 +190,19 @@ public:
     // The space particle positions live in: DxParticleSys::DrawShowing draws
     // them under TheShaderMgr.SetTransform(mRelativeXfm).
     const Transform &RelativeXfm() const { return mRelativeXfm; }
+    // DxParticleSys::DrawShowing scales the billboard's up axis by this
+    // (screen_aspect); the native renderer reads it through
+    // rndshape::PartBillboard.
+    float ScreenAspect() const { return mScreenAspect; }
+    // The velocity-aligned terms DxParticleSys::DrawShowing/DrawParticles hand
+    // the particles shader (c49, c47.w, and the velocity in the vertex); the
+    // native renderer reads them through rndshape::PartBillboard.
+    bool IsFancy() const { return mType == kFancy; }
+    bool AlignWithVelocity() const { return mAlignWithVelocity; }
+    bool StretchWithVelocity() const { return mStretchWithVelocity; }
+    bool ConstantArea() const { return mConstantArea; }
+    bool PerspectiveStretch() const { return mPerspectiveStretch; }
+    float StretchScale() const { return mStretchScale; }
 
     float CalcFrame() {
         if (mFrameDrive)
