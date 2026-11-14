@@ -56,3 +56,7 @@ Inside the body (was lines 143-182):
             // `RndMesh *&slot = *mesh;`, `RndMesh **out`, `mesh[0]`, `(*mesh)`,
             // `!false`, `1 != 0`, `mMonospace || true`).
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.

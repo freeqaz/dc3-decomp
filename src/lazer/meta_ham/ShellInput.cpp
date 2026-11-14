@@ -210,7 +210,22 @@ void ShellInput::Poll() {
         const DataNode *pNavModeNode = TheHamProvider->Property(ui_nav_mode);
         MILO_ASSERT(pNavModeNode, 0xd2);
         Symbol navmodeSym = pNavModeNode->Sym();
+#ifdef HX_NATIVE
+        // Controller mode policy (forced; PLAN H-20): no correct-identity
+        // overlay on hands up. It is a hand-driven menu: its enter exits
+        // controller mode to give the UI to the hands
+        // (ui/correct_identity/correct_identity.dta, helpbar_allow_controller
+        // FALSE), and its BUTTON_DOWN_MSG swallows every pad press but B. On
+        // the 360 that hand-over is the point; forced pins controller mode,
+        // so the hands cannot drive it and the panel only ate the pad's
+        // presses -- one hands-up from someone dancing in the room (1.2 s)
+        // and a pad player's Down presses stopped landing, and it reopened on
+        // the next hands-up. faithful (a camera) keeps the image's behaviour.
+        extern bool Dc3ControllerModeForced();
+        if (TheGestureMgr->IDEnabled() && navmodeSym != movie && !Dc3ControllerModeForced()) {
+#else
         if (TheGestureMgr->IDEnabled() && navmodeSym != movie) {
+#endif
             mHandsUpGestureFilter->Clear();
             if (TheHamUI.GetOverlayPanel()) {
                 TheHamUI.GetOverlayPanel()->Dismiss();

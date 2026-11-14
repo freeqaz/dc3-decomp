@@ -69,6 +69,11 @@ Inside the body (was lines 318-354):
                 // re-open it for the score without a NaN-safe GE form.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.951, 1 non-equal row(s): One
+BRANCHDEST row (idx 75): the image's first `bge` lands on the redundant re-test `fcmpu
+cr6, f31, f30`, ours jumps past it to the block that re-test branches to; f31/f30 are
+unchanged on that edge, so both reach the same code. Jump threading, NOT A BUG (matches
+w25-gh / w26-f14).
 
 ## `?ScaleAddViseme@CharLipSyncDriver@@QAAXPAVCharClip@@M@Z`
 

@@ -84,6 +84,10 @@ Above the definition (was lines 201-217):
 // we land one row earlier on a reload of the same member. Same return value.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
+
 
 ## `?CacheFurTransform@DxMesh@@IAAXABVTransform@@HM@Z`
 
@@ -129,6 +133,10 @@ Inside the body (was lines 265-299):
     // (canonical 98.57718).
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.597, 6 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
 
 ## `?OnSync@DxMesh@@MAAXH@Z`
 
@@ -170,3 +178,14 @@ Inside the body (was lines 506-512):
             // `*dst++ = face.vN;` x3 (moves the `lwz r10,0x68(r31)` reload of
             // lock.mDataAddr INTO the loop, 95.08 -> 94.2).
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: index
+copy loop: target uses a dst-relative cursor, ours a src offset; both write
+buf[i*6+0..4] = faces[i].v1..v3.
+## `?SetTransforms@DxMesh@@IAAXXZ`
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.916, 1 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.

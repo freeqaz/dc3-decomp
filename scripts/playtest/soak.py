@@ -13,7 +13,7 @@ a pad would.  FOOTAGE DIR holds clips cut by make_footage.py (<song>.mp4 and
 soak, as one console would.
 
 The full run (~45-60 min):
-  A  boot; Perform song 1, 2, 3 back to back (results each time); back to
+  A  boot; Perform five songs back to back (results each time); back to
      the main menu; Rehearse one song (time-boxed); quit (SIGTERM, as closing
      the window does) -- the saves are checked here
   B  relaunch: the profile must come back; Dance Battle with two people
@@ -147,6 +147,18 @@ def advance(kit, targets, timeout, prefer=("continue", "done", "play_again_no", 
     return None
 
 
+# Song time (s) at which the footage's dancer stops dancing.  The clips come
+# from a Perform session, and after its last move the dancer walks up to the
+# camera and out of the picture -- and the game pauses, as it should with
+# nobody on the sensor.  Modes that play past Perform's end meet that: Dance
+# Battle's Macarena (she leaves from song 153 s, Perform ends 155.8 s; frames
+# checked, PLAN H-26) and Rehearse's Get Low (she stops at ~187.5 s, gone by
+# 192 s; frames checked, the full soak's Rehearse paused at song 193.2 s with
+# Resume disabled).  The feeder holds her last dancing frame from here on, for
+# every mode: a held frame after the dance costs no move.
+DANCE_END = {"macarena": 153.0, "getlow": 187.0}
+
+
 def footage(dirn, song, duo=False):
     p = os.path.join(dirn, f"{song}{'_duo' if duo else ''}.mp4")
     return p if os.path.exists(p) else None
@@ -166,8 +178,11 @@ class Soak:
         self.n = 0
 
     def clip(self, path):
+        self.current_clip = path
+        name = os.path.basename(path).rsplit(".", 1)[0]
+        end = DANCE_END.get(name[:-4] if name.endswith("_duo") else name)
         with open(self.control + ".tmp", "w") as f:
-            f.write(f"{path} {self.a.pre}\n")
+            f.write(f"{path} {self.a.pre}" + (f" {self.a.pre + end}" if end else "") + "\n")
         os.replace(self.control + ".tmp", self.control)
         say(f"footage: {os.path.basename(path)}")
 
@@ -224,6 +239,7 @@ class Soak:
         t = time.time()
         rec = {"leg": name, "start_min": round((t - T0) / 60, 2), "process": f"proc{self.n}"}
         say(f"== {name}")
+        rec["mem_start_kb"] = self.kit.tree_rss() if self.kit else {}
         try:
             rec.update(fn(*args) or {})
             rec["ok"] = rec.get("ok", True)
@@ -235,6 +251,11 @@ class Soak:
             rec["screen"] = self.kit.screen()
             say(f"== {name} FAILED: {e}")
         rec["minutes"] = round((time.time() - t) / 60, 2)
+        rec["mem_end_kb"] = self.kit.tree_rss() if self.kit and self.kit.alive() else {}
+        rec["leg_load"] = load_over(t, time.time())
+        mem = ", ".join(f"{k} {v / 1024:.0f} MB" for k, v in sorted(rec["mem_end_kb"].items())
+                        if v > 20 * 1024)
+        say(f"== {name} done in {rec['minutes']} min; box load {rec['leg_load']}; memory {mem}")
         self.results["legs"].append(rec)
         return rec
 
@@ -247,7 +268,7 @@ class Soak:
         else:
             k.pick_song(song)
             k.multiuser(difficulty, sides=sides)
-        return self.play_to_results(end_screens, song_timeout, back_to)
+        return self.play_to_results(end_screens, song_timeout, back_to, duo=sides == 2)
 
     def _battle(self, song, difficulty):
         k = self.kit
@@ -260,15 +281,35 @@ class Soak:
         k.pick_song(song)
         k.multiuser(difficulty, sides=2)
 
-    def play_to_results(self, end_screens, song_timeout, back_to):
+    def follow_song(self, duo=False):
+        """The song the game is playing, and its footage when there is a clip
+        for it: Story and the Fitness playlists pick their own songs, and a
+        dancer doing another song's routine is no test of the scorer."""
+        song = self.kit.eval("{meta_performer get_song}", 3)
+        if isinstance(song, str) and song:
+            clip = footage(self.a.footage, song, duo)
+            if clip and clip != self.current_clip:
+                self.clip(clip)
+            elif not clip:
+                # Keep a dancer of the right head count: the full soak's
+                # Story (one player) ran on the Battle duo clip it inherited.
+                if self.current_clip.endswith("_duo.mp4") != duo:
+                    self.clip(footage(self.a.footage, "macarena", duo) or self.default_clip)
+                say(f"no footage for {song}: the dancer is doing {os.path.basename(self.current_clip)}")
+        return song
+
+    def play_to_results(self, end_screens, song_timeout, back_to, duo=False):
         k = self.kit
         self.watch.in_song = True
         t = time.time()
         got = None
+        song = None
         try:
             end = time.time() + song_timeout
             while time.time() < end and k.alive():
                 s = k.screen()
+                if s == "game_screen" and song is None:
+                    song = self.follow_song(duo)
                 # Each mode has its own: perform_, fitness_perform_,
                 # dancebattle_perform_, campaign_perform_endgame_screen ...
                 if s in end_screens or (isinstance(s, str) and s.endswith("endgame_screen")):
@@ -295,7 +336,8 @@ class Soak:
             + (f", p2 {card1}" if card1.get("score") else "")
             + (f"; box load mean {load['mean']} max {load['max']} ({os.cpu_count()} threads)" if load else ""))
         nxt = advance(k, back_to, 180, label="after results") if back_to else None
-        return {"results_screen": got, "song_s": round(secs), "card": card, "card_p2": card1,
+        return {"results_screen": got, "song": song, "footage": os.path.basename(self.current_clip),
+                "song_s": round(secs), "card": card, "card_p2": card1,
                 "load": load, "next": nxt, "ok": bool(nxt) or not back_to}
 
     def resume(self):
@@ -345,8 +387,14 @@ class Soak:
             lst = k.focus_list()
             if k.has_row(lst, "pausecommand_mainmenu"):
                 k.choose("pausecommand_mainmenu")
+            elif k.has_row(lst, "pausecommand_quit"):
+                # Rehearse's welcome screen has no Main Menu row and ignores
+                # Back (measured: 90 s of presses); its quit row leaves the song.
+                k.choose("pausecommand_quit")
             elif s and "confirm" in s and k.has_row(lst, "ok"):
                 k.choose("ok")
+            elif s == "game_screen":
+                k.press("start")   # a song (Rehearse's time box): its pause menu
             else:
                 k.press("cancel")
             time.sleep(3)
@@ -367,6 +415,11 @@ class Soak:
                     say(f"rehearse: {s}")
                 if s == "practice_endgame_screen":
                     break
+                # The same as a song: a pause the player sees is continued
+                # (the full soak sat 2.8 min on practice_pause_screen).
+                if s == "confirm_quit_screen" or (
+                        self.watch.paused_since and time.time() - self.watch.paused_since > 4):
+                    self.resume()
                 time.sleep(3)
         finally:
             self.watch.in_song = False
@@ -396,10 +449,18 @@ class Soak:
         if not k.choose("fitness_mode"):
             raise RuntimeError("main_screen has no fitness_mode row")
         k.need("fitness_screen")
-        rows = k.rows(k.focus_list(), limit=8)
-        say(f"fitness rows {rows}")
-        k.choose(rows[0] if rows else "fitness_option")   # fitness mode on
-        time.sleep(3)
+        say(f"fitness rows {k.rows(k.focus_list(), limit=8)}")
+        # The row toggles: a profile saved in fitness mode (the soak's home
+        # carries across processes) would be switched off by a blind press.
+        on = "{if_else {profile_mgr get_active_profile} {{profile_mgr get_active_profile} in_fitness_mode} -1}"
+        was = k.eval(on, 3)
+        if was in (0, False):
+            k.choose("fitness_option")
+            time.sleep(3)
+        now = k.eval(on, 3)
+        say(f"fitness mode: {was} -> {now}")
+        if now not in (1, True):
+            raise RuntimeError(f"fitness mode not on (profile says {now})")
         if not k.choose("playlists"):
             raise RuntimeError("fitness_screen has no playlists row")
         got = advance(k, ("song_select_playlist_screen",), 60, label="fitness")
@@ -408,8 +469,12 @@ class Soak:
         time.sleep(2)
         rows = k.rows(k.focus_list(), limit=20)
         say(f"playlist rows {rows}")
-        pick = next((r for r in rows if r.endswith("_playlist") and "custom" not in r
-                     and "create" not in r), None)
+        # The decade lists hold every unlocked song of that decade in rank
+        # order; the 1990s one is the one with clips (Macarena, Ice Ice Baby).
+        # follow_song() puts the right dancer on whichever song it starts.
+        pick = next((r for r in ("1990s_dynamic_playlist",) if r in rows), None) or next(
+            (r for r in rows if r.endswith("_playlist") and "custom" not in r
+             and "create" not in r), None)
         if not pick or not k.choose(pick):
             raise RuntimeError(f"no playlist to pick in {rows}")
         time.sleep(3)
@@ -477,7 +542,8 @@ class Soak:
                  480, 2, footage(a.footage, a.battle, duo=True), None)
         self.leg("back to main", self.back_to_main)
         self.leg("story", self.story)
-        self.close("quit and relaunch (story is not left by the menus here)")
+        self.leg("back to main", self.back_to_main)
+        self.close("quit and relaunch")
         self.launch()
         self.leg("relaunch: profile back", self.check_profile_back)
         self.leg("fitness", self.fitness)
@@ -489,7 +555,9 @@ def report(res, out):
              f"{len(res['legs'])} legs"]
     for l in res["legs"]:
         c = l.get("card") or {}
+        ld = l.get("leg_load") or {}
         lines.append(f"  {'ok ' if l.get('ok') else 'BAD'} {l['leg']:<28} {l['minutes']:5.1f} min"
+                     + (f"  load {ld.get('mean')}/{ld.get('max')}" if ld else "")
                      + (f"  {l.get('results_screen')}: perfect {c.get('num_perfect')} awesome "
                         f"{c.get('num_awesome')} score {c.get('score')}" if c else "")
                      + (f"  p2 score {l['card_p2'].get('score')}"
@@ -527,7 +595,9 @@ def main(argv=None):
     ap.add_argument("--norender", action="store_true", help="no GPU (MILO_NORENDER=1)")
     ap.add_argument("--fresh", action="store_true", help="a console that has seen no tutorial")
     ap.add_argument("--pre", type=float, default=8.0)
-    ap.add_argument("--songs", nargs="+", default=["macarena", "cupidshuffle", "iceicebaby"])
+    # Five Perform songs (~4 min each) put the full run in the 45-60 min band.
+    ap.add_argument("--songs", nargs="+",
+                    default=["macarena", "cupidshuffle", "iceicebaby", "12step", "supersonic"])
     ap.add_argument("--rehearse", default="getlow")
     ap.add_argument("--rehearse-min", type=float, default=6.0)
     ap.add_argument("--battle", default="macarena")

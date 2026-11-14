@@ -84,6 +84,10 @@ Inside the body (was lines 155-174):
         // no source spelling of the two arguments reorders them.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
+
 
 ## `?PreSave@Flow@@UAAXAAVBinStream@@@Z`
 

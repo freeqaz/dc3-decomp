@@ -189,3 +189,5 @@ Inside the body (was lines 488-518):
     // normalDir-first at 98.8" is the one spelling seen to reach this order,
     // and it costs more elsewhere than it buys.
 ```
+
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. The projection dot product pairs dir.x/y/z with (b-a).x/y/z identically on both sides; only the association order differs.

@@ -197,6 +197,10 @@ Inside the body (was lines 602-620):
     // Compute dot products with inverted matrix rows
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
+
 
 ## `?IsSerializable@RndAmbientOcclusion@@QBA_NPBVRndMesh@@@Z`
 
@@ -260,6 +264,10 @@ Above the definition (was lines 857-892):
 //   (inert); `it++` in the count loop (inert).
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.444, 11 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
 
 ## `?CalculateAOAtPoint@RndAmbientOcclusion@@IBAXABVVector3@@0PAM@Z`
 
@@ -396,6 +404,10 @@ Inside the body (was lines 1280-1286):
                             // pin the image's association on both builds.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
+
 
 ## `?CalculateAO@RndAmbientOcclusion@@QAAXPAM@Z`
 
@@ -520,3 +532,9 @@ Inside the body (was lines 1605-1617):
                     // on this tree.)  Still open: hoisting the midpoint =
                     // 0xffff stores above this lookup regresses to 90.2.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: r31-frame
+layout shifted by 0x10. The DistanceSH arguments (c0,n0,c1,n1 and the two rotations) match.
+The perimeter sqrt terms match too, but the target squares y with fmuls and fuses x into the
+fmadds, and we do the reverse. Only the fusion order differs.

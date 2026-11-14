@@ -66,7 +66,8 @@ void CharServoBone::Poll() {
     if (!mMeshes.empty()) {
         PoseMeshes();
 #ifdef HX_NATIVE
-        {
+        static const bool sKneeLog = getenv("DC3_IK_DIAG") != nullptr;
+        if (sKneeLog) {
             extern void Dc3KneeLog(const char *);
             char evt[192];
             snprintf(evt, sizeof(evt), "ServoPose-POST %s", PathName(this));

@@ -9,6 +9,23 @@
 // DoPost would turn on. Written for the np-gfx-post usage inventory
 // (archive/np-gfx-2026-11-14/lanes/post/); loads through the decomp's own
 // RndPostProc::Load, so a field means what the game reads.
+//
+// Also one line per RndEnviron, {"file":..,"name":..,"class":"Environ",
+// "fade_out":..,"fade_start":..,"fade_end":..,"fade_cancels_mask":..}:
+// the last is Shader.cpp's fadeOut (FadeOut() && FadeEnd() != FadeStart()),
+// which turns the pseudo-HDR bloom mask off (np-gfx-post round 2).
+//
+// And one line per RndMotionBlur, {"file":..,"name":..,"class":"MotionBlur",
+// "showing":..,"draws":[{"name":..,"class":..,"bones":..}]}: the objects whose
+// DrawShowing queues their draw list for NgPostProc's object velocity
+// (RndVelocityBuffer::DrawMesh; meshes over 40 bones are skipped there) --
+// np-gfx-post round 3.
+//
+// And one line per PropAnim key track whose target is a RndPostProc,
+// {"file":..,"anim":..,"anim_frame":..,"target":..,"prop":..,"type":..,
+// "keys":[[frame,value],...]} (colours as [r,g,b,a]): which post-proc fields a
+// venue animates, and to what, per frame (np-gfx-post round 3, the DCI peak
+// blue lead: environments_master's sub-anims key dci_performance_*.pp).
 
 #include "os/Debug.h"
 #include "os/System.h"
@@ -16,6 +33,11 @@
 #include "obj/DirLoader.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/PostProc.h"
+#include "rndobj/Env.h"
+#include "rndobj/MotionBlur.h"
+#include "rndobj/PropAnim.h"
+#include "rndobj/PropKeys.h"
+#include "rndobj/Mesh.h"
 #include "rndobj/Tex.h"
 #include "char/Char.h"
 #include "world/World.h"
@@ -93,6 +115,12 @@ struct PPPeek : RndPostProc {
     using RndPostProc::mTrailThreshold;
     using RndPostProc::mVignetteColor;
     using RndPostProc::mVignetteIntensity;
+};
+
+// RndMotionBlur's draw list is protected, read the same way.
+struct MBPeek : RndMotionBlur {
+    static const MBPeek &Of(const RndMotionBlur *m) { return *static_cast<const MBPeek *>(m); }
+    using RndMotionBlur::mDrawList;
 };
 
 std::string Esc(const char *s) {
@@ -227,6 +255,47 @@ void Dump(const char *file, const RndPostProc *pp) {
     printf("%s\n", o.c_str());
 }
 
+struct PAPeek : RndPropAnim {
+    static const PAPeek &Of(const RndPropAnim *p) { return *static_cast<const PAPeek *>(p); }
+    using RndPropAnim::mPropKeys;
+};
+
+void DumpPropAnim(const char *file, RndPropAnim *anim) {
+    const PAPeek &a = PAPeek::Of(anim);
+    for (std::list<PropKeys *>::const_iterator k = a.mPropKeys.begin(); k != a.mPropKeys.end(); ++k) {
+        PropKeys *keys = *k;
+        if (!keys || !dynamic_cast<RndPostProc *>(keys->Target())) continue;
+        String prop;
+        if (keys->Prop()) keys->Prop()->Print(prop, kDataArray, true, 0);
+        char b[160];
+        snprintf(b, sizeof(b), "%g", anim->GetFrame());
+        std::string o = "{\"file\":\"" + Esc(file) + "\",\"anim\":\"" + Esc(anim->Name())
+            + "\",\"anim_frame\":" + b + ",\"target\":\"" + Esc(keys->Target()->Name())
+            + "\",\"prop\":\"" + Esc(prop.c_str()) + "\",\"type\":";
+        snprintf(b, sizeof(b), "%d", (int)keys->KeysType());
+        o += b;
+        o += ",\"keys\":[";
+        if (keys->KeysType() == PropKeys::kFloat) {
+            Keys<float, float> *fk = keys->AsFloatKeys();
+            for (size_t i = 0; fk && i < fk->size(); i++) {
+                snprintf(b, sizeof(b), "[%g,%g],", (*fk)[i].frame, (*fk)[i].value);
+                o += b;
+            }
+        } else if (keys->KeysType() == PropKeys::kColor) {
+            Keys<Hmx::Color, Hmx::Color> *ck = keys->AsColorKeys();
+            for (size_t i = 0; ck && i < ck->size(); i++) {
+                const Hmx::Color &c = (*ck)[i].value;
+                snprintf(b, sizeof(b), "[%g,[%g,%g,%g,%g]],", (*ck)[i].frame, c.red, c.green,
+                         c.blue, c.alpha);
+                o += b;
+            }
+        }
+        Close(o);
+        o += "]}";
+        printf("%s\n", o.c_str());
+    }
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -268,7 +337,37 @@ int main(int argc, char *argv[]) {
             Dump(argv[i], it);
             n++;
         }
-        fprintf(stderr, "%s: %d post-procs\n", argv[i], n);
+        int envs = 0;
+        for (ObjDirItr<RndEnviron> it(scene, true); it != nullptr; ++it) {
+            const bool cancels = it->FadeOut() && it->FadeEnd() != it->FadeStart();
+            printf("{\"file\":\"%s\",\"name\":\"%s\",\"class\":\"Environ\",\"fade_out\":%d,"
+                   "\"fade_start\":%g,\"fade_end\":%g,\"fade_cancels_mask\":%d}\n",
+                   argv[i], it->Name(), it->FadeOut() ? 1 : 0, it->FadeStart(), it->FadeEnd(),
+                   cancels ? 1 : 0);
+            envs++;
+        }
+        int blurs = 0;
+        for (ObjDirItr<RndMotionBlur> it(scene, true); it != nullptr; ++it) {
+            std::string o = "{\"file\":\"" + Esc(argv[i]) + "\",\"name\":\"" + Esc(it->Name())
+                + "\",\"class\":\"MotionBlur\",\"showing\":" + (it->Showing() ? "1" : "0")
+                + ",\"draws\":[";
+            const MBPeek &m = MBPeek::Of(it);
+            for (ObjPtrList<RndDrawable>::iterator d = m.mDrawList.begin(); d != m.mDrawList.end(); ++d) {
+                RndDrawable *draw = *d;
+                if (!draw) continue;
+                RndMesh *mesh = dynamic_cast<RndMesh *>(draw);
+                char b[64];
+                snprintf(b, sizeof(b), "%d", mesh ? mesh->NumBones() : -1);
+                o += "{\"name\":\"" + Esc(draw->Name()) + "\",\"class\":\""
+                    + Esc(draw->ClassName().Str()) + "\",\"bones\":" + b + "},";
+            }
+            Close(o);
+            o += "]}";
+            printf("%s\n", o.c_str());
+            blurs++;
+        }
+        for (ObjDirItr<RndPropAnim> it(scene, true); it != nullptr; ++it) DumpPropAnim(argv[i], it);
+        fprintf(stderr, "%s: %d post-procs, %d environs, %d motion blurs\n", argv[i], n, envs, blurs);
         total += n;
     }
     fprintf(stderr, "total %d\n", total);

@@ -49,6 +49,10 @@ Above the definition (was lines 23-54):
 // is 73.8 -- the expanded `a - a/b*b` is what the image has.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
+
 
 ## `?Accumulate@HiResScreen@@QAAXXZ`
 
@@ -132,3 +136,10 @@ Inside the body (was lines 559-563):
     // out-param slot, copied to the return buffer from there).  With `ret`
     // dead the image's frame was 0x10 smaller than ours.
 ```
+
+## `?CurrentTileRect@HiResScreen@@QBAXABVRect@Hmx@@AAV23@1@Z`
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.888, 1 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.

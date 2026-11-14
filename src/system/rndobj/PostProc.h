@@ -134,6 +134,15 @@ public:
     // chain (milo-native-engine rndshape::kDC3RetailPost) keys on these.
     static float BloomLocFactor() { return sBloomLocFactor; }
     float GetColorModulation() const { return mColorModulation; }
+    // NgPostProc::CheckMotionBlur's c105 and DoVelocity's switch.
+    float GetMotionBlurBlend() const { return mMotionBlurBlend; }
+    const Hmx::Color& GetMotionBlurWeight() const { return mMotionBlurWeight; }
+    bool GetMotionBlurVelocity() const { return mMotionBlurVelocity; }
+    // NgPostProc::CheckHueConverge's c222 and unk2a (blend_amount > 0).
+    float GetHueTarget() const { return mHueTarget; }
+    float GetHueFocus() const { return mHueFocus; }
+    float GetHueBlendAmount() const { return mBlendAmount; }
+    float GetHueBrightnessPower() const { return mBrightnessPower; }
 #endif
 
 protected:

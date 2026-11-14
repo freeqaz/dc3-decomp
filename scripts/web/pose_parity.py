@@ -34,12 +34,15 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--fps", type=float, default=30.0)
     ap.add_argument("--model", default=os.path.join(ROOT, "native/models/pose_landmarker_full.task"))
+    ap.add_argument("--num-poses", type=int, default=2,
+                    help="MediaPipe num_poses (2 = pose_server.py's default; 1 = what the "
+                         "scoring calibration recorded at, and what pose_probe gives one dancer)")
     args = ap.parse_args()
 
     frames = sorted(glob.glob(os.path.join(args.frames, "frame_*.png")))
     if not frames:
         sys.exit(f"no frame_*.png in {args.frames}")
-    backend = MediaPipeBackend(args.model, num_poses=2, min_conf=0.5)
+    backend = MediaPipeBackend(args.model, num_poses=args.num_poses, min_conf=0.5)
 
     # Capture the raw landmarker result of each process() call.
     real = backend._landmarker

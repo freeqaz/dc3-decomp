@@ -507,8 +507,8 @@ bool CacheNative::WriteAsync(const char *cc, void *data, unsigned int size, Hmx:
     if (!EnsureParentDir(path)) {
         mLastResult = kCache_ErrorStorageDeviceMissing;
         MILO_NOTIFY("CacheNative::WriteAsync(): failed to create parent directories for '%s'\n", path);
-        NotifyWriteResult(obj);
         mOpCur = kOpNone;
+        NotifyWriteResult(obj); // last: may delete this (see below)
         return true;
     }
     FILE *f = fopen(path, "wb");
@@ -528,8 +528,13 @@ bool CacheNative::WriteAsync(const char *cc, void *data, unsigned int size, Hmx:
             mLastResult = kCache_NoError;
         }
     }
-    NotifyWriteResult(obj);
+    // The op ends BEFORE the result is posted, and nothing touches `this`
+    // after it: the caller may unmount -- delete -- this cache from inside its
+    // cache_write_result handler (SongMgr: SaveWrite -> SaveUnmount ->
+    // UnmountAsync).  On the 360 the result comes from the write thread
+    // frames later; here it comes from inside WriteAsync.
     mOpCur = kOpNone;
+    NotifyWriteResult(obj);
     return true;
 }
 
@@ -600,31 +605,37 @@ void CacheMgrNative::EndOp(OpType op, CacheResult result) {
 // Completes the operation registered by the last Async call. The I/O itself
 // already happened inline; this is the deferred completion the caller's
 // polling loop waits for.
+//
+// The op is cleared BEFORE the callback runs, as CacheMgrXbox::PollMount /
+// PollUnmount do (SetOp(kOpNone), then mCallback->Handle).  The callback may
+// start the next op from inside Handle: SongMgr's cache_mgr_mount_result goes
+// SaveWrite -> CacheNative::WriteAsync, which completes inline here (the 360's
+// write is a thread, so its result comes frames later), -> cache_write_result
+// -> SaveUnmount -> UnmountAsync.  With the op still kOpMount that UnmountAsync
+// was refused busy ("UnmountAsync: !IsDone() current op is 3", PLAN D-8) and
+// SongMgr stayed in kSongMgr_SaveUnmount with the cache mounted.  For the same
+// reason the callback is taken out of mCallback before Handle: a nested op's
+// own callback must not be cleared afterwards.
 void CacheMgrNative::Poll() {
     OpType op = GetOp();
     if (op == kOpNone) {
         return;
     }
-    switch (op) {
-    case kOpMount:
-        if (mCallback) {
-            static Message msg("cache_mgr_mount_result", GetLastResult());
-            msg[0] = GetLastResult();
-            mCallback->Handle(msg, true);
-        }
-        break;
-    case kOpUnmount:
-        if (mCallback) {
-            static Message msg("cache_mgr_unmount_result", GetLastResult());
-            msg[0] = GetLastResult();
-            mCallback->Handle(msg, true);
-        }
-        break;
-    default:
-        break;
-    }
+    Hmx::Object *callback = mCallback;
     mCallback = nullptr;
     SetOp(kOpNone);
+    if (!callback) {
+        return;
+    }
+    if (op == kOpMount) {
+        static Message msg("cache_mgr_mount_result", GetLastResult());
+        msg[0] = GetLastResult();
+        callback->Handle(msg, true);
+    } else if (op == kOpUnmount) {
+        static Message msg("cache_mgr_unmount_result", GetLastResult());
+        msg[0] = GetLastResult();
+        callback->Handle(msg, true);
+    }
 }
 
 bool CacheMgrNative::SearchAsync(const char *cc, CacheID **ppCacheID) {

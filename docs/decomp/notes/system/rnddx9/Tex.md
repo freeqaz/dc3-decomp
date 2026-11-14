@@ -120,6 +120,11 @@ Above the definition (was lines 661-690):
 // after the memset (95.8), and w7-g's in-branch hoist of the tile math.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual:
+XGTileTextureLevel r6 is the same clrlwi value in r23 vs r22; DebugNotifyOncer named
+lbl_ on target side; one stack slot differs.
+
 ## `(file-level)`
 
 Not attributed to one function -- moved verbatim from `src/system/rnddx9/Tex.h` on 2026-11-13 by scripts/notes/migrate_notes.py (line numbers as of e112f97a5)

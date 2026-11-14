@@ -18,12 +18,15 @@
 // engine's older copy, which does not carry the profile API.
 #include "../src/platform/NativeSettings.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <map>
 #include <set>
 #include <string>
 #include <vector>
+#include <sys/stat.h>
+#include <unistd.h>
 
 namespace {
 
@@ -86,6 +89,7 @@ TEST(Dc3ProfileTest, DevTableCarriesTheDeveloperDefaults) {
         {"DC3_DEV_OPTIONS", "1"}, {"DC3_DEV_MENU", "1"},  {"DC3_RND_OVERLAYS", "1"},
         {"DC3_HTTP", "1"},        {"DC3_TEL", "api"},     {"DC3_TAG_MODALS", "dev"},
         {"MILO_INPUT_LOG", "1"},  {"DC3_MOVE_RATING_LOG", "1"}, {"MILO_PERF", "1"},
+        {"DC3_DLC", "1"},
     };
     std::map<std::string, std::string> have;
     for (const Dc3ProfileDefault &row : Rows()) have[row.name] = row.value;
@@ -188,4 +192,53 @@ TEST(Dc3ProfileTest, NoRowChangesTheGameOrCostsTime) {
     for (const Dc3ProfileDefault &row : Rows())
         EXPECT_EQ(forbidden.count(row.name), 0u)
             << row.name << " changes the game or costs time; it must stay opt-in";
+}
+
+// DC3_DLC / DC3_DLC_DIR -> the DLC roots ContentMgr_Native mounts
+// (NativeDlcRoots, ContentMgr_Native.cpp).  The dev profile's DC3_DLC=1 must
+// find <data>/dlc and nothing else; DC3_DLC=0 (what ctest's MILO_TEST_ENV
+// sets) must mount nothing; a named DC3_DLC_DIR (the DLC flow tests) wins.
+TEST(Dc3ProfileTest, DlcRootsFollowDc3DlcAndDc3DlcDir) {
+    ScopedProfileEnv scope;
+    const char *savedData = getenv("DC3_DATA");
+    std::string oldData = savedData ? savedData : "";
+    const char *savedDir = getenv("DC3_DLC_DIR");
+    std::string oldDir = savedDir ? savedDir : "";
+    char tmpl[] = "/tmp/dc3-dlc-roots-XXXXXX";
+    ASSERT_NE(mkdtemp(tmpl), nullptr);
+    std::string data = tmpl;
+    ASSERT_EQ(mkdir((data + "/gen").c_str(), 0755), 0);
+    FILE *hdr = fopen((data + "/gen/main_xbox.hdr").c_str(), "wb");
+    ASSERT_NE(hdr, nullptr);
+    fclose(hdr);
+    setenv("DC3_DATA", data.c_str(), 1);
+    unsetenv("DC3_DLC_DIR");
+
+    setenv("DC3_DLC", "1", 1);
+    EXPECT_EQ(NativeDlcRoots(), "") << "no <data>/dlc directory: nothing to mount";
+    ASSERT_EQ(mkdir((data + "/dlc").c_str(), 0755), 0);
+    EXPECT_EQ(NativeDlcRoots(), data + "/dlc");
+    setenv("DC3_DLC", "0", 1);
+    EXPECT_EQ(NativeDlcRoots(), "") << "DC3_DLC=0 must mount nothing";
+    unsetenv("DC3_DLC");
+    EXPECT_EQ(NativeDlcRoots(), "") << "unset (release, milo-tests) must mount nothing";
+    setenv("DC3_DLC", "0", 1);
+    setenv("DC3_DLC_DIR", "/a:/b", 1);
+    EXPECT_EQ(NativeDlcRoots(), "/a:/b") << "a named DC3_DLC_DIR wins";
+    setenv("DC3_DLC", "1", 1);
+    setenv("DC3_DLC_DIR", "", 1);
+    EXPECT_EQ(NativeDlcRoots(), "") << "an empty DC3_DLC_DIR names no roots (play.sh --no-dlc)";
+
+    // The dev profile turns it on.
+    unsetenv("DC3_DLC");
+    unsetenv("DC3_DLC_DIR");
+    Dc3ProfileApply();
+    EXPECT_EQ(NativeDlcRoots(), data + "/dlc");
+
+    rmdir((data + "/dlc").c_str());
+    remove((data + "/gen/main_xbox.hdr").c_str());
+    rmdir((data + "/gen").c_str());
+    rmdir(data.c_str());
+    if (savedData) setenv("DC3_DATA", oldData.c_str(), 1); else unsetenv("DC3_DATA");
+    if (savedDir) setenv("DC3_DLC_DIR", oldDir.c_str(), 1); else unsetenv("DC3_DLC_DIR");
 }

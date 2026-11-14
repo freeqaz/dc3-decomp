@@ -22,6 +22,31 @@
 //   - streak weights normalised to sum 1 (the image's do not)
 //   - half-float bloom sets (the image's are 8-bit and saturate per pass)
 //   - DisplayGamma returning 0 (no ramp)
+//   motion blur (round 2, NgPostProc::CheckMotionBlur + postprocess.ps bit 24):
+//   - k = c105.rgb only (dropping max(r, ...), the exposure term)
+//   - the mix reversed (prev + (c - prev) * k)
+//   - the feedback never valid (every frame treated as the first)
+//   - a stale previous frame reused after motion blur was off for a frame
+//   - FillRetailPost ignoring RndPostProc::DoMotionBlur's Pack() gate
+//   fade-out (round 2, RndShader*::CalcShaderOpts' !fadeOut):
+//   - BloomMaskScale ignoring the environ's fade-out
+//   - the rect path (RndShaderDrawRect, no fade test) cancelled by it too
+//   - fade-out read as FadeOut() alone (FadeEnd == FadeStart is no fade)
+//   glare (round 2, DoBloom's glare arm, bloom_glare.ps + postprocess.ps bit 37):
+//   - bit 4's screen blend instead of bit 37's add; the add without its 0.5
+//   - nine taps instead of ten; the tap weight not squared; half the step
+//   - the plain harmonic mean (no 2 - 2x); the glare pass skipped
+//   - FillRetailPost never selecting the glare arm
+//   velocity blur (round 3, NgPostProc::DoVelocity / RndVelocityBuffer::Draw,
+//   velocity_camera.ps + postprocess.ps bit 42): see the Velocity* tests below
+//   and lanes/post/round3/sabotage (archive/np-gfx-2026-11-14), S1-S17: the
+//   taps, centre weight, c122, reprojection, clamp, cuts, the off path, the
+//   blurred alpha, the frame path's bookkeeping (S14-S16) and the frame
+//   target's post-proc choice (S17)
+//   hue converge (round 2, CheckHueConverge + postprocess.ps bit 62) and the
+//   post-process selection (Rnd::DoPostProcess' overrides): see
+//   HueConvergeIsRetailBit62 / ActivePostProcFollowsRndOverrides and
+//   lanes/post/round2/sabotage/sab_hue.log (archive/np-gfx-2026-11-14)
 
 #include "test_helpers.h"
 
@@ -31,13 +56,23 @@
 #include "gfx/RB3RetailPost.h"
 #include "platform/Rnd_Wgpu.h"
 #include "platform/rndshape/RndShape.h"
+#include "math/Rot.h"
+#include "obj/DataFile.h"
+#include "rndobj/Cam.h"
+#include "rndobj/Env.h"
 #include "rndobj/Mat.h"
 #include "rndobj/PostProc.h"
+#include "rndobj/Rnd.h"
+#include "rndobj/VelocityBuffer.h"
 
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
+#include <fstream>
+#include <string>
+#include <thread>
 #include <vector>
 
 static_assert(rndshape::kDC3RetailPost,
@@ -230,6 +265,396 @@ TEST_F(DC3RetailPostGpuTest, StreakBloomIsScreenBlendOfMaskedScene) {
     delete pp;
 }
 
+// RndShaderStandard / Particles / Multimesh / SyncTrack::CalcShaderOpts set
+// mPseudoHDR only when !fadeOut, fadeOut = env->FadeOut() && FadeEnd !=
+// FadeStart for the current environ; RndShaderDrawRect has no such test.
+TEST_F(DC3RetailPostTest, BloomMaskOffWhileTheEnvironFadesOut) {
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    RndPostProc *prevPP = RndPostProc::Current();
+    pp->Select();
+    RndEnviron *prevEnv = RndEnviron::Current();
+    RndEnviron *env = Hmx::Object::New<RndEnviron>();
+    env->Select(nullptr);
+    RndMat *mat = Hmx::Object::New<RndMat>();
+    mat->SetProperty("bloom_multiplier", DataNode(1.0f));
+    EXPECT_LT(rndshape::BloomMaskScale(mat), 0.0f) << "no fade: the mask is written";
+
+    env->SetProperty("fade_out", DataNode(1));
+    env->SetProperty("fade_start", DataNode(100.0f));
+    env->SetProperty("fade_end", DataNode(100.0f));
+    EXPECT_LT(rndshape::BloomMaskScale(mat), 0.0f) << "fade_end == fade_start is not a fade";
+    env->SetProperty("fade_end", DataNode(400.0f));
+    EXPECT_EQ(rndshape::BloomMaskScale(mat), 0.0f) << "a fading environ turns the mask off";
+    EXPECT_LT(rndshape::BloomMaskScale(mat, false), 0.0f) << "a rect ignores the fade (RndShaderDrawRect)";
+    env->SetProperty("fade_out", DataNode(0));
+    EXPECT_LT(rndshape::BloomMaskScale(mat), 0.0f);
+
+    if (prevEnv) prevEnv->Select(nullptr);
+    if (prevPP) prevPP->Select(); else pp->Unselect();
+    delete mat;
+    delete pp;
+    delete env;   // ~RndEnviron clears the current environ if it is this one
+}
+
+// NgPostProc::CheckMotionBlur: c105 = (weight.rgb * blend, weight.a), on only
+// when RndPostProc::DoMotionBlur() holds (blend > 0, weight.Pack() > 0: the
+// 8-bit rgb, not alpha).
+TEST_F(DC3RetailPostTest, MotionBlurParamsFollowDoMotionBlur) {
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    RetailPostParams p;
+    rndshape::FillRetailPost(pp, 1.0f, p);
+    EXPECT_FALSE(p.motionBlur) << "the default post-process (blend 0) has no motion blur";
+    pp->SetProperty("motion_blur_blend", DataNode(0.6f));
+    // The weight syncs as a packed 0xBBGGRR int (PropSync(Hmx::Color&)); its
+    // alpha is the separate motion_blur_exposure property.
+    pp->SetProperty("motion_blur_weight", DataNode(0x40FF80));
+    pp->SetProperty("motion_blur_exposure", DataNode(0.75f));
+    rndshape::FillRetailPost(pp, 1.0f, p);
+    ASSERT_TRUE(p.motionBlur);
+    const Hmx::Color &w = pp->GetMotionBlurWeight();
+    EXPECT_FLOAT_EQ(p.motionBlurParams[0], w.red * 0.6f);
+    EXPECT_FLOAT_EQ(p.motionBlurParams[1], 0.6f);
+    EXPECT_FLOAT_EQ(p.motionBlurParams[2], w.blue * 0.6f);
+    EXPECT_NEAR(p.motionBlurParams[0], 0.3012f, 1e-3f);
+    EXPECT_FLOAT_EQ(p.motionBlurParams[3], 0.75f) << "c105.w is the weight's alpha (exposure), unscaled";
+    // DoMotionBlur's weight.Pack() > 0 ignores the alpha: black rgb is off.
+    pp->SetProperty("motion_blur_weight", DataNode(0));
+    rndshape::FillRetailPost(pp, 1.0f, p);
+    EXPECT_FALSE(p.motionBlur) << "weight.Pack() == 0 turns motion blur off whatever its exposure";
+    pp->SetProperty("motion_blur_weight", DataNode(0xFFFFFF));
+    pp->SetProperty("motion_blur_blend", DataNode(0.0f));
+    rndshape::FillRetailPost(pp, 1.0f, p);
+    EXPECT_FALSE(p.motionBlur) << "blend 0 is off";
+    delete pp;
+}
+
+// NgPostProc::DoBloom: doGlare = mBloomGlare && !TheHiResScreen.IsActive()
+// takes the glare arm, which also excludes the streak arm.
+TEST_F(DC3RetailPostTest, GlareArmFollowsBloomGlare) {
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    pp->SetProperty("bloom_intensity", DataNode(0.6f));
+    pp->SetProperty("bloom_streak", DataNode(1));
+    RetailPostParams p;
+    rndshape::FillRetailPost(pp, 1.0f, p);
+    EXPECT_FALSE(p.glare);
+    EXPECT_TRUE(p.streak);
+    pp->SetProperty("bloom_glare", DataNode(1));
+    rndshape::FillRetailPost(pp, 1.0f, p);
+    EXPECT_TRUE(p.glare) << "bloom_glare (off the hi-res screen) is the glare arm";
+    EXPECT_FALSE(p.streak) << "glare excludes the streak arm";
+    delete pp;
+}
+
+// The motion-blur composite over flat scenes, frame after frame (RB3RetailPost
+// directly, so the run sequence is the test's): out = sat(c + (prev - c) * k),
+// k = max(r, c105.rgb), r = sat(c105.w * (prev.a - scene.a) / prev.a), and the
+// output alpha sat(scene.a + r * (prev.a - scene.a)) is the next prev.a.
+TEST_F(DC3RetailPostGpuTest, MotionBlurIsRetailFeedback) {
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    auto &dev = gpu.Device();
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)kW, (uint32_t)kH, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    wgpu::Texture scene = dev.CreateTexture(&d);
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture frame = dev.CreateTexture(&d);
+    wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView();
+    RB3RetailPost post;
+    post.Init(gpu);
+    std::vector<uint8_t> px(kW * kH * 4), out(kW * kH * 4);
+    auto frameOf = [&](uint8_t grey, uint8_t alpha, const RetailPostParams &p) {
+        for (size_t i = 0; i < px.size(); i += 4) {
+            px[i] = px[i + 1] = px[i + 2] = grey;
+            px[i + 3] = alpha;
+        }
+        wgpu::TexelCopyTextureInfo dst{};
+        dst.texture = scene;
+        wgpu::TexelCopyBufferLayout layout{};
+        layout.bytesPerRow = kW * 4;
+        wgpu::Extent3D ext = {(uint32_t)kW, (uint32_t)kH, 1};
+        gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        post.Run(enc, sceneView, sceneView, kW, kH, frameView, p, gpu);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        EXPECT_TRUE(gpu.ReadbackTexture(frame, kW, kH, out.data(), out.size()));
+        return out[((kH / 2) * kW + kW / 2) * 4 + 1] / 255.0f;
+    };
+    RetailPostParams mb;
+    mb.dc3 = true;
+    mb.motionBlur = true;
+    mb.motionBlurParams[0] = mb.motionBlurParams[1] = mb.motionBlurParams[2] = 0.6f;  // PostProc_local
+    RetailPostParams off = mb;
+    off.motionBlur = false;
+    const float tol = 2.5f / 255.0f;
+    auto u8 = [](float v) { return std::round(v * 255.0f) / 255.0f; };
+
+    // c105.w = 0 (every shipped post-process): a plain 0.6 feedback.
+    float f1 = frameOf(200, 0, mb);
+    EXPECT_NEAR(f1, 200 / 255.0f, tol) << "first frame: no previous output, the scene graded";
+    float f2 = frameOf(50, 0, mb);
+    const float e2 = u8(50 / 255.0f + (f1 - 50 / 255.0f) * 0.6f);
+    EXPECT_NEAR(f2, e2, tol) << "second frame: c + (prev - c) * 0.6";
+    float f3 = frameOf(50, 0, mb);
+    EXPECT_NEAR(f3, 50 / 255.0f + (e2 - 50 / 255.0f) * 0.6f, tol) << "the feedback decays geometrically";
+    printf("DC3RetailPost motion blur: 200 -> 50 -> 50 gives %.4f %.4f %.4f\n", f1, f2, f3);
+
+    // Off for one frame, then on: the previous output is gone (retail resolves it
+    // every frame; here the first frame back passes the scene through rather
+    // than mixing in an output two frames old).
+    frameOf(255, 0, off);
+    EXPECT_NEAR(frameOf(50, 0, mb), 50 / 255.0f, tol) << "a stale previous frame was mixed in";
+
+    // c105.w > 0, the exposure: where the mask (alpha) fell since last frame the
+    // previous output wins by r = (prev.a - scene.a) / prev.a.
+    mb.motionBlurParams[3] = 1.0f;
+    frameOf(0, 0, off);
+    frameOf(200, 255, mb);                  // first frame again: out 200, prev.a = 1
+    const float g = frameOf(50, 64, mb);    // scene.a = 0.251
+    const float sa = 64 / 255.0f, r = 1.0f - sa, k = std::max(r, 0.6f);
+    EXPECT_NEAR(g, 50 / 255.0f + (200 / 255.0f - 50 / 255.0f) * k, tol)
+        << "k = max(r, c105.rgb): the exposure term outweighs the 0.6 blend";
+    post.Terminate();
+}
+
+// DoBloom's glare arm (bloom_glare.ps) and bit 37's composite over a flat,
+// fully masked field s: set0 = s after the blur, the glare pass's ten taps from
+// uv towards 1 - uv each weigh w = (1 - 4 min(|p - 0.5|^2, 0.25))^2, the result
+// 2 - 20 / sum(1 / (1 - w s)) saturates in the 8-bit set, and the composite
+// ADDS 0.5 * c6 of it (no screen blend). At the centre every tap has w = 1, so
+// the glare is 2s exactly.
+TEST_F(DC3RetailPostGpuTest, GlareIsAdditiveRadialHarmonicMean) {
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    auto &dev = gpu.Device();
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)kW, (uint32_t)kH, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    wgpu::Texture scene = dev.CreateTexture(&d);
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture frame = dev.CreateTexture(&d);
+    wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView();
+    RB3RetailPost post;
+    post.Init(gpu);
+    std::vector<uint8_t> px(kW * kH * 4), out(kW * kH * 4);
+    const uint8_t grey = 77;   // s = 0.302
+    for (size_t i = 0; i < px.size(); i += 4) {
+        px[i] = px[i + 1] = px[i + 2] = grey;
+        px[i + 3] = 255;
+    }
+    wgpu::TexelCopyTextureInfo dst{};
+    dst.texture = scene;
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = kW * 4;
+    wgpu::Extent3D ext = {(uint32_t)kW, (uint32_t)kH, 1};
+    gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+
+    RetailPostParams g;
+    g.dc3 = true;
+    g.bloom = true;
+    g.glare = true;
+    g.bloomColor[0] = g.bloomColor[1] = g.bloomColor[2] = 1.6f;   // c6 can exceed 1
+    wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+    post.Run(enc, sceneView, sceneView, kW, kH, frameView, g, gpu);
+    wgpu::CommandBuffer cmd = enc.Finish();
+    gpu.Queue().Submit(1, &cmd);
+    ASSERT_TRUE(gpu.ReadbackTexture(frame, kW, kH, out.data(), out.size()));
+    post.Terminate();
+
+    const float s = grey / 255.0f, c6 = 1.6f;
+    auto glareAt = [&](float u, float v) {
+        const float su = (1.0f - 2.0f * u) * 0.1f, sv = (1.0f - 2.0f * v) * 0.1f;
+        float acc = 0, pu = u, pv = v;
+        for (int i = 0; i < 10; i++) {
+            const float du = pu - 0.5f, dv = pv - 0.5f;
+            float w = 1.0f - 4.0f * std::min(du * du + dv * dv, 0.25f);
+            w *= w;
+            acc += 1.0f / (1.0f - w * s);
+            pu += su;
+            pv += sv;
+        }
+        return std::min(1.0f, std::max(0.0f, 2.0f - 20.0f / acc));
+    };
+    struct Probe { int x, y; } probes[] = {{kW / 2, kH / 2}, {kW / 4, kH / 2}, {kW / 8, kH / 4}, {4, 4}};
+    for (const Probe &pr : probes) {
+        const float u = (pr.x + 0.5f) / kW, v = (pr.y + 0.5f) / kH;
+        const float gl = glareAt(u, v);
+        const float expected = std::min(1.0f, s + 0.5f * c6 * gl);
+        const float screen = 1.0f - (1.0f - c6 * gl) * (1.0f - s);
+        const float got = out[(pr.y * kW + pr.x) * 4 + 1] / 255.0f;
+        printf("DC3RetailPost glare: uv=(%.3f %.3f) glare=%.4f got=%.4f expected=%.4f (screen blend %.4f)\n",
+               u, v, gl, got, expected, screen);
+        EXPECT_NEAR(got, expected, 3.0f / 255.0f)
+            << "uv=(" << u << "," << v << "): not scene + 0.5 c6 * bloom_glare";
+    }
+}
+
+// NgPostProc::CheckHueConverge: c222 = (hue_target / 360 + 0.5, hue_focus,
+// blend_amount, brightness_power), bit 62 on when blend_amount > 0.
+TEST_F(DC3RetailPostTest, HueConvergeParamsFollowBlendAmount) {
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    RetailPostParams p;
+    rndshape::FillRetailPost(pp, 1.0f, p);
+    EXPECT_FALSE(p.hueConverge) << "blend_amount defaults to 0: off";
+    pp->SetProperty("hue_target", DataNode(-75.0f));
+    pp->SetProperty("hue_focus", DataNode(0.25f));
+    pp->SetProperty("blend_amount", DataNode(0.7f));
+    pp->SetProperty("brightness_power", DataNode(1.3f));
+    rndshape::FillRetailPost(pp, 1.0f, p);
+    ASSERT_TRUE(p.hueConverge);
+    EXPECT_FLOAT_EQ(p.hueParams[0], -75.0f / 360.0f + 0.5f);
+    EXPECT_FLOAT_EQ(p.hueParams[1], 0.25f);
+    EXPECT_FLOAT_EQ(p.hueParams[2], 0.7f);
+    EXPECT_FLOAT_EQ(p.hueParams[3], 1.3f);
+    delete pp;
+}
+
+// Rnd::DoPostProcess / BeginDrawing take the blacklight override first, then
+// the override, then the selected post-process.
+TEST_F(DC3RetailPostTest, ActivePostProcFollowsRndOverrides) {
+    RndPostProc *sel = Hmx::Object::New<RndPostProc>();
+    RndPostProc *ovr = Hmx::Object::New<RndPostProc>();
+    RndPostProc *blk = Hmx::Object::New<RndPostProc>();
+    RndPostProc *prev = RndPostProc::Current();
+    sel->Select();
+    EXPECT_EQ(rndshape::ActivePostProc(), sel);
+    TheRnd.SetPostProcOverride(ovr);
+    EXPECT_EQ(rndshape::ActivePostProc(), ovr) << "set_postproc_override wins over the selection";
+    TheRnd.SetPostProcBlacklightOverride(blk);
+    EXPECT_EQ(rndshape::ActivePostProc(), blk) << "the blacklight override wins over both";
+    TheRnd.SetPostProcBlacklightOverride(nullptr);
+    EXPECT_EQ(rndshape::ActivePostProc(), ovr);
+    TheRnd.SetPostProcOverride(nullptr);
+    EXPECT_EQ(rndshape::ActivePostProc(), sel);
+    if (prev) prev->Select(); else sel->Unselect();
+    delete blk;
+    delete ovr;
+    delete sel;
+}
+
+// CPU model of postprocess.ps bit 62 (checked against a Xenos interpreter
+// run of postprocess_4000000001200010 over 4000 random inputs, np-gfx-post
+// round 2): HSV (EasyRGB), H' = frac(T + 2 dist(H, T) (1 - focus)),
+// V' = V^power, back to RGB, mixed in by blend.
+static void HueConvergeModel(const float c[3], const float hue[4], float out[3]) {
+    const float mx = std::max(std::max(c[0], c[1]), c[2]);
+    const float mn = std::min(std::min(c[0], c[1]), c[2]);
+    const float delta = mx - mn;
+    float h = 0, s = 0;
+    if (delta != 0) {
+        s = delta / mx;
+        float d[3];
+        for (int i = 0; i < 3; i++) d[i] = ((mx - c[i]) / 6.0f + delta * 0.5f) / delta;
+        if (c[0] == mx) h = d[2] - d[1];
+        else if (c[1] == mx) h = 1.0f / 3.0f + d[0] - d[2];
+        else h = 2.0f / 3.0f + d[1] - d[0];
+        if (h < 0) h += 1;
+        if (h > 1) h -= 1;
+    }
+    const float dd = std::fabs(h - hue[0]);
+    const float dist = dd > 0.5f ? 1 - dd : dd;
+    float hn = hue[0] + 2 * dist * (1 - hue[1]);
+    if (hn > 1) hn -= 1;
+    float v = mx;
+    if (hue[3] != 1) v = mx == 0 ? 0 : std::exp2(hue[3] * std::log2(std::fabs(mx)));
+    float rgb[3] = {v, v, v};
+    if (s != 0) {
+        const float h6 = hn * 6, i = std::floor(h6), f = h6 - i;
+        const float p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+        const float tab[6][3] = {{v, t, p}, {q, v, p}, {p, v, t}, {p, q, v}, {t, p, v}, {v, p, q}};
+        const int k = i < 5 ? (int)i : 5;
+        for (int j = 0; j < 3; j++) rgb[j] = tab[k][j];
+    }
+    for (int j = 0; j < 3; j++)
+        out[j] = std::min(1.0f, std::max(0.0f, c[j] + (rgb[j] - c[j]) * hue[2]));
+}
+
+// Bit 62 over flat scenes, alone and after motion blur (where it is last, so
+// the next frame's previous output carries it).
+TEST_F(DC3RetailPostGpuTest, HueConvergeIsRetailBit62) {
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    auto &dev = gpu.Device();
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)kW, (uint32_t)kH, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    wgpu::Texture scene = dev.CreateTexture(&d);
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture frame = dev.CreateTexture(&d);
+    wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView();
+    const bool bgra = gpu.SurfaceFormat() == wgpu::TextureFormat::BGRA8Unorm ||
+        gpu.SurfaceFormat() == wgpu::TextureFormat::BGRA8UnormSrgb;
+    RB3RetailPost post;
+    post.Init(gpu);
+    std::vector<uint8_t> px(kW * kH * 4), out(kW * kH * 4);
+    auto frameOf = [&](const uint8_t rgb[3], const RetailPostParams &p, float res[3]) {
+        for (size_t i = 0; i < px.size(); i += 4) {
+            px[i] = rgb[0];
+            px[i + 1] = rgb[1];
+            px[i + 2] = rgb[2];
+            px[i + 3] = 0;
+        }
+        wgpu::TexelCopyTextureInfo dst{};
+        dst.texture = scene;
+        wgpu::TexelCopyBufferLayout layout{};
+        layout.bytesPerRow = kW * 4;
+        wgpu::Extent3D ext = {(uint32_t)kW, (uint32_t)kH, 1};
+        gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        post.Run(enc, sceneView, sceneView, kW, kH, frameView, p, gpu);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        EXPECT_TRUE(gpu.ReadbackTexture(frame, kW, kH, out.data(), out.size()));
+        const uint8_t *o = &out[((kH / 2) * kW + kW / 2) * 4];
+        res[0] = o[bgra ? 2 : 0] / 255.0f;
+        res[1] = o[1] / 255.0f;
+        res[2] = o[bgra ? 0 : 2] / 255.0f;
+    };
+    RetailPostParams hp;
+    hp.dc3 = true;
+    hp.hueConverge = true;
+    const float hue[4] = {-75.0f / 360.0f + 0.5f, 0.1f, 0.8f, 1.5f};   // (120 30 160) wraps
+    std::memcpy(hp.hueParams, hue, sizeof(hue));
+    const float tol = 2.5f / 255.0f;
+    const uint8_t cols[][3] = {{200, 50, 50}, {50, 200, 80}, {40, 60, 220},
+                               {230, 210, 40}, {120, 30, 160}, {128, 128, 128}};
+    for (const auto &col : cols) {
+        const float c[3] = {col[0] / 255.0f, col[1] / 255.0f, col[2] / 255.0f};
+        float got[3], exp[3];
+        frameOf(col, hp, got);
+        HueConvergeModel(c, hue, exp);
+        printf("DC3RetailPost hue: (%d %d %d) -> got (%.3f %.3f %.3f) expected (%.3f %.3f %.3f)\n", col[0],
+               col[1], col[2], got[0], got[1], got[2], exp[0], exp[1], exp[2]);
+        for (int j = 0; j < 3; j++)
+            EXPECT_NEAR(got[j], exp[j], tol) << "colour (" << (int)col[0] << " " << (int)col[1] << " "
+                                             << (int)col[2] << ") channel " << j;
+    }
+    // After motion blur: frame 1 (first) = hue(A); frame 2 =
+    // hue(B + (frame1 - B) * 0.6), the previous output being post-hue.
+    RetailPostParams mb = hp;
+    mb.motionBlur = true;
+    mb.motionBlurParams[0] = mb.motionBlurParams[1] = mb.motionBlurParams[2] = 0.6f;
+    RetailPostParams off;
+    off.dc3 = true;
+    float dummy[3], f1[3], f2[3];
+    frameOf(cols[5], off, dummy);
+    frameOf(cols[0], mb, f1);
+    frameOf(cols[2], mb, f2);
+    const float b[3] = {cols[2][0] / 255.0f, cols[2][1] / 255.0f, cols[2][2] / 255.0f};
+    float mixed[3], exp2c[3];
+    for (int j = 0; j < 3; j++) mixed[j] = b[j] + (f1[j] - b[j]) * 0.6f;
+    HueConvergeModel(mixed, hue, exp2c);
+    printf("DC3RetailPost hue after motion blur: got (%.3f %.3f %.3f) expected (%.3f %.3f %.3f)\n", f2[0],
+           f2[1], f2[2], exp2c[0], exp2c[1], exp2c[2]);
+    for (int j = 0; j < 3; j++)
+        EXPECT_NEAR(f2[j], exp2c[j], 3.0f / 255.0f) << "bit 62 after the motion-blur mix, channel " << j;
+    post.Terminate();
+}
+
 // Frame cost of the chain's passes at 1280x720 (np-gfx-post performance
 // report): mean GPU+submit time per Run over 200 runs, one sync at the end.
 // Prints the numbers; asserts only that a disabled effect costs nothing
@@ -289,8 +714,19 @@ TEST_F(DC3RetailPostGpuTest, PassCostAt720p) {
     all.vignetteIntensity = 1.05f;
     all.chromaticOffset = 2.0f;
     all.xfm[0][0] = 1.1f;
+    RetailPostParams mbOn = base;   // PostProc_local's motion blur, no bloom
+    mbOn.motionBlur = true;
+    mbOn.motionBlurParams[0] = mbOn.motionBlurParams[1] = mbOn.motionBlurParams[2] = 0.6f;
+    RetailPostParams streakMb = streak;   // a venue's: streak bloom + motion blur
+    streakMb.motionBlur = true;
+    streakMb.motionBlurParams[0] = streakMb.motionBlurParams[1] = streakMb.motionBlurParams[2] = 0.4f;
+    RetailPostParams glareMb = plain;     // party_mode_hub PostProc_Win: glare + motion blur
+    glareMb.glare = true;
+    glareMb.motionBlur = true;
+    glareMb.motionBlurParams[0] = glareMb.motionBlurParams[1] = glareMb.motionBlurParams[2] = 0.6f;
     const double tBase = timeIt(base), tPlain = timeIt(plain), tStreak = timeIt(streak),
-                 tAll = timeIt(all), tBase2 = timeIt(base);
+                 tAll = timeIt(all), tMb = timeIt(mbOn), tStreakMb = timeIt(streakMb),
+                 tGlareMb = timeIt(glareMb), tBase2 = timeIt(base);
     post.Terminate();
     // The scan-out ramp (WgpuRnd::EndDrawing): a copy and one full-screen pass.
     DisplayRamp ramp;
@@ -311,7 +747,934 @@ TEST_F(DC3RetailPostGpuTest, PassCostAt720p) {
         200.0;
     printf("DC3RetailPost cost @%dx%d (us/frame): composite only %.0f (again %.0f), "
            "+plain bloom %.0f, +streak bloom %.0f, streak+vignette+chroma+xfm %.0f, "
-           "scan-out ramp %.0f\n",
-           W, H, tBase, tBase2, tPlain, tStreak, tAll, tRamp);
+           "+motion blur %.0f, streak bloom+motion blur %.0f, glare+motion blur %.0f, scan-out ramp %.0f\n",
+           W, H, tBase, tBase2, tPlain, tStreak, tAll, tMb, tStreakMb, tGlareMb, tRamp);
     EXPECT_GT(tBase, 0.0);
+}
+
+// ---- round 3: the velocity blur (NgPostProc::DoVelocity, bit 42) ----------
+//
+// RndVelocityBuffer::Draw (dc3-decomp rndobj/VelocityBuffer.cpp), its native
+// bookkeeping DrawNative / TakeNativeFrame, the backend's camera velocity pass
+// (velocity_camera.ps) and the composite's ten taps (postprocess.ps bit 42).
+// Sabotages each was checked against: lanes/post/round3/sabotage.
+
+namespace {
+
+// The view-projection the backend projects a camera with (WgpuRnd's
+// CamSceneMatrices for a camera with no tool-set matrix): view * proj, row-major,
+// row vectors.
+void CamVP(RndCam *cam, float vp[16]) {
+    cam->UpdatedWorldXfm();
+    Transform v;
+    Hmx::Matrix4 p;
+    rndshape::CamViewProjectXfms(cam, v, p);
+    const float view[16] = {v.m.x.x, v.m.x.y, v.m.x.z, 0, v.m.y.x, v.m.y.y, v.m.y.z, 0,
+                            v.m.z.x, v.m.z.y, v.m.z.z, 0, v.v.x,   v.v.y,   v.v.z,   1};
+    const float proj[16] = {p.x.x, p.x.y, p.x.z, p.x.w, p.y.x, p.y.y, p.y.z, p.y.w,
+                            p.z.x, p.z.y, p.z.z, p.z.w, p.w.x, p.w.y, p.w.z, p.w.w};
+    for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 4; j++) {
+            float sum = 0;
+            for (int k = 0; k < 4; k++) sum += view[i * 4 + k] * proj[k * 4 + j];
+            vp[i * 4 + j] = sum;
+        }
+}
+
+// velocity_camera.ps on the CPU, the way the image computes it: the linear depth
+// from the depth-range constants (c89 = (near, far, 1/(zr.y - zr.x), zr.x/(zr.y -
+// zr.x)); z01 = the non-reversed depth), the world position along the
+// interpolated far-plane frustum corner (RndCam::GetCamFrustum), last frame's
+// view-projection, then v = clamp(prevUV - uv, +-0.02) encoded in 8 bits.
+void VelocityModel(RndCam *cur, const float prevVP[16], float depth, float u, float v,
+                   float out[3]) {
+    Vector4 c89;
+    cur->GetDepthRangeValues(c89);
+    Vector3 origin, dirs[4];
+    cur->GetCamFrustum(origin, dirs);
+    const double n = c89.x, f = c89.y;
+    const double viewDepth = n * f / (f - depth * (f - n));
+    const double t = viewDepth / f;
+    // sCorners (0,0) (0,1) (1,0) (1,1): screen (x, y), bilinear.
+    double w[3];
+    const Vector3 &d00 = dirs[0], &d01 = dirs[1], &d10 = dirs[2], &d11 = dirs[3];
+    const double cu = u, cv = v;
+    w[0] = (1 - cu) * (1 - cv) * d00.x + (1 - cu) * cv * d01.x + cu * (1 - cv) * d10.x + cu * cv * d11.x;
+    w[1] = (1 - cu) * (1 - cv) * d00.y + (1 - cu) * cv * d01.y + cu * (1 - cv) * d10.y + cu * cv * d11.y;
+    w[2] = (1 - cu) * (1 - cv) * d00.z + (1 - cu) * cv * d01.z + cu * (1 - cv) * d10.z + cu * cv * d11.z;
+    const double P[4] = {origin.x + t * w[0], origin.y + t * w[1], origin.z + t * w[2], 1.0};
+    double clip[4] = {0, 0, 0, 0};
+    for (int j = 0; j < 4; j++)
+        for (int k = 0; k < 4; k++) clip[j] += P[k] * prevVP[k * 4 + j];
+    double vx = 0.5 + 0.5 * clip[0] / clip[3] - u;
+    double vy = 0.5 - 0.5 * clip[1] / clip[3] - v;
+    vx = std::max(-0.02, std::min(0.02, vx));
+    vy = std::max(-0.02, std::min(0.02, vy));
+    out[0] = (float)(vx * 25 + 0.5);
+    out[1] = (float)(vy * 25 + 0.5);
+    out[2] = (float)(1.767767 * std::sqrt(vx * vx + vy * vy));
+}
+
+// A 4-sample depth target cleared to `d` (the world pass's depth at one value).
+wgpu::Texture ClearedDepth(GpuDevice &gpu, int w, int h, float d) {
+    wgpu::TextureDescriptor td{};
+    td.size = {(uint32_t)w, (uint32_t)h, 1};
+    td.format = wgpu::TextureFormat::Depth32Float;
+    td.sampleCount = 4;
+    td.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+    wgpu::Texture t = gpu.Device().CreateTexture(&td);
+    wgpu::RenderPassDepthStencilAttachment da{};
+    wgpu::TextureView view = t.CreateView();
+    da.view = view;
+    da.depthLoadOp = wgpu::LoadOp::Clear;
+    da.depthStoreOp = wgpu::StoreOp::Store;
+    da.depthClearValue = d;
+    wgpu::RenderPassDescriptor rp{};
+    rp.depthStencilAttachment = &da;
+    wgpu::CommandEncoder enc = gpu.Device().CreateCommandEncoder();
+    wgpu::RenderPassEncoder pass = enc.BeginRenderPass(&rp);
+    pass.End();
+    wgpu::CommandBuffer cmd = enc.Finish();
+    gpu.Queue().Submit(1, &cmd);
+    return t;
+}
+
+}  // namespace
+
+// The bookkeeping of RndVelocityBuffer::Draw, natively: c122 = min(2,
+// 41.666668 / (ms since the last Draw + 1)); only the camera EndWorld cached
+// (CacheCameraSettings) passes; ready (bit 42) from the second consecutive
+// frame after ResetFrame, which CamShot::StartAnim calls on every cut; and the
+// backend takes each frame's result once, through the rndshape accessor.
+TEST_F(DC3RetailPostTest, VelocityBufferFollowsDrawsBookkeeping) {
+    RndVelocityBuffer &vb = RndVelocityBuffer::Singleton();
+    RndCam *cam = Hmx::Object::New<RndCam>();
+    RndCam *other = Hmx::Object::New<RndCam>();
+    ObjPtrList<RndDrawable> none(nullptr);
+    bool ready = true;
+    float scale = 0.0f;
+    RndCam *got = nullptr;
+    rndshape::TakeVelocityFrame(ready, scale, got);   // whatever an earlier frame left
+
+    vb.CacheCameraSettings(cam);
+    vb.DrawNative(cam, none);
+    vb.DrawNative(cam, none);   // the camera is now the last frame's
+    vb.ResetFrame();            // a cut
+    EXPECT_FALSE(vb.DrawNative(cam, none)) << "the frame after a cut has no previous frame";
+    ASSERT_TRUE(rndshape::TakeVelocityFrame(ready, scale, got))
+        << "the rndshape accessor must reach RndVelocityBuffer::TakeNativeFrame";
+    EXPECT_FALSE(ready);
+    EXPECT_EQ(got, cam);
+    EXPECT_FALSE(rndshape::TakeVelocityFrame(ready, scale, got)) << "taken once per frame";
+    EXPECT_TRUE(vb.DrawNative(cam, none)) << "the second frame after a cut is ready";
+    ASSERT_TRUE(rndshape::TakeVelocityFrame(ready, scale, got));
+    EXPECT_TRUE(ready);
+    EXPECT_NEAR(scale, 2.0f, 1e-4f) << "back-to-back Draws: 41.67 / (~0 + 1), capped at 2";
+    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+    EXPECT_TRUE(vb.DrawNative(cam, none));
+    ASSERT_TRUE(rndshape::TakeVelocityFrame(ready, scale, got));
+    EXPECT_GT(scale, 0.3f);
+    EXPECT_LT(scale, 41.666668f / 61.0f + 1e-3f) << "c122 = 41.67 / (split ms + 1)";
+    vb.ResetFrame();
+    EXPECT_FALSE(vb.DrawNative(cam, none));
+    EXPECT_TRUE(vb.DrawNative(cam, none));
+
+    // Draw only runs for the camera CacheCameraSettings saw.
+    vb.CacheCameraSettings(other);
+    EXPECT_FALSE(vb.DrawNative(cam, none));
+    EXPECT_FALSE(rndshape::TakeVelocityFrame(ready, scale, got)) << "the camera test failed: no frame";
+    vb.CacheCameraSettings(cam);
+    delete other;
+    delete cam;
+}
+
+// The frame path reaches it: natively the PostProc factory is RndPostProc, so
+// NgPostProc::EndWorld / DoVelocity never run, and NgRnd::DoPostProcess (what
+// Rnd::EndWorld calls) carries their velocity bookkeeping for the post-process
+// Rnd::DoPostProcess runs. Before that wiring no gameplay frame ever had a
+// velocity pass (round 3's first live run: 0 SetVelocity calls in 75 s).
+namespace {
+// Rnd::EndWorld's two steps (protected), with their virtual dispatch.
+struct RndEndWorldSteps : Rnd {
+    static void Run() {
+        void (Rnd::*worldEnd)() = &RndEndWorldSteps::DoWorldEnd;
+        void (Rnd::*post)() = &RndEndWorldSteps::DoPostProcess;
+        (TheRnd.*worldEnd)();
+        (TheRnd.*post)();
+    }
+};
+}  // namespace
+
+TEST_F(DC3RetailPostTest, FramePathRunsTheVelocityBookkeeping) {
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    RndPostProc *old = RndPostProc::Current();
+    pp->Select();
+    ASSERT_TRUE(TheRnd.GetWorldCamCopy());
+    RndCam *worldCam = Hmx::Object::New<RndCam>();
+    worldCam->Select();   // Rnd::DoWorldEnd copies RndCam::Current()
+    bool ready = false;
+    float scale = 0.0f;
+    RndCam *got = nullptr;
+    auto frame = [&]() {
+        RndEndWorldSteps::Run();
+        return rndshape::TakeVelocityFrame(ready, scale, got);
+    };
+    auto toggle = [] {
+        DataArray *a = DataReadString("{rnd toggle_all_postprocs}");
+        ASSERT_NE(a, nullptr);
+        a->Evaluate(0);
+        a->Release();
+    };
+    pp->SetProperty("motion_blur_velocity", DataNode(0));   // the constructor's is 1
+    frame();
+    EXPECT_FALSE(frame()) << "motion_blur_velocity 0: DoVelocity's gate is shut";
+    pp->SetProperty("motion_blur_velocity", DataNode(1));
+    ASSERT_TRUE(pp->GetMotionBlurVelocity());
+    EXPECT_TRUE(frame()) << "the frame path must run DoVelocity for the selected post-process";
+    EXPECT_EQ(got, TheRnd.GetWorldCamCopy()) << "Draw(TheRnd.GetWorldCamCopy(), ...)";
+    EXPECT_TRUE(frame());   // AdvanceFrame: a new camera restarts the count at 0, then 1
+    EXPECT_TRUE(frame());
+    EXPECT_TRUE(ready) << "consecutive frames on one camera are ready";
+    RndVelocityBuffer::Singleton().ResetFrame();   // CamShot::StartAnim
+    EXPECT_TRUE(frame());
+    EXPECT_FALSE(ready) << "the frame after a cut";
+    ASSERT_FALSE(TheRnd.DisablePP());
+    toggle();
+    ASSERT_TRUE(TheRnd.DisablePP());
+    EXPECT_FALSE(frame()) << "toggle_all_postprocs: Rnd::DoPostProcess skips DoPost, so no Draw";
+    toggle();
+    ASSERT_FALSE(TheRnd.DisablePP());
+    if (old) old->Select(); else pp->Unselect();
+    delete pp;
+    delete worldCam;
+}
+
+// {rnd toggle_all_postprocs}: Rnd::DoPostProcess skips DoPost, and the frame is
+// the scene through the option-free postprocess.ps (no grade, no bloom).
+TEST_F(DC3RetailPostGpuTest, TogglePostProcsShowsTheSceneUngraded) {
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    pp->SetProperty("brightness", DataNode(40.0f));
+    RndPostProc *prev = RndPostProc::Current();
+    pp->Select();
+    PostProcPass pass;
+    pass.Init(gWgpuRnd->Gpu());
+    auto toggle = [] {
+        DataArray *a = DataReadString("{rnd toggle_all_postprocs}");
+        ASSERT_NE(a, nullptr);
+        a->Evaluate(0);
+        a->Release();
+    };
+    ASSERT_FALSE(TheRnd.DisablePP());
+    const float graded = RunFlat(pass, 100, 0);
+    toggle();
+    EXPECT_TRUE(TheRnd.DisablePP());
+    EXPECT_TRUE(rndshape::PostProcDisabled()) << "the accessor must follow Rnd::mDisablePostProc";
+    const float off = RunFlat(pass, 100, 0);
+    toggle();
+    EXPECT_FALSE(rndshape::PostProcDisabled());
+    const float again = RunFlat(pass, 100, 0);
+    printf("DC3RetailPost toggle_all_postprocs: graded %.4f, disabled %.4f, again %.4f (scene %.4f)\n",
+           graded, off, again, 100 / 255.0f);
+    EXPECT_GT(std::fabs(graded - 100 / 255.0f), 0.05f) << "the post-process grades (brightness 40)";
+    EXPECT_NEAR(off, 100 / 255.0f, 1.5f / 255.0f) << "disabled: the scene ungraded";
+    EXPECT_NEAR(again, graded, 1.5f / 255.0f);
+    pass.Terminate();
+    if (prev) prev->Select(); else pp->Unselect();
+    delete pp;
+}
+
+// A whole WgpuRnd frame (BeginDrawing .. EndDrawing, read back from the frame
+// target) whose ONLY post-process is set_postproc_override: Rnd::DoPostProcess
+// runs the override, so the frame must be graded even with no post-proc
+// selected. The engine's frame-target choice used to ask RndPostProc::Current()
+// and so drew such a frame straight to the screen ungraded (round 3, item 2).
+// Sabotage: FramePostProc() back to RndPostProc::Current() -> fails.
+TEST_F(DC3RetailPostGpuTest, OverrideAloneGradesTheFrame) {
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    if (!gpu.IsHeadless()) GTEST_SKIP() << "reads the headless frame target";
+    RndPostProc *prev = RndPostProc::Current();
+    if (prev) prev->Unselect();
+    ASSERT_EQ(RndPostProc::Current(), nullptr);
+    RndMat *mat = Hmx::Object::New<RndMat>();
+    mat->SetColor(100 / 255.0f, 100 / 255.0f, 100 / 255.0f);
+    mat->SetAlpha(1.0f);
+    mat->SetBlend(BaseMaterial::kBlendSrc);
+    mat->SetPreLit(false);
+    mat->SetZMode(kZModeDisable);
+    auto frame = [&](float &red) {
+        TheRnd.BeginDrawing();
+        Hmx::Rect rect(0.0f, 0.0f, (float)TheRnd.Width(), (float)TheRnd.Height());
+        TheRnd.DrawRect(rect, Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f), mat, nullptr, nullptr);
+        TheRnd.EndDrawing();
+        const int w = gpu.WindowWidth(), h = gpu.WindowHeight();
+        std::vector<uint8_t> px((size_t)w * h * 4);
+        if (!gpu.ReadbackFrame(px.data(), px.size())) return false;
+        red = px[((size_t)(h / 2) * w + w / 2) * 4] / 255.0f;
+        return true;
+    };
+    float plain = 0.0f, graded = 0.0f, after = 0.0f;
+    ASSERT_TRUE(frame(plain));
+    RndPostProc *ovr = Hmx::Object::New<RndPostProc>();
+    ovr->SetProperty("brightness", DataNode(40.0f));
+    TheRnd.SetPostProcOverride(ovr);
+    ASSERT_EQ(rndshape::ActivePostProc(), ovr);
+    const bool ok = frame(graded);
+    TheRnd.SetPostProcOverride(nullptr);
+    ASSERT_TRUE(ok);
+    ASSERT_TRUE(frame(after));
+    printf("DC3RetailPost override-only frame: plain %.4f, override (brightness 40) %.4f, "
+           "cleared %.4f\n", plain, graded, after);
+    EXPECT_GT(std::fabs(graded - plain), 0.05f)
+        << "a frame whose only post-proc is the override must go through the post chain";
+    EXPECT_NEAR(after, plain, 1.5f / 255.0f);
+    delete ovr;
+    delete mat;
+    if (prev) prev->Select();
+}
+
+class DC3VelocityGpuTest : public DC3RetailPostGpuTest {
+protected:
+    static constexpr int kVW = 256, kVH = 144;   // a 16:9 frame; tf10 is 128 x 72
+    void SetUp() override {
+        DC3RetailPostGpuTest::SetUp();
+        if (IsSkipped() || HasFatalFailure()) return;
+        cur = Hmx::Object::New<RndCam>();
+        prev = Hmx::Object::New<RndCam>();
+        cur->SetFrustum(1.0f, 1000.0f, 0.75f, 1.0f);
+        prev->SetFrustum(1.0f, 1000.0f, 0.75f, 1.0f);
+        pp = Hmx::Object::New<RndPostProc>();
+        oldPP = RndPostProc::Current();
+        pp->Select();
+    }
+    void TearDown() override {
+        if (pp) {
+            if (oldPP) oldPP->Select(); else pp->Unselect();
+            delete pp;
+        }
+        delete cur;
+        delete prev;
+    }
+    void Place(RndCam *c, float x, float z, float yawRad, float pitchRad = 0.0f, float rollRad = 0.0f) {
+        Transform t;
+        t.Reset();
+        Hmx::Matrix3 r;
+        MakeRotMatrix(Vector3(pitchRad, rollRad, yawRad), r, true);
+        t.m = r;
+        t.v = Vector3(x, 0.0f, z);
+        c->SetLocalXfm(t);
+    }
+    // One frame through PostProcPass: the scene `px` (kVW x kVH RGBA8), the
+    // depth cleared to `depth`, `ready`/`prevVP` as DoVelocity left them.
+    // Returns the frame (RGBA8 or BGRA8) and leaves the velocity target in vel.
+    void RunFrame(PostProcPass &pass, const std::vector<uint8_t> &px, float depth,
+                  std::vector<uint8_t> &frameOut, std::vector<uint8_t> *velOut) {
+        GpuDevice &gpu = gWgpuRnd->Gpu();
+        auto &dev = gpu.Device();
+        wgpu::TextureDescriptor d{};
+        d.size = {(uint32_t)kVW, (uint32_t)kVH, 1};
+        d.format = wgpu::TextureFormat::RGBA8Unorm;
+        d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst |
+                  wgpu::TextureUsage::RenderAttachment;
+        wgpu::Texture scene = dev.CreateTexture(&d);
+        wgpu::TexelCopyTextureInfo dst{};
+        dst.texture = scene;
+        wgpu::TexelCopyBufferLayout layout{};
+        layout.bytesPerRow = kVW * 4;
+        wgpu::Extent3D ext = {(uint32_t)kVW, (uint32_t)kVH, 1};
+        gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+        d.format = gpu.SurfaceFormat();
+        d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+        wgpu::Texture frame = dev.CreateTexture(&d);
+        wgpu::TextureDescriptor b{};
+        b.size = {1, 1, 1};
+        b.format = wgpu::TextureFormat::RGBA8Unorm;
+        b.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+        wgpu::Texture black = dev.CreateTexture(&b);
+        wgpu::Texture depthTex = ClearedDepth(gpu, kVW, kVH, depth);
+        wgpu::TextureViewDescriptor dvd{};
+        dvd.aspect = wgpu::TextureAspect::DepthOnly;
+        wgpu::TextureView depthView = depthTex.CreateView(&dvd);
+        wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView(),
+                          blackView = black.CreateView();
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        pass.Run(enc, sceneView, scene, kVW, kVH, depthView, 4, frameView, blackView, gpu);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        frameOut.resize((size_t)kVW * kVH * 4);
+        EXPECT_TRUE(gpu.ReadbackTexture(frame, kVW, kVH, frameOut.data(), frameOut.size()));
+        if (velOut) {
+            const wgpu::Texture &vt = pass.Retail().VelocityTexture();
+            ASSERT_TRUE((bool)vt);
+            velOut->resize((size_t)(kVW / 2) * (kVH / 2) * 4);
+            EXPECT_TRUE(gpu.ReadbackTexture(vt, kVW / 2, kVH / 2, velOut->data(), velOut->size()));
+        }
+    }
+    RndCam *cur = nullptr, *prev = nullptr;
+    RndPostProc *pp = nullptr, *oldPP = nullptr;
+};
+
+// velocity_camera.ps against its CPU model (the frustum-corner reconstruction
+// the image uses, through RndCam's own GetCamFrustum / GetDepthRangeValues, not
+// the inverse matrix the backend folds): a camera that turned and slid since
+// last frame, a depth plane at view depth ~8.
+TEST_F(DC3VelocityGpuTest, VelocityCameraIsRetailReprojection) {
+    // A small move (every texel inside the clamp) and a large one (roll and a
+    // slide: part of the screen at the +-0.02 clamp, part not).
+    struct Move { float x, z, yaw, pitch, roll; bool expectClamp; } moves[] = {
+        {-0.25f, 0.05f, 0.012f, 0.004f, 0.0f, false},
+        {-0.10f, 0.0f, 0.0f, 0.0f, 0.06f, true},
+    };
+    for (const Move &mv : moves) {
+        PostProcPass pass;
+        pass.Init(gWgpuRnd->Gpu());
+        Place(prev, mv.x, mv.z, 0.0f, 0.0f, mv.roll);
+        Place(cur, 0.0f, 0.0f, mv.yaw, mv.pitch);
+        float prevVP[16], curVP[16];
+        CamVP(prev, prevVP);
+        CamVP(cur, curVP);
+        pass.SetVelocity(true, 2.0f, prevVP);   // last frame's Draw (records its VP)
+        pass.SetVelocity(true, 2.0f, curVP);    // this frame's
+        const double n = 1.0, f = 1000.0, z = 8.0;
+        const float depth = (float)(f * (z - n) / (z * (f - n)));   // standard depth of view z
+        std::vector<uint8_t> px((size_t)kVW * kVH * 4, 128), frame, vel;
+        RunFrame(pass, px, depth, frame, &vel);
+        ASSERT_EQ(pass.Retail().VelocityPasses(), 1);
+        const int hw = kVW / 2, hh = kVH / 2;
+        int bad = 0, moving = 0, clamped = 0;
+        float worst = 0;
+        for (int j = 0; j < hh; j++)
+            for (int i = 0; i < hw; i++) {
+                float m[3];
+                VelocityModel(cur, prevVP, depth, (i + 0.5f) / hw, (j + 0.5f) / hh, m);
+                for (int c = 0; c < 3; c++) {
+                    const float g = vel[(j * hw + i) * 4 + c] / 255.0f;
+                    const float e = std::fabs(g - m[c]);
+                    worst = std::max(worst, e);
+                    if (e > 1.5f / 255.0f) bad++;
+                }
+                if (m[2] > 0.5f / 255.0f) moving++;
+                if (std::fabs(m[0] - 0.5f) > 0.4999f || std::fabs(m[1] - 0.5f) > 0.4999f) clamped++;
+            }
+        printf("DC3 velocity pass: %d x %d, %d moving texels, %d at the +-0.02 clamp, worst |gpu - model| "
+               "%.4f, %d channels off\n", hw, hh, moving, clamped, worst, bad);
+        EXPECT_EQ(bad, 0) << "velocity_camera.ps: not the image's reprojection";
+        EXPECT_GT(moving, hw * hh / 2) << "the camera moved: most texels must carry velocity";
+        if (mv.expectClamp) {
+            EXPECT_GT(clamped, 0) << "the case must reach the clamp (it is part of what is tested)";
+            EXPECT_LT(clamped, hw * hh) << "and leave some of the screen inside it";
+        } else {
+            EXPECT_EQ(clamped, 0);
+        }
+        pass.Terminate();
+    }
+}
+
+// Bit 42's composite: a one-texel vertical line under a camera sliding
+// sideways (v uniform), blurred along x by the ten taps plus the centre,
+// against a bilinear CPU model of postprocess_0000040000000010.
+TEST_F(DC3VelocityGpuTest, VelocityBlurIsRetailBit42) {
+    PostProcPass pass;
+    pass.Init(gWgpuRnd->Gpu());
+    Place(prev, -0.2f, 0.0f, 0.0f);
+    Place(cur, 0.0f, 0.0f, 0.0f);
+    float prevVP[16], curVP[16];
+    CamVP(prev, prevVP);
+    CamVP(cur, curVP);
+    const float scale = 1.8f;
+    pass.SetVelocity(true, scale, prevVP);
+    pass.SetVelocity(true, scale, curVP);
+    const double n = 1.0, f = 1000.0, z = 8.0;
+    const float depth = (float)(f * (z - n) / (z * (f - n)));
+    const int x0 = kVW / 2;
+    std::vector<uint8_t> px((size_t)kVW * kVH * 4, 0), frame, vel;
+    for (int y = 0; y < kVH; y++) {
+        uint8_t *p = &px[(y * kVW + x0) * 4];
+        p[0] = p[1] = p[2] = 255;   // alpha 0: no bloom mask, so no bloom of the line
+    }
+    RunFrame(pass, px, depth, frame, &vel);
+    const int hw = kVW / 2;
+    const uint8_t *vc = &vel[((kVH / 4) * hw + hw / 2) * 4];
+    const float velx = vc[0] / 255.0f, vely = vc[1] / 255.0f, velz = vc[2] / 255.0f;
+    ASSERT_GE(velz, 0.003f) << "the case must be above bit 42's threshold";
+    ASSERT_NEAR(vely, 0.5f, 1.0f / 255.0f) << "a sideways slide: no vertical velocity";
+    // The model: taps at uv - 0.023 d + k 0.0046 d, d = (vel.x - 0.5) * c122.
+    const float d = (velx - 0.5f) * scale;
+    const float st = 0.0046f * d * kVW, b0 = -0.023f * d * kVW;   // in texels
+    const float wk[10] = {0.00876f, 0.02700f, 0.06476f, 0.12099f, 0.17603f,
+                          0.17603f, 0.12099f, 0.06476f, 0.02700f, 0.00876f};
+    auto line = [&](float x) {   // the scene's row, bilinear, x in texel centres
+        const float xf = std::floor(x), t = x - xf;
+        auto at = [&](int xi) { return xi == x0 ? 1.0f : 0.0f; };
+        return at((int)xf) * (1 - t) + at((int)xf + 1) * t;
+    };
+    const int y = kVH / 2;
+    int bad = 0, lit = 0;
+    float worst = 0;
+    for (int x = x0 - 12; x <= x0 + 12; x++) {
+        float m = line((float)x) * 0.19947f;
+        for (int k = 0; k < 10; k++) m += wk[k] * line(x + b0 + k * st);
+        m = std::min(1.0f, m * 1.00549f);
+        const float g = frame[(y * kVW + x) * 4 + 1] / 255.0f;
+        worst = std::max(worst, std::fabs(g - m));
+        if (std::fabs(g - m) > 3.0f / 255.0f) bad++;
+        if (g > 4.0f / 255.0f) lit++;
+        printf("  x %+3d: gpu %.4f model %.4f\n", x - x0, g, m);
+    }
+    printf("DC3 velocity blur: vel (%.4f %.4f %.4f), step %.3f texels, %d lit columns, worst %.4f\n",
+           velx, vely, velz, st, lit, worst);
+    EXPECT_EQ(bad, 0) << "postprocess.ps bit 42: not the image's taps";
+    EXPECT_GE(lit, 5) << "the line must be smeared across several columns";
+    pass.Terminate();
+}
+
+// Bits 42 + 24 together (postprocess_0000040001200010, decoded): the motion
+// blur's exposure term reads the VELOCITY-BLURRED alpha (r1 after the taps
+// feeds prev.a - r1.w), not the sharp scene's. Frame 1 leaves prev = (200, a 1);
+// frame 2 is grey 50 with a one-texel alpha line under a sideways slide, so
+// beside the line the blurred alpha A > 0 and out = c + (prev - c) (1 - A),
+// where the sharp alpha (0 there) would give prev outright.
+TEST_F(DC3VelocityGpuTest, MotionBlurReadsTheVelocityBlurredAlpha) {
+    pp->SetProperty("bloom_intensity", DataNode(0.0f));
+    pp->SetProperty("bloom_color", DataNode(0));
+    pp->SetProperty("motion_blur_blend", DataNode(1.0f));
+    pp->SetProperty("motion_blur_weight", DataNode(0x010101));   // c105.rgb = 1/255: r decides
+    pp->SetProperty("motion_blur_exposure", DataNode(1.0f));
+    {
+        RetailPostParams p;
+        rndshape::FillRetailPost(pp, 1.0f, p);
+        ASSERT_TRUE(p.motionBlur);
+        ASSERT_FALSE(p.bloom) << "the case needs bloom off (alpha is also the bloom mask)";
+    }
+    PostProcPass pass;
+    pass.Init(gWgpuRnd->Gpu());
+    Place(prev, -0.2f, 0.0f, 0.0f);
+    Place(cur, 0.0f, 0.0f, 0.0f);
+    float prevVP[16], curVP[16];
+    CamVP(prev, prevVP);
+    CamVP(cur, curVP);
+    const float scale = 1.8f;
+    const double n = 1.0, f = 1000.0, z = 8.0;
+    const float depth = (float)(f * (z - n) / (z * (f - n)));
+    std::vector<uint8_t> px((size_t)kVW * kVH * 4), frame, vel;
+    for (size_t i = 0; i < px.size(); i += 4) {
+        px[i] = px[i + 1] = px[i + 2] = 200;
+        px[i + 3] = 255;
+    }
+    pass.SetVelocity(true, scale, prevVP);   // no previous VP yet: no velocity
+    RunFrame(pass, px, depth, frame, nullptr);
+    ASSERT_EQ(pass.Retail().VelocityPasses(), 0);
+    const int x0 = kVW / 2;
+    for (int y = 0; y < kVH; y++)
+        for (int x = 0; x < kVW; x++) {
+            uint8_t *q = &px[(y * kVW + x) * 4];
+            q[0] = q[1] = q[2] = 50;
+            q[3] = x == x0 ? 255 : 0;
+        }
+    pass.SetVelocity(true, scale, curVP);
+    RunFrame(pass, px, depth, frame, &vel);
+    ASSERT_EQ(pass.Retail().VelocityPasses(), 1);
+    const int hw = kVW / 2;
+    const uint8_t *vc = &vel[((kVH / 4) * hw + hw / 2) * 4];
+    const float velx = vc[0] / 255.0f;
+    ASSERT_GE(vc[2] / 255.0f, 0.003f);
+    const float d = (velx - 0.5f) * scale;
+    const float st = 0.0046f * d * kVW, b0 = -0.023f * d * kVW;
+    const float wk[10] = {0.00876f, 0.02700f, 0.06476f, 0.12099f, 0.17603f,
+                          0.17603f, 0.12099f, 0.06476f, 0.02700f, 0.00876f};
+    auto line = [&](float x) {
+        const float xf = std::floor(x), t = x - xf;
+        auto at = [&](int xi) { return xi == x0 ? 1.0f : 0.0f; };
+        return at((int)xf) * (1 - t) + at((int)xf + 1) * t;
+    };
+    const float c = 50 / 255.0f, pv = 200 / 255.0f;
+    const int y = kVH / 2;
+    int bad = 0, mixed = 0;
+    float worst = 0;
+    for (int x = x0 - 12; x <= x0 + 12; x++) {
+        float A = line((float)x) * 0.19947f;
+        for (int k = 0; k < 10; k++) A += wk[k] * line(x + b0 + k * st);
+        A = std::min(1.0f, A * 1.00549f);
+        const float k = std::max(1.0f - A, 1.0f / 255.0f);
+        const float m = c + (pv - c) * k;
+        const float g = frame[(y * kVW + x) * 4 + 1] / 255.0f;
+        worst = std::max(worst, std::fabs(g - m));
+        if (std::fabs(g - m) > 3.0f / 255.0f) bad++;
+        if (x != x0 && A > 0.05f) mixed++;
+        printf("  x %+3d: blurred alpha %.4f gpu %.4f model %.4f\n", x - x0, A, g, m);
+    }
+    printf("DC3 velocity + motion blur: %d columns beside the line mixed by the blurred alpha, worst %.4f\n",
+           mixed, worst);
+    EXPECT_GE(mixed, 3) << "the case must put blurred alpha beside the line";
+    EXPECT_EQ(bad, 0) << "bits 42 + 24: the exposure term must read the velocity-blurred alpha";
+    pass.Terminate();
+}
+
+// The velocity blur's cost at 720p through PostProcPass (the half-res camera
+// velocity pass from the 4x depth, and the composite's ten taps where tf10.z
+// >= 0.003): wall time per frame over 200 submitted frames, the camera moving
+// every frame so every texel carries velocity (the worst case), against the
+// same chain with velocity off. No geometry is drawn by the pass, so the
+// draw count of the frame does not enter; the CPU side is FeedVelocity's
+// matrix product and inverse, timed separately.
+TEST_F(DC3VelocityGpuTest, VelocityCostAt720p) {
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    auto &dev = gpu.Device();
+    const int W = 1280, H = 720;
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)W, (uint32_t)H, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst |
+              wgpu::TextureUsage::RenderAttachment;
+    wgpu::Texture scene = dev.CreateTexture(&d);
+    std::vector<uint8_t> px((size_t)W * H * 4);
+    for (size_t i = 0; i < px.size(); i++) px[i] = (uint8_t)((i * 2654435761u) >> 24);
+    wgpu::TexelCopyTextureInfo dst{};
+    dst.texture = scene;
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = W * 4;
+    wgpu::Extent3D ext = {(uint32_t)W, (uint32_t)H, 1};
+    gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture frame = dev.CreateTexture(&d);
+    wgpu::TextureDescriptor b{};
+    b.size = {1, 1, 1};
+    b.format = wgpu::TextureFormat::RGBA8Unorm;
+    b.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    wgpu::Texture black = dev.CreateTexture(&b);
+    const double n = 1.0, f = 1000.0, z = 8.0;
+    wgpu::Texture depthTex = ClearedDepth(gpu, W, H, (float)(f * (z - n) / (z * (f - n))));
+    wgpu::TextureViewDescriptor dvd{};
+    dvd.aspect = wgpu::TextureAspect::DepthOnly;
+    wgpu::TextureView depthView = depthTex.CreateView(&dvd);
+    wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView(),
+                      blackView = black.CreateView();
+    float vpA[16], vpB[16];
+    Place(prev, -0.2f, 0.0f, 0.01f);
+    Place(cur, 0.0f, 0.0f, 0.0f);
+    CamVP(prev, vpA);
+    CamVP(cur, vpB);
+    std::vector<uint8_t> sink((size_t)W * H * 4);
+    PostProcPass pass;
+    pass.Init(gpu);
+    auto timeIt = [&](bool velocity) {
+        auto runN = [&](int count) {
+            for (int i = 0; i < count; i++) {
+                if (velocity) pass.SetVelocity(true, 2.0f, (i & 1) ? vpA : vpB);
+                wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+                pass.Run(enc, sceneView, scene, W, H, depthView, 4, frameView, blackView, gpu);
+                wgpu::CommandBuffer cmd = enc.Finish();
+                gpu.Queue().Submit(1, &cmd);
+            }
+            EXPECT_TRUE(gpu.ReadbackTexture(frame, W, H, sink.data(), sink.size()));
+        };
+        runN(10);
+        const auto t0 = std::chrono::steady_clock::now();
+        runN(200);
+        return std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count() /
+               200.0;
+    };
+    // Five alternations, the median of each side (wall time on a fast GPU is
+    // within submission noise of the pass itself).
+    std::vector<double> offs, ons;
+    int passes = 0;
+    for (int rep = 0; rep < 5; rep++) {
+        offs.push_back(timeIt(false));
+        const int p0 = pass.Retail().VelocityPasses();
+        ons.push_back(timeIt(true));
+        passes = pass.Retail().VelocityPasses() - p0;
+    }
+    std::sort(offs.begin(), offs.end());
+    std::sort(ons.begin(), ons.end());
+    const double tOff = offs[2], tOn = ons[2], tOff2 = offs[0];
+    // CPU: CamSceneMatrices' equivalent and SetVelocity's double inverse.
+    const auto c0 = std::chrono::steady_clock::now();
+    float sinkVP[16];
+    for (int i = 0; i < 1000; i++) {
+        CamVP((i & 1) ? prev : cur, sinkVP);
+        pass.SetVelocity(true, 2.0f, sinkVP);
+    }
+    const double tCpu =
+        std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - c0).count() / 1000.0;
+    printf("DC3 velocity cost @%dx%d (us/frame, wall over 200 frames, median of 5): off %.0f, on %.0f (fastest off %.0f); "
+           "velocity passes %d; CPU per frame (view-proj + inverse) %.2f us\n",
+           W, H, tOff, tOn, tOff2, passes, tCpu);
+    // 210 frames per timed run; the first has no previous view-projection
+    // in the first alternation (no Draw had recorded one yet).
+    EXPECT_GE(passes, 209) << "every timed frame with velocity on ran the pass";
+    pass.Terminate();
+}
+
+// Off costs nothing: no velocity target, no pass, the same composite; and the
+// frame after a cut (not ready), a first frame with no previous VP, or a depth
+// that is not multisampled, add none either.
+TEST_F(DC3VelocityGpuTest, VelocityOffAddsNoPassAndNoTarget) {
+    PostProcPass pass;
+    pass.Init(gWgpuRnd->Gpu());
+    Place(prev, -0.25f, 0.0f, 0.0f);
+    Place(cur, 0.0f, 0.0f, 0.0f);
+    float prevVP[16], curVP[16];
+    CamVP(prev, prevVP);
+    CamVP(cur, curVP);
+    std::vector<uint8_t> px((size_t)kVW * kVH * 4, 90), frame, still;
+    RunFrame(pass, px, 0.5f, still, nullptr);
+    EXPECT_EQ(pass.Retail().VelocityPasses(), 0);
+    EXPECT_FALSE((bool)pass.Retail().VelocityTexture()) << "off: no velocity target allocated";
+    pass.SetVelocity(true, 2.0f, prevVP);    // ready, but no previous frame yet
+    RunFrame(pass, px, 0.5f, frame, nullptr);
+    EXPECT_EQ(pass.Retail().VelocityPasses(), 0) << "no previous view-projection: no pass";
+    pass.SetVelocity(false, 2.0f, curVP);    // the frame after a cut
+    RunFrame(pass, px, 0.5f, frame, nullptr);
+    EXPECT_EQ(pass.Retail().VelocityPasses(), 0) << "not ready: no pass";
+    EXPECT_FALSE((bool)pass.Retail().VelocityTexture());
+    EXPECT_EQ(frame, still) << "not ready: the composite is the plain one";
+    pass.SetVelocity(true, 2.0f, prevVP);    // ready: the pass runs and is consumed
+    RunFrame(pass, px, 0.5f, frame, nullptr);
+    EXPECT_EQ(pass.Retail().VelocityPasses(), 1);
+    RunFrame(pass, px, 0.5f, frame, nullptr);   // no Draw this frame
+    EXPECT_EQ(pass.Retail().VelocityPasses(), 1) << "the result is this frame's only";
+    pass.Terminate();
+}
+
+// ---- np-gfx-post round 4: the post chain's bind groups (dc3 PLAN H-66) ----
+//
+// Every group the chain binds is the same frame after frame -- the scene, the
+// bloom sets, the feedback pair, the velocity target, the noise map, one
+// sampler and one uniform buffer whose per-pass slot is a DYNAMIC offset -- so
+// with WgpuRnd's post cache attached a steady frame must create none. The
+// motion-blur feedback ping-pongs, so its two composite groups alternate.
+// Sabotage: binding the uniform slot as a static offset (the pre-H-66 code)
+// makes each frame's passes land on new keys for 64 / gcd(passes, 64) frames.
+namespace {
+
+struct ChainTargets {
+    wgpu::Texture scene, frame, depth, noise;
+    wgpu::TextureView sceneView, frameView, depthView, noiseView;
+};
+
+ChainTargets MakeChainTargets(GpuDevice &gpu, int w, int h) {
+    auto &dev = gpu.Device();
+    ChainTargets t;
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)w, (uint32_t)h, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst |
+              wgpu::TextureUsage::RenderAttachment;
+    t.scene = dev.CreateTexture(&d);
+    std::vector<uint8_t> px((size_t)w * h * 4);
+    for (size_t i = 0; i < px.size(); i++) px[i] = (uint8_t)((i * 2654435761u) >> 24);
+    wgpu::TexelCopyTextureInfo dst{};
+    dst.texture = t.scene;
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = (uint32_t)w * 4;
+    wgpu::Extent3D ext = {(uint32_t)w, (uint32_t)h, 1};
+    gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc |
+              wgpu::TextureUsage::TextureBinding;
+    t.frame = dev.CreateTexture(&d);
+    d.size = {4, 4, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    t.noise = dev.CreateTexture(&d);
+    t.depth = ClearedDepth(gpu, w, h, 0.5f);
+    wgpu::TextureViewDescriptor dvd{};
+    dvd.aspect = wgpu::TextureAspect::DepthOnly;
+    t.depthView = t.depth.CreateView(&dvd);
+    t.sceneView = t.scene.CreateView();
+    t.frameView = t.frame.CreateView();
+    t.noiseView = t.noise.CreateView();
+    return t;
+}
+
+// The peak frame: streak bloom, noise, motion blur, velocity, hue converge.
+RetailPostParams PeakChain(const ChainTargets &t) {
+    RetailPostParams p;
+    p.dc3 = true;
+    p.bloom = true;
+    p.bloomColor[0] = p.bloomColor[1] = p.bloomColor[2] = 0.5f;
+    p.bloomLumaScale = 0.125f;
+    p.streak = true;
+    p.streakAttenuation = 0.92f;
+    p.streakAngle = -55.0f;
+    for (int i = 0; i < 3; i++) p.xfm[i][i] = 1.0f;
+    p.noiseMap = t.noiseView;
+    p.noiseParams[0] = 1.0f;
+    p.noiseParams[1] = 3.0f;
+    p.noiseParams[2] = 1.0f;
+    p.noiseParams[3] = 1.0f;
+    p.motionBlur = true;
+    p.motionBlurParams[0] = p.motionBlurParams[1] = p.motionBlurParams[2] = 0.5f;
+    p.hueConverge = true;
+    p.hueParams[2] = 0.5f;
+    p.velocity = true;
+    p.velocityScale = 2.0f;
+    for (int i = 0; i < 4; i++) p.velocityReproj[i * 5] = 1.0f;
+    p.velocityDepth = t.depthView;
+    p.velocityDepthSamples = 4;
+    return p;
+}
+
+// Runs `frames` frames of `post` with `p`, each behind cache.BeginFrame;
+// returns the groups created by each.
+std::vector<uint64_t> RunChainFrames(RB3RetailPost &post, BindGroupCache &cache, uint64_t &frameId,
+                                     const ChainTargets &t, int w, int h, const RetailPostParams &p,
+                                     int frames, GpuDevice &gpu) {
+    std::vector<uint64_t> created;
+    for (int f = 0; f < frames; f++) {
+        cache.BeginFrame(++frameId);
+        const uint64_t before = cache.Creates() + cache.Uncached();
+        wgpu::CommandEncoder enc = gpu.Device().CreateCommandEncoder();
+        post.Run(enc, t.sceneView, t.sceneView, w, h, t.frameView, p, gpu);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        created.push_back(cache.Creates() + cache.Uncached() - before);
+    }
+    return created;
+}
+
+std::string CreatedList(const std::vector<uint64_t> &v) {
+    std::string s;
+    for (uint64_t c : v) s += std::to_string(c) + " ";
+    return s;
+}
+
+}  // namespace
+
+TEST_F(DC3RetailPostGpuTest, SteadyFrameCreatesNoBindGroup) {
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    ChainTargets t = MakeChainTargets(gpu, kW, kH);
+    BindGroupCache cache;
+    uint64_t frameId = 1000;
+    RB3RetailPost post;
+    post.Init(gpu);
+    post.SetBindGroupCache(&cache);
+
+    RetailPostParams peak = PeakChain(t);
+    RetailPostParams glare = peak;
+    glare.streak = false;
+    glare.glare = true;
+    glare.motionBlur = false;
+    glare.velocity = false;
+    RetailPostParams plain = glare;
+    plain.glare = false;
+    RetailPostParams rb3;   // RB3's chain (kRetailPostChain), same object
+    rb3.bloom = true;
+    rb3.bloomColor[0] = rb3.bloomColor[1] = rb3.bloomColor[2] = 0.5f;
+    rb3.bloomLumaScale = 1.0f;
+    for (int i = 0; i < 3; i++) rb3.xfm[i][i] = 1.0f;
+
+    struct Arm { const char *name; RetailPostParams p; } arms[] = {
+        {"dc3 peak (streak, noise, motion blur, velocity, hue)", peak},
+        {"dc3 glare", glare},
+        {"dc3 plain", plain},
+        {"rb3", rb3},
+    };
+    for (const Arm &a : arms) {
+        const std::vector<uint64_t> c = RunChainFrames(post, cache, frameId, t, kW, kH, a.p, 8, gpu);
+        // The first arm's first frame creates its groups (non-vacuous). Motion
+        // blur reads black on its first frame and then each half of the
+        // ping-pong pair once, so its last new group is frame 2's.
+        if (&a == &arms[0]) EXPECT_GT(c[0], 0u) << a.name << ": the first frame creates its groups";
+        for (int f = 3; f < 8; f++)
+            EXPECT_EQ(c[f], 0u) << a.name << ": steady frame " << f << " created " << c[f]
+                                << " bind group(s); per frame: " << CreatedList(c);
+    }
+    EXPECT_EQ(cache.Uncached(), 0u) << "every post-chain descriptor is keyable";
+    EXPECT_EQ(post.VelocityPasses(), 8) << "the peak arm ran its velocity pass every frame";
+
+    // The display ramp and the generic bloom (DC3_RETAIL_POST=0, rb3-xenon).
+    DisplayRamp ramp;
+    ramp.SetBindGroupCache(&cache);
+    BloomPass bloom;
+    bloom.Init(gpu);
+    bloom.SetBindGroupCache(&cache);
+    std::vector<uint64_t> c;
+    for (int f = 0; f < 6; f++) {
+        cache.BeginFrame(++frameId);
+        const uint64_t before = cache.Creates() + cache.Uncached();
+        wgpu::CommandEncoder enc = gpu.Device().CreateCommandEncoder();
+        bloom.Run(enc, t.sceneView, kW, kH, 1.0f, 0.5f, Hmx::Color(1, 1, 1), gpu);
+        EXPECT_TRUE(ramp.Apply(enc, t.frame, t.frameView, 1.3f, gpu));
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        c.push_back(cache.Creates() + cache.Uncached() - before);
+    }
+    EXPECT_GT(c[0], 0u);
+    for (int f = 1; f < 6; f++)
+        EXPECT_EQ(c[f], 0u) << "ramp + generic bloom, steady frame " << f << ": " << CreatedList(c);
+    bloom.Terminate();
+    post.Terminate();
+}
+
+// A recreated target takes its groups with it: after a resize, once the cache
+// has had its frame, it holds no more groups than a fresh chain at the new
+// size -- none pinning the old bloom sets, feedback pair or velocity target
+// (Forget). The caller's own scene, depth and noise views are the caller's to
+// Forget, as WgpuRnd does for its intermediate. Sabotage: dropping
+// RB3RetailPost's Forget calls keeps the old size's groups (and their
+// textures) alive until they age out, kMaxAgeFrames later.
+TEST_F(DC3RetailPostGpuTest, ResizeDropsTheOldTargetsGroups) {
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    ChainTargets a = MakeChainTargets(gpu, kW, kH);
+    ChainTargets b = MakeChainTargets(gpu, kW * 2, kH * 2);
+    uint64_t frameId = 5000;
+    size_t fresh = 0;
+    {
+        BindGroupCache ref;
+        RB3RetailPost post;
+        post.Init(gpu);
+        post.SetBindGroupCache(&ref);
+        RunChainFrames(post, ref, frameId, b, kW * 2, kH * 2, PeakChain(b), 4, gpu);
+        fresh = ref.Size();
+        post.Terminate();
+    }
+    ASSERT_GT(fresh, 4u);
+    BindGroupCache cache;
+    RB3RetailPost post;
+    post.Init(gpu);
+    post.SetBindGroupCache(&cache);
+    RunChainFrames(post, cache, frameId, a, kW, kH, PeakChain(a), 4, gpu);
+    const size_t before = cache.Size();
+    cache.Forget(a.sceneView.Get());
+    cache.Forget(a.depthView.Get());
+    cache.Forget(a.noiseView.Get());
+    RunChainFrames(post, cache, frameId, b, kW * 2, kH * 2, PeakChain(b), 4, gpu);
+    cache.BeginFrame(++frameId);   // the Forget()s land here
+    printf("post bind groups: %zu at the old size, %zu after the resize, %zu for a fresh chain\n",
+           before, cache.Size(), fresh);
+    EXPECT_LE(cache.Size(), fresh) << "groups binding the old size's targets survived the resize";
+    post.Terminate();
+}
+
+// The steady-frame test above counts what goes THROUGH the cache, so a pass
+// that called device.CreateBindGroup itself would be invisible to it. Every
+// CreateBindGroup in the post chain's sources is therefore the cache-less
+// fallback of a `mBindGroups ? mBindGroups->GetOrCreate(...) :` (a pass used
+// without WgpuRnd, as the unit tests do). Sabotage: replacing one Group() call
+// in RB3RetailPostDC3.cpp with gpu.Device().CreateBindGroup(&bgd) fails here.
+TEST(DC3RetailPostSource, EveryPostChainBindGroupGoesThroughTheCache) {
+    const char *files[] = {"gfx/RB3RetailPost.cpp", "gfx/RB3RetailPostDC3.cpp", "gfx/BloomPass.cpp",
+                           "gfx/DofPass.cpp",       "gfx/DofPass.h",            "gfx/DisplayRamp.cpp",
+                           "gfx/PostProcPass.cpp"};
+    int fallbacks = 0;
+    for (const char *f : files) {
+        const std::string path = std::string(MILO_ENGINE_SRC_DIR) + "/" + f;
+        std::ifstream in(path);
+        ASSERT_TRUE(in.good()) << "cannot read " << path;
+        std::vector<std::string> lines;
+        for (std::string l; std::getline(in, l);) lines.push_back(l);
+        for (size_t i = 0; i < lines.size(); i++) {
+            if (lines[i].find("CreateBindGroup(") == std::string::npos) continue;
+            const size_t c = lines[i].find("//");
+            if (c != std::string::npos && c < lines[i].find("CreateBindGroup(")) continue;
+            bool guarded = false;
+            for (size_t j = (i >= 2 ? i - 2 : 0); j <= i; j++)
+                guarded |= lines[j].find("mBindGroups ?") != std::string::npos;
+            EXPECT_TRUE(guarded) << f << ":" << i + 1 << " creates a bind group outside the cache: "
+                                 << lines[i];
+            fallbacks += guarded;
+        }
+    }
+    EXPECT_GE(fallbacks, 6) << "the scan found the fallbacks it expects (non-vacuous)";
 }

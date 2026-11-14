@@ -328,7 +328,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "c8abfc0b9b377db695377cc9b4b57d9b1b0cefa2"
+set(MILO_ENGINE_PIN "e16bce7d51840d3417bb67075a0c9f76d4ce9d2e"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -1230,6 +1230,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/ProcessSpawner_Native.cpp # pose_server.py launched from a pristine fork (RLIMIT_RTTIME)
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
+    src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/NuiImageSurface_Native.cpp
@@ -1247,7 +1248,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Cam_Native.cpp
     src/platform/Net_Stub.cpp
     src/platform/Memcard_Stub.cpp
-    src/platform/ContentMgr_Stub.cpp
+    src/platform/ContentMgr_Native.cpp
     src/platform/MapFile_Stub.cpp
     src/platform/VirtualKeyboard_Stub.cpp
     src/platform/Achievements_Stub.cpp
@@ -1406,6 +1407,8 @@ set(DC3_WEB_CORE_SOURCES
     src/xbox_link_stubs.cpp
     src/telemetry/GameplayTelemetry.cpp
     src/platform/DtaEvalSupport.cpp
+    # Dc3FrameCapDecide + Dc3RafGate: the rAF loop's frame cap (H-34).
+    src/platform/FramePacer_Native.cpp
     # Web stand-ins for the XDK/NUI/XNet entry points (exact XDK signatures).
     # Dropped in 466a3a591 as a "deleted file" -- it was not deleted, and its
     # absence left those symbols as unresolved wasm imports.
@@ -1421,6 +1424,7 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/ProcessSpawner_Native.cpp # pose_server.py launched from a pristine fork (RLIMIT_RTTIME)
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
+    src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/NuiImageSurface_Native.cpp
@@ -1434,7 +1438,7 @@ set(DC3_WEB_CORE_SOURCES
     # DC3_WEB_LIFTED_ENGINE_SOURCES below.
     src/platform/MeshFilter.cpp
     src/platform/Memcard_Stub.cpp
-    src/platform/ContentMgr_Stub.cpp
+    src/platform/ContentMgr_Native.cpp
     src/platform/Achievements_Stub.cpp
     src/platform/MemcardMgr_Stub.cpp
     # Native cache backend (CacheMgrNative/CacheNative/CacheIDNative). Needed
@@ -2058,8 +2062,10 @@ if(BUILD_TESTS)
         tests/test_rndcam_projection.cpp
         tests/test_particle_color.cpp
         tests/test_drawrect_color.cpp
+        tests/test_flare_point_test.cpp
         tests/test_retail_lighting.cpp
         tests/test_retail_char_shading.cpp
+        tests/test_proj_shadow_caster_pass.cpp
         tests/test_dta_parser.cpp
         tests/test_movegraph.cpp
         tests/test_dta_flow.cpp
@@ -2105,6 +2111,7 @@ if(BUILD_TESTS)
         tests/test_native_twoplayer.cpp
         tests/test_native_pose_dropout.cpp
         tests/test_native_second_person.cpp
+        tests/test_native_pad_with_person.cpp  # H-20 pad presses with a person on the sensor
         tests/test_native_pose_socket.cpp
         tests/test_native_pose_spawner.cpp
         tests/test_native_tree_paths.cpp
@@ -2123,6 +2130,9 @@ if(BUILD_TESTS)
         tests/test_native_glyph_render.cpp
         tests/test_native_ui_material_terms.cpp
         tests/test_frame_pacer.cpp     # H-29 frame cap + engine CPU-use guards
+        tests/test_bind_group_cache.cpp # H-30/H-31 cached bind groups, staged uniform rings
+        tests/test_host_path_case.cpp  # H-17/H-23 upper-case host directories
+        tests/test_present_scale.cpp  # H-18 fit the frame into the window
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
@@ -2155,6 +2165,11 @@ if(BUILD_TESTS)
             tests/test_pose_scoring.cpp
         APPEND PROPERTY COMPILE_DEFINITIONS
             "DC3_DECOMP_SRC_DIR=\"${CMAKE_SOURCE_DIR}/../src\"")
+    # The engine's source tree, for the post chain's no-direct-CreateBindGroup
+    # guard (PLAN H-66). Per file, for the same ccache reason.
+    set_property(SOURCE tests/test_dc3_retail_post.cpp
+        APPEND PROPERTY COMPILE_DEFINITIONS
+            "MILO_ENGINE_SRC_DIR=\"${MILO_ENGINE_PATH}/src\"")
     target_include_directories(milo-tests PRIVATE
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/../src
@@ -2261,6 +2276,12 @@ if(BUILD_TESTS)
     # developer's running game: kernel-assigned unless the test names a port
     # (the port-file helpers read the one it got).
     list(APPEND MILO_TEST_ENV "DC3_HTTP_PORT=0")
+    # The dev profile also mounts every package under <data>/dlc (DC3_DLC=1).
+    # A test mounts DLC only when it names its own DC3_DLC_DIR (the
+    # DC3_DLC_TESTS gate), so a box with imported packages boots the same song
+    # list -- and runs the same tests -- as one without
+    # (ContentMgr_Native.cpp NativeDlcRoots).
+    list(APPEND MILO_TEST_ENV "DC3_DLC=0")
     set(MILO_TEST_GATES_ON "")
     set(MILO_TEST_GATES_OFF "")
     # MILO_TEST_GATE_PROBES records, for every probed gate, the exact path whose
@@ -2306,6 +2327,34 @@ if(BUILD_TESTS)
     else()
         list(APPEND MILO_TEST_GATES_OFF "DC3_DTA_FLOW_TESTS(no game assets)")
     endif()
+
+    # DC3_DLC_TESTS — DlcSongFlowTest (2) + MoggDlcTest (1): Milkshake from the
+    # DC2 DLC megapack, imported with scripts/dlc/import.sh. DLC is game content
+    # that most boxes (CI, the GPD) do not have, so unlike the gates above this
+    # one decides REGISTRATION, not skipping: the tests are compiled in (the
+    # DC3_DLC_TESTS define) only when the package is found here, and a box
+    # without it registers none of them -- its skip count equals a box with it.
+    # The flow tests also need the game assets. DC3_DLC_TEST_DIR names another
+    # root (a dir without the package turns the gate off, which is how to check
+    # the absent case on a box that has it).
+    set(DC3_DLC_TEST_DIR "${MILO_TEST_ASSET_DIR}/dlc" CACHE PATH
+        "Imported DLC root for the DC3_DLC_TESTS gate (scripts/dlc/import.sh)")
+    set(_dlc_probe
+        "${DC3_DLC_TEST_DIR}/dancecentral2dlcmegapack/songs/milkshake/milkshake.mogg")
+    list(APPEND MILO_TEST_GATE_PROBES "DC3_DLC_TESTS=${_dlc_probe}")
+    set(_dlc_tests 0)
+    if(EXISTS "${_dlc_probe}" AND EXISTS "${MILO_TEST_ASSET_DIR}/gen/main_xbox.hdr")
+        set(_dlc_tests 1)
+        list(APPEND MILO_TEST_ENV "DC3_DLC_TESTS=1" "DC3_TEST_DLC_DIR=${DC3_DLC_TEST_DIR}")
+        list(APPEND MILO_TEST_GATES_ON "DC3_DLC_TESTS")
+    else()
+        list(APPEND MILO_TEST_GATES_OFF
+            "DC3_DLC_TESTS(no DC2 DLC megapack under ${DC3_DLC_TEST_DIR} - tests not registered)")
+    endif()
+    # Per source, as for test_gates.cpp below (a value that differs between
+    # boxes stays out of every other TU's ccache key).
+    set_property(SOURCE tests/test_dta_flow.cpp tests/test_mogg_v0xe.cpp APPEND PROPERTY
+        COMPILE_DEFINITIONS "DC3_DLC_TESTS=${_dlc_tests}")
 
     # Deliberately NOT defaulted on, with the reason recorded so the next person
     # does not have to re-derive it:

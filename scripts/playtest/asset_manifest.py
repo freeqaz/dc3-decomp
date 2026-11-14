@@ -113,10 +113,6 @@ def check(a):
         return 2
     data = a.data
     missing, wrong, notes = [], [], []
-    if data != data.lower():
-        wrong.append(f"the game data path {data} has capital letters; the game lower-cases "
-                     "file paths and cannot open it (PLAN H-17). Move or link it to a "
-                     "lower-case path and set DC3_DATA")
     for e in man["archives"]:
         p = os.path.join(data, e["path"])
         if not os.path.isfile(p):

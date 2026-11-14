@@ -25,15 +25,24 @@
 #   --video-pre S      seconds of clip before song time 0 (default 8, the
 #                      clips scripts/playtest/make_footage.py cuts)
 #   --video-loop       just loop the file instead (pose_server.py --video --loop)
-#   --fullscreen       NOT AVAILABLE YET: the game draws 1280x720 into the
-#                      top-left of any bigger window (PLAN H-18); says so and
-#                      plays windowed
-#   --size WxH         window size (default 1280x720; anything else shows
-#                      H-18's corner picture)
-#   --wayland          on a Wayland desktop, open a Wayland window (default:
-#                      an X11 window through Xwayland, which the compositor
-#                      scales as a whole; see H-18)
+#   --fullscreen       fill the screen (the monitor's own mode; F11 or
+#                      Alt+Enter in the game toggles fullscreen any time)
+#   --size WxH         window size (default 1280x720). Any size or shape
+#                      works: the picture is scaled to fit, black bars where
+#                      the shapes differ (PLAN H-18)
+#   --wayland          on a Wayland desktop, try a Wayland window first
+#                      (default: an X11 window through Xwayland; the prebuilt
+#                      graphics library cannot draw into a Wayland window, and
+#                      the game falls back to Xwayland itself, PLAN H-33)
 #   --no-pose          no tracker: play with keyboard / pad only
+#   --dlc [DIR]        downloadable songs: mount every package under DIR
+#                      (default <data>/dlc, i.e. orig-assets/dlc; DIR may be a
+#                      ':'-separated list, as $DC3_DLC_DIR).  The check says how
+#                      many packages and songs it found.  Import packages with
+#                      scripts/dlc/import.sh (docs/native/DLC.md)
+#   --no-dlc           no downloadable songs even if $DC3_DLC_DIR is set
+#                      (without either, the dev profile mounts <data>/dlc when
+#                      it exists, DC3_DLC=1; the check counts it then too)
 #   --fast-boot        skip the intro and title (straight to the main menu)
 #   --home DIR         saves, settings cache and sessions (default
 #                      ~/.local/share/dc3/playtest; $DC3_PLAYTEST_HOME)
@@ -61,7 +70,7 @@ MAIN_CHECKOUT="${COMMON:+$(dirname "$COMMON")}"
 CHECK=0; NO_PERSON=0; CAMERA="${DC3_POSE_CAMERA:-auto}"; VIDEO=""; FULLSCREEN=0; SIZE=""
 NO_POSE=0; FAST_BOOT=0; HOME_DIR="${DC3_PLAYTEST_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/dc3/playtest}"
 SESSION=""; REPLAY=""; REPLAY_SYNC="song"; HEADLESS=0; PACK=1; ENGINE_ARGS=()
-VIDEO_PRE=8; VIDEO_LOOP=0; WAYLAND=0
+VIDEO_PRE=8; VIDEO_LOOP=0; WAYLAND=0; DLC="${DC3_DLC_DIR:-}"; DLC_DEFAULT=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1 ;;
@@ -74,6 +83,9 @@ while [ $# -gt 0 ]; do
         --wayland) WAYLAND=1 ;;
         --size) SIZE="$2"; shift ;;
         --no-pose) NO_POSE=1 ;;
+        --dlc) if [ $# -gt 1 ] && [ "${2#-}" = "$2" ]; then DLC="$2"; shift
+               else DLC=""; DLC_DEFAULT=1; fi ;;
+        --no-dlc) DLC=""; DLC_DEFAULT=0; NO_DLC=1 ;;
         --fast-boot) FAST_BOOT=1 ;;
         --home) HOME_DIR="$2"; shift ;;
         --session-dir) SESSION="$2"; shift ;;
@@ -91,6 +103,21 @@ done
 BINARY="$REPO/native/build/dc3-native"
 DATA="${DC3_DATA:-$REPO/orig-assets}"
 MODEL="${DC3_POSE_MODEL:-$REPO/native/models/pose_landmarker_full.task}"
+[ "$DLC_DEFAULT" = 1 ] && DLC="$DATA/dlc"
+# Without --dlc the game still mounts <data>/dlc under the dev profile
+# (DC3_DLC=1, ContentMgr_Native.cpp NativeDlcRoots): name it, so the check
+# counts the songs this session will list.
+if [ -z "$DLC" ] && [ "${NO_DLC:-0}" != 1 ] && [ -z "${DC3_DLC_DIR+x}" ] && [ -d "$DATA/dlc" ]; then
+    prof="${DC3_PROFILE:-dev}"; flag="${DC3_DLC:-}"
+    [ -z "$flag" ] && [ "${prof,,}" = dev ] && flag=1   # the dev profile's row
+    case "${flag,,}" in 1|true|on|yes) DLC="$DATA/dlc" ;; esac
+fi
+# Absolute roots: the game's working directory is not the caller's.
+if [ -n "$DLC" ]; then
+    abs=""; IFS=: read -ra parts <<< "$DLC"
+    for d in "${parts[@]}"; do [ -n "$d" ] && abs="${abs:+$abs:}$(realpath -m "$d")"; done
+    DLC="$abs"
+fi
 
 # The tracker's Python is the game's own choice (DC3_POSE_PYTHON if set, the
 # bootstrap's venv, the checkout's .venv, python3: pose_python.py); preflight
@@ -100,6 +127,7 @@ pre_args=(--data "$DATA" --binary "$BINARY" --model "$MODEL")
 [ "$NO_POSE" = 1 ] || [ -n "$REPLAY" ] && pre_args+=(--no-pose)
 [ "$NO_PERSON" = 1 ] && pre_args+=(--no-person)
 [ "$HEADLESS" = 1 ] && pre_args+=(--headless)
+[ -n "$DLC" ] && pre_args+=(--dlc "$DLC")
 
 if [ "$CHECK" = 1 ]; then
     echo "DC3 playtest check ($(git -C "$REPO" rev-parse --short HEAD 2>/dev/null))"
@@ -123,6 +151,8 @@ setdef() { [ -n "${!1+x}" ] || export "$1=$2"; }   # caller's value wins
 export DC3_SAVE_DIR="${DC3_SAVE_DIR:-$HOME_DIR/saves}"
 export DC3_CACHE_DIR="${DC3_CACHE_DIR:-$HOME_DIR/cache}"
 export DC3_DATA="$DATA"
+if [ -n "$DLC" ]; then export DC3_DLC_DIR="$DLC"
+elif [ "${NO_DLC:-0}" = 1 ]; then export DC3_DLC_DIR="" DC3_DLC=0; fi
 # The dev profile (DC3_PROFILE, the default) already turns on the debug API
 # (loopback only), gesture menus while the tracker runs and the per-move
 # rating log; the session summary reads that log.
@@ -138,14 +168,12 @@ setdef DC3_SFX_PCM_DIR "$HOME_DIR/cache/sfx_pcm"   # decoded SFX, not into the g
 if [ "$CAMERA" = auto ]; then unset DC3_POSE_CAMERA; else export DC3_POSE_CAMERA="$CAMERA"; fi
 export DC3_POSE_MODEL="$MODEL"
 [ "$FAST_BOOT" = 1 ] && export DC3_FAST_BOOT=1
-if [ "$FULLSCREEN" = 1 ]; then
-    echo "note: --fullscreen is not available yet (the game would sit in the top-left"
-    echo "      corner of the screen, PLAN H-18); playing in a 1280x720 window."
-fi
-# Wayland: GLFW would open a native Wayland window, which a scaled (HiDPI)
-# desktop hands a framebuffer twice the size, and the game draws into its
-# top-left corner (H-18).  Through Xwayland the window is 1280x720 pixels and
-# the compositor scales the whole picture.
+[ "$FULLSCREEN" = 1 ] && export MILO_FULLSCREEN=1
+# Wayland: the prebuilt Dawn has no Wayland surface support, so a native
+# Wayland window cannot be drawn into; the engine notices and re-opens the
+# window through Xwayland itself (PLAN H-33).  Going there directly skips that
+# detour.  (A scaled desktop is fine either way since H-18: the frame is
+# scaled into whatever the window is.)
 if [ "$HEADLESS" = 0 ] && [ "$WAYLAND" = 0 ] && [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${DISPLAY:-}" ]; then
     echo "Wayland desktop: opening the window through Xwayland (DISPLAY=$DISPLAY); --wayland for native"
     unset WAYLAND_DISPLAY

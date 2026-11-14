@@ -15,6 +15,7 @@ in `../milo-native-engine` (rendering, audio, input, file I/O).
 | [TESTING.md](TESTING.md) | `scripts/native_test.sh`, gates, exit codes, skip budget |
 | [SCORING_ENV_VARS.md](SCORING_ENV_VARS.md) | Scoring and pose env vars |
 | [SAVE_PERSISTENCE_PLAN.md](SAVE_PERSISTENCE_PLAN.md) | Save/cache backend and its on-disk contract |
+| [DLC.md](DLC.md) | Downloadable content: importing a package, `DC3_DLC_DIR`, how it mounts |
 | [reference/](reference/) | Rendering, audio/video, animation, loading and boot, porting, viewer, live-state probing, code style |
 | [../debugging/native.md](../debugging/native.md) | Debugging, and the master env-var table |
 
@@ -44,10 +45,14 @@ Keyboard (windowed; printed once at startup as `DC3 Native: keys: ...`):
 | Esc, Backspace | B | | Q / E | LB / RB |
 | X | X | | Z / C | LT / RT |
 | Y | Y (Options on the shell help bar) | | **Ctrl+Q** | **quit** |
+| F11, Alt+Enter | fullscreen toggle | | | |
 
 Esc is B, not quit: quit with Ctrl+Q or by closing the window (both rc 0).
 Space opens the pause menu but does not close it, as on the 360 (PLAN G-13);
-resume with Continue. A key held with Ctrl, Alt or Super is not a pad press.
+resume with Continue. A key held with Ctrl, Alt or Super is not a pad press
+(so Alt+Enter is not also A). The window can be resized or made fullscreen;
+the 1280x720 frame is scaled to fit with black bars (`MILO_FULLSCREEN=1`
+starts fullscreen; PLAN H-18).
 Debug keys: `` ` `` toggles the ImGui panel, F12 captures a frame. The map is
 the engine's (`../milo-native-engine/src/platform/JoypadKeyMap.h`); rb3 has its
 own keyboard. A GLFW gamepad gets the full Xbox layout. Saves go to
