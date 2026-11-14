@@ -28,6 +28,10 @@
 //   - the feedback never valid (every frame treated as the first)
 //   - a stale previous frame reused after motion blur was off for a frame
 //   - FillRetailPost ignoring RndPostProc::DoMotionBlur's Pack() gate
+//   fade-out (round 2, RndShader*::CalcShaderOpts' !fadeOut):
+//   - BloomMaskScale ignoring the environ's fade-out
+//   - the rect path (RndShaderDrawRect, no fade test) cancelled by it too
+//   - fade-out read as FadeOut() alone (FadeEnd == FadeStart is no fade)
 
 #include "test_helpers.h"
 
@@ -37,6 +41,7 @@
 #include "gfx/RB3RetailPost.h"
 #include "platform/Rnd_Wgpu.h"
 #include "platform/rndshape/RndShape.h"
+#include "rndobj/Env.h"
 #include "rndobj/Mat.h"
 #include "rndobj/PostProc.h"
 
@@ -234,6 +239,37 @@ TEST_F(DC3RetailPostGpuTest, StreakBloomIsScreenBlendOfMaskedScene) {
     pass.Terminate();
     if (prev) prev->Select(); else pp->Unselect();
     delete pp;
+}
+
+// RndShaderStandard / Particles / Multimesh / SyncTrack::CalcShaderOpts set
+// mPseudoHDR only when !fadeOut, fadeOut = env->FadeOut() && FadeEnd !=
+// FadeStart for the current environ; RndShaderDrawRect has no such test.
+TEST_F(DC3RetailPostTest, BloomMaskOffWhileTheEnvironFadesOut) {
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    RndPostProc *prevPP = RndPostProc::Current();
+    pp->Select();
+    RndEnviron *prevEnv = RndEnviron::Current();
+    RndEnviron *env = Hmx::Object::New<RndEnviron>();
+    env->Select(nullptr);
+    RndMat *mat = Hmx::Object::New<RndMat>();
+    mat->SetProperty("bloom_multiplier", DataNode(1.0f));
+    EXPECT_LT(rndshape::BloomMaskScale(mat), 0.0f) << "no fade: the mask is written";
+
+    env->SetProperty("fade_out", DataNode(1));
+    env->SetProperty("fade_start", DataNode(100.0f));
+    env->SetProperty("fade_end", DataNode(100.0f));
+    EXPECT_LT(rndshape::BloomMaskScale(mat), 0.0f) << "fade_end == fade_start is not a fade";
+    env->SetProperty("fade_end", DataNode(400.0f));
+    EXPECT_EQ(rndshape::BloomMaskScale(mat), 0.0f) << "a fading environ turns the mask off";
+    EXPECT_LT(rndshape::BloomMaskScale(mat, false), 0.0f) << "a rect ignores the fade (RndShaderDrawRect)";
+    env->SetProperty("fade_out", DataNode(0));
+    EXPECT_LT(rndshape::BloomMaskScale(mat), 0.0f);
+
+    if (prevEnv) prevEnv->Select(nullptr);
+    if (prevPP) prevPP->Select(); else pp->Unselect();
+    delete mat;
+    delete pp;
+    delete env;   // ~RndEnviron clears the current environ if it is this one
 }
 
 // NgPostProc::CheckMotionBlur: c105 = (weight.rgb * blend, weight.a), on only
