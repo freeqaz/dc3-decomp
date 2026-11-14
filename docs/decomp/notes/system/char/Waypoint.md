@@ -45,6 +45,8 @@ Above the definition (was lines 219-246):
 // both operands are already bound and re-binding them moves nothing.
 ```
 
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. The delta dot products pair (d.x,m+0x10), (d.y,m+0x14) and (d.z,m+0x18) identically on both sides; only the association differs. The f3-f8 at WorldXfm_Force are dead leftovers.
+
 
 ## `(file-level)`
 

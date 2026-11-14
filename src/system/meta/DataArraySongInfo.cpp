@@ -1,6 +1,6 @@
 #include "meta\DataArraySongInfo.h"
 
-int DataArraySongInfo::sSaveVer = 1;
+int DataArraySongInfo::sSaveVer = 2; // the image's value (.data 0x82F0F90C)
 
 DataArraySongInfo::DataArraySongInfo(SongInfo *info) : SongInfoCopy(info) {}
 

@@ -67,6 +67,10 @@ Inside the body (was lines 204-253):
                 // spellings, so fuzzy stays 99.45055 while canonical is 100.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.451, 6 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
 
 ## `?FindBestNodeRecurse@ClipDistMap@@IAAXMMMMM@Z`
 
@@ -110,6 +114,10 @@ Inside the body (was lines 360-369):
     // costs 95.5 -> 86.5 (the image reloads mAStart and mSamplesPerBeat
     // after the floor call, so the members, not the locals, are read there).
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: load
+placement only (lfs/fsubs of 0xc(r31) one block later).
 
 
 ## `?FindDists@ClipDistMap@@QAAXMPAVDataArray@@@Z`
@@ -239,3 +247,7 @@ Inside the body (was lines 691-708):
     // `float c` instead of `const float &c` 98.09 (canonical unchanged), and
     // dropping the `const float &worstErr` binding 97.69.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual:
+lbl_820211C4 = 1e30f, equal to our __real@7149f2ca; regalloc only.

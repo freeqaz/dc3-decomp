@@ -24,6 +24,10 @@ Above the definition (was lines 290-296):
 // `rowIt->second[i] != itRows[i]` is 95.7 (homes &rowIt->second instead).
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal apart from r1 stack-slot layout (std temp at -0xd0 vs -0xdc).
+
 
 ## `(file-level)`
 

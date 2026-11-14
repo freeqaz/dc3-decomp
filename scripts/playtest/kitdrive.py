@@ -143,6 +143,35 @@ class Kit:
             pass
         return None
 
+    def tree_rss(self):
+        """{"<comm>[<pid>]": RSS kB} for play.sh and every process under it
+        (the game, the pose server, ffmpeg ...): memory per process at a leg
+        boundary (PLAN H-24 wants the numbers, not only the game's)."""
+        kids = {}
+        for d in os.listdir("/proc"):
+            if not d.isdigit():
+                continue
+            try:
+                with open(f"/proc/{d}/stat") as f:
+                    st = f.read()
+                ppid = int(st.rsplit(")", 1)[1].split()[1])
+                kids.setdefault(ppid, []).append(int(d))
+            except (OSError, ValueError, IndexError):
+                pass
+        out, todo = {}, [self.proc.pid]
+        while todo:
+            pid = todo.pop()
+            todo.extend(kids.get(pid, []))
+            try:
+                comm = open(f"/proc/{pid}/comm").read().strip()
+                rss = next((int(l.split()[1]) for l in open(f"/proc/{pid}/status")
+                            if l.startswith("VmRSS:")), 0)
+            except (OSError, ValueError, StopIteration):
+                continue
+            if rss:
+                out[f"{comm}[{pid}]"] = rss
+        return out
+
     def wait_port(self, timeout=240):
         pf = os.path.join(self.session, "http_port")
         end = time.time() + timeout
@@ -210,7 +239,23 @@ class Kit:
         there to read."""
         if "current_screen" not in expr:
             return expr
-        return f"{{if_else {{ui current_screen}} {expr} {default}}}"
+        # Every link of the chain can be empty, not just the first: a screen
+        # with no focus_panel answers kDataUnhandled, a panel without the
+        # list answers <null>, and a handler called on either is a MILO_FAIL
+        # (15 of them in one soak try, all the kit's own).  Guard each
+        # prefix the expression goes through, outermost first.
+        chain = ["{ui current_screen}"]
+        panel = "{{ui current_screen} focus_panel}"
+        if panel in expr:
+            chain.append(panel)
+            i = expr.find(panel + " find ")
+            if i >= 0:
+                j = expr.find("}", i + len(panel))
+                chain.append("{" + expr[i:j + 1])
+        out = expr
+        for cond in reversed(chain):
+            out = f"{{if_else {cond} {out} {default}}}"
+        return out
 
     def eval(self, expr, timeout=10):
         try:
@@ -281,13 +326,16 @@ class Kit:
 
     def rows(self, lst, limit=60):
         """The list's row symbols, for logs and for lists that are discovered
-        (fitness, playlists).  Reads no further than the rows on display:
-        some providers raise a MILO_FAIL for an index past their end
-        (MainMenuProvider measured 14 in one soak when this read 12 rows of
-        a 5-row menu), others return garbage."""
-        shown = self.eval(f"{{{lst} get_num_display}}", timeout=3)
-        if isinstance(shown, int) and shown > 0:
-            limit = min(limit, shown)
+        (fitness, playlists).  Reads no further than the provider's row count
+        (`num_data`, a native-only HamNavList handler): every provider
+        raises a MILO_FAIL for an index past its end (MainMenuProvider 14x in
+        one soak; FitnessProvider.cpp:146 in soak #5, PLAN H-28, where
+        get_num_display -- the slots on screen -- said 5 of a 4-row list).
+        No count, no rows: guessing is what raised those FAILs."""
+        n = self.eval(f"{{{lst} num_data}}", timeout=3)
+        if not isinstance(n, int) or n <= 0:
+            return []
+        limit = min(limit, n)
         out = []
         for n in range(limit):
             sym = self.eval(f"{{{lst} data_symbol {n}}}", timeout=3)
@@ -351,9 +399,17 @@ class Kit:
             if got == "startgame_practice_screen":
                 if not self.choose("break_it_down_title_song"):
                     raise RuntimeError("startgame_practice_screen has no break_it_down_title_song")
-                got = self.need(("practice_confirm_screen", "game_screen"), 120)
+                got = self.need(("practice_confirm_screen", "practice_welcome_screen",
+                                 "game_screen"), 180)
                 if got == "practice_confirm_screen":
                     self.choose("ok")  # the dialog's rows are ok / no
+                    got = self.need(("practice_welcome_screen", "game_screen"), 180)
+            if got == "practice_welcome_screen":
+                # After the load: practice_all / practice_choose / perform
+                # (ui/practice/practice_welcome.dta); the whole song, move by
+                # move, is practice_all.
+                if not self.choose("practice_all"):
+                    raise RuntimeError("practice_welcome_screen has no practice_all")
             return self.need(("game_screen",), 120)
         return self.multiuser(difficulty)
 

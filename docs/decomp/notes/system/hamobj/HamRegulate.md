@@ -102,3 +102,8 @@ Inside the body (was lines 161-229):
     // decides.  Left: 12 rows, all pure moveZ/moveRot colour (image f28/f27,
     // ours f27/f28) -- the pri-14/pri-21 tie above, untouched by this lever.
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.643, 12 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.

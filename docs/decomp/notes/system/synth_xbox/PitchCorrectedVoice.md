@@ -23,3 +23,7 @@ Above the definition (was lines 17-23):
 // 0x8(r31)` vs our fmsubs -- the w17-e reload above, reached on both arms on
 // both sides; mSmoothedCorrection = (f28*f27 - s)*coef + s either way.  ARTIFACT.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: target
+re-loads mSmoothedCorrection after the mPrevFreq store; values identical.

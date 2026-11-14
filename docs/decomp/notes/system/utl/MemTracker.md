@@ -107,6 +107,10 @@ Above the definition (was lines 545-569):
 // which literal.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual:
+free/alloc strings swap registers but are used consistently.
+
 
 ## `?ReportMemoryUsageOverview@MemTracker@@QAAXPBD@Z`
 

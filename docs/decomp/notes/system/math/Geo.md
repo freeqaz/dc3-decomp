@@ -58,6 +58,9 @@ Inside the body (was lines 142-151):
     // follow the clamp order in both builds; nothing tried moved the sort.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.500, 2 non-equal row(s): The two
+register rows re-associate the OR of the three ClampEq results; integer OR, exact. NOT A
+BUG.
 
 ## `?Set@Plane@@QAAXABVVector3@@00@Z`
 
@@ -72,6 +75,8 @@ Above the definition (was lines 190-194):
 // orders found nothing under 154/5300 against 161 for this spelling; the
 // cross statement order is fully inert.
 ```
+
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. The three cross-product components stored to the stack are identical expressions on both sides. The differing f6-f8 at the Normalize call are dead leftovers, not arguments.
 
 
 ## `?Intersect@@YAXABVTransform@@ABVPlane@@AAVRay@Hmx@@@Z`
@@ -97,6 +102,10 @@ Above the definition (was lines 374-387):
 // (n.x * m.N.x with the factors swapped), inert under all 8 operand orders.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.718, 2 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
 
 ## `?Intersect@@YA_NABVTriangle@@ABVBox@@@Z`
 
@@ -175,6 +184,10 @@ Inside the body (was lines 614-633):
         // family at 0x68 instead of 0x64), which is the 2 extra rows at 98.37.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: separate
+induction variable for the same addresses; one stack-slot offset differs.
+
 
 ## `?Intersect@@YA_NABVSegment@@ABVTriangle@@_NAAM@Z`
 
@@ -240,6 +253,10 @@ Inside the body (was lines 892-899):
         // stores -- all measured inert.  See the lane note for the residual.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.677, 3 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
 
 ## `BehindPlane()`
 
@@ -327,6 +344,10 @@ Inside the body (was lines 1115-1124):
     // fixed by that temp's sid (C2RS-BRIDGE 8.7), not by the spelling.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 98.784, 9 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
 
 ## `?Update@BSPFace@@QAAXXZ`
 
@@ -360,6 +381,8 @@ Inside the body (was lines 1243-1250):
             // 0x0(r30), 0x8(r30), 0x4(r30) -- x, z, y) and the store order of
             // `normal`.
 ```
+
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. The plane d term is -(n.x*p.x + n.y*p.y + n.z*p.z) on both sides; only the association order differs.
 
 
 ## `?MakeBSPTree@@YA_NAAPAVBSPNode@@AAV?$list@VBSPFace@@V?$StlNodeAlloc@VBSPFace@@@stlpmtx_std@@@stlpmtx_std@@H@Z`
@@ -503,3 +526,13 @@ Inside the body (was lines 1581-1618):
     // So a Vector2 temporary's y does not home here under any spelling tried;
     // whatever the original wrote, MSVC kept its y in memory and its x not.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
+
+## `??$_S_sort@VBSPFace@@V?$StlNodeAlloc@VBSPFace@@@stlpmtx_std@@U?$less@VBSPFace@@@3@@stlpmtx_std@@YAXAAV?$list@VBSPFace@@V?$StlNodeAlloc@VBSPFace@@@stlpmtx_std@@@0@U?$less@VBSPFace@@@0@@Z`
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal; the `??_L` dtor-pointer arg differs only by ICF name.

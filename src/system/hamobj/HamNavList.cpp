@@ -156,6 +156,16 @@ BEGIN_HANDLERS(HamNavList)
     HANDLE_EXPR(data_index, mListState.Provider()->DataIndex(_msg->Sym(2)))
     HANDLE_EXPR(data_symbol, mListState.Provider()->DataSymbol(_msg->Int(2)))
     HANDLE_EXPR(index_enabled, mListState.Provider()->IsActive(_msg->Int(2)))
+#ifdef HX_NATIVE
+    // Native-only (not in the image): the provider's row count, so a debug
+    // driver can read rows without asking past the end -- data_symbol past
+    // NumData() is a MILO_FAIL in most providers (FitnessProvider.cpp:146),
+    // and get_num_display is the number of slots on screen, not of rows
+    // (PLAN H-28: 5 slots over FitnessProvider's 4 rows).
+    HANDLE_EXPR(
+        num_data, mListState.Provider() ? mListState.Provider()->NumData() : 0
+    )
+#endif
     HANDLE_MESSAGE(ButtonDownMsg)
     HANDLE_SUPERCLASS(UIComponent)
     HANDLE_SUPERCLASS(RndAnimatable)

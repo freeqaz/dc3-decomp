@@ -31,3 +31,8 @@ Inside the body (was lines 60-74):
     // carrying the 0x90 member is `V1{0x10020} k07[0x90..]`, and every spelling
     // above reproduces it unchanged.
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.818, 1 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.

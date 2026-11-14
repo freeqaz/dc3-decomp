@@ -143,6 +143,11 @@ Inside the body (was lines 517-538):
         // cosAngle from radiiVec.y 95.64. Kept the register-sourced form.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: NGRadii
+min/fsel and divide verified; vector copies are reordered but equal; stack layout
+differs.
+
 
 ## `?RenderFogProxy@NgSpotlightDrawer@@IAAXXZ`
 

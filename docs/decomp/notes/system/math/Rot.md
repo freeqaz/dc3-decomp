@@ -202,3 +202,7 @@ coefficients (-(yy+zz), xy-zw, xz+yw / xy+zw, -(xx+zz), yz-xw / xz-yw, yz+xw,
 -(xx+yy)), the *2 and the +v term match per component, including the store
 order z, x, y.
 ```
+
+## `?MakeScale@@YAXABVMatrix3@Hmx@@AAVVector3@@@Z`
+
+p2-b99 (2026-11-14, name_check, 99-100 band audit): NOT A BUG. The determinant is the same three cofactor products (0x24*(0x10*0x8-0x0*0x18), 0x20*(0x4*0x18-0x14*0x8), 0x28*(0x14*0x0-0x10*0x4)) and the same squared lengths; only the association order differs.

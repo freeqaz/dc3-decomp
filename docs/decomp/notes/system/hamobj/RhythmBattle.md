@@ -79,3 +79,39 @@ Inside the body (was lines 971-1016):
                 // alone does not say which constructs carry the 13, so nothing
                 // is committed here: a guessed distribution would only buy names.
 ```
+
+## `??__Fgame_outro_finale@?BJK@??OnBeat@RhythmBattle@@AAAXXZ@YAXXZ`
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 97.857, 3 non-equal row(s): the 3 charged
+rows are the static's scope ordinal, image `?BJK@` (410) vs ours `?BIN@` (397). All four
+OnBeat statics the image names are off by the same 13 (msg 210/197, msg 242/229,
+worked_it_progress 326/313, game_outro_finale 410/397), so our OnBeat numbers 13 fewer
+scopes before scope 197. Per-function counter; OnBeat is 99.95 canonical, so the missing
+scopes carry no code. NOT A BUG.
+
+## `??__Fworked_it_progress@?BEG@??OnBeat@RhythmBattle@@AAAXXZ@YAXXZ`
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 97.857, 3 non-equal row(s): the 3 charged
+rows are the static's scope ordinal, image `?BEG@` (326) vs ours `?BDJ@` (313). All four
+OnBeat statics the image names are off by the same 13 (msg 210/197, msg 242/229,
+worked_it_progress 326/313, game_outro_finale 410/397), so our OnBeat numbers 13 fewer
+scopes before scope 197. Per-function counter; OnBeat is 99.95 canonical, so the missing
+scopes carry no code. NOT A BUG.
+
+## `??__Fmsg@?PC@??OnBeat@RhythmBattle@@AAAXXZ@YAXXZ`
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 97.857, 3 non-equal row(s): the 3 charged
+rows are the static's scope ordinal, image `?PC@` (242) vs ours `?OF@` (229). All four
+OnBeat statics the image names are off by the same 13 (msg 210/197, msg 242/229,
+worked_it_progress 326/313, game_outro_finale 410/397), so our OnBeat numbers 13 fewer
+scopes before scope 197. Per-function counter; OnBeat is 99.95 canonical, so the missing
+scopes carry no code. NOT A BUG.
+
+## `??__Fmsg@?NC@??OnBeat@RhythmBattle@@AAAXXZ@YAXXZ`
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 97.857, 3 non-equal row(s): the 3 charged
+rows are the static's scope ordinal, image `?NC@` (210) vs ours `?MF@` (197). All four
+OnBeat statics the image names are off by the same 13 (msg 210/197, msg 242/229,
+worked_it_progress 326/313, game_outro_finale 410/397), so our OnBeat numbers 13 fewer
+scopes before scope 197. Per-function counter; OnBeat is 99.95 canonical, so the missing
+scopes carry no code. NOT A BUG.

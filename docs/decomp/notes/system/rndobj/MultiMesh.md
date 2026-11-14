@@ -85,3 +85,11 @@ Inside the body (was lines 404-421):
                                 // ObjRef/Owner headers reaches it (both are PCH
                                 // headers and are not edited).  w26-p.
 ```
+
+## `??4?$list@UInstance@RndMultiMesh@@V?$TransformListAlloc@UInstance@RndMultiMesh@@@stlpmtx_std@@@stlpmtx_std@@QAAAAV01@ABV01@@Z`
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.111, 6 non-equal row(s): NOT A BUG.
+Every row is register-only; `scripts/analysis/regperm_equivalence.py` raised 10 lead(s),
+each read by hand against the listing: pure register permutation, no operand swap. The
+checker's leads are the dst/src node walk in r31/r30 with the two `mr`s emitted in the
+opposite order; memcpy still gets (dst+8, src+8, 0x44).

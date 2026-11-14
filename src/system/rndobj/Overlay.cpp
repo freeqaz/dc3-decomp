@@ -182,6 +182,12 @@ void RndOverlay::NativeCollect(NativeLineFn fn, void *ctx) {
             if (!line->empty())
                 fn(ctx, o->mName ? o->mName : "?", line->c_str());
         }
+        if (o->mDumpCount > 0) { // Draw()'s toggle_overlay dump
+            o->mDumpCount--;
+            FOREACH (line, o->mLines) {
+                TheDebug << line->c_str() << "\n";
+            }
+        }
         y += o->Height();
     }
 }

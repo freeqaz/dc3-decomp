@@ -12,6 +12,7 @@
 #include <string>
 
 class DataNode;
+class DataArray;
 
 namespace DtaEval {
 
@@ -110,6 +111,42 @@ private:
     const char *mDataFile;
     std::string mLastRepair;
     bool mRestored;
+};
+
+// ---------------------------------------------------------------------------
+// FailScope -- evaluate a debug script the way a MILO_TRY body runs
+// ---------------------------------------------------------------------------
+// On native a MILO_FAIL / MILO_ASSERT is not fatal (Debug::Fail returns, to
+// match the Xbox "Continue" button), so outside a MILO_TRY the code after a
+// failed check simply runs on. For game code that is the platform choice; for
+// a debug eval it was undefined behaviour: `{list data_symbol 4}` on a 4-row
+// FitnessProvider raised the range FAIL, then read mFitnessOptions[4] past the
+// vector's end, and serializing that "symbol" was the SIGSEGV the endpoint
+// recovered from (PLAN H-28, soak #5). Evaluate() opens a try scope, so a FAIL
+// inside the script throws back here (Debug::Fail's mTry path, the image's own
+// MILO_TRY semantics) and the eval answers an error instead of a garbage
+// value. The FAIL line is still printed.
+//
+// Like ScriptStateGuard, declare it in the sigsetjmp frame BEFORE the
+// sigsetjmp: it holds plain values only, and its destructor closes a try scope
+// a crash left open (an open scope makes Debug::Poll raise "TRY conditional not
+// exited" on the next frame).
+class FailScope {
+public:
+    FailScope() : mOpen(false) {}
+    ~FailScope() { Close(); }
+
+    // Evaluate every node of `parsed` (as HandleDtaEval always did), leaving the
+    // last value in `result`. False, with `error` saying so, when a
+    // MILO_FAIL / MILO_ASSERT stopped the script (the message itself is in the
+    // log's FAIL line; the thrown pointer dangles by the time it is caught).
+    bool Evaluate(DataArray *parsed, DataNode &result, std::string &error);
+
+    // Leave the try scope if it is still open. Idempotent.
+    void Close();
+
+private:
+    volatile bool mOpen;
 };
 
 } // namespace DtaEval

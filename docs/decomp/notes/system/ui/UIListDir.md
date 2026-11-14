@@ -90,6 +90,10 @@ Inside the body (was lines 519-568):
         // priority-order question, not a spelling one.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: home-slot
+stores to 0x54(r1) differ only.
+
 
 ## `(file-level)`
 
