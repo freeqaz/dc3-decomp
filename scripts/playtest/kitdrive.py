@@ -303,7 +303,6 @@ class Kit:
             if not self.choose(difficulty, lst):
                 raise RuntimeError(f"multiuser_screen has no {difficulty}")
             time.sleep(2.5)
-            self.log(f"multiuser p{side + 1} rows after difficulty: {self.rows(lst)}")
             for sym in ("play", "skip_waiting"):
                 if self.has_row(lst, sym):
                     self.choose(sym, lst)
