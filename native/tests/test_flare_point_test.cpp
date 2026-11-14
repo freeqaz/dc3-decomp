@@ -31,7 +31,14 @@
 #include "rndobj/Mat.h"
 #include "rndobj/Rnd.h"
 #include "platform/PointTestHook.h"
+#include "platform/Rnd_Wgpu.h"
+#include "platform/rndshape/RndShape.h"
+#include "gfx/PointTestStandIns.h"
 
+#include <algorithm>
+#include <chrono>
+#include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -51,22 +58,30 @@ TEST_F(FlarePointTestTest, UnoccludedAreaTestedFlareDrawsAtFullStrength) {
     ASSERT_TRUE(flare->GetPointTest() && flare->GetAreaTest())
         << "the constructor defaults are what DCI's flares use";
 
-    float strength[3] = { -1.0f, -1.0f, -1.0f };
-    for (int frame = 0; frame < 3; frame++) {
+    // DC3 does not wait for a readback after the submit (round 3,
+    // rndshape::kPointTestWaitAfterSubmit), so in this unpaced loop an answer
+    // can take more than the one frame retail's does: draw paced frames until
+    // it lands, within a bound.
+    std::vector<float> strength;
+    for (int frame = 0; frame < 30; frame++) {
         TheRnd.BeginDrawing();
         RndCam *prev = RndCam::Current();
         cam->Select();
         flare->DrawShowing();
         if (prev) prev->Select();
         TheRnd.EndDrawing();
-        strength[frame] = mat->GetColor().red;
+        strength.push_back(mat->GetColor().red);
+        if (frame >= 2 && strength.back() > 0.999f) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     const Hmx::Rect &a = flare->GetArea();
     ASSERT_GT(a.w * a.h, 100.0f) << "the flare rect is on screen and larger than a few pixels";
     // One step (mSteps 1), range (0,0) -> t 1, nothing occludes: full strength.
-    EXPECT_NEAR(strength[2], 1.0f, 1.0e-4f)
-        << "flare strength " << strength[0] << ", " << strength[1] << ", " << strength[2]
-        << " over a " << a.w << "x" << a.h << " rect (a constant answer would give 1/area or 1000/area)";
+    std::string seq;
+    for (float v : strength) seq += std::to_string(v) + " ";
+    EXPECT_NEAR(strength.back(), 1.0f, 1.0e-4f)
+        << "flare strength " << seq << "over a " << a.w << "x" << a.h
+        << " rect (a constant answer would give 1/area or 1000/area)";
 
     delete flare;
     delete mat;
@@ -156,6 +171,72 @@ protected:
         TheRnd.EndDrawing();
         return mat->GetColor().red;
     }
+
+    // As Frame, the way WgpuRnd delivers without the after-submit wait (DC3,
+    // rndshape::kPointTestWaitAfterSubmit false): with `late` the previous
+    // frame's answers are still being read back at this world end and arrive
+    // at the next one, oldest first; meanwhile, given `standIns`, each late
+    // key gets its last real answer (gfx/PointTestStandIns.h).
+    std::vector<PointTestPass::Answer> held;
+    static void ToFlare(const PointTestPass::Answer &a, void *) {
+        NativePointTestResultFn fn = GetNativePointTestResultFn();
+        if (!fn) return;
+        NativePointTestResult r;
+        r.key = a.key;
+        r.pointDone = a.pointDone;
+        r.visible = a.visible;
+        r.areaDone = a.areaDone;
+        r.area = a.area;
+        fn(r);
+    }
+    float FrameNoWait(FakeTester &t, bool visible, float areaFraction, bool late,
+                      PointTestStandIns *standIns) {
+        std::vector<NativePointTest> prior = t.queued;
+        t.queued.clear();
+        mat->SetColor(0.0f, 0.0f, 0.0f);
+        TheRnd.BeginDrawing();
+        RndCam *prev = RndCam::Current();
+        cam->Select();
+        flare->DrawShowing();
+        if (prev) prev->Select();
+        std::vector<PointTestPass::Answer> answers;
+        for (const NativePointTest &q : prior) {
+            PointTestPass::Answer a;
+            a.key = q.key;
+            a.pointDone = q.pointTest;
+            a.visible = visible;
+            a.areaDone = q.areaTest;
+            a.area = areaFraction * q.rect[2] * q.rect[3];
+            answers.push_back(a);
+        }
+        std::vector<PointTestPass::Answer> deliver;
+        deliver.swap(held);
+        if (late)
+            held = answers;
+        else
+            deliver.insert(deliver.end(), answers.begin(), answers.end());
+        for (const PointTestPass::Answer &a : deliver) {
+            if (standIns) standIns->Note(a);
+            ToFlare(a, nullptr);
+        }
+        if (late && standIns) {
+            std::vector<const void *> keys;
+            for (const PointTestPass::Answer &a : held) keys.push_back(a.key);
+            standIns->Deliver(keys, ToFlare, nullptr);
+        }
+        TheRnd.EndDrawing();
+        return mat->GetColor().red;
+    }
+    // Covered for a while, then uncovered with the first uncovered answer a
+    // frame late. Returns the strengths from the last covered frame on.
+    std::vector<float> UncoverWithALateAnswer(FakeTester &t, PointTestStandIns *standIns) {
+        for (int i = 0; i < 8; i++) FrameNoWait(t, false, 0.0f, false, standIns);
+        std::vector<float> seq;
+        seq.push_back(FrameNoWait(t, false, 0.0f, false, standIns));
+        seq.push_back(FrameNoWait(t, true, 1.0f, true, standIns));
+        for (int i = 0; i < 7; i++) seq.push_back(FrameNoWait(t, true, 1.0f, false, standIns));
+        return seq;
+    }
 };
 
 TEST_F(FlareOcclusionTest, InViewFlareIsQueuedWithItsRect) {
@@ -217,6 +298,90 @@ TEST_F(FlareOcclusionTest, OccludedFlareGoesOutAndStepsBackIn) {
     EXPECT_NEAR(back[2], 0.4f, 1e-3f);
     EXPECT_NEAR(back[3], 0.6f, 1e-3f);
     EXPECT_NEAR(back[5], 1.0f, 1e-3f);
+}
+
+// DC3 does not wait after the submit for point-test answers that were not ready
+// at world end (round 3): an answer is sometimes a frame late. Retail
+// RndFlare::DrawShowing reads a frame without an answer as a flare just come
+// into view and snaps mStep to the end of its fade on the next one, so a
+// steps-5 flare (CouchFlare*, rollerrink's food and disco-ball flares) whose
+// uncovering answer is late pops from 0 to full. The late key's last answer
+// stands in (PointTestStandIns), and the flare fades in a frame later instead.
+//
+// Sabotage tried (each fails this test or the next): Deliver delivers nothing;
+// Note keeps the first answer instead of the latest; Forget leaves the entry;
+// kPointTestWaitAfterSubmit true for dc3-decomp.
+TEST_F(FlareOcclusionTest, LateAnswerStillFadesInRatherThanPopping) {
+    FakeTester t;
+    ScopedTester st(&t);
+    // Control: without a stand-in the scenario does pop, so it can tell.
+    held.clear();
+    std::vector<float> bare = UncoverWithALateAnswer(t, nullptr);
+    float bareJump = 0.0f;
+    for (size_t i = 1; i < bare.size(); i++) bareJump = std::max(bareJump, bare[i] - bare[i - 1]);
+    ASSERT_GT(bareJump, 0.5f) << "control: a late answer with no stand-in should snap";
+
+    // A fresh flare state, then the same frames with stand-ins.
+    for (int i = 0; i < 3; i++) Frame(t, false, 0.0f);
+    held.clear();
+    PointTestStandIns standIns;
+    std::vector<float> seq = UncoverWithALateAnswer(t, &standIns);
+    for (size_t i = 1; i < seq.size(); i++)
+        EXPECT_LE(seq[i] - seq[i - 1], 0.2f + 1e-3f)
+            << "frame " << i << ": " << seq[i - 1] << " -> " << seq[i]
+            << " (steps 5: at most 1/5 a frame)";
+    EXPECT_NEAR(seq[1], 0.0f, 1e-4f) << "the late frame keeps the covered answer";
+    EXPECT_NEAR(seq[3], 0.2f, 1e-3f) << "the fade starts a frame later than on time";
+    EXPECT_NEAR(seq.back(), 1.0f, 1e-3f) << "and completes";
+}
+
+TEST_F(FlareOcclusionTest, StandInsFollowTheLatestAnswerAndForgetCancelledKeys) {
+    PointTestStandIns s;
+    int k1 = 0, k2 = 0;
+    PointTestPass::Answer a;
+    a.key = &k1;
+    a.pointDone = true;
+    a.visible = true;
+    a.areaDone = true;
+    a.area = 10.0f;
+    s.Note(a);
+    a.visible = false;
+    a.area = 3.0f;
+    s.Note(a);
+    std::vector<PointTestPass::Answer> got;
+    auto collect = [](const PointTestPass::Answer &x, void *u) {
+        static_cast<std::vector<PointTestPass::Answer> *>(u)->push_back(x);
+    };
+    EXPECT_EQ(s.Deliver({&k1, &k2, &k1}, collect, &got), 1)
+        << "one stand-in per key; none for a key never answered";
+    ASSERT_EQ(got.size(), 1u);
+    EXPECT_FALSE(got[0].visible) << "the latest answer, not the first";
+    EXPECT_FLOAT_EQ(got[0].area, 3.0f);
+    s.Forget(&k1);
+    got.clear();
+    EXPECT_EQ(s.Deliver({&k1}, collect, &got), 0) << "a cancelled flare gets no stand-in";
+}
+
+// The shape constant, and that the frame end really does not block: real
+// flare tests through WgpuRnd's PointTestPass over several frames.
+TEST_F(FlareOcclusionTest, DC3FrameEndDoesNotWaitForPointTests) {
+    EXPECT_FALSE(rndshape::kPointTestWaitAfterSubmit)
+        << "dc3-decomp takes a late answer instead of waiting after the submit";
+    if (!gWgpuRnd || !gWgpuRnd->Gpu().IsReady()) return;  // no device: the constant is the test
+    const uint64_t waits = gWgpuRnd->PointTestEndWaits();
+    int queued = 0;
+    for (int i = 0; i < 6; i++) {
+        TheRnd.BeginDrawing();
+        RndCam *prev = RndCam::Current();
+        cam->Select();
+        flare->DrawShowing();
+        queued += gWgpuRnd->PendingPointTests();
+        if (prev) prev->Select();
+        TheRnd.EndDrawing();
+    }
+    ASSERT_GT(queued, 0) << "no flare test reached the GPU pass: the check below would be vacuous";
+    EXPECT_EQ(gWgpuRnd->PointTestEndWaits(), waits)
+        << "FinishPointTestReadback blocked on a readback";
 }
 
 TEST_F(FlareOcclusionTest, TesterRefusalKeepsTheUnoccludedFallback) {
