@@ -58,6 +58,9 @@ Inside the body (was lines 142-151):
     // follow the clamp order in both builds; nothing tried moved the sort.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.500, 2 non-equal row(s): The two
+register rows re-associate the OR of the three ClampEq results; integer OR, exact. NOT A
+BUG.
 
 ## `?Set@Plane@@QAAXABVVector3@@00@Z`
 
