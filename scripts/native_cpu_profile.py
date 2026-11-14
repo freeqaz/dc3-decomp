@@ -237,6 +237,9 @@ def main():
     ap.add_argument("--skip-results", action="store_true")
     ap.add_argument("--log", default=None)
     a = ap.parse_args()
+    if a.perf:
+        # perf record cannot create its -o directory, and its stderr is not shown
+        os.makedirs(a.perf, exist_ok=True)
 
     root = seed_root()
     portfile = os.path.join(root, "http_port")
