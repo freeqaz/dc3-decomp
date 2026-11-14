@@ -15,12 +15,19 @@ Which frame is shown:
     song time 0, measured by polling the game's own debug server
     ({taskmgr seconds} on game_screen, median of the last 15 samples), and
     PRE is how many seconds of clip come before song time 0;
-  * past the clip's end, its last frame.
+  * past the clip's end, its last frame;
+  * past HOLD seconds of clip (when given), the frame at HOLD: the person
+    stays where the dance ended.  The clips are cut from a Perform session,
+    and a mode that plays more of the song than Perform does (Dance Battle's
+    Macarena runs on after Perform's 155.8 s end) otherwise shows the
+    dancer walking out of the picture -- which paused the game, correctly,
+    in soak #5 (PLAN H-26: at clip 161-166 s she walks up to the camera and
+    sits down; the pause came at song time 161.4 s).
 
 Clips: --video FILE from the command line (and DC3_FOOTAGE_PRE, default 8),
-or, when DC3_FOOTAGE_CONTROL names a file, the clip and pre-roll written there
-("CLIP PRE" on one line; re-read every half second), so a driver can change
-the dancer between songs.  make_footage.py cuts clips in this shape.
+or, when DC3_FOOTAGE_CONTROL names a file, the clip, pre-roll and optional
+hold written there ("CLIP PRE [HOLD]" on one line; re-read every half
+second), so a driver can change the dancer between songs.  make_footage.py cuts clips in this shape.
 
 Needs DC3_HTTP_PORT_FILE (play.sh sets it) to find the game.  Without it the
 clip just plays from the start, like pose_server.py --video.
@@ -116,7 +123,7 @@ class Sync:
 
 class Cap:
     def __init__(self, path):
-        self.default = (path, PRE)
+        self.default = (path, PRE, None)
         self.sync = Sync() if PORT_FILE else None
         self.cap = None
         self.clip = None
@@ -124,7 +131,7 @@ class Cap:
         self.last_control = 0.0
         self.open(*self.default)
 
-    def open(self, path, pre):
+    def open(self, path, pre, hold=None):
         if self.cap is not None:
             self.cap.release()
         self.cap = real_cv2.VideoCapture(path)
@@ -135,9 +142,11 @@ class Cap:
         self.cur = self.first
         self.idx = 0
         self.eof = not ok
-        self.clip = (path, pre)
+        self.clip = (path, pre, hold)
         self.pre = pre
-        log(f"clip {path} (pre-roll {pre:.2f} s, {self.fps:.2f} fps)")
+        self.hold = hold
+        log(f"clip {path} (pre-roll {pre:.2f} s, {self.fps:.2f} fps"
+            + (f", held from {hold:.2f} s" if hold is not None else "") + ")")
 
     def control(self):
         if not CONTROL or time.time() - self.last_control < 0.5:
@@ -150,7 +159,8 @@ class Cap:
             self.control_mtime = st.st_mtime
             with open(CONTROL) as f:
                 parts = f.read().split()
-            want = (parts[0], float(parts[1]) if len(parts) > 1 else PRE)
+            want = (parts[0], float(parts[1]) if len(parts) > 1 else PRE,
+                    float(parts[2]) if len(parts) > 2 else None)
         except (OSError, ValueError, IndexError):
             return
         if want != self.clip:
@@ -184,6 +194,8 @@ class Cap:
             # clip from its start (want < idx - 1 below).
             return True, self.cur.copy()
         t = (time.time() - w0 + self.pre) if w0 is not None else None
+        if t is not None and self.hold is not None and t > self.hold:
+            t = self.hold
         want = int(t * self.fps) if t is not None else self.idx + 1
         if want < 0:
             # Before the clip's first frame (a count-in longer than the

@@ -143,6 +143,35 @@ class Kit:
             pass
         return None
 
+    def tree_rss(self):
+        """{"<comm>[<pid>]": RSS kB} for play.sh and every process under it
+        (the game, the pose server, ffmpeg ...): memory per process at a leg
+        boundary (PLAN H-24 wants the numbers, not only the game's)."""
+        kids = {}
+        for d in os.listdir("/proc"):
+            if not d.isdigit():
+                continue
+            try:
+                with open(f"/proc/{d}/stat") as f:
+                    st = f.read()
+                ppid = int(st.rsplit(")", 1)[1].split()[1])
+                kids.setdefault(ppid, []).append(int(d))
+            except (OSError, ValueError, IndexError):
+                pass
+        out, todo = {}, [self.proc.pid]
+        while todo:
+            pid = todo.pop()
+            todo.extend(kids.get(pid, []))
+            try:
+                comm = open(f"/proc/{pid}/comm").read().strip()
+                rss = next((int(l.split()[1]) for l in open(f"/proc/{pid}/status")
+                            if l.startswith("VmRSS:")), 0)
+            except (OSError, ValueError, StopIteration):
+                continue
+            if rss:
+                out[f"{comm}[{pid}]"] = rss
+        return out
+
     def wait_port(self, timeout=240):
         pf = os.path.join(self.session, "http_port")
         end = time.time() + timeout
@@ -354,9 +383,17 @@ class Kit:
             if got == "startgame_practice_screen":
                 if not self.choose("break_it_down_title_song"):
                     raise RuntimeError("startgame_practice_screen has no break_it_down_title_song")
-                got = self.need(("practice_confirm_screen", "game_screen"), 120)
+                got = self.need(("practice_confirm_screen", "practice_welcome_screen",
+                                 "game_screen"), 180)
                 if got == "practice_confirm_screen":
                     self.choose("ok")  # the dialog's rows are ok / no
+                    got = self.need(("practice_welcome_screen", "game_screen"), 180)
+            if got == "practice_welcome_screen":
+                # After the load: practice_all / practice_choose / perform
+                # (ui/practice/practice_welcome.dta); the whole song, move by
+                # move, is practice_all.
+                if not self.choose("practice_all"):
+                    raise RuntimeError("practice_welcome_screen has no practice_all")
             return self.need(("game_screen",), 120)
         return self.multiuser(difficulty)
 

@@ -147,6 +147,15 @@ def advance(kit, targets, timeout, prefer=("continue", "done", "play_again_no", 
     return None
 
 
+# Song time (s) at which the footage's dancer stops dancing, where a mode can
+# play past it.  The clips come from a Perform session; Dance Battle's
+# Macarena runs past Perform's end (155.8 s) and the dancer walks out of the
+# picture from clip 161 s = song 153 s (frames checked, PLAN H-26).  The
+# feeder holds her last dancing frame from here on.
+# Only the Battle (duo) clips are held: Perform ends inside the dance.
+DANCE_END = {"macarena": 153.0}
+
+
 def footage(dirn, song, duo=False):
     p = os.path.join(dirn, f"{song}{'_duo' if duo else ''}.mp4")
     return p if os.path.exists(p) else None
@@ -167,8 +176,10 @@ class Soak:
 
     def clip(self, path):
         self.current_clip = path
+        name = os.path.basename(path).rsplit(".", 1)[0]
+        end = DANCE_END.get(name[:-4]) if name.endswith("_duo") else None
         with open(self.control + ".tmp", "w") as f:
-            f.write(f"{path} {self.a.pre}\n")
+            f.write(f"{path} {self.a.pre}" + (f" {self.a.pre + end}" if end else "") + "\n")
         os.replace(self.control + ".tmp", self.control)
         say(f"footage: {os.path.basename(path)}")
 
@@ -225,6 +236,7 @@ class Soak:
         t = time.time()
         rec = {"leg": name, "start_min": round((t - T0) / 60, 2), "process": f"proc{self.n}"}
         say(f"== {name}")
+        rec["mem_start_kb"] = self.kit.tree_rss() if self.kit else {}
         try:
             rec.update(fn(*args) or {})
             rec["ok"] = rec.get("ok", True)
@@ -236,6 +248,11 @@ class Soak:
             rec["screen"] = self.kit.screen()
             say(f"== {name} FAILED: {e}")
         rec["minutes"] = round((time.time() - t) / 60, 2)
+        rec["mem_end_kb"] = self.kit.tree_rss() if self.kit and self.kit.alive() else {}
+        rec["leg_load"] = load_over(t, time.time())
+        mem = ", ".join(f"{k} {v / 1024:.0f} MB" for k, v in sorted(rec["mem_end_kb"].items())
+                        if v > 20 * 1024)
+        say(f"== {name} done in {rec['minutes']} min; box load {rec['leg_load']}; memory {mem}")
         self.results["legs"].append(rec)
         return rec
 
@@ -363,8 +380,14 @@ class Soak:
             lst = k.focus_list()
             if k.has_row(lst, "pausecommand_mainmenu"):
                 k.choose("pausecommand_mainmenu")
+            elif k.has_row(lst, "pausecommand_quit"):
+                # Rehearse's welcome screen has no Main Menu row and ignores
+                # Back (measured: 90 s of presses); its quit row leaves the song.
+                k.choose("pausecommand_quit")
             elif s and "confirm" in s and k.has_row(lst, "ok"):
                 k.choose("ok")
+            elif s == "game_screen":
+                k.press("start")   # a song (Rehearse's time box): its pause menu
             else:
                 k.press("cancel")
             time.sleep(3)
@@ -519,7 +542,9 @@ def report(res, out):
              f"{len(res['legs'])} legs"]
     for l in res["legs"]:
         c = l.get("card") or {}
+        ld = l.get("leg_load") or {}
         lines.append(f"  {'ok ' if l.get('ok') else 'BAD'} {l['leg']:<28} {l['minutes']:5.1f} min"
+                     + (f"  load {ld.get('mean')}/{ld.get('max')}" if ld else "")
                      + (f"  {l.get('results_screen')}: perfect {c.get('num_perfect')} awesome "
                         f"{c.get('num_awesome')} score {c.get('score')}" if c else "")
                      + (f"  p2 score {l['card_p2'].get('score')}"
