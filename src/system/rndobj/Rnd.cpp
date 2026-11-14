@@ -579,6 +579,37 @@ void Rnd::EndDrawing() {
     mFrameID++;
 }
 
+#ifdef HX_NATIVE
+#include "platform/PointTestHook.h"
+
+namespace {
+// The answers to a flare test queued by TestPoint, delivered by the engine's
+// GPU backend at world end one frame after the test was queued -- where
+// retail DxRnd::DoPointTests (rnddx9/Rnd_Xbox.cpp) reads back the previous
+// frame's occlusion queries:
+//   point query -> SetOcclusionReady(true), SetVisible(samples != 0)
+//   area query  -> SetOcclusionResult(samples), SetOcclusionReady(true)
+// RndFlare::DrawShowing steps mStep toward mVisible one step per frame and
+// scales by mOcclusionResult / rect area, so a flare that goes behind a dancer
+// fades out over mSteps frames and a half-covered one draws at half strength.
+void ApplyNativePointTest(const NativePointTestResult &r) {
+    RndFlare *flare = (RndFlare *)r.key;
+    if (r.pointDone) {
+        flare->SetOcclusionReady(true);
+        // Retail issues a flare without an area test and then, in the same
+        // DoPointTests, sets it ready and visible -- after this frame's
+        // answers were applied -- so such a flare ends every frame visible.
+        // mAreaTest is never loaded (always true on shipped flares).
+        flare->SetVisible(flare->GetAreaTest() ? r.visible : true);
+    }
+    if (r.areaDone) {
+        flare->SetOcclusionResult(r.area);
+        flare->SetOcclusionReady(true);
+    }
+}
+}
+#endif
+
 void Rnd::TestPoint(const Vector3 &pos, RndFlare *flare) {
     if (TheHiResScreen.IsActive())
         return;
@@ -592,12 +623,46 @@ void Rnd::TestPoint(const Vector3 &pos, RndFlare *flare) {
         if (depth >= cam->NearPlane() && depth <= cam->FarPlane()
             && screen.x >= 0.0f && screen.y >= 0.0f && screen.x < 1.0f && screen.y < 1.0f) {
 #ifdef HX_NATIVE
-            // Native: no GPU occlusion query — treat in-view flares as fully visible.
-            // Retail draws the flare's rect (set by CalcRect just before this call)
-            // as an occlusion query and stores the visible pixel count, which
-            // RndFlare divides by the rect's area when mAreaTest is on. Unoccluded,
-            // that count is the rect's on-screen area; a constant 1.0 would leave
-            // an area-tested flare at ~1/(w*h) strength.
+            // Retail queues {x, y, ProjectZ(depth)} for DxRnd::DoPointTests'
+            // occlusion queries; native, the engine's GPU backend runs them
+            // (platform/PointTestHook.h, gfx/PointTestPass) against the
+            // world's depth at world end and answers through
+            // ApplyNativePointTest a frame later. The backend projects the
+            // depth itself, so it gets the tested point, plus the area rect
+            // mArea that CalcRect set in DrawShowing just before this call.
+            if (NativePointTester *tester = GetNativePointTester()) {
+                SetNativePointTestResultFn(ApplyNativePointTest);
+                const Hmx::Rect &r = flare->GetArea();
+                NativePointTest t;
+                t.key = flare;
+                t.world[0] = pos.x;
+                t.world[1] = pos.y;
+                t.world[2] = pos.z;
+                t.screenX = screen.x;
+                t.screenY = screen.y;
+                t.rect[0] = r.x;
+                t.rect[1] = r.y;
+                t.rect[2] = r.w;
+                t.rect[3] = r.h;
+                t.screenW = (float)mWidth;
+                t.screenH = (float)mHeight;
+                t.pointTest = flare->GetPointTest();
+                t.areaTest = flare->GetAreaTest();
+                if (tester->QueuePointTest(t)) {
+                    if (!t.areaTest) {
+                        // DoPointTests' else arm, at issue time.
+                        flare->SetOcclusionReady(true);
+                        flare->SetVisible(true);
+                    }
+                    return;
+                }
+            }
+            // No occlusion queries (headless, or no frame to test against):
+            // treat in-view flares as fully visible. Retail draws the flare's
+            // rect as an occlusion query and stores the visible pixel count,
+            // which RndFlare divides by the rect's area when mAreaTest is on.
+            // Unoccluded, that count is the rect's on-screen area; a constant
+            // 1.0 would leave an area-tested flare at ~1/(w*h) strength.
             flare->SetVisible(true);
             const Hmx::Rect &a = flare->GetArea();
             float w = Min<float>((float)mWidth, a.x + a.w) - Max(0.0f, a.x);
@@ -626,6 +691,11 @@ void Rnd::TestPoint(const Vector3 &pos, RndFlare *flare) {
 }
 
 void Rnd::RemovePointTest(RndFlare *flare) {
+#ifdef HX_NATIVE
+    // Queued and in-flight native tests hold the flare too (TestPoint).
+    if (NativePointTester *tester = GetNativePointTester())
+        tester->CancelPointTests(flare);
+#endif
     if (!TheHiResScreen.IsActive()) {
         for (std::list<PointTest>::iterator it = mPointTests.begin();
              it != mPointTests.end();) {
