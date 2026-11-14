@@ -286,8 +286,11 @@ variable that is already set always wins** (`DC3_HTTP=0` turns the server off
 under dev, `DC3_DEV_OPTIONS=1` shows the rows under release). `release` sets
 nothing, so it is the player build: each variable's compiled default, as before
 the profile existed. Web: `?profile=release`, or `?env=DC3_PROFILE=release`.
-Startup prints `DC3 Native: profile=dev (...)` and the rows it applied, or
-`profile=release`.
+Startup prints `DC3 Native: profile=dev (...)` and the rows it applied (for
+scripts), then a boxed banner for a person: one `| on` line per row with its
+switch (`off: DC3_HTTP=0`), `| off` for a row you turned off, the main opt-in
+switches, and `DC3_PROFILE=release turns all of it off`. Release prints
+`profile=release` and no banner.
 
 | Variable | What it gives you | Before | dev | release | Why on in dev |
 |---|---|---|---|---|---|
@@ -316,7 +319,7 @@ original in a way that invalidates testing it, or cost real time
 
 | Variable | Why it stays opt-in |
 |---|---|
-| `DC3_FAST_BOOT` | Skips the boot screens (attract, autosave warning, title). Close call: handy, but then you never see the original's boot flow |
+| `DC3_FAST_BOOT` | Not a dev default: it advances past `title_screen` without the confirm that sets the initial profiles and `$post_load_dest_screen`, and skips the voice-control first-run tutorial (`src/system/ui/UI.cpp`, the `sBoot` table; read from the code, 2026-11-14), so a playtester would never see the profile setup and first-run prompts |
 | `DC3_FAST_TIME`, `DC3_POSE_SELFTEST`, `DC3_POSE_PERFORM`, `DC3_DUMMY_PLAYERS` | Change timing or fake a player |
 | `DC3_POSE_LATENCY_MS` and the pose knobs | Owned by the tracking lane |
 | `MILO_FATAL_FAILS`, `MILO_MAX_FRAMES` | Change how a run ends |
@@ -324,7 +327,7 @@ original in a way that invalidates testing it, or cost real time
 | `DC3_SCORING_DEBUG`, `MILO_DEBUG_UI_FLOW`, `DC3_TEL=1` | Close calls: per-second or per-frame floods |
 | `MILO_CAM_DEBUG`, the camera-blend enhancement, the ImGui panel open at boot | Change the picture; the panel is one `` ` `` away |
 | Unlock-all (`cheats.dta` `a`) | Its `HasCheated` side effect turns off autosave (removed as a default in `3126df522`) |
-| Keyboard cheats (Alt+D, `a`, ...) | Not reachable natively at all (`EnableKeyCheats` is `#ifndef HX_NATIVE`, and no GLFW key callback feeds Milo key messages); plain-key cheats would also clash with the keyboard-as-pad map. PLAN H-18 |
+| Keyboard cheats (Alt+D, `a`, ...) | Not reachable natively at all (`EnableKeyCheats` is `#ifndef HX_NATIVE`, and no GLFW key callback feeds Milo key messages); plain-key cheats would also clash with the keyboard-as-pad map. PLAN H-22 |
 
 Tests: `Dc3ProfileTest.*` (in-process, the table and the apply rules),
 `HeadlessBootTest.DevProfileIsTheDefault` / `ReleaseProfileIsThePlayerBuild` (a
