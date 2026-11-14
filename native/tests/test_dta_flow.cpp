@@ -1348,6 +1348,7 @@ static std::string GetDlcDir() {
     return GetBinaryDir() + "/../../orig-assets/dlc";
 }
 static constexpr const char *kMilkshakePackage = "dancecentral2dlcmegapack";
+static constexpr int kDlcFlowFrames = 5000;
 
 class DlcSongFlowTest : public ControllerModeFlowTest {
 protected:
@@ -1364,7 +1365,10 @@ protected:
         if (!getenv("DC3_DTA_FLOW_TESTS") || sRanEngine || !HavePackage()) return;
         // DC3_TAG_MODALS prints the "Could not load:" notify a subdir that
         // resolved into the package raises.  game_screen ~frame 2000 and
-        // gameStage=playing ~2500 (headless, no GPU).
+        // gameStage=playing ~2500 (headless, no GPU) on an idle box -- but the
+        // song intro waits on asynchronous loading, so under gate load it costs
+        // ~3x the frames: a 3600-frame cap was reached at frame 3598, one frame
+        // short of playing.  kDlcFlowFrames leaves room; the wall clock bounds it.
         // A root holding only this package, so other packages imported next
         // to it cannot move Milkshake in the song list (the flow counts downs).
         char tmpl[] = "/tmp/dc3-dlc-root-XXXXXX";
@@ -1376,7 +1380,7 @@ protected:
             return;
         }
         sEnv = std::string("DC3_TAG_MODALS=1 DC3_DLC_DIR=") + root;
-        sResult = RunDtaFlow(3600, 180, "milkshake.txt", sEnv.c_str(), true, kTutorialGeneral);
+        sResult = RunDtaFlow(kDlcFlowFrames, 240, "milkshake.txt", sEnv.c_str(), true, kTutorialGeneral);
         sRanEngine = true;
     }
     // The first boot writes the song cache (SongMgr's "songcache" container,
@@ -1385,7 +1389,7 @@ protected:
     // own process, so a suite-level second boot would be paid twice.
     static void EnsureWarmBoot() {
         if (sRanWarm || !sResult.setupError.empty()) return;
-        sWarm = RunDtaFlow(3600, 180, "milkshake.txt", sEnv.c_str(), true, kTutorialGeneral,
+        sWarm = RunDtaFlow(kDlcFlowFrames, 240, "milkshake.txt", sEnv.c_str(), true, kTutorialGeneral,
                            sResult.persistenceRoot);
         sRanWarm = true;
     }
