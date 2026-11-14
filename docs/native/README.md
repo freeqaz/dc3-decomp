@@ -45,10 +45,14 @@ Keyboard (windowed; printed once at startup as `DC3 Native: keys: ...`):
 | Esc, Backspace | B | | Q / E | LB / RB |
 | X | X | | Z / C | LT / RT |
 | Y | Y (Options on the shell help bar) | | **Ctrl+Q** | **quit** |
+| F11, Alt+Enter | fullscreen toggle | | | |
 
 Esc is B, not quit: quit with Ctrl+Q or by closing the window (both rc 0).
 Space opens the pause menu but does not close it, as on the 360 (PLAN G-13);
-resume with Continue. A key held with Ctrl, Alt or Super is not a pad press.
+resume with Continue. A key held with Ctrl, Alt or Super is not a pad press
+(so Alt+Enter is not also A). The window can be resized or made fullscreen;
+the 1280x720 frame is scaled to fit with black bars (`MILO_FULLSCREEN=1`
+starts fullscreen; PLAN H-18).
 Debug keys: `` ` `` toggles the ImGui panel, F12 captures a frame. The map is
 the engine's (`../milo-native-engine/src/platform/JoypadKeyMap.h`); rb3 has its
 own keyboard. A GLFW gamepad gets the full Xbox layout. Saves go to

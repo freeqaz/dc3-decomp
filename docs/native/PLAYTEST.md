@@ -47,9 +47,6 @@ from a box that has it:
 scripts/playtest/bootstrap.sh --fix --assets-from free@main-box:code/milohax/dc3-decomp/orig-assets
 ```
 
-The data path must be all lower case (the game lower-cases file paths, PLAN
-H-17).
-
 ## Before every session: the check
 
 ```sh
@@ -107,6 +104,7 @@ controller mode, and 5 s without a press hands the menus back to your hands.
 | Esc, Backspace | B | | Q / E | LB / RB |
 | X | X | | Z / C | LT / RT |
 | Y | Y (Options) | | **Ctrl+Q** | **quit** |
+| F11, Alt+Enter | fullscreen | | | |
 
 Space opens the pause menu but does not close it; resume with Continue (the
 original's behaviour). The map is printed at startup.
