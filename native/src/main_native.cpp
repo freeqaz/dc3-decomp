@@ -6,6 +6,7 @@
 #include "StubTrace.h"
 #include "NativeQuit.h"
 #include "platform/JoypadKeyMap.h"
+#include "platform/ProcessSpawner_Native.h"
 #include <cstdio>
 #include <cstdlib>
 #include <csignal>
@@ -268,6 +269,14 @@ static void SignalHandler(int sig, siginfo_t *info, void *) {
 int main(int argc, char **argv) {
     setbuf(stdout, NULL); // Disable buffering so we see output before crashes
     setbuf(stderr, NULL);
+
+    // FIRST, before audio, graphics or any thread: fork the process that
+    // launches helpers (pose_server.py).  PipeWire's ALSA plugin lowers this
+    // process's RLIMIT_RTTIME to 0 when audio opens on a box without rtkit, a
+    // hard limit a child inherits and cannot raise, and MediaPipe's realtime
+    // thread then gets the pose server SIGKILLed.  The spawner keeps the
+    // limits the game was started with.  See platform/ProcessSpawner_Native.h.
+    NativeSpawner::Init();
 
     sStartTime = time(nullptr);
     Dc3InstallExitHook();

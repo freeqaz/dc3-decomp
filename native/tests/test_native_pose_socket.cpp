@@ -371,6 +371,59 @@ TEST(PoseSocketReaderTest, ADisconnectStopsTheProviderAndTellsThePlayer) {
     NativeNotice::Clear("pose");
 }
 
+// pose_server.py FLAG_NO_CAMERA (bit 1): the camera vanished mid-session (the
+// GPD's USB camera re-enumerates) and the server is reopening it.  The game
+// keeps the connection, shows one notice while the camera is gone and another
+// when it is back -- once per edge, not once per 0.1 s heartbeat.
+TEST(PoseSocketReaderTest, ACameraThatGoesAndComesBackPostsOneNoticeEach) {
+    const uint16_t kUnlevelled = 1u << 0, kNoCamera = 1u << 1;
+    FakePoseServer server;
+    ASSERT_TRUE(server.ok());
+    NativeSkeletonProvider provider;
+    ASSERT_TRUE(Connect(provider, server));
+    NativeNotice::Clear("pose");
+    ASSERT_TRUE(server.Send(PacketV2(1, 1.0, 640, 480, kNumJoints, 1, { Dc3Person(1, 0.0f) },
+                                     -1, kUnlevelled)));
+    ASSERT_TRUE(WaitForFrame(provider, 1));
+    EXPECT_FALSE(provider.CameraMissing());
+    EXPECT_EQ(NativeNotice::Text("pose"), "");
+
+    // The camera goes: zero-person heartbeats carrying the flag.
+    ASSERT_TRUE(server.Send(PacketV2(2, 1.1, 640, 480, kNumJoints, 1, {}, -1,
+                                     kUnlevelled | kNoCamera)));
+    ASSERT_TRUE(WaitForFrame(provider, 2));
+    EXPECT_TRUE(provider.CameraMissing());
+    EXPECT_TRUE(provider.IsRunning()) << "a missing camera must not drop the server";
+    EXPECT_EQ(provider.NumPersons(), 0);
+    EXPECT_EQ(NativeNotice::Text("pose"), NativeSkeletonProvider::CameraLostProblem().text);
+    NativeNotice::View v;
+    ASSERT_TRUE(NativeNotice::Current(v));
+    EXPECT_TRUE(v.banner);
+    EXPECT_TRUE(provider.LastProblem().empty()) << "paused, not failed";
+
+    // More heartbeats do not post it again.
+    NativeNotice::Clear("pose");
+    for (uint32_t id = 3; id <= 6; id++)
+        ASSERT_TRUE(server.Send(PacketV2(id, 1.0 + id * 0.1, 640, 480, kNumJoints, 1, {}, -1,
+                                         kUnlevelled | kNoCamera)));
+    ASSERT_TRUE(WaitForFrame(provider, 6));
+    EXPECT_EQ(NativeNotice::Text("pose"), "") << "re-posted on every heartbeat";
+
+    // The camera is back.
+    ASSERT_TRUE(server.Send(PacketV2(7, 2.0, 640, 480, kNumJoints, 1, { Dc3Person(1, 0.0f) },
+                                     -1, kUnlevelled)));
+    ASSERT_TRUE(WaitForFrame(provider, 7));
+    EXPECT_FALSE(provider.CameraMissing());
+    EXPECT_EQ(provider.NumPersons(), 1);
+    EXPECT_EQ(NativeNotice::Text("pose"), NativeSkeletonProvider::CameraBackNotice().text);
+    NativeNotice::Clear("pose");
+    ASSERT_TRUE(server.Send(PacketV2(8, 2.1, 640, 480, kNumJoints, 1, { Dc3Person(1, 0.0f) },
+                                     -1, kUnlevelled)));
+    ASSERT_TRUE(WaitForFrame(provider, 8));
+    EXPECT_EQ(NativeNotice::Text("pose"), "");
+    provider.Stop();
+}
+
 // ===========================================================================
 // PoseCocoMappingTest -- the layout-0 path (any external COCO-17 source)
 // ===========================================================================
@@ -831,6 +884,74 @@ TEST(PoseServerExitTest, EachServerExitCodeHasItsOwnMessage) {
               std::string::npos);
     EXPECT_EQ(P::DescribeServerExit(11 /* SIGSEGV */, 0).brief,
               "Pose server crashed: pose tracking off");
+    const std::string byId = "usb-SunplusIT_Inc_Integrated_Camera_JX20250923V2-video-index0";
+    EXPECT_NE(P::DescribeServerExit(P::kExitNoCamera << 8, byId).text.find("camera " + byId),
+              std::string::npos);
+    EXPECT_NE(P::DescribeServerExit(P::kExitNoCamera << 8, "auto").text.find("camera auto"),
+              std::string::npos);
+}
+
+// DC3_POSE_CAMERA reaches pose_server.py --camera as given, and unset is
+// "auto" -- never a fixed index, which named a /dev/video node that no longer
+// existed after the GPD's camera re-enumerated.
+TEST(PoseServerStartTest, TheCameraSpecReachesTheServerAsGivenAndDefaultsToAuto) {
+    const char *tmp = getenv("TMPDIR");
+    std::string dir = std::string((tmp && *tmp) ? tmp : "/tmp") + "/dc3_pose_stub_XXXXXX";
+    std::vector<char> buf(dir.begin(), dir.end());
+    buf.push_back('\0');
+    ASSERT_NE(mkdtemp(buf.data()), nullptr);
+    std::string stubDir(buf.data());
+    std::string stub = stubDir + "/python3";
+    std::string argsFile = stubDir + "/args";
+    FILE *f = fopen(stub.c_str(), "w");
+    ASSERT_NE(f, nullptr);
+    fprintf(f, "#!/bin/sh\nprintf '%%s\\n' \"$@\" > '%s'\nexit %d\n", argsFile.c_str(),
+            (int)NativeSkeletonProvider::kExitNoCamera);
+    fclose(f);
+    chmod(stub.c_str(), 0755);
+    const char *oldPath = getenv("PATH");
+    std::string path = stubDir + ":" + (oldPath ? oldPath : "/usr/bin:/bin");
+    ScopedEnv envPath("PATH", path.c_str());
+    ScopedEnv noSpawn("DC3_POSE_NO_SPAWN", nullptr);
+
+    auto cameraArg = [&]() {
+        std::string out;
+        FILE *a = fopen(argsFile.c_str(), "r");
+        if (!a) return std::string("<no args file>");
+        char line[512];
+        bool next = false;
+        while (fgets(line, sizeof(line), a)) {
+            std::string l(line);
+            if (!l.empty() && l.back() == '\n') l.pop_back();
+            if (next) { out = l; break; }
+            next = (l == "--camera");
+        }
+        fclose(a);
+        unlink(argsFile.c_str());
+        return out;
+    };
+    std::string sock = stubDir + "/never.sock";
+    {
+        NativeSkeletonProvider provider;
+        EXPECT_FALSE(provider.Start(sock, "unused.task"));
+        EXPECT_EQ(cameraArg(), "auto");
+        EXPECT_NE(provider.LastProblem().text.find("camera auto"), std::string::npos);
+    }
+    {
+        NativeSkeletonProvider provider;
+        const std::string byId = "/dev/v4l/by-id/usb-Fake_Camera-video-index0";
+        EXPECT_FALSE(provider.Start(sock, "unused.task", byId));
+        EXPECT_EQ(cameraArg(), byId);
+        EXPECT_NE(provider.LastProblem().text.find(byId), std::string::npos);
+    }
+    {
+        NativeSkeletonProvider provider;
+        EXPECT_FALSE(provider.Start(sock, "unused.task", 2));
+        EXPECT_EQ(cameraArg(), "2");
+    }
+    NativeNotice::Clear("pose");
+    unlink(stub.c_str());
+    rmdir(stubDir.c_str());
 }
 
 // A python3 that behaves like pose_server.py on a box with no camera: it exits

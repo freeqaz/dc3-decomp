@@ -233,15 +233,19 @@ void GestureMgr_NativeInit() {
     }
 
     const char *poseMode = getenv("DC3_POSE");
+    // DC3_POSE_CAMERA goes to pose_server.py --camera as is: unset or "auto"
+    // = the first V4L2 video-capture device, re-resolved whenever the server
+    // reopens it (a USB camera re-enumerates under a new /dev/videoN); also an
+    // index, a /dev/videoN path or a /dev/v4l/by-id name.
     const char *camStr = getenv("DC3_POSE_CAMERA");
-    int camIdx = camStr ? atoi(camStr) : 0;
+    std::string camSpec = (camStr && *camStr) ? camStr : "auto";
 
 #ifdef __EMSCRIPTEN__
     // Web: nothing to spawn or connect to.  The provider is created idle; the
     // page's camera pipeline starts it with its first dc3_pose_push
     // (PoseInput_Web.cpp) and stops it when the camera goes away.  Until then
     // BuildSensorFrame feeds the dummy, exactly as with no provider.
-    (void)camIdx;
+    (void)camSpec;
     if ((!poseMode || strcmp(poseMode, "off") != 0) && !TheSkeletonProvider) {
         TheSkeletonProvider = new NativeSkeletonProvider();
         printf("Native: web pose provider ready (waiting for dc3_pose_push)\n");
@@ -271,7 +275,7 @@ void GestureMgr_NativeInit() {
             // (tools/pose_corpus/bench_model_z.py, bench_detection.py).
             std::string modelPath = GestureMgr_NativePoseModelPath();
 
-            if (TheSkeletonProvider->Start(socketPath, modelPath, camIdx)) {
+            if (TheSkeletonProvider->Start(socketPath, modelPath, camSpec)) {
                 printf("Native: external pose server started\n");
             } else {
                 printf("Native: pose tracking unavailable (pose server did not start)\n");

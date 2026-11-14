@@ -1207,6 +1207,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Keyboard_Native.cpp
     src/platform/Synth_Stub.cpp
     src/platform/Skeleton_Native.cpp
+    src/platform/ProcessSpawner_Native.cpp # pose_server.py launched from a pristine fork (RLIMIT_RTTIME)
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
@@ -1394,6 +1395,7 @@ set(DC3_WEB_CORE_SOURCES
     # File_Web.cpp / CDReader_Web.cpp / WebAssets.cpp lifted to milo-engine
     # (MILO_BUILD_WEB platform layer, W0).
     src/platform/Skeleton_Native.cpp
+    src/platform/ProcessSpawner_Native.cpp # pose_server.py launched from a pristine fork (RLIMIT_RTTIME)
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
@@ -2053,6 +2055,7 @@ if(BUILD_TESTS)
         tests/test_native_pose_dropout.cpp
         tests/test_native_second_person.cpp
         tests/test_native_pose_socket.cpp
+        tests/test_native_pose_spawner.cpp
         tests/test_native_tree_paths.cpp
         tests/test_movie_audio.cpp
         tests/test_texrenderer_clear.cpp

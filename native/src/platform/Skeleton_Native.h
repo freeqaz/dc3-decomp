@@ -54,8 +54,20 @@ public:
     };
 
     // The problem the server's exit says it had.  `waitStatus` is waitpid's
-    // status word; `cameraIndex` names the camera in the message.
-    static Problem DescribeServerExit(int waitStatus, int cameraIndex);
+    // status word; `camera` (pose_server.py --camera: auto, an index, a path or
+    // a /dev/v4l/by-id name) names the camera in the message.
+    static Problem DescribeServerExit(int waitStatus, const std::string &camera);
+    static Problem DescribeServerExit(int waitStatus, int cameraIndex) {
+        return DescribeServerExit(waitStatus, std::to_string(cameraIndex));
+    }
+
+    // While the server has no camera (pose_server.py FLAG_NO_CAMERA: the
+    // camera vanished mid-session -- a USB camera re-enumerating -- and the
+    // server is looking for it again), these notices are up: one when it goes,
+    // one when it is back.  The camera-lost one stays (corner line) until then.
+    static Problem CameraLostProblem();
+    static Problem CameraBackNotice();
+    bool CameraMissing() const { return mNoCamera; }
 
     // Why the last Start() failed, or why a running server stopped (the reader
     // posts it when the socket closes).  Thread-safe copy.
@@ -68,11 +80,34 @@ public:
     // cwd-relative default only ever worked from the repo root (PLAN P-10).
     static std::string DefaultModelPath();
 
+    // `camera` is passed to pose_server.py --camera as is: "auto" (the first
+    // V4L2 video-capture device, re-resolved whenever the server reopens it),
+    // an index, a /dev/videoN path or a /dev/v4l/by-id name.
     bool Start(const std::string &socketPath = "/tmp/dc3_pose.sock",
                const std::string &modelPath = DefaultModelPath(),
-               int cameraIndex = 0);
+               const std::string &camera = "auto");
+    bool Start(const std::string &socketPath, const std::string &modelPath,
+               int cameraIndex) {
+        return Start(socketPath, modelPath, std::to_string(cameraIndex));
+    }
     void Stop();
     bool IsRunning() const { return mRunning; }
+
+    // Restart-on-death.  When a server this provider launched dies after it
+    // had connected, the reader relaunches it -- at most `maxRestarts` times
+    // per Start(), waiting baseBackoffMs, then twice that, and so on -- with a
+    // one-line notice each time.  An exit that a restart cannot fix (the model
+    // or the Python packages missing, python3 not runnable, a clean exit) is
+    // not retried.  Defaults: 3 restarts, 1000 ms.  Call before Start().
+    void SetRestartPolicy(int maxRestarts, int baseBackoffMs) {
+        mMaxRestarts = maxRestarts;
+        mRestartBackoffMs = baseBackoffMs;
+    }
+    int Restarts() const { return mRestarts; }
+    // pid of the pose_server.py this provider launched, or -1.
+    int ServerPid() const { return (int)mServerPid; }
+    // Whether DescribeServerExit's exit is one a relaunch could fix.
+    static bool ServerExitIsRestartable(int waitStatus);
 
     // Publish one frame of persons into the back buffer; the next Poll() latches
     // it.  This is the provider's whole contract with its transports: the
@@ -149,18 +184,34 @@ private:
     void ReaderThread();
     // Record a problem and show it to the player (NativeNotice key "pose").
     void ReportProblem(const Problem &p);
-    void ReportServerGone(); // reader thread: the socket closed
+    // Reader thread: the socket closed.  Reports why and, for a server this
+    // provider launched, relaunches it per the restart policy.  True when a
+    // relaunched server is connected again (mSocketFd is the new socket).
+    bool ServerGone();
+    // Launch pose_server.py through NativeSpawner; sets mServerPid.
+    bool LaunchServer();
+    enum WaitResult { kConnected, kServerExited, kTimedOut, kStopped };
+    // Wait for the server's socket and connect (mSocketFd).  kServerExited
+    // fills *exitStatus.
+    WaitResult WaitForServer(int timeoutMs, int *exitStatus);
     void MapCOCOToDC3(const float cocoKpts[][3], PersonData &out);
     Vector3 NormalizedToMeters(float nx, float ny) const;
 
     std::string mSocketPath;
+    std::string mModelPath;
     int mSocketFd = -1;
     pid_t mServerPid = -1;
-    int mCameraIndex = 0;
+    bool mSpawned = false; // this provider launched the server (not DC3_POSE_NO_SPAWN)
+    std::string mCamera = "auto";
+    volatile bool mNoCamera = false; // the last packet carried FLAG_NO_CAMERA
+    int mMaxRestarts = 3;
+    int mRestartBackoffMs = 1000;
+    volatile int mRestarts = 0;
     Problem mProblem; // guarded by mSwapMutex
 
     std::thread mReaderThread;
     volatile bool mRunning = false;
+    volatile bool mStopRequested = false;
 
     // Double-buffered: reader writes to mBack, Poll() swaps to mFront
     std::mutex mSwapMutex;
