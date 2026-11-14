@@ -27,8 +27,11 @@
 //
 // Exit status: 0 = every song was listed, played through to a non-gameplay
 // screen, and (unless --no-audio) its capture is non-silent (RMS > -60 dBFS),
-// every --expect-missing name was absent, and the page threw no error (a throw
-// in the frame loop's tick stops the game). 1 = one of those failed. 2 = the
+// the game reported no file of that song it could not load ("Could not load:
+// .../songs/<song>/..." -- a missing .mogg still leaves the crowd and SFX in the
+// mix at about -25 dBFS, so the RMS check alone does not see it), every
+// --expect-missing name was absent, and the page threw no error (a throw in the
+// frame loop's tick stops the game). 1 = one of those failed. 2 = the
 // run never reached song select.
 import { mkdirSync, writeFileSync, appendFileSync, readFileSync } from 'fs';
 
@@ -91,7 +94,7 @@ page.on('requestfinished', async (req) => {
 });
 page.on('requestfailed', (req) => net.failed.push({ t: el(), url: req.url(), err: req.failure() && req.failure().errorText }));
 
-const screens = [], errors = [], audioLog = [], dropLog = [], dlcLog = [];
+const screens = [], errors = [], audioLog = [], dropLog = [], dlcLog = [], loadFails = [];
 page.on('console', (m) => {
     const e = { t: el(), type: m.type(), text: m.text() };
     appendFileSync(logf, JSON.stringify(e) + '\n');
@@ -101,6 +104,7 @@ page.on('console', (m) => {
         netMarks[mm[1]] = netMarks[mm[1]] || { t: e.t, bytes: net.bytes, requests: net.requests };
         console.log(`[${e.t}s] SCREEN ${mm[1]}`);
     }
+    if (/Could not load:/.test(e.text) && loadFails.push(e) < 40) console.log(`[${e.t}s] ${e.text.slice(0, 200)}`);
     if (/DLC song files dropped/.test(e.text)) { dropLog.push(e); console.log(`[${e.t}s] ${e.text}`); }
     if (/DC3 Web: DLC|ContentMgr|cnt[0-9a-f]{8}:/i.test(e.text)) { dlcLog.push(e); if (dlcLog.length < 40) console.log(`[${e.t}s] ${e.text.slice(0, 200)}`); }
     if (/mogg|vorbis|ogg|StreamPlayer|StandardStream|AudioDevice/i.test(e.text)) audioLog.push(e);
@@ -302,6 +306,9 @@ if (!bootOnly) {
     for (const sg of songs) {
         if (!sg.listed) { fails.push(`${sg.name}: ${sg.result}`); continue; }
         if (!/^left_gameplay_/.test(sg.result || '')) fails.push(`${sg.name}: ${sg.result}`);
+        const own = loadFails.filter((e) => e.t >= sg.tStart && e.t <= (sg.tEnd || 1e9) && e.text.includes(`/songs/${sg.name}/`));
+        sg.loadFails = own.map((e) => e.text);
+        if (own.length) fails.push(`${sg.name}: ${own.length} of its files could not load (first: ${own[0].text.slice(0, 160)})`);
         if (audio && !(sg.audio && sg.audio.rmsDb > SILENT_DB)) fails.push(`${sg.name}: capture silent or missing (${JSON.stringify(sg.audio)})`);
         const ratings = [];
         for (const s of samples) if (s.t >= (sg.tGame || 1e9) && s.t <= (sg.tEnd || 1e9) && s.game && s.game.players) {
@@ -317,7 +324,7 @@ const code = !bootOnly && !songRows ? 2 : fails.length || /^error/.test(result) 
 const boot = { mainScreen: netMarks.main_screen || null, titleScreen: netMarks.title_screen || null, attract: netMarks.attract_screen || null };
 const summary = { result, url, elapsed: el(), errors, fails, boot, net: { ...net, notFound: net.notFound.slice(0, 200) },
                   songRowCount: songRows ? songRows.length : null, missing: missingResults,
-                  songs, dropLog, dlcLog: dlcLog.slice(0, 200), audioLog: audioLog.slice(0, 300), screens, samples };
+                  songs, dropLog, loadFails: loadFails.slice(0, 200), dlcLog: dlcLog.slice(0, 200), audioLog: audioLog.slice(0, 300), screens, samples };
 writeFileSync(`${out}/summary.json`, JSON.stringify(summary, null, 1));
 console.log(`BOOT main_screen at ${boot.mainScreen && boot.mainScreen.t}s after ${boot.mainScreen && (boot.mainScreen.bytes / 1048576).toFixed(2)} MB / ${boot.mainScreen && boot.mainScreen.requests} requests; title at ${boot.titleScreen && boot.titleScreen.t}s ${boot.titleScreen && (boot.titleScreen.bytes / 1048576).toFixed(2)} MB`);
 console.log(`NET total ${(net.bytes / 1048576).toFixed(1)} MB / ${net.requests} requests, dlc ${(net.dlcBytes / 1048576).toFixed(1)} MB / ${net.dlcRequests}, 404s ${net.notFound.length}, failed ${net.failed.length}`);
