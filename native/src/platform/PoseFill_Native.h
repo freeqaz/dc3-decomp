@@ -52,10 +52,15 @@
 // the slot layer, and P-12's hold, as the camera's own frame, exactly as
 // without the fill.
 //
-// Engaged only while the camera is slow: when the median of the last
-// kWindow camera-frame intervals (song time) is over 1/kEngageHz, released
-// when it falls under 1/kReleaseHz.  A 30 Hz source never engages it, so at
-// 30 Hz every mode is the same stream as `off`.
+// Engaged only while the camera is slow: when the trimmed mean of the last
+// kWindow camera-frame intervals (song time; RateInterval) is over
+// 1/kEngageHz, released when it falls under 1/kReleaseHz.  A 30 Hz source
+// never engages it, so at 30 Hz every mode is the same stream as `off`.  Not
+// the median: a camera between the two thresholds delivers a mix of one- and
+// two-frame intervals of a 30 Hz grab (33 / 50 ms), and the median of such a
+// window jumps from one to the other as each frame enters it, across both
+// thresholds -- 349 engage/release changes in one web song (MEASURED,
+// np-web4).  The median still sets the interp delay and the gap limit.
 //
 // Fill frames are never recorded (DC3_POSE_RECORD writes camera frames as
 // they arrive) and are not counted as pose_fps.
@@ -169,6 +174,10 @@ public:
     // The delay the stream runs behind the camera (interp; 0 otherwise), s.
     double Delay() const { return mEngaged && mMode == kInterp ? mDelay : 0.0; }
     double MedianInterval() const; // s, 0 before kMinIntervals
+    // The camera's rate for engage/release: the mean of the window's
+    // intervals without its shortest and longest fifth, s; 0 before
+    // kMinIntervals. Not the median: see the class comment.
+    double RateInterval() const;
     unsigned Fills() const { return mFills; }
     unsigned Reals() const { return mReals; }
     // The elapsed sensor time of the newest camera frame, ms (the camera's

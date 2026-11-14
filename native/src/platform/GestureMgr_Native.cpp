@@ -843,7 +843,7 @@ void FillPublishDelay() {
     if (changed || std::fabs(delay - sLoggedDelay) >= 0.02f) {
         sWasEngaged = gFill.Engaged();
         sLoggedDelay = delay;
-        double med = gFill.MedianInterval();
+        double med = gFill.RateInterval();
         fprintf(stderr,
                 "DC3 POSE FILL: %s (gain %.2f) %s at song %.2f s (camera %.1f frames/s, stream delay "
                 "%.0f ms added to the scorer's latency)\n",

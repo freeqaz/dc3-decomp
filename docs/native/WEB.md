@@ -342,6 +342,46 @@ first probe, but run serially in the one worker it was slower than the
 default on the loaded rig (16.9 vs 18.1 fps, 10.9 vs 11.7), so it stays off;
 numbers in [POSE_INPUT.md](POSE_INPUT.md#web-second-person-probe-np-web4-2026-11-14).
 
+### Pose fill on web (L-8, np-web4)
+
+The desktop's `DC3_POSE_FILL` (default `extrap`) runs on web too: the same
+`GestureMgr_Native.cpp` path, `DC3 POSE FILL: extrap (gain 1.00) engaged at
+song 4.85 s (camera 15.9 frames/s …)` in the console. One-song runs,
+Macarena, macarena mjpeg camera, release build before the fix below,
+interleaved, load 25–76 (MEASURED):
+
+| run | score | detectFrac mean | engage/release lines | game fps | game p50/p95/p99 ms | stalls > 50 ms |
+|---|---|---|---|---|---|---|
+| fill1 | 16,210 | 0.281 | 1 / 0 | 27.8 | 23.1 / 98.3 / 170.5 | 944 |
+| nofill1 (`DC3_POSE_FILL=off`) | 33,648 | 0.400 | — | 51.8 | 16.9 / 38.4 / 75.3 | 236 |
+| nocam1 | 0 | 0.194 | — | 58.0 | 16.7 / 20.2 / 41.4 | 51 |
+| fill2 | 160,521 | 0.419 | 216 / 215 | 58.9 | 16.9 / 20.7 / 29.1 | 28 |
+| nofill2 | 38,121 | 0.358 | — | 58.1 | 16.8 / 21.5 / 39.6 | 53 |
+| nocam2 | 0 | 0.194 | — | 52.0 | 16.8 / 34.6 / 53.7 | 115 |
+| fill3 | 20,603 | 0.357 | 29 / 28 | 57.2 | 16.9 / 25.0 / 39.7 | 29 |
+| nofill3 | 22,446 | 0.369 | — | 50.6 | 17.5 / 37.3 / 62.9 | 173 |
+
+- **The score says nothing either way.** The looping footage is not synced
+  to the song, and one run (fill2, 160,521) is 4–8× every other; fill medians
+  20,603 vs off 33,648. The desktop calibration (8 footage songs, PLAN L-8)
+  is the measurement of the fill's effect; this only shows it runs on web.
+- `nocam` scores 0 on web by design: there is no stand-in performer on the
+  web build, and nobody is in front of the camera. It is the pacing control:
+  the game phase with the pose worker (52–59 fps when the box was quiet) vs
+  without it (52–58) is the same within the box's noise.
+- **Found: the fill flapped.** In fill2 it changed state 349 times inside the
+  song, every two camera frames, with the rate in the log jumping between
+  20.0 and 29.9 frames/s. The web worker delivered ~23 frames/s as a mix of
+  33 and 50 ms intervals, and the median of 15 such intervals jumps from one
+  to the other as each frame enters the window, across both the engage
+  (24 Hz) and release (27 Hz) thresholds. Fixed in `PoseFill_Native.cpp`
+  (shared with desktop): engage/release now read the window's trimmed mean
+  (`RateInterval`, shortest and longest fifth dropped); the median still sets
+  the interp delay and the gap limit. Test
+  `PoseFillScheduleTest.AnAlternatingCameraRateDoesNotFlapTheFill` (33/53 ms
+  alternating: 1 change; with the median put back, 285 changes, FAIL; a
+  33/37 ms mix, ~28.5 Hz, is never engaged).
+
 ### Heap per venue (W-6)
 
 Decided 2026-11-13: dc3-web links `-sMAXIMUM_MEMORY=1024MB`

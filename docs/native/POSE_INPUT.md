@@ -1726,8 +1726,12 @@ Code:
 ### What every mode shares
 
 - **Engages only for a slow camera.**
-  - It engages when the median of the last 15 camera-frame intervals,
-    measured in song time, is above 1/24 s. It releases below 1/27 s.
+  - It engages when the trimmed mean of the last 15 camera-frame intervals
+    (shortest and longest fifth dropped), measured in song time, is above
+    1/24 s. It releases below 1/27 s. (The median, until np-web4: a camera
+    between the thresholds delivers a 33/50 ms interval mix, and the median
+    of that jumped across both thresholds on every frame -- 349 changes in
+    one web song. [WEB.md](WEB.md#pose-fill-on-web-l-8-np-web4).)
   - A 30 Hz source never engages it, so at 30 Hz the stream is the camera's
     own (measured below).
   - A slow *game* (song loading, a box at load 150) also reads as a slow
