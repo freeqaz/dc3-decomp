@@ -328,7 +328,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "e16bce7d51840d3417bb67075a0c9f76d4ce9d2e"
+set(MILO_ENGINE_PIN "a80603fc52265f7daa02dce391764dd1ea7c61e5"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -2064,6 +2064,7 @@ if(BUILD_TESTS)
         tests/test_rndcam_projection.cpp
         tests/test_particle_color.cpp
         tests/test_drawrect_color.cpp
+        tests/test_flare_point_test.cpp
         tests/test_retail_lighting.cpp
         tests/test_retail_char_shading.cpp
         tests/test_proj_shadow_caster_pass.cpp
@@ -2167,6 +2168,11 @@ if(BUILD_TESTS)
             tests/test_pose_scoring.cpp
         APPEND PROPERTY COMPILE_DEFINITIONS
             "DC3_DECOMP_SRC_DIR=\"${CMAKE_SOURCE_DIR}/../src\"")
+    # The engine's source tree, for the post chain's no-direct-CreateBindGroup
+    # guard (PLAN H-66). Per file, for the same ccache reason.
+    set_property(SOURCE tests/test_dc3_retail_post.cpp
+        APPEND PROPERTY COMPILE_DEFINITIONS
+            "MILO_ENGINE_SRC_DIR=\"${MILO_ENGINE_PATH}/src\"")
     target_include_directories(milo-tests PRIVATE
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/../src

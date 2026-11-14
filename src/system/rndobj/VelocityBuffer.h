@@ -5,6 +5,10 @@
 #include "rndobj\Mat.h"
 #include "rndobj\Tex.h"
 
+#ifdef HX_NATIVE
+class RndPostProc;
+#endif
+
 // size 0x1b584
 class RndXfmCache {
     friend class RndVelocityBuffer;
@@ -55,6 +59,24 @@ public:
 
     float GetUnk36be8() { return unk36be8; };
 
+#ifdef HX_NATIVE
+    // Native port (np-gfx-post round 3): Draw()'s bookkeeping without its D3D
+    // passes. The timer scale (c122), the `cam == mCam` test, the cache-slot
+    // flip and AdvanceFrame's readiness (mFrame >= 2, reset by ResetFrame on a
+    // camera cut) are retail's; the camera velocity pass itself is the WebGPU
+    // backend's, which reads the resolved world depth (retail's tf9,
+    // PreDepthTexture) and consumes this frame's result with TakeNativeFrame.
+    bool DrawNative(RndCam *, ObjPtrList<RndDrawable> &);
+    // True once per frame in which DrawNative passed the camera test; `ready`
+    // is Draw()'s return (the composite's bit 42), `scale` its c122 value and
+    // `cam` the camera the backend projects with. Clears the frame's result.
+    bool TakeNativeFrame(bool &ready, float &scale, RndCam *&cam);
+    // NgPostProc::DoVelocity for `pp`: its gate (mMotionBlurVelocity and not
+    // the hi-res screen), then DrawNative with the world camera copy. Natively
+    // NgRnd::DoPostProcess calls it (NgPostProc is not the PostProc factory).
+    static void DoVelocityNative(RndPostProc *pp, RndCam *worldCam);
+#endif
+
 private:
     RndVelocityBuffer();
 
@@ -77,4 +99,8 @@ private:
     RndMat *mMat; // 0x36c78
     RndCam *mLastFrameCamera; // 0x36c7c
     bool mFrameAdvanced; // 0x36c80
+#ifdef HX_NATIVE
+    bool mNativeDrew = false;        // DrawNative passed the camera test this frame
+    RndCam *mNativeCam = nullptr;    // the camera it did
+#endif
 };
