@@ -328,7 +328,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "43324a294ee9bbef37c2137bb834e6a3173ef9f1"
+set(MILO_ENGINE_PIN "e16bce7d51840d3417bb67075a0c9f76d4ce9d2e"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -1407,6 +1407,8 @@ set(DC3_WEB_CORE_SOURCES
     src/xbox_link_stubs.cpp
     src/telemetry/GameplayTelemetry.cpp
     src/platform/DtaEvalSupport.cpp
+    # Dc3FrameCapDecide + Dc3RafGate: the rAF loop's frame cap (H-34).
+    src/platform/FramePacer_Native.cpp
     # Web stand-ins for the XDK/NUI/XNet entry points (exact XDK signatures).
     # Dropped in 466a3a591 as a "deleted file" -- it was not deleted, and its
     # absence left those symbols as unresolved wasm imports.

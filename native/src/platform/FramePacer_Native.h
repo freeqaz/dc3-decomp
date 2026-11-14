@@ -26,6 +26,7 @@
 #pragma once
 
 #include <chrono>
+#include <string>
 
 struct Dc3FrameCap {
     double fps = 0.0;        // 0 = no cap
@@ -58,4 +59,64 @@ private:
     bool mStarted = false;
     long long mPaced = 0;
     double mSleptS = 0.0;
+};
+
+// The same cap for a loop the BROWSER drives (web build, PLAN H-34). There is
+// no sleep there: the page runs one game frame per requestAnimationFrame, and
+// rAF fires at the display's rate (120/144 Hz on a high-refresh panel). This
+// gate is asked on every rAF and answers whether a game frame runs on it.
+//
+// The display rate is not exposed to a page, so it is estimated from the rAF
+// timestamps, from the one-refresh gaps among the last kWindow rAFs: the gaps
+// up to 1.5x the 25th percentile, and their median. Not the median of all
+// gaps: a gap that follows a game frame holds that frame's cost (the next rAF
+// waits for the first refresh after it ends), and only a gap after a SKIPPED
+// rAF, or after a frame shorter than one refresh, is one clean refresh. On
+// 144 Hz with a 72 fps cap and frames of 3 or 10 ms, the gaps are a mix of
+// 6.9 and 13.9 ms; with 60% long frames the median read 72 Hz, the cap went
+// off and stayed off, and the game ran 89 fps (RafGate test, MEASURED with
+// the median put back); in Chromium on an emulated 144 Hz rAF it flipped the
+// cap off and back on (frame-cap.mjs, MEASURED). Whenever a quarter of the gaps are one
+// refresh, this reads the panel. A game slower than the display makes every
+// gap longer and the estimate lower, which turns the cap off -- correctly,
+// there is nothing to cap. The decision is Dc3FrameCapDecide(env,
+// windowed=true, estimate), re-made every kWindow rAFs; a re-estimate within
+// 5% of the cap in force keeps it (timestamp jitter moves it ~1-2%; a real
+// display change, 144 -> 120 or 165 Hz, moves it 13% or more).
+//
+// A frame runs on the first rAF no earlier than half a refresh before it is
+// due, so the rAF grid's own jitter never drops a frame: on 144 Hz with a
+// 72 fps cap that is every second rAF exactly. The next frame is due one
+// period after this one was due (not after it ran), so a frame that ran a
+// refresh late is made up on the next refresh; at most one period of debt.
+class Dc3RafGate {
+public:
+    static constexpr int kWindow = 64;
+
+    explicit Dc3RafGate(const char *env) : mEnv(env ? env : "") {}
+
+    // `nowMs` is the rAF timestamp (performance.now() timebase). True: run a
+    // game frame on this rAF.
+    bool OnRaf(double nowMs);
+
+    double RefreshHz() const { return mRefreshHz; }
+    double TargetFps() const { return mCap.fps; }
+    const char *Why() const { return mCap.why; }
+    long long Ran() const { return mRan; }
+    long long Skipped() const { return mSkipped; }
+    // Bumped whenever the decision changes (for a one-line log per change).
+    int Decisions() const { return mDecisions; }
+
+private:
+    void Decide();
+
+    std::string mEnv;
+    double mGaps[kWindow] = {};
+    int mGapCount = 0, mGapNext = 0, mSinceDecide = 0;
+    double mLastRafMs = -1.0, mLastRunMs = -1.0, mDueMs = -1.0;
+    double mRefreshHz = 0.0;
+    Dc3FrameCap mCap{};
+    char mWhy[160] = "";
+    long long mRan = 0, mSkipped = 0;
+    int mDecisions = 0;
 };
