@@ -1,0 +1,67 @@
+# milkshake (Kelis, "Milkshake") -- a Dance Central 2 DLC song, played from a
+# DLC package mounted by the native ContentMgr (ContentMgr_Native.cpp).
+# Needs the DC2 DLC mega pack imported (scripts/dlc/import.sh) and
+# DC3_DLC_DIR naming the directory that holds it; without the pack the 43
+# downs land on a disc song and the flow test skips before it runs.
+#
+# Same route as omg.txt.  With the pack's 32 songs added the perform-mode list
+# (by_difficulty, tier headers) holds milkshake at data index 45:
+#   {song_offer_provider first_data_index milkshake} -> 45
+# so 43 downs from the entry focus (index 2).  Downs 15 frames apart, as
+# song-select-scroll.txt.  Assumes a console that has seen the move tutorial
+# (the flow test seeds the global options cache).
+wait_screen title_screen
++30 confirm
+wait_screen main_screen
++30 confirm
+wait_screen choose_mode_screen
++30 confirm
+wait_screen song_select_screen
++30 down
++45 down
++60 down
++75 down
++90 down
++105 down
++120 down
++135 down
++150 down
++165 down
++180 down
++195 down
++210 down
++225 down
++240 down
++255 down
++270 down
++285 down
++300 down
++315 down
++330 down
++345 down
++360 down
++375 down
++390 down
++405 down
++420 down
++435 down
++450 down
++465 down
++480 down
++495 down
++510 down
++525 down
++540 down
++555 down
++570 down
++585 down
++600 down
++615 down
++630 down
++645 down
++660 down
++735 confirm
+wait_screen multiuser_screen
++110 confirm
++180 confirm
++250 confirm

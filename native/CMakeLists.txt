@@ -1247,7 +1247,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Cam_Native.cpp
     src/platform/Net_Stub.cpp
     src/platform/Memcard_Stub.cpp
-    src/platform/ContentMgr_Stub.cpp
+    src/platform/ContentMgr_Native.cpp
     src/platform/MapFile_Stub.cpp
     src/platform/VirtualKeyboard_Stub.cpp
     src/platform/Achievements_Stub.cpp
@@ -1434,7 +1434,7 @@ set(DC3_WEB_CORE_SOURCES
     # DC3_WEB_LIFTED_ENGINE_SOURCES below.
     src/platform/MeshFilter.cpp
     src/platform/Memcard_Stub.cpp
-    src/platform/ContentMgr_Stub.cpp
+    src/platform/ContentMgr_Native.cpp
     src/platform/Achievements_Stub.cpp
     src/platform/MemcardMgr_Stub.cpp
     # Native cache backend (CacheMgrNative/CacheNative/CacheIDNative). Needed
@@ -2280,6 +2280,34 @@ if(BUILD_TESTS)
     else()
         list(APPEND MILO_TEST_GATES_OFF "DC3_DTA_FLOW_TESTS(no game assets)")
     endif()
+
+    # DC3_DLC_TESTS — DlcSongFlowTest (2) + MoggDlcTest (1): Milkshake from the
+    # DC2 DLC megapack, imported with scripts/dlc/import.sh. DLC is game content
+    # that most boxes (CI, the GPD) do not have, so unlike the gates above this
+    # one decides REGISTRATION, not skipping: the tests are compiled in (the
+    # DC3_DLC_TESTS define) only when the package is found here, and a box
+    # without it registers none of them -- its skip count equals a box with it.
+    # The flow tests also need the game assets. DC3_DLC_TEST_DIR names another
+    # root (a dir without the package turns the gate off, which is how to check
+    # the absent case on a box that has it).
+    set(DC3_DLC_TEST_DIR "${MILO_TEST_ASSET_DIR}/dlc" CACHE PATH
+        "Imported DLC root for the DC3_DLC_TESTS gate (scripts/dlc/import.sh)")
+    set(_dlc_probe
+        "${DC3_DLC_TEST_DIR}/dancecentral2dlcmegapack/songs/milkshake/milkshake.mogg")
+    list(APPEND MILO_TEST_GATE_PROBES "DC3_DLC_TESTS=${_dlc_probe}")
+    set(_dlc_tests 0)
+    if(EXISTS "${_dlc_probe}" AND EXISTS "${MILO_TEST_ASSET_DIR}/gen/main_xbox.hdr")
+        set(_dlc_tests 1)
+        list(APPEND MILO_TEST_ENV "DC3_DLC_TESTS=1" "DC3_TEST_DLC_DIR=${DC3_DLC_TEST_DIR}")
+        list(APPEND MILO_TEST_GATES_ON "DC3_DLC_TESTS")
+    else()
+        list(APPEND MILO_TEST_GATES_OFF
+            "DC3_DLC_TESTS(no DC2 DLC megapack under ${DC3_DLC_TEST_DIR} - tests not registered)")
+    endif()
+    # Per source, as for test_gates.cpp below (a value that differs between
+    # boxes stays out of every other TU's ccache key).
+    set_property(SOURCE tests/test_dta_flow.cpp tests/test_mogg_v0xe.cpp APPEND PROPERTY
+        COMPILE_DEFINITIONS "DC3_DLC_TESTS=${_dlc_tests}")
 
     # Deliberately NOT defaulted on, with the reason recorded so the next person
     # does not have to re-derive it:
