@@ -25,10 +25,13 @@
 //   pose_probe=<s>      with pose_persons=2: numPoses 1 on every frame, and a
 //                       numPoses 2 probe every <s> seconds that switches to 2
 //                       when it sees a second person (pose_mediapipe.py
-//                       --probe-second-person; 0 = off, numPoses 2 every frame)
+//                       --probe-second-person).  Default 0.5 (W-18: 21.5-22
+//                       -> 28.5-29.2 pose frames/s with the game on the rig);
+//                       0 = off, numPoses 2 every frame (the old default)
 //   pose_probe_worker=1|0  run that probe in a second worker (default 1), as
 //                       desktop runs it on a thread; 0 = after the frame's own
-//                       pass in the one worker (np-web4's version)
+//                       pass in the one worker (np-web4's version).  Without
+//                       nested workers the probe falls back to that
 //   pose_input=<h>|0    scale each camera frame to this height before
 //                       MediaPipe sees it (0 = as captured)
 //   pose_stats=1        per-frame pipeline timing: camera age at read, worker,
@@ -65,7 +68,8 @@ const opt = {
     // way). 1 skips the per-frame person detector that 2 runs while fewer
     // than 2 people are tracked, but a second player is never found.
     persons: Math.min(2, Math.max(1, parseInt(params.get('pose_persons') || '2', 10) || 2)),
-    probeSec: Math.max(0, parseFloat(params.get('pose_probe') || '0') || 0),
+    // The second-person probe (W-18): on by default, 0 turns it off.
+    probeSec: params.has('pose_probe') ? Math.max(0, parseFloat(params.get('pose_probe')) || 0) : 0.5,
     probeWorker: params.get('pose_probe_worker') !== '0',
     input: Math.max(0, parseInt(params.get('pose_input') || '0', 10) || 0),
     statsOn: params.get('pose_stats') === '1',
