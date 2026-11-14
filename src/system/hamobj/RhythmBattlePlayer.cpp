@@ -43,7 +43,26 @@ RhythmBattlePlayer::RhythmBattlePlayer()
       mLastBeatTime(0), mZoneLevel(0), mInTheZone(-2), mNormalizedRhythmScore(0), mNormalizedFreshnessScore(0), mScore(0), mComboMeter(0),
       mSwapped(false), mDebugScoreValue(-1), mSwagJackedState("none"), mGrooveCooldown(0), mSuppressRhythm(false),
       mAutoPass(false),
-      mFramesSinceLastTrigger(0) {}
+      mFramesSinceLastTrigger(0) {
+#ifdef HX_NATIVE
+    // PLAN H-51.  The image's constructor never writes mScoringWindowStart /
+    // mScoringWindowEnd (0x28c / 0x290: no store to either in
+    // ??0RhythmBattlePlayer@@IAA@XZ, 100% matched), and Poll hands them to
+    // RhythmDetector::GetRecord as soon as mWindowElapsedTime reaches 1 --
+    // before RhythmBattle::Poll's first SetWindow.  Heap garbage there is a
+    // "new window" that unfinalizes the record, so the first real window then
+    // notifies "new rhythm detector window w/o finalization [garbage] to
+    // [180.0, 184.0]" (MEASURED, nasty, DC1 songs: [-0.0,-0.0]; disc songs:
+    // [-34734488944640.0,0.0]).  -1 is the "no window" RhythmDetector::ClearData
+    // writes, so the early GetRecord matches the cleared record and leaves it
+    // alone.  Scoring: the first real window runs ClearData either way (its
+    // window differs from whatever is stored), so every window is scored from
+    // the same record; only the stretch before the first SetWindow differs
+    // (garbage cleared the record once there, -1 does not).
+    mScoringWindowStart = -1.0f;
+    mScoringWindowEnd = -1.0f;
+#endif
+}
 
 RhythmBattlePlayer::~RhythmBattlePlayer() {}
 
