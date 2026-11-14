@@ -206,7 +206,62 @@ The web build lists and plays the same packages as desktop, from the same
 
 ### Measured (np-webdlc, 2026-11-14)
 
-WEB_DLC_MEASURED
+All MEASURED, headless Chromium (`--mute-audio`), release build, one box under
+heavy load from other lanes (load averages given per run).
+
+**Song list.** The web and desktop song selects both have 130 rows, in the same
+order: 45 disc songs, 76 DLC songs, plus playlists, `random_song` and 7 tier
+headers. The desktop list was read through the HTTP eval with
+`{song_offer_provider data_symbol i}`; the web list comes from
+`dlc-songs.mjs`'s `songlist.json`. That is 121 songs, not 123. With
+`DC3_DLC=0` the web list is 54 rows and milkshake is missing, so the driver
+exits 1.
+
+**Four songs in one session** (`--songs milkshake,hotinherre,sandstorm,thehustle`,
+load 99.6 → 34.4). Each song reached the results screen. The audio column is
+the 30 s mix capture.
+
+| song | package | audio RMS / peak dBFS | wasm heap MB before / in game / after | MEMFS `/data/dlc` MB before / in game / after | dropped at song select |
+|---|---|---|---|---|---|
+| milkshake | mega pack | -10.4 / -0.9 | 318.9 / 382.7 / 459.3 | 0.1 / 14.2 / 0.3 | 48 files, 14.1 MB |
+| hotinherre | mega pack | -12.1 / -0.9 | 459.3 / 459.3 / 459.3 | 0.3 / 8.8 / 0.3 | 14 files, 8.6 MB |
+| sandstorm | export pack | -11.1 / -0.9 | 459.3 / 459.3 / 459.3 | 0.3 / 14.4 / 0.3 | 57 files, 14.2 MB |
+| thehustle | disc | -15.1 / -0.9 | 459.3 / 459.3 / 459.3 | 0.3 / 0.8 / 0.1 | 4 files, 0.7 MB (previews) |
+
+After rebasing onto `b07c22730` (engine `5f5d9ed` + this branch), with the stronger driver: milkshake and sandstorm again reached results, -10.5 and -11.1 dBFS, no song file failed to load. Load 68.3 → 44.3.
+
+Memory:
+- The wasm heap grows once, on the first song, and stays flat after that.
+- `/data/dlc` returns to 0.3 MB after every song.
+- MEMFS `/data` as a whole goes 198 → 293 → 324 → 361 → 435 MB across the four songs.
+  - That growth is disc venue and world files, which the web build keeps today for every song, disc or DLC.
+  - It is not DLC data and this lane did not change it.
+- DLC traffic for the session was 265 MB in 235 requests.
+  - Most of it is the 256x256 previews of the songs the driver scrolls past.
+  - A player who goes straight to one song fetches that song's files, about 9-15 MB.
+
+**Boot cost** (`--boot-only`, before = main's build with main's server, after = this branch, interleaved, load 67.5 → 37.5):
+
+| | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| before: s to main menu / bytes | 21.46 / 74,871,763 | 21.16 / 74,962,239 | 24.13 / 74,888,178 |
+| after: s to main menu / bytes | 21.32 / 74,972,975 | 20.88 / 74,939,054 | 21.04 / 74,977,021 |
+
+- The added download is the one DLC request: `/api/bundle/dlc`, 15,872 B on the wire (134,276 B raw).
+- Run-to-run variance in the rest of the boot is about 90 KB.
+- Time to the main menu did not get slower: the medians are 21.46 s before and 21.04 s after.
+
+**Two bugs found on the way:**
+- *Frame loop died at gameplay.* `PointTestPass` left `depthClearValue` NaN, and Chromium threw in `beginRenderPass`. The rAF loop then died on the first gameplay frame, on disc songs too. Fixed in the engine.
+- *Disc song after a DLC song went back to the title screen.* `SongMgr::CachedPath` leaves `DirLoader` cache mode off. On the web `UsingCD` is false, so the next disc song asked for loose `.milo` names, which 404. Fixed under `HX_NATIVE`; the Xbox match is unchanged.
+
+**Negative controls:**
+- Run the milkshake driver against a DLC root that is missing `milkshake.mogg`.
+  - The first version of the driver **passed**. The song still played to results and the capture read -25.2 dBFS from the crowd and SFX, well above the -60 dBFS silence threshold.
+  - The driver now also fails a song when the game logs `Could not load: .../songs/<song>/...` while it plays. The good runs log none of these.
+  - Rerun with that check, the same sabotage fails, exit 1: `milkshake: 2 of its files could not load (first: ... milkshake.mogg)`.
+- Run it with `--env DC3_DLC=0`: milkshake is not listed and the driver exits 1.
+- Run `deploy.sh`'s DLC smoke block against main's server, which has no DLC routes: 3 FAILs.
 
 ### Reproducing
 
