@@ -130,6 +130,10 @@ Above the definition (was lines 836-854):
 // identical.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 98.621, 6 non-equal row(s): Two register
+rows are an ASSOCIATION, not a rename: mesh1's distance groups as x+(y+z) here, y+(x+z)
+in the image -- the w26-e trade documented above. Same three squares; last-ulp rounding
+in a sort comparator. NOT A BUG.
 
 ## `?UtilDrawCigar@@YAXABVTransform@@QBM1ABVColor@Hmx@@H@Z`
 

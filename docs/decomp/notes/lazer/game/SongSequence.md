@@ -128,3 +128,9 @@ Above the definition (was lines 361-380):
 // priority ledger for `this` and the TheHamDirector lis half, i.e. how many
 // blocks each spans unreferenced.
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.587, 71 non-equal row(s): SYM rows:
+lbl_831177C8..FC are this function's static Symbols, Message and guard; each lbl pairs
+with the static whose Symbol ctor takes the matching string on the adjacent equal row
+(reset/init/set_type/.../start_score_move_index). The 44 register rows are pure
+permutation. NOT A BUG.

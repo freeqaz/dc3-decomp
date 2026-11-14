@@ -44,3 +44,9 @@ Inside the body (was lines 233-256):
 p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
 stores plus call arguments were compared symbolically on both sides. Residual: target
 re-reads mBeamLength; same values stored.
+## `?ApplyLight@BoxMapLighting@@ABAXABV?$BoxLightArray@ULightParams_Point@BoxMapLighting@@$0DC@@@ABVVector3@@@Z`
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.759, 2 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.

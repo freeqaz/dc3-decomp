@@ -58,6 +58,9 @@ Inside the body (was lines 142-151):
     // follow the clamp order in both builds; nothing tried moved the sort.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.500, 2 non-equal row(s): The two
+register rows re-associate the OR of the three ClampEq results; integer OR, exact. NOT A
+BUG.
 
 ## `?Set@Plane@@QAAXABVVector3@@00@Z`
 
@@ -99,6 +102,10 @@ Above the definition (was lines 374-387):
 // (n.x * m.N.x with the factors swapped), inert under all 8 operand orders.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.718, 2 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
 
 ## `?Intersect@@YA_NABVTriangle@@ABVBox@@@Z`
 
@@ -246,6 +253,10 @@ Inside the body (was lines 892-899):
         // stores -- all measured inert.  See the lane note for the residual.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.677, 3 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
 
 ## `BehindPlane()`
 
@@ -333,6 +344,10 @@ Inside the body (was lines 1115-1124):
     // fixed by that temp's sid (C2RS-BRIDGE 8.7), not by the spelling.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 98.784, 9 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
 
 ## `?Update@BSPFace@@QAAXXZ`
 

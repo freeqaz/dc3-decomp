@@ -186,6 +186,10 @@ Inside the body (was lines 738-762):
     // long-lived candidates.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.775, 9 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
 
 ## `?ModalDraw@DxRnd@@MAAXW4ModalType@Debug@@PBD@Z`
 
@@ -398,3 +402,8 @@ Inside the body (was lines 1497-1504):
             // callee-saved register and reused for BeginQuery (`mr r3, r30`);
             // EndQuery at 0x8261B478 reloads the member.
 ```
+
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.860, 5 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.

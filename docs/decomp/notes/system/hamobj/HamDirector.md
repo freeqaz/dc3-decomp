@@ -249,6 +249,14 @@ Inside the body (was lines 2001-2014):
             // it in r10.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.118, 13 non-equal row(s): NOT A BUG.
+Every row is register-only; `scripts/analysis/regperm_equivalence.py` raised 4 lead(s),
+each read by hand against the listing: pure register permutation, no operand swap. The
+checker's four SRC leads are the success block: the image builds startKey from the
+cached `keys->begin` (r7) and endKey from a reload of it, we do the reverse; both
+pointers get the same values. Measured: writing startKey before endKey lines the two
+stores up but drops fuzzy 99.118 -> 99.059 (canonical stays 100) -- rejected, do not
+retry.
 
 ## `?PoseIconMan@HamDirector@@QAAXPAVCharClip@@MPAVRndTex@@_N0MM@Z`
 

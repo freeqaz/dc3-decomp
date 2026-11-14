@@ -120,6 +120,11 @@ Inside the body (was lines 1505-1512):
                     // and qp taken inside the size test, 100.0 (regperm only).
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.711, 18 non-equal row(s): NOT A BUG.
+Every row is register-only; `scripts/analysis/regperm_equivalence.py` raised 2 lead(s),
+each read by hand against the listing: pure register permutation, no operand swap.
+(CALLARG? leads read by hand: deallocate takes r3-r5; the r7/r8 leads are dead
+leftovers.)
 
 ## `?QueueBlacklightPacket@RndText@@KAXPAVRndMesh@@MH@Z`
 

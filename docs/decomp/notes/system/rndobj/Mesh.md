@@ -532,6 +532,11 @@ Inside the body (was lines 1780-1807):
         // ahead of the base in the code-band walk.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.921, 3 non-equal row(s): NOT A BUG.
+Every row is register-only; `scripts/analysis/regperm_equivalence.py` raised 1 lead(s),
+each read by hand against the listing: pure register permutation, no operand swap.
+(CALLARG? leads read by hand: SetTransParent takes r3-r5; the r9 lead is a dead
+leftover.)
 
 ## `?LoadVertices@RndMesh@@UAAXAAVBinStreamRev@@@Z`
 
