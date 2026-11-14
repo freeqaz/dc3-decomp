@@ -96,6 +96,7 @@ def main(argv=None):
     ap.add_argument("--binary", default=os.path.join(REPO, "native", "build", "dc3-native"))
     a = ap.parse_args(argv)
     out = os.path.abspath(a.out)
+    a.binary = os.path.abspath(a.binary)
     os.makedirs(out, exist_ok=True)
     root = os.path.join(out, "home")
     kitdrive.seed_home(root)
