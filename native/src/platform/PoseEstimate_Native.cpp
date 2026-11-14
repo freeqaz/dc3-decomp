@@ -236,13 +236,20 @@ int Estimator::Apply(int slot, Person &p, float seconds, bool learn) {
     float T = b.torso;
 
     if (learn) {
+        // A bone sample is learned only when it is plausible for this torso:
+        // a tracker can call a joint tracked at a wild place, and one such
+        // run teaches a leg the solve then cannot use.
+        auto learnBone = [&](float &v, const V &bone, float perTorso) {
+            if (Plausible(bone, perTorso * T))
+                Learn(v, Len(bone), 0.05f);
+        };
         for (int s = 0; s < 2; s++) {
             if (p.confidence[kHip[s]] == kT && p.confidence[kKnee[s]] == kT)
-                Learn(b.thigh[s], Len(joint[kKnee[s]] - joint[kHip[s]]), 0.05f);
+                learnBone(b.thigh[s], joint[kKnee[s]] - joint[kHip[s]], kThighPerTorso);
             if (p.confidence[kKnee[s]] == kT && p.confidence[kAnkle[s]] == kT)
-                Learn(b.shin[s], Len(joint[kAnkle[s]] - joint[kKnee[s]]), 0.05f);
+                learnBone(b.shin[s], joint[kAnkle[s]] - joint[kKnee[s]], kShinPerTorso);
             if (p.confidence[kAnkle[s]] == kT && p.confidence[kFoot[s]] == kT)
-                Learn(b.foot[s], Len(joint[kFoot[s]] - joint[kAnkle[s]]), 0.05f);
+                learnBone(b.foot[s], joint[kFoot[s]] - joint[kAnkle[s]], kFootPerTorso);
         }
         if (b.haveUp && hipsSeen && torsoTracked) {
             float h = Dot(hipC, u);
@@ -260,7 +267,9 @@ int Estimator::Apply(int slot, Person &p, float seconds, bool learn) {
                 && h >= b.hipStand - 0.05f) {
                 float lo = Dot(joint[kJointAnkleLeft], u);
                 float lo2 = Dot(joint[kJointAnkleRight], u);
-                Learn(b.standHip, h - (lo < lo2 ? lo : lo2), 0.05f);
+                float stand = h - (lo < lo2 ? lo : lo2);
+                if (stand >= kGuessMin * kStandHipPerTorso * T && stand <= kGuessMax * kStandHipPerTorso * T)
+                    Learn(b.standHip, stand, 0.05f);
             }
         }
         // holds: each tracked joint's pose relative to its anchor

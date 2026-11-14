@@ -76,6 +76,7 @@ struct State {
     uint32_t frameId = 0;
     bool haveLast = false;
     Vector3 last[kNumJoints];
+    float lastConf[kNumJoints];
     bool replaySync = false;
     bool clockLog = false;
     std::vector<ReplayFrame> replay;
@@ -384,14 +385,22 @@ void Dc3PosePerformerPump(NativeSkeletonProvider *provider) {
     }
     if (got) {
         gState.fromTarget++;
-        for (int j = 0; j < kNumJoints; j++)
+        for (int j = 0; j < kNumJoints; j++) {
             gState.last[j] = joints[j];
+            gState.lastConf[j] = conf[j];
+        }
         gState.haveLast = true;
     } else if (gState.haveLast) {
-        // between targets (rests, intro): a person holds where they were
+        // between targets (rests, intro): a person holds where they were,
+        // seen as well as she was -- a replayed joint the tracker had lost
+        // stays lost (it used to come back at confidence 1, at the replay's
+        // guess for it: np-cutoff's leg-cut fixtures taught the estimator a
+        // 1.9 m thigh from those frames)
         gState.held++;
-        for (int j = 0; j < kNumJoints; j++)
+        for (int j = 0; j < kNumJoints; j++) {
             joints[j] = gState.last[j];
+            conf[j] = gState.lastConf[j];
+        }
     } else {
         gState.held++;
         StandPose(joints);

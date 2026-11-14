@@ -12,6 +12,11 @@
 //                                      proportion.  Sabotaged: learning off
 //                                      (Learn() a no-op) -> this test and
 //                                      FloorHoldsAnkles fail.
+//   PoseEstimateTest.AWildTrackedJointTeachesNothing
+//                                      300 frames of legs "tracked" 3 m below
+//                                      the hips leave the learned bones
+//                                      alone.  Sabotaged: the plausibility
+//                                      gate off -> fails.
 //   PoseEstimateTest.FloorHoldsAnkles  hips drop 20 cm with the legs cut:
 //                                      the ankles stay on the floor and the
 //                                      knees bend forward.  Sabotaged: floor
@@ -135,6 +140,24 @@ TEST(PoseEstimateTest, LearnsBoneLengths) {
     }
     EXPECT_NEAR(Dist(q.joints[kJointHipLeft], q.joints[kJointKneeLeft]), 0.50f, 0.01f);
     EXPECT_NEAR(Dist(q.joints[kJointHipRight], q.joints[kJointKneeRight]), 0.50f, 0.01f);
+}
+
+TEST(PoseEstimateTest, AWildTrackedJointTeachesNothing) {
+    Estimator e;
+    e.SetMode(kKinematic);
+    Teach(e, MakeBody(1.0f, 0.50f), 120);
+    // a run of frames with the legs "tracked" 3 m below the hips (what a
+    // replay's held frame used to publish)
+    Person wild = MakeBody(1.0f, 0.50f);
+    CutLegs(wild);
+    for (int j : {kJointKneeLeft, kJointKneeRight, kJointAnkleLeft, kJointAnkleRight, kJointFootLeft,
+                  kJointFootRight})
+        wild.confidence[j] = kConfidenceTracked;
+    Teach(e, wild, 300);
+    EXPECT_NEAR(e.Thigh(0, 0), 0.50f, 0.01f);
+    EXPECT_NEAR(e.Thigh(0, 1), 0.50f, 0.01f);
+    EXPECT_GT(e.Shin(0, 0), 0.3f);
+    EXPECT_LT(e.Shin(0, 0), 0.7f);
 }
 
 TEST(PoseEstimateTest, FloorHoldsAnkles) {
