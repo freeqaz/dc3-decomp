@@ -11,6 +11,7 @@
 #include "telemetry/GameplayTelemetry.h"
 #include "gfx/Screenshot.h"
 #include "gfx/GpuDevice.h"
+#include "gfx/GpuTimers.h"
 #include "gfx/FrameCapture.h"
 #include "obj/Data.h"
 #include "obj/DataFile.h"
@@ -1198,6 +1199,14 @@ void HttpServer::RegisterEndpoints() {
             res.status = 500;
             res.set_content(JsonError(result.error), "application/json");
         }
+    });
+
+    // GET /api/gputime -- the engine's per-render-pass GPU time (MILO_GPU_TIMERS=1,
+    // gfx/GpuTimers.h): the last ~1 s window's per-pass mean/max ms and count,
+    // the frame's pass sum and span. {"active":false,...} with the reason when
+    // the timers are off or unavailable. A value copy under the engine's lock.
+    svr->Get("/api/gputime", [](const httplib::Request&, httplib::Response& res) {
+        res.set_content(JsonOk(GpuTimers::Get().LatestJson()), "application/json");
     });
 
     // GET/PUT /api/pace -- DC3_HTTP_PACE_FPS at run time (PaceFrame above).
