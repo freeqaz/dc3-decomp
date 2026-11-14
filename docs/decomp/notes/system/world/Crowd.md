@@ -77,6 +77,12 @@ Inside the body (was lines 1094-1121):
     // must be measured on a full ninja.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.909, 10 non-equal row(s): The 2 SYM
+rows are the `_dw` static's scope ordinal (image ?CK@ = 42, ours ?DG@ = 54; see its
+atexit dtor). lbl_82F19AE4 = sCollideNames, lbl_83116BE0/E4 = the `_t` timer and its
+guard -- forgiven, pairing consistent. The 8 register rows are pure permutation. NOT A
+BUG.
+
 ## `?Apply3DCharXfm@WorldCrowd@@QAAXABU?$_List_iterator@UCharData@WorldCrowd@@U?$_Nonconst_traits@UCharData@WorldCrowd@@@stlpmtx_std@@@stlpmtx_std@@HPAVRndCam@@@Z`
 
 p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.848, 3 non-equal row(s): NOT A BUG.
