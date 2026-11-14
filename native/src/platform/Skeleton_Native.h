@@ -19,6 +19,11 @@ int NativeDummyPlayerCount(bool modeNeedsTwo, const char *policy);
 // report nobody, and whether it is silent now.
 unsigned NativePoseStalls();
 bool NativePoseStalled();
+// Its on-screen notice is for a player in a song: posted only while a song is
+// in play (GamePanel up, intro or playing), so a source that goes quiet on
+// song select -- a replay between songs -- logs the stall and stays off the
+// screen.  The test hook pins the "song in play" answer (1/0); -1 = the game's.
+void NativePoseStallTestSetSongInPlay(int inPlay);
 
 // Receives skeleton data from pose_server.py (MediaPipe BlazePose) over a
 // Unix socket. Protocol layout 1 carries DC3's own 20 joints in camera-space
@@ -194,6 +199,11 @@ public:
     // archive/fill on this changing so a single camera frame is not integrated
     // multiple times.
     uint32_t FrameId() const { return mFrameIdFront; }
+    // True once the source has published a frame (latched by Poll()).  A
+    // source starts at frame id 0 and its first real frame may also be id 0,
+    // so FrameId() alone cannot tell "nothing yet" from "frame 0"; the stall
+    // watchdog (DC3_POSE_STALL_MS) watches only a source that has spoken.
+    bool HasPublished() const { return mPublishedFront; }
 
     // Sensor capture timestamp (seconds) of that packet, as the server stamped
     // it -- the v1/v2 header's f64 ts.  Xbox takes a skeleton frame's elapsed
@@ -287,6 +297,8 @@ private:
     // Latest packet frame_id (reader writes mFrameIdBack, Poll() latches Front)
     uint32_t mFrameIdBack = 0;
     uint32_t mFrameIdFront = 0;
+    bool mPublishedBack = false;
+    bool mPublishedFront = false;
     double mTimestampBack = 0.0;
     double mTimestampFront = 0.0;
     bool mUnlevelledBack = false;

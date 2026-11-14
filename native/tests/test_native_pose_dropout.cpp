@@ -339,6 +339,14 @@ TEST_F(PoseStallTest, ASilentSourcePausesTheSongAndTrackingResumes) {
     EXPECT_GT(at, 22.5) << "paused before the watchdog and the hold had run; " << where;
     EXPECT_LT(at, 26.0) << "the pause came too late; " << where;
     EXPECT_LT(stall, pause);
+    // The player is told -- in a song, the real GamePanel answers "in play"
+    // (np-polish3: the notice is only for a song; the in-process tests pin
+    // that answer, this is the game's own).  Sabotaged: NativeSongInPlay()
+    // returning false -> no notice line, this EXPECT fails.
+    size_t notice = Find(r.output, "DC3 NOTICE [pose-stall]: The pose stream stopped");
+    EXPECT_NE(notice, std::string::npos) << "a stall in a song put no notice up; " << where;
+    EXPECT_NE(Find(r.output, "DC3 NOTICE [pose-stall]: Pose frames are back"), std::string::npos)
+        << "the player was told of the stall but not that it ended; " << where;
     ASSERT_NE(back, std::string::npos) << "frames never came back after the stall; " << where;
     EXPECT_LT(pause, back) << "frames returned before the pause: the stall was too short to test it";
 }

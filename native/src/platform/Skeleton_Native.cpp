@@ -682,6 +682,11 @@ void NativeSkeletonProvider::Stop() {
     if (mReaderThread.joinable()) {
         mReaderThread.join();
     }
+    {
+        // A restarted source has said nothing yet (HasPublished).
+        std::lock_guard<std::mutex> lock(mSwapMutex);
+        mPublishedBack = mPublishedFront = false;
+    }
 
     if (mSocketFd >= 0) {
         close(mSocketFd);
@@ -1082,6 +1087,7 @@ void NativeSkeletonProvider::PublishFrame(
     memset(mBack + numPersons, 0, (kMaxPersons - numPersons) * sizeof(PersonData));
     mNumPersonsBack = numPersons;
     mFrameIdBack = frameId;
+    mPublishedBack = true;
     mTimestampBack = timestamp;
     mUnlevelledBack = unlevelled;
     mDeclaredLatencyMsBack = declaredLatencyMs;
@@ -1099,6 +1105,7 @@ void NativeSkeletonProvider::Poll() {
         memcpy(mPersons, mBack, sizeof(mPersons));
         mNumPersons = mNumPersonsBack;
         mFrameIdFront = mFrameIdBack;
+        mPublishedFront = mPublishedBack;
         mTimestampFront = mTimestampBack;
         mUnlevelledFront = mUnlevelledBack;
         declaredLatencyMs = mDeclaredLatencyMsBack;
