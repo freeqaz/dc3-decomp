@@ -526,6 +526,52 @@ class KitDriveSlowGameTest(unittest.TestCase):
             self.assertEqual(final, 100, f"{fps} fps: ended on row {final}")
 
 
+class KitDriveIdentityOverlayTest(unittest.TestCase):
+    """PLAN H-77: the correct-identity overlay (opened by a hands-up from the
+    footage dancer, the image's behaviour with a camera) swallows every press
+    but Cancel, so the list under it never moves.  choose() must close it
+    first.  Soak #8 sat behind it on perform_complete_screen for 4.5 min."""
+
+    def test_choose_closes_the_overlay_first(self):
+        state = {"overlay": True, "sel": 0, "confirmed": None}
+
+        def req(path, data=None, timeout=10):
+            if path == "/input/sequence":
+                for e in json.loads(data):
+                    b = e["button"]
+                    if state["overlay"]:
+                        if b == "cancel":
+                            state["overlay"] = False
+                        continue  # BUTTON_DOWN_MSG eats everything else
+                    if b in ("down", "up"):
+                        state["sel"] += 1 if b == "down" else -1
+                    elif b == "confirm":
+                        state["confirmed"] = state["sel"]
+            return b"{}"
+
+        def ev(expr, timeout=10):
+            if "correct_identity_panel is_up" in expr:
+                return 1 if state["overlay"] else 0
+            if "data_index" in expr:
+                return 4
+            if "get_selected" in expr:
+                return state["sel"]
+            return None
+
+        k = kitdrive.Kit.__new__(kitdrive.Kit)
+        k.log, k._req, k.eval = (lambda *a: None), req, ev
+        k.jget = lambda path, timeout=10: None
+        k.screen = lambda: "perform_complete_screen"
+        real, time.sleep = time.sleep, lambda s: None
+        try:
+            ok = k.choose("pausecommand_mainmenu", "{lst}", timeout=0.5)
+        finally:
+            time.sleep = real
+        self.assertTrue(ok, "choose() never got past the overlay")
+        self.assertFalse(state["overlay"])
+        self.assertEqual(state["confirmed"], 4)
+
+
 class FakeCameras:
     """The V4L2 surface camera_resolve (and pose_server.resolve_camera) asks."""
     by_id_dir = "/dev/v4l/by-id"

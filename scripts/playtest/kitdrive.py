@@ -380,6 +380,7 @@ class Kit:
         hand menus the highlight follows the hand, so it starts wherever the
         person's hand is; this does not assume a starting row."""
         lst = lst or self.focus_list()
+        self.dismiss_identity()
         self.press(wake=True)
         time.sleep(0.6)
         if not self.list_select(lst, sym, timeout):
@@ -387,6 +388,23 @@ class Kit:
             return False
         time.sleep(0.6)
         self.press("confirm", wake=False)
+        return True
+
+    def dismiss_identity(self):
+        """Close the "correct identity" overlay if it is up, as a player
+        holding a pad would: B.  It opens when the person on the sensor holds
+        both hands up in a menu (ShellInput::Poll, the image's code; native
+        keeps it while a camera feeds the sensor, PLAN H-20), and the footage
+        dancer does that.  It is hand-driven: its enter exits controller mode,
+        helpbar_allow_controller FALSE refuses re-entry, and its BUTTON_DOWN_MSG
+        swallows every press but Cancel (ui/correct_identity/
+        correct_identity.dta) -- so the focus list under it never moves.
+        Soak #8 sat on perform_complete_screen for 4.5 min behind it (H-77)."""
+        if self.eval("{correct_identity_panel is_up}", timeout=3) not in (1, True):
+            return False
+        self.log(f"correct identity overlay up on {self.screen()}: cancel")
+        self.press("cancel", wake=False)
+        time.sleep(1.0)
         return True
 
     # ---- routes ----

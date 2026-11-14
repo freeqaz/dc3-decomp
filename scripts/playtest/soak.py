@@ -138,6 +138,8 @@ def advance(kit, targets, timeout, prefer=("continue", "done", "play_again_no", 
             say(f"{label} on {s}")
             time.sleep(2.0)
             continue
+        if kit.dismiss_identity():
+            continue
         lst = kit.focus_list()
         pick = next((p for p in prefer if kit.has_row(lst, p)), None)
         if pick:
