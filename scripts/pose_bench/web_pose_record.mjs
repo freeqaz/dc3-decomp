@@ -130,7 +130,7 @@ const info = await page.evaluate(async ({ framePort, w, h, fps, start }) => {
 const hdr = `# dc3-pose-fixture v1\n# web_pose_record.mjs t0=${t0} start=${start} dur=${dur} crop=${crop} width=0 fps=${fps} ` +
     `model=${info.model} delegate=${info.delegate} extra=${extra || '-'} mode=video\n`;
 fs.writeFileSync(out, hdr + lines.join('\n') + '\n');
-console.log(`${out}: ${info.n} frames, person in ${info.seen}, delegate=${info.delegate}, worker busy p50 ${info.busyP50 && info.busyP50.toFixed(1)} ms ` +
+console.log(`${out}: ${info.n} frames, person in ${info.seen}, delegate=${info.delegate}${info.delegateWhy ? " (" + info.delegateWhy + ")" : ""}, worker busy p50 ${info.busyP50 && info.busyP50.toFixed(1)} ms ` +
     `p95 ${info.busyP95 && info.busyP95.toFixed(1)} ms, ${((Date.now() - t1) / 1000).toFixed(0)} s${info.probe ? ' probe=' + JSON.stringify(info.probe) : ''}`);
 await browser.close();
 server.close();
