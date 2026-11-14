@@ -195,7 +195,7 @@ holds many songs, each with its own clock; `scripts/playtest/pose_session.py`
 lists the song segments and cuts one out. Under song sync the replay holds the
 first frame until the song clock comes down to the cut's first frame (the
 count-in; the menus' clock runs up from zero through the song's own times, and
-a dance played into the menus took the pad's presses, H-19), then publishes
+a dance played into the menus took the pad's presses, H-20), then publishes
 every frame on a render frame of its own -- catching up one per frame after a
 hitch, as the live game accepted them -- and restarts the sensor noise floor's
 counters so a replay does not depend on how long the menus took. Tests:

@@ -15,7 +15,7 @@ Stdlib unittest, no GPU, no camera, no game data: synthetic files only.
                      no DC3_EXIT line says so
   asset_manifest.py  check: ok on a box that matches, exit 3 naming what is
                      missing, exit 4 for a short archive, exit 4 for a data
-                     path with capitals (H-16)
+                     path with capitals (H-17)
   kitdrive.Kit.guarded  only expressions built on {ui current_screen} get the
                      null-screen guard
 
@@ -268,7 +268,7 @@ class AssetManifestTest(unittest.TestCase):
         mp3 = self.make_box(caps)
         rc, out = self.check(caps, mp3)
         self.assertEqual(rc, 4)
-        self.assertIn("H-16", out)
+        self.assertIn("H-17", out)
 
 
 class KitDriveTest(unittest.TestCase):

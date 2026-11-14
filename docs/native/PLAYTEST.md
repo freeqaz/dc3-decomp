@@ -41,7 +41,7 @@ scripts/playtest/bootstrap.sh --fix --assets-from free@main-box:code/milohax/dc3
 ```
 
 The data path must be all lower case (the game lower-cases file paths, PLAN
-H-16).
+H-17).
 
 ## Before every session: the check
 
@@ -97,7 +97,7 @@ original's behaviour). The map is printed at startup.
 **Quit** with Ctrl+Q or by closing the window. Esc is B, not quit.
 
 The window is 1280x720. **Do not maximise it or make it fullscreen:** the
-game then draws into the top-left corner (PLAN H-17); `--fullscreen` says so
+game then draws into the top-left corner (PLAN H-18); `--fullscreen` says so
 and stays windowed. On a Wayland desktop the kit opens the window through
 Xwayland, so a scaled (HiDPI) screen shows the whole picture.
 
@@ -124,7 +124,7 @@ stand-in skeleton and nothing you do is scored.
   shows no move cards, say which song and which number it was.
 - **L-4** the latency default for a live camera is not settled; scores may run
   low or high.
-- **H-17** no fullscreen; a maximised window shows the game in a corner.
+- **H-18** no fullscreen; a maximised window shows the game in a corner.
 - **G-10** audio has not been judged by ear on this port: tell us how it
   sounds. **G-26** movies have no sound.
 - **G-11** Rehearse shows no dancer.
