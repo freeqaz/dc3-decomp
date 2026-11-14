@@ -300,6 +300,18 @@ class KitDriveTest(unittest.TestCase):
         self.assertEqual(g("{{ui current_screen} name}"),
                          "{if_else {ui current_screen} {{ui current_screen} name} -2}")
 
+    def test_every_link_of_the_focus_list_chain_is_guarded(self):
+        """A screen with no focus panel, or a panel without the list, used to
+        put 15 MILO_FAILs of the kit's own into one soak's log."""
+        k = kitdrive.Kit.__new__(kitdrive.Kit)
+        lst = k.focus_list()
+        g = kitdrive.Kit.guarded("{%s num_data}" % lst)
+        self.assertEqual(
+            g, "{if_else {ui current_screen} {if_else {{ui current_screen} focus_panel} "
+               "{if_else {{{ui current_screen} focus_panel} find right_hand.hnl} "
+               "{{{{ui current_screen} focus_panel} find right_hand.hnl} num_data} -2} -2} -2}")
+        self.assertEqual(g.count("{") , g.count("}"))
+
 
 class KitDriveRowsTest(unittest.TestCase):
     """PLAN H-28: rows() must never ask a provider for a row past its end.

@@ -239,7 +239,23 @@ class Kit:
         there to read."""
         if "current_screen" not in expr:
             return expr
-        return f"{{if_else {{ui current_screen}} {expr} {default}}}"
+        # Every link of the chain can be empty, not just the first: a screen
+        # with no focus_panel answers kDataUnhandled, a panel without the
+        # list answers <null>, and a handler called on either is a MILO_FAIL
+        # (15 of them in one soak try, all the kit's own).  Guard each
+        # prefix the expression goes through, outermost first.
+        chain = ["{ui current_screen}"]
+        panel = "{{ui current_screen} focus_panel}"
+        if panel in expr:
+            chain.append(panel)
+            i = expr.find(panel + " find ")
+            if i >= 0:
+                j = expr.find("}", i + len(panel))
+                chain.append("{" + expr[i:j + 1])
+        out = expr
+        for cond in reversed(chain):
+            out = f"{{if_else {cond} {out} {default}}}"
+        return out
 
     def eval(self, expr, timeout=10):
         try:

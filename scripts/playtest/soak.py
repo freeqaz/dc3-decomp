@@ -13,7 +13,7 @@ a pad would.  FOOTAGE DIR holds clips cut by make_footage.py (<song>.mp4 and
 soak, as one console would.
 
 The full run (~45-60 min):
-  A  boot; Perform song 1, 2, 3 back to back (results each time); back to
+  A  boot; Perform five songs back to back (results each time); back to
      the main menu; Rehearse one song (time-boxed); quit (SIGTERM, as closing
      the window does) -- the saves are checked here
   B  relaunch: the profile must come back; Dance Battle with two people
@@ -530,7 +530,8 @@ class Soak:
                  480, 2, footage(a.footage, a.battle, duo=True), None)
         self.leg("back to main", self.back_to_main)
         self.leg("story", self.story)
-        self.close("quit and relaunch (story is not left by the menus here)")
+        self.leg("back to main", self.back_to_main)
+        self.close("quit and relaunch")
         self.launch()
         self.leg("relaunch: profile back", self.check_profile_back)
         self.leg("fitness", self.fitness)
@@ -582,7 +583,9 @@ def main(argv=None):
     ap.add_argument("--norender", action="store_true", help="no GPU (MILO_NORENDER=1)")
     ap.add_argument("--fresh", action="store_true", help="a console that has seen no tutorial")
     ap.add_argument("--pre", type=float, default=8.0)
-    ap.add_argument("--songs", nargs="+", default=["macarena", "cupidshuffle", "iceicebaby"])
+    # Five Perform songs (~4 min each) put the full run in the 45-60 min band.
+    ap.add_argument("--songs", nargs="+",
+                    default=["macarena", "cupidshuffle", "iceicebaby", "12step", "supersonic"])
     ap.add_argument("--rehearse", default="getlow")
     ap.add_argument("--rehearse-min", type=float, default=6.0)
     ap.add_argument("--battle", default="macarena")
