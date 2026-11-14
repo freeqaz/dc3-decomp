@@ -220,6 +220,18 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeco
         return pre;
     }
 
+    // Pace real-time runs.  A frame budget only means time while the frame
+    // rate is bounded: loading and the song intro run on the wall clock, so a
+    // faster renderer spends MORE frames on them.  With cached bind groups
+    // (H-30/H-31) a headless run does 8000 frames in ~11 s and reached the cap
+    // with the intro still 1.4 s from over, so GameplayReachesPlayingState
+    // failed on a healthy run (H-69).  At kFlowFpsCap a budget of N frames is
+    // at least N / kFlowFpsCap seconds on any machine; a slower machine is
+    // unaffected.  Fast-time runs (DC3_FAST_TIME) step game time per frame and
+    // are left alone, as is a caller that sets its own cap.
+    static constexpr int kFlowFpsCap = 240;
+    const bool pace = !strstr(extraEnv, "DC3_FAST_TIME") && !strstr(extraEnv, "DC3_FPS_CAP");
+
     std::ostringstream cmd;
     // DC3_TEL at interval 1: GameplayReachesPlayingState reads the real
     // hamprovider game_stage off the per-frame telemetry line.
@@ -228,6 +240,7 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeco
         << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0"
         << (fastBoot ? " DC3_FAST_BOOT=1" : "")
         << " DC3_TEL=1 DC3_TEL_INTERVAL=1"
+        << (pace ? " DC3_FPS_CAP=" + std::to_string(kFlowFpsCap) : std::string())
         << " DC3_CACHE_DIR=" << persistence << "/cache"
         << " DC3_SAVE_DIR=" << persistence << "/saves"
         << " MILO_INPUT_SCRIPT=" << script
@@ -1098,6 +1111,128 @@ TEST_F(ForcedHelpbarAfterSongTest, HelpbarLeavesControllerModeOncePerSong) {
 }
 
 // ===========================================================================
+// Memory is flat song over song (PLAN H-24)
+// ===========================================================================
+//
+// three-songs.txt plays three different Perform songs in one process and
+// returns to song select after each.  DC3_MEM_LOG prints one line per screen
+// Enter (src/system/obj/Object.cpp NativeMemReport):
+//     DC3 MEM song_select_screen rss=..MB inuse=..MB heldfree=..MB ... objects=N
+// The song_select_screen lines are the samples: index 0 is before the first
+// song, 1..3 after each song.  Song select is the same screen with the same
+// content each time, so whatever is live there and was not before is what a
+// song left behind.
+//
+// MEASURED 2026-11-14, MILO_NORENDER + DC3_FAST_TIME, seven distinct songs,
+// box load ~105 on 32 threads (memory numbers do not depend on load):
+//
+//   song select after song   0      1      2      3      4      5      6
+//   fixed:   rss MB         354    310    312    312    313    314    313
+//            in use MB    281.2  255.6  255.9  255.9  256.0  256.0  259.1
+//            objects      27346  26102  26150  26153  26154  26154  26154
+//   no trim (DC3_MEM_TRIM=0):
+//            rss MB         354    481    506    506    526    526    523
+//
+// Two causes, two assertions:
+//  * A leak: ~HamNavList's native cascade branch dropped its list widgets
+//    (dir-less copies, UIListDir::CreateElements) without deleting them: +~450
+//    Hmx::Objects and ~1 MB per song select visit, linear.  After the fix the
+//    count settles (+48 after song 2, then +3, +1, 0, 0).  Bound: 150 objects
+//    over songs 2-3, three times the one-off step seen, a third of one visit's
+//    leak.
+//  * glibc keeps freed heap resident.  A song's working set (in use ~420-460
+//    MB at the results screen) is freed when the song unloads -- in use comes
+//    back to within ~1 MB -- but glibc gives almost none of it back, so rss
+//    stays at the high-water of the biggest song so far: +127 MB after song 1,
+//    +25 more after song 2, plateauing near +170 MB.  That is the "~90 MB a
+//    song" of the soak (H-24).  NativeReleaseFreeHeap (malloc_trim at a
+//    screen Enter) returns it.  Bounds: rss at every post-song song select
+//    within 25 MB of the pre-song one (fixed: -44 to -40; no trim: +127 and
+//    up), and rss growth over songs 2-3 under 10 MB (fixed: +2; no trim: +25).
+//    In use over songs 2-3 under 4 MB (fixed: +0.3).
+//
+// Wall clock: ~70 s a song plus boot at load ~105 (MEASURED); 600 s is a hang
+// guard.  The frame cap is a runaway guard too (~42k frames a song).
+static constexpr int kThreeSongsFrames = 300000;
+
+struct MemSample {
+    double rss, inUse;
+    long objects;
+};
+
+static std::vector<MemSample> MemSamplesAt(const std::string &out, const char *screen) {
+    std::vector<MemSample> samples;
+    std::string prefix = std::string("DC3 MEM ") + screen + " rss=";
+    std::istringstream in(out);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!StartsWith(line, prefix.c_str())) continue;
+        MemSample s = {-1, -1, -1};
+        size_t at;
+        if ((at = line.find(" rss=")) != std::string::npos) s.rss = atof(line.c_str() + at + 5);
+        if ((at = line.find(" inuse=")) != std::string::npos) s.inUse = atof(line.c_str() + at + 7);
+        if ((at = line.find(" objects=")) != std::string::npos)
+            s.objects = atol(line.c_str() + at + 9);
+        samples.push_back(s);
+    }
+    return samples;
+}
+
+class MemoryFlatSongOverSongTest : public ControllerModeFlowTest {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+    static void SetUpTestSuite() {
+        if (!getenv("DC3_DTA_FLOW_TESTS") || sRanEngine) return;
+        sResult = RunDtaFlow(kThreeSongsFrames, 600, "three-songs.txt",
+                             "MILO_NORENDER=1 DC3_FAST_TIME=1 DC3_CONTROLLER_MODE=forced "
+                             "DC3_MEM_LOG=1",
+                             true, kTutorialGeneral);
+        sRanEngine = true;
+    }
+    void SetUp() override { CheckRan(sResult, sRanEngine); }
+    void TearDown() override {
+        if (HasFailure() && sRanEngine) Dump(sResult);
+    }
+    static std::string Table(const std::vector<MemSample> &s) {
+        std::ostringstream t;
+        for (size_t i = 0; i < s.size(); i++)
+            t << "\n  song select " << i << ": rss=" << s[i].rss << "MB inuse=" << s[i].inUse
+              << "MB objects=" << s[i].objects;
+        return t.str();
+    }
+};
+DtaRunResult MemoryFlatSongOverSongTest::sResult = {};
+bool MemoryFlatSongOverSongTest::sRanEngine = false;
+
+TEST_F(MemoryFlatSongOverSongTest, ObjectsAndHeapDoNotGrowAfterTheFirstSong) {
+    std::vector<MemSample> s = MemSamplesAt(sResult.output, "song_select_screen");
+    ASSERT_GE(s.size(), 4u) << "precondition: three-songs.txt should reach song select "
+                               "four times (before, and after each of three songs)"
+                            << Table(s);
+    for (const MemSample &m : s)
+        ASSERT_TRUE(m.rss > 0 && m.inUse > 0 && m.objects > 0)
+            << "unparseable DC3 MEM line" << Table(s);
+    printf("song select samples:%s\n", Table(s).c_str());
+    EXPECT_LE(s[3].objects - s[1].objects, 150)
+        << "Hmx::Objects left behind by songs 2 and 3: something a song or song "
+           "select creates is not destroyed (the ~HamNavList widget leak was ~450 a "
+           "visit).  DC3_MEM_CENSUS=1 prints the classes that moved."
+        << Table(s);
+    EXPECT_LE(s[3].inUse - s[1].inUse, 4.0)
+        << "heap in use grew over songs 2 and 3" << Table(s);
+    EXPECT_LE(s[3].rss - s[1].rss, 10.0)
+        << "resident memory grew over songs 2 and 3" << Table(s);
+    for (size_t i = 1; i < 4; i++)
+        EXPECT_LE(s[i].rss - s[0].rss, 25.0)
+            << "song select after song " << i << " is not back near its pre-song "
+            << "resident size: the freed song is still resident (malloc_trim at "
+               "screen Enter, NativeReleaseFreeHeap, not running?)"
+            << Table(s);
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
+}
+
+// ===========================================================================
 // Options > Gameplay and the Kinect Tuner (PLAN G-12, G-16)
 // ===========================================================================
 //
@@ -1265,7 +1400,7 @@ TEST_F(OptionsGameplayFlowTest, KinectTunerGivesFeedback) {
 // 25.20 MiB as the web build reads it (the inflated extraction), which is why
 // loading.dta's 16 MiB `max_cache_size` sent it -- and 33 other songs -- back
 // to the title screen on web until PreloadPanel::SetTypeDef scaled it
-// (185b6f50e).  omg.txt picks it (51 downs: the last row of song select) on a
+// (185b6f50e).  omg.txt picks it by name (`highlight omg`) on a
 // console that has seen the move tutorial, so the run goes straight from
 // multiuser_screen to loading.
 //
@@ -1307,9 +1442,11 @@ TEST_F(LargestSongFlowTest, OmgPreloadsAndReachesGameplay) {
     ASSERT_NE(out.find("DC3 Input: wait_screen 'song_select_screen' satisfied"),
               std::string::npos)
         << "precondition: omg.txt never reached song_select_screen";
+    ASSERT_NE(out.find("DC3 Input: highlight 'omg' satisfied"), std::string::npos)
+        << "the `highlight omg` directive in scripts/dc3-input-flows/omg.txt never put "
+           "song select's highlight on omg (look for 'DC3 Input: TIMEOUT highlight')";
     ASSERT_NE(out.find("sym='omg'"), std::string::npos)
-        << "the confirm on song select did not pick omg -- the song list changed; "
-           "recount the downs in scripts/dc3-input-flows/omg.txt";
+        << "the confirm on song select did not pick omg although the highlight was on it";
     EXPECT_EQ(out.find("Could not cache"), std::string::npos)
         << "PreloadPanel::CheckFileCached failed: the preload cache evicted part of "
            "omg's set (loading.dta max_cache_size vs the bytes this build reads)";
@@ -1421,9 +1558,11 @@ TEST_F(DlcSongFlowTest, MilkshakeMountsAndReachesGameplay) {
     ASSERT_NE(out.find("DC3 Input: wait_screen 'song_select_screen' satisfied"),
               std::string::npos)
         << "precondition: milkshake.txt never reached song_select_screen";
+    ASSERT_NE(out.find("DC3 Input: highlight 'milkshake' satisfied"), std::string::npos)
+        << "the `highlight milkshake` directive in scripts/dc3-input-flows/milkshake.txt never put "
+           "song select's highlight on milkshake (look for 'DC3 Input: TIMEOUT highlight')";
     ASSERT_NE(out.find("sym='milkshake'"), std::string::npos)
-        << "the confirm on song select did not pick milkshake -- the song list changed; "
-           "recount the downs in scripts/dc3-input-flows/milkshake.txt";
+        << "the confirm on song select did not pick milkshake although the highlight was on it";
     EXPECT_NE(out.find("cnt00000000:/songs/milkshake/gen/milkshake.milo_xbox"),
               std::string::npos)
         << "the song milo was not read from the package's drive";

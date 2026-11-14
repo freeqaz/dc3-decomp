@@ -10,6 +10,11 @@ clock:
   * per-thread CPU from /proc/<pid>/task/*/stat (utime+stime), grouped by
     thread name, as % of one core
   * optionally `perf record -g` of the whole process (--perf DIR)
+  * optionally (--instructions) the main thread's user-space instructions
+    and cycles per frame from `perf stat -t <main tid>`: instructions retired
+    do not move with the machine's load the way CPU time does (other jobs
+    on a shared box change cache misses, clocks and driver waits, not the
+    instruction count), so it is the number to compare two builds by there
 
 The run uses a private, seeded persistence root (move tutorial seen, as
 native/tests/test_dta_flow.cpp's SeedGlobalOptions does) so the flow is the
@@ -138,8 +143,18 @@ def read_watts(path):
         return None
 
 
-def sample(eng, pid, seconds, perf_out=None):
+def sample(eng, pid, seconds, perf_out=None, count_instructions=False):
     perf = None
+    stat = None
+    stat_out = None
+    if count_instructions:
+        stat_fd, stat_out = tempfile.mkstemp(prefix="perfstat-", suffix=".csv")
+        os.close(stat_fd)
+        # The main thread only (tid == pid): the frame's own work.
+        stat = subprocess.Popen(
+            ["perf", "stat", "-x", ",", "-e", "instructions:u,cycles:u", "-t", str(pid),
+             "-o", stat_out, "--", "sleep", str(seconds)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     srcs = power_sources()
     watts = {k: [] for k in srcs}
     if perf_out:
@@ -163,6 +178,14 @@ def sample(eng, pid, seconds, perf_out=None):
     f1, t1, w1 = eng.frame(), thread_times(pid), time.time()
     if perf:
         perf.wait()
+    counters = {}
+    if stat:
+        stat.wait()
+        for line in open(stat_out):
+            parts = line.strip().split(",")
+            if len(parts) >= 3 and parts[0].isdigit():
+                counters[parts[2].split(":")[0]] = int(parts[0])
+        os.unlink(stat_out)
     dt = w1 - w0
     by_name = {}
     main_pct = 0.0
@@ -174,7 +197,14 @@ def sample(eng, pid, seconds, perf_out=None):
             continue
         by_name[comm] = by_name.get(comm, 0.0) + pct
     frames = max(1, f1 - f0)
-    return {
+    extra = {}
+    if "instructions" in counters:
+        # perf's window and the frame window are both `seconds` long and start
+        # together; per frame is instructions over the frames in that window.
+        extra["main_minstr_per_frame"] = counters["instructions"] / frames / 1e6
+    if "cycles" in counters:
+        extra["main_mcycles_per_frame"] = counters["cycles"] / frames / 1e6
+    return dict(extra, **{
         "fps": (f1 - f0) / dt,
         # Main-thread CPU per frame: the load-robust number to compare builds
         # by (fps on a shared machine moves with everyone else's work).
@@ -186,7 +216,7 @@ def sample(eng, pid, seconds, perf_out=None):
         "nthreads": len(t1),
         "seconds": dt,
         "watts": {k: round(sum(v) / len(v), 2) for k, v in watts.items() if v},
-    }
+    })
 
 
 def main():
@@ -200,11 +230,16 @@ def main():
     ap.add_argument("--gameplay-delay", type=float, default=40.0,
                     help="wall seconds into game_screen before sampling gameplay")
     ap.add_argument("--perf", metavar="DIR")
+    ap.add_argument("--instructions", action="store_true",
+                    help="also count the main thread's user instructions/cycles per frame")
     ap.add_argument("--env", action="append", default=[])
     ap.add_argument("--json")
     ap.add_argument("--skip-results", action="store_true")
     ap.add_argument("--log", default=None)
     a = ap.parse_args()
+    if a.perf:
+        # perf record cannot create its -o directory, and its stderr is not shown
+        os.makedirs(a.perf, exist_ok=True)
 
     root = seed_root()
     portfile = os.path.join(root, "http_port")
@@ -219,6 +254,9 @@ def main():
         env.pop("MILO_HEADLESS", None)
     else:
         env["MILO_HEADLESS"] = "1"
+    # The song is YMCA by one counted down: pin the disc list, which the dev
+    # profile would otherwise extend with <data>/dlc (DC3_DLC); --env wins.
+    env.setdefault("DC3_DLC", "0")
     for kv in a.env:
         k, v = kv.split("=", 1)
         env[k] = v
@@ -244,11 +282,15 @@ def main():
 
         def measure(name):
             perf_out = os.path.join(a.perf, name + ".perf.data") if a.perf else None
-            r = sample(eng, proc.pid, a.seconds, perf_out)
+            r = sample(eng, proc.pid, a.seconds, perf_out, a.instructions)
             r["screen"] = eng.screen()
             results[name] = r
-            print("%-11s fps %6.1f  main %5.1f%% (%.2f ms/frame)  other %5.1f%%  %s %s" % (
-                name, r["fps"], r["main_pct"], r["main_ms_per_frame"], r["other_pct"],
+            instr = ""
+            if "main_minstr_per_frame" in r:
+                instr = "  %.2f Minstr/frame %.2f Mcyc/frame" % (
+                    r["main_minstr_per_frame"], r.get("main_mcycles_per_frame", 0.0))
+            print("%-11s fps %6.1f  main %5.1f%% (%.2f ms/frame)%s  other %5.1f%%  %s %s" % (
+                name, r["fps"], r["main_pct"], r["main_ms_per_frame"], instr, r["other_pct"],
                 r["threads"], r["watts"]),
                 file=sys.stderr)
 

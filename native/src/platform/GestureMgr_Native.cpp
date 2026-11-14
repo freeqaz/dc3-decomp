@@ -208,6 +208,8 @@ std::string GestureMgr_NativePoseModelPath() {
 void GestureMgr_NativeInit() {
     ResetSlotMap();
     JoypadScriptSetWakeNeeded(NativeWakeNeeded);
+    extern void JoypadSelect_NativeRegister();
+    JoypadSelect_NativeRegister();
 
     // In headless mode (tests, CLI tools), skip the pose server entirely.
     // The dummy skeleton in GestureMgr_NativePoll provides a neutral standing
@@ -841,7 +843,7 @@ void FillPublishDelay() {
     if (changed || std::fabs(delay - sLoggedDelay) >= 0.02f) {
         sWasEngaged = gFill.Engaged();
         sLoggedDelay = delay;
-        double med = gFill.MedianInterval();
+        double med = gFill.RateInterval();
         fprintf(stderr,
                 "DC3 POSE FILL: %s (gain %.2f) %s at song %.2f s (camera %.1f frames/s, stream delay "
                 "%.0f ms added to the scorer's latency)\n",
