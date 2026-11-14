@@ -291,6 +291,10 @@ class Soak:
             if clip and clip != self.current_clip:
                 self.clip(clip)
             elif not clip:
+                # Keep a dancer of the right head count: the full soak's
+                # Story (one player) ran on the Battle duo clip it inherited.
+                if self.current_clip.endswith("_duo.mp4") != duo:
+                    self.clip(footage(self.a.footage, "macarena", duo) or self.default_clip)
                 say(f"no footage for {song}: the dancer is doing {os.path.basename(self.current_clip)}")
         return song
 
