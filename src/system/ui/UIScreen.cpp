@@ -230,7 +230,9 @@ void UIScreen::Enter(UIScreen *scr) {
 #ifdef HX_NATIVE
     printf("DC3 UI: Screen '%s' Enter (from '%s')\n", Name(), scr ? scr->Name() : "<null>");
     {
+        extern void NativeReleaseFreeHeap(const char *tag);
         extern void NativeMemReport(const char *tag);
+        NativeReleaseFreeHeap(Name());
         NativeMemReport(Name());
     }
 #endif

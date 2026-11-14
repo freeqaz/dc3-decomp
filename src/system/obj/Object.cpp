@@ -1413,6 +1413,7 @@ DataNode Hmx::Object::OnPropertyAppend(const DataArray *da) {
 #if defined(__linux__)
 #include <dlfcn.h>
 #include <unistd.h>
+#include <time.h>
 #endif
 #if defined(__GLIBC__)
 #include <malloc.h>
@@ -1425,6 +1426,84 @@ static bool MemEnvOn(const char *name) {
 }
 
 long NativeLiveObjectCount() { return NativeObjCensus::gLive; }
+
+static long ReadRssMb() {
+#if defined(__linux__)
+    FILE *f = fopen("/proc/self/statm", "r");
+    long mb = -1;
+    if (f) {
+        long size = 0, resident = 0;
+        if (fscanf(f, "%ld %ld", &size, &resident) == 2)
+            mb = resident * sysconf(_SC_PAGESIZE) / (1024 * 1024);
+        fclose(f);
+    }
+    return mb;
+#else
+    return -1;
+#endif
+}
+
+// Hand the heap's free pages back to the OS (PLAN H-24).
+//
+// The 360 runs the game out of fixed heaps (MemMgr), so memory a song frees is
+// simply there for the next one. Native allocates from glibc malloc, which
+// keeps everything a song frees -- ~160-220 MB of it after a Perform song,
+// MEASURED -- resident in the middle of its heap: it can only shrink the heap
+// from the top, and a single live block above the freed region (a menu label
+// allocated mid-song) pins all of it. That free memory was the bulk of "RSS
+// grows ~90 MB a song": allocator-held, not leaked (in use returns to within
+// ~1 MB of the previous song select). malloc_trim(0) madvises every free page
+// in every arena, which is what gives it back.
+//
+// Called on each UIScreen::Enter: a screen change is where the game unloads
+// (the song's world goes between the results and song select), it is
+// already a loading moment, and the trim is skipped unless 32 MB more has been
+// freed since the last one, so ordinary menu screens do not pay it. DC3_MEM_TRIM=0 turns it
+// off. glibc only: macOS's allocator and the browser's (whose memory cannot
+// shrink at all) do not have this behaviour or this call.
+void NativeReleaseFreeHeap(const char *tag) {
+#if defined(__GLIBC__)
+    static int on = -1;
+    if (on < 0) {
+        const char *e = getenv("DC3_MEM_TRIM");
+        on = (e && strcmp(e, "0") == 0) ? 0 : 1;
+    }
+    if (!on)
+        return;
+    typedef int (*MallctlFn)(const char *, void *, size_t *, void *, size_t);
+    static MallctlFn mallctl = (MallctlFn)dlsym(RTLD_DEFAULT, "mallctl");
+    if (mallctl)
+        return; // another allocator is preloaded; mallinfo2 would describe nothing
+    // Trim only once 32 MB more is held free than the least seen since the
+    // last trim. fordblks still counts pages a trim has already returned (they
+    // stay free chunks, just not resident), so a plain "held free > N" test
+    // re-trims on every screen after a song for nothing; the low-water mark
+    // approximates "freed since memory was last given back".
+    struct mallinfo2 mi = mallinfo2();
+    static const size_t kTrimStep = 32u << 20;
+    static size_t sLowWater = (size_t)-1;
+    if (mi.fordblks < sLowWater)
+        sLowWater = mi.fordblks;
+    if (mi.fordblks - sLowWater < kTrimStep)
+        return;
+    sLowWater = mi.fordblks;
+    static int log = -1;
+    if (log < 0)
+        log = MemEnvOn("DC3_MEM_LOG") ? 1 : 0;
+    long before = log ? ReadRssMb() : 0;
+    timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    malloc_trim(0);
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    if (log) {
+        double ms = (t1.tv_sec - t0.tv_sec) * 1e3 + (t1.tv_nsec - t0.tv_nsec) / 1e6;
+        printf("DC3 MEM trim %s heldfree=%.1fMB rss %ld -> %ldMB in %.1f ms\n", tag,
+               mi.fordblks / 1048576.0, before, ReadRssMb(), ms);
+    }
+#else
+    (void)tag;
+#endif
+}
 
 void NativeMemReport(const char *tag) {
     static int on = -1;
