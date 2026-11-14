@@ -99,6 +99,10 @@ Above the definition (was lines 374-387):
 // (n.x * m.N.x with the factors swapped), inert under all 8 operand orders.
 ```
 
+p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.718, 2 non-equal row(s): NOT A BUG.
+Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
+consistent target<->base value pairing at every use (parameters, call arguments, stores,
+compares): pure register permutation, no operand swap.
 
 ## `?Intersect@@YA_NABVTriangle@@ABVBox@@@Z`
 
