@@ -5,6 +5,7 @@
 #include "PoseLevel_Native.h" // NativeSensorLevel: the camera-tilt step
 #ifndef __EMSCRIPTEN__
 #include "PosePerformer_Native.h" // Dc3PosePerformerEnabled
+#include "PoseSession_Native.h"   // DC3_POSE_RECORD / session replay (PLAN L-1)
 #endif
 #include "gesture/LiveCameraInput.h"
 #include "NativeSettings.h" // Dc3EnvFlag, Dc3ControllerModeForced
@@ -779,7 +780,17 @@ static const SkeletonFrame *BuildSensorFrame() {
             // slots hold raw camera space; a camera that does not know its
             // gravity gets an estimate, everything else (0,1,0).
             bool unlevelled = TheSkeletonProvider->FrameUnlevelled() || PerformerReplaysRecording();
-            NativeSensorLevel(sFrame, sPersons, numPersons, unlevelled, sFrame.mElapsedMs * 0.001f);
+#ifndef __EMSCRIPTEN__
+            // A replayed session frame is levelled as it was when recorded
+            // (the estimate is session state a one-song replay cannot rebuild).
+            if (!Dc3PoseSessionReplayLevel(sFrame, frameId))
+#endif
+                NativeSensorLevel(sFrame, sPersons, numPersons, unlevelled, sFrame.mElapsedMs * 0.001f);
+#ifndef __EMSCRIPTEN__
+            // DC3_POSE_RECORD: what the sensor accepted, for an offline replay.
+            Dc3PoseSessionRecord(sPersons, numPersons, frameId, TheSkeletonProvider->Timestamp(),
+                                 unlevelled, sFrame);
+#endif
         } else {
             ScoringDebugTick(false, true, 0);
         }

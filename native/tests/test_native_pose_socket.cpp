@@ -19,6 +19,10 @@
 //                          or DC3_POSE_LEVEL=0, is untouched.
 //   PoseServerStartTest    Start()'s no-camera path: the spawned server's exit
 //                          is noticed at once and becomes a player notice.
+//   PoseSessionTest        DC3_POSE_RECORD / session: replay (PLAN L-1): what a
+//                          live sensor accepted, recorded and replayed, reaches
+//                          the scorer as it did live -- levelled by the tilt
+//                          estimate the live session had built up.
 //
 // Each case was sabotage-checked against the code it pins (see the commit).
 
@@ -28,6 +32,7 @@
 #include "platform/NativeNotice.h"
 #include "platform/Skeleton_Native.h"
 #include "platform/PoseLevel_Native.h"
+#include "platform/PoseSession_Native.h"
 #include "gesture/CameraInput.h"
 #include "gesture/GestureMgr.h" // NUM_SKELETONS
 #include "gesture/SkeletonUpdate.h"
@@ -869,6 +874,147 @@ TEST_F(PoseSensorLevelTest, AFixedPitchLevelsByExactlyThat) {
     EXPECT_NEAR(Pitch(f->mSkeletonDatas[slot].mJointPositions), 0.0f, 0.05f);
     EXPECT_FALSE(NativeSensorGravityEstimator().HasEstimate());
 }
+
+// ===========================================================================
+// PoseSessionTest -- record a live sensor session, replay it (PLAN L-1)
+// ===========================================================================
+class PoseSessionTest : public PoseSensorLevelTest {
+protected:
+    struct Seen {
+        Vector3 joints[2][kNumJoints];
+        int track[2];
+        Vector3 floor;
+    };
+    // Both tracked slots of `f`, in tracking-id order (a, b).
+    static bool Capture(const SkeletonFrame *f, int a, int b, Seen &out) {
+        int ids[2] = { a, b };
+        for (int k = 0; k < 2; k++) {
+            int slot = SlotOf(f, ids[k]);
+            if (slot < 0)
+                return false;
+            out.track[k] = ids[k];
+            for (int j = 0; j < kNumJoints; j++) {
+                const PaddedJointPos &p = f->mSkeletonDatas[slot].mJointPositions[j];
+                out.joints[k][j].Set(p.x, p.y, p.z);
+            }
+        }
+        out.floor = f->mFloorNormal;
+        return true;
+    }
+    static std::string TempPath(const char *name) {
+        const char *tmp = getenv("TMPDIR");
+        std::string dir = std::string((tmp && *tmp) ? tmp : "/tmp") + "/dc3_session_XXXXXX";
+        std::vector<char> buf(dir.begin(), dir.end());
+        buf.push_back('\0');
+        EXPECT_NE(mkdtemp(buf.data()), nullptr);
+        return std::string(buf.data()) + "/" + name;
+    }
+};
+
+TEST_F(PoseSessionTest, AReplayedSessionReachesTheScorerAsItDidLive) {
+    const std::string path = TempPath("live.dc3session");
+    Dc3PoseSessionRecordTo(path.c_str());
+    ASSERT_EQ(Dc3PoseSessionRecordPath(), path);
+
+    // Live: two people, a camera pitched 8 degrees, flagged unlevelled, 10 s
+    // at 30 Hz -- long enough that the estimator has an estimate and moves.
+    std::vector<Seen> live;
+    std::vector<uint32_t> ids;
+    for (int k = 0; k < 300; k++) {
+        WirePerson a = Tilted(61, 8.0f), b = Tilted(62, 8.0f);
+        for (int j = 0; j < kNumJoints; j++) {
+            a.values[j * 4 + 0] -= 0.4f;
+            b.values[j * 4 + 0] += 0.4f + 0.01f * std::sin(k * 0.2f); // b sways
+        }
+        uint32_t id = ++sFrameId;
+        ASSERT_TRUE(mServer.Send(PacketV2(id, 100.0 + id / 30.0, 640, 480, kNumJoints, 1, { a, b }, -1, 1)));
+        ASSERT_TRUE(WaitForFrame(mProvider, id));
+        const SkeletonFrame *f = mSensor->PollNewFrame();
+        ASSERT_NE(f, nullptr) << k;
+        Seen s;
+        ASSERT_TRUE(Capture(f, 61, 62, s)) << k;
+        live.push_back(s);
+        ids.push_back(id);
+    }
+    Dc3PoseSessionRecordTo(nullptr);
+    ASSERT_TRUE(NativeSensorGravityEstimator().HasEstimate());
+
+    // The file holds what the sensor accepted, exactly.
+    std::vector<Dc3PoseSession::Frame> frames;
+    std::string err;
+    ASSERT_TRUE(Dc3PoseSession::Load(path.c_str(), frames, &err)) << err;
+    ASSERT_EQ(frames.size(), live.size());
+    for (size_t k = 0; k < frames.size(); k++) {
+        ASSERT_EQ(frames[k].frameId, ids[k]);
+        EXPECT_EQ(frames[k].timestamp, 100.0 + ids[k] / 30.0);
+        EXPECT_TRUE(frames[k].unlevelled);
+        EXPECT_TRUE(frames[k].level);
+        ASSERT_EQ(frames[k].persons.size(), 2u);
+        EXPECT_EQ(frames[k].persons[0].trackId, 61);
+        EXPECT_EQ(frames[k].persons[1].trackId, 62);
+        EXPECT_EQ(frames[k].floorNormal.y, live[k].floor.y) << k;
+        EXPECT_EQ(frames[k].floorNormal.z, live[k].floor.z) << k;
+    }
+    // The estimate MOVED during the session, so a replay that re-estimated
+    // from scratch could not match (the point of recording the floor normal).
+    EXPECT_GT(std::fabs(live.back().floor.z - live.front().floor.z), 0.05f);
+
+    // Give each frame its own song time and replay it, the estimator reset as
+    // in a fresh process that is replaying only this song.
+    for (size_t k = 0; k < frames.size(); k++)
+        frames[k].song = 10.0 + k / 30.0;
+    const std::string replayPath = TempPath("song.dc3session");
+    {
+        FILE *fp = fopen(replayPath.c_str(), "w");
+        ASSERT_NE(fp, nullptr);
+        fputs("# dc3-pose-session v1\n", fp);
+        for (const Dc3PoseSession::Frame &f : frames)
+            fputs(Dc3PoseSession::Format(f).c_str(), fp);
+        fclose(fp);
+    }
+    NativeSensorLevelSetPolicy(NativePoseLevelPolicy());
+    SkeletonFrame::sUpVectorSmoother.ForceValue(Vector3(0, 1, 0));
+    ASSERT_FALSE(NativeSensorGravityEstimator().HasEstimate());
+    ASSERT_TRUE(Dc3PoseSessionReplayLoad(replayPath.c_str()));
+
+    // Before the first frame: the first frame is held (the player stays
+    // tracked through the menus), as a new frame each call.
+    Dc3PoseSessionReplayPumpAt(&mProvider, 5.0);
+    const SkeletonFrame *f = mSensor->PollNewFrame();
+    ASSERT_NE(f, nullptr);
+    EXPECT_GE(SlotOf(f, 61), 0);
+    EXPECT_GE(SlotOf(f, 62), 0);
+
+    for (size_t k = 0; k < frames.size(); k++) {
+        Dc3PoseSessionReplayPumpAt(&mProvider, frames[k].song + 0.001);
+        f = mSensor->PollNewFrame();
+        ASSERT_NE(f, nullptr) << k;
+        EXPECT_EQ(mProvider.FrameId(), ids[k]);
+        EXPECT_EQ(mProvider.Timestamp(), 100.0 + ids[k] / 30.0);
+        Seen s;
+        ASSERT_TRUE(Capture(f, 61, 62, s)) << k;
+        for (int p = 0; p < 2; p++) {
+            for (int j = 0; j < kNumJoints; j++) {
+                // Equal up to the sensor's 1 um noise floor (its counter is
+                // per process, not per frame).
+                ASSERT_NEAR(s.joints[p][j].x, live[k].joints[p][j].x, 1e-5f) << k << " " << p << " " << j;
+                ASSERT_NEAR(s.joints[p][j].y, live[k].joints[p][j].y, 1e-5f) << k << " " << p << " " << j;
+                ASSERT_NEAR(s.joints[p][j].z, live[k].joints[p][j].z, 1e-5f) << k << " " << p << " " << j;
+            }
+        }
+    }
+    // The same song time again is not a new frame; past the end, the last
+    // frame is held.
+    Dc3PoseSessionReplayPumpAt(&mProvider, frames.back().song + 0.001);
+    EXPECT_EQ(mProvider.FrameId(), ids.back());
+    Dc3PoseSessionReplayPumpAt(&mProvider, frames.back().song + 5.0);
+    f = mSensor->PollNewFrame();
+    ASSERT_NE(f, nullptr);
+    EXPECT_NE(mProvider.FrameId(), ids.back());
+    EXPECT_GE(SlotOf(f, 62), 0);
+    Dc3PoseSessionReplayLoad("/nonexistent/none.dc3session"); // clears the replay
+}
+
 
 TEST(PoseServerExitTest, EachServerExitCodeHasItsOwnMessage) {
     using P = NativeSkeletonProvider;

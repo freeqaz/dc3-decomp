@@ -16,6 +16,7 @@
 #include <signal.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/stat.h>
 #include <poll.h>
 #ifdef __linux__
 #include <linux/limits.h>
@@ -92,7 +93,7 @@ static const char *kStandIn =
     " The game is using a stand-in skeleton, so your dancing is not scored.";
 
 NativeSkeletonProvider::Problem NativeSkeletonProvider::DescribeServerExit(
-    int waitStatus, const std::string &camera
+    int waitStatus, const std::string &camera, const std::string &python
 ) {
     Problem p;
     char buf[512];
@@ -136,14 +137,17 @@ NativeSkeletonProvider::Problem NativeSkeletonProvider::DescribeServerExit(
     case kExitNoDeps:
         snprintf(buf, sizeof(buf),
             "Python pose packages (mediapipe, opencv-python, numpy) are not"
-            " installed for python3 - pose tracking is off.%s",
-            kStandIn);
+            " installed for %s - pose tracking is off.%s Install them with"
+            " scripts/playtest/bootstrap.sh --fix (it makes the venv the game"
+            " looks for), or point DC3_POSE_PYTHON at a Python that has them.",
+            python.c_str(), kStandIn);
         p.brief = "Pose packages missing: pose tracking off";
         break;
     case kExitExecFailed:
         snprintf(buf, sizeof(buf),
-            "python3 could not be started, so there is no pose server - pose"
-            " tracking is off.%s", kStandIn);
+            "%s could not be started, so there is no pose server - pose"
+            " tracking is off.%s Run scripts/playtest/bootstrap.sh --fix.",
+            python.c_str(), kStandIn);
         p.brief = "No python3: pose tracking off";
         break;
     default:
@@ -304,6 +308,101 @@ static std::string CameraFramesArg() {
 }
 
 
+// ---- Which Python runs the pose server ------------------------------------
+static bool IsExecutableFile(const std::string &path) {
+    struct stat st;
+    return !path.empty() && stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode)
+        && access(path.c_str(), X_OK) == 0;
+}
+
+// The main checkout of a git worktree: <root>/.git is then a file
+// "gitdir: <main>/.git/worktrees/<name>".  "" for a main checkout or no git.
+static std::string MainCheckoutOf(const std::string &root) {
+    FILE *f = fopen((root + "/.git").c_str(), "r");
+    if (!f)
+        return std::string();
+    char line[4096] = {};
+    bool ok = fgets(line, sizeof(line), f) != nullptr;
+    fclose(f);
+    if (!ok || strncmp(line, "gitdir: ", 8) != 0)
+        return std::string(); // a directory (fopen succeeds, fgets fails) or junk
+    std::string gitdir(line + 8);
+    while (!gitdir.empty() && (gitdir.back() == '\n' || gitdir.back() == '\r'))
+        gitdir.pop_back();
+    size_t at = gitdir.find("/.git/worktrees/");
+    return at == std::string::npos ? std::string() : gitdir.substr(0, at);
+}
+
+NativeSkeletonProvider::PythonChoice NativeSkeletonProvider::ChoosePosePython(
+    const std::string &treeRoot, const char *home
+) {
+    if (const char *py = getenv("DC3_POSE_PYTHON"); py && *py)
+        return { py, "DC3_POSE_PYTHON" };
+    std::string venv;
+    const char *venvEnv = getenv("DC3_POSE_VENV");
+    if (venvEnv && *venvEnv)
+        venv = venvEnv;
+    else if (home && *home)
+        venv = std::string(home) + "/.local/share/dc3/pose-venv";
+    if (!venv.empty() && IsExecutableFile(venv + "/bin/python3"))
+        return { venv + "/bin/python3",
+                 std::string("the playtest venv") + (venvEnv && *venvEnv ? " (DC3_POSE_VENV)" : "")
+                     + "; scripts/playtest/bootstrap.sh --fix makes it" };
+    if (!treeRoot.empty()) {
+        if (IsExecutableFile(treeRoot + "/.venv/bin/python3"))
+            return { treeRoot + "/.venv/bin/python3", "the checkout's .venv" };
+        std::string main = MainCheckoutOf(treeRoot);
+        if (!main.empty() && IsExecutableFile(main + "/.venv/bin/python3"))
+            return { main + "/.venv/bin/python3", "the main checkout's .venv (this is a worktree)" };
+    }
+    return { "python3", "no venv found (" + (venv.empty() ? std::string("no $HOME") : venv)
+                            + ", " + (treeRoot.empty() ? std::string("?") : treeRoot)
+                            + "/.venv): python3 from PATH" };
+}
+
+NativeSkeletonProvider::PythonChoice NativeSkeletonProvider::ChoosePosePython() {
+    std::string native = NativeTreeDir();
+    std::string root;
+    if (size_t slash = native.rfind('/'); slash != std::string::npos && slash > 0)
+        root = native.substr(0, slash);
+    return ChoosePosePython(root, getenv("HOME"));
+}
+
+std::vector<std::string> NativeSkeletonProvider::ServerCommand(
+    const std::string &scriptPath, const std::string &socketPath, const std::string &modelPath,
+    const std::string &camera
+) {
+    std::vector<std::string> argv = {
+        ChoosePosePython().path, scriptPath, "--socket", socketPath, "--model", modelPath,
+    };
+    // DC3_POSE_VIDEO: a video file stands in for the camera (looped), so the
+    // whole live path -- spawn, exit codes, notices, the socket -- runs
+    // without one.  Otherwise the camera.
+    const char *video = getenv("DC3_POSE_VIDEO");
+    if (video && *video) {
+        argv.insert(argv.end(), { "--video", video, "--loop" });
+    } else {
+        argv.insert(argv.end(), { "--camera", camera.empty() ? std::string("auto") : camera });
+    }
+    // DC3_POSE_HFOV (degrees) calibrates the server to the real camera's
+    // horizontal FOV -- absolute depth scales with the assumed focal length,
+    // and the 58.51-degree Kinect default measured +0.76..1.73 m of depth bias
+    // on real 65-72.5 degree cameras (bench_model_z.py). Pose SHAPE is
+    // FOV-invariant, so the default stays safe for scoring; calibrate for
+    // better absolutes.
+    const char *hfov = getenv("DC3_POSE_HFOV");
+    if (hfov && *hfov)
+        argv.insert(argv.end(), { "--hfov", hfov });
+    // PLAN P-4: ask for the camera picture + person mask (protocol v3) the
+    // player view is drawn from.  DC3_CAMERA_FRAMES=off keeps the pose-only v2
+    // stream; WxH picks the size (default 320x240, the Kinect depth
+    // resolution).
+    std::string framesArg = CameraFramesArg();
+    if (!framesArg.empty())
+        argv.insert(argv.end(), { "--frames", framesArg });
+    return argv;
+}
+
 std::string NativeSkeletonProvider::DefaultModelPath() {
     return NativeTreePath("models/pose_landmarker_full.task");
 }
@@ -367,7 +466,7 @@ bool NativeSkeletonProvider::Start(
         mReaderThread = std::thread(&NativeSkeletonProvider::ReaderThread, this);
         return true;
     case kServerExited:
-        ReportProblem(DescribeServerExit(status, mCamera));
+        ReportProblem(DescribeServerExit(status, mCamera, mPython));
         Stop();
         return false;
     case kTimedOut:
@@ -383,32 +482,20 @@ bool NativeSkeletonProvider::Start(
 
 bool NativeSkeletonProvider::LaunchServer() {
     // pose_server.py is found next to the executable's tree (native/build/<exe>
-    // -> native/scripts), never the working directory.  DC3_POSE_HFOV
-    // (degrees) calibrates the server to the real camera's horizontal FOV --
-    // absolute depth scales with the assumed focal length, and the
-    // 58.51-degree Kinect default measured +0.76..1.73 m of depth bias on real
-    // 65-72.5 degree cameras (bench_model_z.py). Pose SHAPE is FOV-invariant,
-    // so the default stays safe for scoring; calibrate for better absolutes.
-    std::vector<std::string> argv = {
-        "python3", NativeTreePath("scripts/pose_server.py"),
-        "--socket", mSocketPath,
-        "--model",  mModelPath,
-        "--camera", mCamera,
-    };
-    const char *hfov = getenv("DC3_POSE_HFOV");
-    if (hfov && *hfov) {
-        argv.push_back("--hfov");
-        argv.push_back(hfov);
-    }
-    // PLAN P-4: ask for the camera picture + person mask (protocol v3) the
-    // player view is drawn from.  DC3_CAMERA_FRAMES=off keeps the pose-only v2
-    // stream; WxH picks the size (default 320x240, the Kinect depth
-    // resolution).
-    std::string framesArg = CameraFramesArg();
-    if (!framesArg.empty()) {
-        argv.push_back("--frames");
-        argv.push_back(framesArg);
-    }
+    // -> native/scripts), never the working directory; DC3_POSE_SERVER names
+    // a drop-in that takes the same arguments (the playtest kit's footage
+    // feeder).  The command line, interpreter included, is ServerCommand's.
+    std::string scriptPath = NativeTreePath("scripts/pose_server.py");
+    if (const char *srv = getenv("DC3_POSE_SERVER"); srv && *srv)
+        scriptPath = srv;
+    PythonChoice py = ChoosePosePython();
+    mPython = py.path;
+    printf("Pose server python: %s (%s)\n", py.path.c_str(), py.why.c_str());
+    std::vector<std::string> argv = ServerCommand(scriptPath, mSocketPath, mModelPath, mCamera);
+    printf("Pose server command:");
+    for (const std::string &a : argv)
+        printf(" %s", a.c_str());
+    printf("\n");
     // Through the spawner forked at the top of main (ProcessSpawner_Native.h):
     // a child forked from this process now would inherit the RLIMIT_RTTIME of
     // 0 that PipeWire's ALSA plugin sets on it, and MediaPipe's realtime
@@ -532,7 +619,7 @@ bool NativeSkeletonProvider::ServerGone() {
         ReportProblem(streamStopped);
         return false;
     }
-    Problem problem = exited ? DescribeServerExit(status, mCamera) : streamStopped;
+    Problem problem = exited ? DescribeServerExit(status, mCamera, mPython) : streamStopped;
     if (!exited && mServerPid > 0) {
         // It closed the socket but did not exit: replace it.
         NativeSpawner::Kill(mServerPid, SIGTERM);
@@ -591,7 +678,7 @@ bool NativeSkeletonProvider::ServerGone() {
             return true;
         case kServerExited:
             exited = true;
-            problem = DescribeServerExit(status, mCamera);
+            problem = DescribeServerExit(status, mCamera, mPython);
             break;
         case kTimedOut:
             exited = false;

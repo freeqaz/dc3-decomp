@@ -177,9 +177,21 @@ static Vector3 TransformRow(const Vector3 &v, const XMMATRIX &m) {
     return Vector3(x, y, z);
 }
 
+static void LevelByFloorNormal(SkeletonFrame &frame);
+
 void NativeLevelSensorFrame(SkeletonFrame &frame, const Vector3 &normal) {
     SkeletonFrame::sUpVectorSmoother.Smooth(normal, frame.mElapsedMs * 0.001f, false);
     frame.mFloorNormal = SkeletonFrame::sUpVectorSmoother.Value();
+    LevelByFloorNormal(frame);
+}
+
+void NativeLevelSensorFrameAt(SkeletonFrame &frame, const Vector3 &floorNormal) {
+    SkeletonFrame::sUpVectorSmoother.ForceValue(floorNormal);
+    frame.mFloorNormal = floorNormal;
+    LevelByFloorNormal(frame);
+}
+
+static void LevelByFloorNormal(SkeletonFrame &frame) {
     XMVECTOR grav;
     grav.x = frame.mFloorNormal.x;
     grav.y = frame.mFloorNormal.y;
@@ -236,6 +248,8 @@ static const NativePoseLevelPolicy &Policy() {
 }
 
 const NativeGravityEstimator &NativeSensorGravityEstimator() { return sEstimator; }
+
+bool NativeSensorLevelApplies() { return Policy().mode != NativePoseLevelPolicy::kOff; }
 
 void NativeSensorLevelSetPolicy(const NativePoseLevelPolicy &policy) {
     sPolicy = policy;
