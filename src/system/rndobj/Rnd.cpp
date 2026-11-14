@@ -1283,6 +1283,14 @@ void Rnd::DrawPreClear() {
             }
         }
     }
+#else
+    // PLATFORM: no CompressThread natively. Each queued request completes at
+    // once with the texture left uncompressed; ~CompressTexDesc fires the callback.
+    while (!mCompressTexQueue.empty()) {
+        CompressTexDesc *desc = mCompressTexQueue.front();
+        mCompressTexQueue.pop_front();
+        delete desc;
+    }
 #endif // !HX_NATIVE
     ObjPtrList<RndDrawable> *drawList = mReleaseImmediate ? &mPreClearDraws : &mDraws;
     if (drawList->size() != 0) {
