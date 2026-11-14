@@ -70,7 +70,7 @@ for (const extra of extras) {
     });
     const page = await (await browser.newContext({ viewport: { width: 1280, height: 720 } })).newPage();
     const logs = [];
-    page.on('console', (m) => { const t = m.text(); if (/dc3-pose|pose-worker/.test(t)) logs.push(t.slice(0, 200)); });
+    page.on('console', (m) => { const t = m.text(); if (/dc3-pose|pose-worker|WebGPU|adapter|BOOT|fatal/i.test(t)) logs.push(t.slice(0, 200)); });
     await page.goto(`http://127.0.0.1:${opt.port}/?fast_boot=1${extra}`, { waitUntil: 'domcontentloaded' });
     await sleep(opt.settle);
     const grab = (reset) => page.evaluate((reset) => ({ ...(window.dc3PoseSummary ? window.dc3PoseSummary({ reset }) : {}),
@@ -84,14 +84,19 @@ for (const extra of extras) {
     const st = (b && b.stages) || {};
     const line = `${opt.label} ${extra || '(default)'}\tframes/s=${fps}\tgame fps=${gameFps}\tdelegate=${b && b.delegate}` +
         `\tmodel=${b && b.model}\tseen=${b && b.numPoses}\tframes=${b && JSON.stringify(b.frames)}` +
-        `\tperson-frames=${a && b ? b.framesWithPerson - a.framesWithPerson : 'n/a'}\n  ` +
+        `\tperson-frames=${a && b ? b.framesWithPerson - a.framesWithPerson : 'n/a'}` +
+        `\tstate=${b.state}\tpushed=${b.pushed - a.pushed}\n  ` +
         Object.entries(st).map(([k, v]) => `${k} ${v[0]}/${v[1]}`).join('  ') + '   (ms p50/p95)';
     console.log(line);
-    for (const l of logs.filter((l) => /ready|delegate|failed|error/.test(l))) console.log('   ', l);
+    for (const l of logs.filter((l) => /ready|delegate|failed|error|WebGPU|adapter/i.test(l)).slice(0, 8)) console.log('   ', l);
+    // The game counts frames only once it is running (main_web.cpp BOOT_RUNNING):
+    // game fps 0 means the numbers above are the pose pipeline WITHOUT the game.
+    if (!gameFps) console.log('    NOTE: game not running in this window (dc3FrameCount did not advance)');
     if (opt.json) {
         fs.appendFileSync(opt.json, JSON.stringify({ label: opt.label, extra, fps, gameFps, delegate: b && b.delegate,
             model: b && b.model, numPoses: b && b.numPoses, frames: b && b.frames, stages: st,
-            framesWithPerson: a && b ? b.framesWithPerson - a.framesWithPerson : null }) + '\n');
+            framesWithPerson: a && b ? b.framesWithPerson - a.framesWithPerson : null,
+            state: b.state, pushed: b.pushed - a.pushed }) + '\n');
     }
     await browser.close();
 }
