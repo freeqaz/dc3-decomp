@@ -1597,6 +1597,26 @@ probe needs its own worker, as desktop runs it on a thread. Round 2's
 whole-row slowdown is the box, not the settings. Nothing here reached 30 fps,
 so the default is unchanged.
 
+### Web defaults after `np-webpose` (2026-11-14)
+
+The whole web pipeline, its per-stage timing with the game running and the
+scoring of each setting are in [WEB.md](WEB.md#pose-pipeline-w-17w-22-np-webpose).
+In short (rig, MEASURED):
+
+- **The GPU delegate is the web default** (`pose_delegate=AUTO`; CPU where
+  the worker has no WebGL2 or a software renderer). With the game running:
+  18–22 → 26–28 pose frames/s delivered, inference p50 42–45 → 14–22 ms.
+  Scored against the original's cards over four footage songs, it is the
+  same as CPU (0.824 of the card's score at numPoses 2). Its joints differ
+  from the CPU's by 19–23 mm (the 22 mm in the accuracy table below), and
+  the score does not move.
+- **The probe now runs in its own worker** (`pose_probe_worker`), so the
+  problem np-web4 found (both passes on the probe frame) is gone. It stays
+  opt-in, because with one dancer it is numPoses 1, and on the same grid
+  numPoses 1 scores 0.765 against numPoses 2's 0.824 (every song lower;
+  desktop num_poses 1: 0.750). That questions the "different, not worse"
+  reading in the accuracy section; PLAN H-86 is the owner decision.
+
 ### Ranked levers
 
 1. **Desktop: `--probe-second-person 0.5`.** GPD, one dancer:

@@ -343,7 +343,333 @@ first probe, but run serially in the one worker it was slower than the
 default on the loaded rig (16.9 vs 18.1 fps, 10.9 vs 11.7), so it stays off;
 numbers in [POSE_INPUT.md](POSE_INPUT.md#web-second-person-probe-np-web4-2026-11-14).
 
+**Superseded by the next section (np-webpose, 2026-11-14):** the GPU
+delegate is the default now (`pose_delegate=AUTO`), 26–28 pose frames/s
+delivered with the game on the rig, at the old default's score; the probe
+runs in its own worker but stays opt-in.
+
+### Pose pipeline (W-17..W-22, np-webpose)
+
+#### The path a camera frame takes
+
+1. **Camera.** `getUserMedia` asks for 640×480 at 30 fps, front camera
+   (`pose_input.js`). The fake camera (Chromium's
+   `--use-file-for-fake-video-capture`, a 640×480 30 fps y4m) reports
+   640×480 at 30 and delivers 29.99 frames/s to the worker and 29.83 by the
+   preview's `requestVideoFrameCallback` (MEASURED).
+2. **Into the worker.** A `MediaStreamTrackProcessor` with `maxBufferSize: 1`
+   on a clone of the track; its `ReadableStream` is transferred to the
+   worker, which reads `VideoFrame`s itself (no main-thread hop, no copy). A
+   frame the worker is too busy to read is dropped by the processor: newest
+   wins, one frame waits. Without `MediaStreamTrackProcessor`
+   (`pose_transport=bitmap`, Firefox/Safari), the page's
+   `requestVideoFrameCallback` makes an `ImageBitmap` per presented frame and
+   posts it, skipping frames while the worker is busy.
+3. **Inference.** `pose_worker.js`, a module worker: tasks-vision 1.0.0
+   `PoseLandmarker`, VIDEO mode, `full` model, numPoses 2, the GPU delegate
+   (`pose_delegate=AUTO`: WebGL2, or the CPU delegate, XNNPACK, where the
+   worker has no WebGL2 or a software renderer). The CPU
+   wasm is SIMD and single-threaded: no shipped loader uses `Atomics` or
+   `SharedArrayBuffer` (MEASURED), so the COOP/COEP headers `server.py` sends
+   give it nothing. Every frame is uploaded with `texImage2D` into
+   tasks-vision's own WebGL2 `OffscreenCanvas`; the CPU delegate reads it
+   back for XNNPACK. Segmentation masks are on when the P-4 picture is.
+4. **Second-person probe (opt-in, `pose_probe=0.5`).** numPoses 1 on every
+   frame; twice a second a `VideoFrame.clone()` goes to a **second worker**
+   (the same file, `role: 'probe'`, its own tasks-vision and model, CPU,
+   numPoses 2, no masks). When it sees two people the main worker runs
+   numPoses 2 on every frame, until it has seen fewer than two for 1 s.
+   Until the probe worker is ready, or where nested workers fail, the probe
+   runs in the main worker after the frame's own pass (np-web4's version).
+5. **Post-processing, in the worker.** `pose_geometry.js` (the desktop's
+   `pose_mediapipe.py` joints, tracker, root filter), packing to the
+   engine's floats, and the P-4 picture: `drawImage` + `getImageData` to
+   320×240, RGBA→RGB, the ordinal person mask.
+6. **To the page.** One `postMessage` with the floats, the picture and the
+   mask as transferables (0.1 ms p50).
+7. **Into WASM.** The page's handler calls `Module.dc3PosePush`
+   (`dc3_pre.js`) → `dc3_pose_push` (`PoseInput_Web.cpp`), which copies into
+   the heap and calls `NativeSkeletonProvider::PublishFrame` (the back
+   buffer), and pushes the picture (0.02 ms p50 together). It returns the
+   engine frame id.
+8. **Consumption.** The game frame's `Poll` latches the newest published
+   frame (double buffer, `FrameId`). A frame published twice before a game
+   frame takes it is overwritten, never queued. The web camera declares no
+   latency, so scoring uses scoring.dta's 100 ms, as for a desktop webcam.
+9. **Busy worker, timestamps.** The worker passes `VideoFrame.timestamp`
+   (µs, Chromium's monotonic camera clock, not the page's `performance.now`
+   origin) through as the capture time. A frame dropped upstream shows as a
+   gap in those timestamps (`skipped`).
+
+Compared with desktop (`pose_server.py`, np-pose-perf `68df27a46`): the same
+model, geometry, tracker and probe; desktop has no transfer stage (socket
+write, the engine's reader thread) and runs its probe on a thread, the web on
+a worker.
+
+#### Instrument (W-17)
+
+Always on, a few `performance.now()` per frame: the worker's stage times
+(`dc3PoseSummary().stages`). With `?pose_stats=1`, every pose frame is also
+followed to the game frame that takes it:
+
+- the worker stamps when it got the frame from the stream (`availAt`) and
+  its capture timestamp;
+- `dc3_pose_push` returns the engine frame id;
+- with `dc3_pose_stats(1)` the engine calls `window.dc3PoseOnConsume(id, now,
+  overwritten)` from the game frame that latched a new id
+  (`WebPoseStatusTick`, once a frame);
+- the page joins the two into rings (`dc3PoseSummary().pipeline`, p50/p95):
+  `age` (the frame waited in the stream, relative to the freshest frame seen:
+  the camera clock's offset to the page clock is not exposed), `worker`,
+  `xfer`, `page`, `toGame` (push → the end of the game frame that took it),
+  `read2game` and `e2e` (= age + read2game; the camera's own exposure and
+  driver time is not visible to a page).
+
+Counters: camera frames (processed + skipped), pose frames, frames consumed
+and overwritten in the engine (`dc3PoseGame.consumed/overwritten`), and the
+preview's `requestVideoFrameCallback` count. Off, the pipeline costs nothing:
+no engine callback, no rings.
+
+`scripts/pose_bench/web_pose_fps.mjs` reads all of it (one browser per URL,
+`--repeat N` interleaved, box load recorded at start and end of each window).
+Instrument checks (MEASURED, below): `pose_slow=camera:10` grows `draw` and
+`busy` by ~10 ms and not inference; `pose_slow=infer:40` is the sabotage for
+`--check-fps`.
+
+#### Measured: where a frame's time goes (W-18)
+
+Rig (32 cores, RTX 3090), release build, attract screen with the game
+running at 60 fps, the macarena fake camera (640×480, 30 fps), 25 s settle
+and a 20 s window, two interleaved rounds, other lanes running: load average
+26–36 for every row (MEASURED). p50/p95 ms; fps is round 1 / round 2:
+
+| URL | delivered/s | infer | worker busy | wait | age | camera → game (e2e) | game fps |
+|---|---|---|---|---|---|---|---|
+| `pose_probe=0` (the old default: numPoses 2 every frame) | 21.5 / 22.0 | 42.0 / 46.5 | 45.8 / 50.7 | 0.06 | 16.7 / 32.2 | 72.5 / 89.5 | 60 / 60 |
+| **default now** (probe 0.5 in its own worker) | **28.5 / 29.2** | 28.6 / 31.8 | 32.3 / 36.8 | 0.6 | 0.14 / 16.6 | **41.2 / 72.5** | 59.9 / 60 |
+| `pose_delegate=GPU&pose_probe=0` | 28.4 / 27.1 | 18.5 / 25.3 | 24.4 / 31.3 | 8.7 | 0.12 / 3.9 | 39.8 / 56.7 | 58.1 / 59.7 |
+| `pose_delegate=GPU` (+ probe) | 29.7 / 29.3 | 15.7 / 19.2 | 21.0 / 30.0 | 12.3 | 0.09 / 1.1 | 41.5 / 50.1 | 59.8 / 58.7 |
+| `pose_model=lite` (+ probe) | 29.5 / 29.9 | 22.9 / 26.8 | 27.3 / 32.4 | 6.0 | 0.12 / 4.0 | 39.9 / 56.3 | 59.7 / 60 |
+| `pose_delegate=GPU&pose_input=240` (+ probe) | 28.7 / 29.0 | 13.6 / 27.4 | 18.0 / 37.8 | 15.3 | 0.11 / 11.9 | 40.2 / 75.4 | 59.3 / 59.8 |
+
+Per-stage, from the same runs (default now, round 1): geometry 0.04,
+picture `draw` 2.9, `rgb` 0.2, `mask` 0.4, worker → page 0.1, page handler +
+engine push 0.02–0.09, push → the game frame that took it (`toGame`) 9.5 /
+19.6. On the GPU delegate the mask readback (`maskget`) adds 1.6–1.9 ms.
+
+- **Inference is the frame**; everything else is 4 ms. The person detector
+  is most of inference: numPoses 1 (the probe's every-frame pass) is 28 ms
+  against numPoses 2's 42 on the CPU.
+- **The old default was also staler**: a 46 ms worker on a 33 ms camera
+  leaves the next frame waiting in the stream (`age` p50 16.7 ms, the
+  processor's one buffered frame). At 32 ms the worker reads frames as they
+  arrive. Camera → game fell by 30 ms (p50), on top of the fps.
+- `toGame` (10–19 ms) is the game's frame boundary: a frame pushed just
+  after a game frame's `Poll` waits for the next one. Half a 60 Hz frame on
+  average plus the frame itself; not a lever (INFERRED).
+- No run overwrote more than 4 frames in 20 s (`overwritten`): the game takes
+  every pose frame.
+
+Without the game (`--no-game`, same camera, load 27–49, MEASURED, pose
+frames/s round 1 / round 2): default-old 23.8 / 14.2, probe in its own worker
+28.9 / 28.6, the probe in the one worker 27.5 / 27.8, `pose_input=240` 24.0 /
+22.9 (inference unchanged at 38–40 ms: the network's input is fixed, the
+scale only moved 2 ms from `draw` to `scale`), probe + `pose_input=240` 29.5 /
+29.8, `pose_frames=off` 19.6 / 25.8. Round 2 of the old default ran at load
+42–49 (inference 64 ms): the probe in its own worker held 28.6 there.
+
+Two dancers (`duo10.y4m`, no game, load 50–57): the probe worker found the
+second dancer within its first two looks (2 probes, 1 switch) and switched to numPoses 2 (`seen=2`,
+12.98 frames/s against 12.39 for `pose_probe=0`: the same work).
+
+#### Measured: does a faster setting score worse? (W-20)
+
+Every setting was recorded through the shipped worker
+(`scripts/pose_bench/web_pose_record.mjs`: each frame of the footage goes to
+`pose_worker.js` as a `VideoFrame`, one at a time, with the timestamps
+`record_segment.py` uses), and the desktop reference through
+`record_segment.py` (desktop MediaPipe, num_poses 1). Footage: the playtest
+kit's macarena, 12step, supersonic and cupidshuffle (640×480, 30 fps, the
+whole song from 5 s before song time 0), each with the np-video-calib song
+lead (`fixture_transform.py --hold --shift`). Scored by replay:
+`native_song_sweep.py --difficulty medium --performer replay:… --no-gpu`,
+`DC3_POSE_PERFORM_REPLAY_SYNC=song`, freestyle off (the story footage has no
+freestyle), and compared with the original game's results card
+(`compare_cards.py`, the player's real 242 Perfect / 42 Awesome of 291
+moves). MEASURED, all 4 songs × 291 moves, every run clean:
+
+| fixture | score | P/A/O/B | score ÷ card | mean \|ΔPerfect rate\| | joints vs desktop, mean mm | tracked frames |
+|---|---|---|---|---|---|---|
+| desktop, num_poses 1 | 7,179,316 | 194/72/14/11 | 0.750 | 0.167 | — | 18,947 |
+| desktop, repeat | 7,179,280 | 194/72/14/11 | 0.750 | 0.167 | — | — |
+| web CPU, numPoses 2 (`pose_probe=0`) | 7,892,784 | 200/74/8/9 | **0.824** | **0.143** | 26–42 | 18,921 |
+| web CPU, probe 0.5 | 7,331,701 | 192/76/13/10 | 0.765 | 0.174 | 5.4–14 | 18,946 |
+| web GPU, numPoses 2 | 7,896,427 | 199/74/9/9 | **0.824** | 0.149 | 29–45 | 18,912 |
+| web GPU, probe 0.5 | 7,450,159 | 191/78/13/9 | 0.778 | 0.178 | 9.8–19 | 18,957 |
+| web CPU `lite`, probe 0.5 | 7,014,407 | 192/68/20/11 | 0.732 | 0.172 | 55–73 | 18,971 |
+
+(of 19,116 frames; the joint column is the per-song range of
+`fixture_diff.py` means; a one-frame-shift of the desktop recording against
+itself reads 23 mm, the sabotage control.)
+
+- **The GPU delegate costs no score**: 0.824 = 0.824 at numPoses 2, 0.778
+  vs 0.765 with the probe. Its joints differ from the CPU's by 10–12 mm
+  (probe) and 19–23 mm (numPoses 2), the 22 mm np-pose-perf's parity saw,
+  and the score does not move. This is the owner's "GPU after a scoring
+  check" (L-3).
+- **numPoses 1 scores lower than numPoses 2 on all four songs**, on both
+  delegates: 0.765 vs 0.824 of the card on CPU, every song's per-move
+  fraction lower. The probe is numPoses 1 with one dancer (identical output,
+  np-web4's parity), and so is the desktop's default and the scoring
+  calibration's recording (0.750). numPoses 2 re-seeds the landmark region
+  from the person detector on every frame; numPoses 1 follows its own
+  landmarks (np-pose-perf). So the probe's speed is not free on the web: it
+  gives the web what the desktop already gets, which is further from the card.
+  The desktop at num_poses 2 was not recorded here (`record_segment.py` is
+  fixed at 1). PLAN H-86.
+- `lite` scores lowest and its joints are 55–73 mm from the full model's:
+  rejected.
+- The replay is deterministic (the repeat: 36 points of 7.18 M, the same
+  ratings), so these differences come from the input.
+
+#### Measured: delivered pose frames/s, every run (W-19, W-22)
+
+Pose frames a game frame took, per 20 s window, with the game running (rig,
+macarena fake camera; each column is one invocation, configs interleaved in
+it, so compare down a column, not across; MEASURED):
+
+| URL | base, 4 rounds (load 26–49) | main thread ×2 (load 26–35) | main thread ×4 (load 30–34) | quota 3200% (load 36–44) | quota 400% (load 30) | quota 200% (load 30–39) |
+|---|---|---|---|---|---|---|
+| CPU, numPoses 2 (the old default) | 21.5, 22.0, 18.1, 18.9 | 20.3 | 19.4 | 13.9 | 21.9 | 13.8 |
+| CPU, probe 0.5 | 28.5, 29.2, 26.7, 25.0 | 28.2 | 25.4 | 19.2 | 25.9 | 28.1 |
+| **GPU, numPoses 2 (the default now)** | **28.4, 27.1, 28.0, 26.3** | **28.2** | **21.6** | **18.4** | **27.9** | **24.7** |
+| GPU, probe 0.5 | 29.7, 29.3, 19.5, 23.3 | 29.7 | 21.2 | 19.7 | 27.2 | 28.6 |
+
+Game fps was 53–60 in every run except main thread ×4 (33–42.5: a 4× slower
+main thread is the game's own limit, and it then takes fewer pose frames
+than the worker makes: pose/s 20.2 / 27.0 / 23.4 / 23.3).
+
+- **The default moved from 18–22 to 26–28 delivered frames/s** with the
+  same score. Inference p50 42–45 → 14–22 ms; camera → game p50 72–83 →
+  26–44 ms.
+- **The GPU here is shared**: four other lanes' `dc3-native` ran on the 3090
+  during these runs (67% busy, `nvidia-smi`), which is what the GPU rows'
+  spread (GPU probe 19.5–29.7) and their inference p95 (35–116 ms) show.
+  The box is contended on both CPU and GPU; a quiet box was not available.
+- **The stand-ins say little about a slower machine.**
+  `Emulation.setCPUThrottlingRate` slows the page's main thread only;
+  Chromium refuses it on a worker ("Operation is only supported for pages,
+  not workers"), so the pose worker runs at full speed. `--cpu-quota` puts
+  the whole browser in a new cgroup with a CPU cap; its levels ran one after
+  another, so load differs between them (3200% read lower than 200%, at
+  higher load). Within a level, the order of the four is the same as the
+  base rounds. The real question (an integrated GPU shared with the game)
+  needs the GPD (W-22).
+- **Negative result:** the first quota ladder launched the full Chrome
+  instead of the headless shell and its fake camera tracked nobody: every
+  run read ~30 frames/s with 3–14 ms "inference" (MediaPipe idling on an
+  empty frame). Caught by `person-frames=0`; fixed in the bench, and
+  `--check-fps` now fails a run that saw no person.
+
+#### Kept and rejected (W-18, W-19)
+
+| change | result | kept? |
+|---|---|---|
+| GPU delegate by default (`pose_delegate=AUTO`) | 18–22 → 26–28 frames/s with the game; the same score (0.824); CPU on a software renderer (measured: SwiftShader under `--disable-gpu` → CPU, "auto: software WebGL …") or if the delegate fails | **kept** |
+| the probe in its own worker (`pose_probe_worker=1`) | the probe's frame no longer pays two passes: worker busy p95 70–75 → 39–41 ms (no game) | **kept** for when the probe is on |
+| the probe by default (`pose_probe=0.5`) | CPU 18–22 → 25–29 frames/s, but numPoses 1 scores 0.765 vs 0.824 of the card | **rejected** as default (opt-in; owner, PLAN H-86) |
+| `pose_model=lite` | 29.5 / 29.9 with the probe; scores lowest (0.732), joints 55–73 mm off | rejected |
+| `pose_input=240` (scale before MediaPipe) | CPU inference unchanged (38–40 ms: the network input is fixed); GPU no better than without (28.7 / 29.0 vs 29.7 / 29.3) | rejected (kept as a knob) |
+| `pose_frames=off` | 19.6 / 25.8 vs 23.8 / 14.2 (no game, load moved under it): the picture is 3–4 ms | not a lever |
+| WASM threads (COOP/COEP) | tasks-vision 1.0.0 ships no threaded wasm | not available |
+| results transfer, page handler | 0.1 ms + 0.02–0.09 ms | not a lever |
+| game-side consume | `toGame` 10–19 ms = the game's frame boundary; ≤ 4 overwritten per 20 s | not a lever |
+
+#### The regression check (W-21)
+
+```bash
+python3 native/web/server.py --port 8462 &
+node scripts/pose_bench/web_pose_fps.mjs --port 8462 --camera mac20.y4m --check-fps 24 ""
+```
+
+Exit 1 if a run delivered fewer than 24 pose frames/s to the game, 2 if it
+produced none or tracked nobody. Why 24: the default delivered 26.3–28.4 in
+every base round above and 24.7–27.9 under the quotas, at load 26–49 with
+the GPU shared, so 24 holds on this rig while the old default (18–22) fails
+it. MEASURED (load 25–32): the default passed twice (25.5, 28.0, exit 0);
+the sabotage `&pose_slow=infer:40` (40 ms of busy work in the inference
+stage) failed it (15.9, exit 1); the old default `&pose_delegate=CPU` failed
+it (22.0, exit 1). On the GPD or a phone the threshold is not justified yet
+(W-22).
+
+Instrument check, same session, no game (MEASURED): `pose_slow=camera:10`
+moved `draw` 2.13 → 11.98 ms and `busy` 16.2 → 25.4 ms; inference stayed at
+12.0 / 11.5 ms. The default without the game delivered 29.98 of the camera's
+29.98 frames/s (the worker waits 17 ms a frame for the camera).
+
+#### Measured: game frame pacing and live quality, before and after
+
+`pose-gameplay.mjs --pacing --difficulty medium`, one song (Macarena, menus →
+song → results) with the macarena loop as the camera, `pose_stats=1`,
+interleaved (MEASURED; before = `pose_delegate=CPU`, the old default):
+
+| run | load start→end | pose/s in song (delivered) | game phase fps | frame p50 / p95 / p99 ms | game frames > 25 / > 50 ms | in-song stalls > 50 ms: browser frame gap | detectFrac mean (n) | tracked |
+|---|---|---|---|---|---|---|---|---|
+| before1 | 30 → 36 | 19.3 | 58.8 | 16.9 / 21.5 / 30.7 | 169 / 24 | 20 | 0.293 (36) | 166/166 s |
+| after1 | 36 → 41 | 24.8 | 58.1 | 16.7 / 22.0 / 36.3 | 243 / 43 | 40 | 0.258 (36) | 165/165 s |
+| after2 | 41 → 30 | 24.6 | 58.0 | 16.6 / 22.4 / 38.3 | 311 / 41 | 38 | 0.309 (36) | 165/165 s |
+| before2 | 30 → 31 | 21.1 | 59.6 | 16.9 / 20.5 / 22.9 | 69 / 7 | 5 | 0.275 (36) | 165/165 s |
+TODO-PACING3
+
+- **The GPU delegate costs the game some frame tail.** Median and p95 are
+  unchanged (16.6–16.9, 20.5–22.4 ms), but p99 rose (22.9–30.7 → 36–38 ms)
+  and so did the frames over 25 ms; the extra stalls are "browser frame gap"
+  (the compositor/GPU), not the game's own compute. The inference and the
+  game share one GPU; on the rig that GPU was also running four other
+  lanes' engines. INFERRED: on an integrated GPU this is the number to
+  watch first (W-22).
+- The live score and detectFrac say little (the 20 s loop is not synced to
+  the song; W-15 found the same); tracked is 100% in every run. The quality
+  measurement is the scored grid above.
+
+#### Not done
+
+- The GPD (integrated GPU shared with the game) and a phone: W-22. The
+  game-pacing cost above is the first thing to measure there; if it is large,
+  `pose_delegate=CPU&pose_probe=0.5` is the CPU alternative (with H-86's
+  score cost).
+- A quiet-GPU rig run (H-87); per-frame latency compensation (H-88); the
+  probe worker's memory (H-89).
+- Two pose workers on alternate frames (the other way to double CPU
+  throughput): not built. Each would track every other frame, and the
+  tracker and root filter would have to move out of the worker.
+
+#### Reproducing
+
+```bash
+python3 native/web/server.py --port 8462 &
+ffmpeg -ss 30 -i macarena.mp4 -t 20 -vf scale=640:480,fps=30,format=yuv420p -f yuv4mpegpipe mac20.y4m
+# per-stage table with the game, interleaved (GPU runs: outside the sandbox)
+node scripts/pose_bench/web_pose_fps.mjs --port 8462 --camera mac20.y4m --repeat 2 \
+    "&pose_delegate=CPU" "" "&pose_probe=0.5" "&pose_delegate=CPU&pose_probe=0.5"
+# the check
+node scripts/pose_bench/web_pose_fps.mjs --port 8462 --camera mac20.y4m --check-fps 24 ""
+# a setting's score: record each footage song through the worker, then replay it
+node scripts/pose_bench/web_pose_record.mjs --port 8462 --video macarena.mp4 --t0 8 --start -5 \
+    --dur 161.3 --out raw/macarena.dc3pose --extra "&pose_delegate=CPU"
+python3 -I scripts/video_calib/fixture_transform.py raw/macarena.dc3pose fx/macarena.dc3pose --hold --shift 0.137
+python3 scripts/native_song_sweep.py --out grid/cpu --songs macarena --no-gpu --difficulty medium \
+    --performer "replay:fx/{song}.dc3pose" --env DC3_POSE_PERFORM_REPLAY_SYNC=song \
+    --eval '{profile_mgr toggle_disable_freestyle}'
+python3 -I scripts/video_calib/compare_cards.py --manifest scripts/video_calib/mqcXJrH5vUo.json grid/cpu
+python3 -I scripts/pose_bench/fixture_diff.py desk/macarena.dc3pose raw/macarena.dc3pose
+# pacing
+node scripts/web/pose-gameplay.mjs --port 8462 --camera mac20.y4m --out run --pacing \
+    --difficulty medium --extra "&pose_stats=1"
+```
+
 ### Pose fill on web (L-8, np-web4)
+
 
 The desktop's `DC3_POSE_FILL` (default `extrap`) runs on web too: the same
 `GestureMgr_Native.cpp` path, `DC3 POSE FILL: extrap (gain 1.00) engaged at
