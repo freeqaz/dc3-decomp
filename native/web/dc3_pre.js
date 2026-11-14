@@ -11,8 +11,8 @@
 // Pose input (native/web/pose/pose_input.js → native/src/platform/PoseInput_Web.cpp).
 // Lives here, not in the page, because HEAPF32 is only in scope inside the
 // generated JS. `floats` holds `count` persons of [trackId, 20 × (x, y, z, conf)]
-// (DC3 joints, camera-space metres). Returns 1 if the engine took the frame,
-// 0 if it is not up yet (or DC3_POSE=off).
+// (DC3 joints, camera-space metres). Returns the engine's frame id for it
+// (> 0) if the engine took the frame, 0 if it is not up yet (or DC3_POSE=off).
 Module.dc3PoseFloatsPerPerson = 81;
 Module.dc3PosePush = function (floats, count, timestampSec) {
     if (!Module['_dc3_pose_push'] || typeof HEAPF32 === 'undefined' || !HEAPF32) return 0;
