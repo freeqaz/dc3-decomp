@@ -14,6 +14,12 @@
 // "fade_out":..,"fade_start":..,"fade_end":..,"fade_cancels_mask":..}:
 // the last is Shader.cpp's fadeOut (FadeOut() && FadeEnd() != FadeStart()),
 // which turns the pseudo-HDR bloom mask off (np-gfx-post round 2).
+//
+// And one line per RndMotionBlur, {"file":..,"name":..,"class":"MotionBlur",
+// "showing":..,"draws":[{"name":..,"class":..,"bones":..}]}: the objects whose
+// DrawShowing queues their draw list for NgPostProc's object velocity
+// (RndVelocityBuffer::DrawMesh; meshes over 40 bones are skipped there) --
+// np-gfx-post round 3.
 
 #include "os/Debug.h"
 #include "os/System.h"
@@ -22,6 +28,8 @@
 #include "rndobj/Rnd.h"
 #include "rndobj/PostProc.h"
 #include "rndobj/Env.h"
+#include "rndobj/MotionBlur.h"
+#include "rndobj/Mesh.h"
 #include "rndobj/Tex.h"
 #include "char/Char.h"
 #include "world/World.h"
@@ -99,6 +107,12 @@ struct PPPeek : RndPostProc {
     using RndPostProc::mTrailThreshold;
     using RndPostProc::mVignetteColor;
     using RndPostProc::mVignetteIntensity;
+};
+
+// RndMotionBlur's draw list is protected, read the same way.
+struct MBPeek : RndMotionBlur {
+    static const MBPeek &Of(const RndMotionBlur *m) { return *static_cast<const MBPeek *>(m); }
+    using RndMotionBlur::mDrawList;
 };
 
 std::string Esc(const char *s) {
@@ -283,7 +297,27 @@ int main(int argc, char *argv[]) {
                    cancels ? 1 : 0);
             envs++;
         }
-        fprintf(stderr, "%s: %d post-procs, %d environs\n", argv[i], n, envs);
+        int blurs = 0;
+        for (ObjDirItr<RndMotionBlur> it(scene, true); it != nullptr; ++it) {
+            std::string o = "{\"file\":\"" + Esc(argv[i]) + "\",\"name\":\"" + Esc(it->Name())
+                + "\",\"class\":\"MotionBlur\",\"showing\":" + (it->Showing() ? "1" : "0")
+                + ",\"draws\":[";
+            const MBPeek &m = MBPeek::Of(it);
+            for (ObjPtrList<RndDrawable>::iterator d = m.mDrawList.begin(); d != m.mDrawList.end(); ++d) {
+                RndDrawable *draw = *d;
+                if (!draw) continue;
+                RndMesh *mesh = dynamic_cast<RndMesh *>(draw);
+                char b[64];
+                snprintf(b, sizeof(b), "%d", mesh ? mesh->NumBones() : -1);
+                o += "{\"name\":\"" + Esc(draw->Name()) + "\",\"class\":\""
+                    + Esc(draw->ClassName().Str()) + "\",\"bones\":" + b + "},";
+            }
+            Close(o);
+            o += "]}";
+            printf("%s\n", o.c_str());
+            blurs++;
+        }
+        fprintf(stderr, "%s: %d post-procs, %d environs, %d motion blurs\n", argv[i], n, envs, blurs);
         total += n;
     }
     fprintf(stderr, "total %d\n", total);

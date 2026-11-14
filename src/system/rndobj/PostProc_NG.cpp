@@ -275,8 +275,14 @@ void NgPostProc::RebuildTex() {
 
 #ifdef HX_NATIVE
 void NgPostProc::DoVelocity() {
-    // Post-processing uses hardcoded ILP32 struct offsets throughout — stub on native
-    // Will be reimplemented when the WebGPU renderer is built
+    // Retail's gate and bookkeeping (below); the velocity pass and the bit-42
+    // composite are the WebGPU backend's, which takes this frame's result with
+    // RndVelocityBuffer::TakeNativeFrame (TheShaderMgr.unk39 and c122 there).
+    if (mMotionBlurVelocity && !TheHiResScreen.IsActive()) {
+        RndVelocityBuffer::Singleton().DrawNative(TheRnd.GetWorldCamCopy(), mMotionBlurDrawList);
+    }
+    if (!mMotionBlurDrawList.empty())
+        mMotionBlurDrawList.clear();
 }
 #else
 void NgPostProc::DoVelocity() {
