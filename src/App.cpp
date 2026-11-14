@@ -891,11 +891,13 @@ void App::RunOneFrame() {
                 sImGuiReady = true;
             }
         }
+        DebugPanel::PollRndOverlays(); // DC3_RND_OVERLAYS, as on desktop
         if (sImGuiReady && ImGui::GetCurrentContext()) {
             ImGuiBackend::NewFrame();
             if (DebugPanel::IsVisible())
                 DebugPanel::Draw();
             DebugPanel::DrawNotices(); // NativeNotice (no camera, sensor lost)
+            DebugPanel::DrawRndOverlays();
             ImGui::Render();
         }
     }
@@ -1292,11 +1294,16 @@ void App::RunWithoutDebugging() {
 #ifdef HX_IMGUI
         // ImGui debug overlay — rendered after game UI, before EndDrawing
         // EndDrawing() calls RenderImGuiOverlay() which consumes the draw data
+        // DC3_RND_OVERLAYS: the original's RndOverlays (cheat_display ...),
+        // which WgpuRnd::EndDrawing does not draw; collected with or without
+        // ImGui (it also logs their text), drawn in the ImGui frame below.
+        DebugPanel::PollRndOverlays();
         if (ImGui::GetCurrentContext()) {
             ImGuiBackend::NewFrame();
             if (DebugPanel::IsVisible())
                 DebugPanel::Draw();
             DebugPanel::DrawNotices(); // NativeNotice (no camera, sensor lost)
+            DebugPanel::DrawRndOverlays();
             ImGui::Render();
         }
 #endif

@@ -1,7 +1,11 @@
 #include "platform/DebugPanel.h"
 #include "platform/NativeSettings.h"
 #include "platform/NativeNotice.h"
+#include "rndobj/Overlay.h"
 #include <imgui.h>
+#include <map>
+#include <string>
+#include <vector>
 
 static bool sVisible = false;
 
@@ -108,4 +112,69 @@ void DebugPanel::DrawNotices() {
         }
         ImGui::End();
     }
+}
+
+// ---------------------------------------------------------------------------
+// The original's RndOverlays (DC3_RND_OVERLAYS).  The image draws them in the
+// top-left corner from Rnd::EndDrawing; WgpuRnd's EndDrawing never did, so
+// cheat_display (every MILO_NOTIFY at notify_level 1, ui/cheats_funcs.dta) and
+// the joypad quick cheats' overlays (LB+LT / RB+RT + a button, config/
+// cheats.dta) showed nothing natively.
+// ---------------------------------------------------------------------------
+bool Dc3EnvFlag(const char *name, bool defaultOn); // System_Native.cpp
+
+namespace {
+struct OverlayLine {
+    std::string overlay, text;
+};
+std::vector<OverlayLine> sOverlayLines;
+std::map<std::string, std::string> sOverlayLast; // overlay -> its text last frame
+
+bool RndOverlaysEnabled() {
+    static const bool on = Dc3EnvFlag("DC3_RND_OVERLAYS", false);
+    return on;
+}
+
+void CollectLine(void *, const char *overlay, const char *line) {
+    sOverlayLines.push_back({overlay, line});
+}
+} // namespace
+
+void DebugPanel::PollRndOverlays() {
+    if (!RndOverlaysEnabled()) return;
+    sOverlayLines.clear();
+    RndOverlay::NativeCollect(CollectLine, nullptr);
+    // Print an overlay's text on stderr when it changes, so a terminal (and a
+    // test, and a NORENDER run with no ImGui) sees what the corner shows.
+    std::map<std::string, std::string> now;
+    for (const OverlayLine &l : sOverlayLines) {
+        std::string &t = now[l.overlay];
+        if (!t.empty()) t += "\n";
+        t += l.text;
+    }
+    for (const auto &kv : now) {
+        auto it = sOverlayLast.find(kv.first);
+        if (it != sOverlayLast.end() && it->second == kv.second) continue;
+        std::string esc;
+        for (char c : kv.second) esc += (c == '\n') ? std::string(" | ") : std::string(1, c);
+        fprintf(stderr, "DC3 OVERLAY [%s] %s\n", kv.first.c_str(), esc.c_str());
+    }
+    sOverlayLast.swap(now);
+}
+
+void DebugPanel::DrawRndOverlays() {
+    if (!RndOverlaysEnabled() || sOverlayLines.empty()) return;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration
+        | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize
+        | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing
+        | ImGuiWindowFlags_NoNav;
+    const ImGuiIO &io = ImGui::GetIO();
+    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.02f, io.DisplaySize.y * 0.02f),
+                            ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.6f);
+    if (ImGui::Begin("##rnd_overlays", nullptr, flags)) {
+        for (const OverlayLine &l : sOverlayLines)
+            ImGui::TextUnformatted(l.text.c_str());
+    }
+    ImGui::End();
 }
