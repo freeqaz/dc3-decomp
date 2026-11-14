@@ -58,11 +58,11 @@ Source MakeSource(double arrival, double ts, std::vector<Person> people) {
 
 } // namespace
 
-TEST(PoseFillMathTest, TheModeDefaultsToInterpAndNamesParse) {
+TEST(PoseFillMathTest, TheModeDefaultsToExtrapAndNamesParse) {
     bool ok = false;
-    EXPECT_EQ(ParseMode(nullptr, &ok), kInterp);
+    EXPECT_EQ(ParseMode(nullptr, &ok), kExtrap);
     EXPECT_TRUE(ok);
-    EXPECT_EQ(ParseMode("", &ok), kInterp);
+    EXPECT_EQ(ParseMode("", &ok), kExtrap);
     EXPECT_EQ(ParseMode("interp", &ok), kInterp);
     EXPECT_EQ(ParseMode("off", &ok), kOff);
     EXPECT_EQ(ParseMode("0", &ok), kOff);
@@ -70,8 +70,87 @@ TEST(PoseFillMathTest, TheModeDefaultsToInterpAndNamesParse) {
     EXPECT_EQ(ParseMode("extrap", &ok), kExtrap);
     EXPECT_EQ(ParseMode("extrapc", &ok), kExtrapClamped);
     EXPECT_TRUE(ok);
-    EXPECT_EQ(ParseMode("cubic", &ok), kInterp);
+    EXPECT_EQ(ParseMode("cubic", &ok), kExtrap);
     EXPECT_FALSE(ok);
+    EXPECT_EQ(Filler().GetMode(), kExtrap);
+}
+
+TEST(PoseFillMathTest, TheGainParsesWithinZeroToOne) {
+    bool ok = false;
+    EXPECT_FLOAT_EQ(ParseGain(nullptr, &ok), kDefaultGain);
+    EXPECT_TRUE(ok);
+    EXPECT_FLOAT_EQ(ParseGain("0.5", &ok), 0.5f);
+    EXPECT_TRUE(ok);
+    EXPECT_FLOAT_EQ(ParseGain("0", &ok), 0.0f);
+    EXPECT_FLOAT_EQ(ParseGain("1", &ok), 1.0f);
+    EXPECT_TRUE(ok);
+    for (const char *bad : { "1.5", "-0.1", "half", "0.5x", "nan" }) {
+        EXPECT_FLOAT_EQ(ParseGain(bad, &ok), kDefaultGain) << bad;
+        EXPECT_FALSE(ok) << bad;
+    }
+    Filler f;
+    EXPECT_FLOAT_EQ(f.Gain(), kDefaultGain);
+    f.SetGain(3.0f);
+    EXPECT_FLOAT_EQ(f.Gain(), 1.0f);
+    f.SetGain(-1.0f);
+    EXPECT_FLOAT_EQ(f.Gain(), 0.0f);
+}
+
+TEST(PoseFillMathTest, GuardedExtrapolationScalesClampsAndHoldsGuessesAndSwaps) {
+    // 0.125 s apart, every joint moved 0.1 m in x: 0.8 m/s.
+    Source prev = MakeSource(0, 0, { MakePerson(7, 0.0f) });
+    Source last = MakeSource(0.125, 0.125, { MakePerson(7, 0.1f) });
+    Output out;
+    ExtrapolateGuarded(prev, last, 0.1f, 0.125f, 1.0f, out);
+    EXPECT_NEAR(out.persons[0].joints[kJointHandLeft].x, 0.1f + 0.08f, 1e-5f) << "v * t";
+    ExtrapolateGuarded(prev, last, 0.1f, 0.125f, 0.5f, out);
+    EXPECT_NEAR(out.persons[0].joints[kJointHandLeft].x, 0.1f + 0.04f, 1e-5f) << "x gain";
+    ExtrapolateGuarded(prev, last, 0.1f, 0.125f, 0.0f, out);
+    EXPECT_NEAR(out.persons[0].joints[kJointHandLeft].x, 0.1f, 1e-6f) << "gain 0 is hold";
+
+    // An absurd step (2 m in 0.125 s = 16 m/s) is clamped to kMaxJointSpeed.
+    Source far = MakeSource(0.125, 0.125, { MakePerson(7, 2.0f) });
+    ExtrapolateGuarded(prev, far, 0.1f, 0.125f, 1.0f, out);
+    EXPECT_NEAR(out.persons[0].joints[kJointHead].x, 2.0f + kMaxJointSpeed * 0.1f, 1e-4f);
+
+    // A joint not tracked in either frame is a guess: not moved.
+    Source guess = last;
+    guess.persons[0].confidence[kJointHead] = kConfidenceNotTracked;
+    ExtrapolateGuarded(prev, guess, 0.1f, 0.125f, 1.0f, out);
+    EXPECT_NEAR(out.persons[0].joints[kJointHead].x, 0.1f, 1e-6f);
+    EXPECT_NEAR(out.persons[0].joints[kJointSpine].x, 0.18f, 1e-5f) << "the rest still moves";
+    // Inferred joints do move (they are the image's, just less sure).
+    guess.persons[0].confidence[kJointHead] = kConfidenceInferred;
+    ExtrapolateGuarded(prev, guess, 0.1f, 0.125f, 1.0f, out);
+    EXPECT_NEAR(out.persons[0].joints[kJointHead].x, 0.18f, 1e-5f);
+
+    // A left/right swap: hands and wrists 0.6 m apart trade places.  Not
+    // amplified: the whole person is held where the camera put her.
+    Person a = MakePerson(7, 0.0f), b = MakePerson(7, 0.01f);
+    const int L[] = { kJointWristLeft, kJointHandLeft }, Rt[] = { kJointWristRight, kJointHandRight };
+    for (int k = 0; k < 2; k++) {
+        a.joints[L[k]].Set(-0.3f, 1.5f, 2.0f); // a pair side by side
+        a.joints[Rt[k]].Set(0.3f, 1.5f, 2.0f);
+        b.joints[L[k]].Set(0.3f, 1.5f, 2.0f);
+        b.joints[Rt[k]].Set(-0.3f, 1.5f, 2.0f);
+    }
+    Source sa = MakeSource(0, 0, { a }), sb = MakeSource(0.125, 0.125, { b });
+    ExtrapolateGuarded(sa, sb, 0.125f, 0.125f, 1.0f, out);
+    for (int j = 0; j < kNumJoints; j++)
+        EXPECT_FLOAT_EQ(out.persons[0].joints[j].x, b.joints[j].x) << "joint " << j;
+    // ... while the same hands crossing a little are not a swap.
+    for (int k = 0; k < 2; k++) {
+        b.joints[L[k]].Set(-0.1f, 1.5f, 2.0f);
+        b.joints[Rt[k]].Set(0.1f, 1.5f, 2.0f);
+    }
+    sb = MakeSource(0.125, 0.125, { b });
+    ExtrapolateGuarded(sa, sb, 0.125f, 0.125f, 1.0f, out);
+    EXPECT_NEAR(out.persons[0].joints[kJointHandLeft].x, 0.1f, 1e-5f) << "-0.1 + 0.2";
+
+    // A person not in the earlier frame is copied, not moved.
+    Source other = MakeSource(0, 0, { MakePerson(8, 0.0f) });
+    ExtrapolateGuarded(other, last, 0.1f, 0.125f, 1.0f, out);
+    EXPECT_NEAR(out.persons[0].joints[kJointHandLeft].x, 0.1f, 1e-6f);
 }
 
 TEST(PoseFillMathTest, InterpolationStaysOnTheSegmentBetweenTheTwoFrames) {
@@ -233,6 +312,7 @@ TEST(PoseFillScheduleTest, OffNeverFills) {
 
 TEST(PoseFillScheduleTest, InterpAtEightHertzIsThirtyHertzAFixedDelayBehindAndExact) {
     Filler f;
+    f.SetMode(kInterp);
     FillRun r = Drive(f, 0.125, 10.0, 20.0, 20.5, Always);
     ASSERT_TRUE(f.Engaged());
     EXPECT_NEAR(f.Delay(), 0.125 * Filler::kDelayFactor, 1e-6);
@@ -288,6 +368,7 @@ TEST(PoseFillScheduleTest, InterpAtEightHertzIsThirtyHertzAFixedDelayBehindAndEx
 
 TEST(PoseFillScheduleTest, AStalledCameraStallsTheStream) {
     Filler f;
+    f.SetMode(kInterp);
     FillRun r = Drive(f, 0.125, 10.0, 15.0, 17.0, Always);
     double lastArrival = r.arrivals.back();
     const Delivery &last = r.out.back();
@@ -298,26 +379,71 @@ TEST(PoseFillScheduleTest, AStalledCameraStallsTheStream) {
     EXPECT_LT(last.song, lastArrival + f.Delay() + 1.0 / 60.0) << "nothing after it";
 }
 
+TEST(PoseFillScheduleTest, ExtrapStopsOnePeriodAfterTheNewestCameraFrame) {
+    for (float gain : { 1.0f, 0.5f }) {
+        Filler f;
+        f.SetMode(kExtrap);
+        f.SetGain(gain);
+        FillRun r = Drive(f, 0.125, 10.0, 15.0, 17.0, Always);
+        double lastArrival = r.arrivals.back();
+        ASSERT_TRUE(f.Engaged());
+        EXPECT_LE(r.out.back().song, lastArrival + 0.125 + 1e-9) << "a stall stays a stall";
+        for (const Delivery &d : r.out) {
+            double newest = -1;
+            for (double a : r.arrivals) {
+                if (a <= d.song + 1e-9)
+                    newest = a;
+            }
+            // x = capture time; the step on is at most gain x one period.
+            EXPECT_LE(d.x, (float)(newest + gain * 0.125) + 1e-4f) << "at " << d.song;
+            EXPECT_GE(d.x, (float)newest - 1e-4f) << "at " << d.song;
+            if (!d.real && d.song > 11.0)
+                EXPECT_NEAR(d.x, (float)(newest + gain * (d.song - newest)), 1e-4f) << "at " << d.song;
+        }
+    }
+}
+
 TEST(PoseFillScheduleTest, NoFillAcrossADropoutTheDropoutFrameArrivesExactly) {
     // The person is missing from 13.0 to 13.5: a detection dropout.
     auto present = [](double t) { return t < 13.0 - 1e-9 || t > 13.5 + 1e-9; };
-    Filler f;
-    FillRun r = Drive(f, 0.125, 10.0, 16.0, 16.5, present);
-    int emptyReal = 0;
-    for (const Delivery &d : r.out) {
-        if (d.shows > 12.875 + 1e-9 && d.shows < 13.625 - 1e-9) {
-            // Between the last frame with her and the first one with her
-            // again only camera frames, each exactly as it came: nobody in it.
-            EXPECT_TRUE(d.real) << "a fill frame showing " << d.shows;
-            EXPECT_EQ(d.persons, 0) << "showing " << d.shows;
-            emptyReal += d.real && d.persons == 0;
+    {
+        Filler f;
+        f.SetMode(kInterp);
+        FillRun r = Drive(f, 0.125, 10.0, 16.0, 16.5, present);
+        int emptyReal = 0;
+        for (const Delivery &d : r.out) {
+            if (d.shows > 12.875 + 1e-9 && d.shows < 13.625 - 1e-9) {
+                // Between the last frame with her and the first one with her
+                // again only camera frames, each exactly as it came: nobody in it.
+                EXPECT_TRUE(d.real) << "a fill frame showing " << d.shows;
+                EXPECT_EQ(d.persons, 0) << "showing " << d.shows;
+                emptyReal += d.real && d.persons == 0;
+            }
         }
+        EXPECT_EQ(emptyReal, 5) << "13.0 .. 13.5, every empty camera frame";
     }
-    EXPECT_EQ(emptyReal, 5) << "13.0 .. 13.5, every empty camera frame";
+    {
+        // extrap: after the last frame with her, at most one period of her
+        // (the camera has not yet said she is gone); from the first empty
+        // camera frame to the first one with her again, nothing but those.
+        Filler f;
+        f.SetMode(kExtrap);
+        FillRun r = Drive(f, 0.125, 10.0, 16.0, 16.5, present);
+        int emptyReal = 0;
+        for (const Delivery &d : r.out) {
+            if (d.song > 13.0 - 1e-9 && d.song < 13.625 - 1e-9) {
+                EXPECT_TRUE(d.real) << "a fill frame at " << d.song;
+                EXPECT_EQ(d.persons, 0) << "at " << d.song;
+                emptyReal += d.real && d.persons == 0;
+            }
+        }
+        EXPECT_EQ(emptyReal, 5) << "13.0 .. 13.5, every empty camera frame";
+    }
 }
 
 TEST(PoseFillScheduleTest, NoFillAcrossALongCameraGap) {
     Filler f;
+    f.SetMode(kInterp);
     FillRun r = Drive(f, 0.125, 10.0, 13.0, 13.0, Always);
     ASSERT_TRUE(f.Engaged());
     // The camera hiccups for 0.6 s, then carries on.

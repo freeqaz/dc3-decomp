@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 namespace Dc3PoseFill {
@@ -11,19 +12,34 @@ namespace Dc3PoseFill {
 Mode ParseMode(const char *env, bool *ok) {
     if (ok)
         *ok = true;
-    if (!env || !*env || !strcmp(env, "interp"))
+    if (!env || !*env || !strcmp(env, "extrap"))
+        return kExtrap;
+    if (!strcmp(env, "interp"))
         return kInterp;
     if (!strcmp(env, "off") || !strcmp(env, "0"))
         return kOff;
     if (!strcmp(env, "hold"))
         return kHold;
-    if (!strcmp(env, "extrap"))
-        return kExtrap;
     if (!strcmp(env, "extrapc"))
         return kExtrapClamped;
     if (ok)
         *ok = false;
-    return kInterp;
+    return kExtrap;
+}
+
+float ParseGain(const char *env, bool *ok) {
+    if (ok)
+        *ok = true;
+    if (!env || !*env)
+        return kDefaultGain;
+    char *end = nullptr;
+    double g = strtod(env, &end);
+    if (end == env || *end != '\0' || !(g >= 0.0 && g <= 1.0)) {
+        if (ok)
+            *ok = false;
+        return kDefaultGain;
+    }
+    return (float)g;
 }
 
 const char *ModeName(Mode m) {
@@ -109,6 +125,64 @@ void Interpolate(const Source &a, const Source &b, float alpha, Output &out) {
     }
 }
 
+// The tracker's left/right confusion: some pair of `last` sits much closer to
+// the other side's joint of `prev` than to its own (by more than half).  Real
+// motion does that on 0.1% of 8 Hz frame pairs of the np-video-calib footage
+// (hands crossing); a whole-body swap does it on 99.7%.
+static bool LooksSwapped(const Person &prev, const Person &last) {
+    static const int kPairs[][2] = {
+        { kJointShoulderLeft, kJointShoulderRight }, { kJointElbowLeft, kJointElbowRight },
+        { kJointWristLeft, kJointWristRight },       { kJointHandLeft, kJointHandRight },
+        { kJointHipLeft, kJointHipRight },           { kJointKneeLeft, kJointKneeRight },
+        { kJointAnkleLeft, kJointAnkleRight },       { kJointFootLeft, kJointFootRight },
+    };
+    auto dist = [](const Vector3 &a, const Vector3 &b) {
+        float dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
+        return sqrtf(dx * dx + dy * dy + dz * dz);
+    };
+    for (const auto &pr : kPairs) {
+        int l = pr[0], r = pr[1];
+        if (prev.confidence[l] <= kConfidenceNotTracked || prev.confidence[r] <= kConfidenceNotTracked
+            || last.confidence[l] <= kConfidenceNotTracked || last.confidence[r] <= kConfidenceNotTracked)
+            continue;
+        float straight = dist(last.joints[l], prev.joints[l]) + dist(last.joints[r], prev.joints[r]);
+        float swapped = dist(last.joints[l], prev.joints[r]) + dist(last.joints[r], prev.joints[l]);
+        if (swapped < kSwapMargin * straight)
+            return true;
+    }
+    return false;
+}
+
+void ExtrapolateGuarded(const Source &prev, const Source &last, float seconds, float period, float gain,
+                        Output &out) {
+    CopyFrame(last, out);
+    if (period <= 1e-3f || seconds <= 0.0f || gain <= 0.0f)
+        return;
+    for (int i = 0; i < out.numPersons; i++) {
+        Person &p = out.persons[i];
+        if (!p.valid)
+            continue;
+        const Person *q = FindValid(prev, p.trackId);
+        if (!q || LooksSwapped(*q, p))
+            continue; // held: nothing to step from, or a step that is a swap
+        for (int j = 0; j < kNumJoints; j++) {
+            if (p.confidence[j] <= kConfidenceNotTracked || q->confidence[j] <= kConfidenceNotTracked)
+                continue; // a guess is not extrapolated
+            const Vector3 &x = p.joints[j], &xp = q->joints[j];
+            float vx = (x.x - xp.x) / period, vy = (x.y - xp.y) / period, vz = (x.z - xp.z) / period;
+            float speed = sqrtf(vx * vx + vy * vy + vz * vz);
+            if (speed > kMaxJointSpeed) {
+                float k = kMaxJointSpeed / speed;
+                vx *= k;
+                vy *= k;
+                vz *= k;
+            }
+            float t = gain * seconds;
+            p.joints[j].Set(x.x + vx * t, x.y + vy * t, x.z + vz * t);
+        }
+    }
+}
+
 void Extrapolate(const Source &prev, const Source &last, float a, bool clamped, Output &out) {
     CopyFrame(last, out);
     for (int i = 0; i < out.numPersons; i++) {
@@ -162,6 +236,10 @@ void Filler::Reset() {
     mSigma = -1e30;
     mArrivalElapsedMs = 33;
     mFills = mReals = 0;
+}
+
+void Filler::SetGain(float g) {
+    mGain = g < 0.0f ? 0.0f : g > 1.0f ? 1.0f : g;
 }
 
 double Filler::MedianInterval() const {
@@ -326,6 +404,8 @@ bool Filler::Poll(double song, Output &out) {
     if (mDelivered < 0)
         return false;
     const Source &a = mBuf[mDelivered];
+    if (!AnyValid(a))
+        return false; // nobody in the newest frame: nothing to fill (P-12's hold sees the camera's frames)
     double sinceReal = song - a.arrival;
     if (song - mLastShows < kStep - 1e-6)
         return false;
@@ -335,7 +415,19 @@ bool Filler::Poll(double song, Output &out) {
         period = a.ts - prev->ts;
     else if (prev && a.arrival > prev->arrival)
         period = a.arrival - prev->arrival;
-    if (mMode == kExtrapClamped) {
+    if (mMode == kExtrap) {
+        // One source period at most: the last pair's, and never more than the
+        // camera's usual one (a dropped frame doubles the pair's), then the
+        // stream waits for the camera.
+        double horizon = period;
+        double med = MedianInterval();
+        if (med > 0.0 && (horizon <= 0.0 || horizon > med))
+            horizon = med;
+        if (horizon <= 0.0)
+            horizon = kStep;
+        if (sinceReal > horizon + 1e-6)
+            return false;
+    } else if (mMode == kExtrapClamped) {
         if (period <= 0.0 || sinceReal > period)
             return false;
     } else if (sinceReal >= kHoldCap) {
@@ -343,6 +435,11 @@ bool Filler::Poll(double song, Output &out) {
     }
     if (mMode == kHold || !prev || period <= 1e-3) {
         CopyFrame(a, out);
+    } else if (mMode == kExtrap) {
+        if (prev->arrival < a.arrival - std::min(kGapFactor * MedianInterval(), kMaxGap))
+            CopyFrame(a, out); // the pair straddles a camera gap: no velocity from it
+        else
+            ExtrapolateGuarded(*prev, a, (float)sinceReal, (float)period, mGain, out);
     } else {
         double horizon = mMode == kExtrapClamped ? 0.5 * period : period;
         float k = (float)(std::min(sinceReal, horizon) / period);

@@ -784,8 +784,11 @@ static void PerfTick(bool providerRunning, bool accepted, int persons) {
 
 // DC3_POSE_FILL (PoseFill_Native.h): frames between camera frames, at the
 // Kinect's 30 Hz of song time, while the camera is slow.  The default,
-// interp, runs the stream one camera period behind the camera and adds that
-// delay to the scorer's latency (Dc3SetPoseFillDelaySeconds).
+// extrap, steps each camera frame on by its joints' velocity for up to one
+// camera period, at DC3_POSE_FILL_GAIN of the full step -- deliberately
+// generous (owner decision 2026-11-14: over-credit, then calibrate down).
+// interp instead runs the stream one camera period behind the camera and
+// adds that delay to the scorer's latency (Dc3SetPoseFillDelaySeconds).
 //
 // While the fill is engaged a camera frame is NOT laid into the slots when it
 // arrives: it is levelled (the gravity estimate is sensor state built from
@@ -797,7 +800,7 @@ static void PerfTick(bool providerRunning, bool accepted, int persons) {
 namespace {
 Dc3PoseFill::Filler gFill;
 bool gFillModeRead = false;
-Dc3PoseFill::Mode gFillModeOverride = Dc3PoseFill::kInterp;
+Dc3PoseFill::Mode gFillModeOverride = Dc3PoseFill::kExtrap;
 bool gFillHaveOverride = false;
 double (*gFillClock)() = nullptr;
 
@@ -817,6 +820,11 @@ void FillReadMode() {
                     v);
     }
     gFill.SetMode(mode);
+    const char *g = gFillHaveOverride ? nullptr : getenv("DC3_POSE_FILL_GAIN");
+    bool gainOk = true;
+    gFill.SetGain(Dc3PoseFill::ParseGain(g, &gainOk));
+    if (!gainOk)
+        fprintf(stderr, "DC3_POSE_FILL_GAIN='%s' ignored (want 0 .. 1)\n", g);
     gFill.Reset();
 }
 
@@ -835,9 +843,9 @@ void FillPublishDelay() {
         sLoggedDelay = delay;
         double med = gFill.MedianInterval();
         fprintf(stderr,
-                "DC3 POSE FILL: %s %s at song %.2f s (camera %.1f frames/s, stream delay %.0f ms "
-                "added to the scorer's latency)\n",
-                Dc3PoseFill::ModeName(gFill.GetMode()),
+                "DC3 POSE FILL: %s (gain %.2f) %s at song %.2f s (camera %.1f frames/s, stream delay "
+                "%.0f ms added to the scorer's latency)\n",
+                Dc3PoseFill::ModeName(gFill.GetMode()), gFill.Gain(),
                 changed ? (sWasEngaged ? "engaged" : "released") : "delay", FillClock(),
                 med > 0.0 ? 1.0 / med : 0.0, delay * 1000.0f);
     }

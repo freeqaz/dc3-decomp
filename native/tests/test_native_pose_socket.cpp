@@ -1239,13 +1239,49 @@ TEST_F(PoseFillSensorTest, ASlowCameraIsFilledAndOnlyItsOwnFramesAreRecorded) {
         EXPECT_EQ(frames[k].frameId, sent[k]) << k;
 }
 
+TEST_F(PoseFillSensorTest, TheDefaultExtrapFillsASlowCameraNoMoreThanAPeriodAheadAndRecordsOnlyItsFrames) {
+    EXPECT_EQ(Dc3PoseFill::ParseMode(nullptr), Dc3PoseFill::kExtrap) << "the default";
+    NativePoseFillTestSet(Dc3PoseFill::kExtrap, &Clock);
+    const std::string path = TempPath("fill_extrap.dc3session");
+    Dc3PoseSessionRecordTo(path.c_str());
+    std::vector<uint32_t> sent;
+    std::vector<Shown> shown = Play(6.0, 0.125, 82, Always, &sent);
+    Dc3PoseSessionRecordTo(nullptr);
+
+    const Dc3PoseFill::Filler &fill = NativePoseFiller();
+    ASSERT_TRUE(fill.Engaged());
+    EXPECT_EQ(fill.Delay(), 0.0) << "extrap adds no delay";
+    EXPECT_EQ(Dc3PoseFillDelaySeconds(), 0.0f) << "so the scorer's latency is the camera's";
+    EXPECT_GT(fill.Fills(), 100u);
+    int n = 0;
+    for (const Shown &s : shown) {
+        if (s.song < sClock - 4.0)
+            continue;
+        n++;
+        ASSERT_GE(s.slot, 0) << "at " << s.song;
+        EXPECT_TRUE(s.tracked) << "at " << s.song;
+        // Steady motion: the step on from the newest camera frame lands on the
+        // moment shown, never more than one camera period past that frame.
+        EXPECT_NEAR(s.hipX, 0.1 * s.song, 0.1 * (1.0 / 120.0) + 2e-4) << "at " << s.song;
+    }
+    EXPECT_NEAR(n / 4.0, 32.0, 3.0);
+
+    std::vector<Dc3PoseSession::Frame> frames;
+    std::string err;
+    ASSERT_TRUE(Dc3PoseSession::Load(path.c_str(), frames, &err)) << err;
+    ASSERT_EQ(frames.size(), sent.size()) << "camera frames only";
+    for (size_t k = 0; k < frames.size(); k++)
+        EXPECT_EQ(frames[k].frameId, sent[k]) << k;
+}
+
 TEST_F(PoseFillSensorTest, ADropoutReachesTheHoldExactlyAsWithTheFillOff) {
     // 8 Hz: 2 s of the player, then she is lost.  The hold (1000 ms of sensor
     // time, P-12) must hold and release her after the same camera frames,
     // fill on or off, and no fill frame may stand in for her meanwhile.
-    int heldFrames[2] = { -1, -1 };
-    for (int mode = 0; mode < 2; mode++) {
-        NativePoseFillTestSet(mode == 0 ? Dc3PoseFill::kOff : Dc3PoseFill::kInterp, &Clock);
+    const Dc3PoseFill::Mode modes[3] = { Dc3PoseFill::kOff, Dc3PoseFill::kInterp, Dc3PoseFill::kExtrap };
+    int heldFrames[3] = { -1, -1, -1 };
+    for (int mode = 0; mode < 3; mode++) {
+        NativePoseFillTestSet(modes[mode], &Clock);
         const int id = 90 + mode;
         const double lostAt = sClock + 2.0;
         auto present = [lostAt](double t) { return t < lostAt; };
@@ -1253,8 +1289,8 @@ TEST_F(PoseFillSensorTest, ADropoutReachesTheHoldExactlyAsWithTheFillOff) {
         int held = 0;
         bool released = false;
         const Dc3PoseFill::Filler &fill = NativePoseFiller();
-        if (mode == 1)
-            ASSERT_TRUE(fill.Engaged());
+        if (mode > 0)
+            ASSERT_TRUE(fill.Engaged()) << Dc3PoseFill::ModeName(modes[mode]);
         for (const Shown &s : shown) {
             if (s.slot >= 0 && !s.tracked) {
                 EXPECT_FALSE(released) << "held again after the release";
@@ -1263,25 +1299,29 @@ TEST_F(PoseFillSensorTest, ADropoutReachesTheHoldExactlyAsWithTheFillOff) {
                 released = true;
             }
         }
-        EXPECT_TRUE(released) << (mode ? "interp" : "off");
+        EXPECT_TRUE(released) << Dc3PoseFill::ModeName(modes[mode]);
         heldFrames[mode] = held;
         // Run on: the next case starts from an empty sensor.
         Play(1.0, 0.125, id, [](double) { return false; });
     }
     EXPECT_EQ(heldFrames[0], 8) << "1000 ms / 125 ms";
-    EXPECT_EQ(heldFrames[1], heldFrames[0]) << "fill on: a different hold";
+    EXPECT_EQ(heldFrames[1], heldFrames[0]) << "interp: a different hold";
+    EXPECT_EQ(heldFrames[2], heldFrames[0]) << "extrap: a different hold";
 }
 
 TEST_F(PoseFillSensorTest, AThirtyHertzCameraIsTheSameStreamFillOnOrOff) {
-    std::vector<uint32_t> sent;
-    std::vector<Shown> shown = Play(4.0, 1.0 / 30.0, 95, Always, &sent);
-    EXPECT_FALSE(NativePoseFiller().Engaged());
-    EXPECT_EQ(NativePoseFiller().Fills(), 0u);
-    EXPECT_EQ(Dc3PoseFillDelaySeconds(), 0.0f);
-    ASSERT_EQ(shown.size(), sent.size()) << "one frame per camera frame";
-    for (const Shown &s : shown) {
-        ASSERT_GE(s.slot, 0);
-        EXPECT_NEAR(s.hipX, 0.1 * s.song, 2e-4) << "at once, at " << s.song;
+    for (Dc3PoseFill::Mode m : { Dc3PoseFill::kExtrap, Dc3PoseFill::kInterp }) {
+        NativePoseFillTestSet(m, &Clock);
+        std::vector<uint32_t> sent;
+        std::vector<Shown> shown = Play(4.0, 1.0 / 30.0, 95, Always, &sent);
+        EXPECT_FALSE(NativePoseFiller().Engaged()) << Dc3PoseFill::ModeName(m);
+        EXPECT_EQ(NativePoseFiller().Fills(), 0u) << Dc3PoseFill::ModeName(m);
+        EXPECT_EQ(Dc3PoseFillDelaySeconds(), 0.0f);
+        ASSERT_EQ(shown.size(), sent.size()) << "one frame per camera frame";
+        for (const Shown &s : shown) {
+            ASSERT_GE(s.slot, 0);
+            EXPECT_NEAR(s.hipX, 0.1 * s.song, 2e-4) << "at once, at " << s.song;
+        }
     }
 }
 
