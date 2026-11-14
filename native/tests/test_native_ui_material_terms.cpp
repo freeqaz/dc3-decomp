@@ -57,11 +57,15 @@ TEST(NativeUiMaterialTerms, OverlayPhaseTakesRetailTerms) {
            "score digits draw half-transparent white without it";
 }
 
-TEST(NativeUiMaterialTerms, WorldPhaseUnchanged) {
-    // Before EndWorld the world keeps the dc3 shader's linear model (lane
-    // np-gfx-light) and the engine's existing material rules.
+TEST(NativeUiMaterialTerms, WorldPhaseTakesTheShapesShadingSpace) {
+    // Before EndWorld the hook's UI switches do not apply: the world takes the
+    // render shape's own shading space and the engine's existing material
+    // rules. For DC3 that space is gamma (the retail light model, lane
+    // np-gfx-light: rndshape::kGammaSpaceShading), so the world and the UI now
+    // agree; what must stay off outside the overlay is the UI material terms.
     UiDrawTerms world = UiDrawTermsFor(false);
-    EXPECT_FALSE(world.gammaShading);
+    EXPECT_TRUE(world.gammaShading)
+        << "the DC3 world shades in gamma space, as the Xbox 360 renderer does";
     EXPECT_FALSE(world.retailMaterialTerms);
 }
 
