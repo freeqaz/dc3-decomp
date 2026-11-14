@@ -16,8 +16,9 @@ scripts/remote/tnr_build.sh --no-fetch ~/tmp/my-lane     # compile check only
 | `--jobs N` | `ninja -j` and CPU quota on tnr (default **32**, at most 64; 32 until the cgroup-weight question below is settled) |
 | `--reconfigure` | re-run `scripts/native_configure.sh` on tnr first |
 | `--no-fetch` | leave the build on tnr; only the log comes back |
-| `--test [ARGS]` | run `scripts/native_test.sh` on tnr (see [Tests on tnr](#tests-on-tnr)) |
-| `--sync-assets` | copy `orig-assets`, `archive` and `milo-rnd-library/dc3` to tnr (tests only) |
+| `--test [ARGS]` | run `scripts/native_test.sh` on tnr; **not the gate** (see [Tests on tnr](#tests-on-tnr)) |
+| `--test-args 'S'` | the same, with `S` passed as is (`'-R regex -j4'`) |
+| `--sync-assets` | copy `orig-assets`, `archive`, `native/models` and `milo-rnd-library/dc3` to tnr (tests only) |
 | `--build-image` | (re)build the container image on tnr |
 
 Exit codes:
@@ -49,7 +50,7 @@ Measured timings are in [Measured](#measured).
   | `ccache/` | tnr's cache |
   | `deps/` | Dawn, imgui |
   | `bin/ccache` | the ccache binary |
-  | `assets/` | game data; only after `--sync-assets` |
+  | `assets/` | game data and pose models; only after `--sync-assets` |
   | `xdg/`, `containers/` | podman state |
   | `image/` | the Containerfile and its build log |
 
@@ -157,7 +158,80 @@ After a desk `pacman -Syu`:
 
 ## Tests on tnr
 
-TODO (deliverable 3, in progress).
+**tnr cannot run the native gate green: a run on tnr is not the gate.** It
+runs the gate's tests under Mesa's lavapipe (`GPU = llvmpipe`), because tnr's
+GPUs are not ours. That works, but every test that renders the game frame by
+frame is too slow under lavapipe to finish inside its hard-coded caps.
+
+Setup and command:
+
+```sh
+scripts/remote/tnr_build.sh --sync-assets ~/tmp/my-lane      # once: ~24 GB, 341 s cold, 3 s after
+scripts/remote/tnr_build.sh --no-fetch --test -j16 ~/tmp/my-lane
+scripts/remote/tnr_build.sh --no-fetch --test-args '-R ^NativeTreePaths\. -j4' ~/tmp/my-lane
+```
+
+Measured 2026-11-14 on `np-build-infra` with the full gate, `ctest -j16` in a
+32-CPU container, image `4ab03b942615`:
+
+| | desk (GPU, serial) | tnr (lavapipe, `-j16`) |
+|---|---|---|
+| executed / passed / failed / skipped | 766 / 766 / 0 / 70 | 765 / 724 / **41** / 71 (70 since `native/models` is synced) |
+| wall | 2,861 s (desk load 60-75) | 966 s (most of it the failures running out their caps) |
+
+The 41 failures, plus 2 more that failed in only one of the two runs (43
+tests), fall into two classes.
+
+- **Rendered engine runs overrun their caps (42 tests).** These suites run
+  `dc3-native` with rendering on: `DtaFlowTest`, `DtaFlowIdleMultiuserTest`,
+  `DtaFlowSongSelectScrollTest`, `YmcaFaithfulNoFastBootTest`,
+  `ControllerMode*`, `StoryTutorialGate*`, `FitnessPlaylistFlowTest`,
+  `OptionsGameplay*`, `LargestSongFlowTest`, `HttpInputTest`,
+  `PerformCrowdTest`, `RehearseProjectionTest`, `XeniaGolden.*`,
+  `HeadlessBootTest` (4) and the windowed `NativeExitTest` cases (5).
+  - Their caps are hard-coded: `kEngineWallClockSeconds` = 300, 60 s for
+    `YmcaFaithful`, 30 s exit waits, and the HTTP driver's command timeout.
+  - lavapipe costs about 13 ms a frame on the attract screen. The desk's GPU
+    does 2,000 headless frames in about 4 s.
+  - Serially, with nothing else in the container:
+    - `HeadlessBootTest.SurvivesMainLoop` takes 38 s (desk: 4 s).
+    - `DtaFlowTest.NoCrashCleanExit` hits its 300 s cap (desk: 44 s).
+  - So lower `-j` does not rescue them.
+  - The same runs pass at desk speed when they set `MILO_NORENDER=1` (median
+    tnr/desk ratio 1.06 over the 24 passing tests that take over 5 s), for
+    example `GestureMenusTest`, `TwoPlayerBattleTest`, `PoseDropoutTest` and
+    `NoCameraBattleTest`. The slowness is the CPU rasterizer, not the box.
+- **`NativeAudioSeekTest.DecodeLeadReachesTheImageSteadyState` (1 test)**
+  misses its bound by 2-12 ms, both runs (1,241 / 1,251 vs 1,254 ms).
+  - It is a timing test that the rendering load disturbs.
+  - It passes on the desk.
+
+**Safe in parallel.** Everything else passed at `-j16`:
+
+- the 700-odd unit tests;
+- the `MILO_NORENDER` engine flows;
+- `MiloViewer*`.
+
+Each container gets its own network namespace, so test ports cannot collide
+with tnr's services or with another lane.
+
+**Pixel tests.** The image-comparing tests that reach their comparison all
+match under lavapipe:
+
+- `MiloViewerScreenshot.PoseDumpCanMatchGoldenWithTolerance`
+- `TexRendererClearTest.*`
+- `NativeGlyphRender*`
+- `PostProcNoiseTest`
+- `CameraYuvDecode`
+- the `CameraViewTest` mask
+
+None differed. `DtaFlowSongSelectScrollTest.ScrollDownEdgeMatchesImage`
+never reaches its comparison: its flow times out first.
+
+**What tnr could still save.** The 724 tests that pass took 1,257 s of the
+desk's 2,861 s serial gate. The 43 that fail took the other 1,589 s and still
+need a GPU. Offloading only the first group needs a reliable way to select
+them; see PLAN H-29. A hand-written exclude list would rot.
 
 ## Measured
 
@@ -180,3 +254,10 @@ After every fetch:
 - The 81 tests that read the per-file path defines passed on the desk
   against tnr-built binaries, including `TestGates.BuildMatchesSources`, which
   asks the desk's ninja whether the build is current.
+- **The full desk gate passed on tnr-built binaries** (`scripts/native_test.sh`
+  with nothing rebuilt on the desk): 836 registered, 766 passed, 0 failed,
+  70 skipped (= budget), exit 0.
+
+The image is now `4ab03b942615` (it adds the test-only layer). Its first build
+found the old image's build dir, ran `ninja -t clean`, and rebuilt all 2,610
+edges into a fresh cache scope, as designed.
