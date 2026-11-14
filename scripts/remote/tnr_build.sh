@@ -20,7 +20,8 @@
 #                    instead of a plain build; ARGS go to native_test.sh
 #   --no-fetch       leave the build on tnr (only the log comes back)
 #   --reconfigure    re-run scripts/native_configure.sh on tnr first
-#   --jobs N         ninja -j and CPU quota on tnr (default 64, max 96)
+#   --jobs N         ninja -j and CPU quota on tnr (default 32, max 64; see
+#                    docs/native/REMOTE_BUILD.md before raising it)
 #   --build-image    (re)build the container image on tnr and exit
 #   --sync-assets    copy orig-assets / archive / milo-rnd-library to tnr
 #                    (needed for --test only; under TNR_ROOT, nowhere else)
@@ -39,7 +40,7 @@ set -u
 HOST="${TNR_HOST:-tnr-decomp}"
 B="${TNR_ROOT:-/scratch/dc3-native-build}"
 IMAGE="${TNR_IMAGE:-localhost/dc3-native-build:20261020}"
-JOBS=64; FETCH=1; RECONF=0; MODE=build; TEST_ARGS=""; ACTION=build
+JOBS=32; FETCH=1; RECONF=0; MODE=build; TEST_ARGS=""; ACTION=build
 
 usage() { sed -n '2,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
 WT=""; TARGETS=()
@@ -59,7 +60,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 case "$JOBS" in ''|*[!0-9]*) echo "--jobs must be a number" >&2; exit 2 ;; esac
-[ "$JOBS" -gt 96 ] && { echo "--jobs capped at 96 on tnr (docs/native/REMOTE_BUILD.md)" >&2; JOBS=96; }
+[ "$JOBS" -gt 64 ] && { echo "--jobs capped at 64 on tnr (docs/native/REMOTE_BUILD.md)" >&2; JOBS=64; }
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 CM="${XDG_RUNTIME_DIR:-/tmp}/tnr-build-cm-%C"

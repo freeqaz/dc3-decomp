@@ -8,7 +8,7 @@ set -u
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.." || exit 9
 BUILD_DIR=native/build
 LOG="$BUILD_DIR/tnr-build-last.log"
-JOBS="${TNR_JOBS:-64}"
+JOBS="${TNR_JOBS:-32}"
 CPUSET="${TNR_CPUSET:-}"
 
 # nice 19 + SCHED_IDLE + idle IO class, pinned to the agreed CPU set.
