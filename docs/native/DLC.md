@@ -56,7 +56,7 @@ The two halves meet at the drive name.
   - Mounting a package maps that drive to the host directory, and unmounting it unmaps the drive.
   - Discovery queues the package's `songs/` files the way the base `ContentMgr` expects.
   - It logs `DC3 Native: DLC package '<name>' at cnt00000000: -> <dir>`, with ` (cached)` when the song cache already holds the package.
-- **Engine `src/platform/File_Native.cpp`** (`../milo-native-engine`, branch `np-dlc`)
+- **Engine `src/platform/File_Native.cpp`** (`../milo-native-engine`, landed in `c8abfc0`)
   - A 16-entry drive table: `NativeMountDrive` / `NativeUnmountDrive`.
   - `FileQualifiedFilename` turns `cnt00000000:/songs/...` into `<host dir>/songs/...`, and `FileIsLocal` answers true for a mapped drive.
   - Every engine reader goes through these, including `AsyncFile`, `FileGetStat` and the FFmpeg movie and preview reader.
