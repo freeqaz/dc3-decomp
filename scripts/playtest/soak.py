@@ -153,7 +153,7 @@ class Soak:
         os.replace(self.control + ".tmp", self.control)
         say(f"footage: {os.path.basename(path)}")
 
-    def launch(self):
+    def launch(self, fast=False):
         self.n += 1
         label = f"proc{self.n}"
         # The menus are driven by pad presses; under `auto` with a person on
@@ -166,7 +166,8 @@ class Soak:
         env["MILO_NORENDER" if self.a.norender else "MILO_RENDER"] = "1"
         self.clip(self.default_clip)
         self.kit = kitdrive.Kit(os.path.join(self.a.out, label), self.home,
-                                args=["--headless", "--video", self.default_clip,
+                                args=["--headless"] + (["--fast-boot"] if fast else [])
+                                + ["--video", self.default_clip,
                                       "--video-pre", str(self.a.pre)],
                                 env=env, gpu_lock=self.a.gpu_lock,
                                 log=lambda m: say(f"[{label}] {m}"))
@@ -379,8 +380,30 @@ class Soak:
         loaded = [l for l in log.splitlines() if "loaded" in l and "save" in l.lower()][:3]
         return {"save_load_lines": loaded, "ok": bool(loaded)}
 
+    def try_legs(self, names):
+        """--try: one process, only the named legs (for working on a leg
+        without the whole soak in front of it).  A full boot: under
+        DC3_FAST_BOOT nobody signs in, and Fitness then shows an empty list."""
+        a = self.a
+        self.launch()
+        self.leg("boot", self.kit.boot_to_main)
+        table = {"perform": lambda: self.song("perform", a.songs[0], "medium",
+                                              ("perform_endgame_screen",)),
+                 "rehearse": lambda: self.rehearse(a.rehearse),
+                 "battle": lambda: self.song(
+                     "dance_battle", a.battle, "medium",
+                     ("perform_endgame_screen", "battle_endgame_screen",
+                      "dance_battle_endgame_screen"), 480, 2,
+                     footage(a.footage, a.battle, duo=True), None),
+                 "story": self.story, "fitness": self.fitness, "main": self.back_to_main}
+        for n in names:
+            self.leg(n, table[n])
+        self.close("end of --try")
+
     def run(self):
         a = self.a
+        if a.try_legs:
+            return self.try_legs(a.try_legs.split(","))
         self.launch()
         self.leg("boot", self.kit.boot_to_main)
         songs = a.songs[:1] if a.short else a.songs
@@ -455,6 +478,9 @@ def main(argv=None):
     ap.add_argument("--rehearse", default="getlow")
     ap.add_argument("--rehearse-min", type=float, default=6.0)
     ap.add_argument("--battle", default="macarena")
+    ap.add_argument("--try", dest="try_legs", metavar="LEG,LEG",
+                    help="only these legs (perform rehearse battle story fitness main), "
+                         "one process: for working on a leg")
     a = ap.parse_args(argv)
     a.out = os.path.abspath(a.out)
     a.footage = os.path.abspath(a.footage)

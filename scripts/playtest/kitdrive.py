@@ -279,6 +279,13 @@ class Kit:
             raise RuntimeError(f"choose_mode_screen has no {mode} row")
         self.need("song_select_screen")
         self.pick_song(song)
+        if mode == "practice":
+            # Rehearse picks its difficulty on its own screen (rows easy,
+            # medium, expert), then goes straight to the song.
+            self.need("seldiff_practice_screen")
+            if not self.choose(difficulty):
+                raise RuntimeError(f"seldiff_practice_screen has no {difficulty}")
+            return self.need(("game_screen",), 120)
         return self.multiuser(difficulty)
 
     def pick_song(self, song):
