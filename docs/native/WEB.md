@@ -110,28 +110,83 @@ at the display's rate, so a 120/144 Hz browser ran the game at 120/144 fps
 where the desktop caps at 60 (H-29). The rAF loop now asks `dc3RafGate(ts)`
 first (`Dc3RafGate`, `native/src/platform/FramePacer_Native.cpp`):
 
-- it estimates the display rate from the **median** of the last 64 rAF gaps
-  (first decision after 16), so one long frame does not move it;
+- it estimates the display rate from the **one-refresh gaps** among the last
+  64 rAF gaps (first decision after 16): the gaps up to 1.5× the 25th
+  percentile, and their median. The first version took the median of all
+  gaps, which is wrong: a gap after a frame that ran holds the frame's cost,
+  and only a gap after a skipped rAF (or a frame shorter than one refresh) is
+  one clean refresh. With most frames a little over one refresh, the median
+  read half the panel's rate and turned the cap off (MEASURED in Chromium on
+  an emulated 144 Hz rAF: off at "48 Hz", then on again; in the unit test
+  the game ran 89 fps on 144 Hz with the median put back);
 - it passes that estimate to the same `Dc3FrameCapDecide` the desktop uses, so
   the cap snaps the same way: 144 Hz → every 2nd rAF (72 fps), 120 → 60,
-  240 → 60, 165 → 82.5, and 60 Hz or slower runs every rAF;
-- a rAF runs the frame when at least one period minus half a display interval
-  has passed since the last frame that ran, so jitter does not drop frames;
+  240 → 60, 165 → 82.5, and 60 Hz or slower runs every rAF. A re-estimate
+  within 5% of the cap in force keeps it (the estimate wobbles ~1–2% with
+  timestamp jitter; the first version logged a new "frame cap 72.00 fps" line
+  for each wobble, hiding the real flip among them);
+- a rAF runs the frame when it is no earlier than half a refresh before the
+  frame is due, so jitter does not drop frames. An on-time frame makes the
+  next due one period after this rAF (an estimate a fraction off, 143.6 vs
+  144 Hz, never drifts into a drop); a late frame (ran past its refresh)
+  makes the next due one period after it was *due*, so the lost refresh is
+  made up on the next one, with at most one period of debt;
 - `?env=DC3_FPS_CAP=N` caps at N (snapped), `DC3_FPS_CAP=0` turns it off, as on
   desktop.
+
+A game slower than the cap leaves no one-refresh gap (nothing is skipped and
+every frame outlasts a refresh), so the gate reads the game's own rate and
+turns the cap off. That is correct (there is nothing to cap) and the cap comes
+back once frames are short again.
 
 It logs `DC3 Web: frame cap … (display ~N Hz from rAF)` when the decision
 changes, and `window.dc3FrameCap` holds the estimate, the cap, and rAFs run and
 skipped. Tests: `RafGate.*` in `test_frame_pacer.cpp` drive the gate with a
-simulated rAF grid (144/120/240/165/500 Hz, 60 Hz, a game slower than the
-display, jitter, env overrides). Sabotages (MEASURED, in a standalone copy):
-running on every rAF fails every capped case; dropping the half-interval
-tolerance fails 120 Hz and the jitter case. In the browser,
-`scripts/web/frame-cap.mjs` runs Chromium with `--disable-frame-rate-limit
---disable-gpu-vsync` (an unthrottled rAF stands in for a fast display) and
-fails above 66 game frames a second; `--env DC3_FPS_CAP=0 --expect uncapped` is
-its control. It needs rAF ≥ 90/s to say anything, and exits 3 (SKIPPED) below
-that. Video plays from `.webm` transcodes (all 142 `.bik` have one;
+simulated rAF grid where a frame that runs long holds the next rAF to the
+first refresh after it (144/120/240/165/500 Hz, 60 Hz, a game slower than the
+display, frames longer than one refresh, late frames, ±0.5 ms jitter on 120
+and 144 Hz with every gap between frames checked, env overrides). Sabotages
+(MEASURED, each in a standalone build of the gate and the RafGate tests):
+
+| sabotage | fails |
+|---|---|
+| median of all gaps (the first version) | `FramesLongerThanOneRefreshDoNotHideThePanel`: 89.3 / 74.8 game fps on 144 / 120 Hz, cap off |
+| bare 25th percentile (no one-refresh cluster) | `JitterDoesNotDropFrames`: estimate 149.7 Hz |
+| exact cap comparison (no 5%) | `JitterDoesNotDropFrames`: 14 decisions; `FramesLonger…`: flipped |
+| no half-refresh tolerance | `JitterDoesNotDropFrames`: gaps of 1 and 3 refreshes |
+| period from the last frame that ran (no make-up) | `ALateFrameIsMadeUpOnTheNextRefresh`: 60 fps (68.9 with it; uncapped ~80) |
+| due grid never re-anchored to the rAF | `JitterDoesNotDropFrames`: gaps of 1 and 3 refreshes |
+| run on every rAF | every capped case |
+
+In the browser, `scripts/web/frame-cap.mjs --hz N` replaces
+`requestAnimationFrame` before any page script with an N Hz grid scheduler
+(a callback that runs long misses grid points, as on a real panel; Chromium's
+`--disable-frame-rate-limit --disable-gpu-vsync`, the first version of the
+probe, made every game frame ~70 ms on this box and could not say anything;
+`--hz 0` keeps it). It fails above cap + 3 game frames a second always, and
+needs the gate at the snapped cap with no flip to pass; a game slower than
+the cap on its own is exit 3 (SKIPPED). MEASURED on the rig, attract screen,
+release build, load 28–60 (other lanes and their GPU work: the same command
+gave anywhere from 22 to 101 uncapped game frames a second, so the game rate
+says little; the cap and the skip count are the result):
+
+| run | game/s | gate | result |
+|---|---|---|---|
+| 144 Hz, median build | 61.1 | 5 decisions, off at "48 Hz" once | flip (FAIL under today's check) |
+| 144 Hz | 56.6¹, 53.5, 33.7 | 72 fps, 1 decision, 356–511 rAFs skipped per 10 s | PASS |
+| 120 Hz | 48.7¹, 30.3 | 60 fps, 1 decision | PASS |
+| 165 Hz | 45.9 | 82.5 fps, 1 decision | PASS |
+| 144 Hz, game at 16–23/s (load 35–60) | 15.8, 23.0 | turned off, 3 decisions | SKIPPED, correctly |
+| control `DC3_FPS_CAP=0 --expect uncapped`, 144 Hz | 101.1¹, 93.4, 82.7, 68.1 | off, 0 skipped | PASS (21.8 once: SKIPPED) |
+| sabotage: `DC3_FPS_CAP=0` under the capped check | 99.7 (144 Hz), 57.4 (120 Hz) | off | FAIL, FAIL |
+
+¹ An intermediate build (bare 25th percentile, period from the last frame that
+ran); the rest are the final gate.
+
+INFERRED, not measured: a real high-refresh panel. Nothing on this box has
+one; the emulation stands in for it.
+
+Video plays from `.webm` transcodes (all 142 `.bik` have one;
 see [`native/web/VIDEO_ASSETS.md`](../../native/web/VIDEO_ASSETS.md)).
 
 ### Intro movie (W-11)

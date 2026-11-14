@@ -172,9 +172,15 @@ struct RafSim {
     double refreshHz;
     double gameMs = 2.0;
     double jitterMs = 0.0;
+    double longMs = 0.0;   // when set, this fraction of frames cost longMs
+    double longFrac = 0.0;
+    // After the warm-up: the shortest and longest gap between two frames that
+    // ran, in refreshes (an fps average hides a dropped frame that the next
+    // one makes up).
+    double minRunGap = 1e9, maxRunGap = 0.0;
     double Run(Dc3RafGate &gate, double warmS = 2.0, double measureS = 4.0) {
         const double period = 1000.0 / refreshHz;
-        double t = 0.0;
+        double t = 0.0, lastRunT = -1.0;
         long long ranAtWarm = -1;
         unsigned seed = 12345;
         while (t < (warmS + measureS) * 1000.0) {
@@ -183,7 +189,16 @@ struct RafSim {
             const bool ran = gate.OnRaf(t + j);
             if (ranAtWarm < 0 && t >= warmS * 1000.0)
                 ranAtWarm = gate.Ran();
-            const double busy = ran ? gameMs : 0.1;
+            if (ran) {
+                if (ranAtWarm >= 0 && lastRunT >= 0.0) {
+                    minRunGap = std::min(minRunGap, (t - lastRunT) / period);
+                    maxRunGap = std::max(maxRunGap, (t - lastRunT) / period);
+                }
+                lastRunT = t;
+            }
+            seed = seed * 1103515245u + 12345u;
+            const bool isLong = ((seed >> 8) & 0xffff) / 65536.0 < longFrac;
+            const double busy = ran ? (isLong ? longMs : gameMs) : 0.1;
             t += std::max(1.0, std::ceil(busy / period - 1e-9)) * period;
         }
         return (gate.Ran() - ranAtWarm) / measureS;
@@ -220,6 +235,46 @@ TEST(RafGate, SixtyHertzAndSlowGamesAreLeftAlone) {
     }
 }
 
+TEST(RafGate, FramesLongerThanOneRefreshDoNotHideThePanel) {
+    // The gap after a game frame holds the frame's cost. 60% of frames cost
+    // a little over one refresh (10 ms on 144 Hz, 12 on 120), the rest 3 ms.
+    // Uncapped, the game would run ~90 / ~75 fps -- over the 72 / 60 cap. The
+    // gate must read the panel from the short gaps and hold the cap. A
+    // median-of-all-gaps estimator read 72 / 60 Hz here, turned the cap off
+    // and stayed off (89.3 / 74.8 game fps, MEASURED with that sabotage).
+    struct { double hz, longMs, want; } cases[] = {{144.0, 10.0, 72.0}, {120.0, 12.0, 60.0}};
+    for (auto c : cases) {
+        Dc3RafGate gate(nullptr);
+        RafSim sim{c.hz};
+        sim.gameMs = 3.0;
+        sim.longMs = c.longMs;
+        sim.longFrac = 0.6;
+        EXPECT_NEAR(sim.Run(gate, 2.0, 8.0), c.want, 1.0) << c.hz << " Hz " << gate.Why();
+        EXPECT_NEAR(gate.RefreshHz(), c.hz, 0.5) << c.hz << " Hz";
+        EXPECT_NEAR(gate.TargetFps(), c.want, 0.1) << gate.Why();
+        EXPECT_LE(gate.Decisions(), 2) << "the cap flipped: " << gate.Why();
+    }
+}
+
+TEST(RafGate, ALateFrameIsMadeUpOnTheNextRefresh) {
+    // 40% of frames cost 15 ms on 144 Hz: just over two refreshes, so that
+    // frame's gap is three. Uncapped the game makes ~80 fps, so a 72 cap
+    // should cost little: after a late frame the next one runs one refresh
+    // later, back on the 72 Hz grid (68.9 here: two late frames in a row
+    // exceed the one period of debt the gate keeps). Counting the period from
+    // the last frame that RAN (instead of the grid) left every late frame's
+    // extra refresh unrecovered: 60 fps (MEASURED with that rule put back).
+    Dc3RafGate gate(nullptr);
+    RafSim sim{144.0};
+    sim.gameMs = 3.0;
+    sim.longMs = 15.0;
+    sim.longFrac = 0.4;
+    const double fps = sim.Run(gate, 2.0, 8.0);
+    EXPECT_GE(fps, 68.0) << gate.Why();
+    EXPECT_LE(fps, 73.0) << gate.Why();
+    EXPECT_NEAR(gate.TargetFps(), 72.0, 0.1) << gate.Why();
+}
+
 TEST(RafGate, UnthrottledRafIsCapped) {
     // Chrome's --disable-frame-rate-limit: rAF at ~500 Hz.
     Dc3RafGate gate(nullptr);
@@ -227,11 +282,25 @@ TEST(RafGate, UnthrottledRafIsCapped) {
 }
 
 TEST(RafGate, JitterDoesNotDropFrames) {
-    // +-0.5 ms of timestamp jitter on a 144 Hz grid: still every second rAF.
+    // +-0.5 ms of timestamp jitter on 144 and 120 Hz grids: still every
+    // second rAF, every time -- not a dropped frame made up by the next.
+    for (double hz : {120.0, 144.0}) {
+        Dc3RafGate gate(nullptr);
+        RafSim sim{hz};
+        sim.jitterMs = 0.5;
+        sim.Run(gate);
+        EXPECT_NEAR(sim.minRunGap, 2.0, 0.01) << hz << " Hz " << gate.Why();
+        EXPECT_NEAR(sim.maxRunGap, 2.0, 0.01) << hz << " Hz " << gate.Why();
+    }
     Dc3RafGate gate(nullptr);
     RafSim sim{144.0};
     sim.jitterMs = 0.5;
     EXPECT_NEAR(sim.Run(gate), 72.0, 1.0) << gate.Why();
+    // ...the estimate is the panel's rate, not biased by the jitter (a bare
+    // 25th percentile read 149 Hz here)...
+    EXPECT_NEAR(gate.RefreshHz(), 144.0, 1.5);
+    // ...and the jittered re-estimates are one decision, not one per window.
+    EXPECT_EQ(gate.Decisions(), 1) << gate.Why();
 }
 
 TEST(RafGate, EnvOverrides) {
