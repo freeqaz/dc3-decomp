@@ -12,7 +12,8 @@
 //                         in order, a fixed delay behind its arrival, nothing
 //                         past the newest camera frame (a stall stays a
 //                         stall), no fill across a dropout or a long gap.
-//   PoseFillLatencyTest   the delay reaches the scorer's latency.
+//   PoseFillLatencyTest   the delay reaches the scorer's latency, on top of
+//                         whichever sensor latency is in force.
 //
 // The sensor end (slots, P-12's hold, the recorder) is PoseFillSensorTest in
 // test_native_pose_socket.cpp.
@@ -20,6 +21,7 @@
 #include <gtest/gtest.h>
 
 #include "platform/PoseFill_Native.h"
+#include "platform/Skeleton_Native.h" // Dc3SensorLatencySeconds, Dc3DeclareSourceLatencyMs
 #include "hamobj/MoveDir.h"
 
 #include <cmath>
@@ -27,7 +29,6 @@
 
 using namespace Dc3PoseFill;
 
-float Dc3SensorLatencySeconds(float scoringDtaSeconds); // Skeleton_Native.cpp
 
 namespace {
 
@@ -392,4 +393,26 @@ TEST(PoseFillLatencyTest, TheDelayIsAddedToTheScorersLatency) {
     unsetenv("DC3_POSE_LATENCY_MS");
     EXPECT_FLOAT_EQ(Dc3SensorLatencySeconds(0.1f), 0.1f);
     MoveDir::NativeSetLatencySeconds(0.1f);
+}
+
+TEST(PoseFillLatencyTest, TheDelayRidesOnWhicheverSensorLatencyWins) {
+    // np-latency-harness's precedence (explicit > declared > default) picks the
+    // CAMERA's latency; the fill's delay is ours, on top of whichever it is.
+    unsetenv("DC3_POSE_LATENCY_MS");
+    Dc3DeclareSourceLatencyMs(-1);
+    Dc3SetPoseFillDelaySeconds(0.0f);
+    MoveDir::NativeSetLatencySeconds(Dc3SensorLatencySeconds(0.1f));
+    Dc3SetPoseFillDelaySeconds(0.16f);
+    EXPECT_FLOAT_EQ(MoveDir::NativeLatencySeconds(), 0.26f) << "default 100 + fill";
+    Dc3DeclareSourceLatencyMs(0); // a recorded file
+    EXPECT_FLOAT_EQ(MoveDir::NativeLatencySeconds(), 0.16f) << "declared 0 + fill";
+    EXPECT_FLOAT_EQ(Dc3SensorLatencySeconds(0.1f), 0.16f) << "and at the next LoadScoring";
+    setenv("DC3_POSE_LATENCY_MS", "50", 1);
+    EXPECT_FLOAT_EQ(Dc3SensorLatencySeconds(0.1f), 0.21f) << "explicit 50 + fill";
+    Dc3SetPoseFillDelaySeconds(0.0f);
+    EXPECT_FLOAT_EQ(MoveDir::NativeLatencySeconds(), 0.05f) << "released: explicit alone";
+    unsetenv("DC3_POSE_LATENCY_MS");
+    Dc3DeclareSourceLatencyMs(-1);
+    EXPECT_FLOAT_EQ(MoveDir::NativeLatencySeconds(), 0.1f) << "back to the default";
+    MoveDir::NativeSetLatencySeconds(Dc3SensorLatencySeconds(0.1f));
 }
