@@ -1,8 +1,9 @@
 #include "Skeleton_Native.h"
+#include "PoseFill_Native.h"     // Dc3SetPoseFillDelaySeconds
 #include "gesture/GestureMgr.h" // NUM_SKELETONS
 #include "platform/NativeNotice.h"
 #include "platform/CameraStream_Native.h"
-#include "hamobj/MoveDir.h" // NativeSetLatencySeconds (a source-declared latency)
+#include "hamobj/MoveDir.h" // NativeSetLatencySeconds (a declared latency, the fill delay)
 #include <cstdint>
 #include <cstring>
 #include <cstdio>
@@ -230,6 +231,14 @@ float Dc3ScoringDtaLatencySeconds(float scorerSeconds) {
     return sScoringDtaLatency >= 0.0f ? sScoringDtaLatency : scorerSeconds;
 }
 
+// DC3_POSE_FILL=interp runs the pose stream this far behind the camera
+// (PoseFill_Native.h).  The scorer must compare each frame with the
+// choreography of the moment it was captured, so the delay is added to the
+// sensor latency, whichever of explicit / declared / default is in force:
+// that figure describes the camera, and this one our own buffer on top of it.
+// MoveDir's sLatencySeconds = resolved sensor latency + this.
+static float sPoseFillDelay = 0.0f;
+
 // DC3_POSE_LATENCY_MS, parsed.  False when unset, empty or out of range.
 static bool ExplicitLatencyMs(double *ms) {
     const char *v = getenv("DC3_POSE_LATENCY_MS");
@@ -307,7 +316,7 @@ float Dc3SensorLatencySeconds(float scoringDtaSeconds) {
     float seconds = scoringDtaSeconds;
     Dc3LatencySource source = Dc3ResolveSensorLatency(scoringDtaSeconds, &seconds);
     LogLatency(source, seconds);
-    return seconds;
+    return seconds + sPoseFillDelay;
 }
 
 void Dc3DeclareSourceLatencyMs(int ms) {
@@ -320,11 +329,24 @@ void Dc3DeclareSourceLatencyMs(int ms) {
         return; // LoadScoring has not run; it will resolve with this declaration
     float seconds = sScoringDtaLatency;
     Dc3LatencySource source = Dc3ResolveSensorLatency(sScoringDtaLatency, &seconds);
-    MoveDir::NativeSetLatencySeconds(seconds);
+    MoveDir::NativeSetLatencySeconds(seconds + sPoseFillDelay);
     LogLatency(source, seconds);
 }
 
 int Dc3DeclaredSourceLatencyMs() { return sSourceLatencyMs; }
+
+void Dc3SetPoseFillDelaySeconds(float seconds) {
+    if (seconds == sPoseFillDelay)
+        return;
+    sPoseFillDelay = seconds;
+    if (sScoringDtaLatency < 0.0f)
+        return; // LoadScoring has not run; it will add the delay itself
+    float sensor = sScoringDtaLatency;
+    Dc3ResolveSensorLatency(sScoringDtaLatency, &sensor);
+    MoveDir::NativeSetLatencySeconds(sensor + seconds);
+}
+
+float Dc3PoseFillDelaySeconds() { return sPoseFillDelay; }
 
 #ifdef __EMSCRIPTEN__
 // Web: only the TRANSPORT is absent -- no pose_server.py to spawn, no Unix

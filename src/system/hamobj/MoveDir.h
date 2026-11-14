@@ -116,8 +116,10 @@ public:
         return mMovePlayerData[player].mDetectFrames;
     }
     static float NativeLatencySeconds() { return sLatencySeconds; }
-    // The pose source declared its latency after LoadScoring ran (a recorded
-    // file has no camera delay): Dc3ApplySourceLatency, Skeleton_Native.cpp.
+    // Set after LoadScoring by the native sensor (Skeleton_Native.cpp): a
+    // pose source that declares its latency (a recorded file has no camera
+    // delay), and the frame fill's added delay (Dc3SetPoseFillDelaySeconds,
+    // docs/native/POSE_INPUT.md), which rides on top of whichever wins.
     static void NativeSetLatencySeconds(float seconds) { sLatencySeconds = seconds; }
 #endif
 

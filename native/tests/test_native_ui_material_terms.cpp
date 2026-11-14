@@ -57,14 +57,15 @@ TEST(NativeUiMaterialTerms, OverlayPhaseTakesRetailTerms) {
            "score digits draw half-transparent white without it";
 }
 
-TEST(NativeUiMaterialTerms, WorldPhaseUnchanged) {
-    // Before EndWorld the world keeps the engine's existing material rules.
-    // It shades in gamma space too: the Xbox 360 renders the whole frame in
-    // gamma space (engine docs/native/dc3-retail-lighting.md section 2), and
-    // the DC3 shape's kGammaSpaceShading switches world and UI alike. This
-    // test was written while the world was still linear.
+TEST(NativeUiMaterialTerms, WorldPhaseTakesTheShapesShadingSpace) {
+    // Before EndWorld the hook's UI switches do not apply: the world takes the
+    // render shape's own shading space and the engine's existing material
+    // rules. For DC3 that space is gamma (the retail light model, lane
+    // np-gfx-light: rndshape::kGammaSpaceShading), so the world and the UI now
+    // agree; what must stay off outside the overlay is the UI material terms.
     UiDrawTerms world = UiDrawTermsFor(false);
-    EXPECT_TRUE(world.gammaShading);
+    EXPECT_TRUE(world.gammaShading)
+        << "the DC3 world shades in gamma space, as the Xbox 360 renderer does";
     EXPECT_FALSE(world.retailMaterialTerms);
 }
 
@@ -178,4 +179,164 @@ TEST_F(NativeUiMaterialAssetTest, LetterboxMicTabBlockerFollowsTheTab) {
     EXPECT_EQ(blocker->Mat()->GetBlend(), BaseMaterial::kBlendSrc) << "the blocker is opaque";
     EXPECT_EQ(ShouldSkipMesh(blocker->Name(), nullptr), ShouldSkipMesh(tab->Name(), nullptr))
         << "the mic tab and its black backing must be drawn or hidden together";
+}
+
+// The rule tests above pin the helpers; these drive the real builders, so a
+// BuildMaterialParams / BuildPassMaterialParams that stops consulting the UI
+// terms (or stops calling MaterialShadesUnlit / MaterialShadesPrelit /
+// MaterialAlphaScale) fails here even though the helpers still pass. The
+// three-argument overloads take the terms explicitly; the two-argument entry
+// points the draw path calls forward CurrentUiDrawTerms() to them.
+// Outside a render pass CurrentPassHasDepth() is false, so these build as
+// overlay-pass draws, which is where the retail terms apply.
+//
+// Sabotages tried, each verified to fail a test here (engine d35269e): the
+// primary builder replacing its uiTerms argument with CurrentUiDrawTerms();
+// dropping the MaterialShadesUnlit term from `unlit` (primary, and pass);
+// passing retailMaterialTerms=false to MaterialShadesPrelit; not scaling
+// color[3] by MaterialAlphaScale (primary, and pass); CurrentUiDrawTerms()
+// returning the overlay terms unconditionally.
+#include "platform/MaterialSetup.h"
+#include "rndobj/BaseMaterial.h"
+
+MaterialParams BuildMaterialParams(RndMat *mat, bool isTextMesh, const UiDrawTerms &uiTerms);
+MaterialParams BuildPassMaterialParams(BaseMaterial *pass, const UiDrawTerms &uiTerms);
+
+namespace {
+RndMat *MakeMat(bool prelit, bool useEnviron, bool intensify, float alpha) {
+    RndMat *mat = Hmx::Object::New<RndMat>();
+    mat->SetPreLit(prelit);
+    mat->SetUseEnv(useEnviron);
+    mat->SetProperty("intensify", DataNode(intensify ? 1 : 0));
+    mat->SetColor(1.0f, 1.0f, 1.0f);
+    mat->SetAlpha(alpha);
+    return mat;
+}
+const UiDrawTerms kRetail{true, true};
+const UiDrawTerms kEngineDefault{false, false};
+} // namespace
+
+class NativeUiMaterialBuilderTest : public EngineTestFixture {};
+
+TEST_F(NativeUiMaterialBuilderTest, PrimaryBuilderAppliesTheUiTerms) {
+    ASSERT_NE(gWgpuRnd, nullptr);
+    ASSERT_FALSE(gWgpuRnd->CurrentPassHasDepth()) << "test expects an overlay-pass build";
+
+    // A lit text material that uses its environ: lit under the retail terms
+    // (the score digits), forced prelit under the engine default.
+    RndMat *litText = MakeMat(false, true, false, 1.0f);
+    ASSERT_TRUE(litText->GetUseEnviron());
+    MaterialParams p = BuildMaterialParams(litText, true, kRetail);
+    EXPECT_EQ(p.uniforms.prelit, 0.0f);
+    EXPECT_EQ(p.uniforms.unlit, 0.0f);
+    EXPECT_EQ(p.uniforms.gammaShading, 1.0f);
+    p = BuildMaterialParams(litText, true, kEngineDefault);
+    EXPECT_EQ(p.uniforms.prelit, 1.0f);
+    EXPECT_EQ(p.uniforms.gammaShading, 0.0f);
+
+    // A lit material that ignores its environ: unlit (ambient 1, no lights),
+    // as NgMat::SetupAmbient does (the move names). Under the UI terms and
+    // without them: the DC3 retail light model (np-gfx-light) applies the same
+    // rule to the world, where the phrase-meter ring and the hand ribbons
+    // depend on it.
+    RndMat *noEnv = MakeMat(false, false, false, 1.0f);
+    ASSERT_FALSE(noEnv->GetUseEnviron());
+    EXPECT_EQ(BuildMaterialParams(noEnv, true, kRetail).uniforms.unlit, 1.0f);
+    EXPECT_EQ(BuildMaterialParams(noEnv, true, kEngineDefault).uniforms.unlit, 1.0f);
+    // An authored prelit material is not "unlit", whatever its environ.
+    RndMat *prelitNoEnv = MakeMat(true, false, false, 1.0f);
+    EXPECT_EQ(BuildMaterialParams(prelitNoEnv, false, kRetail).uniforms.unlit, 0.0f);
+    EXPECT_EQ(BuildMaterialParams(prelitNoEnv, false, kRetail).uniforms.prelit, 1.0f);
+
+    // Intensify scales alpha too under the retail terms: font_alpha 0.5 on
+    // the score font reads opaque.
+    RndMat *bright = MakeMat(false, true, true, 0.5f);
+    ASSERT_TRUE(bright->GetIntensify());
+    p = BuildMaterialParams(bright, true, kRetail);
+    EXPECT_FLOAT_EQ(p.uniforms.color[3], 1.0f);
+    EXPECT_FLOAT_EQ(p.uniforms.intensify, 2.0f);
+    EXPECT_FLOAT_EQ(BuildMaterialParams(bright, true, kEngineDefault).uniforms.color[3], 0.5f);
+
+    delete litText;
+    delete noEnv;
+    delete prelitNoEnv;
+    delete bright;
+}
+
+TEST_F(NativeUiMaterialBuilderTest, PassBuilderAppliesTheUiTerms) {
+    ASSERT_NE(gWgpuRnd, nullptr);
+    RndMat *noEnv = MakeMat(false, false, false, 1.0f);
+    // use_environ 0 is unlit under either term set (see the primary builder).
+    EXPECT_EQ(BuildPassMaterialParams(noEnv, kRetail).uniforms.unlit, 1.0f);
+    EXPECT_EQ(BuildPassMaterialParams(noEnv, kEngineDefault).uniforms.unlit, 1.0f);
+    EXPECT_EQ(BuildPassMaterialParams(noEnv, kRetail).uniforms.gammaShading, 1.0f);
+    EXPECT_EQ(BuildPassMaterialParams(noEnv, kEngineDefault).uniforms.gammaShading, 0.0f);
+
+    RndMat *bright = MakeMat(false, true, true, 0.5f);
+    EXPECT_FLOAT_EQ(BuildPassMaterialParams(bright, kRetail).uniforms.color[3], 1.0f);
+    EXPECT_FLOAT_EQ(BuildPassMaterialParams(bright, kEngineDefault).uniforms.color[3], 0.5f);
+    delete noEnv;
+    delete bright;
+}
+
+// A premultiplied-alpha material (blend 7: One / OneMinusSrcAlpha) reaches the
+// shader with rgb scaled by its alpha: NgMat::SetRegularShaderConst
+// (Mat_NG.cpp:191, 100% matched) calls PreMultiplyAlpha on the colour before
+// setting kVS_Color/kPS_Color. Without it a fading premult label adds its full
+// colour until the shader's fringe fade near alpha 0: the fitness HUD's
+// time/kCal crossfade drew both labels at full brightness for its 0.33 s
+// (Eagle-Light(47).mat is blend 7). Both term sets, both builders; the scale
+// uses the authored alpha, before the intensify factor on alpha.
+// Sabotages tried, each verified to fail here: MaterialShaderColor not scaling
+// rgb (both builders at once); the primary builder copying the raw colour;
+// the pass builder copying the raw colour; scaling every blend, not just 7;
+// scaling by twice the alpha (the intensify-doubled value).
+TEST_F(NativeUiMaterialBuilderTest, PremultipliedAlphaColourIsScaledByAlpha) {
+    ASSERT_NE(gWgpuRnd, nullptr);
+    RndMat *label = MakeMat(false, false, false, 0.25f);
+    label->SetColor(0.8f, 0.6f, 0.4f);
+    label->SetBlend(BaseMaterial::kPreMultAlpha);
+    for (const UiDrawTerms &terms : {kRetail, kEngineDefault}) {
+        for (const MaterialParams &p : {BuildMaterialParams(label, true, terms),
+                                        BuildPassMaterialParams(label, terms)}) {
+            EXPECT_FLOAT_EQ(p.uniforms.color[0], 0.8f * 0.25f);
+            EXPECT_FLOAT_EQ(p.uniforms.color[1], 0.6f * 0.25f);
+            EXPECT_FLOAT_EQ(p.uniforms.color[2], 0.4f * 0.25f);
+            EXPECT_FLOAT_EQ(p.uniforms.color[3], 0.25f);
+        }
+    }
+
+    // Any other blend: the colour as authored.
+    label->SetBlend(BaseMaterial::kBlendSrcAlpha);
+    for (const MaterialParams &p : {BuildMaterialParams(label, true, kRetail),
+                                    BuildPassMaterialParams(label, kRetail)}) {
+        EXPECT_FLOAT_EQ(p.uniforms.color[0], 0.8f);
+        EXPECT_FLOAT_EQ(p.uniforms.color[2], 0.4f);
+        EXPECT_FLOAT_EQ(p.uniforms.color[3], 0.25f);
+    }
+
+    // Intensify: retail premultiplies the authored alpha, then the shader's
+    // intensify doubles rgb and alpha alike (MaterialAlphaScale).
+    RndMat *bright = MakeMat(false, true, true, 0.5f);
+    bright->SetBlend(BaseMaterial::kPreMultAlpha);
+    MaterialParams p = BuildMaterialParams(bright, true, kRetail);
+    EXPECT_FLOAT_EQ(p.uniforms.color[0], 0.5f);
+    EXPECT_FLOAT_EQ(p.uniforms.color[3], 1.0f);
+    delete label;
+    delete bright;
+}
+
+// The two-argument entry point the draw path uses must forward the current
+// phase's terms: outside the overlay phase those are the world's
+// (UiDrawTermsFor(false): the shape's shading space, no UI material terms).
+TEST_F(NativeUiMaterialBuilderTest, DrawPathEntryPointForwardsTheCurrentTerms) {
+    ASSERT_NE(gWgpuRnd, nullptr);
+    ASSERT_FALSE(gWgpuRnd->FrameInOverlay()) << "test runs outside a frame";
+    RndMat *noEnv = MakeMat(false, false, false, 1.0f);
+    MaterialParams viaDrawPath = BuildMaterialParams(noEnv, true);
+    MaterialParams viaDefault = BuildMaterialParams(noEnv, true, UiDrawTermsFor(false));
+    EXPECT_EQ(viaDrawPath.uniforms.unlit, viaDefault.uniforms.unlit);
+    EXPECT_EQ(viaDrawPath.uniforms.prelit, viaDefault.uniforms.prelit);
+    EXPECT_EQ(viaDrawPath.uniforms.gammaShading, viaDefault.uniforms.gammaShading);
+    delete noEnv;
 }
