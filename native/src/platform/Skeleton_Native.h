@@ -14,6 +14,11 @@
 // pose provider runs (1, or 2 in a two-player mode; DC3_DUMMY_PLAYERS=1|2
 // overrides).  Pure, so the policy is testable without an engine.
 int NativeDummyPlayerCount(bool modeNeedsTwo, const char *policy);
+// GestureMgr_Native.cpp's stalled-source watchdog (DC3_POSE_STALL_MS): how
+// many times a running pose source went silent long enough for the sensor to
+// report nobody, and whether it is silent now.
+unsigned NativePoseStalls();
+bool NativePoseStalled();
 
 // Receives skeleton data from pose_server.py (MediaPipe BlazePose) over a
 // Unix socket. Protocol layout 1 carries DC3's own 20 joints in camera-space
@@ -142,6 +147,13 @@ public:
         mRestartBackoffMs = baseBackoffMs;
     }
     int Restarts() const { return mRestarts; }
+    // A launched server that stays connected but sends nothing for this long
+    // (hung in inference, SIGSTOPped, a camera read that never returns) is
+    // killed and relaunched under the same policy.  0 = never.  Default
+    // DC3_POSE_SERVER_STALL_MS, else kDefaultServerStallMs.  Before Start().
+    static const int kDefaultServerStallMs = 5000;
+    void SetServerStallMs(int ms) { mServerStallMs = ms; }
+    int ServerStalls() const { return mServerStalls; }
     // pid of the pose_server.py this provider launched, or -1.
     int ServerPid() const { return (int)mServerPid; }
     // Whether DescribeServerExit's exit is one a relaunch could fix.
@@ -254,6 +266,9 @@ private:
     int mMaxRestarts = 3;
     int mRestartBackoffMs = 1000;
     volatile int mRestarts = 0;
+    int mServerStallMs = -1;            // -1 = DC3_POSE_SERVER_STALL_MS / the default
+    volatile int mServerStalls = 0;
+    volatile bool mServerStalled = false; // ServerGone: this server was killed for stalling
     Problem mProblem; // guarded by mSwapMutex
 
     std::thread mReaderThread;

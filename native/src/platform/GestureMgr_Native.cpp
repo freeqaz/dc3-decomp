@@ -20,6 +20,7 @@
 #include "hamobj/HamPlayerData.h" // GetSkeletonTrackingID
 #include "hamobj/MoveDir.h"       // MoveDir::SongSeconds (DC3_POSE_FILL)
 #include "PoseFill_Native.h"      // DC3_POSE_FILL
+#include "NativeNotice.h"         // DC3_POSE_STALL_MS
 #include "meta_ham/HamUI.h"          // TheHamUI -> ShellInput -> SkeletonChooser
 #include "meta_ham/ShellInput.h"
 #include "meta_ham/SkeletonChooser.h"
@@ -950,6 +951,93 @@ static void DeliverFillFrame(const Dc3PoseFill::Output &out) {
         NativeLevelSensorFrameBy(sFrame, out.floorNormal);
 }
 
+// DC3_POSE_STALL_MS (default kDefaultStallMs, 0 = off): a pose source that
+// stops sending frames while it still "runs" -- a pose server hung in
+// inference or SIGSTOPped, a camera driver that blocks, a web worker that
+// stopped posting -- used to leave every slot at its last frame, tracked,
+// with the song scoring a frozen player.  A Kinect never stops: with nobody
+// in view it still sends frames with nobody in them.  So once the source has
+// been silent this long, the sensor delivers exactly that, one empty frame
+// per 1/30 s of wall time: P-12's hold keeps the player for DC3_POSE_HOLD_MS,
+// then the slot reads untracked and the image's own skeleton-loss handling
+// takes over (Game::CheckForSkeletonLoss pauses a song, "stand in front of
+// the sensor").  When frames return, the person is laid in again and the
+// pause screen behaves as on a 360.  Wall time, not song time: a stalled
+// source must be noticed on the pause screen too.
+static const int kDefaultStallMs = 1500;
+static const char *kStallNoticeKey = "pose-stall";
+
+static int NativePoseStallMs() {
+    const char *v = getenv("DC3_POSE_STALL_MS");
+    if (!v || !*v)
+        return kDefaultStallMs;
+    char *end = nullptr;
+    long ms = strtol(v, &end, 10);
+    if (end == v || *end != '\0' || ms < 0)
+        return kDefaultStallMs;
+    return ms > 60000 ? 60000 : (int)ms;
+}
+
+namespace {
+struct StallWatch {
+    std::chrono::steady_clock::time_point lastNew, lastEmpty;
+    bool haveNew = false;
+    bool stalled = false;
+    unsigned stalls = 0;
+};
+StallWatch gStall;
+} // namespace
+
+unsigned NativePoseStalls() { return gStall.stalls; }
+bool NativePoseStalled() { return gStall.stalled; }
+
+// Called once per BuildSensorFrame with the provider running.  Returns true
+// when it laid an empty frame into the slots (never when this call already
+// delivered a frame).
+static bool StallWatchTick(bool newFrame, bool delivered) {
+    auto now = std::chrono::steady_clock::now();
+    if (newFrame) {
+        if (gStall.stalled) {
+            double secs = std::chrono::duration<double>(now - gStall.lastNew).count();
+            fprintf(stderr, "DC3 POSE STALL: frames are back after %.1f s\n", secs);
+            NativeNotice::Clear(kStallNoticeKey);
+            NativeNotice::Post(kStallNoticeKey, "Pose frames are back - tracking resumed.", "", 4.0f);
+        }
+        gStall.stalled = false;
+        gStall.haveNew = true;
+        gStall.lastNew = now;
+        return false;
+    }
+    int stallMs = NativePoseStallMs();
+    if (stallMs <= 0 || !gStall.haveNew)
+        return false;
+    double silentMs = std::chrono::duration<double, std::milli>(now - gStall.lastNew).count();
+    if (silentMs < stallMs)
+        return false;
+    if (!gStall.stalled) {
+        gStall.stalled = true;
+        gStall.stalls++;
+        gStall.lastEmpty = now - std::chrono::milliseconds(100);
+        fprintf(stderr,
+                "DC3 POSE STALL: no pose frame for %.1f s - the sensor reports nobody until frames "
+                "return (DC3_POSE_STALL_MS=%d)\n",
+                silentMs / 1000.0, stallMs);
+        NativeNotice::Post(kStallNoticeKey,
+                           "The pose stream stopped sending frames - pose tracking is paused until "
+                           "it is back.",
+                           "Pose stream stalled", 20.0f);
+        gFill.Reset();
+    }
+    if (delivered
+        || std::chrono::duration<double, std::milli>(now - gStall.lastEmpty).count() < 1000.0 / 30.0)
+        return false;
+    gStall.lastEmpty = now;
+    BeginSensorFrame(AcceptedFrameElapsed());
+    ScoringDebugTick(true, false, FillPersonSlots(nullptr, 0, (float)sFrame.mElapsedMs));
+    sFrame.mFloorNormal.Set(0.0f, 1.0f, 0.0f);
+    return true;
+}
+
 static const SkeletonFrame *BuildSensorFrame() {
     bool providerRunning = false;
     bool newFrame = false;
@@ -1036,12 +1124,16 @@ static const SkeletonFrame *BuildSensorFrame() {
                 delivered = true;
             }
         }
+        if (StallWatchTick(newFrame, delivered))
+            delivered = true;
         FillPublishDelay();
         if (!delivered)
             ScoringDebugTick(false, true, 0);
     }
 
     if (!providerRunning) {
+        gStall = StallWatch(); // a new source starts unwatched
+        NativeNotice::Clear(kStallNoticeKey);
         ResetSlotMap();
         gFill.Reset();
         FillPublishDelay();
