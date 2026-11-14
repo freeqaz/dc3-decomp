@@ -25,14 +25,15 @@
 #   --video-pre S      seconds of clip before song time 0 (default 8, the
 #                      clips scripts/playtest/make_footage.py cuts)
 #   --video-loop       just loop the file instead (pose_server.py --video --loop)
-#   --fullscreen       NOT AVAILABLE YET: the game draws 1280x720 into the
-#                      top-left of any bigger window (PLAN H-18); says so and
-#                      plays windowed
-#   --size WxH         window size (default 1280x720; anything else shows
-#                      H-18's corner picture)
-#   --wayland          on a Wayland desktop, open a Wayland window (default:
-#                      an X11 window through Xwayland, which the compositor
-#                      scales as a whole; see H-18)
+#   --fullscreen       fill the screen (the monitor's own mode; F11 or
+#                      Alt+Enter in the game toggles fullscreen any time)
+#   --size WxH         window size (default 1280x720). Any size or shape
+#                      works: the picture is scaled to fit, black bars where
+#                      the shapes differ (PLAN H-18)
+#   --wayland          on a Wayland desktop, try a Wayland window first
+#                      (default: an X11 window through Xwayland; the prebuilt
+#                      graphics library cannot draw into a Wayland window, and
+#                      the game falls back to Xwayland itself, PLAN H-33)
 #   --no-pose          no tracker: play with keyboard / pad only
 #   --fast-boot        skip the intro and title (straight to the main menu)
 #   --home DIR         saves, settings cache and sessions (default
@@ -138,14 +139,12 @@ setdef DC3_SFX_PCM_DIR "$HOME_DIR/cache/sfx_pcm"   # decoded SFX, not into the g
 if [ "$CAMERA" = auto ]; then unset DC3_POSE_CAMERA; else export DC3_POSE_CAMERA="$CAMERA"; fi
 export DC3_POSE_MODEL="$MODEL"
 [ "$FAST_BOOT" = 1 ] && export DC3_FAST_BOOT=1
-if [ "$FULLSCREEN" = 1 ]; then
-    echo "note: --fullscreen is not available yet (the game would sit in the top-left"
-    echo "      corner of the screen, PLAN H-18); playing in a 1280x720 window."
-fi
-# Wayland: GLFW would open a native Wayland window, which a scaled (HiDPI)
-# desktop hands a framebuffer twice the size, and the game draws into its
-# top-left corner (H-18).  Through Xwayland the window is 1280x720 pixels and
-# the compositor scales the whole picture.
+[ "$FULLSCREEN" = 1 ] && export MILO_FULLSCREEN=1
+# Wayland: the prebuilt Dawn has no Wayland surface support, so a native
+# Wayland window cannot be drawn into; the engine notices and re-opens the
+# window through Xwayland itself (PLAN H-33).  Going there directly skips that
+# detour.  (A scaled desktop is fine either way since H-18: the frame is
+# scaled into whatever the window is.)
 if [ "$HEADLESS" = 0 ] && [ "$WAYLAND" = 0 ] && [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${DISPLAY:-}" ]; then
     echo "Wayland desktop: opening the window through Xwayland (DISPLAY=$DISPLAY); --wayland for native"
     unset WAYLAND_DISPLAY
