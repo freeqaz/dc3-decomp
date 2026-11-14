@@ -32,7 +32,9 @@
 #include "utl/FilePath.h"
 #include "platform/LookProfile.h"
 
+#include <cmath>
 #include <cstdlib>
+#include <limits>
 #include <cstring>
 #include <map>
 #include <string>
@@ -343,11 +345,30 @@ TEST(NativeGlyphRender, LookProfileSwitch) {
 // Retail's alpha test passes ABOVE the threshold (D3DCMP_GREATER), so a cut at
 // 0 drops alpha-0 texels: the shader discards below the uniform, which must
 // therefore sit just past the reference value.
+// The shader discards `a < uniform` (fs_main; fs_cutout's coverage is 0 there
+// too), and a discarded fragment writes neither colour nor depth. Retail passes
+// iff a > threshold (D3DCMP_GREATER): at every census threshold, a texel AT the
+// threshold must be discarded -- at 0 that is every alpha-0 texel, which must
+// stay out of the depth buffer -- and the very next float must pass. The
+// uniform does not depend on the look, so this holds in both.
 TEST(NativeGlyphRender, AlphaTestIsRetailsGreater) {
     EXPECT_EQ(MaterialAlphaThreshold(false, 110), 0.0f) << "no cut, no test";
-    EXPECT_GT(MaterialAlphaThreshold(true, 0), 0.0f) << "alpha 0 passed a cut at 0";
-    EXPECT_GT(MaterialAlphaThreshold(true, 110), 110.0f / 255.0f) << "alpha == threshold passed";
-    EXPECT_LT(MaterialAlphaThreshold(true, 110), 110.5f / 255.0f) << "the nudge ate a texel step";
+    for (int thr : {0, 32, 80, 90, 110, 130, 150, 170, 255}) {
+        const float uniform = MaterialAlphaThreshold(true, thr);
+        const float at = thr / 255.0f;
+        EXPECT_TRUE(at < uniform) << "thr " << thr << ": alpha == threshold passes"
+                                  << (thr == 0 ? " (alpha-0 texels write colour and depth)" : "");
+        EXPECT_GE(uniform, std::numeric_limits<float>::min())
+            << "thr " << thr << ": a denormal reference may flush to 0 on the GPU";
+        if (thr > 0) {
+            const float above = std::nextafter(at, 2.0f);
+            EXPECT_FALSE(above < uniform) << "thr " << thr << ": alpha just above the threshold is dropped";
+        }
+    }
+    // Above 0 the uniform is exactly the next float: nothing above the
+    // threshold is dropped, however close (texel x fade products are not
+    // 8-bit values).
+    EXPECT_EQ(MaterialAlphaThreshold(true, 110), std::nextafter(110 / 255.0f, 2.0f));
 }
 
 // The sharpened cutout (fs_cutout) must test what retail's alpha test tests:
