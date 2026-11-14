@@ -82,3 +82,8 @@ Inside the body (was lines 127-133):
             // overload, is far worse: 85.1.)  Earlier refuted spellings:
             // `trans.m.x *= 4` x3 (95.5 reversed), Scale(trans.m.x, 4, ...) x3.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: the
+target's `lwz r11,0x1b4(r11)` is the unresolved TheHamProvider @l reloc; the rest is ICF
+MakeString and named-static vs lbl_ naming.

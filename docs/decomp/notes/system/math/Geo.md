@@ -177,6 +177,10 @@ Inside the body (was lines 614-633):
         // family at 0x68 instead of 0x64), which is the 2 extra rows at 98.37.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: separate
+induction variable for the same addresses; one stack-slot offset differs.
+
 
 ## `?Intersect@@YA_NABVSegment@@ABVTriangle@@_NAAM@Z`
 
@@ -507,3 +511,13 @@ Inside the body (was lines 1581-1618):
     // So a Vector2 temporary's y does not home here under any spelling tried;
     // whatever the original wrote, MSVC kept its y in memory and its x not.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
+
+## `??$_S_sort@VBSPFace@@V?$StlNodeAlloc@VBSPFace@@@stlpmtx_std@@U?$less@VBSPFace@@@3@@stlpmtx_std@@YAXAAV?$list@VBSPFace@@V?$StlNodeAlloc@VBSPFace@@@stlpmtx_std@@@0@U?$less@VBSPFace@@@0@@Z`
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal; the `??_L` dtor-pointer arg differs only by ICF name.

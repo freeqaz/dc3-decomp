@@ -233,6 +233,10 @@ Inside the body (was lines 1131-1144):
     // statement in the outer loop is contracted under /fp:fast.  95.1 -> 95.3.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stack
+slots 0x70/0x80 swapped; values equal.
+
 
 ## `?UtilDrawPlane@@YAXABVPlane@@ABVVector3@@ABVColor@Hmx@@HM_N@Z`
 
@@ -910,6 +914,10 @@ Inside the body (was lines 2653-2770):
         // (w27-c, w31-a), so nothing else is left to change from the source.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: store
+order only.
+
 
 ## `?BurnXfm@@YAXPAVRndMesh@@_N@Z`
 
@@ -1042,6 +1050,11 @@ Inside the body (was lines 3003-3086):
     // remainder hangs on the comparator temp above sharing 0x50.
 ```
 
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: edge/face
+slots remap 1:1 (e12/e23/e31 and f1..f4 same values, same push order); stack layout
+only.
+
 
 ## `?BuildVisit@@YAXPAVBSPNode@@@Z`
 
@@ -1113,6 +1126,10 @@ Inside the body (was lines 3186-3247):
     // repeated per site rather than hoisted.  94.97321 -> 96.29762 canonical,
     // 1300 -> 1320 B against the image's 1344.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: dead home
+stores of the iterator to 0x60(r31); stores otherwise equal.
 
 
 ## `?BuildFromBSP@@YAXPAVRndMesh@@@Z`

@@ -21,3 +21,7 @@ Inside the body (was lines 146-150):
     // `% 9600` read indices (idx 137-183); swapping the step statements is
     // worse (84.6 instr-level).
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.

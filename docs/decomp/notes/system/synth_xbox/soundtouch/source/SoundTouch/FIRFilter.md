@@ -22,3 +22,7 @@ Above the definition (was lines 164-169):
 // pow argument, a const parameter.  The ??_V/RadFree and MakeString call-name
 // rows are ICF folds.
 ```
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: `stw
+r26,0xc(r30)` placed two rows later.

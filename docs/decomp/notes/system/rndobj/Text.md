@@ -426,3 +426,22 @@ Inside the body (was lines 3379-3386):
         // addressed through a hoisted r27 instead of living in f31, which cost
         // the image's fourth saved FPR and its 0x150 frame.
 ```
+
+## `?DrawShowing@RndText@@UAAXXZ`
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual:
+sBlacklight/TheUI register swap and store reorder only.
+
+## `?SetupCharacter@FontMap@RndText@@UAAXGAAMMABVStyleState@2@GMW4FitType@2@M@Z`
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: stores
+equal under symbolic sim.
+
+## `?WrapText@RndText@@QAAXPBGHPAMAAV?$vector@VLine@RndText@@V?$StlNodeAlloc@VLine@RndText@@@stlpmtx_std@@@stlpmtx_std@@AAVRect@Hmx@@M@Z`
+
+p2-b95 (2026-11-14): NOT A BUG. Every non-equal row was read against the listing, and
+stores plus call arguments were compared symbolically on both sides. Residual: line/word
+struct stores checked by index (words[idx].0x14, line.0x15) and the line-building walk
+w=words[w.next]; register/spill differences only.
