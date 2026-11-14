@@ -328,7 +328,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "1a488e760532e66e7930bdfc072f836f063c81dc"
+set(MILO_ENGINE_PIN "43324a294ee9bbef37c2137bb834e6a3173ef9f1"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -2107,6 +2107,7 @@ if(BUILD_TESTS)
         tests/test_native_twoplayer.cpp
         tests/test_native_pose_dropout.cpp
         tests/test_native_second_person.cpp
+        tests/test_native_pad_with_person.cpp  # H-20 pad presses with a person on the sensor
         tests/test_native_pose_socket.cpp
         tests/test_native_pose_spawner.cpp
         tests/test_native_tree_paths.cpp
@@ -2126,6 +2127,8 @@ if(BUILD_TESTS)
         tests/test_native_ui_material_terms.cpp
         tests/test_frame_pacer.cpp     # H-29 frame cap + engine CPU-use guards
         tests/test_bind_group_cache.cpp # H-30/H-31 cached bind groups, staged uniform rings
+        tests/test_host_path_case.cpp  # H-17/H-23 upper-case host directories
+        tests/test_present_scale.cpp  # H-18 fit the frame into the window
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}

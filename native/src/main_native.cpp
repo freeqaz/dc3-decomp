@@ -54,6 +54,9 @@
 // src/App.cpp (under HX_NATIVE) so test binaries that link App.cpp without this
 // translation unit still resolve it.
 extern const char *gDc3ExitReason;
+// Engine platform/Rnd_Wgpu.h (not included: it pulls in the renderer's headers).
+using NativeRenderFatalFn = void (*)(const char *reason, int code);
+void SetNativeRenderFatalHandler(NativeRenderFatalFn fn);
 
 static time_t sStartTime = 0;
 static std::atomic<bool> sExitReported{false};
@@ -320,6 +323,14 @@ int main(int argc, char **argv) {
     sigaction(SIGALRM, &sg, nullptr);
 
     Dc3StartHeartbeat();
+
+    // H-33: a window that opens but cannot be drawn into stops the game
+    // (WgpuRnd, kNativeSurfaceExitCode) with its FATAL message; route that exit
+    // through the exit record so it reads detail=window_surface_unusable.
+    SetNativeRenderFatalHandler([](const char *, int code) {
+        gDc3ExitReason = "window_surface_unusable";
+        Dc3Exit(code);
+    });
 
     printf("DC3 Native Port - Starting...\n");
 
