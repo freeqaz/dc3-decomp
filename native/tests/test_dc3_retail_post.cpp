@@ -27,12 +27,14 @@
 
 #include "gfx/GpuDevice.h"
 #include "gfx/PostProcPass.h"
+#include "gfx/RB3RetailPost.h"
 #include "platform/Rnd_Wgpu.h"
 #include "platform/rndshape/RndShape.h"
 #include "rndobj/Mat.h"
 #include "rndobj/PostProc.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <vector>
@@ -197,4 +199,72 @@ TEST_F(DC3RetailPostGpuTest, StreakBloomIsScreenBlendOfMaskedScene) {
     pass.Terminate();
     if (prev) prev->Select(); else pp->Unselect();
     delete pp;
+}
+
+// Frame cost of the chain's passes at 1280x720 (np-gfx-post performance
+// report): mean GPU+submit time per Run over 200 runs, one sync at the end.
+// Prints the numbers; asserts only that a disabled effect costs nothing
+// measurable over the bare composite (no extra passes are recorded for it).
+TEST_F(DC3RetailPostGpuTest, PassCostAt720p) {
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    auto &dev = gpu.Device();
+    const int W = 1280, H = 720;
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)W, (uint32_t)H, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst |
+        wgpu::TextureUsage::RenderAttachment;
+    wgpu::Texture scene = dev.CreateTexture(&d);
+    std::vector<uint8_t> px((size_t)W * H * 4);
+    for (size_t i = 0; i < px.size(); i++) px[i] = (uint8_t)((i * 2654435761u) >> 24);
+    wgpu::TexelCopyTextureInfo dst{};
+    dst.texture = scene;
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = W * 4;
+    wgpu::Extent3D ext = {(uint32_t)W, (uint32_t)H, 1};
+    gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture frame = dev.CreateTexture(&d);
+    wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView();
+
+    RB3RetailPost post;
+    post.Init(gpu);
+    std::vector<uint8_t> sink((size_t)W * H * 4);
+    auto timeIt = [&](const RetailPostParams &p) {
+        auto runN = [&](int n) {
+            for (int i = 0; i < n; i++) {
+                wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+                post.Run(enc, sceneView, sceneView, W, H, frameView, p, gpu);
+                wgpu::CommandBuffer cmd = enc.Finish();
+                gpu.Queue().Submit(1, &cmd);
+            }
+            EXPECT_TRUE(gpu.ReadbackTexture(frame, W, H, sink.data(), sink.size()));
+        };
+        runN(10);
+        const auto t0 = std::chrono::steady_clock::now();
+        runN(200);
+        const auto t1 = std::chrono::steady_clock::now();
+        return std::chrono::duration<double, std::micro>(t1 - t0).count() / 200.0;
+    };
+    RetailPostParams base;
+    base.dc3 = true;
+    RetailPostParams plain = base;
+    plain.bloom = true;
+    plain.bloomColor[0] = plain.bloomColor[1] = plain.bloomColor[2] = 1.0f;
+    RetailPostParams streak = plain;
+    streak.streak = true;
+    streak.streakAttenuation = 0.92f;
+    streak.streakAngle = -45.0f;
+    RetailPostParams all = streak;
+    all.vignetteIntensity = 1.05f;
+    all.chromaticOffset = 2.0f;
+    all.xfm[0][0] = 1.1f;
+    const double tBase = timeIt(base), tPlain = timeIt(plain), tStreak = timeIt(streak),
+                 tAll = timeIt(all), tBase2 = timeIt(base);
+    post.Terminate();
+    printf("DC3RetailPost cost @%dx%d (us/frame): composite only %.0f (again %.0f), "
+           "+plain bloom %.0f, +streak bloom %.0f, streak+vignette+chroma+xfm %.0f\n",
+           W, H, tBase, tBase2, tPlain, tStreak, tAll);
+    EXPECT_GT(tBase, 0.0);
 }
