@@ -17,6 +17,7 @@
 #include "gesture/SkeletonUpdate.h"
 #include "hamobj/HamGameData.h"   // TheGameData (player->skeleton binding)
 #include "hamobj/HamPlayerData.h" // GetSkeletonTrackingID
+#include "hamobj/MoveDir.h"       // MoveDir::SongSeconds (DC3_POSE_FILL)
 #include "meta_ham/HamUI.h"          // TheHamUI -> ShellInput -> SkeletonChooser
 #include "meta_ham/ShellInput.h"
 #include "meta_ham/SkeletonChooser.h"
@@ -779,9 +780,49 @@ static void PerfTick(bool providerRunning, bool accepted, int persons) {
     }
 }
 
+// DC3_POSE_FILL=hold|extrap (PROTOTYPE, np-pose-rough study; off by default).
+// The scorer keeps, per choreography frame, the BEST (pose error + time
+// error) over every sensor frame within reach of it (MoveDir::
+// EnqueueDetectFrames -> DetectFrame::AddError), a rule tuned on a 30 Hz
+// Kinect.  At 8 camera frames/s the nearest frame is up to 60 ms from each
+// choreography frame and the time error alone costs a rating.  A fill frame
+// re-accepts the last camera frame (hold) or a linear step on from it
+// (extrap: from the last two camera frames of the same track id, capped at
+// one camera period) every 1/30 s of SONG time between camera frames.  Not
+// recorded (DC3_POSE_RECORD keeps camera frames only), not counted as
+// pose_fps, and no fill more than 0.5 s after the last camera frame.
+namespace {
+enum FillMode { kFillOff, kFillHold, kFillExtrap };
+FillMode PoseFillMode() {
+    static const FillMode sMode = [] {
+        const char *v = getenv("DC3_POSE_FILL");
+        if (!v || !*v || !strcmp(v, "0") || !strcmp(v, "off"))
+            return kFillOff;
+        if (!strcmp(v, "hold"))
+            return kFillHold;
+        if (!strcmp(v, "extrap"))
+            return kFillExtrap;
+        fprintf(stderr, "DC3_POSE_FILL='%s' ignored (want hold or extrap)\n", v);
+        return kFillOff;
+    }();
+    return sMode;
+}
+struct PoseFill {
+    bool have = false;
+    double lastAcceptSong = 0.0, lastRealSong = 0.0;
+    double realTs = -1.0, prevRealTs = -1.0;
+    NativeSkeletonProvider::PersonData last[NativeSkeletonProvider::kMaxPersons];
+    NativeSkeletonProvider::PersonData prev[NativeSkeletonProvider::kMaxPersons];
+    int nLast = 0, nPrev = 0;
+    unsigned fills = 0;
+};
+PoseFill gFill;
+} // namespace
+
 static const SkeletonFrame *BuildSensorFrame() {
     bool providerRunning = false;
     bool newFrame = false;
+    bool filled = false;
 
     if (TheSkeletonProvider && TheSkeletonProvider->IsRunning()) {
         providerRunning = true;
@@ -817,6 +858,71 @@ static const SkeletonFrame *BuildSensorFrame() {
             Dc3PoseSessionRecord(sPersons, numPersons, frameId, TheSkeletonProvider->Timestamp(),
                                  unlevelled, sFrame);
 #endif
+            if (PoseFillMode() != kFillOff) {
+                double song = MoveDir::SongSeconds();
+                for (int i = 0; i < gFill.nLast; i++)
+                    gFill.prev[i] = gFill.last[i];
+                gFill.nPrev = gFill.nLast;
+                for (int i = 0; i < numPersons; i++)
+                    gFill.last[i] = sPersons[i];
+                gFill.nLast = numPersons;
+                gFill.prevRealTs = gFill.have ? gFill.realTs : -1.0;
+                gFill.realTs = TheSkeletonProvider->Timestamp();
+                gFill.lastAcceptSong = gFill.lastRealSong = song;
+                gFill.have = true;
+            }
+        } else if (PoseFillMode() != kFillOff && gFill.have) {
+            double song = MoveDir::SongSeconds();
+            double sinceReal = song - gFill.lastRealSong;
+            if (song < gFill.lastAcceptSong - 0.5) {
+                gFill.have = false; // the clock went back: a new song, the menus
+            } else if (song - gFill.lastAcceptSong >= 1.0 / 30.0 - 1e-6 && sinceReal < 0.5) {
+                double camPeriod = gFill.realTs >= 0.0 && gFill.prevRealTs >= 0.0
+                    ? gFill.realTs - gFill.prevRealTs
+                    : -1.0;
+                static NativeSkeletonProvider::PersonData sFillPersons[NativeSkeletonProvider::kMaxPersons];
+                for (int i = 0; i < gFill.nLast; i++) {
+                    sFillPersons[i] = gFill.last[i];
+                    if (PoseFillMode() != kFillExtrap || camPeriod <= 1e-3 || !gFill.last[i].valid)
+                        continue;
+                    for (int k = 0; k < gFill.nPrev; k++) {
+                        const NativeSkeletonProvider::PersonData &p = gFill.prev[k];
+                        if (p.trackId != gFill.last[i].trackId || !p.valid)
+                            continue;
+                        float a = (float)(std::min(sinceReal, camPeriod) / camPeriod);
+                        for (int j = 0; j < kNumJoints; j++) {
+                            const Vector3 &x = gFill.last[i].joints[j];
+                            const Vector3 &xp = p.joints[j];
+                            sFillPersons[i].joints[j].Set(x.x + (x.x - xp.x) * a,
+                                                          x.y + (x.y - xp.y) * a,
+                                                          x.z + (x.z - xp.z) * a);
+                        }
+                        break;
+                    }
+                }
+                // The camera's time base, so the elapsed time is the fill's
+                // own step; kept short of where the next camera frame lands.
+                double ts = -1.0;
+                if (gFill.realTs >= 0.0) {
+                    double step = sinceReal;
+                    if (camPeriod > 0.0 && step > 0.9 * camPeriod)
+                        step = 0.9 * camPeriod;
+                    ts = gFill.realTs + step;
+                }
+                BeginSensorFrame(AcceptedFrameElapsed(ts));
+                FillPersonSlots(sFillPersons, gFill.nLast, (float)sFrame.mElapsedMs);
+                bool unlevelled = TheSkeletonProvider->FrameUnlevelled() || PerformerReplaysRecording();
+#ifndef __EMSCRIPTEN__
+                if (!Dc3PoseSessionReplayLevel(sFrame, frameId))
+#endif
+                    NativeSensorLevel(sFrame, sFillPersons, gFill.nLast, unlevelled,
+                                      sFrame.mElapsedMs * 0.001f);
+                gFill.lastAcceptSong = song;
+                gFill.fills++;
+                filled = true;
+            }
+            if (!filled)
+                ScoringDebugTick(false, true, 0);
         } else {
             ScoringDebugTick(false, true, 0);
         }
@@ -836,7 +942,7 @@ static const SkeletonFrame *BuildSensorFrame() {
 
     PerfTick(providerRunning, newFrame,
              providerRunning && TheSkeletonProvider ? TheSkeletonProvider->NumPersons() : 0);
-    if (!newFrame)
+    if (!newFrame && !filled)
         return nullptr;
     NativeAutoAssignPlayers();
     return &sFrame;
