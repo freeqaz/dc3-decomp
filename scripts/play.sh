@@ -34,6 +34,12 @@
 #                      an X11 window through Xwayland, which the compositor
 #                      scales as a whole; see H-18)
 #   --no-pose          no tracker: play with keyboard / pad only
+#   --dlc [DIR]        downloadable songs: mount every package under DIR
+#                      (default <data>/dlc, i.e. orig-assets/dlc; DIR may be a
+#                      ':'-separated list, as $DC3_DLC_DIR).  The check says how
+#                      many packages and songs it found.  Import packages with
+#                      scripts/dlc/import.sh (docs/native/DLC.md)
+#   --no-dlc           no downloadable songs even if $DC3_DLC_DIR is set
 #   --fast-boot        skip the intro and title (straight to the main menu)
 #   --home DIR         saves, settings cache and sessions (default
 #                      ~/.local/share/dc3/playtest; $DC3_PLAYTEST_HOME)
@@ -61,7 +67,7 @@ MAIN_CHECKOUT="${COMMON:+$(dirname "$COMMON")}"
 CHECK=0; NO_PERSON=0; CAMERA="${DC3_POSE_CAMERA:-auto}"; VIDEO=""; FULLSCREEN=0; SIZE=""
 NO_POSE=0; FAST_BOOT=0; HOME_DIR="${DC3_PLAYTEST_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/dc3/playtest}"
 SESSION=""; REPLAY=""; REPLAY_SYNC="song"; HEADLESS=0; PACK=1; ENGINE_ARGS=()
-VIDEO_PRE=8; VIDEO_LOOP=0; WAYLAND=0
+VIDEO_PRE=8; VIDEO_LOOP=0; WAYLAND=0; DLC="${DC3_DLC_DIR:-}"; DLC_DEFAULT=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1 ;;
@@ -74,6 +80,9 @@ while [ $# -gt 0 ]; do
         --wayland) WAYLAND=1 ;;
         --size) SIZE="$2"; shift ;;
         --no-pose) NO_POSE=1 ;;
+        --dlc) if [ $# -gt 1 ] && [ "${2#-}" = "$2" ]; then DLC="$2"; shift
+               else DLC=""; DLC_DEFAULT=1; fi ;;
+        --no-dlc) DLC=""; DLC_DEFAULT=0; NO_DLC=1 ;;
         --fast-boot) FAST_BOOT=1 ;;
         --home) HOME_DIR="$2"; shift ;;
         --session-dir) SESSION="$2"; shift ;;
@@ -91,6 +100,13 @@ done
 BINARY="$REPO/native/build/dc3-native"
 DATA="${DC3_DATA:-$REPO/orig-assets}"
 MODEL="${DC3_POSE_MODEL:-$REPO/native/models/pose_landmarker_full.task}"
+[ "$DLC_DEFAULT" = 1 ] && DLC="$DATA/dlc"
+# Absolute roots: the game's working directory is not the caller's.
+if [ -n "$DLC" ]; then
+    abs=""; IFS=: read -ra parts <<< "$DLC"
+    for d in "${parts[@]}"; do [ -n "$d" ] && abs="${abs:+$abs:}$(realpath -m "$d")"; done
+    DLC="$abs"
+fi
 
 # The tracker's Python is the game's own choice (DC3_POSE_PYTHON if set, the
 # bootstrap's venv, the checkout's .venv, python3: pose_python.py); preflight
@@ -100,6 +116,7 @@ pre_args=(--data "$DATA" --binary "$BINARY" --model "$MODEL")
 [ "$NO_POSE" = 1 ] || [ -n "$REPLAY" ] && pre_args+=(--no-pose)
 [ "$NO_PERSON" = 1 ] && pre_args+=(--no-person)
 [ "$HEADLESS" = 1 ] && pre_args+=(--headless)
+[ -n "$DLC" ] && pre_args+=(--dlc "$DLC")
 
 if [ "$CHECK" = 1 ]; then
     echo "DC3 playtest check ($(git -C "$REPO" rev-parse --short HEAD 2>/dev/null))"
@@ -123,6 +140,8 @@ setdef() { [ -n "${!1+x}" ] || export "$1=$2"; }   # caller's value wins
 export DC3_SAVE_DIR="${DC3_SAVE_DIR:-$HOME_DIR/saves}"
 export DC3_CACHE_DIR="${DC3_CACHE_DIR:-$HOME_DIR/cache}"
 export DC3_DATA="$DATA"
+if [ -n "$DLC" ]; then export DC3_DLC_DIR="$DLC"
+elif [ "${NO_DLC:-0}" = 1 ]; then export DC3_DLC_DIR=""; fi
 # The dev profile (DC3_PROFILE, the default) already turns on the debug API
 # (loopback only), gesture menus while the tracker runs and the per-move
 # rating log; the session summary reads that log.

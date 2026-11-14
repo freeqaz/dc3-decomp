@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import shutil
+import re
 import subprocess
 import sys
 
@@ -72,6 +73,73 @@ def check_data(a):
         add("FAIL", "game data", text or f"asset check exit {rc}",
             "copy the game data from the main box (docs/native/PLAYTEST.md, 'Setting up "
             "a machine'), then run scripts/playtest/bootstrap.sh")
+
+
+def dta_top_level_names(path):
+    """The names of a songs.dta's top-level arrays, `(name (...) ...)`: one per
+    song.  Strings, `;` comments and `{}`/`[]` nest like the DTA reader."""
+    with open(path, encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    names, depth, i, n = [], 0, 0, len(text)
+    while i < n:
+        c = text[i]
+        if c == ";":
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+        elif c == '"':
+            j = text.find('"', i + 1)
+            i = n if j < 0 else j
+        elif c in "({[":
+            depth += 1
+            if depth == 1 and c == "(":
+                m = re.match(r"\s*'?([^\s()'\";]+)", text[i + 1:])
+                if m:
+                    names.append(m.group(1))
+        elif c in ")}]":
+            depth -= 1
+        i += 1
+    return names
+
+
+def dlc_census(roots):
+    """Packages and songs under DC3_DLC_DIR-style roots, as ContentMgr_Native
+    finds them: every non-dot subdirectory of a root is one package."""
+    packages = []
+    for root in roots:
+        for name in sorted(os.listdir(root)):
+            pkg = os.path.join(root, name)
+            if name.startswith(".") or not os.path.isdir(pkg):
+                continue
+            dta = os.path.join(pkg, "songs", "songs.dta")
+            songs = dta_top_level_names(dta) if os.path.isfile(dta) else []
+            packages.append({"package": name, "root": root, "songs": songs,
+                             "has_songs_dta": os.path.isfile(dta)})
+    return packages
+
+
+def check_dlc(a):
+    if not a.dlc:
+        add("OK", "dlc", "off (no DLC directory; scripts/play.sh --dlc DIR)")
+        return
+    roots = [r for r in a.dlc.split(":") if r]
+    missing = [r for r in roots if not os.path.isdir(r)]
+    if missing:
+        add("FAIL", "dlc", f"no such directory: {', '.join(missing)}",
+            "import a package with scripts/dlc/import.sh (docs/native/DLC.md)")
+        return
+    packages = dlc_census(roots)
+    songs = sum(len(p["songs"]) for p in packages)
+    names = [s for p in packages for s in p["songs"]]
+    dupes = sorted({s for s in names if names.count(s) > 1})
+    detail = (f"{songs} song(s) in {len(packages)} package(s) under {', '.join(roots)}: "
+              + ", ".join(f"{p['package']} {len(p['songs'])}" for p in packages))
+    if not packages or not songs:
+        add("WARN", "dlc", detail or f"no packages under {', '.join(roots)}",
+            "import a package with scripts/dlc/import.sh (docs/native/DLC.md)")
+    elif dupes:
+        add("WARN", "dlc", detail + f"; in more than one package: {', '.join(dupes)}")
+    else:
+        add("OK", "dlc", detail)
 
 
 def check_display(a):
@@ -291,12 +359,16 @@ def main(argv=None):
     ap.add_argument("--no-pose", action="store_true")
     ap.add_argument("--no-person", action="store_true", help="open the camera but do not look for a person")
     ap.add_argument("--headless", action="store_true")
+    ap.add_argument("--dlc", default="",
+                    help="DLC roots the game will mount (DC3_DLC_DIR, ':'-separated): "
+                         "count their packages and songs")
     ap.add_argument("--json")
     a = ap.parse_args(argv)
     a.data = os.path.abspath(a.data)
 
     check_binary(a)
     check_data(a)
+    check_dlc(a)
     check_display(a)
     check_gpu(a)
     check_audio(a)
