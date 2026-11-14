@@ -4,13 +4,28 @@ Embedded HTTP server for interacting with a running DC3 native engine instance. 
 
 Desktop-only (not available in Emscripten/web builds).
 
+**Loopback only:** the server binds `127.0.0.1` (it listened on `0.0.0.0`
+until 2026-11-14). It evaluates arbitrary DTA, so it never answers another
+machine; drive an engine on another box through a tunnel,
+`ssh -L 9090:127.0.0.1:9090 <box>`.
+
+**On by default** under the dev profile (`DC3_PROFILE`, the default; see
+[debugging/native.md "Profiles"](../debugging/native.md#profiles-dc3_profile)).
+`DC3_HTTP=0` or `DC3_PROFILE=release` turns it off.
+
 ## Quick Start
 
 ```bash
-# Enable the server (off by default)
+# Dev profile: the server is already on. With DC3_HTTP_PORT unset a window
+# takes 9090 if it is free, else a kernel-assigned port (it says which);
+# a headless run always takes a kernel-assigned port. Either way the port is
+# printed on stdout as DC3_HTTP_PORT=<n>.
+./dc3-native
+
+# Under release, or to be explicit
 DC3_HTTP=1 ./dc3-native
 
-# Custom port (default 9090)
+# A fixed port (strict: taken = exit 98)
 DC3_HTTP=1 DC3_HTTP_PORT=8080 ./dc3-native
 
 # Kernel-assigned free port; the chosen one is printed on stdout as
@@ -293,7 +308,17 @@ curl -X POST localhost:9090/api/input/sequence -d '[
   {"button":"dpad_down","delay":15},
   {"button":"confirm","delay":30}
 ]'
+
+# Hold each press down for 2 frames instead of 1 (the playtest kit's driver
+# does, so no press is a one-frame blip)
+curl -X POST localhost:9090/api/input/sequence -d '[{"button":"confirm","delay":3,"hold":2}]'
 ```
+
+`hold` (frames, default 1) is how long a sequence press stays down: its
+`ButtonUpMsg` comes `hold` frames after its `ButtonDownMsg`; 1 is the next
+frame, the behaviour before `hold` existed. A button pressed again while
+still held is released and pressed again on that frame. The per-frame rule is
+`InjectedPadHold` (`HttpServer.h`), tested by `HttpInjectedHoldTest`.
 
 Button names: `confirm`/`a`, `cancel`/`b`, `start`, `select`/`back`/`option`, `up`/`dpad_up`, `down`/`dpad_down`, `left`/`dpad_left`, `right`/`dpad_right`, `l1`/`lb`, `r1`/`rb`, `l2`/`lt`, `r2`/`rt`, `x`, `y`, `l3`/`ls`, `r3`/`rs`.
 

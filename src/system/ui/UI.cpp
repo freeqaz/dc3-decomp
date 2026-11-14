@@ -859,6 +859,23 @@ void UIManager::Init() {
     mTransitionState = kTransitionNone;
     mTransitionScreen = nullptr;
     mWentBack = false;
+#ifdef HX_NATIVE
+    // The original debug build's development menu ({ui show_dev_menu}: the
+    // extra Choose Mode modes, ChooseModeProvider::UpdateList; the extra
+    // campaign difficulty rows, CampaignDiffProvider::UpdateList) is reached
+    // with Alt+D (config/cheats.dta's toggle_dev_menu), a keyboard cheat the
+    // native build cannot deliver.  DC3_DEV_MENU starts it on; the dev profile
+    // (DC3_PROFILE, System_Native.cpp) sets it.  {ui toggle_dev_menu} still
+    // flips it at run time.  The rows are appended, so no retail row moves.
+    // Here, not in the constructor: TheHamUI is a static, built before main()
+    // applies the profile.
+    {
+        extern bool Dc3EnvFlag(const char *, bool);
+        mShowDevMenu = Dc3EnvFlag("DC3_DEV_MENU", false);
+        if (mShowDevMenu)
+            fprintf(stderr, "DC3 Native: development menu on (DC3_DEV_MENU)\n");
+    }
+#endif
     mCam = ObjectDir::Main()->New<RndCam>("[ui.cam]");
     DataArray *camCfg = cfg->FindArray("cam");
     mCam->SetFrustum(

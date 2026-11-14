@@ -275,6 +275,69 @@ grep -rhoE '(getenv|Dc3EnvFlag)\s*\(\s*"[A-Z0-9_]+"' native/src src ../milo-nati
 The engine also keeps a classified registry of its own flags in
 `../milo-native-engine/src/platform/NativeCompatFlags.classification.json`.
 
+### Profiles (`DC3_PROFILE`)
+
+`DC3_PROFILE=dev` (the default; unset, empty or an unknown value is dev) or
+`release`. A profile is only a set of default **values** for ordinary variables.
+`Dc3ProfileApply()` runs first thing in `main()` (native and web; table
+`kDc3DevDefaults` in `native/src/platform/System_Native.cpp`, the one place a
+dev default lives). Under dev it sets each row that is unset or empty. **A
+variable that is already set always wins** (`DC3_HTTP=0` turns the server off
+under dev, `DC3_DEV_OPTIONS=1` shows the rows under release). `release` sets
+nothing, so it is the player build: each variable's compiled default, as before
+the profile existed. Web: `?profile=release`, or `?env=DC3_PROFILE=release`.
+Startup prints `DC3 Native: profile=dev (...)` and the rows it applied (for
+scripts), then a boxed banner for a person: one `| on` line per row with its
+switch (`off: DC3_HTTP=0`), `| off` for a row you turned off, the main opt-in
+switches, and `DC3_PROFILE=release turns all of it off`. Release prints
+`profile=release` and no banner.
+
+| Variable | What it gives you | Before | dev | release | Why on in dev |
+|---|---|---|---|---|---|
+| `DC3_DEV_OPTIONS` | Options → Gameplay's native rows (Camera Blend, Debug Overlay) | off | `1` | off | Owner's ask; the rows are appended, retail rows don't move |
+| `DC3_DEV_MENU` | The original debug build's dev menu (`{ui show_dev_menu}`): 9 extra modes in Choose Mode, extra campaign difficulty rows. On the 360 this is Alt+D, which native cannot send | off | `1` | off | The original's own dev path. Rows appended; `{ui toggle_dev_menu}` flips it at run time |
+| `DC3_RND_OVERLAYS` | The original's `RndOverlay`s (`cheat_display` notices, the framerate/stats/timer quick cheats) in a corner window, plus a `DC3 OVERLAY [<name>] <text>` stderr line when one changes. `WgpuRnd::EndDrawing` never drew them | off (invisible) | `1` | off | The debug build shows them; a notice nobody can see is useless |
+| `DC3_HTTP` | HTTP debug server on **127.0.0.1 only** | off | `1` (desktop) | off | `curl` state, eval DTA, screenshot; loopback, so nothing is exposed |
+| `DC3_TEL` | Gameplay telemetry. `api`: sampled for `GET /api/telemetry`, no stderr lines | off | `api` (desktop) | off | The API is free; the ~2 KB-per-10-frames lines are for scripts (`DC3_TEL=1`) |
+| `DC3_TAG_MODALS` | `dev`: every `MILO_WARN/NOTIFY/FAIL/ASSERT` as one `MILO_<KIND>:` line, rate-limited (first 5, then powers of ten), no backtraces | off | `dev` (desktop) | off | See what the game complains about; `=1` is still the harvest mode |
+| `MILO_INPUT_LOG` | One `Joypad: down/up ...` line per button message | off | `1` | off | Shows what a key or pad press really sent |
+| `DC3_MOVE_RATING_LOG` | One `DC3 MOVE_RATING` line per scored move | off | `1` | off | Scoring is visible while you dance |
+| `MILO_PERF` | A `[PERF]` fps/frame-time line every 5 s | off | `1` | off | Cheap; presence-tested, so `MILO_PERF=0` is unset by the profile and reads as off |
+
+"Desktop" rows are not applied on web: there is no debug server there, and the
+web tap is already on (`DC3_TAG_MODALS` defaults to `1` on web, and its parser
+would misread `dev`).
+
+Already on under both profiles (no change): `DC3_CONTROLLER_MODE=auto`, the
+splash, `DC3_HEARTBEAT_S=60`, `DC3_NATIVE_SCORING`, `DC3_REAL_MOVE_PASSED`,
+web `DC3_TAG_MODALS`, the original's `notify_level 1` and `disable_cheats
+FALSE` (so the gamepad quick cheats, LB+LT / RB+RT + a button, should be live: inferred from the DTA, not exercised natively).
+
+**Opt-in under every profile.** A row must not move the game away from the
+original in a way that invalidates testing it, or cost real time
+(`Dc3ProfileTest.NoRowChangesTheGameOrCostsTime` holds the list):
+
+| Variable | Why it stays opt-in |
+|---|---|
+| `DC3_FAST_BOOT` | Not a dev default: it advances past `title_screen` without the confirm that sets the initial profiles and `$post_load_dest_screen`, and skips the voice-control first-run tutorial (`src/system/ui/UI.cpp`, the `sBoot` table; read from the code, 2026-11-14), so a playtester would never see the profile setup and first-run prompts |
+| `DC3_FAST_TIME`, `DC3_POSE_SELFTEST`, `DC3_POSE_PERFORM`, `DC3_DUMMY_PLAYERS` | Change timing or fake a player |
+| `DC3_POSE_LATENCY_MS` and the pose knobs | Owned by the tracking lane |
+| `MILO_FATAL_FAILS`, `MILO_MAX_FRAMES` | Change how a run ends |
+| `DC3_REFRING_AUDIT`, `DC3_POISON_FREED_OBJECTS`, `DC3_STUB_TRACE`, `DC3_DRAW_CRASH_GUARD` | Real cost or changed behaviour |
+| `DC3_SCORING_DEBUG`, `MILO_DEBUG_UI_FLOW`, `DC3_TEL=1` | Close calls: per-second or per-frame floods |
+| `MILO_CAM_DEBUG`, the camera-blend enhancement, the ImGui panel open at boot | Change the picture; the panel is one `` ` `` away |
+| Unlock-all (`cheats.dta` `a`) | Its `HasCheated` side effect turns off autosave (removed as a default in `3126df522`) |
+| Keyboard cheats (Alt+D, `a`, ...) | Not reachable natively at all (`EnableKeyCheats` is `#ifndef HX_NATIVE`, and no GLFW key callback feeds Milo key messages); plain-key cheats would also clash with the keyboard-as-pad map. PLAN H-22 |
+
+Tests: `Dc3ProfileTest.*` (in-process, the table and the apply rules),
+`HeadlessBootTest.DevProfileIsTheDefault` / `ReleaseProfileIsThePlayerBuild` (a
+real `dc3-native` under each profile), `OptionsGameplayFlowTest` (dev, 6 rows)
+and `OptionsGameplayPlayerFlowTest` (`DC3_PROFILE=release`, 4 rows).
+`milo-tests` itself never applies a profile, so an in-process test sees the
+compiled defaults (= release); the `dc3-native` processes it starts do apply
+it, so a test that asserts a player-facing default pins `DC3_PROFILE=release`.
+`MILO_TEST_ENV` sets `DC3_HTTP_PORT=0`.
+
 ### Run control
 
 | Variable | Default | Effect | Read in |
@@ -284,6 +347,7 @@ The engine also keeps a classified registry of its own flags in
 | `MILO_RENDER` | unset | Legacy. Presence forces GPU init even over `MILO_NORENDER` — note `MILO_RENDER=0` also forces it on | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
 | `MILO_WIDTH` / `MILO_HEIGHT` | `1280` / `720` | Render target size | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
 | `MILO_MAX_FRAMES` | `10000` | Exit after N frames. `0` or negative = unlimited | `src/App.cpp` |
+| `DC3_FPS_CAP` | windowed `60`, headless off | Frame cap (PLAN H-29). The image never draws more than 60 fps (`rnd sync 1` → `D3DRS_PRESENTINTERVAL 1`), so a windowed run sleeps out the rest of each frame instead of drawing at the panel's rate. The cap is snapped to a whole number of refreshes so every frame is held equally long: 72 on a 144 Hz panel, 60 on 120/240 Hz, 82.5 on 165 Hz; at 60/75 Hz vsync alone paces and the cap is off. `0`/`off` = no cap (display rate). `N` = cap at N (windowed: snapped the same way). **Headless runs are never capped unless this is set** (flow tests depend on running faster than real time); headless `N` caps at exactly N. The log names the decision (`DC3 Native: frame cap: …`) and, at exit, how many frames were paced. Desktop only; web is paced by `requestAnimationFrame` | `src/App.cpp`, `native/src/platform/FramePacer_Native.cpp` |
 | `MILO_FATAL_FAILS` | `0` (non-fatal) | `MILO_FAIL`/`MILO_ASSERT` print `FAIL:` and continue, like the 360's "Continue" dialog. Non-zero = `abort()`. A fail inside `MILO_TRY` throws to the `MILO_CATCH` regardless, as in the image (this includes `MILO_FAIL_DTA`) | `src/system/os/Debug.cpp` |
 | `DC3_DATA` | search | Game data root (must contain `gen/main_xbox.hdr`). Unset: tries `orig-assets`, `../orig-assets`, `../../orig-assets`, `.` | `native/src/platform/System_Native.cpp` |
 | `DC3_DLC_DIR` | unset | Extra content directory queued as HDD content | `native/src/platform/ContentMgr_Stub.cpp` |
@@ -291,10 +355,11 @@ The engine also keeps a classified registry of its own flags in
 | `DC3_SAVE_DIR` | `$HOME/.local/share/dc3/saves` | Memory-card / save directory | `native/src/platform/MemcardMgr_Stub.cpp` |
 | `DC3_FAST_BOOT` | `0` | Non-zero: the boot screens (attract → autosave warning → title → main) are force-advanced after 10 frames each. Off: no forced advance; the screens progress as the image's flow drives them. Web: `?fast_boot=1` | `src/system/ui/UI.cpp` |
 | `DC3_SHOW_SPLASH` | shown | `0` skips the splash. Never shown on web | `src/App.cpp` |
-| `DC3_DEV_OPTIONS` | off | `Dc3EnvFlag`. Shows the native overlay's developer rows (Camera Blend, the debug panel) in Options → Gameplay; off, the page has the retail rows only (`{native_settings dev_options}`, PLAN G-20) | `src/App.cpp`, `native/dta/ui/options/options_gameplay.dta` |
+| `DC3_PROFILE` | `dev` | `dev` or `release`: the defaults of the rows in [Profiles](#profiles-dc3_profile) | `native/src/platform/System_Native.cpp` |
+| `DC3_DEV_OPTIONS` | dev profile `1`, release off | `Dc3EnvFlag`. Shows the native overlay's developer rows (Camera Blend, the debug panel) in Options → Gameplay; off, the page has the retail rows only (`{native_settings dev_options}`, PLAN G-20) | `src/App.cpp`, `native/dta/ui/options/options_gameplay.dta` |
 | `DC3_FAST_TIME` | unset | Presence. Song time advances per frame instead of on the wall clock (see [Fast Time Mode](#fast-time-mode)) | `src/lazer/game/LiveInput.cpp` |
 | `DC3_HEARTBEAT_S` | `60` | Seconds between `DC3_HEARTBEAT: uptime_s=… rss_kb=…` lines on stderr; `0` disables | `native/src/main_native.cpp` |
-| `DC3_TAG_MODALS` | desktop `0`, **web `1`** | Every `MILO_WARN`/`MILO_NOTIFY` (desktop also `MILO_FAIL`) printed as one `MILO_<KIND>: <msg>` line. Desktop: stderr, plus a backtrace for each new message. Web: the browser devtools console only (`console.warn`, not the page's console), each distinct message's first 5 repeats then every power of ten (W-9); `?env=DC3_TAG_MODALS=0` turns it off. Without it a notify at `notify_level` 1 goes to `cheat_display` and is never printed | `src/system/os/Debug.cpp` |
+| `DC3_TAG_MODALS` | desktop: dev profile `dev`, release `0`; **web `1`** | Every `MILO_WARN`/`MILO_NOTIFY` (desktop also `MILO_FAIL`) printed as one `MILO_<KIND>: <msg>` line. Desktop `1` (the harvest mode, `scripts/native_assert_harvest.py`): stderr, every line, plus a backtrace for each new message. Desktop `dev`: stderr, each distinct message's first 5 then every power of ten with `[repeat N]`, no backtraces. Web: the browser devtools console only (`console.warn`, not the page's console), each distinct message's first 5 repeats then every power of ten (W-9); `?env=DC3_TAG_MODALS=0` turns it off. Without it a notify at `notify_level` 1 goes to `cheat_display` and is never printed | `src/system/os/Debug.cpp` |
 
 ### Stopping the engine (H-9)
 
@@ -318,7 +383,7 @@ Tests: `NativeExitTest.*` (runs its own Xvfb; no window manager needed).
 |----------|---------|--------|---------|
 | `MILO_INPUT_SCRIPT` | unset | Scripted button presses, used when there is no window (see [Scripted Input System](#scripted-input-system)) | `../milo-native-engine/src/platform/Joypad_Native.cpp` |
 | `MILO_INPUT_WAKE_BUTTON` | `l3` | Button a script `wake` presses | `../milo-native-engine/src/platform/Joypad_Native.cpp` |
-| `MILO_INPUT_LOG` | unset | Non-zero: one `Joypad: down pad=0 button=7 (X) action=14` / `Joypad: up ...` line per button message, any source (keyboard, gamepad, script, HTTP) | `../milo-native-engine/src/platform/Joypad_Native.cpp` |
+| `MILO_INPUT_LOG` | dev profile `1`, release unset | Non-zero: one `Joypad: down pad=0 button=7 (X) action=14` / `Joypad: up ...` line per button message, any source (keyboard, gamepad, script, HTTP) | `../milo-native-engine/src/platform/Joypad_Native.cpp` |
 | `DC3_CONTROLLER_MODE` | `auto` | `auto`, `forced` or `faithful` (see [Controller Mode Policy](#controller-mode-policy)) | `native/src/platform/System_Native.cpp` |
 | `DC3_CONTROLLER_MODE_TIMEOUT_MS` | helpbar value | faithful policy only: overrides the helpbar's `controller_mode_timeout` | `native/src/platform/System_Native.cpp` |
 | `DC3_HTTP_PACE_FPS` | unset (unpaced) | Cap the frame rate of a debug-server run, so a client answering every frame (the synthetic performer on `/api/frame/wait`) keeps up; `PUT /api/pace?fps=N` changes it at run time | `native/src/platform/HttpServer.cpp` |
@@ -336,8 +401,9 @@ variables are value-parsed: `0`/`false`/`off`/`no` disable.
 | `DC3_REAL_MOVE_PASSED` | on | `Dc3EnvFlag`. The image's `move_passed` path | `src/lazer/game/Game.cpp` |
 | `DC3_POSE_SELFTEST` | off | `Dc3EnvFlag`. Feed the choreography's own reference pose as the player | `native/src/platform/GestureMgr_Native.cpp`, `src/App.cpp`, `src/system/hamobj/FilterQueue.cpp` |
 | `DC3_SCORING_DEBUG` | off | `Dc3EnvFlag`. Once-per-second scoring liveness counters | `native/src/platform/GestureMgr_Native.cpp`, `src/lazer/game/Game.cpp` |
+| `DC3_MOVE_RATING_LOG` | dev profile `1`, release off | `Dc3EnvFlag`. One `DC3 MOVE_RATING` line per scored move | `src/lazer/game/Game.cpp` |
 | `DC3_POSE` | unset | Provider select. `off`: no pose server, the stand-in skeleton. Any other value (conventionally `external`) only overrides the headless skip: in headless runs the pose provider is skipped unless this or a valid `DC3_POSE_PERFORM` mode is set | `native/src/platform/GestureMgr_Native.cpp` |
-| `DC3_POSE_CAMERA` | `0` | Camera index | `native/src/platform/GestureMgr_Native.cpp` |
+| `DC3_POSE_CAMERA` | `auto` | Camera for the spawned pose server, passed as `--camera`: `auto` = first V4L2 video-capture device, re-resolved whenever the server reopens it; or an index (falls back to `auto` if that node is missing or not a camera), a `/dev/videoN` path, or a `/dev/v4l/by-id` name. See POSE_INPUT.md "Which camera" | `native/src/platform/GestureMgr_Native.cpp` |
 | `DC3_POSE_MODEL` | `<tree>/native/models/pose_landmarker_full.task`, found from the executable, not the cwd | MediaPipe model passed to the spawned server | `native/src/platform/GestureMgr_Native.cpp` |
 | `DC3_DUMMY_PLAYERS` | auto | `1` or `2`: how many standing stand-ins the sensor shows when no pose provider runs. Unset: one, two in two-player modes (`requires_2_players` / `is_in_party_mode`). Ignored while a provider runs | `native/src/platform/GestureMgr_Native.cpp` |
 | `DC3_POSE_SOCKET` | spawned server: `/tmp/dc3_pose_<pid>.sock`; with `DC3_POSE_NO_SPAWN`: `/tmp/dc3_pose.sock` | Unix socket shared with the pose server. Per process when the engine spawns the server, since `pose_server.py` unlinks whatever is at its path | `native/src/platform/GestureMgr_Native.cpp` |
@@ -345,6 +411,15 @@ variables are value-parsed: `0`/`false`/`off`/`no` disable.
 | `DC3_POSE_HFOV` | unset | Horizontal camera FOV passed to the spawned server | `native/src/platform/Skeleton_Native.cpp` |
 | `DC3_POSE_HOLD_MS` | `1000` | Dropout hold (PLAN P-12): a person the detector loses is still reported, same slot and tracking id, every joint inferred at its last pose, for this much sensor time; then the slot is released and the image's own 1 s recovery window runs. `0` = off (lost at once). Not applied to someone seen under 500 ms, or when a new id appears within 0.3 m. Capped at 5000 | `native/src/platform/GestureMgr_Native.cpp` |
 | `DC3_POSE_LATENCY_LOG` | off | `Dc3EnvFlag`. Every 5 s, `DC3 POSE AGE: capture->game median/p10/p90`: the age of a pose frame when the game takes it, from `pose_server.py`'s capture stamp (desktop only) | `native/src/platform/GestureMgr_Native.cpp` |
+| `DC3_POSE_PYTHON` | the game chooses | Interpreter the spawned pose server runs under. Unset, the game takes the first executable of: `${DC3_POSE_VENV:-~/.local/share/dc3/pose-venv}/bin/python3` (what `scripts/playtest/bootstrap.sh --fix` makes), the checkout's `.venv/bin/python3`, a worktree's main-checkout `.venv/bin/python3`, then `python3` from PATH. It logs `Pose server python: PATH (why)`; when that Python lacks mediapipe/opencv the notice names it and `bootstrap.sh --fix`. `scripts/playtest/pose_python.py` is the same order (preflight checks the game's choice) | `native/src/platform/Skeleton_Native.cpp` (`ChoosePosePython`) |
+| `DC3_POSE_VENV` | `~/.local/share/dc3/pose-venv` | The playtest venv the game looks for (step 2 above); replaces the default rather than adding to it | `Skeleton_Native.cpp` (`ChoosePosePython`), `scripts/playtest/bootstrap.sh` |
+| `DC3_POSE_SERVER` | `<tree>/native/scripts/pose_server.py` | A drop-in for `pose_server.py`, started with the same arguments (`scripts/playtest/footage_camera.py` is one) | `native/src/platform/Skeleton_Native.cpp` |
+| `DC3_POSE_VIDEO` | unset | The spawned server reads this video file (looped) instead of `--camera N` (`scripts/play.sh --video`) | `native/src/platform/Skeleton_Native.cpp` (`ServerCommand`) |
+| `DC3_POSE_RECORD` | unset | Write every sensor frame the game accepts, as the scorer receives it (persons, frame id, timestamp, song time, floor normal), to this dc3-pose-session v1 file; flushed per frame. `scripts/play.sh` sets it to `<session>/pose.dc3session` | `native/src/platform/PoseSession_Native.cpp` |
+| `DC3_POSE_SESSION_SYNC` | `song` | With `DC3_POSE_PERFORM=session:FILE`: `song` publishes each recorded frame at its recorded song time (and uses its recorded floor normal); `wall` at its recorded wall offset | `native/src/platform/PoseSession_Native.cpp` |
+| `DC3_PERF_LOG` | off | Every 5 s: `DC3 PERF: fps= pose_fps= persons=` (game frames/s, sensor frames accepted/s, mean people) | `native/src/platform/GestureMgr_Native.cpp` |
+| `DC3_POSE_STATS` | off | Read by `pose_server.py`: every 5 s `POSE_STATS: fps= infer_ms_mean= infer_ms_p95= persons= sent= dropped=` on stderr | `native/scripts/pose_server.py` |
+| `DC3_FOOTAGE_PRE`, `DC3_FOOTAGE_CONTROL` | `8`, unset | `footage_camera.py`: seconds of clip before song time 0; a file holding `CLIP PRE`, re-read every 0.5 s (a driver changes the dancer between songs) | `scripts/playtest/footage_camera.py` |
 
 ### Capture and output
 
@@ -357,12 +432,13 @@ variables are value-parsed: `0`/`false`/`off`/`no` disable.
 | `MILO_CAPTURE_FRAME` | unset | Arm a GPU frame capture at frame N (see [native/TOOLS.md](../native/TOOLS.md)) | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
 | `MILO_FRAME_TIMES` | unset | Write a per-frame timing CSV to this path | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
 | `DC3_CROWD_STATS` | unset | `N`: every N render frames, one `DC3_CROWD: frame=… draws3d=… impostors=… pose=…` line on stderr (3D crowd draws, impostor renders, checksum of the drawn crowd poses). Draws nothing differently; read by `CrowdTest` | `src/system/world/Crowd.cpp` |
-| `MILO_PERF` | unset | Presence. Frame timing | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
-| `DC3_TEL` | `0` | Non-zero: gameplay telemetry lines on stderr | `native/src/telemetry/GameplayTelemetry.cpp` |
+| `MILO_PERF` | dev profile `1`, release unset | Presence (the profile unsets `MILO_PERF=0`, so that reads as off). A `[PERF]` frame-timing line every 5 s | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
+| `DC3_TEL` | desktop: dev profile `api`, release `0` | `api`: telemetry sampled for `GET /api/telemetry`, nothing printed. Other non-zero: also a `DC3_TEL:` line on stderr every `DC3_TEL_INTERVAL` frames | `native/src/telemetry/GameplayTelemetry.cpp` |
 | `DC3_TEL_INTERVAL` | `10` | Frames between telemetry lines | `native/src/telemetry/GameplayTelemetry.cpp` |
-| `DC3_HTTP` | `0` | Non-zero: start the HTTP debug server ([tools/HTTP_DEBUG_SERVER.md](../tools/HTTP_DEBUG_SERVER.md)). Only `dc3-native` is built with `DC3_HTTP_SERVER` | `native/src/platform/HttpServer.cpp` (DC3 glue; the engine copy is not compiled) |
-| `DC3_HTTP_PORT` | `9090` | HTTP debug server port. `0` or `auto`: kernel-assigned port, printed on stdout as `DC3_HTTP_PORT=<n>`. A port that cannot be bound exits 98 (see [Stopping the engine](#stopping-the-engine-h-9)) | `native/src/platform/HttpServer.cpp` |
+| `DC3_HTTP` | desktop: dev profile `1`, release `0` | Non-zero: start the HTTP debug server on **127.0.0.1 only** ([tools/HTTP_DEBUG_SERVER.md](../tools/HTTP_DEBUG_SERVER.md); another box: `ssh -L 9090:127.0.0.1:9090`). Only `dc3-native` is built with `DC3_HTTP_SERVER` | `native/src/platform/HttpServer.cpp` (DC3 glue; the engine copy is not compiled) |
+| `DC3_HTTP_PORT` | window: `9090` if free, else kernel-assigned; headless: kernel-assigned | HTTP debug server port; the one in use is printed on stdout as `DC3_HTTP_PORT=<n>`. `0` or `auto`: kernel-assigned. An explicit port is strict: one that cannot be bound exits 98 (see [Stopping the engine](#stopping-the-engine-h-9)) | `native/src/platform/HttpServer.cpp` |
 | `DC3_HTTP_PORT_FILE` | unset | Once the debug server is bound, write its port to this file (temp file + rename). How harnesses learn a `DC3_HTTP_PORT=0` port | `native/src/platform/HttpServer.cpp` |
+| `DC3_HTTP_HOST` | `127.0.0.1` | Address the HTTP debug server binds. Unset is loopback only; set it (e.g. `0.0.0.0`) only to widen that on purpose: the server evaluates any DTA it is sent. The listen line then says `NOT loopback only`; an ssh tunnel is the safer way to reach another box | `native/src/platform/HttpServer.cpp` |
 
 ### Audio
 
@@ -380,6 +456,7 @@ variables are value-parsed: `0`/`false`/`off`/`no` disable.
 |----------|---------|--------|---------|
 | `MILO_CLEAR_COLOR` | unset | `R,G,B,A` clear colour override | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp`, `src/App.cpp` |
 | `MILO_SIMPLE_RENDER` | unset | Presence. Simplified material rendering | `../milo-native-engine/src/platform/MaterialSetup.cpp` |
+| `MILO_GPU_LABELS` | auto | `1`: create the device with Dawn's `use_user_defined_labels_in_backend` toggle, so every Vulkan object carries its WebGPU label (readable names in RenderDoc / validation messages). `0`: never. Unset: on only when a Vulkan capture or debug layer is requested (`VK_INSTANCE_LAYERS`, `VK_LOADER_LAYERS_ENABLE`, `ENABLE_VULKAN_RENDERDOC_CAPTURE`), off otherwise — naming each object cost 5–8% of the main thread in menus. The log says `GpuDevice: backend object labels ON` when it is on | `../milo-native-engine/src/gfx/GpuDevice.cpp` |
 | `MILO_DEBUG_PIPELINES` | unset | Presence. Log pipeline creation | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp`, `../milo-native-engine/src/gfx/PipelineManager.cpp` |
 | `MILO_NO_TRANSPARENT_DEFER` | unset | Presence. Disable the transparent draw queue | `../milo-native-engine/src/platform/TransparentQueue.cpp` |
 | `MILO_NO_SPOT_BEAMS` | unset | Presence. Drop spotlight beams | `../milo-native-engine/src/platform/Rnd_Wgpu.cpp` |
@@ -391,6 +468,8 @@ variables are value-parsed: `0`/`false`/`off`/`no` disable.
 | `MILO_DEBUG_MERGE` | `0` | Non-zero: log `MergeObject` source/target/action | `src/system/obj/Utl.cpp`, `src/system/rndobj/PropAnim.cpp` |
 | `DC3_NO_UI` / `DC3_HUD_ONLY` | unset | Presence. Skip `TheUI->Draw()` | `src/App.cpp` |
 | `DC3_DRAW_CRASH_GUARD` | off | `Dc3EnvFlag`. Run UI draw under a `sigsetjmp` guard | `src/App.cpp` |
+| `DC3_DEV_MENU` | dev profile `1`, release off | `Dc3EnvFlag`. Starts the original's development menu on (`{ui show_dev_menu}`, Alt+D on the 360): extra Choose Mode modes and campaign difficulty rows, appended | `src/system/ui/UI.cpp` (`UIManager::Init`) |
+| `DC3_RND_OVERLAYS` | dev profile `1`, release off | `Dc3EnvFlag`. Draws the original's `RndOverlay`s (`cheat_display`, quick-cheat stats) in a top-left ImGui window and logs `DC3 OVERLAY [<name>] <text>` when one changes | `native/src/platform/DebugPanel.cpp`, `src/system/rndobj/Overlay.cpp` |
 
 ### Object-lifetime and stub diagnostics
 
@@ -419,7 +498,9 @@ The agent launcher sets these unless the caller already has them:
 `DC3_SHOW_SPLASH=0`, `MILO_MAX_FRAMES=0` (unlimited; bound the run yourself or
 pass `--frames N`). `--headless` additionally exports `MILO_HEADLESS=1` and
 `DC3_FAST_TIME=1`. (The script's own `--help` text still says
-`MILO_MAX_FRAMES=100000`; the code sets `0`.)
+`MILO_MAX_FRAMES=100000`; the code sets `0`.) It runs under the dev profile, so it
+also gets the other [Profiles](#profiles-dc3_profile) rows; its `DC3_TEL=1` and
+`DC3_HTTP_PORT=9090` win over the profile's `api` and port policy.
 
 ## Fast Time Mode
 

@@ -49,7 +49,12 @@ const char *GetExpCode(int code);
 #include <execinfo.h>
 #include <set>
 #include <string>
-// Native-only harvest tap, OFF unless DC3_TAG_MODALS=1.
+#include <strings.h>
+#include <unordered_map>
+// Native-only harvest tap.  DC3_TAG_MODALS: unset or 0 = off; `dev` = the
+// developer console (rate-limited lines, no backtraces; the dev profile's
+// default, DC3_PROFILE in System_Native.cpp); any other non-zero number = the
+// harvest tap below (every line, plus a backtrace per distinct message).
 //
 // On native MILO_ASSERT/MILO_FAIL are non-fatal and MILO_WARN/MILO_NOTIFY reach
 // stderr (if at all) through App.cpp's DebugModal as an UNPREFIXED MILO_LOG line
@@ -61,10 +66,14 @@ const char *GetExpCode(int code);
 // found even when the message carries no file:line.  scripts/native_assert_harvest.py
 // consumes this.  Emits nothing and changes no control flow when disabled.
 static void NativeModalTap(const char *kind, const char *msg) {
+    // 0 off, 1 harvest, 2 dev console.
     static int sEnabled = -1;
     if (sEnabled == -1) {
         const char *env = getenv("DC3_TAG_MODALS");
-        sEnabled = (env && atoi(env) != 0) ? 1 : 0;
+        if (env && strcasecmp(env, "dev") == 0)
+            sEnabled = 2;
+        else
+            sEnabled = (env && atoi(env) != 0) ? 1 : 0;
     }
     if (!sEnabled)
         return;
@@ -76,6 +85,26 @@ static void NativeModalTap(const char *kind, const char *msg) {
             esc += "\\n";
         else
             esc += line[i];
+    }
+    if (sEnabled == 2) {
+        // Dev console: the web tap's rate limit (each distinct message's first
+        // 5 occurrences, then every power of ten with the running count), so
+        // a message repeated every frame cannot bury a person's terminal.  No
+        // backtraces -- raw addresses are for scripts/native_assert_harvest.py,
+        // which sets DC3_TAG_MODALS=1.
+        static const long kTapRepeats = 5;
+        static std::unordered_map<std::string, long> sCounts;
+        long n = ++sCounts[std::string(kind) + esc];
+        bool show = n <= kTapRepeats;
+        for (long pow10 = 10; !show && pow10 <= n; pow10 *= 10)
+            show = pow10 == n;
+        if (show) {
+            if (n > kTapRepeats)
+                fprintf(stderr, "MILO_%s: %s [repeat %ld]\n", kind, esc.c_str(), n);
+            else
+                fprintf(stderr, "MILO_%s: %s\n", kind, esc.c_str());
+        }
+        return;
     }
     fprintf(stderr, "MILO_%s: %s\n", kind, esc.c_str());
     static std::set<std::string> sSeen;

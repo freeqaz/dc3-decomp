@@ -6,6 +6,7 @@
 #include "StubTrace.h"
 #include "NativeQuit.h"
 #include "platform/JoypadKeyMap.h"
+#include "platform/ProcessSpawner_Native.h"
 #include <cstdio>
 #include <cstdlib>
 #include <csignal>
@@ -265,9 +266,27 @@ static void SignalHandler(int sig, siginfo_t *info, void *) {
     _exit(128 + sig);
 }
 
+void Dc3ProfileApply(); // platform/System_Native.cpp, DC3_PROFILE
+
 int main(int argc, char **argv) {
     setbuf(stdout, NULL); // Disable buffering so we see output before crashes
     setbuf(stderr, NULL);
+
+    // FIRST, before audio, graphics or any thread: fork the process that
+    // launches helpers (pose_server.py).  PipeWire's ALSA plugin lowers this
+    // process's RLIMIT_RTTIME to 0 when audio opens on a box without rtkit, a
+    // hard limit a child inherits and cannot raise, and MediaPipe's realtime
+    // thread then gets the pose server SIGKILLed.  The spawner keeps the
+    // limits the game was started with.  See platform/ProcessSpawner_Native.h.
+    NativeSpawner::Init();
+
+    // DC3_PROFILE (dev by default): the profile's defaults go into the
+    // environment before anything -- the heartbeat below included -- reads a
+    // variable.  docs/debugging/native.md "Profiles".  After the spawner fork
+    // on purpose: the spawner needs none of it (it touches no env-read code),
+    // and each helper it launches gets the game's environment as of the
+    // Spawn() call, profile included (NativeSpawner::Spawn sends environ).
+    Dc3ProfileApply();
 
     sStartTime = time(nullptr);
     Dc3InstallExitHook();

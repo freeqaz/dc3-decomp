@@ -23,11 +23,21 @@
 #include "rndobj/BaseMaterial.h"
 #include "rndobj/Mat.h"
 #include "rndobj/Mesh.h"
+#include "obj/DirLoader.h"
+#include "obj/Dir.h"
+#include "platform/GameRenderHook.h"
+#include "rndobj/Font.h"
+#include "rndobj/Text.h"
+#include "utl/FilePath.h"
 
 // Declared here, not via "platform/MaterialSetup.h": dc3's own
 // native/src/platform/MaterialSetup.h (a pre-engine copy) is earlier on the
 // include path and shadows the engine's.
 bool TextMeshKeepsAtlasRGB(RndMesh *mesh, RndMat *mat, bool skinned);
+bool MeshDrawsAsGlyph(RndMesh *mesh, bool skinned);
+bool MeshShadesAsText(RndMesh *mesh);
+void MarkTextGlyphMesh(RndMesh *mesh);
+bool IsMarkedTextGlyphMesh(RndMesh *mesh);
 
 // The pipeline key's WgpuBlend and BaseMaterial::Blend share one numbering;
 // BlendSkipsFringeFade takes either.
@@ -61,4 +71,148 @@ TEST_F(NativeGlyphRenderTest, DC3TextGlyphsKeepAtlasRGB) {
     EXPECT_FALSE(TextMeshKeepsAtlasRGB(named, nullptr, false));
     delete named;
     delete glyphs;
+}
+
+// Lane np-gfx-blend: only a text glyph page is drawn without depth test and
+// culling. RndText marks every page it creates (Text.cpp AllocateMeshes,
+// FontMap3d::AllocateMeshes -> MarkTextGlyphMesh) and DC3's render hook says
+// so (MarksTextGlyphMeshes), so the engine asks positively. Every other
+// unnamed mesh keeps its material's zMode and cull: spotlight beams, RndRibbon,
+// RndLine, crowd billboards, and HamRibbon's skinned hand trail
+// (hamribbon.mat: zMode 2, cull 1 -- drawn as text it went through the dancer
+// and drew its back faces, FrameCapture on streetside peak:
+// mesh='' mat='hamribbon_02.mat' blend=4 zMode=2 cull=1 SKINNED).
+// Sabotage tried:
+//  - MeshDrawsAsGlyph back to `!mesh->Name()[0] && !skinned` (inferred, round
+//    1) -> GlyphPagesAreMarkedNotInferred fails on the unmarked mesh;
+//  - back to `!mesh->Name()[0]` (round 0) -> it also fails on the skinned one;
+//  - the MarkTextGlyphMesh call removed from Text.cpp AllocateMeshes ->
+//    RndTextMarksItsGlyphPages fails.
+TEST_F(NativeGlyphRenderTest, GlyphPagesAreMarkedNotInferred) {
+    GameRenderHook *hook = GetGameRenderHook();
+    ASSERT_NE(hook, nullptr) << "DC3's render hook is not registered";
+    ASSERT_TRUE(hook->MarksTextGlyphMeshes());
+
+    RndMesh *beam = Hmx::Object::New<RndMesh>(); // unnamed, never marked
+    EXPECT_FALSE(MeshDrawsAsGlyph(beam, false))
+        << "an unmarked unnamed mesh (spotlight beam, ribbon, crowd billboard) "
+           "keeps its material's zMode and cull";
+    EXPECT_FALSE(MeshDrawsAsGlyph(beam, true))
+        << "a skinned unnamed mesh (HamRibbon) keeps its material's zMode and cull";
+
+    RndMesh *page = Hmx::Object::New<RndMesh>();
+    MarkTextGlyphMesh(page);
+    EXPECT_TRUE(IsMarkedTextGlyphMesh(page));
+    EXPECT_TRUE(MeshDrawsAsGlyph(page, false)) << "a glyph page draws without depth";
+
+    RndMesh *named = Hmx::Object::New<RndMesh>();
+    named->SetName("floor.mesh", ObjectDir::Main());
+    EXPECT_FALSE(MeshDrawsAsGlyph(named, false));
+    EXPECT_FALSE(MeshDrawsAsGlyph(nullptr, false));
+    delete named;
+    delete page;
+    delete beam;
+}
+
+// A game that does not mark its pages (no hook, or one that does not say so:
+// rb3-xenon today) keeps the inferred rule: unnamed and not skinned.
+TEST_F(NativeGlyphRenderTest, UnmarkingGameKeepsInferredGlyphRule) {
+    GameRenderHook *saved = GetGameRenderHook();
+    SetGameRenderHook(nullptr);
+    RndMesh *unnamed = Hmx::Object::New<RndMesh>();
+    RndMesh *named = Hmx::Object::New<RndMesh>();
+    named->SetName("floor.mesh", ObjectDir::Main());
+    const bool unnamedFlat = MeshDrawsAsGlyph(unnamed, false);
+    const bool unnamedSkinned = MeshDrawsAsGlyph(unnamed, true);
+    const bool namedFlat = MeshDrawsAsGlyph(named, false);
+    SetGameRenderHook(saved);
+    EXPECT_TRUE(unnamedFlat);
+    EXPECT_FALSE(unnamedSkinned);
+    EXPECT_FALSE(namedFlat);
+    delete named;
+    delete unnamed;
+}
+
+// Lane np-gfx-blend round 2: the text COLOUR path (BuildMaterialParams'
+// isTextMesh: forced prelit, atlas alpha as RGB unless the hook keeps the
+// atlas RGB) follows the same mark. HamRibbon's trail is unnamed and was shaded
+// as text: forced prelit, so its lit material (hamribbon.mat: prelit 0,
+// use_environ 0 -- NgMat::SetupAmbient gives it an ambient of 1 and the shader
+// options no lights) was replaced by the mesh's vertex colour, which is white
+// only by RndMesh::Vert's default. FrameCapture on streetside peak:
+// mesh='' mat='hamribbon.mat' ... prelit=1 heuristics: TextMeshDetect.
+// Sabotage tried:
+//  - MeshShadesAsText back to `!mesh->Name()[0]` -> the unmarked meshes fail;
+//  - MeshShadesAsText returning the mark regardless of the hook ->
+//    UnmarkingGameKeepsTextColourPath fails.
+TEST_F(NativeGlyphRenderTest, OnlyMarkedPagesTakeTextColourPath) {
+    GameRenderHook *hook = GetGameRenderHook();
+    ASSERT_NE(hook, nullptr) << "DC3's render hook is not registered";
+    ASSERT_TRUE(hook->MarksTextGlyphMeshes());
+
+    RndMesh *ribbon = Hmx::Object::New<RndMesh>(); // unnamed, never marked
+    EXPECT_FALSE(MeshShadesAsText(ribbon))
+        << "an unmarked unnamed mesh (HamRibbon trail, beam, billboard) shades with "
+           "its own material, not as a text page";
+    RndMesh *page = Hmx::Object::New<RndMesh>();
+    MarkTextGlyphMesh(page);
+    EXPECT_TRUE(MeshShadesAsText(page)) << "a glyph page keeps the text colour path";
+    RndMesh *named = Hmx::Object::New<RndMesh>();
+    named->SetName("floor.mesh", ObjectDir::Main());
+    EXPECT_FALSE(MeshShadesAsText(named));
+    EXPECT_FALSE(MeshShadesAsText(nullptr));
+    delete named;
+    delete page;
+    delete ribbon;
+}
+
+// Without the mark (rb3-xenon) the colour path is what it was: every unnamed
+// mesh, skinned or not (it never looked at skinning).
+TEST_F(NativeGlyphRenderTest, UnmarkingGameKeepsTextColourPath) {
+    GameRenderHook *saved = GetGameRenderHook();
+    SetGameRenderHook(nullptr);
+    RndMesh *unnamed = Hmx::Object::New<RndMesh>();
+    RndMesh *named = Hmx::Object::New<RndMesh>();
+    named->SetName("floor.mesh", ObjectDir::Main());
+    const bool unnamedText = MeshShadesAsText(unnamed);
+    const bool namedText = MeshShadesAsText(named);
+    SetGameRenderHook(saved);
+    EXPECT_TRUE(unnamedText);
+    EXPECT_FALSE(namedText);
+    delete named;
+    delete unnamed;
+}
+
+// The text code marks the pages it builds: a real font, a real RndText.
+TEST_F(NativeGlyphRenderTest, RndTextMarksItsGlyphPages) {
+    if (IsSkipped()) return;
+    ObjectDir *fonts =
+        DirLoader::LoadObjects(FilePath("ui/resource/fonts/gen/default.milo_xbox"), nullptr, nullptr);
+    if (!fonts) GTEST_SKIP() << "no archive UI fonts (ui/resource/fonts/gen/default.milo_xbox)";
+    RndFont *font = nullptr;
+    for (ObjDirItr<RndFont> it(fonts, true); it != nullptr; ++it) {
+        font = it;
+        break;
+    }
+    ASSERT_NE(font, nullptr) << "no RndFont in " << fonts->Name();
+
+    RndText *text = Hmx::Object::New<RndText>();
+    DataArrayPtr fontProp(Symbol("styles"), 0, Symbol("font"));
+    text->SetProperty(fontProp, DataNode(font));
+    text->SetTextASCII("Ab");
+    text->UpdateText(); // Load/Copy/the update_text handler do this; SetText does not
+
+    int meshes = 0;
+    for (std::list<RndTransformable *>::const_iterator it = text->Children().begin();
+         it != text->Children().end(); ++it) {
+        RndMesh *mesh = dynamic_cast<RndMesh *>(*it);
+        if (!mesh) continue;
+        meshes++;
+        EXPECT_TRUE(IsMarkedTextGlyphMesh(mesh)) << "page mesh " << meshes << " of font "
+                                                 << font->Name() << " is not marked";
+        EXPECT_TRUE(MeshDrawsAsGlyph(mesh, false));
+    }
+    EXPECT_GT(meshes, 0) << "the text built no page mesh (font " << font->Name() << ")";
+    delete text;
+    delete fonts;
 }

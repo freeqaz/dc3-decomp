@@ -179,6 +179,18 @@ does not reach the test process. Gates are decided in `native/CMakeLists.txt`.
   ground-truth tests.
 - `MILO_POSE_GOLDEN_DIR` — override for the pose-dump golden directory.
 
+- **Profiles.** `dc3-native` defaults to `DC3_PROFILE=dev`, which turns on the
+  HTTP debug server, the dev Options rows and dev menu, the overlays and several
+  console logs ([debugging/native.md "Profiles"](../debugging/native.md#profiles-dc3_profile)).
+  `milo-tests` itself never applies a profile, so an in-process test sees the
+  compiled defaults (= release); the `dc3-native` processes a test starts do
+  apply it. A test that asserts a **player-facing** default pins
+  `DC3_PROFILE=release` (`OptionsGameplayPlayerFlowTest`,
+  `HeadlessBootTest.ReleaseProfileIsThePlayerBuild`). `MILO_TEST_ENV` sets
+  `DC3_HTTP_PORT=0`, so the dev profile's server never takes 9090 in a test.
+  The dev menu's rows are appended after the retail ones, so recorded menu
+  scripts that walk `down` from the top land where they did.
+
 Runtime variables for `dc3-native` itself are in the master table in
 [debugging/native.md](../debugging/native.md#environment-variables).
 

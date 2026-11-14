@@ -11,6 +11,7 @@
 #include "telemetry/GameplayTelemetry.h"
 #include "gfx/Screenshot.h"
 #include "gfx/GpuDevice.h"
+#include "gfx/FrameCapture.h"
 #include "obj/Data.h"
 #include "obj/DataFile.h"
 #include "obj/DataFunc.h"
@@ -231,12 +232,46 @@ bool HttpServer::Start(int port) {
     // http_port_bind_failed), so a harness can tell "my port was taken" from
     // a crash.  The "already in use" wording is kept: tools/state_diff/golden.py
     // matches it.
+    //
+    // Loopback only.  The server evaluates arbitrary DTA (/api/dta/eval),
+    // injects input and reads the framebuffer, and it is on by default in the
+    // dev profile (DC3_PROFILE), so it must never answer another machine: it
+    // listened on 0.0.0.0 until 2026-11-13.  To drive an engine on another box
+    // (the GPD), tunnel: `ssh -L 9090:127.0.0.1:9090 <box>`.  DC3_HTTP_HOST
+    // is the explicit way to widen it (e.g. 0.0.0.0); unset is loopback.
+    //
+    // A negative port means "this one if it is free, else any": the default
+    // when DC3_HTTP_PORT is unset in a window (HttpServerInit), so a second
+    // engine, or one started while the owner's game holds 9090, gets a
+    // kernel-assigned port and says so instead of exiting 98.  An EXPLICIT
+    // port keeps the strict exit-98 contract.
+    const char *hostEnv = getenv("DC3_HTTP_HOST");
+    const char *kHttpBindAddress = (hostEnv && *hostEnv) ? hostEnv : "127.0.0.1";
     errno = 0;
-    if (port == 0) {
-        port = svr->bind_to_any_port("0.0.0.0");
+    if (port < 0) {
+        const int preferred = -port;
+        if (svr->bind_to_port(kHttpBindAddress, preferred)) {
+            port = preferred;
+        } else {
+            const int err = errno;
+            // A failed bind marks a cpp-httplib Server decommissioned, and
+            // every later bind on it returns -1 at once (measured: the second
+            // windowed engine exited 98 "cannot bind port 0").  stop() on a
+            // server that is not running only clears that flag.
+            svr->stop();
+            port = svr->bind_to_any_port(kHttpBindAddress);
+            if (port <= 0)
+                HttpBindFailed(0, errno);
+            fprintf(stderr,
+                    "DC3 Native: HTTP debug server: port %d is taken (%s); using "
+                    "kernel-assigned port %d instead (set DC3_HTTP_PORT to insist)\n",
+                    preferred, err ? strerror(err) : "bind failed", port);
+        }
+    } else if (port == 0) {
+        port = svr->bind_to_any_port(kHttpBindAddress);
         if (port <= 0)
             HttpBindFailed(0, errno);
-    } else if (!svr->bind_to_port("0.0.0.0", port)) {
+    } else if (!svr->bind_to_port(kHttpBindAddress, port)) {
         HttpBindFailed(port, errno);
     }
 
@@ -254,7 +289,9 @@ bool HttpServer::Start(int port) {
     // Machine-readable line on stdout for scripts to parse
     fprintf(stdout, "DC3_HTTP_PORT=%d\n", port);
     fflush(stdout);
-    fprintf(stderr, "[HttpServer] Listening on port %d\n", port);
+    fprintf(stderr, "[HttpServer] Listening on %s:%d (%s)\n", kHttpBindAddress, port,
+            strcmp(kHttpBindAddress, "127.0.0.1") == 0 ? "loopback only"
+                                                       : "DC3_HTTP_HOST: NOT loopback only");
     return true;
 }
 
@@ -420,27 +457,29 @@ static JoypadAction HttpButtonAction(JoypadButton btn, Symbol controllerType) {
 }
 
 void HttpServer::DispatchInjectedButtons() {
-    unsigned int pressed = ConsumeHttpButtons();
-    if (!pressed && !mInjectedHeld)
+    int hold[InjectedPadHold::kBits] = {};
+    unsigned int pressed = ConsumeHttpButtons(hold);
+    if (!pressed && !mInjectedHold.held)
         return;
     JoypadData *pad = JoypadGetPadData(0);
     if (!pad)
         return;
+    unsigned int ups = 0, downs = 0;
+    mInjectedHold.Step(pressed, hold, &ups, &downs);
     for (int b = 0; b < kPad_NumButtons; b++) {
-        if (mInjectedHeld & (1u << b)) {
+        if (ups & (1u << b)) {
             JoypadButton btn = (JoypadButton)b;
             ButtonUpMsg msg(pad->mUser, btn, HttpButtonAction(btn, pad->mControllerType), 0);
             JoypadPushThroughMsg(msg);
         }
     }
     for (int b = 0; b < kPad_NumButtons; b++) {
-        if (pressed & (1u << b)) {
+        if (downs & (1u << b)) {
             JoypadButton btn = (JoypadButton)b;
             ButtonDownMsg msg(pad->mUser, btn, HttpButtonAction(btn, pad->mControllerType), 0);
             JoypadPushThroughMsg(msg);
         }
     }
-    mInjectedHeld = pressed;
 }
 
 void HttpServer::ProcessScreenshotsWithoutFrame() {
@@ -538,7 +577,7 @@ void HttpServer::NotifyFrame(const char* screenName, int frame) {
     PaceFrame();
 }
 
-unsigned int HttpServer::ConsumeHttpButtons() {
+unsigned int HttpServer::ConsumeHttpButtons(int *hold) {
     std::lock_guard<std::mutex> lk(mInputMutex);
 
     unsigned int buttons = mImmediateButtons;
@@ -549,6 +588,11 @@ unsigned int HttpServer::ConsumeHttpButtons() {
     while (it != mInputQueue.end()) {
         if (it->framesRemaining <= 0) {
             buttons |= it->buttonBit;
+            if (hold) {
+                for (int b = 0; b < InjectedPadHold::kBits; b++)
+                    if (it->buttonBit == (1u << b) && it->holdFrames > hold[b])
+                        hold[b] = it->holdFrames;
+            }
             it = mInputQueue.erase(it);
         } else {
             it->framesRemaining--;
@@ -1409,8 +1453,10 @@ void HttpServer::RegisterEndpoints() {
 
     // POST /api/input/sequence — queue a button sequence
     svr->Post("/api/input/sequence", [this](const httplib::Request& req, httplib::Response& res) {
-        // Parse JSON array: [{"button":"down","delay":15}, ...]
-        std::vector<std::pair<unsigned int, int>> events; // <buttonBit, delay>
+        // Parse JSON array: [{"button":"down","delay":15,"hold":2}, ...]
+        // delay: frames after the previous event; hold: frames the button
+        // stays down (default 1: released the next frame).
+        std::vector<InputEvent> events; // framesRemaining = the delay, for now
 
         size_t pos = 0;
         while (pos < req.body.size()) {
@@ -1438,6 +1484,14 @@ void HttpServer::RegisterEndpoints() {
                     delay = atoi(req.body.c_str() + dc + 1);
             }
 
+            int holdFrames = 1;
+            auto hp = req.body.find("\"hold\"", q2);
+            if (hp != std::string::npos && (objEnd == std::string::npos || hp < objEnd)) {
+                auto hc = req.body.find(':', hp + 6);
+                if (hc != std::string::npos)
+                    holdFrames = atoi(req.body.c_str() + hc + 1);
+            }
+
             int bit = ParseHttpButtonName(btnName.c_str());
             if (bit < 0) {
                 res.status = 400;
@@ -1445,7 +1499,7 @@ void HttpServer::RegisterEndpoints() {
                 return;
             }
 
-            events.push_back({1u << bit, delay});
+            events.push_back({1u << bit, delay, holdFrames < 1 ? 1 : holdFrames});
             pos = (objEnd != std::string::npos) ? objEnd + 1 : req.body.size();
         }
 
@@ -1459,9 +1513,9 @@ void HttpServer::RegisterEndpoints() {
         {
             std::lock_guard<std::mutex> lk(mInputMutex);
             int accumFrames = 0;
-            for (auto& [btnBit, delay] : events) {
-                accumFrames += delay;
-                mInputQueue.push_back({btnBit, accumFrames});
+            for (InputEvent &e : events) {
+                accumFrames += e.framesRemaining;
+                mInputQueue.push_back({e.buttonBit, accumFrames, e.holdFrames});
             }
         }
 
@@ -1563,6 +1617,14 @@ void HttpServer::RegisterEndpoints() {
             "application/json");
     });
 
+    // GET /api/capture/next — arm FrameCapture's per-draw log (mesh, material,
+    // blend, zmode, camera, colour) for the next frame: the F12 key's effect,
+    // for a headless engine. The log goes to stderr when that frame ends.
+    svr->Get("/api/capture/next", [](const httplib::Request&, httplib::Response& res) {
+        FrameCapture::Get().CaptureNextFrame();
+        res.set_content(JsonOk("{\"armed\":true}"), "application/json");
+    });
+
     // GET /api/frame/wait/<n> — long-poll until frame N reached
     svr->Get(R"(/api/frame/wait/(\d+))", [this](const httplib::Request& req, httplib::Response& res) {
         int target = atoi(req.matches[1].str().c_str());
@@ -1597,16 +1659,23 @@ void HttpServer::RegisterEndpoints() {
 // Init/shutdown helper (called from App.cpp)
 // ---------------------------------------------------------------------------
 
+struct GLFWwindow;
+extern GLFWwindow *gNativeWindow; // engine Rnd_Wgpu.cpp; null when headless
+
 void HttpServerInit() {
     const char* env = getenv("DC3_HTTP");
     if (!env || atoi(env) == 0) return;
 
-    // Unset -> 9090. "0" or "auto" -> kernel-assigned ephemeral port, reported
-    // on stdout as DC3_HTTP_PORT=<n> (see Start). Anything else unparseable or
-    // non-positive keeps the historical 9090 fallback.
-    int port = 9090;
+    // Unset -> in a window, 9090 if it is free, else a kernel-assigned port
+    // (Start's negative-port case); headless, a kernel-assigned port, so a
+    // test or agent run never squats the 9090 a person or a script that names
+    // it expects.  Either way the port is printed on stdout as
+    // DC3_HTTP_PORT=<n> and written to DC3_HTTP_PORT_FILE.  "0" or "auto" ->
+    // kernel-assigned.  An explicit port is strict: taken = exit 98.  Anything
+    // else unparseable or non-positive keeps the historical 9090.
+    int port = gNativeWindow ? -9090 : 0;
     const char* portEnv = getenv("DC3_HTTP_PORT");
-    if (portEnv) {
+    if (portEnv && *portEnv) {
         if (strcmp(portEnv, "auto") == 0 || strcmp(portEnv, "0") == 0) {
             port = 0;
         } else {

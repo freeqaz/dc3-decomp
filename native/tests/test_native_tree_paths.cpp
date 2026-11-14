@@ -118,13 +118,11 @@ private:
 };
 
 // The tree the test binary was built in, located independently of
-// NativeTreeDir(): this source file's own directory is native/tests.
+// NativeTreeDir(): CMake's own idea of the source tree. Not __FILE__: under
+// ccache (docs/native/BUILD_CACHE.md) the compiler is handed a path relative
+// to the build dir, and this test deliberately runs from an unrelated cwd.
 std::string ExpectedNativeDir() {
-    std::string self = __FILE__;
-    size_t slash = self.rfind('/');
-    if (slash == std::string::npos)
-        return std::string();
-    return RealPath(self.substr(0, slash) + "/..");
+    return RealPath(std::string(DC3_DECOMP_SRC_DIR) + "/../native");
 }
 
 } // namespace
@@ -203,6 +201,7 @@ TEST(NativeTreePaths, PoseServerFindsTheDefaultModel) {
     const char *oldPath = getenv("PATH");
     std::string path = stubDir + ":" + (oldPath ? oldPath : "/usr/bin:/bin");
     ScopedEnvVar envPath("PATH", path.c_str());
+    ScopedEnvVar envPy("DC3_POSE_PYTHON", stub.c_str()); // else the game prefers a venv
     ScopedEnvVar noSpawn("DC3_POSE_NO_SPAWN", nullptr);
     ScopedEnvVar perform("DC3_POSE_PERFORM", nullptr);
     ScopedEnvVar model("DC3_POSE_MODEL", nullptr);
