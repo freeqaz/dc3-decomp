@@ -445,13 +445,6 @@ static void mainLoop() {
 extern "C" {
 
 EMSCRIPTEN_KEEPALIVE
-void dc3_resize_canvas(int w, int h) {
-    if (gWgpuRnd && w > 0 && h > 0) {
-        gWgpuRnd->Gpu().ResizeSurface(w, h);
-    }
-}
-
-EMSCRIPTEN_KEEPALIVE
 void dc3MainLoopTick() {
     mainLoop();
 }
