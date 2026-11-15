@@ -48,6 +48,12 @@ public:
 
     void UpdateLimb(int, bool);
     void ResetErrors();
+#ifdef HX_NATIVE
+    // What its target's limb meshes draw with once it has synced: the native
+    // load-time pipeline warm (native/src/platform/PipelineWarm.cpp) asks for
+    // its keys before the first failed move.
+    RndMat *GetFailMat() const { return mFailMat; }
+#endif
 
     static bool sEnabled;
 
