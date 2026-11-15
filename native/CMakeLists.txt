@@ -153,6 +153,14 @@ FetchContent_Declare(imgui
 FetchContent_MakeAvailable(imgui)
 if(NOT EMSCRIPTEN)
     # Desktop: GLFW + Dawn backends
+    if(APPLE)
+        # imgui_impl_wgpu.cpp makes a CAMetalLayer through Cocoa on macOS, so it
+        # is Objective-C++ there.  As plain C++ it does not compile (MEASURED on
+        # macOS 15.7 / Apple clang, 2026-11-13).
+        enable_language(OBJCXX)
+        set_source_files_properties(${imgui_SOURCE_DIR}/backends/imgui_impl_wgpu.cpp
+            PROPERTIES LANGUAGE OBJCXX)
+    endif()
     add_library(imgui STATIC
         ${imgui_SOURCE_DIR}/imgui.cpp
         ${imgui_SOURCE_DIR}/imgui_draw.cpp
@@ -328,7 +336,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "de5c90c5101c395fb0a6b776757f527a8793855c"
+set(MILO_ENGINE_PIN "7e75fcb273b4f506c817c80b68388a540bfd7aed"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -1237,6 +1245,8 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/NuiImageSurface_Native.cpp
     src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
     src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
+    src/platform/DepthBuffer3D_Native.cpp # PLAN P-4: the depthbuffer_3d shader on the CPU (boxyman)
+    src/platform/DepthBuffer3DDraw_Native.cpp # PLAN P-4: ... and its draw
     src/platform/StreamReceiver_Native.cpp
     src/platform/SampleInst_Native.cpp
     src/platform/StbVorbisImpl.cpp
@@ -1432,6 +1442,8 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/NuiImageSurface_Native.cpp
     src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
     src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
+    src/platform/DepthBuffer3D_Native.cpp # PLAN P-4: the depthbuffer_3d shader on the CPU (boxyman)
+    src/platform/DepthBuffer3DDraw_Native.cpp # PLAN P-4: ... and its draw
     # ThreadCall_Native.cpp lifted to milo-engine (engine 0.2b drop-xdk POSIX
     # graduation); compiled via DC3_WEB_LIFTED_ENGINE_SOURCES below.
     # AudioDevice_Web.cpp lifted to milo-engine (MILO_BUILD_WEB, W0).
@@ -2100,7 +2112,9 @@ if(BUILD_TESTS)
         tests/test_dta_eval_endpoint.cpp
         tests/test_camera_yuv_decode.cpp
         tests/test_camera_stream.cpp
+        tests/test_depthbuffer3d.cpp
         tests/test_native_camera_view.cpp
+        tests/test_native_boxyman.cpp
         tests/test_native_crowd.cpp
         tests/test_native_shadow.cpp
         tests/test_native_shadow_stream.cpp

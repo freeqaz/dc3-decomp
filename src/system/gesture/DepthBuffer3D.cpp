@@ -22,6 +22,27 @@
 #include "rndobj\Tex.h"
 #include "rndobj\Trans.h"
 #include <math.h>
+#ifdef HX_NATIVE
+#include "platform/DepthBuffer3D_Native.h"
+
+// PLATFORM (PLAN P-4): the constant registers of the depthbuffer_3d shader.
+// The image hands them to TheShaderMgr, whose setters are no-ops natively
+// (there is no shader to receive them); DrawShowing files them here as well
+// and DrawMesh runs the shader's CPU transcription with them
+// (native/src/platform/DepthBuffer3D_Native.h).
+namespace {
+    NativeDepthBuffer3D::Constants gNativeShaderConstants;
+    RndTex *gNativeDepthTex;
+    RndTex *gNativePalette;
+
+    void NativeSetConstant(float reg[4], const Vector4 &v) {
+        reg[0] = v.x;
+        reg[1] = v.y;
+        reg[2] = v.z;
+        reg[3] = v.w;
+    }
+}
+#endif
 
 LargeQuadRenderData DepthBuffer3D::mQuad;
 
@@ -81,7 +102,12 @@ DepthBuffer3D::DepthBuffer3D()
       unk25c(2048, 204.8f, 204.8f), unk270(4096, 204.8f, 204.8f), mMaxZoom(1),
       mMaxDepthZoom(1), unk28c(0) {}
 
-DepthBuffer3D::~DepthBuffer3D() {}
+DepthBuffer3D::~DepthBuffer3D() {
+#ifdef HX_NATIVE
+    // PLATFORM: the meshes the native draw generated for this object.
+    NativeDepthBuffer3DRelease(this);
+#endif
+}
 
 BEGIN_HANDLERS(DepthBuffer3D)
     HANDLE_SUPERCLASS(RndDrawable)
@@ -230,28 +256,25 @@ void DepthBuffer3D::DrawMesh() {
         for (float j = 0.0f; j < v.y; j += 1.0f) {
             v.w = j;
             TheShaderMgr.SetVConstant((VShaderConstant)0x44, v);
+#ifdef HX_NATIVE
+            // PLATFORM (PLAN P-4): the image's draw is DxMesh::DrawShowing
+            // with the depthbuffer_3d shader selected by mMeshVersion = 0x1d;
+            // that shader makes the whole picture and the native mesh draw
+            // has no shader override.  Run it on the CPU for this tile and
+            // draw what it produces.
+            NativeSetConstant(gNativeShaderConstants.tile, v);
+            NativeDepthBuffer3DDrawTile(
+                this, mMesh, WorldXfm(), gNativeShaderConstants, gNativeDepthTex, gNativePalette
+            );
+#else
             mMesh->DrawShowing();
+#endif
         }
     }
     mMesh->mMeshVersion = savedVersion;
     mMesh->SetLocalXfm(savedXfm);
     mMesh->SetShowing(false);
 }
-
-#ifdef HX_NATIVE
-// Only the DRAW is native-stubbed: Kinect depth rendering is not available on
-// native. Save/Load/Copy used to be stubbed here too, and an empty Load leaves
-// every DepthBuffer3D field at its constructor default -- measured by the
-// Xenia loader golden (loader_venue_song_v1, kept in the gitignored
-// archive/state_diff/goldens/xenia/):
-// in world/default.milo the original resolves boxyman1_p1.db3d's `mesh` to
-// grid_80by60_cube.mesh, so RndDir::SyncDrawables drops that mesh from
-// boxyman's draws (it is the DepthBuffer3D's draw child); native kept it as a
-// 31st top-level drawable. Serialization has nothing platform-specific.
-void DepthBuffer3D::DrawShowing() {
-    // Kinect depth rendering not available on native
-}
-#endif
 
 BEGIN_SAVES(DepthBuffer3D)
     SAVE_REVS(11, 0)
@@ -340,7 +363,13 @@ BEGIN_COPYS(DepthBuffer3D)
     END_COPYING_MEMBERS
 END_COPYS
 
-#ifndef HX_NATIVE
+// NATIVE (PLAN P-4): this body used to be compiled out and replaced by an
+// empty DrawShowing, so freestyle's visualizer had no player in it.  It now
+// runs as shipped, with four marked islands: no camera -> nothing to draw; no
+// depth frame yet -> nothing to draw; the shader constants are also filed for
+// the CPU shader; and DrawMesh's draw call (above).  Serialization was never
+// platform-specific (an empty Load left every field at its constructor
+// default, which the Xenia loader golden loader_venue_song_v1 caught).
 // Lane history (38 lines moved): docs/decomp/notes/system/gesture/DepthBuffer3D.md
 // > STOP POINT (w21-f, 80.3 normalized, was 72.54; ~730 rows, 449 of them arg-only
 // > regalloc).
@@ -380,6 +409,12 @@ void DepthBuffer3D::DrawShowing() {
         depthTex = mPlayerPaletteTex;
     } else {
         LiveCameraInput *cam = TheGestureMgr->GetLiveCameraInput();
+#ifdef HX_NATIVE
+        // PLATFORM: the 360 always has a Kinect; natively the camera stand-in
+        // exists only once a webcam has delivered a frame (GestureMgr.h).
+        if (!cam)
+            return;
+#endif
         if (!cam->mDepthPolled) {
             cam->PollNewStream(LiveCameraInput::kBufferDepth);
         }
@@ -410,15 +445,20 @@ void DepthBuffer3D::DrawShowing() {
 
             void *bits = nullptr;
             texSource->TexelsLock(bits);
+#ifdef HX_NATIVE
+            // PLATFORM: the stream texture has texels only while a depth frame
+            // is held (CameraStream_Native.cpp, StreamTex); the loop below
+            // reads them unconditionally, as the image does.
+            if (!bits)
+                return;
+#endif
             const unsigned short *px = (const unsigned short *)bits;
             for (int row = 0; row < 0x3c; ++row) {
                 for (int col = 0; col < 0x50; ++col) {
                     // No null test on px: the image's lhzx at 0x82DEFB34 is
                     // unconditional (r24 is the TexelsLock result loaded once at
-                    // 0x82DEFB1C and never compared). This whole function body is
-                    // inside the #else of the HX_NATIVE guard at line 220 -- the
-                    // native build compiles the empty DrawShowing stub instead --
-                    // so removing the guard cannot fault the native port.
+                    // 0x82DEFB1C and never compared).  The native build returns
+                    // above when there are no texels.
                     unsigned short v = px[(row * 0x180 + col) * 4];
                     int player = v & 7;
                     // NOT inlined into the push_back below.  `depths.push_back(v >> 3)`
@@ -814,6 +854,22 @@ void DepthBuffer3D::DrawShowing() {
         UpdateAttachment(*it, texZoom, depthZoom);
     }
 
+#ifdef HX_NATIVE
+    // PLATFORM (PLAN P-4): the registers set above, for the CPU shader.  The
+    // vertex texture is depthTex (stage 0) and the palette the pixel shader
+    // samples is PConstant 10, i.e. mPlayerPalette or the default texture.
+    NativeSetConstant(gNativeShaderConstants.palette, paletteParams);
+    NativeSetConstant(gNativeShaderConstants.slots, slotParams);
+    NativeSetConstant(gNativeShaderConstants.draw, drawFlags);
+    NativeSetConstant(gNativeShaderConstants.voxel, voxelParams);
+    NativeSetConstant(gNativeShaderConstants.texZoom, texZoom);
+    NativeSetConstant(gNativeShaderConstants.depthZoom, depthZoom);
+    gNativeDepthTex = depthTex;
+    gNativePalette = mPlayerPalette
+        ? mPlayerPalette.Ptr()
+        : TheRnd.GetDefaultTex(Rnd::kDefaultTex_WhiteTransparent);
+#endif
+
     if (!mDrawSheet) {
         if (mMesh.Ptr() != nullptr) {
             DrawMesh();
@@ -822,5 +878,3 @@ void DepthBuffer3D::DrawShowing() {
         TheNgRnd.DrawLargeQuad(mQuad, WorldXfm(), mat, kDepthBuffer3DShader);
     }
 }
-
-#endif

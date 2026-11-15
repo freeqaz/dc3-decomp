@@ -36,6 +36,11 @@
 #define CPPHTTPLIB_FORM_URL_ENCODED_PAYLOAD_MAX_LENGTH kMaxHttpBodyBytes
 static const size_t kMaxHttpBodyBytes = 1024 * 1024; // hard transport ceiling
 
+#if defined(__APPLE__)
+// -fms-compatibility hides __GNUC__, and Darwin's ntohs/htonl macros are only
+// defined under it.  Load the byte-swap helpers before cpp-httplib uses them.
+#include <libkern/OSByteOrder.h>
+#endif
 #include <httplib.h>
 #include <cstdio>
 #include <cstdlib>

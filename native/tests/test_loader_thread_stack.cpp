@@ -100,6 +100,10 @@ struct LoaderStackProbe : public ThreadCallback {
     volatile bool mDone = false;
 
     int ThreadStart() override {
+#if defined(__APPLE__)
+        // Darwin has no pthread_getattr_np.
+        mStackSize = pthread_get_stacksize_np(pthread_self());
+#else
         pthread_attr_t attr;
         if (pthread_getattr_np(pthread_self(), &attr) == 0) {
             void *base = nullptr;
@@ -108,6 +112,7 @@ struct LoaderStackProbe : public ThreadCallback {
                 mStackSize = size;
             pthread_attr_destroy(&attr);
         }
+#endif
 
         // Only recurse if the stack can take it — otherwise this would SIGSEGV
         // and kill the whole test binary before gtest could report anything.
@@ -143,7 +148,7 @@ TEST_F(LoaderThreadStackTest, WorkerHasStackForNestedDtaParse) {
     }
     ASSERT_TRUE(probe.mDone) << "ThreadCall worker never completed the job";
 
-    ASSERT_NE(probe.mStackSize, 0u) << "pthread_getattr_np failed on the worker";
+    ASSERT_NE(probe.mStackSize, 0u) << "could not query the worker's stack size";
     ASSERT_GE(probe.mStackSize, kMinWorkerStack)
         << "ThreadCall worker stack is " << probe.mStackSize
         << " bytes. The DTA parser costs ~8432 bytes per array-nesting level "
