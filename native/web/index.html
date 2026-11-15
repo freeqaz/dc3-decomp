@@ -63,6 +63,11 @@
             display: block;
             outline: none;
         }
+        /* Fullscreen makes the container the whole screen, which need not be
+           16:9 (a 16:10 laptop): letterbox the 16:9 buffer instead of
+           stretching it. */
+        #canvas-container:fullscreen { background: #000; }
+        #canvas-container:fullscreen #dc3-canvas { object-fit: contain; }
         #loading {
             position: absolute;
             inset: 0;
@@ -693,63 +698,87 @@
             if (e.key === 'p' || e.key === 'P') { e.preventDefault(); togglePause(); }
             if (e.key === '.' && paused) { e.preventDefault(); stepFrame(); }
         });
-        // Canvas sizing — pin the BUFFER to the engine's virtual 1280x720.
-        //
-        // WHY: the game renders at a fixed virtual resolution. RndCam::Select
-        // (src/system/rndobj/Cam.cpp, HX_NATIVE block) programs a PIXEL
-        // viewport from TheRnd.Width()/Height() = 1280x720 on every cam select.
-        // So the drawable buffer MUST be 1280x720. If the canvas buffer is any
-        // other size, the fixed 720p viewport corner-pins the frame (buffer
-        // bigger than 720p) or crops it (buffer smaller). Keeping the buffer at
-        // 1280x720 and letting CSS scale the bitmap (`#dc3-canvas { width/height:
-        // 100% }`) gives correct fullscreen — the browser stretches the 720p
-        // bitmap to the displayed box. So the resize handler must NOT touch
-        // canvas.width/height and must NOT call _dc3_resize_canvas.
-        //
-        // Escape hatch: ?nativeres=1 restores the old behavior (buffer = CSS px
-        // + _dc3_resize_canvas) so hi-res rendering can be re-tested without a
-        // rebuild.
+        // Canvas sizing. The page never writes canvas.width/height after this:
+        // the ENGINE sizes the canvas's buffer (GpuDevice_Web.cpp,
+        // GpuDevice::FollowCanvas). The canvas's CSS box is the 16:9 rectangle
+        // #canvas-container fits into the window; the page only publishes that
+        // box in DEVICE pixels as window.miloCanvasDevicePixels = [w, h].
+        //   Enhanced look: the engine makes the buffer that box, fitted to 16:9
+        //     and capped in rows (1080; 720 on a phone-class adapter without
+        //     texture-compression-bc; ?env=MILO_OUTPUT_MAX_ROWS=<rows> either
+        //     way), never under 640x360, at render scale 1. Viewports, UI and
+        //     the post chain stay laid out in the virtual 1280x720 and scaled
+        //     to the buffer (GpuDevice::LogicalWidth), as on the desktop. It
+        //     takes a new box once it has held 250 ms, so a drag or a
+        //     fullscreen toggle reconfigures once, not per event.
+        //   Retail look: the buffer stays the original's 1280x720 and CSS
+        //     stretches it to the box, as before.
+        // (Until np-webres the buffer was pinned at 1280x720 for both looks,
+        // because RndCam::Select programmed a pixel viewport in the virtual
+        // resolution; and ?nativeres=1 made the buffer the CSS box, which
+        // corner-pinned the frame. Both are gone.)
+        // Observing the content box -- device-pixel-content-box where the
+        // browser has it, exact; else the CSS content box times
+        // devicePixelRatio -- is immune to the engine's own buffer writes: the
+        // CSS size is fixed by #dc3-canvas { width/height: 100% }, so a new
+        // buffer size never changes the box (window.dc3CanvasObservations
+        // counts the callbacks, for the tests).
         (function() {
             var canvas = document.getElementById('dc3-canvas');
-            var nativeRes = /(?:^|[?&])nativeres=1(?:&|$)/.test(location.search);
-
-            if (!nativeRes) {
-                // Pinned-buffer path (default). Make 1280x720 explicit in JS so a
-                // stale/absent width/height attribute can't corner-pin the frame.
-                canvas.width = 1280;
-                canvas.height = 720;
+            // The engine's starting size (and Retail's for good).
+            canvas.width = 1280;
+            canvas.height = 720;
+            window.dc3CanvasObservations = 0;
+            function publish(w, h) {
+                w = Math.round(w); h = Math.round(h);
+                if (w <= 0 || h <= 0) return;  // collapsed: the engine keeps its frame
+                window.miloCanvasDevicePixels = [w, h];
+            }
+            function fromRect() {
+                var r = canvas.getBoundingClientRect();
+                var dpr = window.devicePixelRatio || 1;
+                publish(r.width * dpr, r.height * dpr);
+            }
+            fromRect();
+            if (typeof ResizeObserver === 'undefined') {
+                window.addEventListener('resize', fromRect);
                 return;
             }
-
-            // nativeres=1: legacy path — buffer tracks CSS pixel size and the
-            // engine reconfigures its surface + viewport to the new resolution.
-            var pending = false;
-            function resizeCanvas() {
-                var rect = canvas.getBoundingClientRect();
-                // CSS pixels, not device pixels — scaling by DPR would create a
-                // surface larger than the viewport (black bars).
-                var w = Math.round(rect.width);
-                var h = Math.round(rect.height);
-                if (w <= 0 || h <= 0) return;
-                if (canvas.width === w && canvas.height === h) return;
-                canvas.width = w;
-                canvas.height = h;
-                if (wasmReady && Module._dc3_resize_canvas) {
-                    Module._dc3_resize_canvas(w, h);
+            var onResize = function(entries) {
+                window.dc3CanvasObservations++;
+                var e = entries[entries.length - 1];
+                var dp = e.devicePixelContentBoxSize && e.devicePixelContentBoxSize[0];
+                var cb = e.contentBoxSize && (e.contentBoxSize[0] || e.contentBoxSize);
+                var dpr = window.devicePixelRatio || 1;
+                if (!cb || cb.inlineSize === undefined) {
+                    fromRect();
+                    return;
                 }
+                var cw = cb.inlineSize * dpr, ch = cb.blockSize * dpr;
+                // device-pixel-content-box is the CSS box times dpr snapped to
+                // whole pixels; take it when it agrees within that snapping.
+                // Chromium's device emulation (DevTools, headless tests with a
+                // deviceScaleFactor) reports it in CSS pixels while dpr is the
+                // emulated one; there the CSS box times dpr is the answer.
+                if (dp && Math.abs(dp.inlineSize - cw) <= 2 && Math.abs(dp.blockSize - ch) <= 2)
+                    publish(dp.inlineSize, dp.blockSize);
+                else
+                    publish(cw, ch);
+            };
+            var ro = new ResizeObserver(onResize);
+            try {
+                ro.observe(canvas, { box: 'device-pixel-content-box' });
+            } catch (err) {
+                ro.observe(canvas);  // Safari: no device-pixel-content-box
             }
-            if (typeof ResizeObserver !== 'undefined') {
-                new ResizeObserver(function() {
-                    if (!pending) {
-                        pending = true;
-                        requestAnimationFrame(function() {
-                            pending = false;
-                            resizeCanvas();
-                        });
-                    }
-                }).observe(canvas);
-            }
-            window.addEventListener('resize', resizeCanvas);
+            // A devicePixelRatio change (browser zoom, a window moved to another
+            // monitor) without a CSS change: Safari's content-box observer does
+            // not fire for it.
+            window.addEventListener('resize', function() {
+                var dp = window.miloCanvasDevicePixels, r = canvas.getBoundingClientRect();
+                var dpr = window.devicePixelRatio || 1;
+                if (!dp || Math.abs(dp[0] - r.width * dpr) > 2 || Math.abs(dp[1] - r.height * dpr) > 2) fromRect();
+            });
         })();
     </script>
     <!-- Webcam pose input: camera panel + MediaPipe worker -> dc3_pose_push
