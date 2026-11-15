@@ -33,7 +33,9 @@
 #include "obj/Dir.h"
 #include "obj/Object.h"
 #include "platform/rndshape/RndShape.h"
+#include "rndobj/Cam.h"
 #include "rndobj/Env.h"
+#include "rndobj/Group.h"
 #include "rndobj/Lit.h"
 #include "rndobj/Mat.h"
 #include "rndobj/Mesh.h"
@@ -69,10 +71,10 @@ protected:
         mEnv->LightsReal().push_back(l);
         return l;
     }
-    SceneUniforms Write() {
+    SceneUniforms Write(RndCam *cam = nullptr) {
         SceneUniforms s;
         memset(&s, 0, sizeof(s));
-        EXPECT_TRUE(rndshape::WriteSceneLighting(s, nullptr));
+        EXPECT_TRUE(rndshape::WriteSceneLighting(s, cam));
         return s;
     }
     RndEnviron *mEnv = nullptr;
@@ -202,9 +204,14 @@ TEST_F(RetailLightingTest, ProjectedShadowLightDrawsItsCastersWhereTheReceiversL
     ASSERT_TRUE(rndshape::CollectProjShadowCasters(drawn));
     ASSERT_EQ(drawn.meshes.size(), 1u);
     EXPECT_EQ(drawn.meshes[0], caster);
-    EXPECT_EQ(0, memcmp(drawn.clipFromWorld, s1.lightViewProj, sizeof(s1.lightViewProj)));
 
-    // The rasteriser's texel for a world point must be the receiver's uv.
+    // The rasteriser's texel for a world point must be the receiver's uv,
+    // offset by half a texel of the image's 256x256 map (for an orthonormal light. The casters are drawn through the light's
+    // inverse and the receivers read its raw rows, and the two part when the
+    // light is scaled: ScaledLightDrawsItsCastersThroughTheInverse.)
+    // Sabotage: dropping the half-texel offset from ProjShadowCasterClip
+    // fails the uv checks here and in the scaled test.
+    const float kHalfTexel = 0.5f / 256.0f;
     const Transform p = spot->Projection();
     const Vector3 pts[] = {Vector3(0, 0, 0), Vector3(30, -20, 0), Vector3(-50, 40, 10)};
     for (const Vector3 &w : pts) {
@@ -218,8 +225,10 @@ TEST_F(RetailLightingTest, ProjectedShadowLightDrawsItsCastersWhereTheReceiversL
         const float r0 = p.m.x.x * w.x + p.m.y.x * w.y + p.m.z.x * w.z + p.v.x;
         const float r1 = p.m.x.y * w.x + p.m.y.y * w.y + p.m.z.y * w.z + p.v.y;
         const float r2 = p.m.x.z * w.x + p.m.y.z * w.y + p.m.z.z * w.z + p.v.z;
-        EXPECT_NEAR(texU, r0 / r2, 1e-5f);
-        EXPECT_NEAR(texV, r1 / r2, 1e-5f);
+        // Half a 256-texel along +u and +v: the image rasterises the casters
+        // with D3D9 pixel centres and reads them bilinearly (§15).
+        EXPECT_NEAR(texU, r0 / r2 + kHalfTexel, 1e-5f);
+        EXPECT_NEAR(texV, r1 / r2 + kHalfTexel, 1e-5f);
         EXPECT_EQ(clip[2], 0.0f);   // casters at depth 0: a coverage map
     }
 
@@ -242,6 +251,141 @@ TEST_F(RetailLightingTest, ProjectedShadowLightDrawsItsCastersWhereTheReceiversL
     rndshape::CollectProjShadowCasters(none);
     spot->SetShadowOverride(nullptr);
     delete caster;
+}
+
+// Retail draws a projected light's casters with NgLight::SetShadowTransforms:
+// the inverse of the light's world transform, y and z swapped, then the cone
+// (clip = (x, z, ., top + (bot - top) * y / range)). Its receivers read the
+// map through RndLight::Projection(), the light's raw world rows. The two
+// agree only for an orthonormal light. dclive's a2_spotlight.lit is scaled
+// (1, 0.86, 0.86), and there the image's arm shadows land 24-30 px from where
+// native drew them while it used the receivers' transform for the casters.
+// Sabotage: drawing the casters with the receivers' transform (the clip
+// WriteDC3ProjShadow writes to lightViewProj) fails the formula check and the
+// "the two transforms part" check.
+TEST_F(RetailLightingTest, ScaledLightDrawsItsCastersThroughTheInverse) {
+    const float sc = 0.86f;
+    RndLight *spot = MakeLight(RndLight::kFakeSpot, Vector3(0.0f, 0.0f, 300.0f));
+    Hmx::Matrix3 rot;   // straight down, y and z scaled as dclive's is
+    rot.x.Set(1.0f, 0.0f, 0.0f);
+    rot.y.Set(0.0f, 0.0f, -sc);
+    rot.z.Set(0.0f, sc, 0.0f);
+    spot->SetLocalRot(rot);
+    const float range = 400.0f, top = 5.0f, bot = 120.0f;
+    spot->SetRange(range);
+    spot->SetTopRadius(top);
+    spot->SetBotRadius(bot);
+    spot->SetProjectedBlend(1);   // the caster pass is the same for both forms
+    RndMesh *caster = Hmx::Object::New<RndMesh>();
+    ObjPtrList<RndDrawable> casters(spot);
+    casters.push_back(caster);
+    spot->SetShadowOverride(&casters);
+
+    Write();
+    rndshape::ProjShadowCasters drawn;
+    ASSERT_TRUE(rndshape::CollectProjShadowCasters(drawn));
+    ASSERT_EQ(drawn.meshes.size(), 1u);
+
+    const Transform p = spot->Projection();
+    const Vector3 pts[] = {Vector3(0, 0, 0), Vector3(30, -20, 0), Vector3(-50, 40, 10)};
+    float maxPart = 0.0f;
+    for (const Vector3 &w : pts) {
+        // The light's local frame by hand: w - pos = xL*m.x + yL*m.y + zL*m.z.
+        const float xL = w.x, zL = w.y / sc, yL = -(w.z - 300.0f) / sc;
+        const float cw = top + (bot - top) * yL / range;
+        const float wantU = 0.5f * xL / cw + 0.5f + 0.5f / 256.0f;   // + D3D9's half texel
+        const float wantV = 0.5f - 0.5f * zL / cw + 0.5f / 256.0f;
+
+        const float *m = drawn.clipFromWorld;
+        float clip[4];
+        for (int r = 0; r < 4; r++)
+            clip[r] = m[0 * 4 + r] * w.x + m[1 * 4 + r] * w.y + m[2 * 4 + r] * w.z + m[3 * 4 + r];
+        ASSERT_GT(clip[3], 0.0f);
+        EXPECT_NEAR(0.5f * clip[0] / clip[3] + 0.5f, wantU, 1e-5f);
+        EXPECT_NEAR(0.5f - 0.5f * clip[1] / clip[3], wantV, 1e-5f);
+        EXPECT_EQ(clip[2], 0.0f);
+
+        const float r0 = p.m.x.x * w.x + p.m.y.x * w.y + p.m.z.x * w.z + p.v.x;
+        const float r1 = p.m.x.y * w.x + p.m.y.y * w.y + p.m.z.y * w.z + p.v.y;
+        const float r2 = p.m.x.z * w.x + p.m.y.z * w.y + p.m.z.z * w.z + p.v.z;
+        maxPart = std::max(maxPart, std::max(std::fabs(r0 / r2 - wantU), std::fabs(r1 / r2 - wantV)));
+    }
+    // The receivers' uv is not the casters' for this light (as in the image).
+    EXPECT_GT(maxPart, 0.01f);
+
+    rndshape::ProjShadowCasters none;
+    rndshape::CollectProjShadowCasters(none);
+    spot->SetShadowOverride(nullptr);
+    delete caster;
+}
+
+// RndDrawable::Draw skips a drawable whose world sphere (MakeWorldSphere with
+// false: the authored sphere, none for a group) is wholly outside
+// RndCam::Current()'s frustum. NgLight::RenderShadows draws each shadow object
+// with DrawShowing (no test) under the camera drawing the scene, so every
+// nested caster out of that camera's view casts nothing.
+// Sabotages: no cull fails the with-camera set; culling the shadow objects
+// themselves (depth 0) fails it too (topOut goes missing); a cull without a
+// camera fails the no-camera set.
+TEST_F(RetailLightingTest, NestedCastersOutOfTheCamerasViewAreCulled) {
+    RndLight *spot = MakeLight(RndLight::kFakeSpot, Vector3(0.0f, 0.0f, 300.0f));
+    Hmx::Matrix3 rot;
+    rot.x.Set(1.0f, 0.0f, 0.0f);
+    rot.y.Set(0.0f, 0.0f, -1.0f);
+    rot.z.Set(0.0f, 1.0f, 0.0f);
+    spot->SetLocalRot(rot);
+    spot->SetRange(400.0f);
+    spot->SetTopRadius(5.0f);
+    spot->SetBotRadius(120.0f);
+    spot->SetProjectedBlend(1);
+
+    // Camera at y = -500 looking down +y at the stage.
+    RndCam *cam = Hmx::Object::New<RndCam>();
+    cam->SetLocalPos(Vector3(0.0f, -500.0f, 100.0f));
+    cam->SetFrustum(1.0f, 2000.0f, 1.0f, 1.0f);
+
+    auto sphereMesh = [](const Vector3 &c, float r) {
+        RndMesh *m = Hmx::Object::New<RndMesh>();
+        m->SetSphere(Sphere(c, r));
+        return m;
+    };
+    RndMesh *inView = sphereMesh(Vector3(0.0f, 0.0f, 0.0f), 10.0f);
+    RndMesh *behind = sphereMesh(Vector3(0.0f, -800.0f, 0.0f), 10.0f);   // behind the camera
+    RndMesh *noSphere = Hmx::Object::New<RndMesh>();                     // radius 0: never tested
+    noSphere->SetLocalPos(Vector3(0.0f, -800.0f, 0.0f));
+    RndMesh *topOut = sphereMesh(Vector3(0.0f, -800.0f, 0.0f), 10.0f);   // a shadow object itself
+    RndGroup *group = Hmx::Object::New<RndGroup>();
+    group->AddObject(inView);
+    group->AddObject(behind);
+    group->AddObject(noSphere);
+    ObjPtrList<RndDrawable> casters(spot);
+    casters.push_back(group);
+    casters.push_back(topOut);
+    spot->SetShadowOverride(&casters);
+
+    auto collect = [&](RndCam *c) {
+        Write(c);
+        rndshape::ProjShadowCasters drawn;
+        EXPECT_TRUE(rndshape::CollectProjShadowCasters(drawn));
+        std::vector<RndMesh *> got(drawn.meshes.begin(), drawn.meshes.end());
+        std::sort(got.begin(), got.end());
+        return got;
+    };
+    auto sorted = [](std::vector<RndMesh *> v) {
+        std::sort(v.begin(), v.end());
+        return v;
+    };
+    EXPECT_EQ(collect(cam), sorted({inView, noSphere, topOut}))
+        << "a nested caster wholly outside the view is not drawn; the shadow object is";
+    EXPECT_EQ(collect(nullptr), sorted({inView, behind, noSphere, topOut}))
+        << "no camera: nothing is culled";
+
+    rndshape::ProjShadowCasters none;
+    rndshape::CollectProjShadowCasters(none);
+    spot->SetShadowOverride(nullptr);
+    delete group;
+    for (RndMesh *m : {inView, behind, noSphere, topOut}) delete m;
+    delete cam;
 }
 
 namespace {
