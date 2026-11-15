@@ -474,6 +474,7 @@ variables are value-parsed: `0`/`false`/`off`/`no` disable.
 | `MILO_AUDIO` | unset | `1` opens the audio device even when `MILO_HEADLESS` or `DC3_NO_AUDIO` is set | `../milo-native-engine/src/audio/AudioDevice.cpp` |
 | `MILO_AUDIO_BACKEND` | ALSA | `pulseaudio`, `alsa`, `null` (dummy device on a real clock), or `default` (miniaudio's own choice) | `../milo-native-engine/src/audio/AudioDevice.cpp` |
 | `DC3_AUDIO_GAIN` | `1.0` | Pre-limiter gain | `../milo-native-engine/src/audio/AudioDevice.cpp` |
+| `MILO_BACKGROUND_AUDIO` | unset | `1` keeps audio playing when the window is in the background. Unset: the output is muted while the window has no focus and no frame has finished for 500 ms (a compositor that stops presenting a hidden window drops the game to about one frame a second, and the music then plays in bursts); it comes back when the window has focus or draws at full rate again. Never applies headless | `../milo-native-engine/src/audio/BackgroundMute.h` |
 | `DC3_DUMP_AUDIO` / `DC3_DUMP_SECONDS` | unset | Capture the mixed PCM to a file | `../milo-native-engine/src/audio/AudioDevice.cpp` |
 
 ### Rendering and UI diagnostics
