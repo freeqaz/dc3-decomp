@@ -417,6 +417,33 @@ def pack_frame(frame_id, timestamp, frame_w, frame_h, num_landmarks, layout, per
     return struct.pack("<I", len(packet)) + packet
 
 
+SEND_BUFFER_BYTES = 4 << 20   # the client socket's send buffer; see widen_send_buffer
+
+
+def widen_send_buffer(sock, want=SEND_BUFFER_BYTES, floor=64 << 10):
+    """Ask for a send buffer that holds whole packets, and return the size the
+    system reports afterwards.
+
+    The Outbox sends once per processed frame and drops the next packet while
+    one is still in flight, so a buffer smaller than a packet turns into
+    dropped frames: the game gets one packet for every (packet size / buffer
+    size) camera frames. macOS gives an AF_UNIX stream socket 8 KB
+    (net.local.stream.sendspace); with ~300 KB packets a Mac tracked two
+    dancers at 28 fps and delivered 2-3 of them a second (sent=9 dropped=140 in
+    one 5 s window). Linux's default is ~208 KB, which is why it went unseen.
+
+    A size the system refuses (above kern.ipc.maxsockbuf on macOS) is halved
+    until one is taken; Linux clamps silently instead of refusing."""
+    size = want
+    while size >= floor:
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, size)
+            break
+        except OSError:
+            size //= 2
+    return sock.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF)
+
+
 class Outbox:
     """Whole packets to a non-blocking client. A v3 packet is ~300 KB, more
     than a socket buffer, so a send can stop part-way; the remainder goes out
@@ -651,8 +678,10 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
                 try:
                     client, _ = server.accept()
                     client.setblocking(False)
+                    sndbuf = widen_send_buffer(client)
                     outbox = Outbox(client)
-                    print("Client connected", file=sys.stderr)
+                    print("Client connected (send buffer %d KB)" % (sndbuf // 1024),
+                          file=sys.stderr)
                 except socket.timeout:
                     pass
 

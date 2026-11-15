@@ -858,6 +858,116 @@ class CameraFramesTest(unittest.TestCase):
             pass
 
 
+class _RefusingSocket:
+    """A socket that refuses a send buffer above `limit`, as macOS does above
+    kern.ipc.maxsockbuf (Linux clamps without an error)."""
+
+    def __init__(self, limit):
+        self.limit = limit
+        self.asked = []
+        self.size = 8192
+
+    def setsockopt(self, level, name, value):
+        assert (level, name) == (socket.SOL_SOCKET, socket.SO_SNDBUF)
+        self.asked.append(value)
+        if value > self.limit:
+            raise OSError(55, "No buffer space available")
+        self.size = value
+
+    def getsockopt(self, level, name):
+        assert (level, name) == (socket.SOL_SOCKET, socket.SO_SNDBUF)
+        return self.size
+
+
+class SendBufferTest(unittest.TestCase):
+    """The client socket's send buffer holds a whole packet.
+
+    macOS gives an AF_UNIX stream socket 8 KB. The Outbox drops a new packet
+    while one is in flight, so a Mac that tracked two dancers at 28 fps
+    delivered 2-3 poses a second to the game (sent=9 dropped=140 in 5 s)."""
+
+    PACKET = b"p" * (100 << 10)     # smaller than a real packet; enough for the 8 KB case
+
+    def small_pair(self):
+        a, b = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.addCleanup(a.close)
+        self.addCleanup(b.close)
+        a.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 8192)     # the macOS default
+        a.setblocking(False)
+        return a, b
+
+    def test_a_small_buffer_leaves_a_packet_in_flight_and_drops_the_next(self):
+        # The control: without the widening this is what a Mac did.
+        a, _b = self.small_pair()
+        box = ps.Outbox(a)
+        self.assertTrue(box.offer(self.PACKET))
+        self.assertTrue(box.pending, "an 8 KB buffer took a whole 100 KB packet")
+        self.assertFalse(box.offer(self.PACKET))
+        self.assertEqual((box.sent_packets, box.dropped_packets), (1, 1))
+
+    def test_a_widened_buffer_takes_whole_packets_while_the_reader_is_idle(self):
+        a, _b = self.small_pair()
+        size = ps.widen_send_buffer(a)
+        self.assertGreaterEqual(size, 2 * len(self.PACKET))
+        box = ps.Outbox(a)
+        self.assertTrue(box.offer(self.PACKET))
+        self.assertEqual(box.pending, b"")
+        self.assertTrue(box.offer(self.PACKET))
+        self.assertEqual((box.sent_packets, box.dropped_packets), (2, 0))
+
+    def test_a_refused_size_is_halved_until_one_is_taken(self):
+        sock = _RefusingSocket(limit=1 << 20)
+        self.assertEqual(ps.widen_send_buffer(sock), 1 << 20)
+        self.assertEqual(sock.asked, [4 << 20, 2 << 20, 1 << 20])
+
+    def test_a_socket_that_refuses_every_size_keeps_its_own(self):
+        sock = _RefusingSocket(limit=0)
+        self.assertEqual(ps.widen_send_buffer(sock), 8192)
+        self.assertEqual(sock.asked[-1], 64 << 10)      # stopped at the floor, did not loop
+
+    def test_the_server_widens_the_socket_of_the_client_it_accepts(self):
+        clock = FakeClock()
+        cap = FakeCapture(clock, frames=120, size=(640, 480), latency=0.03, real_delay=0.004)
+        widened = []
+        real = ps.widen_send_buffer
+
+        def recording(sock, *a, **kw):
+            size = real(sock, *a, **kw)
+            widened.append((sock.family, size))
+            return size
+
+        ps.widen_send_buffer = recording
+        self.addCleanup(setattr, ps, "widen_send_buffer", real)
+        with tempfile.TemporaryDirectory() as d:
+            model = os.path.join(d, "m.task")
+            open(model, "w").close()
+            sock_path = os.path.join(d, "s.sock")
+            a = args_for(socket=sock_path, model=model)
+
+            def serve():
+                try:
+                    ps.run(a, cv2=FakeCv2(cap), make_backend=lambda _a: (FakeBackend(), 20, 1),
+                           clock=clock, sleep=clock.sleep,
+                           devices=FakeDevices({"/dev/video0": (True, "Fake")}))
+                except ps.ServerExit:
+                    pass
+
+            th = threading.Thread(target=serve, daemon=True)
+            th.start()
+            deadline = time.monotonic() + 10
+            while not os.path.exists(sock_path) and time.monotonic() < deadline:
+                time.sleep(0.005)
+            c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            c.connect(sock_path)
+            read_packets(c, 5)
+            th.join(20)
+            c.close()
+        self.assertFalse(th.is_alive())
+        self.assertEqual(len(widened), 1, "the accepted client's send buffer was not widened")
+        self.assertEqual(widened[0][0], socket.AF_UNIX)
+        self.assertGreaterEqual(widened[0][1], 200 << 10)
+
+
 class _RealCv2WithCapture:
     """Real cv2 (resize / cvtColor for the camera block) with a fake camera."""
 

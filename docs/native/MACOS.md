@@ -1,6 +1,6 @@
 # macOS (Apple Silicon)
 
-**State (2026-11-15): builds on a Mac and plays a song headless.** Built 2026-11-13 on an M3 MacBook Air
+**State (2026-11-15): builds on a Mac and is played there, in a window, with the camera.** Built 2026-11-13 on an M3 MacBook Air
 (macOS 15.7.4, command-line tools, Homebrew) at `29c8bdc3d`: `dc3-native`,
 `milo-viewer` and `milo-tests` link, and the no-game-data test run passed
 (333 executed, 0 failed, 468 skipped for want of game data). That build needed
@@ -14,9 +14,24 @@ Objective-C++ line for a build that does not come through dc3 (dc3 defines the
 (`451af6c41`, engine `9f6291a`), `scripts/mac/bootstrap.sh --no-launch --smoke`
 passed on that machine on 2026-11-15: the scripted YMCA run on Metal ("Apple M3")
 reached gameplay and stayed there, 3,885 of 8,000 frames on `game_screen` in
-38 s. **Not yet done on a Mac: a windowed run with the camera** — macOS asks
-for camera permission in a dialog on the Mac's own screen, so it cannot be
-granted over SSH. A first smoke there stopped at the loading screen with
+38 s. A windowed session with the built-in camera followed the same day
+(`scripts/start-mac.sh`): 57-60 fps on Metal, the tracker following two people
+at 25-29 fps. Two faults showed only there, both fixed:
+
+- **Poses reached the game at 2-3 a second.** macOS gives an AF_UNIX stream
+  socket an 8 KB buffer (`net.local.stream.sendspace`; Linux: ~208 KB). A pose
+  packet with the camera image is ~300 KB, and the pose server drops a new
+  packet while one is in flight: `sent=9 dropped=140` in 5 s. The server now
+  asks for a 4 MB send buffer on the client socket (`widen_send_buffer`);
+  after it, `sent=149 dropped=0` and the game's `pose_fps` read 29.4.
+- **Opening the fitness screen killed the game** (`EXC_BREAKPOINT`). The image
+  deletes its queued commands through an abstract base with a destructor that
+  is not virtual, and Apple clang compiles that delete as a trap. Linux clang
+  does not, so no Linux test saw it. `scripts/native/delete_nonvirtual_sweep.py`
+  lists every delete of that kind in the native build; run it with `--check`
+  after pulling new game code onto a Mac.
+
+A first smoke there stopped at the loading screen with
 "MIDI file header is corrupt" and "Can't load old ObjectDir": one archive
 (`main_xbox_6.ark`) had been cut short by an interrupted copy and resumed
 wrongly. The size was right; only a checksum against the source showed it.
@@ -77,8 +92,11 @@ Notes:
   camera". OpenCV fails that first open while the dialog is up. The game then
   shows its "no camera" banner (pose server exit 3, PLAN P-2). Click Allow,
   quit the game (Esc or close the window), and run `scripts/start-mac.sh`
-  again. **INFERRED** from how TCC and OpenCV's AVFoundation backend behave;
-  not seen on this project's Mac.
+  again. **MEASURED** 2026-11-14: the dialog named Terminal, and the camera
+  worked only after the restart.
+  - To start the game on the Mac's screen from an SSH session, put the launch
+    in a `.command` file and `open` it. Terminal runs it, so Terminal is the
+    app the camera grant belongs to.
   - Clicked Don't Allow: System Settings › Privacy & Security › Camera, enable
     the terminal app, then quit and reopen the terminal app.
   - Over SSH no dialog can appear and the camera is denied. Run it from a
