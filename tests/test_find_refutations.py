@@ -258,3 +258,38 @@ def test_file_level_blocks_print_as_context_but_do_not_change_the_exit(tmp_path)
     rc, out = run(SYM, "--file", str(f))
     assert rc == 0, out
     assert out.index("w6-own") < out.index("w6-fl")
+
+
+# --- one sidecar per case-insensitive name -------------------------------------
+# Mtx.h and mtx.cpp wrote Mtx.md and mtx.md: two tracked paths that macOS checks
+# out as ONE file, so every Mac clone showed a modified Mtx.md and could not pull
+# a change to either (found on a Mac, 2026-11-15).
+
+def test_sidecar_lookup_takes_the_existing_file_of_another_case(tmp_path):
+    sys.path.insert(0, str(TOOL.parent))
+    import find_refutations as fr
+    notes = tmp_path / "docs" / "decomp" / "notes" / "math"
+    notes.mkdir(parents=True)
+    (notes / "Mtx.md").write_text("# x\n")
+    src = tmp_path / "src" / "math"
+    src.mkdir(parents=True)
+    (src / "mtx.cpp").write_text("")
+    assert fr.sidecar_path(str(src / "mtx.cpp")) == str(notes / "Mtx.md")
+    assert fr.sidecar_path(str(src / "Mtx.h")) == str(notes / "Mtx.md")
+    # nothing there yet: the source's own spelling
+    assert fr.sidecar_path(str(src / "Vec.cpp")) == str(notes / "Vec.md")
+
+
+def test_no_tracked_paths_differ_only_in_case():
+    root = TOOL.parent.parent
+    out = subprocess.run(["git", "-C", str(root), "ls-files", "-z"],
+                         capture_output=True, text=True, check=True).stdout
+    paths = [p for p in out.split("\0") if p]
+    assert len(paths) > 1000, "git ls-files returned almost nothing; the check would be vacuous"
+    seen, clashes = {}, []
+    for p in paths:
+        k = p.lower()
+        if k in seen:
+            clashes.append((seen[k], p))
+        seen[k] = p
+    assert not clashes, f"paths differing only in case (one file on macOS/Windows): {clashes[:5]}"

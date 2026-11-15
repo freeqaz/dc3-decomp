@@ -79,6 +79,28 @@ SIDECAR_HEADING_RE = re.compile(r"^## `([^`]+)`\s*$")
 FILE_LEVEL = "(file-level)"
 
 
+def same_name_any_case(path):
+    """`path`, or the file already in its directory whose name differs only in case.
+
+    `Mtx.h` and `mtx.cpp` share ONE sidecar, `Mtx.md`.  As `Mtx.md` + `mtx.md`
+    they were two tracked files that a case-insensitive filesystem (macOS,
+    Windows) checks out as one, so every Mac clone was dirty from the first
+    `git status` on.  The directory is listed rather than stat'ed: on such a
+    filesystem `exists("mtx.md")` is true and would return the wrong spelling.
+    """
+    d, name = os.path.split(path)
+    try:
+        names = os.listdir(d or ".")
+    except OSError:
+        return path
+    if name in names:
+        return path
+    for n in sorted(names):
+        if n.lower() == name.lower():
+            return os.path.join(d, n)
+    return path
+
+
 def sidecar_path(src_path, notes_root=None):
     """`<root>/src/system/rndobj/MatAnim.cpp` -> `<root>/docs/decomp/notes/system/rndobj/MatAnim.md`.
 
@@ -97,7 +119,7 @@ def sidecar_path(src_path, notes_root=None):
     if notes_root is None:
         notes_root = os.path.join(os.sep.join(parts[:k]) or os.sep, "docs", "decomp", "notes")
     stem = os.path.splitext(os.path.join(*rel))[0]
-    return os.path.join(notes_root, stem + ".md")
+    return same_name_any_case(os.path.join(notes_root, stem + ".md"))
 
 
 def parse_sidecar(path):
