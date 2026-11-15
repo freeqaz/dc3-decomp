@@ -275,6 +275,9 @@ TEST_F(NativeExitTest, DtaExitSkipsTheStaticDestructors) {
     Engine e;
     Start(e, mRunDir, {"MILO_HEADLESS=1", "DC3_HTTP=1", "DC3_HTTP_PORT=0"});
     ASSERT_TRUE(e.WaitFor("DC3 Native: Entering main loop", 120)) << Tail(e.Output());
+    // The server starts after that line (App.cpp HttpServerInit) and prints
+    // its port, then "Listening"; reading the port at once raced it (np-exitrace).
+    ASSERT_TRUE(e.WaitFor("[HttpServer] Listening on", 60)) << Tail(e.Output());
     std::string out = e.Output();
     size_t at = out.find("DC3_HTTP_PORT=");
     ASSERT_NE(at, std::string::npos) << Tail(out);
@@ -309,6 +312,9 @@ TEST_F(NativeExitTest, DtaExitDuringAContentRefreshFinishesTheExit) {
     Engine e;
     Start(e, mRunDir, {"MILO_HEADLESS=1", "DC3_HTTP=1", "DC3_HTTP_PORT=0"});
     ASSERT_TRUE(e.WaitFor("DC3 Native: Entering main loop", 120)) << Tail(e.Output());
+    // The server starts after that line (App.cpp HttpServerInit) and prints
+    // its port, then "Listening"; reading the port at once raced it (np-exitrace).
+    ASSERT_TRUE(e.WaitFor("[HttpServer] Listening on", 60)) << Tail(e.Output());
     std::string out = e.Output();
     size_t at = out.find("DC3_HTTP_PORT=");
     ASSERT_NE(at, std::string::npos) << Tail(out);
