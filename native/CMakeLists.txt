@@ -328,7 +328,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "db0f2c14f6ec34231dfe49cfdbd26e4b55cca689"
+set(MILO_ENGINE_PIN "9f6291a0f56a831c7c2d3a3f6847bf3bfa1851c6"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -2070,6 +2070,7 @@ if(BUILD_TESTS)
         tests/test_flare_point_test.cpp
         tests/test_gpu_timers.cpp
         tests/test_retail_lighting.cpp
+        tests/test_spot_beam_frame_cost.cpp # spotperf: an unchanged beam set uploads nothing per frame
         tests/test_color_pack_roundtrip.cpp
         tests/test_retail_char_shading.cpp
         tests/test_screen_aligned_texgen.cpp
