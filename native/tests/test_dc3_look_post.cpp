@@ -950,33 +950,34 @@ TEST_F(DC3LookPostTest, RenderScaledPresentDitherKeepsLevelsAndFractions) {
             blocks++;
         }
     // The present: PresentScale as GpuDevice's present runs it (box filter,
-    // dither), letterboxed 4 px into a wider target.
+    // dither), letterboxed 3 px into a wider target (not a multiple of the
+    // pattern's 4, so a threshold keyed on the target position would show).
     PresentScale present;
     present.SetBoxFilter(true);
     present.SetDither(true);
     std::vector<uint8_t> shown;
     {
         wgpu::TextureDescriptor d{};
-        d.size = {(uint32_t)kW + 8, (uint32_t)kH, 1};
+        d.size = {(uint32_t)kW + 6, (uint32_t)kH, 1};
         d.format = wgpu::TextureFormat::RGBA8Unorm;
         d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
         wgpu::Texture target = scaled.Device().CreateTexture(&d);
         wgpu::Texture frameCopy = UploadOn(scaled, W2, H2, px);
         wgpu::CommandEncoder enc = scaled.Device().CreateCommandEncoder();
         const PresentRect r = present.Encode(scaled.Device(), enc, frameCopy, target.CreateView(),
-                                             wgpu::TextureFormat::RGBA8Unorm, kW + 8, kH);
+                                             wgpu::TextureFormat::RGBA8Unorm, kW + 6, kH);
         wgpu::CommandBuffer cmd = enc.Finish();
         scaled.Queue().Submit(1, &cmd);
-        EXPECT_EQ(r.x, 4);
+        EXPECT_EQ(r.x, 3);
         EXPECT_EQ(r.w, kW);
-        shown.resize((size_t)(kW + 8) * kH * 4);
-        EXPECT_TRUE(scaled.ReadbackTexture(target, kW + 8, kH, shown.data(), shown.size()));
+        shown.resize((size_t)(kW + 6) * kH * 4);
+        EXPECT_TRUE(scaled.ReadbackTexture(target, kW + 6, kH, shown.data(), shown.size()));
     }
     size_t presentDiff = 0;
     for (int y = 0; y < kH; y++)
         for (int x = 0; x < kW; x++)
             for (int c = 0; c < 3; c++)
-                presentDiff += shown[((size_t)y * (kW + 8) + x + 4) * 4 + c] != dith[((size_t)y * kW + x) * 4 + c];
+                presentDiff += shown[((size_t)y * (kW + 6) + x + 3) * 4 + c] != dith[((size_t)y * kW + x) * 4 + c];
     printf("DC3LookPost present dither at 2x: flat 2x2s changed plain %zu dithered %zu; 4x4 block mean "
            "error (levels) plain %.3f (worst %.3f) dithered %.3f (worst %.3f) over %d blocks; outside "
            "the level pair %zu; frame to frame %zu; letterboxed present vs readback %zu\n",
