@@ -275,6 +275,9 @@ TEST_F(NativeExitTest, DtaExitSkipsTheStaticDestructors) {
     Engine e;
     Start(e, mRunDir, {"MILO_HEADLESS=1", "DC3_HTTP=1", "DC3_HTTP_PORT=0"});
     ASSERT_TRUE(e.WaitFor("DC3 Native: Entering main loop", 120)) << Tail(e.Output());
+    // The server starts after that line (App.cpp HttpServerInit) and prints
+    // its port, then "Listening"; reading the port at once raced it (np-exitrace).
+    ASSERT_TRUE(e.WaitFor("[HttpServer] Listening on", 60)) << Tail(e.Output());
     std::string out = e.Output();
     size_t at = out.find("DC3_HTTP_PORT=");
     ASSERT_NE(at, std::string::npos) << Tail(out);
@@ -285,6 +288,47 @@ TEST_F(NativeExitTest, DtaExitSkipsTheStaticDestructors) {
     ASSERT_TRUE(e.WaitExit(30)) << "still running 30 s after {exit}\n" << Tail(e.Output());
     out = e.Output();
     EXPECT_TRUE(Contains(out, "APP EXITING")) << "Debug::Exit never ran\n" << Tail(out);
+    ExpectNoCrash(out);
+    ASSERT_TRUE(WIFEXITED(e.status)) << Tail(out);
+    EXPECT_EQ(WEXITSTATUS(e.status), 0) << Tail(out);
+    EXPECT_TRUE(Contains(out, "DC3_EXIT: how=exit_runtime")) << Tail(out);
+}
+
+// H-101: `{exit}` while a content refresh is running finishes the exit. The
+// gate's DtaExitSkipsTheStaticDestructors died of SIGSEGV in ~2 of 104 runs:
+// its `{exit}` sometimes landed in the frames after main_screen's
+// MainMenuPanel::Load started a refresh, so HamSongMgr::Terminate (an exit
+// callback) raised ContentMgr::UnregisterCallback's `midRefreshAllowed ||
+// !RefreshInProgress()` FAIL. The eval's try scope (H-28 FailScope) turned that
+// FAIL into a throw out of Debug::Exit, leaving the game half torn down (UI
+// gone, its event manager freed) and back in the main loop, where the next
+// HamUI::Draw read a null TheUIEventMgr. Here the refresh is started in the
+// same eval, by the game's own handlers (title.dta / main.dta send
+// `start_refresh`; `remove_content` of an unknown name only marks the list
+// dirty, as add/remove_content do), so the race is not a race.
+// Sabotaged once (np-exitrace: Debug::Fail throwing again while exiting):
+// fails with rc 139 and the HamUI::Draw SIGSEGV; restored, passes.
+TEST_F(NativeExitTest, DtaExitDuringAContentRefreshFinishesTheExit) {
+    Engine e;
+    Start(e, mRunDir, {"MILO_HEADLESS=1", "DC3_HTTP=1", "DC3_HTTP_PORT=0"});
+    ASSERT_TRUE(e.WaitFor("DC3 Native: Entering main loop", 120)) << Tail(e.Output());
+    // The server starts after that line (App.cpp HttpServerInit) and prints
+    // its port, then "Listening"; reading the port at once raced it (np-exitrace).
+    ASSERT_TRUE(e.WaitFor("[HttpServer] Listening on", 60)) << Tail(e.Output());
+    std::string out = e.Output();
+    size_t at = out.find("DC3_HTTP_PORT=");
+    ASSERT_NE(at, std::string::npos) << Tail(out);
+    int port = atoi(out.c_str() + at + strlen("DC3_HTTP_PORT="));
+    ASSERT_GT(port, 0);
+    ASSERT_TRUE(PostEval(port, "{do {content_mgr remove_content h101_probe} "
+                               "{content_mgr start_refresh} {exit}}"));
+    ASSERT_TRUE(e.WaitExit(30)) << "still running 30 s after {exit}\n" << Tail(e.Output());
+    out = e.Output();
+    EXPECT_TRUE(Contains(out, "APP EXITING")) << "Debug::Exit never ran\n" << Tail(out);
+    // Control: an exit callback really did unregister mid-refresh (else this
+    // run never reached the case and proves nothing).
+    EXPECT_TRUE(Contains(out, "Error: midRefreshAllowed || !RefreshInProgress()"))
+        << "no refresh was in progress during the exit\n" << Tail(out);
     ExpectNoCrash(out);
     ASSERT_TRUE(WIFEXITED(e.status)) << Tail(out);
     EXPECT_EQ(WEXITSTATUS(e.status), 0) << Tail(out);

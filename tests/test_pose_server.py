@@ -7,7 +7,11 @@ asks for, serves frames on a fake clock, stamps them through CAP_PROP_POS_MSEC
 the way the V4L2 backend does, and can stop delivering.
 
 What is pinned:
-  * the capture request: 640x480, 30 fps, a one-frame driver buffer;
+  * the capture request: 640x480, 30 fps, two driver buffers (one halves the
+    rate a UVC camera delivers: np-gpd-camfps), and the capture thread that
+    goes with them (NewestFrameCapture): newest frame wins, a frame's stamp
+    stays its own, a failed device read is a failed read, release is the
+    thread's;
   * "no camera" (will not open / opens but never delivers) is EXIT_NO_CAMERA,
     decided before the model loads, and the real script exits with it fast;
   * timestamps: the packet carries the frame's capture time (device clock when
@@ -25,6 +29,7 @@ Run: python3 tests/test_pose_server.py
 """
 
 import os
+import queue
 import re
 import socket
 import struct
@@ -176,13 +181,16 @@ class FakeBackend:
 
 def args_for(**kw):
     a = ps.parse_args(["--socket", kw.pop("socket", "/nonexistent.sock")])
+    # The fake-clock tests script the camera read by read; the capture thread
+    # has its own tests (NewestFrameCaptureTest, CaptureThreadLoopTest).
+    kw.setdefault("capture_thread", False)
     for k, v in kw.items():
         setattr(a, k, v)
     return a
 
 
 class CameraRequestTest(unittest.TestCase):
-    def test_requests_640x480_at_30fps_with_a_one_frame_buffer(self):
+    def test_requests_640x480_at_30fps_with_two_driver_buffers(self):
         clock = FakeClock()
         cap = FakeCapture(clock)
         cv2 = FakeCv2(cap)
@@ -194,7 +202,10 @@ class CameraRequestTest(unittest.TestCase):
         self.assertEqual(sets[FakeCv2.CAP_PROP_FRAME_WIDTH], 640)
         self.assertEqual(sets[FakeCv2.CAP_PROP_FRAME_HEIGHT], 480)
         self.assertEqual(sets[FakeCv2.CAP_PROP_FPS], 30.0)
-        self.assertEqual(sets[FakeCv2.CAP_PROP_BUFFERSIZE], 1)
+        # Two, not one: with one buffer uvcvideo has nowhere to put every
+        # other frame (measured on the GPD camera: 15 fps from a 30 fps sensor).
+        self.assertEqual(sets[FakeCv2.CAP_PROP_BUFFERSIZE], 2)
+        self.assertEqual(ps.CAMERA_BUFFERS, 2)
 
     def test_a_camera_that_will_not_open_is_no_camera(self):
         clock = FakeClock()
@@ -213,6 +224,273 @@ class CameraRequestTest(unittest.TestCase):
         self.assertTrue(cap.released)
         self.assertGreaterEqual(clock() - t0, ps.FIRST_FRAME_TIMEOUT_S)
         self.assertLess(clock() - t0, ps.FIRST_FRAME_TIMEOUT_S + 1.0)
+
+
+class ScriptedCapture:
+    """A capture whose read() blocks until the test feeds it: ("frame", name,
+    stamp_ms) or ("fail",). get(CAP_PROP_POS_MSEC) is the stamp of the frame
+    read() returned last, as on a real device."""
+
+    def __init__(self, first_stamp_ms=0.0):
+        self.feed = queue.Queue()
+        self.pos_msec = first_stamp_ms
+        self.released = 0
+        self.released_by = None
+        self.reads_started = 0
+
+    def frame(self, name, stamp_ms):
+        self.feed.put(("frame", name, stamp_ms))
+
+    def fail(self):
+        self.feed.put(("fail",))
+
+    def read(self):
+        self.reads_started += 1
+        item = self.feed.get()
+        if item[0] == "fail":
+            return False, None
+        self.pos_msec = item[2]
+        return True, item[1]
+
+    def get(self, prop):
+        return self.pos_msec if prop == FakeCv2.CAP_PROP_POS_MSEC else 30.0
+
+    def release(self):
+        self.released += 1
+        self.released_by = threading.current_thread().name
+
+
+def wait_until(cond, timeout=5.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if cond():
+            return True
+        time.sleep(0.002)
+    return cond()
+
+
+class NewestFrameCaptureTest(unittest.TestCase):
+    """The capture thread: what the loop reads is the newest frame the camera
+    delivered, with that frame's own stamp."""
+
+    def make(self, cap, **kw):
+        nf = ps.NewestFrameCapture(cap, FakeCv2(cap), **kw)
+        self.addCleanup(lambda: (nf.release(0.0), cap.fail()))
+        return nf
+
+    def test_the_newest_frame_wins_and_is_handed_out_once(self):
+        cap = ScriptedCapture()
+        nf = self.make(cap, wait_s=0.05)
+        for i, name in enumerate(("a", "b", "c")):
+            cap.frame(name, 100.0 + i)
+        self.assertTrue(wait_until(lambda: nf.frames_read == 3))
+        self.assertEqual(nf.read(), (True, "c"))
+        self.assertEqual(nf.get(FakeCv2.CAP_PROP_POS_MSEC), 102.0)
+        self.assertEqual(nf.replaced, 2)
+        # Nothing new: a failed read after wait_s, not the same frame again.
+        t0 = time.monotonic()
+        self.assertEqual(nf.read(), (False, None))
+        self.assertGreaterEqual(time.monotonic() - t0, 0.04)
+        self.assertIsNone(nf.read_time)
+        cap.frame("d", 103.0)
+        self.assertEqual(nf.read(), (True, "d"))
+        self.assertEqual(nf.replaced, 2)
+
+    def test_a_frames_stamp_stays_its_own_while_the_thread_reads_on(self):
+        clock = FakeClock(50.0)
+        cap = ScriptedCapture()
+        nf = self.make(cap, clock=clock)
+        cap.frame("a", 1000.0)
+        self.assertEqual(nf.read(), (True, "a"))
+        self.assertEqual(nf.read_time, 50.0)
+        clock.t = 51.0
+        cap.frame("b", 1033.0)          # the device's own stamp moves on
+        self.assertTrue(wait_until(lambda: nf.frames_read == 2))
+        self.assertEqual(cap.pos_msec, 1033.0)
+        self.assertEqual(nf.get(FakeCv2.CAP_PROP_POS_MSEC), 1000.0)   # still a's
+        self.assertEqual(nf.read_time, 50.0)
+        clock.t = 52.0                  # the loop gets to b a while after it arrived
+        self.assertEqual(nf.read(), (True, "b"))
+        self.assertEqual(nf.get(FakeCv2.CAP_PROP_POS_MSEC), 1033.0)
+        self.assertEqual(nf.read_time, 51.0)   # when it came off the device, not when it was taken
+
+    def test_before_the_first_read_the_stamp_is_open_cameras_first_frame(self):
+        cap = ScriptedCapture(first_stamp_ms=777.0)
+        nf = self.make(cap)
+        self.assertEqual(nf.get(FakeCv2.CAP_PROP_POS_MSEC), 777.0)
+
+    def test_a_failed_device_read_is_a_failed_read_at_once_and_a_frame_ends_it(self):
+        cap = ScriptedCapture()
+        nf = self.make(cap, wait_s=30.0, pause=lambda s: None)
+        cap.fail()
+        t0 = time.monotonic()
+        self.assertEqual(nf.read(), (False, None))
+        self.assertEqual(nf.read(), (False, None))      # and stays failed, without waiting
+        self.assertLess(time.monotonic() - t0, 5.0)
+        cap.frame("back", 5.0)
+        self.assertTrue(wait_until(lambda: nf.frames_read == 1))
+        self.assertEqual(nf.read(), (True, "back"))
+
+    def test_release_returns_under_a_blocked_read_and_the_thread_releases_the_device(self):
+        cap = ScriptedCapture()
+        nf = ps.NewestFrameCapture(cap, FakeCv2(cap))
+        self.assertTrue(wait_until(lambda: cap.reads_started == 1))
+        t0 = time.monotonic()
+        nf.release(0.05)                 # the thread is inside read()
+        self.assertLess(time.monotonic() - t0, 2.0)
+        self.assertEqual(cap.released, 0, "released under a read in flight")
+        cap.frame("late", 1.0)           # the read comes back
+        self.assertTrue(wait_until(lambda: cap.released == 1))
+        self.assertEqual(cap.released_by, "pose-capture")
+        self.assertEqual(nf.read(), (False, None))      # nothing after release
+        nf.release(0.05)
+        time.sleep(0.02)
+        self.assertEqual(cap.released, 1)
+
+
+class SlowBackend(FakeBackend):
+    def __init__(self, seconds):
+        super().__init__()
+        self.seconds = seconds
+
+    def process(self, frame, ts_ms):
+        time.sleep(self.seconds)
+        return super().process(frame, ts_ms)
+
+
+class CaptureThreadLoopTest(unittest.TestCase):
+    """The server loop on the capture thread, on the real clock: a camera
+    faster than inference."""
+
+    PERIOD = 0.01
+    INFER = 0.045
+
+    def serve(self, capture_thread):
+        clock = time.monotonic
+        devices = FakeDevices({"/dev/video0": (True, "Fake")})
+
+        class RealTimeCamera(FakeCapture):
+            """Delivers a frame every PERIOD of real time whether or not anyone
+            reads (a read returns the newest undelivered one, like a driver
+            with a free buffer), then goes away."""
+
+            def __init__(self, n):
+                super().__init__(clock, frames=n, latency=0.0)
+                self.t0 = None
+
+            def read(self):
+                if self.t0 is None:
+                    self.t0 = clock()
+                k = max(self.reads + 1, int((clock() - self.t0) / CaptureThreadLoopTest.PERIOD) + 1)
+                if k > self.frames:
+                    devices.replace({})
+                    return False, None
+                wait = self.t0 + k * CaptureThreadLoopTest.PERIOD - clock()
+                if wait > 0:
+                    time.sleep(wait)
+                self.reads = k
+                self.last_capture = self.t0 + k * CaptureThreadLoopTest.PERIOD
+                self.captures.append(self.last_capture)
+                return True, FakeFrame(*self.size)
+
+        cap = RealTimeCamera(150)
+        backend = SlowBackend(self.INFER)
+        result = {}
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d, \
+                mock.patch.object(ps, "CAMERA_LOST_AFTER_S", 0.2), \
+                mock.patch.object(ps, "CAMERA_REOPEN_BUDGET_S", 0.3), \
+                mock.patch.object(ps, "CAMERA_REOPEN_DELAYS_S", (0.1, 0.1)):
+            model = os.path.join(d, "m.task")
+            open(model, "w").close()
+            sock_path = os.path.join(d, "s.sock")
+            a = args_for(socket=sock_path, model=model, capture_thread=capture_thread)
+
+            def run():
+                try:
+                    ps.run(a, cv2=FakeCv2(cap), make_backend=lambda _a: (backend, 20, 1),
+                           devices=devices)
+                    result["exit"] = None
+                except ps.ServerExit as e:
+                    result["exit"] = e.code
+
+            th = threading.Thread(target=run, daemon=True)
+            th.start()
+            self.assertTrue(wait_until(lambda: os.path.exists(sock_path), 10))
+            c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            c.connect(sock_path)
+            packets = read_packets(c, 10 ** 6, timeout=20)
+            th.join(30)
+            c.close()
+        self.assertFalse(th.is_alive(), "server still running")
+        self.assertEqual(result.get("exit"), ps.EXIT_CAMERA_LOST)
+        frames = [p for p in packets if p[2] == 1]
+        return cap, frames
+
+    def test_inference_gets_the_newest_frame_not_the_next_one(self):
+        cap, frames = self.serve(capture_thread=True)
+        ts = [p[3] for p in frames]
+        self.assertGreater(len(ts), 15)
+        self.assertTrue(all(b > a for a, b in zip(ts, ts[1:])))
+        # Capture times (to a microsecond: the stamp went through CAP_PROP_POS_MSEC's
+        # milliseconds and back, which is not exact on the real clock's values).
+        import bisect
+        captures = sorted(cap.captures)
+
+        def is_capture_time(t):
+            i = bisect.bisect_left(captures, t)
+            return any(abs(t - c) < 1e-6 for c in captures[max(i - 1, 0):i + 1])
+        self.assertTrue(all(is_capture_time(t) for t in ts), "packet stamps are not capture times")
+        # The camera was read all the way through at its own rate ...
+        self.assertGreaterEqual(len(cap.captures), 140)
+        # ... and inference (4.5 camera periods) skipped to the newest frame
+        # each time: far fewer packets than frames, a step of ~INFER between
+        # them, and each one fresh when inference started.
+        self.assertLess(len(ts), len(cap.captures) / 2)
+        steps = sorted(b - a for a, b in zip(ts, ts[1:]))
+        self.assertGreater(steps[len(steps) // 2], 3 * self.PERIOD)
+
+    def test_without_the_thread_the_loop_reads_in_line(self):
+        # The control: the same camera read in the loop is only read once per
+        # inference, so the capture thread above is what read all 150.
+        cap, frames = self.serve(capture_thread=False)
+        self.assertGreater(len(frames), 15)
+        self.assertLessEqual(len(cap.captures), len(frames) + 2)
+
+
+class StatsCameraRateTest(unittest.TestCase):
+    def test_the_stats_line_carries_the_cameras_own_rate_when_it_is_counted(self):
+        import contextlib
+        import io
+
+        class Counting:
+            frames_read = 0
+
+        cap = Counting()
+        st = ps.Stats()
+        lines = []
+        for delivered, processed in ((100, 40), (100, 40)):
+            cap.frames_read += delivered
+            for _ in range(processed):
+                st.frame(0.05, 2)
+            st.t0 -= 5.0
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                st.maybe_print(None, cap)
+            lines.append(err.getvalue())
+        # The first window has no earlier count to difference against.
+        self.assertNotIn("camera_fps", lines[0])
+        m = re.search(r"POSE_STATS: fps=([\d.]+) .* window_s=[\d.]+ camera_fps=([\d.]+)$", lines[1].strip())
+        self.assertTrue(m, lines[1])
+        self.assertAlmostEqual(float(m.group(1)), 8.0, delta=0.1)
+        self.assertAlmostEqual(float(m.group(2)), 20.0, delta=0.2)
+        # A capture that does not count (no thread, a video file): the line as before.
+        st.frame(0.05, 2)
+        st.t0 -= 5.0
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            st.maybe_print(None, object())
+        self.assertRegex(err.getvalue().strip(), r"window_s=[\d.]+$")
 
 
 class CaptureClockTest(unittest.TestCase):
@@ -579,6 +857,7 @@ def serve_and_read(a, cap, n):
     clock = FakeClock()
     cap.clock = clock
     backend = FakeBackend()
+    a.capture_thread = False   # a fake clock: read by read (see args_for)
     with tempfile.TemporaryDirectory() as d:
         model = os.path.join(d, "m.task")
         open(model, "w").close()
@@ -856,6 +1135,116 @@ class CameraFramesTest(unittest.TestCase):
                    clock=clock, sleep=clock.sleep)
         except ps.ServerExit:
             pass
+
+
+class _RefusingSocket:
+    """A socket that refuses a send buffer above `limit`, as macOS does above
+    kern.ipc.maxsockbuf (Linux clamps without an error)."""
+
+    def __init__(self, limit):
+        self.limit = limit
+        self.asked = []
+        self.size = 8192
+
+    def setsockopt(self, level, name, value):
+        assert (level, name) == (socket.SOL_SOCKET, socket.SO_SNDBUF)
+        self.asked.append(value)
+        if value > self.limit:
+            raise OSError(55, "No buffer space available")
+        self.size = value
+
+    def getsockopt(self, level, name):
+        assert (level, name) == (socket.SOL_SOCKET, socket.SO_SNDBUF)
+        return self.size
+
+
+class SendBufferTest(unittest.TestCase):
+    """The client socket's send buffer holds a whole packet.
+
+    macOS gives an AF_UNIX stream socket 8 KB. The Outbox drops a new packet
+    while one is in flight, so a Mac that tracked two dancers at 28 fps
+    delivered 2-3 poses a second to the game (sent=9 dropped=140 in 5 s)."""
+
+    PACKET = b"p" * (100 << 10)     # smaller than a real packet; enough for the 8 KB case
+
+    def small_pair(self):
+        a, b = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.addCleanup(a.close)
+        self.addCleanup(b.close)
+        a.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 8192)     # the macOS default
+        a.setblocking(False)
+        return a, b
+
+    def test_a_small_buffer_leaves_a_packet_in_flight_and_drops_the_next(self):
+        # The control: without the widening this is what a Mac did.
+        a, _b = self.small_pair()
+        box = ps.Outbox(a)
+        self.assertTrue(box.offer(self.PACKET))
+        self.assertTrue(box.pending, "an 8 KB buffer took a whole 100 KB packet")
+        self.assertFalse(box.offer(self.PACKET))
+        self.assertEqual((box.sent_packets, box.dropped_packets), (1, 1))
+
+    def test_a_widened_buffer_takes_whole_packets_while_the_reader_is_idle(self):
+        a, _b = self.small_pair()
+        size = ps.widen_send_buffer(a)
+        self.assertGreaterEqual(size, 2 * len(self.PACKET))
+        box = ps.Outbox(a)
+        self.assertTrue(box.offer(self.PACKET))
+        self.assertEqual(box.pending, b"")
+        self.assertTrue(box.offer(self.PACKET))
+        self.assertEqual((box.sent_packets, box.dropped_packets), (2, 0))
+
+    def test_a_refused_size_is_halved_until_one_is_taken(self):
+        sock = _RefusingSocket(limit=1 << 20)
+        self.assertEqual(ps.widen_send_buffer(sock), 1 << 20)
+        self.assertEqual(sock.asked, [4 << 20, 2 << 20, 1 << 20])
+
+    def test_a_socket_that_refuses_every_size_keeps_its_own(self):
+        sock = _RefusingSocket(limit=0)
+        self.assertEqual(ps.widen_send_buffer(sock), 8192)
+        self.assertEqual(sock.asked[-1], 64 << 10)      # stopped at the floor, did not loop
+
+    def test_the_server_widens_the_socket_of_the_client_it_accepts(self):
+        clock = FakeClock()
+        cap = FakeCapture(clock, frames=120, size=(640, 480), latency=0.03, real_delay=0.004)
+        widened = []
+        real = ps.widen_send_buffer
+
+        def recording(sock, *a, **kw):
+            size = real(sock, *a, **kw)
+            widened.append((sock.family, size))
+            return size
+
+        ps.widen_send_buffer = recording
+        self.addCleanup(setattr, ps, "widen_send_buffer", real)
+        with tempfile.TemporaryDirectory() as d:
+            model = os.path.join(d, "m.task")
+            open(model, "w").close()
+            sock_path = os.path.join(d, "s.sock")
+            a = args_for(socket=sock_path, model=model)
+
+            def serve():
+                try:
+                    ps.run(a, cv2=FakeCv2(cap), make_backend=lambda _a: (FakeBackend(), 20, 1),
+                           clock=clock, sleep=clock.sleep,
+                           devices=FakeDevices({"/dev/video0": (True, "Fake")}))
+                except ps.ServerExit:
+                    pass
+
+            th = threading.Thread(target=serve, daemon=True)
+            th.start()
+            deadline = time.monotonic() + 10
+            while not os.path.exists(sock_path) and time.monotonic() < deadline:
+                time.sleep(0.005)
+            c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            c.connect(sock_path)
+            read_packets(c, 5)
+            th.join(20)
+            c.close()
+        self.assertFalse(th.is_alive())
+        self.assertEqual(len(widened), 1, "the accepted client's send buffer was not widened")
+        self.assertEqual(widened[0][0], socket.AF_UNIX)
+        self.assertGreaterEqual(widened[0][1], 200 << 10)
 
 
 class _RealCv2WithCapture:

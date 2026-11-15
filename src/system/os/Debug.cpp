@@ -355,7 +355,20 @@ void Debug::Fail(const char *msg, void *v) {
     // failing cheat script). That is data semantics, not the fatal-modal
     // platform choice below, so native unwinds exactly where the image does
     // instead of running the rest of the try body on a half-built result.
-    if (!mNoDebug && !mFailing && MainThread() && mTry) {
+    //
+    // Except once Debug::Exit has begun (PLAN H-101). The exit callbacks are
+    // tearing the game down one subsystem at a time, and a throw from inside
+    // one unwinds out of Exit with only some of them run and XLaunchNewImage
+    // never reached: the try's catch then hands a half-terminated game back to
+    // the main loop. Measured: `{exit}` through /api/dta/eval (a FailScope try)
+    // while main_screen's content refresh is still running -> GameTerminate ->
+    // HamSongMgr::Terminate -> ContentMgr::UnregisterCallback's
+    // `midRefreshAllowed || !RefreshInProgress()` FAIL -> throw; UI's exit
+    // callback had already run (UIEventMgr::Terminate), so the next frame's
+    // HamUI::Draw read TheUIEventMgr == null (SIGSEGV at 0x68, rc 139). An
+    // exit is not a script step that can be abandoned: the FAIL is non-fatal
+    // like every other native FAIL and the exit runs to the end.
+    if (!mNoDebug && !mFailing && MainThread() && mTry && !mExiting) {
         mTry--;
         throw msg;
     }
