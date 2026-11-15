@@ -215,6 +215,8 @@ unsigned NativeStreamUploadCount() { return sUploadCount; }
 
 // GestureMgr_Native.cpp
 bool NativeCameraStandInAttached();
+// DepthBuffer3DDraw_Native.cpp
+std::string Dc3BoxymanJson();
 
 // GET /api/camera (HttpServer.cpp).
 std::string Dc3CameraJson(int gridW, int gridH) {
@@ -262,7 +264,10 @@ std::string Dc3CameraJson(int gridW, int gridH) {
         }
         j += "]}";
     }
-    j += "]}";
+    j += "]";
+    // DepthBuffer3D's draw (DepthBuffer3DDraw_Native.cpp)
+    j += ",\"boxyman\":" + Dc3BoxymanJson();
+    j += "}";
     return j;
 }
 

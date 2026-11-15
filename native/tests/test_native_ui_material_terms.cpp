@@ -421,3 +421,83 @@ TEST_F(NativeUiMaterialAssetTest, PeakStripeIntensifyDoublesWorldAlpha) {
         << "a world intensify stripe must draw at twice its authored alpha, as standard.ps does";
     EXPECT_FLOAT_EQ(BuildPassMaterialParams(pink1, world).uniforms.color[3], 2.0f * authored);
 }
+
+// ---- written by the light lane (round 7), taken into np-menutext ------------
+// throneroom's peak columns are SrcAlpha + alpha_cut at threshold 0. The
+// engine used to make every alpha cut alpha-to-coverage on the 4x MSAA main
+// pass, so they were covered by their alpha AND blended by it: about alpha
+// squared, in a 4-sample screen-door. Frozen, lit, post off: native 46.4
+// against Xenia 52.9 in the pillar box, 52.2 with alpha_cut cleared live
+// (clearing it on Xenia changes nothing, as a GREATER-0 test predicts).
+// Two assertions here that the rule tests (CutCoverageRule's table, and
+// AlphaTestIsRetailsGreater, which checks MaterialAlphaThreshold itself) do
+// not make: that BOTH material builders actually hand the shader that strict
+// reference (reverting only the pass builder to threshold/255 leaves every
+// test_native_glyph_render.cpp test green and fails this one), and that the
+// real throneroom asset falls on the no-coverage side in both looks.
+#include "platform/LookProfile.h"
+// Engine MaterialSetup.h (np-menutext); dc3's native/src copy shadows the header.
+enum class CutCoverage : unsigned char { None, AlphaToCoverage, Sharpened };
+CutCoverage MaterialCutCoverage(BaseMaterial *mat);
+
+namespace {
+// The shader's test: `if (baseColor.a < material.alphaThreshold) discard;`
+bool CutDiscards(float alpha, float uniform) { return alpha < uniform; }
+} // namespace
+
+TEST_F(NativeUiMaterialBuilderTest, BuildersHandTheShaderRetailsStrictAlphaTest) {
+    ASSERT_NE(gWgpuRnd, nullptr);
+    RndMat *cut = MakeMat(false, true, true, 1.0f);
+    cut->SetBlend(BaseMaterial::kBlendSrcAlpha);
+    cut->SetProperty("alpha_cut", DataNode(1));
+    cut->SetProperty("alpha_threshold", DataNode(0));
+    ASSERT_TRUE(cut->GetAlphaCut());
+    for (const UiDrawTerms &terms : {kRetail, kEngineDefault, UiDrawTermsFor(false)}) {
+        for (const MaterialParams &p : {BuildMaterialParams(cut, false, terms),
+                                        BuildPassMaterialParams(cut, terms)}) {
+            EXPECT_TRUE(CutDiscards(0.0f, p.uniforms.alphaThreshold))
+                << "a cut at 0 drops alpha-0 texels (GREATER 0), so they neither draw nor write depth";
+            EXPECT_FALSE(CutDiscards(1.0f / 255.0f, p.uniforms.alphaThreshold));
+        }
+    }
+    cut->SetProperty("alpha_threshold", DataNode(128));
+    for (const MaterialParams &p : {BuildMaterialParams(cut, false, kRetail),
+                                    BuildPassMaterialParams(cut, kRetail)}) {
+        EXPECT_TRUE(CutDiscards(128.0f / 255.0f, p.uniforms.alphaThreshold)) << "alpha == threshold fails GREATER";
+        EXPECT_FALSE(CutDiscards(129.0f / 255.0f, p.uniforms.alphaThreshold));
+    }
+    cut->SetProperty("alpha_cut", DataNode(0));
+    EXPECT_FALSE(CutDiscards(0.0f, BuildMaterialParams(cut, false, kRetail).uniforms.alphaThreshold))
+        << "no alpha cut, no test";
+    EXPECT_FALSE(CutDiscards(0.0f, BuildPassMaterialParams(cut, kRetail).uniforms.alphaThreshold));
+    delete cut;
+}
+
+TEST_F(NativeUiMaterialAssetTest, ThroneroomPeakColumnsGetNoCoverageInEitherLook) {
+    const char *root = getenv("MILO_LIB");
+    if (!root || !root[0])
+        GTEST_SKIP() << "MILO_LIB not set";
+    std::string path = std::string(root) + "/world/throneroom/gen/throneroom.milo_xbox";
+    ObjectDir *dir = DirLoader::LoadObjects(FilePath(path.c_str()), nullptr, nullptr);
+    ASSERT_NE(dir, nullptr) << path;
+    RndMat *col = nullptr;
+    for (ObjDirItr<RndMat> it(dir, true); it != nullptr; ++it) {
+        if (strcmp(it->Name(), "peak_columns_1.mat") == 0) {
+            col = it;
+            break;
+        }
+    }
+    ASSERT_NE(col, nullptr) << "peak_columns_1.mat not in " << path;
+    EXPECT_EQ(col->GetBlend(), BaseMaterial::kBlendSrcAlpha);
+    EXPECT_TRUE(col->GetAlphaCut());
+    EXPECT_EQ(col->GetAlphaThreshold(), 0);
+    EXPECT_TRUE(col->GetIntensify());
+    for (milo::LookProfile look : {milo::LookProfile::Retail, milo::LookProfile::Enhanced}) {
+        milo::ScopedLookOverride scoped(look);
+        EXPECT_EQ((int)MaterialCutCoverage(col), (int)CutCoverage::None)
+            << "peak_columns_1.mat under DC3_LOOK=" << milo::LookProfileName(look)
+            << ": coverage on a SrcAlpha cut at 0 attenuates it twice";
+    }
+    ASSERT_NE(gWgpuRnd, nullptr);
+    EXPECT_TRUE(CutDiscards(0.0f, BuildMaterialParams(col, false, UiDrawTermsFor(false)).uniforms.alphaThreshold));
+}

@@ -268,6 +268,225 @@ TEST_F(DC3RetailPostGpuTest, StreakBloomIsScreenBlendOfMaskedScene) {
     delete pp;
 }
 
+// A CPU model of DC3's streak arm, written from the original: NgPostProc::
+// DoBloom's streak branch, bloom.ps, and SetBloomBlurWeightsStreak exactly as
+// dc3-decomp rndobj/Utl.cpp has it (weights[3] = 0.333333, weights[3 +- i] =
+// atten^i * 0.333333 with atten = attenuation^(4^pass); offsets 0.5 +- i * 4^pass;
+// rotated by the angle, the horizontal x scaled by TheRnd's height/width).
+// One channel. DxRnd::DrawRect draws with HalfPixelOffset on, so pixel (i, j)
+// samples uv ((i + 0.5) / w, (j + 0.5) / h); every target is 8-bit, sampled
+// bilinear with clamp.
+namespace {
+struct StreakPlane {
+    int w = 0, h = 0;
+    std::vector<float> v;
+    StreakPlane(int w_, int h_) : w(w_), h(h_), v((size_t)w_ * h_, 0.0f) {}
+    float At(int x, int y) const {
+        x = std::clamp(x, 0, w - 1);
+        y = std::clamp(y, 0, h - 1);
+        return v[(size_t)y * w + x];
+    }
+    float Bilinear(float u, float t) const {
+        const float fx = u * w - 0.5f, fy = t * h - 0.5f;
+        const int x0 = (int)std::floor(fx), y0 = (int)std::floor(fy);
+        const float ax = fx - x0, ay = fy - y0;
+        return (At(x0, y0) * (1 - ax) + At(x0 + 1, y0) * ax) * (1 - ay) +
+            (At(x0, y0 + 1) * (1 - ax) + At(x0 + 1, y0 + 1) * ax) * ay;
+    }
+    void Quantise() {
+        for (float &x : v) x = std::round(std::clamp(x, 0.0f, 1.0f) * 255.0f) / 255.0f;
+    }
+};
+
+// set0 (w/4): bloom.ps' 4x4 box of rgb * a. set1 (w/16): bloom.ps' four taps
+// at +-2 source texels on the diagonals, from the scene. Then three
+// Bloom_Blur(kBloomBlurStreak) passes each, horizontal on set0, vertical on set1.
+// Returns the composite's bloom sum b = set0 + set1 sampled at frame (x, y).
+std::vector<float> RetailStreakBloom(const StreakPlane &rgbA, float attenuation, float angleDeg, float yRatio) {
+    const int W = rgbA.w, H = rgbA.h;
+    StreakPlane set0(W / 4, H / 4), set1(W / 16, H / 16);
+    for (int y = 0; y < set0.h; y++)
+        for (int x = 0; x < set0.w; x++) {
+            float acc = 0;
+            for (int j = 0; j < 4; j++)
+                for (int i = 0; i < 4; i++) acc += rgbA.At(x * 4 + i, y * 4 + j);
+            set0.v[(size_t)y * set0.w + x] = acc / 16.0f;
+        }
+    set0.Quantise();
+    const float tx = 2.0f / W, ty = 2.0f / H;
+    const float o[4][2] = {{-tx, -ty}, {tx, ty}, {tx, -ty}, {-tx, ty}};
+    for (int y = 0; y < set1.h; y++)
+        for (int x = 0; x < set1.w; x++) {
+            const float u = (x + 0.5f) / set1.w, t = (y + 0.5f) / set1.h;
+            float acc = 0;
+            for (auto &d : o) acc += 0.25f * rgbA.Bilinear(u + d[0], t + d[1]);
+            set1.v[(size_t)y * set1.w + x] = acc;
+        }
+    set1.Quantise();
+    const float a = angleDeg * 0.01745329238474369f, sinA = std::sin(a), cosA = std::cos(a);
+    auto streak = [&](StreakPlane &p, bool horizontal) {
+        for (int pass = 0; pass < 3; pass++) {
+            const float initWeight = 0.333333f, scale = std::pow(4.0f, (float)pass);
+            const float atten = std::pow(attenuation, scale);
+            float weights[7], offsets[7];
+            weights[3] = initWeight;
+            offsets[3] = 0.5f;
+            float curWeight = atten, curOffset = scale;
+            for (int i = 1; i <= 3; i++) {
+                weights[3 - i] = weights[3 + i] = curWeight * initWeight;
+                offsets[3 - i] = 0.5f - curOffset;
+                offsets[3 + i] = curOffset + 0.5f;
+                curWeight *= atten;
+                curOffset += scale;
+            }
+            StreakPlane out(p.w, p.h);
+            for (int y = 0; y < p.h; y++)
+                for (int x = 0; x < p.w; x++) {
+                    const float u = (x + 0.5f) / p.w, t = (y + 0.5f) / p.h;
+                    float acc = 0;
+                    for (int i = 0; i < 7; i++) {
+                        float dx, dy;
+                        if (horizontal) {
+                            const float off = offsets[i] / p.w;
+                            dx = off * cosA * yRatio;
+                            dy = off * sinA;
+                        } else {
+                            const float off = offsets[i] / p.h;
+                            dx = -(off * sinA * yRatio);
+                            dy = off * cosA;
+                        }
+                        acc += weights[i] * p.Bilinear(u + dx, t + dy);
+                    }
+                    out.v[(size_t)y * p.w + x] = acc;
+                }
+            out.Quantise();
+            p = out;
+        }
+    };
+    streak(set0, true);
+    streak(set1, false);
+    std::vector<float> b((size_t)W * H);
+    for (int y = 0; y < H; y++)
+        for (int x = 0; x < W; x++) {
+            const float u = (x + 0.5f) / W, t = (y + 0.5f) / H;
+            b[(size_t)y * W + x] = set0.Bilinear(u, t) + set1.Bilinear(u, t);
+        }
+    return b;
+}
+}  // namespace
+
+// The streak arm against that model, per pixel, on a white 32x32 block. The
+// original's offsets 0.5 +- i * 4^pass step the term half a texel per pass
+// along each set's axis: its centroid sits about (-17, -14) px from the block
+// at -45 degrees. Centred taps (offsets +- i * 4^pass, which this port used
+// until round 10) leave it near the block and miss by 15 levels a pixel.
+// Engine doc §37.10.
+TEST_F(DC3RetailPostGpuTest, StreakTermSitsWhereTheOriginalsTapsPutIt) {
+    constexpr int W = 512, H = 288;      // 16:9, the sets 128x72 and 32x18
+    constexpr int bx = 240, by = 128, B = 32;  // a white block on set1's texel grid
+    constexpr float yRatio = 0.5625f;    // TheRnd 720 / 1280 (RetailPostParams::screenAspect)
+    constexpr float atten = 0.5f;        // compact: nothing reaches the clamped edges
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    pp->SetProperty("bloom_streak", DataNode(1));
+    pp->SetProperty("bloom_streak_attenuation", DataNode(atten));
+    pp->SetProperty("bloom_intensity", DataNode(1.5f));
+    RndPostProc *prev = RndPostProc::Current();
+    pp->Select();
+    const float c6 = pp->GetBloomColor().green * RndPostProc::BloomLocFactor() * pp->BloomIntensity();
+
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    auto &dev = gpu.Device();
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)W, (uint32_t)H, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst |
+        wgpu::TextureUsage::RenderAttachment;
+    wgpu::Texture scene = dev.CreateTexture(&d);
+    std::vector<uint8_t> px(W * H * 4, 0);
+    StreakPlane rgbA(W, H);
+    for (int y = by; y < by + B; y++)
+        for (int x = bx; x < bx + B; x++) {
+            uint8_t *p = &px[(y * W + x) * 4];
+            p[0] = p[1] = p[2] = p[3] = 255;
+            rgbA.v[(size_t)y * W + x] = 1.0f;
+        }
+    wgpu::TexelCopyTextureInfo dst{};
+    dst.texture = scene;
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = W * 4;
+    wgpu::Extent3D ext = {(uint32_t)W, (uint32_t)H, 1};
+    gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture frame = dev.CreateTexture(&d);
+    wgpu::TextureDescriptor bd{};
+    bd.size = {1, 1, 1};
+    bd.format = wgpu::TextureFormat::RGBA8Unorm;
+    bd.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    wgpu::Texture black = dev.CreateTexture(&bd);
+    const uint8_t k[4] = {0, 0, 0, 255};
+    dst.texture = black;
+    layout.bytesPerRow = 4;
+    wgpu::Extent3D one = {1, 1, 1};
+    gpu.Queue().WriteTexture(&dst, k, 4, &layout, &one);
+
+    PostProcPass pass;
+    pass.Init(gpu);
+    wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView(),
+                      blackView = black.CreateView(), noDepth;
+    for (const float angle : {-45.0f, 0.0f, -55.0f}) {
+        pp->SetProperty("bloom_streak_angle", DataNode(angle));
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        pass.Run(enc, sceneView, scene, W, H, noDepth, 1, frameView, blackView, gpu);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        std::vector<uint8_t> out(W * H * 4);
+        ASSERT_TRUE(gpu.ReadbackTexture(frame, W, H, out.data(), out.size()));
+        const std::vector<float> bm = RetailStreakBloom(rgbA, atten, angle, yRatio);
+
+        // Off the block the scene is black, so the screen blend's output IS
+        // the term: min(1, b c6), 8-bit. The block itself (white) is skipped.
+        // Per pixel, in 8-bit levels, over every pixel either side lit.
+        double gw = 0, gx = 0, gy = 0, mw = 0, mx = 0, my = 0, se = 0;
+        int n = 0, worst = 0;
+        for (int y = 0; y < H; y++)
+            for (int x = 0; x < W; x++) {
+                if (x >= bx && x < bx + B && y >= by && y < by + B) continue;
+                const int g = out[(y * W + x) * 4 + 1];
+                const int m = (int)std::round(std::min(1.0f, bm[(size_t)y * W + x] * c6) * 255.0f);
+                gw += g; gx += g * (x + 0.5); gy += g * (y + 0.5);
+                mw += m; mx += m * (x + 0.5); my += m * (y + 0.5);
+                if (g || m) {
+                    se += (double)(g - m) * (g - m);
+                    n++;
+                    worst = std::max(worst, std::abs(g - m));
+                }
+            }
+        ASSERT_GT(gw, 255.0) << "no streak term at all";
+        const double cx = bx + B / 2, cy = by + B / 2;
+        const float Gx = (float)(gx / gw - cx), Gy = (float)(gy / gw - cy);
+        const float Mx = (float)(mx / mw - cx), My = (float)(my / mw - cy);
+        const double rms = std::sqrt(se / std::max(1, n));
+        printf("DC3RetailPost: streak at %+.0f deg: term centroid (%+.2f, %+.2f) px from its source, energy %.0f;"
+               " the original's taps (%+.2f, %+.2f), energy %.0f; per pixel rms %.2f, worst %d levels over %d px\n",
+               angle, Gx, Gy, gw / 255, Mx, My, mw / 255, rms, worst, n);
+        // Measured on this box: rms 0.24..0.64, worst 1..3 levels. Centred
+        // taps (offsets +- i * 4^pass): rms 3.1..3.9, worst 15..16; a quarter
+        // texel: rms 1.5..2.0, worst 7. The 8-bit tails make the centroid and
+        // energy sensitive to the GPU's rounding of ties (1.6 px, 8% at -45
+        // degrees), so those two are bounded loosely and the per-pixel
+        // numbers carry the guard.
+        EXPECT_LE(rms, 1.0) << angle << " deg: the streak is not SetBloomBlurWeightsStreak's";
+        EXPECT_LE(worst, 4) << angle << " deg: the streak is not SetBloomBlurWeightsStreak's";
+        EXPECT_NEAR(Gx, Mx, 2.5f) << angle << " deg: the streak term is not where the original's taps put it";
+        EXPECT_NEAR(Gy, My, 2.5f) << angle << " deg: the streak term is not where the original's taps put it";
+        EXPECT_NEAR(gw / mw, 1.0, 0.15) << angle << " deg: not the original's streak energy";
+    }
+    pass.Terminate();
+    if (prev) prev->Select(); else pp->Unselect();
+    delete pp;
+}
+
 // RndShaderStandard / Particles / Multimesh / SyncTrack::CalcShaderOpts set
 // mPseudoHDR only when !fadeOut, fadeOut = env->FadeOut() && FadeEnd !=
 // FadeStart for the current environ; RndShaderDrawRect has no such test.
@@ -1745,4 +1964,138 @@ TEST_F(DC3RetailPostTest, DOFProcKeepsNgDOFProcSetParameters) {
     delete menu;
     delete game;
     delete cam;
+}
+
+// Depth of field and {rnd toggle_all_postprocs} (round 9). NgDOFProc is a
+// registered PostProcessor (NgDOFProc::Init: TheRnd.RegisterPostProcessor), so
+// Rnd::DoPostProcess's !mDisablePostProc gate skips its DoPost with the rest
+// and the frame is the scene unblurred: Xenia's raw frames on houseparty cu02
+// read background sharpness 18.3 against 9.8 graded (lanes/post/round9,
+// measure/hp_toggle_ab.txt). The engine ran DofPass ahead of that gate, so
+// native's "post off" kept the blur (7.6 vs 7.6). A stripe scene, a 4-sample
+// depth at the far plane (blur factor 1), depth of field enabled: graded, the
+// stripes are blurred; toggled off, they come through as drawn.
+// Sabotage: PostProcPass::Run running mDof regardless of PostProcDisabled().
+TEST_F(DC3RetailPostGpuTest, TogglePostProcsSkipsDepthOfField) {
+    ASSERT_TRUE(TheDOFProc);
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    auto &dev = gpu.Device();
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    pp->SetProperty("bloom_intensity", DataNode(0.0f));
+    RndPostProc *prev = RndPostProc::Current();
+    pp->Select();
+    UIScreen *game = Hmx::Object::New<UIScreen>();
+    game->SetName("game_screen", ObjectDir::Main());
+    DofProbeUI ui;
+    UIManager *savedUI = TheUI;
+    TheUI = &ui;
+    ui.SetCurrent(game);
+    TheDOFProc->Set(nullptr, 2.0f, 0.5f, 1.0f, 0.0f);
+    ASSERT_TRUE(TheDOFProc->Enabled());
+
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)kW, (uint32_t)kH, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst |
+        wgpu::TextureUsage::RenderAttachment;
+    wgpu::Texture scene = dev.CreateTexture(&d);
+    std::vector<uint8_t> px(kW * kH * 4);
+    for (int y = 0; y < kH; y++)
+        for (int x = 0; x < kW; x++) {
+            uint8_t v = (x & 1) ? 230 : 20;  // 1-pixel stripes: the 4x4 downsample flattens them
+            uint8_t *p = &px[(y * kW + x) * 4];
+            p[0] = p[1] = p[2] = v;
+            p[3] = 0;
+        }
+    wgpu::TexelCopyTextureInfo dst{};
+    dst.texture = scene;
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = kW * 4;
+    wgpu::Extent3D ext = {(uint32_t)kW, (uint32_t)kH, 1};
+    gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+
+    wgpu::TextureDescriptor zd{};
+    zd.size = {(uint32_t)kW, (uint32_t)kH, 1};
+    zd.format = wgpu::TextureFormat::Depth32Float;
+    zd.sampleCount = 4;
+    zd.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+    wgpu::Texture depth = dev.CreateTexture(&zd);
+    wgpu::TextureView depthView = depth.CreateView();
+    {
+        wgpu::RenderPassDepthStencilAttachment za{};
+        za.view = depthView;
+        za.depthLoadOp = wgpu::LoadOp::Clear;
+        za.depthStoreOp = wgpu::StoreOp::Store;
+        za.depthClearValue = 1.0f;
+        wgpu::RenderPassDescriptor rp{};
+        rp.label = "TestDofDepthClear";
+        rp.depthStencilAttachment = &za;
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        enc.BeginRenderPass(&rp).End();
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+    }
+
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture frame = dev.CreateTexture(&d);
+    wgpu::TextureDescriptor b{};
+    b.size = {1, 1, 1};
+    b.format = wgpu::TextureFormat::RGBA8Unorm;
+    b.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    wgpu::Texture black = dev.CreateTexture(&b);
+    const uint8_t k[4] = {0, 0, 0, 255};
+    dst.texture = black;
+    layout.bytesPerRow = 4;
+    wgpu::Extent3D one = {1, 1, 1};
+    gpu.Queue().WriteTexture(&dst, k, 4, &layout, &one);
+    wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView(),
+                      blackView = black.CreateView();
+
+    PostProcPass pass;
+    pass.Init(gpu);
+    // Mean |difference| between horizontal neighbours across the stripes, in
+    // levels (the scene's own reads 210).
+    auto contrast = [&] {
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        pass.Run(enc, sceneView, scene, kW, kH, depthView, 4, frameView, blackView, gpu);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        std::vector<uint8_t> out(kW * kH * 4);
+        EXPECT_TRUE(gpu.ReadbackTexture(frame, kW, kH, out.data(), out.size()));
+        double sum = 0;
+        int n = 0;
+        for (int y = 16; y < kH - 16; y++)
+            for (int x = 16; x < kW - 16; x++) {
+                sum += std::abs((int)out[(y * kW + x + 1) * 4 + 1] - (int)out[(y * kW + x) * 4 + 1]);
+                n++;
+            }
+        return sum / n;
+    };
+    auto toggle = [] {
+        DataArray *a = DataReadString("{rnd toggle_all_postprocs}");
+        ASSERT_NE(a, nullptr);
+        a->Evaluate(0);
+        a->Release();
+    };
+    ASSERT_FALSE(TheRnd.DisablePP());
+    const double graded = contrast();
+    toggle();
+    ASSERT_TRUE(rndshape::PostProcDisabled());
+    const double off = contrast();
+    toggle();
+    const double again = contrast();
+    printf("DC3RetailPost DOF + toggle_all_postprocs: stripe contrast graded %.2f, post off %.2f, "
+           "again %.2f (scene 210)\n", graded, off, again);
+    EXPECT_LT(graded, 30.0) << "depth of field on at the far plane blurs the stripes (non-vacuous)";
+    EXPECT_GT(off, 180.0) << "post off: Rnd::DoPostProcess skips NgDOFProc::DoPost too";
+    EXPECT_NEAR(again, graded, 1.0);
+
+    pass.Terminate();
+    TheDOFProc->UnSet();
+    TheUI = savedUI;
+    ui.SetCurrent(nullptr);
+    delete game;
+    if (prev) prev->Select(); else pp->Unselect();
+    delete pp;
 }

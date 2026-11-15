@@ -328,7 +328,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "5e8768c6de607e6c672bd0f5554f1dc8a46009d2"
+set(MILO_ENGINE_PIN "9f6291a0f56a831c7c2d3a3f6847bf3bfa1851c6"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -1237,6 +1237,8 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/NuiImageSurface_Native.cpp
     src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
     src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
+    src/platform/DepthBuffer3D_Native.cpp # PLAN P-4: the depthbuffer_3d shader on the CPU (boxyman)
+    src/platform/DepthBuffer3DDraw_Native.cpp # PLAN P-4: ... and its draw
     src/platform/StreamReceiver_Native.cpp
     src/platform/SampleInst_Native.cpp
     src/platform/StbVorbisImpl.cpp
@@ -1432,6 +1434,8 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/NuiImageSurface_Native.cpp
     src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
     src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
+    src/platform/DepthBuffer3D_Native.cpp # PLAN P-4: the depthbuffer_3d shader on the CPU (boxyman)
+    src/platform/DepthBuffer3DDraw_Native.cpp # PLAN P-4: ... and its draw
     # ThreadCall_Native.cpp lifted to milo-engine (engine 0.2b drop-xdk POSIX
     # graduation); compiled via DC3_WEB_LIFTED_ENGINE_SOURCES below.
     # AudioDevice_Web.cpp lifted to milo-engine (MILO_BUILD_WEB, W0).
@@ -2102,7 +2106,9 @@ if(BUILD_TESTS)
         tests/test_dta_eval_endpoint.cpp
         tests/test_camera_yuv_decode.cpp
         tests/test_camera_stream.cpp
+        tests/test_depthbuffer3d.cpp
         tests/test_native_camera_view.cpp
+        tests/test_native_boxyman.cpp
         tests/test_native_crowd.cpp
         tests/test_native_shadow.cpp
         tests/test_native_shadow_stream.cpp
