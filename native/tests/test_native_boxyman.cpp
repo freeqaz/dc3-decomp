@@ -39,6 +39,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "platform/ExecutablePath.h"
+#include "test_tmp.h"
 #include "engine_http_port.h"
 #include "shell_timeout.h"
 
@@ -109,13 +110,11 @@ SongRun RunSong(bool frames, bool throughFreestyle) {
         r.setupError = "python3 with numpy is not runnable; the camera frames need it";
         return r;
     }
-    char tmpl[] = "/tmp/dc3-boxyman-XXXXXX";
-    char *root = mkdtemp(tmpl);
-    if (!root) {
-        r.setupError = "mkdtemp failed";
+    std::string R = MakeTestTempDir("dc3-boxyman"); // removed at exit on a pass
+    if (R.empty()) {
+        r.setupError = "MakeTestTempDir failed under " + TestTempBase();
         return r;
     }
-    std::string R = root;
     mkdir((R + "/cache").c_str(), 0755);
     mkdir((R + "/saves").c_str(), 0755);
     std::string sock = R + "/kinect.sock";
@@ -203,11 +202,10 @@ double Number(const std::string &json, const char *key, double missing = -1.0) {
     return strtod(json.c_str() + at, nullptr);
 }
 
-// pid in the name: a fixed name would be shared by every concurrent run of the gate
+// pid in the name: a fixed name would be shared by every concurrent run of the
+// gate.  Removed at exit if the run passed (TestLogPath), kept if it failed.
 std::string Dump(const SongRun &r) {
-    std::string path = "/tmp/claude-1000/boxyman_" +
-        std::string(::testing::UnitTest::GetInstance()->current_test_info()->name()) + "_" +
-        std::to_string((int)getpid()) + ".log";
+    std::string path = TestLogPath("boxyman");
     std::ofstream f(path);
     if (f.is_open())
         f << r.driver << "LOADED: " << r.loaded << "\nCAMERA: " << r.camera << "\nPHOTOS: "

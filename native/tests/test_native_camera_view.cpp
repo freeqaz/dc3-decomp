@@ -49,6 +49,7 @@
 #include <unistd.h>
 #include <vector>
 #include "platform/ExecutablePath.h"
+#include "test_tmp.h"
 #include "engine_http_port.h"
 #include "shell_timeout.h"
 
@@ -116,13 +117,11 @@ ViewRun RunToMainScreen(bool frames) {
         r.setupError = "python3 with numpy is not runnable; the camera frames need it";
         return r;
     }
-    char tmpl[] = "/tmp/dc3-cameraview-XXXXXX";
-    char *root = mkdtemp(tmpl);
-    if (!root) {
-        r.setupError = "mkdtemp failed";
+    std::string R = MakeTestTempDir("dc3-cameraview"); // removed at exit on a pass
+    if (R.empty()) {
+        r.setupError = "MakeTestTempDir failed under " + TestTempBase();
         return r;
     }
-    std::string R = root;
     {
         std::ofstream f(R + "/input.txt");
         f << "wait_screen title_screen\n+30 confirm\nwait_screen main_screen\n";
@@ -231,11 +230,10 @@ std::vector<std::string> ExpectedWireMask() {
     return rows;
 }
 
-// pid in the name: a fixed name was shared by every concurrent run of the gate
+// pid in the name: a fixed name was shared by every concurrent run of the gate.
+// Removed at exit if the run passed (TestLogPath), kept if it failed.
 std::string Dump(const ViewRun &r, int copy = 0) {
-    std::string path = "/tmp/claude-1000/cameraview_" +
-        std::string(::testing::UnitTest::GetInstance()->current_test_info()->name()) + "_" +
-        std::to_string((int)getpid()) + (copy ? "_" + std::to_string(copy) : "") + ".log";
+    std::string path = TestLogPath(copy ? "cameraview" + std::to_string(copy) : "cameraview");
     std::ofstream f(path);
     if (f.is_open())
         f << r.driver << "CAMERA: " << r.camera << "\nHEALTH:\n" << r.health << r.output;

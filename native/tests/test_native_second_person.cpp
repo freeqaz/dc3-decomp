@@ -70,6 +70,7 @@
 #include <unistd.h>
 #include <vector>
 #include "platform/ExecutablePath.h"
+#include "test_tmp.h"
 #include "engine_http_port.h"
 #include "shell_timeout.h"
 
@@ -171,13 +172,11 @@ PerformRun RunPerform(const char *sensorArgs, int waitSeconds) {
         r.setupError = "python3 is not runnable; the synthetic sensor needs it";
         return r;
     }
-    char tmpl[] = "/tmp/dc3-secondperson-XXXXXX";
-    char *root = mkdtemp(tmpl);
-    if (!root) {
-        r.setupError = "mkdtemp failed";
+    std::string R = MakeTestTempDir("dc3-secondperson"); // removed at exit on a pass
+    if (R.empty()) {
+        r.setupError = "MakeTestTempDir failed under " + TestTempBase();
         return r;
     }
-    std::string R = root;
     if (!SeedAllTutorialsSeen(R)) {
         r.setupError = "could not seed the global options cache under " + R;
         return r;
@@ -341,13 +340,11 @@ SessionRun RunStandInSession(double stopSecs) {
         r.setupError = "dc3-native does not exist at " + bin + " (scripts/native_test.sh builds it)";
         return r;
     }
-    char tmpl[] = "/tmp/dc3-standin-XXXXXX";
-    char *root = mkdtemp(tmpl);
-    if (!root) {
-        r.setupError = "mkdtemp failed";
+    std::string R = MakeTestTempDir("dc3-standin"); // removed at exit on a pass
+    if (R.empty()) {
+        r.setupError = "MakeTestTempDir failed under " + TestTempBase();
         return r;
     }
-    std::string R = root;
     if (!SeedAllTutorialsSeen(R)) {
         r.setupError = "could not seed the global options cache under " + R;
         return r;
@@ -408,9 +405,7 @@ protected:
             GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable (requires game assets)";
     }
     static std::string Dump(const PerformRun &r) {
-        std::string path = "/tmp/claude-1000/second_person_" +
-            std::string(::testing::UnitTest::GetInstance()->current_test_info()->name()) + "_" +
-            std::to_string((int)getpid()) + ".log";
+        std::string path = TestLogPath("second_person"); // removed at exit on a pass
         std::ofstream f(path);
         if (f.is_open()) {
             f << r.driver << r.last;
@@ -525,7 +520,7 @@ TEST_F(SecondPersonPerformTest, AnUnjoinedSecondPersonDoesNotTakeTheSong) {
 TEST_F(LostPlayerStandInTest, TheStandInIsNobodyAgainAndTheSongNeverPauses) {
     SessionRun r = RunStandInSession(42.0);
     ASSERT_TRUE(r.setupError.empty()) << r.setupError;
-    std::string where = "/tmp/claude-1000/second_person_standin_" + std::to_string((int)getpid()) + ".log";
+    std::string where = TestTempFile("second_person_standin"); // removed at exit on a pass
     {
         std::ofstream f(where);
         if (f.is_open())

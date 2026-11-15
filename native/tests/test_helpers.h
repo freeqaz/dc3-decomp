@@ -2,8 +2,11 @@
 
 #include <gtest/gtest.h>
 #include <cstring>
+#include <string>
 #include <vector>
 #include <cstdint>
+
+#include "test_tmp.h"
 
 // ============================================================================
 // MemBinStream — in-memory BinStream for unit testing without files
@@ -225,9 +228,18 @@ bool WriteSyntheticMilo(const char *path,
 // ============================================================================
 
 // A directory private to this test process, created on first use:
-// /tmp/claude-1000/milo-tests-<pid>-<n>, removed when the process exits.  Several
-// lanes run the gate on one box at once, and ctest runs each case in its own
-// process, so a fixed path such as /tmp/claude-1000/milo_tests was written,
-// read and deleted by unrelated runs at the same time.  Fixtures written here
-// cannot be touched by another run.  Empty string if it cannot be created.
+// <TestTempBase("/tmp/claude-1000")>/milo-tests-<pid>-<n>.  Several lanes run
+// the gate on one box at once, and ctest runs each case in its own process, so
+// a fixed path such as /tmp/claude-1000/milo_tests was written, read and
+// deleted by unrelated runs at the same time.  Fixtures written here cannot be
+// touched by another run.  Empty string if it cannot be created.
+//
+// It follows the temp policy in test_tmp.h: removed when the process exits if the run
+// passed, kept (and its path printed) if it failed.  It used to be removed
+// "when the process exits" by an atexit handler that read the path out of a
+// function-local static std::string -- which was destroyed BEFORE that handler
+// ran (the atexit was registered inside the string's initializer, so the string
+// finished constructing later and is destroyed earlier), so remove_all got a
+// dead string and removed nothing: 5,363 dirs (10 GB) survived on 2026-11-15
+// from processes that had exited normally.
 const std::string &TestScratchDir();

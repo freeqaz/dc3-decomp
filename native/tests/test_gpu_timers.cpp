@@ -43,6 +43,7 @@
 #include <unistd.h>
 
 #include "platform/ExecutablePath.h"
+#include "test_tmp.h"
 #include "shell_timeout.h"
 
 namespace {
@@ -72,13 +73,11 @@ EngineRun Boot(bool timersOn) {
                        " (scripts/native_test.sh builds it with milo-tests)";
         return r;
     }
-    char tmpl[] = "/tmp/dc3-gpu-timers-XXXXXX";
-    char* dir = mkdtemp(tmpl);
-    if (!dir) {
-        r.setupError = "mkdtemp failed";
+    std::string root = MakeTestTempDir("dc3-gpu-timers"); // removed at exit on a pass
+    if (root.empty()) {
+        r.setupError = "MakeTestTempDir failed under " + TestTempBase();
         return r;
     }
-    std::string root(dir);
     mkdir((root + "/cache").c_str(), 0755);
     mkdir((root + "/saves").c_str(), 0755);
     std::ostringstream cmd;

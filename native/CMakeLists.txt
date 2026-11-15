@@ -2036,6 +2036,7 @@ if(BUILD_TESTS)
 
     add_executable(milo-tests
         tests/test_helpers.cpp
+        tests/test_test_tmp.cpp
         tests/telemetry_parser.cpp
         tests/test_gates.cpp
         tests/test_gameplay_telemetry.cpp

@@ -39,6 +39,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include "platform/ExecutablePath.h"
+#include "test_tmp.h"
 #include "shell_timeout.h"
 
 namespace {
@@ -106,13 +107,11 @@ FlowRun RunFlow(const char *extraEnv, int timeoutSeconds) {
         r.setupError = "python3 is not runnable; the synthetic sensor needs it";
         return r;
     }
-    char tmpl[] = "/tmp/dc3-gesture-menus-XXXXXX";
-    char *root = mkdtemp(tmpl);
-    if (!root) {
-        r.setupError = "mkdtemp '/tmp/dc3-gesture-menus-XXXXXX' failed";
+    r.workdir = MakeTestTempDir("dc3-gesture-menus"); // removed at exit on a pass
+    if (r.workdir.empty()) {
+        r.setupError = "MakeTestTempDir 'dc3-gesture-menus' failed under " + TestTempBase();
         return r;
     }
-    r.workdir = root;
     std::string reportPath = r.workdir + "/report.json";
     std::ostringstream sh;
     sh << kShellTimeoutLookup
