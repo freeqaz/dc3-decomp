@@ -29,6 +29,14 @@
 // dropping the PresyncBitmap call in WgpuRnd::WriteSceneUniforms fails it --
 // slot 3 falls back to white and the light lights its whole cone flat, which
 // is what the rink floor did (dc3-retail-lighting.md 8.1).
+//
+// And skinning: a skinned caster is skinned the way the main pass skins it
+// (standard_wgsl.inc normalizeBoneWeights) -- weights divided by their sum,
+// an all-zero set bound to its first bone. DC3's *_lod shadow meshes are drawn
+// by the caster pass only, and with raw weights their vertices were pulled
+// toward the world origin (throneroom's dancers smeared into wedges, the
+// floor shadow a faint wash). Sabotage: pointing RenderCasters' skinned
+// pipeline back at vs_shadow_skinned fails both skinned tests.
 
 #include "test_helpers.h"
 
@@ -42,6 +50,7 @@
 #include "rndobj/Lit.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/Tex.h"
+#include "rndobj/Trans.h"
 
 #include <vector>
 
@@ -62,6 +71,34 @@ RndMesh *MakeQuad(float x0, float y0, float x1, float y1) {
     for (int i = 0; i < 4; i++)
         mesh->Faces()[i].Set(kFaces[i][0], kFaces[i][1], kFaces[i][2]);
     return mesh;
+}
+
+// MakeQuad, skinned to two bones: every vertex has the weights `w` on bones
+// (0, 1). Bone offsets stay identity, so a vertex lands at bone * pos.
+RndMesh *MakeSkinnedQuad(float x0, float y0, float x1, float y1, RndTransformable *b0,
+                         RndTransformable *b1, float w0, float w1) {
+    RndMesh *mesh = MakeQuad(x0, y0, x1, y1);
+    mesh->SetNumBones(2);
+    mesh->SetBone(0, b0, false);
+    mesh->SetBone(1, b1, false);
+    for (int i = 0; i < 4; i++) {
+        RndMesh::Vert &v = mesh->Verts()[i];
+        v.boneWeights.Set(w0, w1, 0, 0);
+        v.boneIndices[0] = 0;
+        v.boneIndices[1] = 1;
+        v.boneIndices[2] = 0;
+        v.boneIndices[3] = 0;
+    }
+    return mesh;
+}
+
+RndTransformable *MakeBoneAt(float x, float y) {
+    RndTransformable *bone = Hmx::Object::New<RndTransformable>();
+    Transform xfm;
+    xfm.Reset();
+    xfm.v.Set(x, y, 0.0f);
+    bone->SetLocalXfm(xfm);
+    return bone;
 }
 
 // clip = (x, y, 0, 1) from world (x, y, z): column-major, as the shape hands
@@ -225,6 +262,49 @@ TEST_F(ProjShadowCasterPassTest, TwoLightsDrawIntoTheirOwnTiles) {
     EXPECT_EQ(sp.GetCasterStats().lastTiles, 2u);
     delete a;
     delete b;
+}
+
+TEST_F(ProjShadowCasterPassTest, SkinnedCasterWeightsAreNormalized) {
+    // Weights 0.5 / 0 on a bone at (+0.6, +0.6): normalized, the quad sits on
+    // the bone. Raw, every vertex is halved -- position and bone translation
+    // alike -- so the quad shrinks to (+0.3, +0.3) and the bone's place is clear.
+    ShadowPass sp;
+    RndTransformable *b0 = MakeBoneAt(0.6f, 0.6f);
+    RndTransformable *b1 = MakeBoneAt(-0.6f, -0.6f);
+    RndMesh *mesh = MakeSkinnedQuad(-0.1f, -0.1f, 0.1f, 0.1f, b0, b1, 0.5f, 0.0f);
+    ASSERT_TRUE(mesh->IsSkinned());
+    std::vector<RndMesh *> meshes{mesh};
+    Render(sp, meshes);
+    std::vector<float> map = ReadMap(sp);
+    ASSERT_FALSE(map.empty());
+    EXPECT_EQ(sp.GetCasterStats().lastDraws, 1u);
+    EXPECT_LT(At(map, 0.6f, 0.6f), 0.01f) << "the caster sits on its bone";
+    EXPECT_LT(At(map, 0.68f, 0.52f), 0.01f) << "at its full size";
+    EXPECT_EQ(At(map, 0.3f, 0.3f), 1.0f) << "raw weights would have halved it toward the origin";
+    EXPECT_EQ(At(map, -0.6f, -0.6f), 1.0f) << "the unweighted bone moves nothing";
+    delete mesh;
+    delete b0;
+    delete b1;
+}
+
+TEST_F(ProjShadowCasterPassTest, SkinnedCasterWithNoWeightsFollowsItsFirstBone) {
+    // All-zero weights (UDEC4N decoding to nothing): the main pass binds such
+    // a vertex to its first bone, so the caster does too. Raw, the sum is
+    // zero, every vertex lands on the world origin and the quad vanishes.
+    ShadowPass sp;
+    RndTransformable *b0 = MakeBoneAt(-0.5f, 0.5f);
+    RndTransformable *b1 = MakeBoneAt(0.5f, -0.5f);
+    RndMesh *mesh = MakeSkinnedQuad(-0.1f, -0.1f, 0.1f, 0.1f, b0, b1, 0.0f, 0.0f);
+    std::vector<RndMesh *> meshes{mesh};
+    Render(sp, meshes);
+    std::vector<float> map = ReadMap(sp);
+    ASSERT_FALSE(map.empty());
+    EXPECT_LT(At(map, -0.5f, 0.5f), 0.01f) << "the caster follows bone 0";
+    EXPECT_EQ(At(map, 0.5f, -0.5f), 1.0f);
+    EXPECT_EQ(At(map, 0.0f, 0.0f), 1.0f);
+    delete mesh;
+    delete b0;
+    delete b1;
 }
 
 extern wgpu::TextureView GetGpuTexView(RndTex *tex);
