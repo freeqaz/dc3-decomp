@@ -16,11 +16,19 @@
 #include <emscripten/em_asm.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <dirent.h>
 #include <map>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <vector>
 #include <set>
 #include <string>
 
 #include "App.h"
+bool Dc3EnvFlag(const char *name, bool defaultOn); // platform/System_Native.cpp
+#include "hamobj/HamNavList.h"
+#include "obj/Msg.h"
 #include "platform/FrameTraceCounters.h"
 #include "platform/FramePacer_Native.h"
 #include "platform/WebAssets.h"
@@ -29,6 +37,7 @@
 #include "ui/UIScreen.h"
 
 extern void NativeSetDataDir(const char *);
+std::string NativeDlcRoots(); // platform/ContentMgr_Native.cpp
 extern WgpuRnd *gWgpuRnd;
 extern void WebPoseStatusTick(int engineFrame); // platform/PoseInput_Web.cpp
 
@@ -147,9 +156,9 @@ static std::string NextScreenBundleName(const char *fromScreen) {
 // Called each frame from BOOT_RUNNING. On a change of current screen, fire the
 // matching screen bundle(s) once. Cheap (a strcmp + a static-set lookup) when
 // the screen hasn't changed or has no mapping.
+static void WebDlcDropSongFiles(const char *screen);
+
 static void WebScreenBundleHook() {
-    if (!ScreenBundlesEnabled())
-        return;
     UIScreen *scr = TheUI ? TheUI->CurrentScreen() : nullptr;
     const char *name = (scr && scr->Name()) ? scr->Name() : "";
     if (!name[0])
@@ -160,6 +169,11 @@ static void WebScreenBundleHook() {
         return; // no transition this frame
     sLastScreen = name;
 
+    if (!strcmp(name, "song_select_screen") || !strcmp(name, "main_screen"))
+        WebDlcDropSongFiles(name);
+
+    if (!ScreenBundlesEnabled())
+        return;
     std::string bundles = NextScreenBundleName(name);
     if (bundles.empty())
         return;
@@ -183,6 +197,96 @@ static void WebScreenBundleHook() {
             break;
         pos = plus + 1;
     }
+}
+
+// ============================================================================
+// Downloadable content (PLAN D-7, W-23..W-28; docs/native/DLC.md "Web")
+//
+// ContentMgr_Native discovers packages by listing /data/dlc/<package>/songs,
+// so the songs*.dta of every package the server has must be in MEMFS before
+// the App starts: /api/bundle/dlc (server.py) carries exactly those, as
+// dlc/<package>/songs/<file>, fetched beside the config bundle and gated by the
+// same BOOT_FETCHING wait. Everything else in a package -- milos, mogg, MIDI,
+// album art -- is fetched on demand through the package's drive
+// (cntNNNNNNNN: -> /data/dlc/<package>, File_Web.cpp), so boot does not grow
+// by the songs, and a DLC-off boot (release profile, DC3_DLC=0, DC3_DLC_DIR
+// set empty) does not fetch the bundle at all.
+// ============================================================================
+
+static bool WebDlcEnabled() {
+    // NativeDlcRoots is the desktop rule: DC3_DLC_DIR (set = those roots, empty =
+    // none), else DC3_DLC (a dev-profile default, applied in main()) -> <data>/dlc
+    // if it is a directory. /data/dlc does not exist until the bundle lands, so
+    // ask the env half of the rule here.
+    const char *dir = getenv("DC3_DLC_DIR");
+    if (dir) return dir[0] != 0;
+    return Dc3EnvFlag("DC3_DLC", false);
+}
+
+// A DLC song's files are dropped from MEMFS when the player is back at song
+// select (or the main menu): what a song fetched -- its milo set, mogg, MIDI,
+// barks, ~6-27 MB a song -- otherwise stays in MEMFS (JS memory, outside the
+// wasm heap) for the session, so playing through the DLC list would keep every
+// song's files. Only files under /data/dlc/<package>/songs/<song>/ go; the
+// package's songs*.dta (from the bundle, needed for every later refresh) stay.
+// Anything dropped is fetched again on its next open, so this can only cost a
+// refetch, never a failed load. ?env=DC3_WEB_DLC_KEEP=1 keeps everything.
+static void WebDlcDropTree(const std::string &dir, long long *bytes, int *files) {
+    DIR *d = opendir(dir.c_str());
+    if (!d) return;
+    struct dirent *e;
+    std::vector<std::string> subdirs;
+    while ((e = readdir(d)) != nullptr) {
+        if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
+        std::string p = dir + "/" + e->d_name;
+        struct stat st;
+        if (stat(p.c_str(), &st) != 0) continue;
+        if (S_ISDIR(st.st_mode)) {
+            subdirs.push_back(p);
+        } else if (unlink(p.c_str()) == 0) {
+            *bytes += st.st_size;
+            (*files)++;
+        }
+    }
+    closedir(d);
+    for (size_t i = 0; i < subdirs.size(); i++) WebDlcDropTree(subdirs[i], bytes, files);
+}
+
+static void WebDlcDropSongFiles(const char *screen) {
+    if (Dc3EnvFlag("DC3_WEB_DLC_KEEP", false)) return;
+    std::string roots = NativeDlcRoots();
+    long long bytes = 0;
+    int files = 0;
+    size_t start = 0;
+    while (start <= roots.size()) {
+        size_t end = roots.find(':', start);
+        if (end == std::string::npos) end = roots.size();
+        std::string root = roots.substr(start, end - start);
+        start = end + 1;
+        if (root.empty()) continue;
+        DIR *d = opendir(root.c_str());
+        if (!d) continue;
+        struct dirent *e;
+        while ((e = readdir(d)) != nullptr) {
+            if (e->d_name[0] == '.') continue;
+            std::string songs = root + "/" + e->d_name + "/songs";
+            DIR *sd = opendir(songs.c_str());
+            if (!sd) continue;
+            struct dirent *se;
+            while ((se = readdir(sd)) != nullptr) {
+                if (se->d_name[0] == '.') continue;
+                std::string song = songs + "/" + se->d_name;
+                struct stat st;
+                if (stat(song.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
+                    WebDlcDropTree(song, &bytes, &files);
+            }
+            closedir(sd);
+        }
+        closedir(d);
+    }
+    if (files)
+        printf("DC3 Web: DLC song files dropped at %s: %d files, %.1f MB\n", screen, files,
+               bytes / 1048576.0);
 }
 
 // ============================================================================
@@ -248,6 +352,10 @@ static void mainLoop() {
         printf("DC3 Web: downloading assets (bundle)...\n");
         WebAssetsInit();
         WebAssetsFetchBundle();
+        if (WebDlcEnabled()) {
+            printf("DC3 Web: DLC on: fetching package song lists (/api/bundle/dlc)\n");
+            WebAssetsFetchBundle("/api/bundle/dlc");
+        }
         sBootState = BOOT_FETCHING;
         break;
     }
@@ -369,6 +477,81 @@ int dc3RafGate(double nowMs) {
         }, sGate->RefreshHz(), sGate->TargetFps(), (double)sGate->Ran(), (double)sGate->Skipped());
     }
     return run ? 1 : 0;
+}
+
+// Test hooks for scripts/web drivers (scripts/web/dlc-songs.mjs): the focused
+// list's highlight, by name, the way the desktop input script's `highlight NAME`
+// asks it (platform/JoypadSelect_Native.cpp), so a driver can press Down/Up in
+// a closed loop instead of counting rows. "" / -1 when no HamNavList has focus.
+static HamNavList *WebFocusList() {
+    return TheUI ? dynamic_cast<HamNavList *>(TheUI->FocusComponent()) : nullptr;
+}
+
+EMSCRIPTEN_KEEPALIVE
+const char *dc3_focus_selected_sym() {
+    HamNavList *list = WebFocusList();
+    if (!list) return "";
+    static Symbol get_selected_sym("get_selected_sym");
+    return list->Handle(Message(get_selected_sym), true).Sym().Str();
+}
+
+EMSCRIPTEN_KEEPALIVE
+int dc3_focus_data_index(const char *name) {
+    HamNavList *list = WebFocusList();
+    if (!list || !name) return -1;
+    static Symbol data_index("data_index");
+    return list->Handle(Message(data_index, Symbol(name)), true).Int();
+}
+
+// The focused list's rows (HamNavList `num_data` / `data_symbol`), so a driver
+// can list song select the way the player sees it (headers included).
+EMSCRIPTEN_KEEPALIVE
+int dc3_focus_num_data() {
+    HamNavList *list = WebFocusList();
+    if (!list) return -1;
+    static Symbol num_data("num_data");
+    return list->Handle(Message(num_data), true).Int();
+}
+
+EMSCRIPTEN_KEEPALIVE
+const char *dc3_focus_data_symbol(int i) {
+    HamNavList *list = WebFocusList();
+    if (!list || i < 0 || i >= dc3_focus_num_data()) return "";
+    static Symbol data_symbol("data_symbol");
+    return list->Handle(Message(data_symbol, i), true).Sym().Str();
+}
+
+EMSCRIPTEN_KEEPALIVE
+int dc3_focus_settled() {
+    HamNavList *list = WebFocusList();
+    if (!list) return 0;
+    static Symbol is_scrolling_settled("is_scrolling_settled");
+    return list->Handle(Message(is_scrolling_settled), true).Int();
+}
+
+// Bytes of regular files under a MEMFS directory (recursive): what the asset
+// cache holds, e.g. "/data" or "/data/dlc" (PLAN W-27 memory measurements).
+static double WebTreeBytes(const std::string &dir, int *files) {
+    double total = 0;
+    DIR *d = opendir(dir.c_str());
+    if (!d) return 0;
+    struct dirent *e;
+    while ((e = readdir(d)) != nullptr) {
+        if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
+        std::string p = dir + "/" + e->d_name;
+        struct stat st;
+        if (stat(p.c_str(), &st) != 0) continue;
+        if (S_ISDIR(st.st_mode)) total += WebTreeBytes(p, files);
+        else { total += st.st_size; (*files)++; }
+    }
+    closedir(d);
+    return total;
+}
+
+EMSCRIPTEN_KEEPALIVE
+double dc3_memfs_bytes(const char *dir) {
+    int files = 0;
+    return WebTreeBytes(dir ? dir : "/data", &files);
 }
 
 } // extern "C"

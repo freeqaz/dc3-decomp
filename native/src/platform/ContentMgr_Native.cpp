@@ -60,13 +60,16 @@
 #include <sys/stat.h>
 #include <vector>
 
-#ifndef __EMSCRIPTEN__
-// milo-native-engine src/platform/File_Native.cpp: content drives.
+// milo-native-engine src/platform/File_Native.cpp (desktop) and File_Web.cpp
+// (web): content drives.
 extern bool NativeMountDrive(const char *drive, const char *hostDir);
 extern void NativeUnmountDrive(const char *drive);
-#endif
 
+#ifdef __EMSCRIPTEN__
+extern const char *NativeGetDataDir(); // File_Web.cpp: "/data", the MEMFS root
+#else
 extern const char *NativeFindDataDir(); // System_Native.cpp
+#endif
 
 namespace {
 
@@ -88,6 +91,11 @@ bool IsDirectory(const char *path) {
 //                                 packages); none otherwise
 //   neither                       none
 //
+// Web: the same rules over MEMFS. <game data>/dlc is /data/dlc, which holds
+// each package's songs/*.dta from the server's /api/bundle/dlc (fetched at boot
+// by main_web.cpp when DLC is on); every other file of a package is fetched on
+// demand through the drive (docs/native/DLC.md "Web").
+//
 // The dev profile sets DC3_DLC=1 (System_Native.cpp kDc3DevDefaults), so a
 // developer's boot lists every imported package; release does not.  ctest
 // runs every test with DC3_DLC=0 (MILO_TEST_ENV, native/CMakeLists.txt), so a
@@ -97,7 +105,11 @@ std::string NativeDlcRoots() {
     const char *env = getenv("DC3_DLC_DIR");
     if (env) return env;
     if (!Dc3EnvFlag("DC3_DLC", false)) return std::string();
+#ifdef __EMSCRIPTEN__
+    const char *data = NativeGetDataDir();
+#else
     const char *data = NativeFindDataDir();
+#endif
     if (!data) return std::string();
     std::string root = std::string(data) + "/dlc";
     return IsDirectory(root.c_str()) ? root : std::string();
@@ -108,16 +120,10 @@ namespace {
 // XboxContent's kContentRootFormat.
 const char *const kContentRootFormat = "cnt%08x";
 
-#ifndef __EMSCRIPTEN__
 bool MountDrive(const char *drive, const char *hostDir) {
     return NativeMountDrive(drive, hostDir);
 }
 void UnmountDrive(const char *drive) { NativeUnmountDrive(drive); }
-#else
-// No DLC on web yet (PLAN D-7): DiscoverPackages finds none, so these never run.
-bool MountDrive(const char *, const char *) { return false; }
-void UnmountDrive(const char *) {}
-#endif
 
 } // namespace
 
