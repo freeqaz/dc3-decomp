@@ -225,24 +225,50 @@ class CentroidTracker:
     same player in the same slot. It was 15 (0.5 s): the dancer came back as
     someone new. native/web/pose/pose_geometry.js ports this class; keep the
     two equal (tests/test_pose_tracker.py checks both).
+
+    One body, one track (body_ratio). MediaPipe with num_poses 2 reports one
+    person twice on some frames, the two hip centres a few cm apart (measured
+    on a played session: 1-17 cm, against 43 cm and up for two real people).
+    The second report used to become a second track on the same body, and
+    from then on every frame's single detection went to whichever of the two
+    tracks' last positions was nearer: the dancer's id alternated between the
+    twins (84 one-body id changes in 8.5 minutes), and each change is a new
+    person to the engine -- slot released, player unbound and rebound, root
+    depth filter restarted. So, within the body radius -- body_ratio x the
+    detection's own torso length in the image, about 25 cm of real space at
+    any distance:
+      * a detection no track claims that lies on a kept detection is a second
+        report of that body and gets no id (None), so no track;
+      * a track that went unmatched and lies on a matched detection is a
+        leftover of that body (a twin from a jump past max_dist) and is
+        forgotten at once rather than competing for the next frames.
+    Two established tracks are never merged, and nothing here reaches further
+    than the body radius, so two players side by side are not touched.
+    Without sizes the radius is 0 and neither rule applies.
     """
 
-    def __init__(self, max_dist=0.25, max_missing=60):
+    def __init__(self, max_dist=0.25, max_missing=60, body_ratio=0.5):
         self.max_dist = max_dist
         self.max_missing = max_missing
+        self.body_ratio = body_ratio
         self._next_id = 1
         self._tracks = {}  # id -> [centroid(np.array 2), missing_frames]
 
-    def update(self, centroids):
-        """centroids: list of (x, y) in normalized image space. Returns list of ids."""
-        assigned = [None] * len(centroids)
+    def update(self, centroids, sizes=None):
+        """centroids: list of (x, y) in normalized image space; sizes: each
+        one's torso length (shoulder centre to hip centre) in the same space.
+        Returns a list of ids, None for a duplicate report of a body."""
+        count = len(centroids)
+        radius = [self.body_ratio * float(s) for s in sizes] if sizes is not None else [0.0] * count
+        points = [np.asarray(c, dtype=float) for c in centroids]
+        assigned = [None] * count
         used = set()
 
         # Greedy nearest-neighbour over all (track, detection) pairs, closest first.
         pairs = []
         for tid, (prev, _missing) in self._tracks.items():
-            for di, c in enumerate(centroids):
-                pairs.append((float(np.linalg.norm(np.asarray(c) - prev)), tid, di))
+            for di in range(count):
+                pairs.append((float(np.linalg.norm(points[di] - prev)), tid, di))
         pairs.sort()
         for dist, tid, di in pairs:
             if dist > self.max_dist or tid in used or assigned[di] is not None:
@@ -250,20 +276,35 @@ class CentroidTracker:
             assigned[di] = tid
             used.add(tid)
 
-        # Unmatched detections become new tracks.
-        for di, c in enumerate(centroids):
-            if assigned[di] is None:
-                assigned[di] = self._next_id
-                self._next_id += 1
+        # Unmatched detections become new tracks -- unless they lie on a
+        # detection already kept (matched ones first, then in order): that is
+        # the same body reported twice.
+        kept = [di for di in range(count) if assigned[di] is not None]
+        for di in range(count):
+            if assigned[di] is not None:
+                continue
+            if any(float(np.linalg.norm(points[di] - points[k])) <= max(radius[di], radius[k])
+                   for k in kept):
+                continue
+            assigned[di] = self._next_id
+            self._next_id += 1
+            kept.append(di)
 
-        # Refresh matched tracks, age out the rest.
+        # Refresh matched tracks; forget a leftover lying on a matched body;
+        # age out the rest.
         for di, tid in enumerate(assigned):
-            self._tracks[tid] = [np.asarray(centroids[di], dtype=float), 0]
+            if tid is not None:
+                self._tracks[tid] = [points[di], 0]
         for tid in list(self._tracks):
-            if tid not in assigned:
-                self._tracks[tid][1] += 1
-                if self._tracks[tid][1] > self.max_missing:
-                    del self._tracks[tid]
+            if tid in assigned:
+                continue
+            prev = self._tracks[tid][0]
+            if any(float(np.linalg.norm(points[k] - prev)) <= radius[k] for k in kept):
+                del self._tracks[tid]
+                continue
+            self._tracks[tid][1] += 1
+            if self._tracks[tid][1] > self.max_missing:
+                del self._tracks[tid]
 
         return assigned
 
@@ -565,7 +606,7 @@ class MediaPipeBackend:
             return []
         seg = getattr(res, "segmentation_masks", None) or []
 
-        people, centroids = [], []
+        people, centroids, sizes = [], [], []
         for pi, wlms in enumerate(res.pose_world_landmarks):
             world = np.array([[l.x, l.y, l.z] for l in wlms], dtype=float)
             if pi < len(res.pose_landmarks):
@@ -588,15 +629,19 @@ class MediaPipeBackend:
                     mask = mask[:, :, 0]
             people.append((joints, confs, float(root[2]), mask))
             hip_c = (image_xy[L_HIP] + image_xy[R_HIP]) * 0.5
+            shoulder_c = (image_xy[L_SHOULDER] + image_xy[R_SHOULDER]) * 0.5
             centroids.append((float(hip_c[0]), float(hip_c[1])))
+            sizes.append(float(np.linalg.norm(shoulder_c - hip_c)))
 
         t3 = clock()
         timing["geom"] = (t3 - t2) * 1e3
-        ids = self._tracker.update(centroids)
+        ids = self._tracker.update(centroids, sizes)
         self._frame_count += 1
         t_s = timestamp_ms / 1000.0
         out = []
         for (joints, confs, root_z, mask), tid in zip(people, ids):
+            if tid is None:
+                continue  # a second report of a body already in `out`
             self.last_masks.append(mask)
             # Filter the root DEPTH per persistent track and shift the whole
             # skeleton by the correction -- root noise is a rigid z offset, so

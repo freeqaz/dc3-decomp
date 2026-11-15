@@ -46,10 +46,17 @@ python3 native/web/server.py --port 8420
 - There is no `.data` package: assets stream from `server.py` at runtime
   (`/api/file/...`, ~132 MB and ~240 requests for boot plus one song).
 - Requires crossOriginIsolated (COOP/COEP, for the audio worklet's
-  SharedArrayBuffer) and JSPI (Chrome/Edge 137+, also on macOS). Safari is not
-  supported: Safari 26 has WebGPU but no JSPI, and the page refuses it with an
-  error card naming JSPI (`08814d5b1`) instead of failing inside the WASM
-  instantiate.
+  SharedArrayBuffer) and JSPI: Chrome/Edge 137+ (Windows, macOS, Linux,
+  Android) and Safari 27 / iOS 27 ([MDN compat data, JSPI in Safari 27](https://github.com/mdn/browser-compat-data/pull/30552),
+  [caniuse](https://caniuse.com/wf-wasm-jspi)). Safari 26 has WebGPU but no
+  JSPI. The page refuses a browser without JSPI with an error card
+  (`08814d5b1`) instead of failing inside the WASM instantiate. The card's
+  advice depends on the device (np-ios): on iPhone/iPad it says to update to
+  iOS 27 (Safari 27) and that another iPhone browser will not help (every iOS
+  browser is WebKit); on Mac Safari it says Safari 27, or Chrome/Edge 137;
+  elsewhere Chrome/Edge 137 or Safari 27 on a Mac. iPadOS reports a Mac UA,
+  so "iOS" is an iPhone/iPad/iPod UA or a Mac UA with `maxTouchPoints > 1`.
+  Not tested on a real Safari 27 (no device here); see "iPhone and iPad".
 - Symbols unresolved at link become runtime warnings via `missing_stubs.js`
   (163 env imports at `-O3`, 166 at `-O0`, emscripten's own JS functions
   included); `AudioDevice::Suspend`/`Resume` have no web implementation and
@@ -895,8 +902,8 @@ rig's Chromium, so the GPU and memory are the rig's; no real phone was used.
   try these browser flags" card. It now gets "This page needs a secure
   connection" and the engine does not boot.
 - **No WebGPU on a phone**: Android gets "Chrome 137+, Android 12+, a supported
-  GPU"; iPhone/iPad gets "Safari has WebGPU from iOS 26 but not the JSPI this
-  build needs".
+  GPU"; iPhone/iPad gets "needs iOS 27 (Safari 27) or newer" (np-ios; it used
+  to say iOS had no JSPI at all, which Safari 27 changed).
 - **Buttons.** `touch_controls.js` shows a d-pad and A (Enter) / B (Esc) /
   Start (Space) when the device has no fine pointer (`?touch=1` forces,
   `?touch=0` hides). They dispatch the keys the engine's document listener
@@ -920,6 +927,161 @@ Not known without a real phone: the GPU and frame rate with the pose worker,
 and memory (the release peaks at 523 MB of wasm heap). The page must be served
 over https to reach a phone at all.
 
+### iPhone and iPad (W-29..W-34, np-ios)
+
+The owner opened the site on an iPhone (Safari, iOS 26). The page refused the
+browser for its missing JSPI, but the camera panel ("Camera on — looking for
+you…") and the touch buttons still started over the refusal card. Safari 27 /
+iOS 27 adds JSPI, so the work here makes sure an iOS 27 phone can actually run
+the build, and that an older one gets a clean refusal. Everything below ran in
+Chromium on this box with an emulated iPhone or a masked GPU. **No real iPhone
+and no WebKit build was used.** Playwright's WebKit (`webkit-2287`) installs but
+will not launch here: it needs `libicu74`, `libflite1` and `libmanette-0.2-0`,
+which need root.
+
+**Refused boot (W-31).** Every refusal (insecure origin, no WebGPU, no JSPI)
+goes through `refuseBoot()` in `index.html`. It sets `window.dc3BootBlocked`
+and adds `html.dc3-failed`, and any later error card calls
+`window.dc3PoseShutdown()`. `touch_controls.js` and `pose/pose_input.js` check
+`dc3BootBlocked` before they start, and CSS hides `#dc3-touch`, `#pose-panel`
+and `#dc3-sound` under `dc3-failed`. The camera is never requested
+(`getUserMedia` calls: 0). `pose_input.js` also gained `shutdown()` (stops the
+tracks, ends the worker, removes the panel), plus a check after each `await`
+in `start()`, so an error that arrives while the camera prompt is open stops
+the stream rather than leaving it on. On the player page the card is fixed
+full screen, inside the safe-area insets.
+
+**Layout.** The viewport meta has `viewport-fit=cover`, plus the
+`apple-mobile-web-app-*` and `theme-color` metas (Add to Home Screen opens it
+full screen). `overscroll-behavior:none` stops the rubber-band scroll and
+`touch-action:manipulation` stops double-tap zoom. The canvas is sized from
+`100dvh` (falling back to `100vh`) minus the `env(safe-area-inset-*)` insets,
+so Safari's bars and the notch do not cover it. The d-pad, face buttons and
+hint are offset by the same insets.
+
+**Sound.** iOS creates an `AudioContext` suspended, and only a gesture can
+resume it: `touchend`/`pointerup`/`click`, not `touchstart`, which the engine
+listens to. iOS also has its own "interrupted" state. A head script now tracks
+every `AudioContext` the page makes (`window.dc3AudioContexts`). It resumes any
+context that is not running on `pointerup`/`touchend`/`click`/`keydown`, and
+while the game is running and a context is still not running it shows a "Tap
+for sound" button on touch-only devices. `?sound_button=1` forces the button
+and `?sound_button=0` hides it; `window.dc3SoundState()` reports both. The
+engine is not changed.
+
+**Mobile GPU (`?gpu_profile=`, W-29).** `gpu_profile.js` loads in the head and
+does nothing unless the URL asks. With it, the page masks what the real
+adapter offers, before the engine asks:
+
+| `?gpu_profile=` | features the adapter/device report | limits | canvas format |
+|---|---|---|---|
+| `mobile` | Apple-GPU subset: depth-clip-control, depth32float-stencil8, texture-compression-etc2, texture-compression-astc, indirect-first-instance, shader-f16, rg11b10ufloat-renderable, bgra8unorm-storage, float32-filterable. **No `texture-compression-bc`** | clamped to the spec defaults (alignments take the larger value) | `bgra8unorm` |
+| `bare` | none | spec defaults | real |
+| `record` | real (records what the engine asks for; the control) | real | real |
+
+It overrides the `features`/`limits` getters on `GPUAdapter`/`GPUDevice` (which
+emdawnwebgpu reads) and wraps `requestDevice`, which rejects a masked feature
+or an over-profile limit the way a real device would. It also tallies every
+`createTexture`/`destroy` by format (live bytes, peak, count) and records the
+canvas format. All of it is in `window.dc3GpuProfile`.
+
+`scripts/web/mobile-gpu.mjs --port P [--profile mobile|bare|record]
+[--song-index 3] [--play 20] [--out DIR]` boots with that profile, plays one
+song, and checks:
+
+- the device got no feature outside the profile and no BC texture was made;
+- "software DXT" was logged;
+- there was no page error, uncaptured WebGPU error or device loss;
+- the menu and the song drew pixels.
+
+Exit 1 if a check fails, 2 if the run broke. `--profile record` is the negative
+control: on this rig it fails exactly the three BC checks. MEASURED, headless
+Chromium 1223, RTX 3090, box load 30-102, one song each, `--song-index 3`.
+Before the np-webdlc rebase that index was thehustle (rollerrink); with DLC
+in the song list it is dragosteadintei (DLC, dclive), so the table has both:
+
+| profile | result | device features | GPU textures live (by format) | wasm heap peak | menu | song load | fps (20 s) |
+|---|---|---|---|---|---|---|---|
+| `mobile`, rollerrink | PASS | none | 519, **296.8 MB** (rgba8unorm 501 / 228.5 MB) | 462.0 MB | 12.9 s | 35.7 s | 58.3 |
+| `bare`, rollerrink | PASS | none | 296.9 MB | 467.9 MB | 10.1 s | 45.0 s | 26 (box load) |
+| `record`, rollerrink | 3 FAIL (control) | texture-compression-bc | **149.8 MB** (bc3 ×332, bc1 ×124) | 467.9 MB | 10.2 s | 35.6 s | 59.4 |
+| `mobile`, dclive (rebased) | PASS | none | 485, **281.3 MB** (rgba8unorm 467 / 223.3 MB) | 389.9 MB | 11.4 s | 38.0 s | 44.7 |
+| `record`, dclive (rebased) | 3 FAIL (control) | texture-compression-bc (+ core-features-and-limits) | **146.9 MB** (bc3 ×308, bc1 ×116) | 390.0 MB | 14.8 s | 35.4 s | 57.2 |
+
+What this settles:
+
+- The engine needs no optional feature and no raised limit. `GpuDevice_Web`
+  requests only `texture-compression-bc`, and only when the adapter has it;
+  `requestDevice` gets `requiredLimits` = `{}`. Every format it creates is
+  core (RGBA8/BGRA8, Depth24PlusStencil8, Depth32Float, RGBA16Float). MSAA is
+  4×, which every WebGPU device supports for those formats.
+- Without BC, `TextureConvert` decodes DXT1/3/5/DXN to RGBA8 on the CPU, and
+  the song draws correctly: the roller-rink screenshot matches the BC run.
+  **The cost is GPU texture memory: 297 MB instead of 150 MB (+147 MB) in
+  rollerrink, 281 MB instead of 147 MB (+134 MB) in dclive, about 2×.** ETC2/ASTC transcoding or dropping the top mip when
+  BC is missing would claw it back (W-32).
+- The first song run under both profiles also found a web regression on main
+  at the time: `PointTestPass` left `depthClearValue` at the C++ default of
+  NaN, Chromium's binding rejects a non-finite float even under `LoadOp::Load`,
+  and every song with a point test threw in `beginRenderPass` and drew black
+  (W-30). np-ios carried the one-line fix. Engine main got the same fix
+  independently (`3a6476d`, np-webdlc), so np-ios dropped its copy on rebase.
+
+**Memory (W-32).** The build asks for `ALLOW_MEMORY_GROWTH` with
+`MAXIMUM_MEMORY=1024MB` (dc3's override of the engine's 512 MB, W-6), a 4 MB
+stack, and emcc's default initial memory (16 MB, INFERRED). One song peaks at
+390-468 MB of wasm heap (MEASURED, above, by venue), plus 281-297 MB of GPU textures
+without BC. The pose worker's own heap (tasks-vision wasm and the model) is
+not measured (H-89). Safari's per-tab limit on an iPhone is not published, and
+a 1 GB wasm reservation plus ~300 MB of textures is the most likely reason an
+iOS 27 phone would reload the tab. INFERRED, not tested.
+
+**Pose on Safari (read, not run).** Safari has no `MediaStreamTrackProcessor`
+on the main thread, so `pose_input.js` takes its bitmap transport
+(`createImageBitmap` on `requestVideoFrameCallback`) to the worker. The
+worker's AUTO delegate tries the GPU (OffscreenCanvas + WebGL2) and falls back
+to CPU when creating it throws. `<video>` carries `playsinline`. Whether
+MediaPipe's GPU delegate actually works on iOS WebKit is open; LiteRT has an
+open report of WebGPU trouble on iOS ([google-ai-edge/LiteRT-LM#2616](https://github.com/google-ai-edge/LiteRT-LM/issues/2616)).
+
+**Checks.** `scripts/web/phone.mjs --port P` now has 36 checks (21 before).
+New ones:
+
+- iPhone 15 portrait and landscape with JSPI removed: the card asks for iOS 27
+  and does not say "Use Chrome"; it covers the screen; there are no buttons;
+  the camera is not asked for; no screen boots.
+- A Mac Safari 26 UA: the card names Safari 27 and Chrome/Edge 137, and not
+  iOS.
+- Sound, with iOS's rule emulated (a context starts suspended and `resume()`
+  works only under user activation; headless Chromium starts every context
+  running under every autoplay policy, MEASURED, so the rule had to be
+  emulated): the button shows, and a tap resumes the context and hides the
+  button.
+- No vertical scroll, in both orientations.
+
+`--only iphone|sound` runs just those. Run against main's page before np-ios,
+`--only iphone` failed 9 checks: the owner's screenshot (camera asked for,
+buttons shown, "Use Chrome" text). `--sabotage-sound` serves a page without
+the context tracker, and the sound check fails, as it must.
+
+**Asyncify (W-33, not built).** An Asyncify variant for browsers without
+JSPI is not worth building now that Safari 27 has JSPI. It would also not be
+cheap. emcc refuses the combination the engine uses: "ASYNCIFY=1 is not
+compatible with -fwasm-exceptions" (MEASURED on a probe). It would take:
+
+- an engine opt-in that switches the exception model (`-fexceptions` JS
+  exceptions, slower and larger, or `-fno-exceptions`);
+- a third frame-loop mode in `main_web.cpp` (an Asyncify `ccall`/`whenDone`
+  instead of `await Module._dc3MainLoopTick()`);
+- `EM_ASYNC_JS` in `WebAssets.cpp` and `emscripten_sleep(0)` in `App.cpp`
+  kept on the Asyncify side;
+- a second build dir and deploy target;
+- a selector in `index.html` (`?async=asyncify|jspi`, defaulting to
+  `WebAssembly.Suspending` detection).
+
+Asyncify's usual cost is a much larger binary and slower code across every
+function that can reach a suspend point. Neither was measured here.
+
 ### Known console lines (np-web4)
 
 A boot to gameplay used to print four lines that look like faults. One is
@@ -939,7 +1101,9 @@ Scripts live in `scripts/web/` and share `scripts/web/lib/core.mjs`:
 `screenshot.mjs`, `scroll.mjs`, `gameplay.mjs`, `smoke-test.mjs`,
 `audio-probe.mjs`, `cdp-break.mjs`, `netperf-lite.mjs`, `pose-gameplay.mjs`
 (one song with a fake camera or none, per-second heap/pose/score samples),
-`page-states.mjs` (W-8, W-13), `song-order.mjs` (prints which song each
+`page-states.mjs` (W-8, W-13), `phone.mjs` (W-16, W-31: touch, iPhone
+refusal, sound), `mobile-gpu.mjs` (W-29: one song under `?gpu_profile=`),
+`song-order.mjs` (prints which song each
 `--song-index` selects), `attract-movie.mjs` (W-11: the intro movie's pixels
 are on the canvas), `gesture-menus.mjs --skip-attract` (a gesture skips the
 intro movie). `pose-gameplay.mjs --unmute` runs the audio on the real output
