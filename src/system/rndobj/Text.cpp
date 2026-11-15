@@ -2709,7 +2709,8 @@ void RndText::DrawShowing() {
             RndMesh *mesh = (*it)->Mesh(i);
             if (mesh) {
 #ifdef HX_NATIVE
-                if (getenv("DC3_TEXT_DIAG")) {
+                static const bool sTextDiag = getenv("DC3_TEXT_DIAG") != nullptr;  // H-110: read once; nothing in the process writes it
+                if (sTextDiag) {
                     static int sTD = 0;
                     String ascii = TextASCII();
                     if (sTD < 500 && ascii.length() > 0 && mesh->Verts().size() >= 4) {

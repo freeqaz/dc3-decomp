@@ -315,6 +315,58 @@ TEST_F(HeadlessBootTest, FrameCapWhenAsked) {
     EXPECT_GE(slept, 1.0) << "the cap did not sleep";
 }
 
+// PLAN H-110: outside gameplay the loader keeps the image's per-poll budget at
+// any frame target -- boot, the attract and title screens are where scaling it
+// to the period made the load slower (0.1-0.3 s, 6 pairs of 6). Each "loader
+// budget" line reports what LoadMgr holds (read back through its setter);
+// every one in a 60-frame boot must be the image's own value (10 ms, or a
+// loading screen's 14) and say that gameplay is not on screen. The gameplay
+// half (5 ms at 120, 10 at 60) is LoaderBudgetGameplayTest
+// (test_native_rehearse.cpp); the pure rule is test_loader_budget.cpp.
+TEST_F(HeadlessBootTest, LoaderBudgetIsTheImagesOutsideGameplay) {
+    struct Case {
+        const char *cap;
+        double fps;
+    };
+    const Case cases[] = {{"120", 120.0}, {"60", 60.0}, {nullptr, 0.0}};
+    for (const Case &c : cases) {
+        SCOPED_TRACE(c.cap ? c.cap : "uncapped");
+        std::vector<EnvVar> env;
+        if (c.cap)
+            env.push_back({"DC3_FPS_CAP", c.cap});
+        auto result = RunHeadless(60, nullptr, 120, env);
+        ASSERT_EQ(result.signal, 0) << CrashSummary(result);
+        ASSERT_TRUE(HasCompletionMarker(result.output)) << CrashSummary(result);
+        int lines = 0;
+        for (size_t pos = result.output.find("loader budget "); pos != std::string::npos;
+             pos = result.output.find("loader budget ", pos + 1)) {
+            lines++;
+            const std::string line =
+                result.output.substr(pos, result.output.find('\n', pos) - pos);
+            double budget = -1, fps = -1;
+            int used = 0;
+            if (!c.cap) {
+                ASSERT_EQ(sscanf(line.c_str(),
+                                 "loader budget %lf ms a poll (the image's; no frame target)%n",
+                                 &budget, &used),
+                          1)
+                    << line;
+            } else {
+                ASSERT_EQ(sscanf(line.c_str(),
+                                 "loader budget %lf ms a poll (the image's; %lf fps frame target, "
+                                 "gameplay is not on screen)%n",
+                                 &budget, &fps, &used),
+                          2)
+                    << "scaled outside gameplay: " << line;
+                EXPECT_DOUBLE_EQ(fps, c.fps) << line;
+            }
+            EXPECT_EQ(used, (int)line.size()) << line;
+            EXPECT_TRUE(budget == 10.0 || budget == 14.0) << "not the image's budget: " << line;
+        }
+        EXPECT_GE(lines, 1) << "no loader budget line";
+    }
+}
+
 // Boot with scripted input — press Start after some frames to dismiss title
 // NOTE: Currently crashes in DTA script handlers for UIScreen::Handle when
 // button input triggers joypad config lookups. The DTA handler path needs
