@@ -24,6 +24,9 @@
 //     every caller polling forever.
 
 #include "Cache_Native.h"
+#ifndef __EMSCRIPTEN__
+#include "gfx/PipelineDiskCache.h"
+#endif
 #include "obj/Msg.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
@@ -65,6 +68,24 @@ static void CacheRootDir(char *buf, size_t bufSize) {
     }
     snprintf(buf, bufSize, "%s/.local/share/dc3/cache", home);
 }
+
+#ifndef __EMSCRIPTEN__
+// The engine's persistent pipeline cache (Dawn's blob cache,
+// milo-native-engine gfx/PipelineDiskCache.h) lives in this tree too, beside
+// the game's caches: <root>/dawn-pipelines. No image cache has that name (the
+// image's are "global" and the song caches), and nothing lists the root.
+// Deleting it only costs the next run its compiles. MILO_PIPELINE_CACHE
+// overrides it (0/off: none).
+const char *MiloPipelineCacheDefaultDir() {
+    static char sDir[600];
+    if (!sDir[0]) {
+        char root[512];
+        CacheRootDir(root, sizeof(root));
+        snprintf(sDir, sizeof(sDir), "%s/dawn-pipelines", root);
+    }
+    return sDir;
+}
+#endif
 
 // <root>/<cache name>
 static void MakeCacheDirPath(char *buf, size_t bufSize, const char *name) {

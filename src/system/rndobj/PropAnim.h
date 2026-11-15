@@ -43,6 +43,11 @@ public:
     void RemoveRange(Hmx::Object *, DataArray *, float, float);
     bool ChangePropPath(Hmx::Object *, DataArray *, DataArray *);
     int GetNumKeys(Hmx::Object *, Symbol);
+#ifdef HX_NATIVE
+    // Every animated (target, property): the native load-time pipeline warm
+    // (native/src/platform/PipelineWarm.cpp) reads the material states keyed.
+    const std::list<PropKeys *> &AllKeys() const { return mPropKeys; }
+#endif
 
     /** Get the PropKeys from our collection that has the supplied target and prop.
      * @param [in] obj The target object the PropKeys must have.

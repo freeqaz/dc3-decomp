@@ -12,6 +12,8 @@
  *   2. No `pageerror` events fire (WASM/JS exception).
  *   3. No `function signature mismatch` / `call_indirect` strings in console
  *      output (defense in depth — the WASM trap signature).
+ *   4. No WebGPU uncaptured (validation) error: an invalid pipeline drops
+ *      every frame that uses it without throwing.
  *
  * Exits 0 on success, 1 on failure.
  *
@@ -86,9 +88,19 @@ try {
         failures.push('  ^ AppLabel-class regression suspected — see TODO.md §8.6');
     }
 
+    // 4. No WebGPU validation error. An invalid pipeline does not throw: the
+    //    device reports it once, and every frame that uses it is dropped as an
+    //    invalid command buffer -- the page keeps running on wrong frames. A
+    //    boot with nothing wrong reports none (np-hitch: a particle pipeline
+    //    warmed before the renderer's resources existed, 18,245 of these).
+    const gpuErrors = cap.logs.filter(l => l.text.includes('GpuDevice: uncaptured error'));
+    if (gpuErrors.length) {
+        failures.push(`${gpuErrors.length} WebGPU uncaptured error(s); first: ${gpuErrors[0].text}`);
+    }
+
     console.log('\n=== Smoke test ===');
     if (failures.length === 0) {
-        console.log('PASS — main_screen reached, MainMenuProvider populated, no pageerror');
+        console.log('PASS — main_screen reached, MainMenuProvider populated, no pageerror, no WebGPU error');
     } else {
         console.log('FAIL');
         for (const f of failures) console.log(`  - ${f}`);

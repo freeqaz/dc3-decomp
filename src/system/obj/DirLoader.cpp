@@ -19,6 +19,11 @@
 #include "utl\TextStream.h"
 #include <map>
 
+#ifdef HX_NATIVE
+// native/src/platform/PipelineWarm.cpp
+void NativeWarmLoadedDir(ObjectDir *dir);
+#endif
+
 bool (*DirLoader::sPathEval)(const char *);
 bool DirLoader::sPrintTimes;
 bool DirLoader::sCacheMode;
@@ -543,6 +548,12 @@ void DirLoader::Cleanup(const char *str) {
             mDir->SetSubDirFlag(mSubDir);
             mDir->SyncObjects();
             mDir->SetSubDirFlag(false);
+#ifdef HX_NATIVE
+            // Natively the renderer compiles the material pipelines this dir
+            // will draw with now, on the loading screen, instead of at their
+            // first draw mid-song (native/src/platform/PipelineWarm.cpp).
+            NativeWarmLoadedDir(mDir);
+#endif
         }
     }
     mState = &DirLoader::DoneLoading;
