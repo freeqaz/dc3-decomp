@@ -472,7 +472,7 @@ int DriverFrame(const std::string &driver, const char *tag) {
     return atoi(driver.c_str() + f + 8);
 }
 
-// No render pipeline is compiled once the load is over (dc3 PLAN H-101, engine
+// No render pipeline is compiled once the load is over (dc3 PLAN H-104, engine
 // doc section 39): DirLoader::Cleanup's NativeWarmLoadedDir compiled, or
 // queued, every pipeline the loaded venue, song and HUD can draw with, so
 // from game_screen on no draw creates one: [GPUCOUNT] pipelineCreates minus
