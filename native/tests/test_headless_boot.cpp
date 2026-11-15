@@ -502,6 +502,10 @@ TEST_F(HeadlessBootTest, LongRunStability) {
 // NativeTreeDir reads -- is under the capitals), Tree/dta (this tree's
 // overlay) and Data/ (one symlink per entry of the game data), and the boot
 // runs with DC3_DATA=.../Data.
+//
+// Since H-107 a not-found open is silent, as in the image, so the
+// "failed to open" check below only sees other open errors; a mis-cased host
+// path (ENOENT) is caught by the completion marker and the overlay line.
 TEST_F(HeadlessBootTest, BootsFromUpperCaseHostDirectories) {
     char dataReal[PATH_MAX], dtaReal[PATH_MAX];
     ASSERT_NE(realpath(NativeFindDataDir(), dataReal), nullptr);
