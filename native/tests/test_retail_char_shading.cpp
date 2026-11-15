@@ -35,6 +35,14 @@
 // scaling only the box term (the form before item 11) fails it -- with the
 // factor at 0 the point lights still light the pixel.
 //
+// And the normal detail map (bit 24, kind 4, item 13 (c)): standard.ps
+// 0000030001030035 adds norm_detail_strength (dx, dy, sat(1 - dx^2 - dy^2))
+// of the detail texel to the normal map's (x, y, z) before the de_normal
+// factor. Sabotages: the detail term removed (the form before item 13, which
+// left houseparty's floor without its sheen); its z term removed; the detail
+// added after the de_normal factor; the DC3 gate widened to RB3's form
+// (Rb3FormKeepsThePlainPath fails).
+//
 // Needs a GPU (skips without one). No game data.
 
 #include "test_helpers.h"
@@ -59,13 +67,16 @@ struct CharCase {
     float lightPos[3][4], lightCol[3][4];
     float box[6][4];
     float want[3];
+    float detailTex[4], c106[4];   // kind 4 only: the normal detail texel, (strength, tiling, 1, 1)
 };
 
 const CharCase kCases[] = {
 #include "retail_char_shading_cases.inc"
 };
 
-const char *const kKindName[] = {"skin", "skin (no rim)", "hair", "plain + rim"};
+constexpr int kKinds = 5;
+const char *const kKindName[kKinds] = {"skin", "skin (no rim)", "hair", "plain + rim",
+                                       "plain + detail"};
 
 // Appended to the standard shader: one pixel per dispatch.
 const char *kComputeTail = R"WGSL(
@@ -79,6 +90,7 @@ struct CharTestIn {
     base: vec4f,
     ambient: vec4f,
     projMult: vec4f,
+    detailSample: vec4f,
 }
 @group(3) @binding(1) var<storage, read> charTestIn: CharTestIn;
 @group(3) @binding(2) var<storage, read_write> charTestOut: vec4f;
@@ -91,6 +103,7 @@ fn char_test_main() {
     px.tangent = charTestIn.tangent.xyz;
     px.bitangent = charTestIn.bitangent.xyz;
     px.normalSample = charTestIn.normalSample;
+    px.detailSample = charTestIn.detailSample;
     px.specSample = charTestIn.specSample;
     px.rimSample = vec4f(1.0);
     px.ao = vec4f(1.0, 1.0, 1.0, 0.0);
@@ -170,7 +183,7 @@ protected:
         wgpu::Buffer matBuf = Buffer(sizeof(MaterialUniforms), U);
         wgpu::Buffer objBuf = Buffer(sizeof(ObjectUniforms), U);
         wgpu::Buffer inBuf =
-            Buffer(9 * 16, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopyDst);
+            Buffer(10 * 16, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopyDst);
         wgpu::Buffer outBuf =
             Buffer(16, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);
         wgpu::Buffer staging =
@@ -193,7 +206,7 @@ protected:
         wgpu::BindGroup g0 = group(0, {entry(0, sceneBuf, sizeof(SceneUniforms))});
         wgpu::BindGroup g1 = group(1, {entry(0, matBuf, sizeof(MaterialUniforms))});
         wgpu::BindGroup g2 = group(2, {entry(0, objBuf, sizeof(ObjectUniforms))});
-        wgpu::BindGroup g3 = group(3, {entry(1, inBuf, 9 * 16), entry(2, outBuf, 16)});
+        wgpu::BindGroup g3 = group(3, {entry(1, inBuf, 10 * 16), entry(2, outBuf, 16)});
 
         for (size_t i = 0; i < n; i++) {
             const CharCase &c = cases[i];
@@ -215,17 +228,23 @@ protected:
             m.shaderVariation = c.kind <= 1 ? 1.0f : c.kind == 2 ? 2.0f : 0.0f;
             m.retailFlags[0] = 1.0f;                       // per-pixel
             m.retailFlags[1] = c.kind == 2 ? 0.0f : 1.0f;  // normal map (hair has none)
-            m.retailFlags[2] = 1.0f;                       // specular map
+            m.retailFlags[2] = c.kind == 4 ? 0.0f : 1.0f;  // specular map (detail case has none)
             m.retailFlags[3] = 0.0f;                       // no rim map
+            if (c.kind == 4) {
+                m.hasNormDetailMap = 1.0f;
+                m.normDetailStrength = c.c106[0];
+                m.normDetailTiling = c.c106[1];
+            }
             ObjectUniforms o{};
             for (int f = 0; f < 6; f++) Copy4(o.boxLight[f], c.box[f]);
-            float in[9][4] = {};
+            float in[10][4] = {};
             Copy3(in[0], c.P, 1.0f);
             Copy3(in[1], c.n, 0.0f);
             Copy3(in[2], c.t, 0.0f);
             Copy3(in[3], c.b, 0.0f);
             Copy4(in[4], c.normalTex);
             Copy4(in[5], c.specTex);
+            Copy4(in[9], c.detailTex);
             for (int a = 0; a < 3; a++) {
                 in[6][a] = c.diffTex[a] * c.c0[a];   // texel times material colour
                 in[7][a] = c.c1[a];                  // ambient
@@ -279,8 +298,8 @@ TEST_F(RetailCharShadingTest, PixelShadingIsTheShippedMicrocode) {
     const std::vector<float> got = ShadeAll(2.0f);
     ASSERT_FALSE(got.empty());
     const size_t n = sizeof(kCases) / sizeof(kCases[0]);
-    int bad[4] = {}, total[4] = {};
-    float worst[4] = {};
+    int bad[kKinds] = {}, total[kKinds] = {};
+    float worst[kKinds] = {};
     for (size_t i = 0; i < n; i++) {
         const CharCase &c = kCases[i];
         total[c.kind]++;
@@ -299,7 +318,7 @@ TEST_F(RetailCharShadingTest, PixelShadingIsTheShippedMicrocode) {
                               << c.want[2] << ")";
         }
     }
-    for (int k = 0; k < 4; k++) {
+    for (int k = 0; k < kKinds; k++) {
         printf("[ retail char ] %-14s %d/%d within tolerance, worst rel err %.2e\n", kKindName[k],
                total[k] - bad[k], total[k], worst[k]);
         EXPECT_EQ(bad[k], 0) << kKindName[k];
@@ -316,7 +335,7 @@ TEST_F(RetailCharShadingTest, Rb3FormKeepsThePlainPath) {
     ASSERT_FALSE(dc3.empty());
     ASSERT_FALSE(rb3.empty());
     const size_t n = sizeof(kCases) / sizeof(kCases[0]);
-    int differ[4] = {}, total[4] = {};
+    int differ[kKinds] = {}, total[kKinds] = {};
     for (size_t i = 0; i < n; i++) {
         const int k = kCases[i].kind;
         total[k]++;
@@ -330,6 +349,10 @@ TEST_F(RetailCharShadingTest, Rb3FormKeepsThePlainPath) {
         EXPECT_EQ(differ[k], total[k]) << kKindName[k] << ": " << total[k] - differ[k]
                                        << " cases shade the same under RB3's form";
     EXPECT_GT(differ[3], 0) << "plain + rim: the back light is not DC3-only";
+    // The normal detail is DC3's too: under RB3's form the detail texel is
+    // not read, so every detail case shades differently.
+    EXPECT_EQ(differ[4], total[4]) << kKindName[4] << ": " << total[4] - differ[4]
+                                   << " cases shade the same under RB3's form";
 }
 
 // The plain permutation without rim or specular, under a projected_blend 1
