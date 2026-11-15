@@ -70,7 +70,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-from find_refutations import NOTE_RE, parse_sidecar  # noqa: E402
+from find_refutations import NOTE_RE, parse_sidecar, same_name_any_case  # noqa: E402
 
 VERSION = "373307D9"
 MIN_LINES = 5
@@ -698,10 +698,15 @@ def make_stub(b, indent, sidecar_rel):
 
 # --------------------------------------------------------------------------- sidecar
 
-def sidecar_rel(src_rel):
+def sidecar_rel(src_rel, root="."):
+    """The sidecar for a source file, relative to the repo root.  A sidecar that
+    already exists under another capitalisation is the one (see
+    find_refutations.same_name_any_case): the tree must hold no two paths that
+    differ only in case."""
     p = Path(src_rel)
     parts = p.parts[1:] if p.parts and p.parts[0] == "src" else p.parts
-    return str(Path("docs/decomp/notes", *parts).with_suffix(".md"))
+    rel = Path("docs/decomp/notes", *parts).with_suffix(".md")
+    return os.path.relpath(same_name_any_case(os.path.join(str(root), str(rel))), str(root))
 
 
 def render_sections(src_rel, blocks, head, today):
@@ -766,7 +771,7 @@ def plan_file(root, src_rel, index, min_lines, exclude):
 
 
 def apply_file(root, src_rel, raw, lines, moves, head, today):
-    side_rel = sidecar_rel(src_rel)
+    side_rel = sidecar_rel(src_rel, root)
     new_lines = list(lines)
     for b in sorted(moves, key=lambda b: b.mstart, reverse=True):
         indent = re.match(r"^\s*", lines[b.mstart]).group(0)
@@ -854,7 +859,7 @@ def main(argv=None):
             for b in movable_blocks(lines, lex(lines), a.min_lines):
                 bad += 1
                 print(f"{rel}:{b.mstart + 1}-{b.end + 1}: {b.nmoved}-line lane-note block "
-                      f"in the source; move it to {sidecar_rel(rel)}"
+                      f"in the source; move it to {sidecar_rel(rel, root)}"
                       f" (scripts/notes/migrate_notes.py {rel})")
         print(f"checked {len(rels)} file(s): {bad} lane-note wall(s) of >= {a.min_lines} lines")
         return 1 if bad else 0
@@ -876,7 +881,7 @@ def main(argv=None):
             print(f"REFUSED {rel}:{b.mstart + 1}: {b.refused}")
         if moves:
             new_src, new_side, side_path = apply_file(root, rel, raw, lines, moves, head, a.date)
-            rec["stub_lines"] = sum(len(make_stub(b, "", sidecar_rel(rel))) for b in moves)
+            rec["stub_lines"] = sum(len(make_stub(b, "", sidecar_rel(rel, root))) for b in moves)
             rec["sidecar"] = str(side_path.relative_to(root))
             if a.show:
                 import difflib
