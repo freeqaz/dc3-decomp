@@ -153,6 +153,14 @@ FetchContent_Declare(imgui
 FetchContent_MakeAvailable(imgui)
 if(NOT EMSCRIPTEN)
     # Desktop: GLFW + Dawn backends
+    if(APPLE)
+        # imgui_impl_wgpu.cpp makes a CAMetalLayer through Cocoa on macOS, so it
+        # is Objective-C++ there.  As plain C++ it does not compile (MEASURED on
+        # macOS 15.7 / Apple clang, 2026-11-13).
+        enable_language(OBJCXX)
+        set_source_files_properties(${imgui_SOURCE_DIR}/backends/imgui_impl_wgpu.cpp
+            PROPERTIES LANGUAGE OBJCXX)
+    endif()
     add_library(imgui STATIC
         ${imgui_SOURCE_DIR}/imgui.cpp
         ${imgui_SOURCE_DIR}/imgui_draw.cpp

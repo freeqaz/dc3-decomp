@@ -1,9 +1,19 @@
 # macOS (Apple Silicon)
 
-**State (2026-11-13): prepared from Linux, not yet built on a Mac.** The last
-build on Mac hardware was March 2026. Everything below was fixed or checked
-from Linux, with what that could and could not prove marked **MEASURED** /
-**INFERRED**. Work items: [PLAN.md](PLAN.md) track M and P-8.
+**State (2026-11-15): builds on a Mac.** Built 2026-11-13 on an M3 MacBook Air
+(macOS 15.7.4, command-line tools, Homebrew) at `29c8bdc3d`: `dc3-native`,
+`milo-viewer` and `milo-tests` link, and the no-game-data test run passed
+(333 executed, 0 failed, 468 skipped for want of game data). That build needed
+three source fixes, now in the tree: `imgui_impl_wgpu.cpp` compiled as
+Objective-C++, `<libkern/OSByteOrder.h>` before cpp-httplib (`-fms-compatibility`
+hides `__GNUC__`, which Darwin's `ntohs` macros need), and
+`pthread_get_stacksize_np` in the loader-stack test (Darwin has no
+`pthread_getattr_np`). The engine's own imgui block needs the same
+Objective-C++ line for a build that does not come through dc3 (dc3 defines the
+`imgui` target first); that one is not landed. **Not yet done on a Mac: a run
+with game data.** Notes below that predate the build are still marked
+**MEASURED** / **INFERRED** as they were. Work items: [PLAN.md](PLAN.md) track M
+and P-8.
 
 ## The one command
 
@@ -100,7 +110,9 @@ Notes:
 | Closing the window | GLFW Cocoa | `WindowLoss_X11.cpp` is X11-only; on macOS the close button is GLFW's should-close, the clean path the Linux `WM_DELETE_WINDOW` test covers |
 | Test harness | `scripts/native_test.sh` on macOS bash 3.2 / BSD tools | `--no-assets` is what the macOS CI job runs; the tests' `timeout` falls back to `gtimeout` (coreutils) |
 
-Not problems: case-insensitive APFS (no case collisions in either repo or the
+Not problems: case-insensitive APFS (no two tracked paths differ only in case;
+`tests/test_find_refutations.py` checks it, after `Mtx.md` + `mtx.md` left every
+Mac clone with a modified file until 2026-11-15; none in the engine or the
 assets), endianness, `char` signedness (signed on Apple arm64, as on x86-64),
 x86 intrinsics (none in compiled code), `/proc` (gone: `ExecutablePath.h` uses
 `_NSGetExecutablePath`, RSS uses `task_info`), `<malloc.h>`.
