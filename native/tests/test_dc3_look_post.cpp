@@ -544,35 +544,73 @@ TEST_F(DC3LookPostTest, DitherIsStaticAndSubLevel) {
     chain.Terminate();
 }
 
-// postDofFilter: the depth of field's blur through the tent and the B-spline.
-// A bright 4-pixel line on black, at the far plane (blur factor 1), moving by
-// sub-pixel steps: the blur's energy and spread are retail's (the taps are
-// scaled by DofPass::EnhancedTapScale), and the bilinear read's creases --
-// slope breaks every 4 pixels, at the quarter-size texel centres, so the
-// profile's second difference piles up on one phase of 4 -- are gone.
-TEST_F(DC3LookPostTest, EnhancedDofKeepsTheRadiusWithoutCreases) {
-    ASSERT_TRUE(TheDOFProc);
-    // The game's size: the Poisson taps' reach in quarter texels grows with
-    // the size squared (RetailBlurOffsets), and the compensation with it.
-    constexpr int W = 1280, H = 720;
+// ---- render scale (LookSettings::renderScale; MILO_RENDER_SCALE) ------------
+
+namespace {
+
+// A headless device drawing at 2x its output size (a headless default is 1x).
+bool InitScaled(GpuDevice &scaled, int w, int h) {
+    GpuDeviceDesc desc;
+    desc.headless = true;
+    desc.width = w;
+    desc.height = h;
+    desc.renderScaleExplicit = 2.0f;
+    if (!scaled.Init(desc)) return false;
+    scaled.AcquireHeadlessFrame();  // the headless surface format
+    return scaled.RenderScaled() && scaled.WindowWidth() == 2 * w && scaled.OutputWidth() == w;
+}
+
+wgpu::Texture UploadOn(GpuDevice &gpu, int w, int h, const std::vector<uint8_t> &px,
+                       wgpu::TextureUsage extra = wgpu::TextureUsage::RenderAttachment) {
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)w, (uint32_t)h, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst | extra;
+    wgpu::Texture t = gpu.Device().CreateTexture(&d);
+    wgpu::TexelCopyTextureInfo dst{};
+    dst.texture = t;
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = (uint32_t)w * 4;
+    wgpu::Extent3D ext = {(uint32_t)w, (uint32_t)h, 1};
+    gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+    return t;
+}
+
+}  // namespace
+
+namespace {
+
+// postDofFilter's measurement (EnhancedDofKeepsTheRadiusWithoutCreases and its
+// render-scale variant): a 12 px bright bar on black at the far plane (blur
+// factor 1) moving by sub-pixel steps, through DofPass retail (e = 0) and
+// enhanced (e = 1), on `gpu`, drawn at `s` times 1280x720 (the bar, its path
+// and the rows read scale with it, the radius is read back in 1x pixels).
+// The game's size: the Poisson taps' reach in quarter texels grows with the
+// size squared (RetailBlurOffsets), and the compensation with it.
+struct DofProfileStats {
+    double energy[2] = {}, spread[2] = {}, crease[2] = {};
+};
+DofProfileStats MeasureDofBar(GpuDevice &gpu, int s) {
+    DofProfileStats st;
+    const int W = 1280 * s, H = 720 * s;
     UIScreen *game = Hmx::Object::New<UIScreen>();
     game->SetName("game_screen", ObjectDir::Main());
     class ProbeUI : public UIManager {
     public:
-        void SetCurrent(UIScreen *s) { mCurrentScreen = s; }
+        void SetCurrent(UIScreen *sc) { mCurrentScreen = sc; }
     } ui;
     UIManager *savedUI = TheUI;
     TheUI = &ui;
     ui.SetCurrent(game);
     TheDOFProc->Set(nullptr, 2.0f, 0.5f, 1.0f, 0.0f);
-    ASSERT_TRUE(TheDOFProc->Enabled());
+    EXPECT_TRUE(TheDOFProc->Enabled());
 
     wgpu::TextureDescriptor zd{};
     zd.size = {(uint32_t)W, (uint32_t)H, 1};
     zd.format = wgpu::TextureFormat::Depth32Float;
     zd.sampleCount = 4;
     zd.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
-    wgpu::Texture depth = Gpu().Device().CreateTexture(&zd);
+    wgpu::Texture depth = gpu.Device().CreateTexture(&zd);
     wgpu::TextureView depthView = depth.CreateView();
     {
         wgpu::RenderPassDepthStencilAttachment za{};
@@ -583,19 +621,18 @@ TEST_F(DC3LookPostTest, EnhancedDofKeepsTheRadiusWithoutCreases) {
         wgpu::RenderPassDescriptor rp{};
         rp.label = "TestDofDepthClear";
         rp.depthStencilAttachment = &za;
-        wgpu::CommandEncoder enc = Gpu().Device().CreateCommandEncoder();
+        wgpu::CommandEncoder enc = gpu.Device().CreateCommandEncoder();
         enc.BeginRenderPass(&rp).End();
         wgpu::CommandBuffer cmd = enc.Finish();
-        Gpu().Queue().Submit(1, &cmd);
+        gpu.Queue().Submit(1, &cmd);
     }
     DofPass dof;
     constexpr int kPhases = 16;
-    double energy[2] = {}, spread[2] = {}, crease[2] = {};
     for (int k = 0; k < kPhases; k++) {
         // A 12 px bright bar: wide enough that its blurred profile's
         // curvature stands well above the 8-bit output's rounding.
-        constexpr double kBar = 12.0;
-        const double x0 = 634.0 + 4.0 * k / kPhases;
+        const double kBar = 12.0 * s;
+        const double x0 = (634.0 + 4.0 * k / kPhases) * s;
         std::vector<uint8_t> px((size_t)W * H * 4, 0);
         for (int y = 0; y < H; y++)
             for (int x = 0; x < W; x++) {
@@ -604,52 +641,93 @@ TEST_F(DC3LookPostTest, EnhancedDofKeepsTheRadiusWithoutCreases) {
                 p[0] = p[1] = p[2] = (uint8_t)std::lround(255.0 * std::min(1.0, cov));
                 p[3] = 255;
             }
-        wgpu::Texture scene = Upload(W, H, px);
+        wgpu::Texture scene = UploadOn(gpu, W, H, px);
         wgpu::TextureView sv = scene.CreateView();
         for (int e = 0; e < 2; e++) {
-            wgpu::CommandEncoder enc = Gpu().Device().CreateCommandEncoder();
-            ASSERT_TRUE(dof.Run(enc, sv, wgpu::TextureFormat::RGBA8Unorm, depthView, 4, W, H, Gpu(), e == 1));
+            wgpu::CommandEncoder enc = gpu.Device().CreateCommandEncoder();
+            const bool ran = dof.Run(enc, sv, wgpu::TextureFormat::RGBA8Unorm, depthView, 4, W, H, gpu, e == 1);
+            EXPECT_TRUE(ran);
+            if (!ran) break;
             wgpu::CommandBuffer cmd = enc.Finish();
-            Gpu().Queue().Submit(1, &cmd);
+            gpu.Queue().Submit(1, &cmd);
             std::vector<uint8_t> out((size_t)W * H * 4);
-            ASSERT_TRUE(Gpu().ReadbackTexture(dof.OutputTexture(), W, H, out.data(), out.size()));
+            EXPECT_TRUE(gpu.ReadbackTexture(dof.OutputTexture(), W, H, out.data(), out.size()));
             // The profile: the mean of the middle rows' green.
             std::vector<double> prof(W, 0.0);
-            for (int y = 344; y < 376; y++)
-                for (int x = 0; x < W; x++) prof[x] += out[((size_t)y * W + x) * 4 + 1] / 32.0;
-            double s = 0, c = 0, v = 0;
+            const int rows = 32 * s;
+            for (int y = 344 * s; y < 344 * s + rows; y++)
+                for (int x = 0; x < W; x++) prof[x] += out[((size_t)y * W + x) * 4 + 1] / (double)rows;
+            double sum = 0, c = 0, v = 0;
             for (int x = 0; x < W; x++) {
-                s += prof[x];
+                sum += prof[x];
                 c += prof[x] * x;
             }
-            c /= s;
+            c /= sum;
             for (int x = 0; x < W; x++) v += prof[x] * (x - c) * (x - c);
-            energy[e] += s / kPhases;
+            st.energy[e] += sum / s / kPhases;
             // The blur's own radius: the profile's variance less the bar's.
-            spread[e] += std::sqrt(std::max(0.0, v / s - kBar * kBar / 12.0)) / kPhases;
+            st.spread[e] += std::sqrt(std::max(0.0, v / sum - kBar * kBar / 12.0)) / s / kPhases;
             double phase[4] = {}, all = 0;
             for (int x = 1; x + 1 < W; x++) {
                 const double d2 = prof[x - 1] - 2.0 * prof[x] + prof[x + 1];
-                phase[x & 3] += d2 * d2;
+                phase[x & 3] += d2 * d2;  // the quarter targets' texel: 4 drawn px
                 all += d2 * d2;
             }
-            crease[e] += *std::max_element(phase, phase + 4) / all / kPhases;
+            st.crease[e] += *std::max_element(phase, phase + 4) / all / kPhases;
         }
     }
-    printf("DC3LookPost depth of field: energy %.0f -> %.0f (x%.3f), blur radius %.2f -> %.2f px, "
-           "creases (share of the profile's curvature on one phase of 4; 0.25 = none) %.3f -> %.3f\n",
-           energy[0], energy[1], energy[1] / energy[0], spread[0], spread[1], crease[0], crease[1]);
-    EXPECT_NEAR(energy[1] / energy[0], 1.0, 0.03);
-    // Uncompensated taps read +4% (the tent and the B-spline add their own
-    // variance); 2% separates the two.
-    EXPECT_NEAR(spread[1] / spread[0], 1.0, 0.02) << "the blur radius is retail's";
-    EXPECT_GT(crease[0], 0.45) << "retail's bilinear read creases (non-vacuous)";
-    EXPECT_LT(crease[1], 0.38) << "the B-spline read does not";
     dof.Terminate();
     TheDOFProc->UnSet();
     TheUI = savedUI;
     ui.SetCurrent(nullptr);
     delete game;
+    return st;
+}
+
+}  // namespace
+
+// postDofFilter: the depth of field's blur through the tent and the B-spline.
+// A bright 4-pixel line on black, at the far plane (blur factor 1), moving by
+// sub-pixel steps: the blur's energy and spread are retail's (the taps are
+// scaled by DofPass::EnhancedTapScale), and the bilinear read's creases --
+// slope breaks every 4 pixels, at the quarter-size texel centres, so the
+// profile's second difference piles up on one phase of 4 -- are gone.
+TEST_F(DC3LookPostTest, EnhancedDofKeepsTheRadiusWithoutCreases) {
+    ASSERT_TRUE(TheDOFProc);
+    const DofProfileStats st = MeasureDofBar(Gpu(), 1);
+    printf("DC3LookPost depth of field: energy %.0f -> %.0f (x%.3f), blur radius %.2f -> %.2f px, "
+           "creases (share of the profile's curvature on one phase of 4; 0.25 = none) %.3f -> %.3f\n",
+           st.energy[0], st.energy[1], st.energy[1] / st.energy[0], st.spread[0], st.spread[1],
+           st.crease[0], st.crease[1]);
+    EXPECT_NEAR(st.energy[1] / st.energy[0], 1.0, 0.03);
+    // Uncompensated taps read +4% (the tent and the B-spline add their own
+    // variance); 2% separates the two.
+    EXPECT_NEAR(st.spread[1] / st.spread[0], 1.0, 0.02) << "the blur radius is retail's";
+    EXPECT_GT(st.crease[0], 0.45) << "retail's bilinear read creases (non-vacuous)";
+    EXPECT_LT(st.crease[1], 0.38) << "the B-spline read does not";
+}
+
+// The same at render scale 2 (np-gfx's SceneBlurOffsets: the taps keep the
+// 1x frame's span, so at 2x they reach twice as many quarter texels). The
+// tent and the B-spline add a fixed spread in the quarter targets' OWN
+// texels, a quarter as much of the blur at 2x, so the compensation measures
+// the taps' spread in those texels (DofPass::Run, texels = qw): retail's
+// radius, as at 1x. Sabotage: the spread measured in the 1x quarter's texels
+// (the 2x taps compensated as the 1x ones are) -- the radius reads ~3% short,
+// red.
+TEST_F(DC3LookPostTest, RenderScaledDofKeepsTheEnhancedRadius) {
+    ASSERT_TRUE(TheDOFProc);
+    GpuDevice scaled;
+    if (!InitScaled(scaled, 1280, 720)) GTEST_SKIP() << "no second headless device at 2x";
+    const DofProfileStats st = MeasureDofBar(scaled, 2);
+    printf("DC3LookPost depth of field at render scale 2: energy %.0f -> %.0f (x%.3f), blur radius "
+           "%.2f -> %.2f px (1x pixels), creases %.3f -> %.3f\n",
+           st.energy[0], st.energy[1], st.energy[1] / st.energy[0], st.spread[0], st.spread[1],
+           st.crease[0], st.crease[1]);
+    EXPECT_NEAR(st.energy[1] / st.energy[0], 1.0, 0.03);
+    EXPECT_NEAR(st.spread[1] / st.spread[0], 1.0, 0.015) << "the 2x blur radius is retail's";
+    EXPECT_GT(st.spread[0], 3.0) << "the blur reached the profile (non-vacuous)";
+    scaled.Shutdown();
 }
 
 // {rnd native_look post_*}: the per-item tokens turn on their own post field
@@ -678,4 +756,265 @@ TEST_F(DC3LookPostTest, NativeLookPostTokensSetTheirOwnField) {
         EXPECT_EQ(s.postDofFilter, c.dofFilter) << c.token;
         EXPECT_EQ(s.profile, milo::LookProfile::Enhanced) << c.token << " changed the profile";
     }
+}
+
+
+// The enhanced world grade under a render scale (np-gfx's 2x on a discrete
+// GPU): the same frame drawn at 2x and box-filtered down grades like the 1x
+// frame, as retail's does (DC3RetailPostGpuTest.
+// RenderScaledFrameKeepsTheOutputPixelBloom) -- the enhanced bloom is built
+// from the output-sized copy (DC3BloomSourceDownsample), so its tent, combine
+// and B-spline keep the 1x frame's extent -- and the enhancement is still on
+// at 2x: the 2x frame differs from retail's 2x frame as the 1x frames differ.
+// Both arms. Sabotages: the np-gfx merge taking np-gfx's side of
+// RunDC3Retail (the rp.enhPrecision / enhFilter lines lost) -- the 2x frame is
+// retail's, red; the enhanced bloom reading the 2x scene (RunDC3Bloom given
+// sceneView) -- the halo halves, red.
+TEST_F(DC3LookPostTest, RenderScaledWorldGradeKeepsTheEnhancedBloom) {
+    constexpr int kW = 128, kH = 96;
+    GpuDevice scaled;
+    if (!InitScaled(scaled, kW, kH)) GTEST_SKIP() << "no second headless device at 2x";
+    auto &dev = scaled.Device();
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    RndPostProc *prev = RndPostProc::Current();
+    pp->Select();
+    PostProcPass pass;
+    pass.Init(scaled);
+    // DC3RetailPostGpuTest's pattern: a dark field outside the bloom mask,
+    // bright 4x4 blocks inside it, a 1-px vertical line.
+    auto pattern = [](int x, int y, uint8_t *p) {
+        const bool block = (x % 32) >= 8 && (x % 32) < 12 && (y % 24) >= 10 && (y % 24) < 14;
+        const bool line = x == 70;
+        const uint8_t v = block ? 240 : line ? 200 : 20;
+        p[0] = v;
+        p[1] = line ? 60 : v;
+        p[2] = line ? 120 : v;
+        p[3] = block ? 255 : 0;
+    };
+    std::vector<uint8_t> k = {0, 0, 0, 255};
+    wgpu::Texture black = UploadOn(scaled, 1, 1, k, wgpu::TextureUsage::None);
+    wgpu::TextureView blackView = black.CreateView(), noDepth;
+    auto run = [&](int s, milo::LookProfile look) {
+        const int w = kW * s, h = kH * s;
+        std::vector<uint8_t> px((size_t)w * h * 4);
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) pattern(x / s, y / s, &px[((size_t)y * w + x) * 4]);
+        wgpu::Texture scene = UploadOn(scaled, w, h, px);
+        wgpu::TextureDescriptor d{};
+        d.size = {(uint32_t)w, (uint32_t)h, 1};
+        d.format = scaled.SurfaceFormat();
+        d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+        wgpu::Texture frame = dev.CreateTexture(&d);
+        wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView();
+        milo::ScopedLookOverride o(look);
+        pass.SetWorldGrade(true);
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        pass.Run(enc, sceneView, scene, w, h, noDepth, 1, frameView, blackView, scaled);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        scaled.Queue().Submit(1, &cmd);
+        pass.SetWorldGrade(false);
+        std::vector<uint8_t> out((size_t)w * h * 4);
+        EXPECT_TRUE(scaled.ReadbackTexture(frame, w, h, out.data(), out.size()));
+        std::vector<float> g((size_t)kW * kH * 3);
+        for (int y = 0; y < kH; y++)
+            for (int x = 0; x < kW; x++)
+                for (int c = 0; c < 3; c++) {
+                    float sum = 0;
+                    for (int j = 0; j < s; j++)
+                        for (int i = 0; i < s; i++)
+                            sum += out[(((size_t)(y * s + j)) * w + (x * s + i)) * 4 + c];
+                    g[((size_t)y * kW + x) * 3 + c] = sum / (s * s);
+                }
+        return g;
+    };
+    auto field = [](int x) { return (x % 32) >= 14 && (x % 32) < 20 && (x < 60 || x > 80); };
+    for (int streak = 0; streak < 2; streak++) {
+        pp->SetProperty("bloom_streak", DataNode(streak));
+        pp->SetProperty("bloom_streak_attenuation", DataNode(0.9f));
+        pp->SetProperty("bloom_intensity", DataNode(1.0f));
+        const auto e1 = run(1, milo::LookProfile::Enhanced), e2 = run(2, milo::LookProfile::Enhanced);
+        const auto r1 = run(1, milo::LookProfile::Retail), r2 = run(2, milo::LookProfile::Retail);
+        double halo1 = 0, halo2 = 0, worst = 0, sum = 0, look1 = 0, look2 = 0;
+        for (int y = 0; y < kH; y++)
+            for (int x = 0; x < kW; x++)
+                for (int c = 0; c < 3; c++) {
+                    const size_t i = ((size_t)y * kW + x) * 3 + c;
+                    const double d = std::fabs(e1[i] - e2[i]);
+                    worst = std::max(worst, d);
+                    sum += d;
+                    look1 += std::fabs(e1[i] - r1[i]);
+                    look2 += std::fabs(e2[i] - r2[i]);
+                    if (field(x) && c == 1) {
+                        halo1 += e1[i] - 20;
+                        halo2 += e2[i] - 20;
+                    }
+                }
+        const double n = (double)kW * kH * 3;
+        printf("DC3LookPost render scale 2, %s arm: enhanced mean |1x - 2x| %.3f, worst %.1f; halo 1x "
+               "%.1f 2x %.1f; mean |enhanced - retail| 1x %.3f 2x %.3f\n",
+               streak ? "streak" : "plain", sum / n, worst, halo1, halo2, look1 / n, look2 / n);
+        EXPECT_GT(halo1, 50.0) << "no bloom reached the field; the comparison proves nothing";
+        EXPECT_NEAR(halo2, halo1, 0.1 * halo1) << "the 2x enhanced bloom's spread is not the 1x one's";
+        EXPECT_LT(sum / n, 1.0) << "the 2x enhanced frame does not grade like the 1x one";
+        EXPECT_LT(worst, 12.0);
+        EXPECT_GT(look1 / n, 0.05) << "the enhanced look changes the 1x frame (non-vacuous)";
+        EXPECT_GT(look2, 0.5 * look1) << "the enhancement is off (or much weaker) at 2x";
+    }
+    pass.Terminate();
+    if (prev) prev->Select(); else pp->Unselect();
+    delete pp;
+    scaled.Shutdown();
+}
+
+// The box filter's dither (PresentScale::SetDither, GpuDevice::
+// SetPresentDither), under a render scale: every output pixel whose 2x2 is
+// one 8-bit level -- a flat fill, a glyph's ink -- comes out as that level,
+// dithered or not; a 2x2 whose mean falls between two levels comes out, over
+// each 4x4 output block, at exactly that mean (without the dither: the
+// nearest level, a quarter of a level off); the pattern is fixed (two
+// readbacks agree) and keyed on the output pixel, so a letterboxed present
+// and the readback write the same pixels. Sabotages: SetPresentDither not
+// reaching the readback's PresentScale -- the means are a quarter level off,
+// red; the threshold keyed on the target position (in.pos) -- the
+// letterboxed present differs, red; a TPDF dither (+-1 level) -- flat fills
+// change, red.
+TEST_F(DC3LookPostTest, RenderScaledPresentDitherKeepsLevelsAndFractions) {
+    constexpr int kW = 128, kH = 64, W2 = 2 * kW, H2 = 2 * kH;
+    GpuDevice scaled;
+    if (!InitScaled(scaled, kW, kH)) GTEST_SKIP() << "no second headless device at 2x";
+    if (scaled.SurfaceFormat() != wgpu::TextureFormat::RGBA8Unorm)
+        GTEST_SKIP() << "the headless frame is not RGBA8Unorm";
+    // Left half: flat 2x2s, a different level per output pixel. Right half: n
+    // of each 2x2's four texels one level up (n = 1, 2, 3 by band of 16 output
+    // rows; 0 below), the base level by 4x4 output block.
+    auto level = [](int ox, int oy) { return (ox * 7 + oy * 13) % 256; };
+    auto base = [](int ox, int oy) { return 20 + 9 * ((ox / 4) % 8) + 3 * ((oy / 4) % 4); };
+    auto band = [](int oy) { return (oy / 16) % 4; };
+    std::vector<uint8_t> px((size_t)W2 * H2 * 4);
+    for (int y = 0; y < H2; y++)
+        for (int x = 0; x < W2; x++) {
+            const int ox = x / 2, oy = y / 2, sub = (y & 1) * 2 + (x & 1);
+            int v;
+            if (ox < kW / 2) v = level(ox, oy);
+            else v = base(ox, oy) + (sub < band(oy) ? 1 : 0);
+            uint8_t *p = &px[((size_t)y * W2 + x) * 4];
+            p[0] = p[1] = p[2] = (uint8_t)v;
+            p[3] = 255;
+        }
+    wgpu::Texture pattern = UploadOn(scaled, W2, H2, px);
+    // Into the headless frame 1:1 (an integer-scale present samples nearest).
+    PresentScale copy;
+    {
+        wgpu::CommandEncoder enc = scaled.Device().CreateCommandEncoder();
+        copy.Encode(scaled.Device(), enc, pattern, scaled.AcquireHeadlessFrame(),
+                    wgpu::TextureFormat::RGBA8Unorm, W2, H2);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        scaled.Queue().Submit(1, &cmd);
+    }
+    auto readback = [&](bool dither) {
+        scaled.SetPresentDither(dither);
+        EXPECT_EQ(scaled.PresentDither(), dither);
+        std::vector<uint8_t> out((size_t)kW * kH * 4);
+        EXPECT_TRUE(scaled.ReadbackHeadlessFrame(out.data(), out.size()));
+        return out;
+    };
+    const auto plain = readback(false), dith = readback(true), again = readback(true);
+    size_t flatBad[2] = {}, outOfPair = 0, moved = 0;
+    double meanErr[2] = {}, meanWorst[2] = {};
+    int blocks = 0;
+    for (int oy = 0; oy < kH; oy++)
+        for (int ox = 0; ox < kW / 2; ox++) {
+            const size_t i = ((size_t)oy * kW + ox) * 4;
+            for (int c = 0; c < 3; c++) {
+                flatBad[0] += plain[i + c] != level(ox, oy);
+                flatBad[1] += dith[i + c] != level(ox, oy);
+            }
+        }
+    for (size_t i = 0; i < dith.size(); i++) moved += dith[i] != again[i];
+    for (int by = 0; by < kH; by += 4)
+        for (int bx = kW / 2; bx < kW; bx += 4) {
+            const double want = base(bx, by) + band(by) / 4.0;
+            for (int e = 0; e < 2; e++) {
+                const auto &img = e ? dith : plain;
+                double s = 0;
+                for (int y = by; y < by + 4; y++)
+                    for (int x = bx; x < bx + 4; x++) {
+                        const int v = img[((size_t)y * kW + x) * 4 + 1];
+                        s += v;
+                        if (e && (v < base(bx, by) || v > base(bx, by) + 1)) outOfPair++;
+                    }
+                const double err = std::fabs(s / 16.0 - want);
+                meanErr[e] += err;
+                meanWorst[e] = std::max(meanWorst[e], err);
+            }
+            blocks++;
+        }
+    // The present: PresentScale as GpuDevice's present runs it (box filter,
+    // dither), letterboxed 4 px into a wider target.
+    PresentScale present;
+    present.SetBoxFilter(true);
+    present.SetDither(true);
+    std::vector<uint8_t> shown;
+    {
+        wgpu::TextureDescriptor d{};
+        d.size = {(uint32_t)kW + 8, (uint32_t)kH, 1};
+        d.format = wgpu::TextureFormat::RGBA8Unorm;
+        d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+        wgpu::Texture target = scaled.Device().CreateTexture(&d);
+        wgpu::Texture frameCopy = UploadOn(scaled, W2, H2, px);
+        wgpu::CommandEncoder enc = scaled.Device().CreateCommandEncoder();
+        const PresentRect r = present.Encode(scaled.Device(), enc, frameCopy, target.CreateView(),
+                                             wgpu::TextureFormat::RGBA8Unorm, kW + 8, kH);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        scaled.Queue().Submit(1, &cmd);
+        EXPECT_EQ(r.x, 4);
+        EXPECT_EQ(r.w, kW);
+        shown.resize((size_t)(kW + 8) * kH * 4);
+        EXPECT_TRUE(scaled.ReadbackTexture(target, kW + 8, kH, shown.data(), shown.size()));
+    }
+    size_t presentDiff = 0;
+    for (int y = 0; y < kH; y++)
+        for (int x = 0; x < kW; x++)
+            for (int c = 0; c < 3; c++)
+                presentDiff += shown[((size_t)y * (kW + 8) + x + 4) * 4 + c] != dith[((size_t)y * kW + x) * 4 + c];
+    printf("DC3LookPost present dither at 2x: flat 2x2s changed plain %zu dithered %zu; 4x4 block mean "
+           "error (levels) plain %.3f (worst %.3f) dithered %.3f (worst %.3f) over %d blocks; outside "
+           "the level pair %zu; frame to frame %zu; letterboxed present vs readback %zu\n",
+           flatBad[0], flatBad[1], meanErr[0] / blocks, meanWorst[0], meanErr[1] / blocks, meanWorst[1],
+           blocks, outOfPair, moved, presentDiff);
+    EXPECT_EQ(flatBad[0], 0u);
+    EXPECT_EQ(flatBad[1], 0u) << "a flat fill (an exact 8-bit level) changed under the dither";
+    EXPECT_GT(meanWorst[0], 0.2) << "undithered the fractions round away (non-vacuous)";
+    EXPECT_LT(meanWorst[1], 1e-6) << "the dithered 4x4 blocks keep the 2x2 means exactly";
+    EXPECT_EQ(outOfPair, 0u) << "the dither moves a pixel by less than one level";
+    EXPECT_EQ(moved, 0u) << "the pattern is fixed";
+    EXPECT_EQ(presentDiff, 0u) << "the present and the readback dither alike";
+    scaled.SetPresentDither(false);
+    scaled.Shutdown();
+}
+
+// WgpuRnd asks for the dither each frame from the look: on with
+// LookSettings::postPrecision (DC3_LOOK=enhanced), off under retail and with
+// only another post field on. Sabotage: the SetPresentDither call removed
+// from WgpuRnd::BeginDrawing -- red.
+TEST_F(DC3LookPostTest, PresentDitherFollowsPostPrecision) {
+    GpuDevice &gpu = Gpu();
+    auto frameWith = [&](bool precision, bool bloomFilter) {
+        milo::ScopedLookOverride o(milo::LookProfile::Enhanced);
+        milo::SetLookPostFieldsForInspection(precision, bloomFilter, false);
+        TheRnd.BeginDrawing();
+        TheRnd.EndDrawing();
+        return gpu.PresentDither();
+    };
+    gpu.SetPresentDither(true);
+    EXPECT_FALSE(frameWith(false, true)) << "postBloomFilter alone does not dither the present";
+    EXPECT_TRUE(frameWith(true, false)) << "postPrecision dithers the present";
+    {
+        milo::ScopedLookOverride o(milo::LookProfile::Retail);
+        TheRnd.BeginDrawing();
+        TheRnd.EndDrawing();
+        EXPECT_FALSE(gpu.PresentDither()) << "DC3_LOOK=retail";
+    }
+    TheRnd.BeginDrawing();
+    TheRnd.EndDrawing();
 }
