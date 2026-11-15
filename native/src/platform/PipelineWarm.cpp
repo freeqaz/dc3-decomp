@@ -18,7 +18,15 @@
 //    rollerrink song) -- each keyed value is a key the draw can ask for;
 //  - the font of every bitmap text (RndFont): a text builds its glyph pages
 //    when its string is set, so a page a later string needs (an icon font's)
-//    is in no loaded dir, but its font is.
+//    is in no loaded dir, but its font is;
+//  - the material of every ribbon (HamRibbon, RndRibbon): a ribbon's mesh is
+//    its own and joins a dir only at its first draw;
+//  - a CharFeedback's fail material, which it puts on its character's limb
+//    meshes (skinned) when it syncs, and draws when a move is failed;
+//  - every particle system (RndParticleSys), flare and screen mask (RndFlare,
+//    RndScreenMask: a DrawRect with their material), whose pipelines are the
+//    particle and rect renderers' (platform/Part_Wgpu.cpp, gfx/DrawRect2D.cpp),
+//    1-10 ms each and compiled here synchronously.
 // What the content does not say is the pass, so this says it, by where the
 // object sits:
 //  - everything: the world pass (the main frame: venue, characters, and the
@@ -43,18 +51,25 @@
 #include "obj/Dir.h"
 #include "obj/Object.h"
 #include "char/Character.h"
+#include "hamobj/CharFeedback.h"
+#include "hamobj/HamRibbon.h"
 #include "rndobj/Draw.h"
+#include "rndobj/Flare.h"
 #include "rndobj/Font.h"
 #include "rndobj/Group.h"
 #include "rndobj/Mat.h"
 #include "rndobj/Mesh.h"
+#include "rndobj/Part.h"
 #include "rndobj/PropAnim.h"
 #include "rndobj/PropKeys.h"
+#include "rndobj/Ribbon.h"
+#include "rndobj/ScreenMask.h"
 #include "rndobj/Text.h"
 #include "ui/PanelDir.h"
 #include "world/Reflection.h"
 
 #include "platform/MeshPipelineKey.h"
+#include "platform/Part_Wgpu.h"
 #include "platform/Rnd_Wgpu.h"
 
 #include <chrono>
@@ -191,6 +206,7 @@ public:
         if (!obj || depth > 16) return 0;
         if (RndMesh *mesh = dynamic_cast<RndMesh *>(obj)) return QueueMesh(mesh, ctx);
         if (RndText *text = dynamic_cast<RndText *>(obj)) return QueueText(text, ctx);
+        if (int n = QueueOther(obj, ctx)) return n;
         if (ObjectDir *dir = dynamic_cast<ObjectDir *>(obj)) {
             Warm sub(mCtx);
             sub.mAnimated = mAnimated;
@@ -218,6 +234,36 @@ private:
         const std::vector<MatKeyVariant> v = VariantsOf(mat, a->second);
         return WarmMeshPipelines(mesh, ctx, v.data(), (int)v.size());
     }
+    // What draws a mesh that is in no dir (a ribbon's own), or draws without
+    // a mesh (a particle system; a flare's or a screen mask's rect).
+    int QueueOther(Hmx::Object *obj, const MeshPassContext &ctx) {
+        if (HamRibbon *r = dynamic_cast<HamRibbon *>(obj))  // bones per segment
+            return QueueMaterial(r->GetMat(), true, ctx);
+        if (RndRibbon *r = dynamic_cast<RndRibbon *>(obj))  // no bones
+            return QueueMaterial(r->GetMat(), false, ctx);
+        if (CharFeedback *f = dynamic_cast<CharFeedback *>(obj))  // a character's limbs
+            return QueueMaterial(f->GetFailMat(), true, ctx);
+        if (RndFlare *f = dynamic_cast<RndFlare *>(obj))
+            return f->GetMat() ? gWgpuRnd->WarmRectPipelines(f->GetMat(), ctx) : 0;
+        if (RndScreenMask *m = dynamic_cast<RndScreenMask *>(obj))
+            return m->GetMat() ? gWgpuRnd->WarmRectPipelines(m->GetMat(), ctx) : 0;
+        if (RndParticleSys *p = dynamic_cast<RndParticleSys *>(obj)) {
+            RndMat *mat = p->GetMat();
+            if (!mat) return 0;
+            AnimatedStates::const_iterator a = mAnimated.find(mat);
+            if (a == mAnimated.end()) return WarmParticlePipelines(mat, ctx);
+            const std::vector<int> blends(a->second.blends.begin(), a->second.blends.end());
+            return WarmParticlePipelines(mat, ctx, blends.data(), (int)blends.size());
+        }
+        return 0;
+    }
+    int QueueMaterial(RndMat *mat, bool skinned, const MeshPassContext &ctx) {
+        if (!mat) return 0;
+        AnimatedStates::const_iterator a = mAnimated.find(mat);
+        if (a == mAnimated.end()) return WarmMaterialPipelines(mat, skinned, ctx);
+        const std::vector<MatKeyVariant> v = VariantsOf(mat, a->second);
+        return WarmMaterialPipelines(mat, skinned, ctx, v.data(), (int)v.size());
+    }
     int QueueText(RndText *text, const MeshPassContext &ctx) {
         int n = 0;
         for (std::list<RndTransformable *>::const_iterator it = text->Children().begin();
@@ -234,6 +280,8 @@ private:
                 n += QueueMesh(mesh, ctx);
             } else if (RndText *text = dynamic_cast<RndText *>(obj)) {
                 n += QueueText(text, ctx);
+            } else if (int q = QueueOther(obj, ctx)) {
+                n += q;
             } else if (RndFont *font = dynamic_cast<RndFont *>(obj)) {
                 // Its pages draw in the world and in the overlay of whatever
                 // panel shows them, which need not be the dir it loaded with.

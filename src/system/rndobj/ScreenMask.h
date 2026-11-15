@@ -19,6 +19,11 @@ public:
     OBJ_MEM_OVERLOAD(0x17);
     NEW_OBJ(RndScreenMask)
     static void Init() { REGISTER_OBJ_FACTORY(RndScreenMask) }
+#ifdef HX_NATIVE
+    // What its quad draws with: the native load-time pipeline warm
+    // (native/src/platform/PipelineWarm.cpp) asks for its rect pipeline.
+    RndMat *GetMat() const { return mMat; }
+#endif
 
 protected:
     RndScreenMask();

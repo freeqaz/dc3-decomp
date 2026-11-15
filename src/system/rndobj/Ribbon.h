@@ -35,6 +35,12 @@ public:
     void ConstructMesh();
     void UpdateChase();
     void UpdateMesh();
+#ifdef HX_NATIVE
+    // The material its mesh draws with: the native load-time pipeline warm
+    // (native/src/platform/PipelineWarm.cpp) asks for its keys before the
+    // mesh is in any dir.
+    RndMat *GetMat() const { return mMat; }
+#endif
 
 protected:
     RndRibbon();

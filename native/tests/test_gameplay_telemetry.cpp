@@ -130,7 +130,9 @@ protected:
             return;
         }
         std::string script = GetScriptDir() + "/ymca.txt";
-        sResult = RunWithTelemetry(9050, script.c_str(), 180);
+        // MILO_GPU_COUNTERS: log-only ([GPUCOUNT] every 10 frames), read by
+        // NoPipelineCompiledAfterGameplayStarts.
+        sResult = RunWithTelemetry(9050, script.c_str(), 180, "MILO_GPU_COUNTERS=10");
         sSamples = ParseTelemetry(sResult.output);
         sRanEngine = true;
     }
@@ -394,6 +396,60 @@ TEST_F(GameplayTelemetryTest, WorldPipelineConvergesDuringGameplay) {
         << "Gameplay began, but the world pipeline never converged to "
         << "worldLoaded=1, worldPresent=1, mergerDir=1, clipDir=1. "
         << progressSummary();
+}
+
+// The material pipelines a song draws are compiled while it loads (DirLoader
+// -> NativeWarmLoadedDir, native/src/platform/PipelineWarm.cpp; np-hitch),
+// not at their first draw: each one compiled at the draw is a 20-300 ms frame
+// in the middle of the song. Once the game is playing, the renderer's
+// pipeline-create count does not move. Non-vacuous: the load warmed some.
+// Sabotage (dc3-decomp archive/np-gfx-2026-11-14/lanes/spotperf/round3): the
+// NativeWarmLoadedDir call removed from DirLoader::Cleanup -> the HUD's and
+// the reflections' pipelines compile during the song and this fails.
+// Runs with MILO_PIPELINE_CACHE=0 (MILO_TEST_ENV), so every create is a real
+// compile and the answer does not depend on what the box has cached.
+TEST_F(GameplayTelemetryTest, NoPipelineCompiledAfterGameplayStarts) {
+    auto playing = gameplaySamples();
+    ASSERT_FALSE(playing.empty())
+        << "Never observed game_screen in playing state. " << progressSummary();
+    const int startFrame = playing.front().frame;
+
+    struct Count { int frame; unsigned long long creates, warms; };
+    std::vector<Count> counts;
+    std::istringstream in(sResult.output);
+    std::string line;
+    while (std::getline(in, line)) {
+        const size_t at = line.find("[GPUCOUNT] frame=");
+        if (at == std::string::npos) continue;
+        Count c{};
+        const size_t cr = line.find(" pipelineCreates=", at);
+        const size_t wa = line.find(" pipelineWarms=", at);
+        if (cr == std::string::npos || wa == std::string::npos) continue;
+        c.frame = atoi(line.c_str() + at + 17);
+        c.creates = strtoull(line.c_str() + cr + 17, nullptr, 10);
+        c.warms = strtoull(line.c_str() + wa + 15, nullptr, 10);
+        counts.push_back(c);
+    }
+    ASSERT_FALSE(counts.empty()) << "no [GPUCOUNT] line (MILO_GPU_COUNTERS=10 not honoured?)";
+    const Count *atStart = nullptr;
+    for (const Count &c : counts)
+        if (c.frame <= startFrame) atStart = &c;
+    ASSERT_NE(atStart, nullptr) << "no [GPUCOUNT] line before gameplay began at frame " << startFrame;
+    const Count &last = counts.back();
+    ASSERT_GT(last.frame, startFrame + 1000) << "the run ended " << (last.frame - startFrame)
+                                             << " frames into the song";
+    EXPECT_GT(last.warms, 0u) << "no pipeline was warmed at load (vacuous)";
+    unsigned long long prev = atStart->creates;
+    std::string where;
+    for (const Count &c : counts) {
+        if (c.frame <= atStart->frame) continue;
+        if (c.creates != prev) where += " frame " + std::to_string(c.frame) + ": +" +
+                                        std::to_string(c.creates - prev) + ";";
+        prev = c.creates;
+    }
+    EXPECT_EQ(last.creates, atStart->creates)
+        << "pipelines compiled during the song (gameplay from frame " << startFrame
+        << "):" << where;
 }
 
 TEST_F(GameplayTelemetryTest, SongAnimHasPropKeysDuringGameplay) {
