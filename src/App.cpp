@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include "telemetry\GameplayTelemetry.h"
 #include "NativeQuit.h"
+#include "platform/LoaderBudget_Native.h"
 #if !defined(__EMSCRIPTEN__)
 #include "platform/FramePacer_Native.h"
 #define GLFW_INCLUDE_NONE
@@ -791,6 +792,10 @@ App::App(int argc, char **argv) {
 // > crash guard / ImGui / HTTP hooks, and derefs managers native never creates), so this
 // > mirrors its POLL part call for call, in the image's order. (w22-ml)
 static void Dc3NativeFramePoll() {
+    // PLAN H-107: the loader's per-poll budget at the frame pacer's period (the
+    // image's 10 ms of a 60 Hz frame is 5 ms at 120 fps), before SystemPoll runs
+    // LoadMgr::Poll. See platform/LoaderBudget_Native.h.
+    Dc3LoaderBudgetApply();
     SystemPoll(false);
     {
         START_AUTO_TIMER("misc_poll");
@@ -1203,6 +1208,7 @@ void App::RunWithoutDebugging() {
         }
         const Dc3FrameCap cap = Dc3FrameCapDecide(getenv("DC3_FPS_CAP"), windowed, refreshHz);
         framePacer.SetTarget(cap.fps);
+        Dc3LoaderBudgetSetFrameTarget(framePacer.TargetFps());  // H-107
         MILO_LOG("DC3 Native: frame cap: %s\n", cap.why);
     }
 

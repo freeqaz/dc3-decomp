@@ -315,6 +315,59 @@ TEST_F(HeadlessBootTest, FrameCapWhenAsked) {
     EXPECT_GE(slept, 1.0) << "the cap did not sleep";
 }
 
+// PLAN H-107: the loader's per-poll budget follows the frame pacer's target --
+// the image's 10 ms of a 60 Hz frame is 5 ms at a 120 fps cap, 10 ms at 60,
+// and the image's own value with no cap. Each "loader budget" line reports what
+// LoadMgr holds (read back through its setter); every one must be the image's
+// value (10 or 14 ms) scaled by 60 / cap, so a budget scaled twice (5 -> 2.5)
+// fails too. The pure rule is test_loader_budget.cpp.
+TEST_F(HeadlessBootTest, LoaderBudgetFollowsTheFrameCap) {
+    struct Case {
+        const char *cap;
+        double fps;
+        const char *first;
+    };
+    const Case cases[] = {
+        {"120", 120.0,
+         "loader budget 5.00 ms a poll (the image's 10.00 ms, at a 120.00 fps frame target)"},
+        {"60", 60.0,
+         "loader budget 10.00 ms a poll (the image's 10.00 ms, at a 60.00 fps frame target)"},
+        {nullptr, 0.0, "loader budget 10.00 ms a poll (the image's; no frame target)"},
+    };
+    for (const Case &c : cases) {
+        SCOPED_TRACE(c.cap ? c.cap : "uncapped");
+        std::vector<EnvVar> env;
+        if (c.cap)
+            env.push_back({"DC3_FPS_CAP", c.cap});
+        auto result = RunHeadless(60, nullptr, 120, env);
+        ASSERT_EQ(result.signal, 0) << CrashSummary(result);
+        ASSERT_TRUE(HasCompletionMarker(result.output)) << CrashSummary(result);
+        EXPECT_NE(result.output.find(c.first), std::string::npos) << "no '" << c.first << "' line";
+        int lines = 0;
+        for (size_t pos = result.output.find("loader budget "); pos != std::string::npos;
+             pos = result.output.find("loader budget ", pos + 1)) {
+            lines++;
+            const std::string line =
+                result.output.substr(pos, result.output.find('\n', pos) - pos);
+            double budget = -1, image = -1, fps = -1;
+            if (!c.cap) {
+                EXPECT_EQ(line, "loader budget 10.00 ms a poll (the image's; no frame target)")
+                    << "an uncapped run scaled the loader budget";
+                continue;
+            }
+            ASSERT_EQ(sscanf(line.c_str(),
+                             "loader budget %lf ms a poll (the image's %lf ms, at a %lf fps",
+                             &budget, &image, &fps),
+                      3)
+                << line;
+            EXPECT_DOUBLE_EQ(fps, c.fps) << line;
+            EXPECT_TRUE(image == 10.0 || image == 14.0) << "not an image budget: " << line;
+            EXPECT_NEAR(budget, image * 60.0 / c.fps, 0.006) << line;
+        }
+        EXPECT_GE(lines, 1);
+    }
+}
+
 // Boot with scripted input — press Start after some frames to dismiss title
 // NOTE: Currently crashes in DTA script handlers for UIScreen::Handle when
 // button input triggers joypad config lookups. The DTA handler path needs
