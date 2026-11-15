@@ -15,10 +15,15 @@ static const char *SkipRule(const char* name) {
     // rb3-xenon link the same engine and the LOD one is actively wrong for RB3
     // content — its crowd characters are authored *as* their LOD-2 asset).
 
-    // grid_80by60_cube: the voxel template DepthBuffer3D instances once per
-    // depth sample (cursor.milo, the bustamove visualiser, boxyman, ...).
-    // DepthBuffer3D's draw is still a native stub, so the template would draw
-    // as one bare cube; it stays hidden with or without a camera (PLAN P-4).
+    // grid_80by60_cube: the 80x60 grid of cubes DepthBuffer3D draws the player
+    // with (boxyman, the visualizers, bustamove).  The image only ever draws
+    // it through DepthBuffer3D::DrawMesh with the depthbuffer_3d shader bound,
+    // which places, sizes and culls every cube.  Natively that draw is
+    // NativeDepthBuffer3DDrawTile (DepthBuffer3DDraw_Native.cpp): it runs the
+    // shader on the CPU and draws meshes of its own, which are unnamed and so
+    // never reach this rule.  The grid mesh itself, drawn by the standard
+    // pipeline, would be 4,800 unshaded cubes in a sheet; it stays hidden
+    // with or without a camera (PLAN P-4).
     if (strstr(name, "grid_80by60")) return "kinect-depth-grid";
 
     // No `_lod` name test. dc3-native used to drop every mesh whose name holds
