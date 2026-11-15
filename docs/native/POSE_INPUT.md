@@ -2116,15 +2116,26 @@ under `camera_fps` means inference is the limit, both low means the camera
 is. `--no-capture-thread` reads the camera in the loop (two buffers still),
 for comparison.
 
-**Not verified.** The capture numbers above come from probes that open the
-camera the way the server does (`cv2.VideoCapture`, V4L2, the same
-properties) with a sleep for inference; the probe's `thread` shape is what
-`NewestFrameCapture` implements. The changed `pose_server.py` itself has not
-run on the GPD's camera: the box left the tailnet (about 21:20 PST, ten
-minutes after the last measurement) before that run. Nothing was measured
-with a person in view, so detection, two-dancer inference in a live session
-and the score are all open. The capture thread has not run on macOS
-(AVFoundation); `--no-capture-thread` is the way back there.
+**Measured on the GPD's camera, 2026-11-15** (`pose_server.py` itself, the
+full model, one person in view, auto exposure in a dim room, 8 s per run, a
+client reading every packet):
+
+| server | packets/s | camera step (p50) | capture-to-packet age p50 / p95 | inference |
+|---|---|---|---|---|
+| main (one buffer) | 7.6 | 120 ms | 231 / 350 ms | 50 ms |
+| this change | 14.1 | 60 ms | 167 / 227 ms | 46 ms |
+| this change, `--no-capture-thread` | 13.2 | 60 ms | 167 / 228 ms | 46 ms |
+| main, +30 ms inference | 7.6 | 120 ms | 262 / 380 ms | 79 ms |
+| this change, +30 ms | 11.2 | 60 ms | 257 / 319 ms | 80 ms |
+| this change, +30 ms, `--no-capture-thread` | 11.4 | 60 ms | 294 / 360 ms | 79 ms |
+
+`POSE_STATS` read `fps=16.7 camera_fps=16.7` on the change and `fps=8.5` on
+main: the camera delivered every frame it made (16.7 a second at that
+exposure) where main got every other one. With slow inference the thread
+does not raise the rate but hands over a newer frame (age p50 257 against
+294 ms). **Still open:** two dancers in a live session and the score, and
+the capture thread on macOS (AVFoundation), where `--no-capture-thread` is
+the way back.
 
 Tests: `tests/test_pose_server.py` — `CameraRequestTest` (two buffers),
 `NewestFrameCaptureTest` (newest wins and is handed out once; a frame's
