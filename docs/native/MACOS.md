@@ -1,6 +1,6 @@
 # macOS (Apple Silicon)
 
-**State (2026-11-15): builds on a Mac.** Built 2026-11-13 on an M3 MacBook Air
+**State (2026-11-15): builds on a Mac and plays a song headless.** Built 2026-11-13 on an M3 MacBook Air
 (macOS 15.7.4, command-line tools, Homebrew) at `29c8bdc3d`: `dc3-native`,
 `milo-viewer` and `milo-tests` link, and the no-game-data test run passed
 (333 executed, 0 failed, 468 skipped for want of game data). That build needed
@@ -10,8 +10,17 @@ hides `__GNUC__`, which Darwin's `ntohs` macros need), and
 `pthread_get_stacksize_np` in the loader-stack test (Darwin has no
 `pthread_getattr_np`). The engine's own imgui block needs the same
 Objective-C++ line for a build that does not come through dc3 (dc3 defines the
-`imgui` target first); that one is not landed. **Not yet done on a Mac: a run
-with game data.** Notes below that predate the build are still marked
+`imgui` target first); that one is not landed. With the game data in place
+(`451af6c41`, engine `9f6291a`), `scripts/mac/bootstrap.sh --no-launch --smoke`
+passed on that machine on 2026-11-15: the scripted YMCA run on Metal ("Apple M3")
+reached gameplay and stayed there, 3,885 of 8,000 frames on `game_screen` in
+38 s. **Not yet done on a Mac: a windowed run with the camera** — macOS asks
+for camera permission in a dialog on the Mac's own screen, so it cannot be
+granted over SSH. A first smoke there stopped at the loading screen with
+"MIDI file header is corrupt" and "Can't load old ObjectDir": one archive
+(`main_xbox_6.ark`) had been cut short by an interrupted copy and resumed
+wrongly. The size was right; only a checksum against the source showed it.
+Notes below that predate the build are still marked
 **MEASURED** / **INFERRED** as they were. Work items: [PLAN.md](PLAN.md) track M
 and P-8.
 

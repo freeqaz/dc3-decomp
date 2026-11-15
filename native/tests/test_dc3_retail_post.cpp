@@ -1786,11 +1786,20 @@ TEST_F(DC3RetailPostGpuTest, SteadyFrameCreatesNoBindGroup) {
     rb3.bloomLumaScale = 1.0f;
     for (int i = 0; i < 3; i++) rb3.xfm[i][i] = 1.0f;
 
+    // The enhanced look's chain (np-gfx-post round 10: 16-bit sets, the tent,
+    // the plain arm's combine, the B-spline composite) on the same cache.
+    auto enhanced = [](RetailPostParams p) {
+        p.enhPrecision = p.enhFilter = true;
+        return p;
+    };
     struct Arm { const char *name; RetailPostParams p; } arms[] = {
         {"dc3 peak (streak, noise, motion blur, velocity, hue)", peak},
         {"dc3 glare", glare},
         {"dc3 plain", plain},
         {"rb3", rb3},
+        {"dc3 enhanced peak", enhanced(peak)},
+        {"dc3 enhanced glare", enhanced(glare)},
+        {"dc3 enhanced plain", enhanced(plain)},
     };
     for (const Arm &a : arms) {
         const std::vector<uint64_t> c = RunChainFrames(post, cache, frameId, t, kW, kH, a.p, 8, gpu);
@@ -1803,7 +1812,7 @@ TEST_F(DC3RetailPostGpuTest, SteadyFrameCreatesNoBindGroup) {
                                 << " bind group(s); per frame: " << CreatedList(c);
     }
     EXPECT_EQ(cache.Uncached(), 0u) << "every post-chain descriptor is keyable";
-    EXPECT_EQ(post.VelocityPasses(), 8) << "the peak arm ran its velocity pass every frame";
+    EXPECT_EQ(post.VelocityPasses(), 16) << "the two peak arms ran their velocity pass every frame";
 
     // The display ramp and the generic bloom (DC3_RETAIL_POST=0, rb3-xenon).
     DisplayRamp ramp;
