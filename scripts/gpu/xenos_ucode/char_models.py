@@ -17,8 +17,9 @@ normalised), r3 normal, r4 tangent, r5 bitangent. Constants: c0 material
 colour, c1 ambient, c2 specular (rgb, power), c14.x = 1 - de_normal, c19
 second specular colour, c61 rim (rgb, power), c62..c64 point positions
 (w falloff slope), c66..c68 point colours (w falloff offset), c80..c85 the box
-map faces +X -X +Y -Y +Z -Z. Textures: tf0 diffuse, tf1 normal map, tf2
-specular map.
+map faces +X -X +Y -Y +Z -Z, c106 normal detail (strength, tiling, 1, 1).
+Textures: tf0 diffuse, tf1 normal map, tf2 specular map, tf14 the normal
+detail map (fetched at uv * c106.y).
 """
 import argparse
 import os
@@ -32,12 +33,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ARCHIVE = "/home/free/code/milohax/dc3-decomp/archive/np-gfx-2026-11-14/lanes/light"
 DEFAULT_UCODE = ARCHIVE + "/round2/ucode"
 DEFAULT_SHADERS = ARCHIVE + "/shaders/standard"
+# Listings disassembled after round 2 (dis.sh), looked up here when --ucode
+# does not hold them.
+EXTRA_UCODE = ("/home/free/code/milohax/dc3-decomp/archive/np-gfx-2026-11-14/lanes/sharp/"
+               "item13/c/ucode")
 
 SKIN = "0000032040035037"          # skin, rim, rim-under, normal + spec maps
 SKIN_NO_RIM = "0000030040031037"   # skin, normal + spec maps, no rim
 HAIR = "0000030080031017"          # hair, spec map
 PLAIN_RIM = "0000032000031037"     # no variation, rim, normal + spec maps
 PLAIN = "0000030000031017"         # no variation, spec map
+PLAIN_DETAIL = "0000030001030035"  # no variation, normal map + normal detail (bit 24), specular
 
 LIT_BYTES = {SKIN_NO_RIM: 128}     # the others carry 64 bytes (c252..c255)
 
@@ -80,10 +86,17 @@ def lights(P, c):
     return out
 
 
-def bumped(n, t, b, nm, k):
-    """(the normal with de_normal applied, the normal at full strength)"""
+def bumped(n, t, b, nm, k, detail=None, strength=0.0):
+    """(the normal with de_normal applied, the normal at full strength).
+    With a normal detail texel (bit 24) its x, y and z = sat(1 - x^2 - y^2),
+    times the strength c106.x, are added to the normal map's before the
+    de_normal factor and the tangent frame."""
     x, y = nm[0] * 2 - 1, nm[1] * 2 - 1
     z = sat(1 - x * x - y * y)
+    if detail is not None:
+        dx, dy = detail[0] * 2 - 1, detail[1] * 2 - 1
+        x, y = x + strength * dx, y + strength * dy
+        z = z + strength * sat(1 - dx * dx - dy * dy)
     return nrm(z * n + k * x * b + k * y * t), nrm(z * n + x * b + y * t)
 
 
@@ -147,11 +160,15 @@ def hair(I, c, tex):
     return (light * c[0][:3] + c[1][:3] * c[0][:3]) * diff[:3] + spec * spt[:3]
 
 
-def plain(I, c, tex, has_rim=True, has_normal_map=True):
+def plain(I, c, tex, has_rim=True, has_normal_map=True, has_detail=False,
+          has_spec_map=True):
     P, V = I[1][:3], nrm(I[2][:3])
     n, t, b = I[3][:3], I[4][:3], I[5][:3]
-    diff, nm, spt = tex[0], tex[1], tex[2]
-    N = bumped(n, t, b, nm, c[14][0])[0] if has_normal_map else nrm(n)
+    diff, nm = tex[0], tex[1]
+    spt = tex[2] if has_spec_map else np.ones(4)
+    detail = tex[14] if has_detail else None
+    strength = c[106][0] if has_detail else 0.0
+    N = bumped(n, t, b, nm, c[14][0], detail, strength)[0] if has_normal_map else nrm(n)
     base = diff[:3] * c[0][:3]
     light = c[1][:3] + box(N, c)
     sp = spt * c[2]
@@ -179,8 +196,12 @@ def plain_no_rim(I, c, tex):
     return plain(I, c, tex, has_rim=False, has_normal_map=False)
 
 
+def plain_detail(I, c, tex):
+    return plain(I, c, tex, has_rim=False, has_detail=True, has_spec_map=False)
+
+
 MODELS = {SKIN: skin, SKIN_NO_RIM: skin_no_rim, HAIR: hair, PLAIN_RIM: plain,
-          PLAIN: plain_no_rim}
+          PLAIN: plain_no_rim, PLAIN_DETAIL: plain_detail}
 
 
 def rnd_inputs(rng, normal_scale=(1.0, 1.0)):
@@ -205,16 +226,29 @@ def rnd_inputs(rng, normal_scale=(1.0, 1.0)):
     return I, c, tex
 
 
+def rnd_detail(rng, c, tex):
+    """The normal detail inputs (c106, tf14), drawn from their own generator so
+    that adding them leaves every other permutation's inputs as they were."""
+    c[106] = np.array([rng.uniform(0.05, 1.5), rng.uniform(1, 60), 1.0, 1.0])
+    tex[14] = rng.random(4)
+    tex[14][:2] = 0.5 + 0.6 * (tex[14][:2] - 0.5)
+
+
 def emulator(ucode_dir, shaders_dir, key):
-    return Ucode(f"{ucode_dir}/{key}.ps.txt", literals(shaders_dir, key))
+    path = f"{ucode_dir}/{key}.ps.txt"
+    if not os.path.exists(path):
+        path = f"{EXTRA_UCODE}/{key}.ps.txt"
+    return Ucode(path, literals(shaders_dir, key))
 
 
 def check(ucode_dir, shaders_dir, key, n=2000, seed=1, normal_scale=(1.0, 1.0)):
     emu = emulator(ucode_dir, shaders_dir, key)
     rng = np.random.default_rng(seed)
+    rng_detail = np.random.default_rng(seed + 1000)
     worst = 0.0
     for _ in range(n):
         I, c, tex = rnd_inputs(rng, normal_scale)
+        rnd_detail(rng_detail, c, tex)
         got = emu.run(I, c, tex)["oC0"][:3]
         want = MODELS[key](I, c, tex)
         worst = max(worst, float(np.max(np.abs(got - want) / (1e-3 + np.abs(got)))))
