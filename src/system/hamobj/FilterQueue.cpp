@@ -98,7 +98,9 @@ void FilterQueue::Poll(const SkeletonUpdateData &skelData) {
         // untouched. This whole block compiles out on PPC.
         bool selfTest = false;
         extern bool Dc3EnvFlag(const char *, bool);
-        if (Dc3EnvFlag("DC3_POSE_SELFTEST", false)) {
+        // H-107: read once; nothing in the process writes it.
+        static const bool sPoseSelfTest = Dc3EnvFlag("DC3_POSE_SELFTEST", false);
+        if (sPoseSelfTest) {
             selfTest = true;
             skel = const_cast<BaseSkeleton *>(
                 static_cast<const BaseSkeleton *>(

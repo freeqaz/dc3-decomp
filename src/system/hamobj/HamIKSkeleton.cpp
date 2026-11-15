@@ -92,7 +92,7 @@ void HamIKSkeleton::Poll() {
             // — proven 2026-06-08, see the session doc). Default = the original
             // matched stamp, so default native behavior is unchanged.
             Transform t = charTrans->WorldXfm();
-            const char *neutralMode = getenv("DC3_IK_NEUTRAL");
+            static const char *const neutralMode = getenv("DC3_IK_NEUTRAL");  // H-107: read once; nothing in the process writes it
             if (neutralMode && streq(neutralMode, "local")) {
                 t.v.x = 0.0f;
                 t.v.y = 0.0f;

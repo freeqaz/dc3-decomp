@@ -499,7 +499,8 @@ void CharIKFoot::Poll() {
     }
     {
         static int sCharIKFootPollLog = 0;
-        if (getenv("DC3_IK_DIAG2") && sCharIKFootPollLog < 400) {
+        static const bool sIkDiag2 = getenv("DC3_IK_DIAG2") != nullptr;  // H-107: read once; nothing in the process writes it
+        if (sIkDiag2 && sCharIKFootPollLog < 400) {
             sCharIKFootPollLog++;
             const Vector3 fw = mFinger ? mFinger->WorldXfm().v : Vector3(0,0,0);
             const Vector3 hw = mHand ? mHand->WorldXfm().v : Vector3(0,0,0);
@@ -603,7 +604,8 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
     // HamIKEffector's SetWorldXfm). Tests whether a floor-clamped goal re-plants
     // the rendered foot during the dance crouch (the toe-target sinks to -4 with
     // the over-extended leg). Remove before shipping.
-    if (Dc3FeetPlantFix() || getenv("DC3_IK_FOOTPLANT")) {
+    static const bool sIkFootplant = getenv("DC3_IK_FOOTPLANT") != nullptr;  // H-107: read once; nothing in the process writes it
+    if (Dc3FeetPlantFix() || sIkFootplant) {
         if (tf.v.z < 0.0f)
             tf.v.z = 0.0f;
     }
@@ -662,7 +664,8 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
             return;
         }
     }
-    if (getenv("DC3_IK_DIAG")) {
+    static const bool sIkDiag = getenv("DC3_IK_DIAG") != nullptr;  // H-107: read once; nothing in the process writes it
+    if (sIkDiag) {
         static int sFsmLog = 0;
         const char *pn = PathName(this);
         if (sFsmLog < 40 && pn && strstr(pn, "main.milo")) {

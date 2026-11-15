@@ -838,9 +838,11 @@ static void Dc3NativeFramePoll() {
         // DC3_NATIVE_SCORING=0. Web goes default-on too (CheckForSkeletonLoss
         // early-returns on __EMSCRIPTEN__).
         extern bool Dc3EnvFlag(const char *, bool);
-        if (TheGestureMgr
-            && (Dc3EnvFlag("DC3_NATIVE_SCORING", true)
-                || Dc3EnvFlag("DC3_POSE_SELFTEST", false)))
+        // H-107: read once; nothing in the process writes either (the same
+        // decision GestureMgr_Native.cpp caches as sSensorFeedEnabled).
+        static const bool sPollGestures =
+            Dc3EnvFlag("DC3_NATIVE_SCORING", true) || Dc3EnvFlag("DC3_POSE_SELFTEST", false);
+        if (TheGestureMgr && sPollGestures)
             TheGestureMgr->Poll();
     }
     if (TheUI)
@@ -1297,7 +1299,8 @@ void App::RunWithoutDebugging() {
             extern bool Dc3EnvFlag(const char *, bool);
             return Dc3EnvFlag("DC3_DRAW_CRASH_GUARD", false);
         }();
-        if (TheUI && !getenv("DC3_HUD_ONLY") && !getenv("DC3_NO_UI")) {
+        static const bool sNoUiDraw = getenv("DC3_HUD_ONLY") || getenv("DC3_NO_UI");  // H-107: read once; nothing in the process writes it
+        if (TheUI && !sNoUiDraw) {
             if (!sDrawCrashGuard) {
                 TheUI->Draw();
             } else if (sigsetjmp(gDrawJmpBuf, 1) == 0) {
