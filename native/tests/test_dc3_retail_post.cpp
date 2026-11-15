@@ -1882,8 +1882,12 @@ TEST_F(DC3RetailPostGpuTest, ResizeDropsTheOldTargetsGroups) {
 // that called device.CreateBindGroup itself would be invisible to it. Every
 // CreateBindGroup in the post chain's sources is therefore the cache-less
 // fallback of a `mBindGroups ? mBindGroups->GetOrCreate(...) :` (a pass used
-// without WgpuRnd, as the unit tests do). Sabotage: replacing one Group() call
-// in RB3RetailPostDC3.cpp with gpu.Device().CreateBindGroup(&bgd) fails here.
+// without WgpuRnd, as the unit tests do). Since engine e14e052 (np-framecost4)
+// those fallbacks are CreateCountedBindGroup (gfx/BindGroupCount.h), which the
+// scan counts as a create too: matching only "CreateBindGroup(" it found 0 of
+// them and failed its own non-vacuous check. Sabotages: replacing one Group()
+// call in RB3RetailPostDC3.cpp with gpu.Device().CreateBindGroup(&bgd), or with
+// CreateCountedBindGroup(gpu.Device(), &bgd), fails here.
 TEST(DC3RetailPostSource, EveryPostChainBindGroupGoesThroughTheCache) {
     const char *files[] = {"gfx/RB3RetailPost.cpp", "gfx/RB3RetailPostDC3.cpp", "gfx/BloomPass.cpp",
                            "gfx/DofPass.cpp",       "gfx/DofPass.h",            "gfx/DisplayRamp.cpp",
@@ -1896,9 +1900,12 @@ TEST(DC3RetailPostSource, EveryPostChainBindGroupGoesThroughTheCache) {
         std::vector<std::string> lines;
         for (std::string l; std::getline(in, l);) lines.push_back(l);
         for (size_t i = 0; i < lines.size(); i++) {
-            if (lines[i].find("CreateBindGroup(") == std::string::npos) continue;
+            size_t at = lines[i].find("CreateBindGroup(");
+            const size_t counted = lines[i].find("CreateCountedBindGroup(");
+            if (counted < at) at = counted;
+            if (at == std::string::npos) continue;
             const size_t c = lines[i].find("//");
-            if (c != std::string::npos && c < lines[i].find("CreateBindGroup(")) continue;
+            if (c != std::string::npos && c < at) continue;
             bool guarded = false;
             for (size_t j = (i >= 2 ? i - 2 : 0); j <= i; j++)
                 guarded |= lines[j].find("mBindGroups ?") != std::string::npos;
