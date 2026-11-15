@@ -336,7 +336,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "8cc0f227fba331680a5c146399924cf0d79d0f7e"
+set(MILO_ENGINE_PIN "3784ab530e5f1dde2e6fe87529f09ba369066e44"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -2164,6 +2164,8 @@ if(BUILD_TESTS)
         tests/test_native_ui_material_terms.cpp
         tests/test_frame_pacer.cpp     # H-29 frame cap + engine CPU-use guards
         tests/test_bind_group_cache.cpp # H-30/H-31 cached bind groups, staged uniform rings
+        tests/test_fringe_fade.cpp # np-gfx-sharp item 8: DC3 draws no alpha fringe fade
+        tests/test_map_sampler_wrap.cpp # np-gfx-sharp item 8: a material's tex_wrap clamps its maps
         tests/test_headless_frames_in_flight.cpp # H-75 a headless frame loop stays within 2 frames of the GPU
         tests/test_host_path_case.cpp  # H-17/H-23 upper-case host directories
         tests/test_present_scale.cpp  # H-18 fit the frame into the window
