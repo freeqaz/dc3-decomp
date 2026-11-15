@@ -584,15 +584,16 @@ namespace {
 // render-scale variant): a 12 px bright bar on black at the far plane (blur
 // factor 1) moving by sub-pixel steps, through DofPass retail (e = 0) and
 // enhanced (e = 1), on `gpu`, drawn at `s` times 1280x720 (the bar, its path
-// and the rows read scale with it, the radius is read back in 1x pixels).
+// and the rows read scale with it, the radius is read back in 1x pixels; `s`
+// need not be whole: a frame at its output's resolution is 1.5x at 1080p).
 // The game's size: the Poisson taps' reach in quarter texels grows with the
 // size squared (RetailBlurOffsets), and the compensation with it.
 struct DofProfileStats {
     double energy[2] = {}, spread[2] = {}, crease[2] = {};
 };
-DofProfileStats MeasureDofBar(GpuDevice &gpu, int s) {
+DofProfileStats MeasureDofBar(GpuDevice &gpu, double s) {
     DofProfileStats st;
-    const int W = 1280 * s, H = 720 * s;
+    const int W = (int)std::lround(1280 * s), H = (int)std::lround(720 * s);
     UIScreen *game = Hmx::Object::New<UIScreen>();
     game->SetName("game_screen", ObjectDir::Main());
     class ProbeUI : public UIManager {
@@ -654,8 +655,8 @@ DofProfileStats MeasureDofBar(GpuDevice &gpu, int s) {
             EXPECT_TRUE(gpu.ReadbackTexture(dof.OutputTexture(), W, H, out.data(), out.size()));
             // The profile: the mean of the middle rows' green.
             std::vector<double> prof(W, 0.0);
-            const int rows = 32 * s;
-            for (int y = 344 * s; y < 344 * s + rows; y++)
+            const int rows = (int)std::lround(32 * s), y0 = (int)std::lround(344 * s);
+            for (int y = y0; y < y0 + rows; y++)
                 for (int x = 0; x < W; x++) prof[x] += out[((size_t)y * W + x) * 4 + 1] / (double)rows;
             double sum = 0, c = 0, v = 0;
             for (int x = 0; x < W; x++) {
@@ -728,6 +729,43 @@ TEST_F(DC3LookPostTest, RenderScaledDofKeepsTheEnhancedRadius) {
     EXPECT_NEAR(st.spread[1] / st.spread[0], 1.0, 0.015) << "the 2x blur radius is retail's";
     EXPECT_GT(st.spread[0], 3.0) << "the blur reached the profile (non-vacuous)";
     scaled.Shutdown();
+}
+
+// The same at the non-whole scales of a frame drawn at its output's own
+// resolution (np-outres, GpuDeviceDesc::outputFollowsTarget): a 1920x1080
+// output against the 1280x720 logical frame is 1.5x at render scale 1 and 3x
+// at render scale 2 (3840x2160 drawn). The taps keep the logical frame's span
+// (SceneBlurOffsets with RenderScaleFor = drawn / logical) and the tent and
+// B-spline compensation is measured in the drawn quarter's own texels, so
+// the enhanced radius is retail's at either. Sabotage: the compensation's
+// spread measured in the logical quarter's texels -- red at both.
+TEST_F(DC3LookPostTest, FollowingOutputDofKeepsTheEnhancedRadius) {
+    ASSERT_TRUE(TheDOFProc);
+    for (int asked = 0; asked < 2; asked++) {
+        GpuDevice d;
+        GpuDeviceDesc desc;
+        desc.headless = true;
+        desc.width = 1920;
+        desc.height = 1080;
+        desc.outputFollowsTarget = true;
+        desc.logicalWidth = 1280;
+        desc.logicalHeight = 720;
+        desc.renderScaleExplicit = asked ? 2.0f : 0.0f;
+        if (!d.Init(desc)) GTEST_SKIP() << "no second headless device";
+        const double s = asked ? 3.0 : 1.5;
+        ASSERT_FLOAT_EQ(d.RenderScaleFor(d.WindowWidth()), (float)s);
+        ASSERT_EQ(d.WindowWidth(), (int)std::lround(1280 * s));
+        const DofProfileStats st = MeasureDofBar(d, s);
+        printf("DC3LookPost depth of field at a 1920x1080 output, %.1fx the logical frame: energy "
+               "%.0f -> %.0f (x%.3f), blur radius %.2f -> %.2f px (1x pixels), creases %.3f -> %.3f\n",
+               s, st.energy[0], st.energy[1], st.energy[1] / st.energy[0], st.spread[0], st.spread[1],
+               st.crease[0], st.crease[1]);
+        EXPECT_NEAR(st.energy[1] / st.energy[0], 1.0, 0.03) << s << "x";
+        EXPECT_NEAR(st.spread[1] / st.spread[0], 1.0, 0.015) << s << "x: the blur radius is retail's";
+        EXPECT_GT(st.spread[0], 3.0) << "the blur reached the profile (non-vacuous)";
+        EXPECT_LT(st.crease[1], st.crease[0]) << s << "x: the B-spline read creases less";
+        d.Shutdown();
+    }
 }
 
 // {rnd native_look post_*}: the per-item tokens turn on their own post field
@@ -878,12 +916,11 @@ TEST_F(DC3LookPostTest, RenderScaledWorldGradeKeepsTheEnhancedBloom) {
 // red; the threshold keyed on the target position (in.pos) -- the
 // letterboxed present differs, red; a TPDF dither (+-1 level) -- flat fills
 // change, red.
-TEST_F(DC3LookPostTest, RenderScaledPresentDitherKeepsLevelsAndFractions) {
-    constexpr int kW = 128, kH = 64, W2 = 2 * kW, H2 = 2 * kH;
-    GpuDevice scaled;
-    if (!InitScaled(scaled, kW, kH)) GTEST_SKIP() << "no second headless device at 2x";
-    if (scaled.SurfaceFormat() != wgpu::TextureFormat::RGBA8Unorm)
-        GTEST_SKIP() << "the headless frame is not RGBA8Unorm";
+namespace {
+// RenderScaledPresentDitherKeepsLevelsAndFractions' measurement on `scaled`, a
+// headless device drawing 2x its kW x kH output.
+void CheckPresentDither(GpuDevice &scaled, const int kW, const int kH, const char *what) {
+    const int W2 = 2 * kW, H2 = 2 * kH;
     // Left half: flat 2x2s, a different level per output pixel. Right half: n
     // of each 2x2's four texels one level up (n = 1, 2, 3 by band of 16 output
     // rows; 0 below), the base level by 4x4 output block.
@@ -978,10 +1015,10 @@ TEST_F(DC3LookPostTest, RenderScaledPresentDitherKeepsLevelsAndFractions) {
         for (int x = 0; x < kW; x++)
             for (int c = 0; c < 3; c++)
                 presentDiff += shown[((size_t)y * (kW + 6) + x + 3) * 4 + c] != dith[((size_t)y * kW + x) * 4 + c];
-    printf("DC3LookPost present dither at 2x: flat 2x2s changed plain %zu dithered %zu; 4x4 block mean "
+    printf("DC3LookPost present dither, %s: flat 2x2s changed plain %zu dithered %zu; 4x4 block mean "
            "error (levels) plain %.3f (worst %.3f) dithered %.3f (worst %.3f) over %d blocks; outside "
            "the level pair %zu; frame to frame %zu; letterboxed present vs readback %zu\n",
-           flatBad[0], flatBad[1], meanErr[0] / blocks, meanWorst[0], meanErr[1] / blocks, meanWorst[1],
+           what, flatBad[0], flatBad[1], meanErr[0] / blocks, meanWorst[0], meanErr[1] / blocks, meanWorst[1],
            blocks, outOfPair, moved, presentDiff);
     EXPECT_EQ(flatBad[0], 0u);
     EXPECT_EQ(flatBad[1], 0u) << "a flat fill (an exact 8-bit level) changed under the dither";
@@ -991,7 +1028,41 @@ TEST_F(DC3LookPostTest, RenderScaledPresentDitherKeepsLevelsAndFractions) {
     EXPECT_EQ(moved, 0u) << "the pattern is fixed";
     EXPECT_EQ(presentDiff, 0u) << "the present and the readback dither alike";
     scaled.SetPresentDither(false);
+}
+}  // namespace
+
+TEST_F(DC3LookPostTest, RenderScaledPresentDitherKeepsLevelsAndFractions) {
+    constexpr int kW = 128, kH = 64;
+    GpuDevice scaled;
+    if (!InitScaled(scaled, kW, kH)) GTEST_SKIP() << "no second headless device at 2x";
+    if (scaled.SurfaceFormat() != wgpu::TextureFormat::RGBA8Unorm)
+        GTEST_SKIP() << "the headless frame is not RGBA8Unorm";
+    CheckPresentDither(scaled, kW, kH, "2x of 128x64");
     scaled.Shutdown();
+}
+
+// The same at a 1080p output (np-outres: the frame at its output's own
+// resolution, 1920x1080 against the 1280x720 logical frame, drawn 3840x2160
+// at render scale 2): the box filter's dither is keyed on the output pixel,
+// so it keeps flat fills and the 2x2 means at that size too.
+TEST_F(DC3LookPostTest, FollowingOutputPresentDitherKeepsLevelsAndFractions) {
+    GpuDevice d;
+    GpuDeviceDesc desc;
+    desc.headless = true;
+    desc.width = 1920;
+    desc.height = 1080;
+    desc.outputFollowsTarget = true;
+    desc.logicalWidth = 1280;
+    desc.logicalHeight = 720;
+    desc.renderScaleExplicit = 2.0f;
+    if (!d.Init(desc)) GTEST_SKIP() << "no second headless device";
+    d.AcquireHeadlessFrame();
+    ASSERT_EQ(d.OutputWidth(), 1920);
+    ASSERT_EQ(d.WindowWidth(), 3840);
+    if (d.SurfaceFormat() != wgpu::TextureFormat::RGBA8Unorm)
+        GTEST_SKIP() << "the headless frame is not RGBA8Unorm";
+    CheckPresentDither(d, 1920, 1080, "1080p output drawn 3840x2160");
+    d.Shutdown();
 }
 
 // WgpuRnd asks for the dither each frame from the look: on with
