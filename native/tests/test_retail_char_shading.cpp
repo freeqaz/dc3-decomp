@@ -28,6 +28,13 @@
 //   round-1 form); the skin/hair branch disabled (everything through the
 //   plain path).
 //
+// And the projected shadow (projected_blend 1) on the plain path:
+// standard.ps 0000110010030011 accumulates the point lights and the six box
+// faces in one register and scales that by c0 (1 - 0.75 s c69 sat(c65 . N)),
+// adding c1 c0 unscaled (ProjectedShadowScalesTheWholeDiffuseLight). Sabotage:
+// scaling only the box term (the form before item 11) fails it -- with the
+// factor at 0 the point lights still light the pixel.
+//
 // Needs a GPU (skips without one). No game data.
 
 #include "test_helpers.h"
@@ -71,6 +78,7 @@ struct CharTestIn {
     specSample: vec4f,
     base: vec4f,
     ambient: vec4f,
+    projMult: vec4f,
 }
 @group(3) @binding(1) var<storage, read> charTestIn: CharTestIn;
 @group(3) @binding(2) var<storage, read_write> charTestOut: vec4f;
@@ -87,7 +95,7 @@ fn char_test_main() {
     px.rimSample = vec4f(1.0);
     px.ao = vec4f(1.0, 1.0, 1.0, 0.0);
     var proj: Dc3Proj;
-    proj.mult = vec3f(1.0);
+    proj.mult = charTestIn.projMult.rgb;
     proj.add = vec3f(0.0);
     charTestOut = vec4f(retailPixelShade(px, charTestIn.base.rgb, charTestIn.ambient.rgb, proj),
                         1.0);
@@ -118,6 +126,13 @@ protected:
     // Shade every case through the engine's WGSL; returns rgb per case, or an
     // empty vector (with a gtest failure) if the shader does not compile.
     std::vector<float> ShadeAll(float retailLighting) {
+        return Shade(retailLighting, kCases, sizeof(kCases) / sizeof(kCases[0]), kNoShadow);
+    }
+    static constexpr float kNoShadow[3] = {1.0f, 1.0f, 1.0f};
+
+    // `projMult` is the projected light's factor (Dc3Proj.mult) for every case.
+    std::vector<float> Shade(float retailLighting, const CharCase *cases, size_t n,
+                             const float projMult[3]) {
         GpuDevice &gpu = gWgpuRnd->Gpu();
         wgpu::Device &dev = gpu.Device();
         const std::string src = std::string(StandardWgslSource()) + kComputeTail;
@@ -155,10 +170,9 @@ protected:
         wgpu::Buffer matBuf = Buffer(sizeof(MaterialUniforms), U);
         wgpu::Buffer objBuf = Buffer(sizeof(ObjectUniforms), U);
         wgpu::Buffer inBuf =
-            Buffer(8 * 16, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopyDst);
+            Buffer(9 * 16, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopyDst);
         wgpu::Buffer outBuf =
             Buffer(16, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc);
-        const size_t n = sizeof(kCases) / sizeof(kCases[0]);
         wgpu::Buffer staging =
             Buffer(16 * n, wgpu::BufferUsage::MapRead | wgpu::BufferUsage::CopyDst);
 
@@ -179,10 +193,10 @@ protected:
         wgpu::BindGroup g0 = group(0, {entry(0, sceneBuf, sizeof(SceneUniforms))});
         wgpu::BindGroup g1 = group(1, {entry(0, matBuf, sizeof(MaterialUniforms))});
         wgpu::BindGroup g2 = group(2, {entry(0, objBuf, sizeof(ObjectUniforms))});
-        wgpu::BindGroup g3 = group(3, {entry(1, inBuf, 8 * 16), entry(2, outBuf, 16)});
+        wgpu::BindGroup g3 = group(3, {entry(1, inBuf, 9 * 16), entry(2, outBuf, 16)});
 
         for (size_t i = 0; i < n; i++) {
-            const CharCase &c = kCases[i];
+            const CharCase &c = cases[i];
             SceneUniforms s{};
             for (int a = 0; a < 3; a++) s.cameraPos[a] = c.P[a] + c.V[a];
             for (int l = 0; l < 3; l++) {
@@ -205,7 +219,7 @@ protected:
             m.retailFlags[3] = 0.0f;                       // no rim map
             ObjectUniforms o{};
             for (int f = 0; f < 6; f++) Copy4(o.boxLight[f], c.box[f]);
-            float in[8][4] = {};
+            float in[9][4] = {};
             Copy3(in[0], c.P, 1.0f);
             Copy3(in[1], c.n, 0.0f);
             Copy3(in[2], c.t, 0.0f);
@@ -215,6 +229,7 @@ protected:
             for (int a = 0; a < 3; a++) {
                 in[6][a] = c.diffTex[a] * c.c0[a];   // texel times material colour
                 in[7][a] = c.c1[a];                  // ambient
+                in[8][a] = projMult[a];
             }
             gpu.Queue().WriteBuffer(sceneBuf, 0, &s, sizeof(s));
             gpu.Queue().WriteBuffer(matBuf, 0, &m, sizeof(m));
@@ -315,6 +330,48 @@ TEST_F(RetailCharShadingTest, Rb3FormKeepsThePlainPath) {
         EXPECT_EQ(differ[k], total[k]) << kKindName[k] << ": " << total[k] - differ[k]
                                        << " cases shade the same under RB3's form";
     EXPECT_GT(differ[3], 0) << "plain + rim: the back light is not DC3-only";
+}
+
+// The plain permutation without rim or specular, under a projected_blend 1
+// light whose factor is `m` (1 - 0.75 s c69 sat(c65 . N), per channel). The
+// microcode's colour is (c1 c0 + (points + box) c0 m) texel, so: m = 0 leaves
+// exactly the ambient, and any m scales everything else linearly.
+TEST_F(RetailCharShadingTest, ProjectedShadowScalesTheWholeDiffuseLight) {
+    std::vector<CharCase> plain;
+    for (const CharCase &c : kCases) {
+        if (c.kind != 3) continue;
+        CharCase p = c;
+        for (int a = 0; a < 4; a++) {
+            p.c2[a] = 0.0f;    // no specular
+            p.c61[a] = 0.0f;   // no rim
+        }
+        plain.push_back(p);
+    }
+    ASSERT_GT(plain.size(), 0u);
+    const float one[3] = {1.0f, 1.0f, 1.0f}, zero[3] = {0.0f, 0.0f, 0.0f};
+    const float m[3] = {0.3f, 0.55f, 0.8f};
+    const std::vector<float> lit = Shade(2.0f, plain.data(), plain.size(), one);
+    const std::vector<float> dark = Shade(2.0f, plain.data(), plain.size(), zero);
+    const std::vector<float> part = Shade(2.0f, plain.data(), plain.size(), m);
+    ASSERT_EQ(lit.size(), 3 * plain.size());
+    ASSERT_EQ(dark.size(), lit.size());
+    ASSERT_EQ(part.size(), lit.size());
+    int bad = 0;
+    for (size_t i = 0; i < plain.size(); i++) {
+        const CharCase &c = plain[i];
+        for (int a = 0; a < 3; a++) {
+            const float ambient = c.diffTex[a] * c.c0[a] * c.c1[a];
+            const float l = lit[3 * i + a], d = dark[3 * i + a], p = part[3 * i + a];
+            ASSERT_GT(l - ambient, 1e-3f) << "case " << i << ": the pixel has no diffuse light";
+            if (!Close(d, ambient) || !Close(p, d + m[a] * (l - d))) {
+                if (bad++ < 3)
+                    ADD_FAILURE() << "case " << i << " channel " << a << ": ambient " << ambient
+                                  << ", factor 0 gives " << d << ", factor " << m[a] << " gives "
+                                  << p << ", unshadowed " << l;
+            }
+        }
+    }
+    EXPECT_EQ(bad, 0) << "the projected shadow must scale the point lights with the box";
 }
 
 } // namespace
