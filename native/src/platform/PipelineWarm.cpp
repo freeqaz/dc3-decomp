@@ -1,5 +1,5 @@
 // Load-time material pipeline warm (np-gfx spotperf round 3, np-hitch; PLAN
-// H-33).
+// H-101).
 //
 // A material pipeline is compiled the first time a draw asks for its key
 // (PipelineManager::GetPipeline): 20-40 ms each on the dev box, 160-310 ms on
