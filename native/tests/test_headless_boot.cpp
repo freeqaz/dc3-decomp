@@ -411,32 +411,38 @@ TEST_F(HeadlessBootTest, DevProfileIsTheDefault) {
     // Boot raises MILO_NOTIFYs (measured: localization, main_screen's
     // preloads; XTitleServerCreateEnumerator's is silenced on native since
     // np-polish3 -- the call is a stub that always fails); the dev tap prints
-    // them, rate-limited, with no backtraces, and the corner overlay shows the
-    // cheat_display copy.
+    // them, rate-limited, with no backtraces, and the cheat_display copy goes to
+    // the log as DC3 OVERLAY lines -- not over the picture (np-notifyband: the
+    // console game never drew its debug notices; DC3_RND_OVERLAYS=1 does,
+    // OverlaysSwitchDrawsThem).  Sabotaged: the dev row back to "1" -> the
+    // "drawn on screen" EXPECT_FALSE fails.
     EXPECT_TRUE(Has(out, "\nMILO_NOTIFY: ")) << "the dev console printed no notify";
     EXPECT_FALSE(Has(out, "MILO_BT:")) << "the dev tap must not dump backtraces";
-    EXPECT_TRUE(Has(out, "DC3 OVERLAY [cheats] ")) << "cheat_display reached no overlay";
-    EXPECT_TRUE(Has(out, "DC3 OVERLAY: drawn on screen")) << "dev drew no overlay";
+    EXPECT_TRUE(Has(out, "DC3 OVERLAY [cheats] ")) << "cheat_display lost its log lines";
+    EXPECT_FALSE(Has(out, "DC3 OVERLAY: drawn on screen"))
+        << "the default draws the debug notices over the picture";
+    EXPECT_TRUE(Has(out, "debug notices + quick-cheat stats to the log only"))
+        << "the banner does not say where the notices went";
     // A stub that always fails is not news (XLSPConnection, HX_NATIVE).
     EXPECT_FALSE(Has(out, "XTitleServerCreateEnumerator failed"));
 }
 
-// scripts/play.sh's default (np-polish3): DC3_RND_OVERLAYS=log under the dev
-// profile.  The notices still reach the log, but nothing is drawn over the
-// picture -- a player was reading "XTitleServerCreateEnumerator failed with
-// error 1317" over the main menu's OPTIONS label.  Sabotaged: `log` parsed as
-// draw in DebugPanel::RndOverlaysModeFor -> the "drawn on screen" EXPECT fails.
-TEST_F(HeadlessBootTest, OverlaysLogModeLogsWithoutDrawing) {
+// The switch (np-notifyband): DC3_RND_OVERLAYS=1 draws the debug notices in
+// the corner again, and the banner says it was asked for.  The default (`log`,
+// also scripts/play.sh's since np-polish3) is DevProfileIsTheDefault.
+// Sabotaged: `1` parsed as log in DebugPanel::RndOverlaysModeFor -> the
+// "drawn on screen" EXPECT fails.
+TEST_F(HeadlessBootTest, OverlaysSwitchDrawsThem) {
     std::vector<EnvVar> env = ProfileEnv("");
     for (EnvVar &e : env)
-        if (e.key == "DC3_RND_OVERLAYS") e.value = "log";
+        if (e.key == "DC3_RND_OVERLAYS") e.value = "1";
     auto result = RunHeadless(kProfileFrames, nullptr, 180, env);
     const std::string &out = result.output;
     ASSERT_EQ(result.signal, 0) << CrashSummary(result);
     ASSERT_TRUE(HasCompletionMarker(out)) << "no frame-cap line\n" << CrashSummary(result);
-    EXPECT_TRUE(Has(out, "(you set DC3_RND_OVERLAYS=log)")) << "the banner does not say so";
-    EXPECT_TRUE(Has(out, "DC3 OVERLAY [cheats] ")) << "log mode lost the log lines";
-    EXPECT_FALSE(Has(out, "DC3 OVERLAY: drawn on screen")) << "log mode drew the overlay";
+    EXPECT_TRUE(Has(out, "(you set DC3_RND_OVERLAYS=1)")) << "the banner does not say so";
+    EXPECT_TRUE(Has(out, "DC3 OVERLAY [cheats] ")) << "the switch lost the log lines";
+    EXPECT_TRUE(Has(out, "DC3 OVERLAY: drawn on screen")) << "DC3_RND_OVERLAYS=1 drew nothing";
 }
 
 TEST_F(HeadlessBootTest, ReleaseProfileIsThePlayerBuild) {
