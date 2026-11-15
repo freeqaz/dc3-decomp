@@ -1237,6 +1237,8 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/NuiImageSurface_Native.cpp
     src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
     src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
+    src/platform/DepthBuffer3D_Native.cpp # PLAN P-4: the depthbuffer_3d shader on the CPU (boxyman)
+    src/platform/DepthBuffer3DDraw_Native.cpp # PLAN P-4: ... and its draw
     src/platform/StreamReceiver_Native.cpp
     src/platform/SampleInst_Native.cpp
     src/platform/StbVorbisImpl.cpp
@@ -1432,6 +1434,8 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/NuiImageSurface_Native.cpp
     src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
     src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
+    src/platform/DepthBuffer3D_Native.cpp # PLAN P-4: the depthbuffer_3d shader on the CPU (boxyman)
+    src/platform/DepthBuffer3DDraw_Native.cpp # PLAN P-4: ... and its draw
     # ThreadCall_Native.cpp lifted to milo-engine (engine 0.2b drop-xdk POSIX
     # graduation); compiled via DC3_WEB_LIFTED_ENGINE_SOURCES below.
     # AudioDevice_Web.cpp lifted to milo-engine (MILO_BUILD_WEB, W0).
@@ -2101,7 +2105,9 @@ if(BUILD_TESTS)
         tests/test_dta_eval_endpoint.cpp
         tests/test_camera_yuv_decode.cpp
         tests/test_camera_stream.cpp
+        tests/test_depthbuffer3d.cpp
         tests/test_native_camera_view.cpp
+        tests/test_native_boxyman.cpp
         tests/test_native_crowd.cpp
         tests/test_native_shadow.cpp
         tests/test_native_shadow_stream.cpp
