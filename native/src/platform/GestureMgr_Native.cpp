@@ -545,20 +545,24 @@ static void NativeAutoAssignPlayers(float elapsedMs) {
     Dc3PoseIdentity::Players::Result result = gPlayers.Update(
         slots, boundId, autoPlayers, elapsedMs, Dc3PoseIdentity::ReacquireMs(), NativePoseHoldMs());
     const Skeleton *bound[2] = { nullptr, nullptr };
+    static int sLastAssign[2] = { -1, -1 };
+    static int sLastRule[2] = { 0, 0 };
+    static float sSinceMs[2] = { 0.0f, 0.0f }; // since the last binding asked for
     for (int p = 0; p < 2; p++) {
+        sSinceMs[p] += elapsedMs;
         if (result.slot[p] >= 0)
             bound[p] = &TheGestureMgr->GetSkeleton(result.slot[p]);
         if (result.assign[p] < 0 || !TheGameData->Player(p))
             continue;
         TheGameData->AssignSkeleton(p, result.assign[p]);
         sAutoAssignCount[p]++;
-        // One line per change: where the image does not keep a binding (the
-        // results screen) the same one is asked for every frame.
-        static int sLastAssign[2] = { -1, -1 };
-        static int sLastRule[2] = { 0, 0 };
-        bool changed = result.assign[p] != sLastAssign[p] || result.rule[p] != sLastRule[p];
+        // Where the image does not keep a binding (the results screen) the
+        // same one is asked for every frame: one line for a run of those.
+        bool changed = result.assign[p] != sLastAssign[p] || result.rule[p] != sLastRule[p]
+            || sSinceMs[p] > 500.0f;
         sLastAssign[p] = result.assign[p];
         sLastRule[p] = result.rule[p];
+        sSinceMs[p] = 0.0f;
         if (sDebug && changed)
             fprintf(stderr,
                 "DC3 SCORING: bind p%d -> tracking id %d slot %d rule=%s lost=%.0fms dist=%.2fm\n",
@@ -570,6 +574,40 @@ static void NativeAutoAssignPlayers(float elapsedMs) {
             if (bound[p])
                 chooser->NativeSkeletonBound((int)(bound[p] - &TheGestureMgr->GetSkeleton(0)));
         }
+    }
+    // The player ids the image keeps beside the bindings (GestureMgr's, which
+    // SkeletonChooser::UpdatePlayerSkeletonNavData reads back every poll) are
+    // the ones the players hold after a binding made here.  The chooser only
+    // writes them from the bindings AFTER it has compared the two, so a
+    // binding it has not been told of is undone on its next poll:
+    //  * a player moved to another skeleton during the image's recovery
+    //    second (her new body, or a stand-in) was unbound at once, and with
+    //    nobody else playing Game::CheckForSkeletonLoss paused the song on
+    //    that frame -- before the next sensor frame could bind her again;
+    //  * a stand-in handed back stayed a player id nobody held, and
+    //    SetPlayerSkeletonNavData gives such an id to the free player:
+    //    measured, song 3 of the recorded session, the bystander who stood in
+    //    for 1.2 s was bound as player 2 with no raised hand and rated for 49
+    //    measures.  Told, she is the round robin's candidate once more.
+    // Not with DC3_POSE_REACQUIRE_MS=0: that is the behaviour before this,
+    // where the only binding made here is to a skeleton nobody holds.
+    bool boundNow = false;
+    for (int p = 0; p < 2; p++) {
+        if (result.assign[p] >= 0)
+            boundNow = true;
+        if (sDebug && result.released[p] >= 0)
+            fprintf(stderr, "DC3 SCORING: stand-in tracking id %d released by p%d\n",
+                result.released[p], p);
+    }
+    if (boundNow && Dc3PoseIdentity::ReacquireMs() > 0) {
+        int held[2];
+        for (int q = 0; q < 2; q++) {
+            HamPlayerData *playerData = TheGameData->Player(q);
+            held[q] = playerData ? playerData->GetSkeletonTrackingID() : -1;
+        }
+        if (TheGestureMgr->GetPlayerSkeletonID(0) != held[0]
+            || TheGestureMgr->GetPlayerSkeletonID(1) != held[1])
+            TheGestureMgr->SetTrackedSkeletons(held[0], held[1]);
     }
 
     if (sDebug) {

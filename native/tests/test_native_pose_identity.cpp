@@ -168,6 +168,19 @@ TEST(PoseIdentityPeopleTest, ATrackerIdAlreadySomebodysGetsAPrivateId) {
     EXPECT_GE(ids[1], Dc3PoseIdentity::kPrivateIdBase);
 }
 
+TEST(PoseIdentityPeopleTest, ATrackerIdMeansTheBodyItIsOnNow) {
+    // The camera stream's person masks are labelled with the tracker's ids
+    // (StableForRaw).  The tracker's 81 was A's and has walked onto B.
+    People people;
+    for (int i = 0; i < 5; i++)
+        See(people, { Det(81, 0.0f), Det(82, 1.0f) });
+    EXPECT_EQ(people.StableForRaw(81), 81);
+    for (int i = 0; i < 5; i++)
+        See(people, { Det(81, 1.0f) });
+    EXPECT_EQ(people.StableForRaw(81), 82) << "the mask the tracker calls 81 is B's";
+    EXPECT_EQ(people.StableForRaw(82), 82);
+}
+
 TEST(PoseIdentityPeopleTest, AnUntrackedDetectionPassesThrough) {
     People people;
     std::vector<int> ids = See(people, { Det(-1, 0.0f), Det(91, 0.5f) });
@@ -522,9 +535,75 @@ TEST_F(PoseIdentityPlayersTest, AStandInGivesThePlayerBackWhenSheReturns) {
     EXPECT_EQ(r.rule[0], Dc3PoseIdentity::kRuleSameId);
     EXPECT_EQ(r.slot[0], 2);
     EXPECT_FALSE(mPlayers.StandIn(0));
+    EXPECT_EQ(r.released[0], 302) << "and the stand-in is named, to be forgotten as a player";
+    EXPECT_EQ(r.released[1], -1);
+    r = Tick();
+    EXPECT_EQ(r.released[0], -1) << "once";
     Ticks(60);
     EXPECT_EQ(mBinds[0], 3) << "and it stays";
     EXPECT_EQ(mBound[0], 301);
+}
+
+// The image's quality filter fails a dancer close to the camera with her feet
+// out of the picture (the recorded session: 1.4 m).  She is tracked, and she is
+// still the player: bound by the near rule, not half a second later by the
+// auto-assign as a stand-in.  A valid skeleton is taken before a tracked one.
+TEST_F(PoseIdentityPlayersTest, ANewBodyTheQualityFilterFailsIsStillHer) {
+    Skeleton(0, 301, -0.4f);
+    Tick();
+    Ticks(60);
+    Gone(0);
+    Ticks(10);
+    Skeleton(2, 399, -0.3f, 2.5f, false);
+    Players::Result r = Tick();
+    EXPECT_EQ(mBound[0], 399);
+    EXPECT_EQ(r.rule[0], Dc3PoseIdentity::kRuleNear);
+    EXPECT_FALSE(mPlayers.StandIn(0));
+}
+
+TEST_F(PoseIdentityPlayersTest, AValidNewBodyIsTakenBeforeATrackedOne) {
+    Skeleton(0, 301, -0.4f);
+    Tick();
+    Ticks(60);
+    Gone(0);
+    Ticks(10);
+    Skeleton(2, 398, -0.38f, 2.5f, false); // nearer, fails the filter
+    Skeleton(3, 399, -0.25f);
+    Players::Result r = Tick();
+    EXPECT_EQ(mBound[0], 399);
+    EXPECT_EQ(r.rule[0], Dc3PoseIdentity::kRuleNear);
+}
+
+// Only a stand-in is released: a player who comes back to her own skeleton
+// with nobody having stood in, and a stand-in who became the player when the
+// window ran out, leave nobody for the image to forget.
+TEST_F(PoseIdentityPlayersTest, OnlyAStandInIsReleased) {
+    Skeleton(0, 301, -0.4f);
+    Tick();
+    Ticks(60);
+    Gone(0);
+    Ticks(40);
+    Unbind(0); // the image, after its hold and its recovery second
+    Ticks(20);
+    Skeleton(0, 301, -0.4f);
+    Players::Result r = Tick();
+    ASSERT_EQ(r.rule[0], Dc3PoseIdentity::kRuleSameId);
+    EXPECT_EQ(r.released[0], -1);
+
+    Skeleton(1, 302, 0.4f);
+    Ticks(60);
+    Gone(0);
+    Ticks(170); // 5.6 s: past the window, 302 is the player now
+    ASSERT_EQ(mBound[0], 302);
+    ASSERT_FALSE(mPlayers.StandIn(0));
+    Gone(1);
+    Ticks(40);
+    Unbind(0);
+    Ticks(20);
+    Skeleton(1, 302, 0.4f);
+    r = Tick();
+    ASSERT_EQ(r.rule[0], Dc3PoseIdentity::kRuleSameId);
+    EXPECT_EQ(r.released[0], -1);
 }
 
 TEST_F(PoseIdentityPlayersTest, AStandInGivesThePlayerBackToANewBodyWhereSheStood) {
@@ -539,6 +618,7 @@ TEST_F(PoseIdentityPlayersTest, AStandInGivesThePlayerBackToANewBodyWhereSheStoo
     Players::Result r = Tick();
     EXPECT_EQ(mBound[0], 399);
     EXPECT_EQ(r.rule[0], Dc3PoseIdentity::kRuleNear);
+    EXPECT_EQ(r.released[0], 302);
 }
 
 TEST_F(PoseIdentityPlayersTest, AfterTheWindowTheStandInIsThePlayer) {

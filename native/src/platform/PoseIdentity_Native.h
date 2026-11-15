@@ -434,6 +434,12 @@ public:
         int rule[kPlayers];   // why (Rule), for an assign
         float distance[kPlayers]; // how far from where she stood (kRuleNear / kRuleAuto with memory)
         float lostMs[kPlayers];   // how long she had been lost
+        // The stand-in's tracking id when this assign takes the player off a
+        // stand-in and back to herself, else -1.  The stand-in was never the
+        // player: whoever keeps player ids beside the binding (the image's
+        // GestureMgr / SkeletonChooser) has to forget this one, or she is
+        // left looking like somebody who joined.
+        int released[kPlayers];
     };
 
     // One sensor frame.  boundId[p] is the tracking id player p holds (-1 =
@@ -450,6 +456,7 @@ public:
             r.rule[p] = kRuleNone;
             r.distance[p] = -1.0f;
             r.lostMs[p] = 0.0f;
+            r.released[p] = -1;
         }
         // How long each slot's skeleton has been there.
         for (int s = 0; s < kSlots; s++) {
@@ -521,8 +528,13 @@ public:
                 Bind(r, claimed, slots, boundId, p, s, kRuleSameId, 0.0f);
         }
         // 2. A lost player and a body that appeared, after she was lost, near
-        //    where she stood.  Nearest pair first.
-        for (int round = 0; round < kPlayers; round++) {
+        //    where she stood.  Nearest pair first; skeletons that pass the
+        //    quality filter before ones that are merely tracked, as the
+        //    auto-assign has it (a dancer 1.4 m from the camera with her feet
+        //    out of the picture is tracked and not valid: she is still the
+        //    player, and left to rule 3 she is bound later, as a stand-in).
+        for (int round = 0; round < 2 * kPlayers; round++) {
+            bool requireValid = round < kPlayers;
             int bestP = -1, bestS = -1;
             float bestD = 0.0f;
             for (int p = 0; p < kPlayers; p++) {
@@ -534,7 +546,9 @@ public:
                     reach = kRebindMax;
                 for (int s = 0; s < kSlots; s++) {
                     float age = slots[s].ageMs >= 0.0f ? slots[s].ageMs : mSlotAgeMs[s];
-                    if (!slots[s].valid || claimed[s] || age > m.lostMs + (float)holdMs + kFreshSlackMs)
+                    if (requireValid ? !slots[s].valid : !slots[s].tracked)
+                        continue;
+                    if (claimed[s] || age > m.lostMs + (float)holdMs + kFreshSlackMs)
                         continue;
                     float d = Flat(m, slots[s]);
                     if (d <= reach && (bestP < 0 || d < bestD)) {
@@ -545,7 +559,7 @@ public:
                 }
             }
             if (bestP < 0)
-                break;
+                continue;
             Bind(r, claimed, slots, boundId, bestP, bestS, kRuleNear, bestD);
         }
         // 3. The auto-assign: a player nobody has to ask for takes a free
@@ -642,6 +656,8 @@ private:
         // the skeleton in view, that is its decision (see Update) -- one
         // re-bind per loss, never one per frame.
         if (rule != kRuleAuto && m.known) {
+            if (m.standIn && m.standInId != slots[s].id)
+                r.released[p] = m.standInId;
             m.id = slots[s].id;
             m.lost = false;
             m.standIn = false;
