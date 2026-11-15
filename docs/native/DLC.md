@@ -191,6 +191,88 @@ at load average 40-210 (other lanes), so wall times are upper bounds:
 - **What "64 disc songs" counts.** The disc's `songs/` has 64 directories: 62 songs plus `gen` and `updates`. Its `songs.dta` has 62 entries: 45 that perform lists, 1 locked by rank (`blackandtan`, listed with `--unlock-all`, the image's own `{toggle_unlock_all}` cheat) and 16 `is_fake` rows (`hb_camp_*`, `mocapbpm*`, `blackandtan_ktbfinale`, `dcimindcontrol`) that perform never lists and that were not swept.
 
 
+## Web (D-7, W-23..W-28, lane `np-webdlc`)
+
+The web build lists and plays the same packages as desktop, from the same
+`orig-assets/dlc`, which the asset server serves in place (nothing is copied).
+
+- **Discovery.** `server.py` finds the DLC root (`--dlc-dir`, else `DC3_DLC_ASSETS`, else `<assets>/../dlc`, i.e. `orig-assets/dlc`). `/api/bundle/dlc` carries every package's `songs/*.dta` as `dlc/<package>/songs/<file>`. With DLC on, `main_web.cpp` fetches it at `BOOT_INIT` beside the config bundle, inside the same wait, so `ContentMgr_Native` finds `/data/dlc/<package>/songs/` in MEMFS and runs the desktop path unchanged. `DC3_DLC` is a dev-profile default on web as well as desktop (`System_Native.cpp`); `?profile=release` or `?env=DC3_DLC=0` turn it off, and then the bundle is not fetched.
+- **Files on demand.** Mounting maps `cntNNNNNNNN:` to `/data/dlc/<package>` in the engine's `File_Web.cpp` (the drive table is shared with `File_Native.cpp`: `platform/NativeDrives.h`). A file a song opens is not in MEMFS, so the existing `AsyncFile` → `WebAssetsFetchSync` path fetches `/api/file/dlc/<package>/<path>`. Nothing per song is in the boot download.
+- **Previews.** `scripts/web/gen_dlc_web_assets.sh` (run by `scripts/web/build.sh`) writes a `<song>_prev.webm` next to each package's `_prev.bik`, as the disc has, and `WebMovieImpl` qualifies the drive path before its `.bik` → `.webm` rewrite. It also encodes the 5 kXMA sidecar keys the packages' barks have that the disc set lacks. `--check` exits 1 if a preview or a sidecar is missing.
+- **Memory.** Entering song select or the main menu unlinks every file under `/data/dlc/<package>/songs/<song>/` (`DC3 Web: DLC song files dropped at <screen>: N files, X MB`); the songs `.dta` stay. `?env=DC3_WEB_DLC_KEEP=1` keeps them. A dropped file is fetched again if it is opened again.
+- **Deploy.** `dc3-web.service` runs `server.py` with no `--dlc-dir`, so it finds `orig-assets/dlc` in the main checkout. `scripts/web/deploy.sh` builds (which generates the previews and sidecars) and its smoke test checks the packages are listed, `/api/bundle/dlc` and one preview answer, and `gen_dlc_web_assets.sh --check` passes.
+
+**Disk written** (once per box, shared by every checkout): 76 previews, 169.2 MB, inside `orig-assets/dlc/<package>/songs/<song>/`, plus `orig-assets/dlc/web-video-manifest.json`; 5 sidecar `.ogg` (0.1 MB) in `native/web/build/sfx_sidecars/`; the server's wire-compression cache grows by the DLC files it has brotli'd.
+
+### Measured (np-webdlc, 2026-11-14)
+
+All MEASURED, headless Chromium (`--mute-audio`), release build, one box under
+heavy load from other lanes (load averages given per run).
+
+**Song list.** The web and desktop song selects both have 130 rows, in the same
+order: 45 disc songs, 76 DLC songs, plus playlists, `random_song` and 7 tier
+headers. The desktop list was read through the HTTP eval with
+`{song_offer_provider data_symbol i}`; the web list comes from
+`dlc-songs.mjs`'s `songlist.json`. That is 121 songs, not 123. With
+`DC3_DLC=0` the web list is 54 rows and milkshake is missing, so the driver
+exits 1.
+
+**Four songs in one session** (`--songs milkshake,hotinherre,sandstorm,thehustle`,
+load 99.6 → 34.4). Each song reached the results screen. The audio column is
+the 30 s mix capture.
+
+| song | package | audio RMS / peak dBFS | wasm heap MB before / in game / after | MEMFS `/data/dlc` MB before / in game / after | dropped at song select |
+|---|---|---|---|---|---|
+| milkshake | mega pack | -10.4 / -0.9 | 318.9 / 382.7 / 459.3 | 0.1 / 14.2 / 0.3 | 48 files, 14.1 MB |
+| hotinherre | mega pack | -12.1 / -0.9 | 459.3 / 459.3 / 459.3 | 0.3 / 8.8 / 0.3 | 14 files, 8.6 MB |
+| sandstorm | export pack | -11.1 / -0.9 | 459.3 / 459.3 / 459.3 | 0.3 / 14.4 / 0.3 | 57 files, 14.2 MB |
+| thehustle | disc | -15.1 / -0.9 | 459.3 / 459.3 / 459.3 | 0.3 / 0.8 / 0.1 | 4 files, 0.7 MB (previews) |
+
+After rebasing onto `b07c22730` (engine `5f5d9ed` + this branch), with the stronger driver: milkshake and sandstorm again reached results, -10.5 and -11.1 dBFS, no song file failed to load. Load 68.3 → 44.3.
+
+Memory:
+- The wasm heap grows once, on the first song, and stays flat after that.
+- `/data/dlc` returns to 0.3 MB after every song.
+- MEMFS `/data` as a whole goes 198 → 293 → 324 → 361 → 435 MB across the four songs.
+  - That growth is disc venue and world files, which the web build keeps today for every song, disc or DLC.
+  - It is not DLC data and this lane did not change it.
+- DLC traffic for the session was 265 MB in 235 requests.
+  - Most of it is the 256x256 previews of the songs the driver scrolls past.
+  - A player who goes straight to one song fetches that song's files, about 9-15 MB.
+
+**Boot cost** (`--boot-only`, before = main's build with main's server, after = this branch, interleaved, load 67.5 → 37.5):
+
+| | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| before: s to main menu / bytes | 21.46 / 74,871,763 | 21.16 / 74,962,239 | 24.13 / 74,888,178 |
+| after: s to main menu / bytes | 21.32 / 74,972,975 | 20.88 / 74,939,054 | 21.04 / 74,977,021 |
+
+- The added download is the one DLC request: `/api/bundle/dlc`, 15,872 B on the wire (134,276 B raw).
+- Run-to-run variance in the rest of the boot is about 90 KB.
+- Time to the main menu did not get slower: the medians are 21.46 s before and 21.04 s after.
+
+**Two bugs found on the way:**
+- *Frame loop died at gameplay.* `PointTestPass` left `depthClearValue` NaN, and Chromium threw in `beginRenderPass`. The rAF loop then died on the first gameplay frame, on disc songs too. Fixed in the engine.
+- *Disc song after a DLC song went back to the title screen.* `SongMgr::CachedPath` leaves `DirLoader` cache mode off. On the web `UsingCD` is false, so the next disc song asked for loose `.milo` names, which 404. Fixed under `HX_NATIVE`; the Xbox match is unchanged.
+
+**Negative controls:**
+- Run the milkshake driver against a DLC root that is missing `milkshake.mogg`.
+  - The first version of the driver **passed**. The song still played to results and the capture read -25.2 dBFS from the crowd and SFX, well above the -60 dBFS silence threshold.
+  - The driver now also fails a song when the game logs `Could not load: .../songs/<song>/...` while it plays. The good runs log none of these.
+  - Rerun with that check, the same sabotage fails, exit 1: `milkshake: 2 of its files could not load (first: ... milkshake.mogg)`.
+- Run it with `--env DC3_DLC=0`: milkshake is not listed and the driver exits 1.
+- Run `deploy.sh`'s DLC smoke block against main's server, which has no DLC routes: 3 FAILs.
+
+### Reproducing
+
+```bash
+scripts/web/build.sh --release                 # also runs gen_dlc_web_assets.sh
+python3 native/web/server.py --port 8463       # finds orig-assets/dlc
+# GPU: outside the sandbox
+node scripts/web/dlc-songs.mjs --port 8463 --out /tmp/dlc --songs milkshake,hotinherre,sandstorm,thehustle
+node scripts/web/dlc-songs.mjs --port 8463 --out /tmp/boot --boot-only
+```
+
 ## Not done
 
 See PLAN Track D.
