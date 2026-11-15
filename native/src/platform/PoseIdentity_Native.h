@@ -97,6 +97,34 @@ static const float kSameIdBonus = 0.05f;
 // half.
 static const float kDepthWeight = 0.5f;
 static const float kHeightWeight = 0.5f;
+// THE PICTURE MOVED.  Nobody moves further than her reach between two frames;
+// a camera that is nudged, or re-aimed, moves everybody in it at once.  When
+// every person seen in the last frame is in this one under the same tracker
+// id, nobody else is, no detection is where somebody else was, and they have
+// all moved the same way (to within kMovedAgree) further than reach allows,
+// the people are who the tracker says and it is the picture that moved: they
+// keep their ids, and where everybody was is moved along with them.  Only
+// between consecutive frames (kMovedFrameSec); a detection within somebody
+// else's reach is decided by position as always (that is the tracker id
+// sliding onto the neighbour, which is what this layer is for).
+// TWO PEOPLE OR MORE.  One person alone has nobody to agree with, and her
+// tracker id by itself is not evidence: in the recorded session (song 3,
+// 132.7 s) the one detection in a frame was the dancer's tracker id on a
+// person walking past 0.5 m away, and the dancer was back under a new id in
+// the next.  Taking the tracker's word there gives the passer-by the
+// dancer's identity -- player 1, and her score -- for the rest of the song
+// (measured over the whole recorded evening, 5,964 frames: a one-person rule
+// fires 4 times, that one among them; this rule, never).  A lone body out of
+// reach is somebody new, and Players binds a lost player to a new body near
+// where she stood.
+// The synthetic sensor moves the picture several times a song: it stands
+// every body up at (x, 0.9, 2.5) whenever the game has no move to show and
+// puts them back at the move's position (y ~0.05, z ~2.0) when it has, all in
+// one frame under the same ids.  Without this rule each of those made
+// everybody somebody new, and with two people in view player 1 changed
+// tracking id mid-song.
+static const float kMovedAgree = 0.1f;
+static const float kMovedFrameSec = 0.5f;
 
 static const int kMaxDetections = 6; // NativeSkeletonProvider::kMaxPersons
 static const int kMaxPeople = 16;
@@ -174,15 +202,20 @@ public:
                 search.cost[i][n] = d - (sameId ? kSameIdBonus : 0.0f);
             }
         }
-        // The pairing that leaves the fewest detections new, then the least
-        // total distance (at most six detections with a handful of candidates
-        // each: exhaustive).
-        search.best = 1e30f;
         for (int i = 0; i < count; i++)
             search.pick[i] = search.bestPick[i] = -1;
-        for (int p = 0; p < mCount; p++)
-            search.used[p] = false;
-        Solve(search, 0, 0.0f);
+        if (PictureMoved(dets, count, dtSec, search)) {
+            // bestPick is each detection's own person, moved with the picture.
+            mMoved++;
+        } else {
+            // The pairing that leaves the fewest detections new, then the
+            // least total distance (at most six detections with a handful of
+            // candidates each: exhaustive).
+            search.best = 1e30f;
+            for (int p = 0; p < mCount; p++)
+                search.used[p] = false;
+            Solve(search, 0, 0.0f);
+        }
 
         bool seen[kMaxPeople];
         for (int p = 0; p < kMaxPeople; p++)
@@ -231,6 +264,8 @@ public:
                     mPeople[p].rawId = -1;
             }
         }
+        for (int p = 0; p < mCount; p++)
+            mPeople[p].seenLast = seen[p];
     }
 
     // The stable id the tracker's id means now (the camera stream's person
@@ -268,6 +303,8 @@ public:
     int Remembered() const { return mCount; }
     // Times a person was recognised under a different tracker id.
     int Reacquired() const { return mReacquired; }
+    // Times the picture moved under the people in it (kMovedAgree).
+    int Moved() const { return mMoved; }
 
 private:
     struct Person {
@@ -280,6 +317,7 @@ private:
         float anchorSec;  // how long ago
         float seenSec;    // how long she has been seen in all
         float ageSec;     // how long ago she was first seen
+        bool seenLast;    // she was in the last frame
     };
     static constexpr float kSightingSec = 0.2f;
     struct Search {
@@ -315,6 +353,82 @@ private:
         Solve(s, i + 1, cost + kNewCost);
     }
 
+    // See kMovedAgree.  True: s.bestPick[i] is the person each detection is,
+    // and everybody remembered has been moved the way the picture went.
+    bool PictureMoved(const Detection *dets, int count, float dtSec, Search &s) {
+        if (count < 2 || dtSec > kMovedFrameSec)
+            return false;
+        int inLast = 0;
+        for (int p = 0; p < mCount; p++) {
+            if (mPeople[p].seenLast)
+                inLast++;
+        }
+        if (inLast != count)
+            return false;
+        int own[kMaxDetections];
+        bool beyondReach = false;
+        for (int i = 0; i < count; i++) {
+            own[i] = -1;
+            if (dets[i].rawId < 0)
+                return false;
+            for (int p = 0; p < mCount; p++) {
+                if (mPeople[p].seenLast && mPeople[p].rawId == dets[i].rawId)
+                    own[i] = p;
+            }
+            if (own[i] < 0)
+                return false; // somebody new, so somebody is missing
+            for (int k = 0; k < i; k++) {
+                if (own[k] == own[i])
+                    return false;
+            }
+            // Where somebody else was: position decides.
+            for (int n = 0; n < s.numCand[i]; n++) {
+                if (s.cand[i][n] != own[i])
+                    return false;
+            }
+            if (s.numCand[i] == 0)
+                beyondReach = true;
+        }
+        if (!beyondReach)
+            return false; // everybody is within her own reach: nothing moved
+        float sx = 0.0f, sy = 0.0f, sz = 0.0f;
+        for (int i = 0; i < count; i++) {
+            const Person &who = mPeople[own[i]];
+            float dx = dets[i].x - who.x, dy = dets[i].y - who.y, dz = dets[i].z - who.z;
+            if (i == 0) {
+                sx = dx;
+                sy = dy;
+                sz = dz;
+            } else if (Distance(dx, dy, dz, sx, sy, sz) > kMovedAgree) {
+                return false; // they went different ways: people, not the picture
+            }
+        }
+        // Where everybody was -- the people in this frame, and the ones
+        // remembered and not seen -- in the picture as it is now.
+        for (int p = 0; p < mCount; p++) {
+            Person &who = mPeople[p];
+            float dx = sx, dy = sy, dz = sz;
+            for (int i = 0; i < count; i++) {
+                if (own[i] == p) {
+                    dx = dets[i].x - who.x;
+                    dy = dets[i].y - who.y;
+                    dz = dets[i].z - who.z;
+                }
+            }
+            who.x += dx;
+            who.y += dy;
+            who.z += dz;
+            if (who.hasAnchor) {
+                who.ax += dx;
+                who.ay += dy;
+                who.az += dz;
+            }
+        }
+        for (int i = 0; i < count; i++)
+            s.bestPick[i] = own[i];
+        return true;
+    }
+
     int NewPerson(int rawId, bool *seen) {
         int p = mCount;
         if (mCount < kMaxPeople) {
@@ -345,6 +459,7 @@ private:
         mPeople[p].anchorSec = 0.0f;
         mPeople[p].seenSec = 0.0f;
         mPeople[p].ageSec = 0.0f;
+        mPeople[p].seenLast = false;
         return p;
     }
 
@@ -352,6 +467,7 @@ private:
     int mCount = 0;
     int mNextPrivate = kPrivateIdBase;
     int mReacquired = 0;
+    int mMoved = 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -380,7 +496,8 @@ static const float kFreshSlackMs = 250.0f;
 // whoever it is.  Under the image's recovery second on purpose: past that the
 // image unbinds her and Game::CheckForSkeletonLoss pauses the song, which for
 // one dancer whom the camera lost and found somewhere else is worse than
-// being generous.
+// being generous.  If the image unbinds her before that anyway, the wait is
+// over there and then.
 // Whoever she takes then is a STAND-IN: the song goes on, and the player
 // herself is still looked for until the window ends -- her own tracking id,
 // or a new body where she stood, takes the binding back.  (Song 3 of the
@@ -572,7 +689,15 @@ public:
                 if (r.slot[p] >= 0)
                     continue;
                 const Memory &m = mMem[p];
-                if (m.known && m.lost && m.lostMs < kAutoWaitMs)
+                // She waits for her own body only while the image still holds
+                // her binding, which is its recovery second.  Once the image
+                // has given her up there is nothing left to wait for: the
+                // next thing to happen is the song pausing.  (The wait is in
+                // sensor time and the image's second is on the UI clock; they
+                // are the same clock in a real session and not under
+                // DC3_FAST_TIME, where the UI clock runs four times as fast
+                // and the image unbinds her 250 sensor-ms in.)
+                if (m.known && m.lost && m.lostMs < kAutoWaitMs && boundId[p] > 0)
                     continue; // still waiting for her own body
                 int best = -1;
                 float bestD = -1.0f;

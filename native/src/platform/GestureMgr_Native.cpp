@@ -1200,8 +1200,13 @@ static void IdentifyPeople(NativeSkeletonProvider::PersonData *persons, int numP
         index[count++] = i;
     }
     int before = gPeople.Reacquired();
+    int movedBefore = gPeople.Moved();
     gPeople.Update(dets, count, dt, Dc3PoseIdentity::ReacquireMs(), ids);
     static bool sDebug = Dc3EnvFlag("DC3_SCORING_DEBUG", false);
+    if (sDebug && gPeople.Moved() != movedBefore && count > 0)
+        fprintf(stderr,
+            "DC3 SCORING: the picture moved under %d %s (to x=%+.2f y=%+.2f z=%.2f); tracking ids kept\n",
+            count, count == 1 ? "person" : "people", dets[0].x, dets[0].y, dets[0].z);
     for (int k = 0; k < count; k++) {
         if (sDebug && gPeople.Reacquired() != before && ids[k] != dets[k].rawId)
             fprintf(stderr, "DC3 SCORING: tracker id %d is tracking id %d (x=%+.2f z=%.2f)\n",

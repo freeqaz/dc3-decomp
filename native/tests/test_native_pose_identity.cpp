@@ -210,6 +210,172 @@ TEST(PoseIdentityPeopleTest, SeenTimeCountsSightingsNotTheGapsBetween) {
     EXPECT_NEAR(people.SeenSec(111), 0.6f, 1e-4f) << "a sighting after a gap is one frame's worth";
 }
 
+// --- the picture moved (kMovedAgree) ---------------------------------------
+//
+// The synthetic sensor (scripts/synthetic_kinect.py) stands every body up at
+// y 0.9, z 2.5 whenever the game has no move to show and puts them back at
+// the move's position when it has: everybody at once, in one frame, under the
+// same tracker ids.  A nudged camera does the same.  Each of those used to
+// make everybody somebody new (SecondPersonPerformTest: player 1 on three
+// tracking ids in one song).  Two people or more: see kMovedAgree.
+
+Detection At(int rawId, float x, float y, float z) {
+    Detection d = Det(rawId, x, z);
+    d.y = y;
+    return d;
+}
+
+TEST(PoseIdentityPeopleTest, WhenThePictureMovesEverybodyKeepsHerId) {
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { At(5, -0.4f, 0.9f, 2.5f), At(9, 0.4f, 0.9f, 2.5f) });
+    ASSERT_EQ(people.Moved(), 0);
+    // Both 0.2 m left, 0.9 m down and 0.9 m nearer between two frames: 0.67 m
+    // as People measures it, further than any reach.
+    std::vector<int> ids = See(people, { At(5, -0.6f, 0.0f, 1.6f), At(9, 0.2f, 0.0f, 1.6f) });
+    EXPECT_EQ(ids[0], 5);
+    EXPECT_EQ(ids[1], 9);
+    EXPECT_EQ(people.Moved(), 1);
+    EXPECT_EQ(people.Remembered(), 2) << "nobody new was made";
+    // They dance on there, and it moves back.
+    for (int i = 0; i < 12; i++)
+        ids = See(people, { At(5, -0.6f, 0.0f, 1.6f), At(9, 0.2f, 0.0f, 1.6f) });
+    ids = See(people, { At(9, 0.4f, 0.9f, 2.5f), At(5, -0.4f, 0.9f, 2.5f) });
+    EXPECT_EQ(ids[0], 9);
+    EXPECT_EQ(ids[1], 5);
+    EXPECT_EQ(people.Moved(), 2);
+    EXPECT_EQ(people.Reacquired(), 0);
+}
+
+TEST(PoseIdentityPeopleTest, WhenThePictureMovesSoDoesWhereALostPersonWas) {
+    // Three in view; the third is lost; the picture moves 0.9 m down and
+    // nearer; she is found again where she stood, in the picture as it is now.
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { At(5, -0.8f, 0.9f, 2.5f), At(9, 0.0f, 0.9f, 2.5f), At(13, 0.8f, 0.9f, 2.5f) });
+    See(people, { At(5, -0.8f, 0.9f, 2.5f), At(9, 0.0f, 0.9f, 2.5f) });
+    std::vector<int> ids = See(people, { At(5, -0.8f, 0.0f, 1.6f), At(9, 0.0f, 0.0f, 1.6f) });
+    ASSERT_EQ(people.Moved(), 1);
+    EXPECT_EQ(ids[0], 5);
+    EXPECT_EQ(ids[1], 9);
+    ids = See(people, { At(5, -0.8f, 0.0f, 1.6f), At(9, 0.0f, 0.0f, 1.6f), At(14, 0.8f, 0.0f, 1.6f) });
+    EXPECT_EQ(ids[2], 13) << "the lost person, under a new tracker id, where she stood";
+}
+
+TEST(PoseIdentityPeopleTest, PeopleWhoGoDifferentWaysAreNotThePictureMoving) {
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { At(5, -0.4f, 0.9f, 2.5f), At(9, 0.4f, 0.9f, 2.5f) });
+    // The same jump for one, 0.3 m further along x for the other.
+    std::vector<int> ids = See(people, { At(5, -0.6f, 0.0f, 1.6f), At(9, 0.5f, 0.0f, 1.6f) });
+    EXPECT_EQ(people.Moved(), 0);
+    EXPECT_NE(ids[0], 5) << "a body out of reach is somebody new, whatever the tracker calls it";
+    EXPECT_NE(ids[1], 9);
+}
+
+TEST(PoseIdentityPeopleTest, SomebodyMissingOrNewIsNotThePictureMoving) {
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { At(5, -0.8f, 0.9f, 2.5f), At(9, 0.0f, 0.9f, 2.5f), At(13, 0.8f, 0.9f, 2.5f) });
+    // One of the three is not in the frame; the other two are 0.64 m away,
+    // the same way.
+    std::vector<int> two = See(people, { At(5, -0.8f, 0.0f, 1.6f), At(9, 0.0f, 0.0f, 1.6f) });
+    EXPECT_EQ(people.Moved(), 0);
+    EXPECT_NE(two[0], 5);
+    EXPECT_NE(two[1], 9);
+
+    People more;
+    for (int i = 0; i < 12; i++)
+        See(more, { At(5, -0.4f, 0.9f, 2.5f) });
+    // She is 0.67 m away and somebody else has appeared.
+    std::vector<int> ids = See(more, { At(5, -0.6f, 0.0f, 1.6f), At(9, 0.9f, 0.0f, 1.6f) });
+    EXPECT_NE(ids[0], 5);
+    EXPECT_EQ(more.Moved(), 0);
+}
+
+TEST(PoseIdentityPeopleTest, ATrackerIdWhereSomebodyElseWasIsNotThePictureMoving) {
+    // A is in view, B was lost 0.3 s ago 0.8 m to her right.  The tracker's
+    // id for A turns up on B's spot: that is B (the id slid), not A moved.
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { Det(5, -0.4f), Det(9, 0.4f) });
+    for (int i = 0; i < 3; i++)
+        See(people, { Det(5, -0.4f) });
+    EXPECT_EQ(See(people, { Det(5, 0.4f) })[0], 9);
+    EXPECT_EQ(people.Moved(), 0);
+    // And two whose ids swap are each where the other was (see above).
+    People swap;
+    for (int i = 0; i < 12; i++)
+        See(swap, { Det(5, -0.4f), Det(9, 0.4f) });
+    std::vector<int> ids = See(swap, { Det(9, -0.4f), Det(5, 0.4f) });
+    EXPECT_EQ(ids[0], 5);
+    EXPECT_EQ(ids[1], 9);
+    EXPECT_EQ(swap.Moved(), 0);
+}
+
+TEST(PoseIdentityPeopleTest, OnePersonAloneIsNotThePictureMoving) {
+    // Nobody to agree with, and the tracker's id by itself is not evidence
+    // (Song3ThePasserByUnderTheDancersTrackerIdIsNotTheDancer, below).
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { At(101, 0.6f, 0.9f, 2.5f) });
+    EXPECT_NE(See(people, { At(101, 0.4f, 0.0f, 1.6f) })[0], 101);
+    EXPECT_EQ(people.Moved(), 0);
+    EXPECT_EQ(people.Remembered(), 2);
+}
+
+TEST(PoseIdentityPeopleTest, WhereSheWasAMomentAgoMovesWithThePicture) {
+    // The anchor (kAnchorSec) is a place in the picture too.  The picture
+    // moves, one of them is missed for a frame, and a body turns up where she
+    // stood in the OLD picture: 0.64 m from where she is, so somebody else.
+    // (0.12 s frames: the anchor is taken every fifth sighting, the 2nd, 6th
+    // and 10th here, so the 13th -- the move -- is not one of them.)
+    const float dt = 0.12f;
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { At(5, -0.4f, 0.9f, 2.5f), At(9, 0.4f, 0.9f, 2.5f) }, dt);
+    See(people, { At(5, -0.4f, 0.0f, 1.6f), At(9, 0.4f, 0.0f, 1.6f) }, dt);
+    ASSERT_EQ(people.Moved(), 1);
+    See(people, { At(5, -0.4f, 0.0f, 1.6f) }, dt);
+    std::vector<int> ids = See(people, { At(5, -0.4f, 0.0f, 1.6f), At(77, 0.4f, 0.9f, 2.5f) }, dt);
+    EXPECT_EQ(ids[1], 77);
+}
+
+TEST(PoseIdentityPeopleTest, ATrackerIdSlidingAlongTheRowIsNotThePictureMoving) {
+    // Two side by side 0.8 m apart; the next frame has the left one's id on
+    // the right one's spot and the right one's id 0.8 m further on.  They
+    // agree on the way they went, and one of them is exactly where somebody
+    // else was: position decides, as it does for any id that slides.
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { Det(5, -0.4f), Det(9, 0.4f) });
+    std::vector<int> ids = See(people, { Det(5, 0.4f), Det(9, 1.2f) });
+    EXPECT_EQ(people.Moved(), 0);
+    EXPECT_EQ(ids[0], 9);
+    EXPECT_NE(ids[1], 9);
+    EXPECT_NE(ids[1], 5);
+}
+
+TEST(PoseIdentityPeopleTest, AJumpAfterFramesWereMissedIsNotThePictureMoving) {
+    // Only between consecutive frames: over a gap people do move, and reach
+    // has grown to say how far (0.25 + 0.5 m/s).
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { At(5, -0.4f, 0.9f, 2.5f), At(9, 0.4f, 0.9f, 2.5f) });
+    // 1.4 m along x in 0.6 s (reach by then: 0.55 m, 0.85 m from the anchor).
+    std::vector<int> ids = See(people, { At(5, 1.0f, 0.9f, 2.5f), At(9, 1.8f, 0.9f, 2.5f) }, 0.6f);
+    EXPECT_EQ(people.Moved(), 0);
+    EXPECT_NE(ids[0], 5);
+    EXPECT_NE(ids[1], 9);
+    People consecutive;
+    for (int i = 0; i < 12; i++)
+        See(consecutive, { At(5, -0.4f, 0.9f, 2.5f), At(9, 0.4f, 0.9f, 2.5f) });
+    ids = See(consecutive, { At(5, 1.0f, 0.9f, 2.5f), At(9, 1.8f, 0.9f, 2.5f) });
+    EXPECT_EQ(consecutive.Moved(), 1) << "the same jump, next frame";
+    EXPECT_EQ(ids[0], 5);
+    EXPECT_EQ(ids[1], 9);
+}
+
 // --- the recording ---------------------------------------------------------
 
 struct RecordedFrame {
@@ -302,6 +468,23 @@ TEST(PoseIdentityRecordingTest, Song2TheTwoDancersKeepTheirIdsThroughTheTrackers
     // Nobody else was there.
     std::set<int> all = Ids(seen, 0.0f, 25.0f, -10.0f, 10.0f);
     EXPECT_EQ(Show(all), "4 7 ");
+}
+
+TEST(PoseIdentityRecordingTest, TheRecordedPeopleNeverMoveThePicture) {
+    // The rule above is for a picture that moves.  Nothing in the recorded
+    // session is one: two dancers and a bystander, tracker ids that slide.
+    for (const char *section : { "song2", "song3" }) {
+        std::vector<RecordedFrame> frames = LoadSection(section);
+        ASSERT_FALSE(frames.empty()) << section;
+        People people;
+        float prev = 0.0f;
+        for (size_t i = 0; i < frames.size(); i++) {
+            float dt = i ? frames[i].t - prev : 1.0f / 30.0f;
+            prev = frames[i].t;
+            See(people, frames[i].dets, dt, kWindowMs);
+        }
+        EXPECT_EQ(people.Moved(), 0) << section;
+    }
 }
 
 TEST(PoseIdentityRecordingTest, Song2StrictIsWhatTheTrackerSaid) {
@@ -542,6 +725,36 @@ TEST_F(PoseIdentityPlayersTest, AStandInGivesThePlayerBackWhenSheReturns) {
     Ticks(60);
     EXPECT_EQ(mBinds[0], 3) << "and it stays";
     EXPECT_EQ(mBound[0], 301);
+}
+
+// The wait for her own body is in sensor time and the image's recovery second
+// is on the UI clock.  Under DC3_FAST_TIME the UI clock runs four times as
+// fast, the image unbinds her 250 sensor-ms in, and waiting on to 700 paused
+// the song (ReacquiredDancerTest in the gate).  The wait ends where the image
+// gives her up, whatever the clocks say.
+TEST_F(PoseIdentityPlayersTest, APlayerTheImageHasGivenUpDoesNotWaitAnyLonger) {
+    Skeleton(1, 301, 0.0f);
+    Tick();
+    ASSERT_EQ(mBound[0], 301);
+    Skeleton(0, 302, -1.5f);
+    Skeleton(2, 303, 0.9f);
+    Ticks(30);
+    Gone(1);
+    Ticks(5); // 165 ms
+    ASSERT_EQ(mBound[0], 301) << "the image holds her binding: she waits";
+    Unbind(0); // the image's recovery has run out
+    Players::Result r = Tick();
+    EXPECT_EQ(mBound[0], 303) << "the nearest skeleton, in the same frame";
+    EXPECT_EQ(r.rule[0], Dc3PoseIdentity::kRuleAuto);
+    EXPECT_TRUE(mPlayers.StandIn(0)) << "as a stand-in: she is still looked for";
+    // Her own body, back in view 0.4 s after it went.
+    Ticks(6);
+    Skeleton(1, 301, 0.1f);
+    r = Tick();
+    EXPECT_EQ(mBound[0], 301);
+    EXPECT_EQ(r.rule[0], Dc3PoseIdentity::kRuleSameId);
+    EXPECT_EQ(r.released[0], 303);
+    EXPECT_EQ(mBinds[0], 3);
 }
 
 // The image's quality filter fails a dancer close to the camera with her feet
