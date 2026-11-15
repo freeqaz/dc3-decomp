@@ -13,7 +13,7 @@ Work items: [PLAN.md](PLAN.md) track P.
 
 | Stage | Code | Gate |
 |---|---|---|
-| Camera frame | `native/scripts/pose_server.py` (`cv2.VideoCapture`: 640×480 @ 30 fps, 1-frame driver buffer), a Python child spawned by `NativeSkeletonProvider::Start` in `native/src/platform/Skeleton_Native.cpp`. Packet timestamp = capture time (the device's `CAP_PROP_POS_MSEC` when it is on our monotonic clock, as V4L2's is; else when `read()` returned). | `DC3_POSE_CAMERA` (default `auto`; also an index, a `/dev/videoN` path or a `/dev/v4l/by-id` name — [camera selection](#which-camera-and-a-camera-that-goes-away)) |
+| Camera frame | `native/scripts/pose_server.py` (`cv2.VideoCapture`: 640×480 @ 30 fps, two driver buffers, read on its own thread so the loop always takes the newest frame — [capture buffers](#capture-buffers-np-gpd-camfps-2026-11-14)), a Python child spawned by `NativeSkeletonProvider::Start` in `native/src/platform/Skeleton_Native.cpp`. Packet timestamp = capture time (the device's `CAP_PROP_POS_MSEC` when it is on our monotonic clock, as V4L2's is; else when `read()` returned). | `DC3_POSE_CAMERA` (default `auto`; also an index, a `/dev/videoN` path or a `/dev/v4l/by-id` name — [camera selection](#which-camera-and-a-camera-that-goes-away)) |
 | 2D + 3D pose | `native/scripts/pose_mediapipe.py` `MediaPipeBackend`: BlazePose world landmarks (metres), absolute root by PnP, one-euro filter on root depth, centroid tracker. Emits DC3's 20 Kinect joints in camera-space metres. | `DC3_POSE_MODEL` (default `native/models/pose_landmarker_full.task` of the executable's tree, gitignored), `DC3_POSE_HFOV` |
 | Wire | Unix socket, protocol v2, layout 1 (20 DC3 joints). The header's u16 after the layout byte is `flags`; bit 0 `FLAG_UNLEVELLED` = "this camera does not know its gravity, estimate it" (`pose_server.py` always sets it); bit 1 `FLAG_NO_CAMERA` = "the camera is gone and the server is reopening it" (zero-person heartbeats every 0.1 s). Bit 2 `FLAG_LATENCY_DECLARED` = "score me at bits 8..15 × 5 ms" (`--video` declares 0; see [Who sets the latency](#who-sets-the-latency-np-latency-harness)). Layout 0 = COCO, remapped by `MapCOCOToDC3`. | `DC3_POSE_SOCKET`, `DC3_POSE_NO_SPAWN=1` (connect to a server you started) |
 | Socket → slots | `GestureMgr_Native.cpp`: `BuildSensorFrame` → `FillPersonSlots` / `AssignSlots` / `NativeAutoAssignPlayers`. Joints under 0.3 confidence are first estimated (`PoseEstimate_Native.cpp`, [Cut-off joints](#cut-off-joints-np-cutoff-2026-11-14)) and marked Inferred; with `DC3_POSE_ESTIMATE=off`, `FillSkeletonData` holds their last good position. No provider → a jittered standing dummy (two in two-player modes, `DC3_DUMMY_PLAYERS`). Every valid person fills its own slot: two people on the socket or in one `dc3_pose_push` frame are two players. | `DC3_POSE` (`off`, `external`, …), `DC3_NATIVE_SCORING` (default on), `DC3_POSE_SELFTEST`, `DC3_POSE_ESTIMATE`, `DC3_POSE_STALL_MS` |
@@ -1941,7 +1941,17 @@ game would receive were compared (one dancer, 600 frames, full model):
 
 ### Negative results
 
-- **No capture cliff, so no grabber thread.** I expected OpenCV's 1-buffer
+- **RETRACTED 2026-11-14 (`np-gpd-camfps`): "No capture cliff, so no grabber
+  thread."** The cliff is there, and it is worse than the one this looked
+  for: with one driver buffer the camera loses **every other frame whatever
+  the processing time**, zero included. Both shapes of `camera_probe.py`
+  opened the camera through `open_camera` with one buffer, so both were
+  halved and agreed with each other; the "10–12 fps the room light held the
+  camera at" was a sensor running at 20–24. See
+  [Capture buffers](#capture-buffers-np-gpd-camfps-2026-11-14). The bullets
+  below are the measurement as it was written, kept for the record; the
+  ages in them are of a half-rate stream.
+- ~~No capture cliff, so no grabber thread.~~ I expected OpenCV's 1-buffer
   V4L2 capture to lose a whole camera period whenever processing outlasts it.
   It does not, measured on the GPD's camera with `scripts/pose_bench/
   camera_probe.py`. The room light held that camera at 10–12 fps (YUYV,
@@ -1985,6 +1995,135 @@ game would receive were compared (one dancer, 600 frames, full model):
 # web (serve a build first: python3 native/web/server.py --port 8451)
 node scripts/pose_bench/web_pose_fps.mjs --port 8451 --camera clip.y4m "" "&pose_persons=1" "&pose_delegate=GPU"
 ```
+
+### Capture buffers (`np-gpd-camfps`, 2026-11-14)
+
+**The pose server asked the camera for one driver buffer, and one buffer
+delivers half the frames the sensor makes.** uvcvideo fills a buffer only if
+it was queued when that frame began; OpenCV queues its buffer back at the
+next `read()`; so with one buffer the frame that starts while we hold it has
+nowhere to go. The session rates were the sensor's rate halved: 7.7 fps was a
+sensor at 15.4, 10.3 was 20.6, and the 15.4 a manual exposure reached was 30.
+`open_camera` now asks for `CAMERA_BUFFERS = 2`, and `NewestFrameCapture`
+reads the camera on its own thread so the second buffer never hands
+MediaPipe an older frame. Everything below is MEASURED on the GPD's camera
+(SunplusIT 1e08:5520, UVC 1.00, `/dev/video0`) on 2026-11-14 between 20:45
+and 21:10 PST, in the dim room of that evening's session, with nobody in
+view and the game stopped, unless marked INFERRED.
+
+What the server opens: `cv2.VideoCapture(node, CAP_V4L2)`, 640×480, 30 fps,
+no FOURCC — the driver's default, which is **YUYV** (`v4l2-ctl --all`
+while it ran). The camera offers 640×480 at 30 fps in both YUYV and MJPG
+(MJPG up to 2592×1944, all at 30), so the format is not the limit:
+
+| what was asked (auto exposure, one buffer) | delivered fps | mean luma |
+|---|---|---|
+| default (YUYV 640×480), as the server opens it | 7.8 | 112 |
+| MJPG 640×480 | 7.8 | 113 |
+| MJPG 1280×720 | 7.5 | 120 |
+| YUYV 640×360 | 7.7 | 119 |
+| YUYV 320×240 | 10.4 | 128 |
+
+(The 10.4 is auto exposure settling on a 20 fps sensor rate for that run,
+not the size: with a manual exposure every format and size tried, up to
+MJPG 1920×1080, delivers 15.1–15.7 through one buffer.)
+
+Buffers, same camera, same minute, no work in the loop
+(`CAP_PROP_BUFFERSIZE`; frame-to-frame device timestamps in brackets):
+
+| exposure | 1 buffer (was shipped) | 2 buffers | 4 buffers |
+|---|---|---|---|
+| auto, sensor at 15 fps | 7.6 (132 ms) | 15.0 (68 ms) | — |
+| auto, sensor at 20 fps | 10.2 (100 ms) | 20.0 (48 ms) | 20.0 (48 ms) |
+| manual 33.3 ms (`exposure_time_absolute=333`) | 15.4 (68 ms) | 30.0 (32 ms) | 30.0 (32 ms) |
+| manual 40 ms | 13.0 (80 ms) | — | 25.0 (40 ms) |
+| manual 50 ms | 10.4 (100 ms) | — | 20.0 (48 ms) |
+
+Capture shape against inference time (a sleep stands in for inference;
+delivered fps / frame age p50 in ms, age = device timestamp → the loop has
+the frame):
+
+| sensor | shape | 0 ms | 22 ms | 50 ms | 57 ms |
+|---|---|---|---|---|---|
+| 30 fps (manual 333) | loop, 1 buffer (was shipped) | 15.5 / 33 | 15.5 / 33 | 15.5 / 33 | 15.2 / 33 |
+| | loop, 2 buffers | 30.0 / 33 | 30.0 / 33 | 19.6 / 85 | 17.2 / 98 |
+| | **thread, 2 buffers (now)** | 30.0 / 33 | 30.0 / 33 | 19.9 / 51 | 17.4 / 52 |
+| 20 fps (auto, dim room) | loop, 1 buffer (was shipped) | 10.2 / 53 | 10.4 / 53 | 10.5 / 53 | 10.2 / 53 |
+| | loop, 2 buffers | 20.0 / 49 | 20.0 / 49 | 19.6 / 72 | 17.3 / 90 |
+| | **thread, 2 buffers (now)** | 20.0 / 49 | 20.1 / 50 | 19.8 / 68 | 17.4 / 75 |
+
+- Two buffers double the rate at every exposure. A second buffer read in
+  the loop costs 35–45 ms of frame age once inference outlasts the camera
+  period; the thread gives that back. Four buffers add nothing over two.
+- After this change the limit is whichever is slower of the sensor and
+  inference. Two dancers cost 57 ms in the session (48 ms on an idle GPD),
+  which is 17.4 fps; the sensor in that room ran at 15–20 fps.
+
+**The sensor's own rate.** Auto exposure (`auto_exposure=3`, the only
+automatic mode) lengthens the frame to fit the exposure: 15–20 fps in that
+room, luma 110–130. There is no `exposure_dynamic_framerate` control to
+forbid it (the camera terminal's `bmControls` is `0x0022002a`: no
+auto-exposure-priority bit). In manual mode the sensor period is
+max(33.3 ms, exposure): 30 fps up to `exposure_time_absolute=333`, 25 at
+400, 20 at 500, 12.5 at 800, 4.9 at 2047. But a manual exposure is dark:
+
+| manual exposure | sensor fps | mean luma YUYV / MJPG | auto exposure, same scene |
+|---|---|---|---|
+| 333 (33 ms) | 30 | 4.6 / 11.2 | 111–130 / 115–128 |
+| 400 (40 ms) | 25 | 7.2 / 13.5 | |
+| 500 (50 ms) | 20 | 12.5 / 17.1 | |
+| 2047 (205 ms) | 4.9 | 76.5 / — | |
+
+Auto exposure reaches luma 115–130 at a 50–66 ms frame, so it applies about
+8–10× of sensor gain that manual mode does not keep (it does not freeze at
+the switch: auto then manual 333 read 17.4). The UVC `Gain` control is in
+the descriptor and the kernel disables it at every enumeration (`uvcvideo:
+UVC non compliance: permanently disabling control 980913 (Gain), due to
+error -5`). The other controls do not replace it, MJPG at manual 500
+(luma 17.1, p5/p95 7/40): `gamma` 200 and 300 → 16.9, 16.6 (no effect);
+`contrast=95` → 2.1; `backlight_compensation=0` → 17.4; `brightness=64` →
+83.1 but p5/p95 73/106, the same 33 levels moved up, not brightened.
+**No control setting gives a bright picture at a fixed 20–30 fps on this
+camera.**
+
+**Software lift of a short exposure** is the only way to a fixed rate, and
+it is not built. A manual-500 MJPG frame holds 130 distinct levels; gain
+×10.4 (after the black pedestal) brings its mean to 102 with 1.8× the pixel
+noise of the auto-exposure picture (4.2 vs 2.3) and visible colour blocks;
+manual 333 needs ×16 (106 levels, noise 4.8). Whether MediaPipe tracks a
+real lifted frame is NOT measured (nobody was in view). A simulation on the
+two-dancer clip (each frame divided by 10.4 onto the pedestal, noise added,
+JPEG q75, then lifted) found both dancers on 150 of 150 frames, with joints
+132–136 mm (mean) from the untouched clip's; for scale, `lite` against
+`full` on the same frames is 78 mm, and half-resolution input 27 mm.
+Unlifted, the same frames found nobody, as the live session did at manual
+exposure (`persons=0.00`). At ÷30 both dancers were found on 35% of frames.
+INFERRED: a lift would track, noticeably less accurately; more light on the
+dancers is the better lever, and after it the model.
+
+**Inference with two dancers** (idle GPD, the macarena duo, 150 frames,
+`num_poses 2`, masks on, p50 / p95 ms): `full` 48.0 / 55.7; `lite` 33.4 /
+39.9; `full` on 320×240 input 47.0 / 55.2; `lite` on 320×240 32.6 / 33.5.
+A smaller input saves nothing (MediaPipe resizes to the model's own input
+either way). `lite` is the only setting here that puts two dancers under
+the 50 ms a 20 fps sensor allows with the game running (57 × 33.4 / 48 ≈
+40 ms, INFERRED), and it scores lower (W-20: 0.732 of the card against
+0.824).
+
+`POSE_STATS` now ends with `camera_fps=`, the rate the camera delivered
+over the window, next to `fps=`, the rate the server processed: `fps` well
+under `camera_fps` means inference is the limit, both low means the camera
+is. `--no-capture-thread` reads the camera in the loop (two buffers still),
+for comparison.
+
+Tests: `tests/test_pose_server.py` — `CameraRequestTest` (two buffers),
+`NewestFrameCaptureTest` (newest wins and is handed out once; a frame's
+stamp and arrival time stay its own while the thread reads on; a failed
+device read is a failed read at once; release returns under a blocked read
+and the thread releases the device), `CaptureThreadLoopTest` (the server
+loop on a camera 4.5× faster than inference reads every frame and processes
+the newest; without the thread it reads one per inference),
+`StatsCameraRateTest`. 11 mutations of `pose_server.py`, 11 caught.
 
 ## Frame fill (`np-pose-fill`, 2026-11-14)
 

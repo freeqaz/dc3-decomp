@@ -438,7 +438,7 @@ variables are value-parsed: `0`/`false`/`off`/`no` disable.
 | `DC3_POSE_SESSION_SYNC` | `song` | With `DC3_POSE_PERFORM=session:FILE`: `song` publishes each recorded frame at its recorded song time (and uses its recorded floor normal); `wall` at its recorded wall offset | `native/src/platform/PoseSession_Native.cpp` |
 | `DC3_POSE_PERFORM_STALL` | unset | With `DC3_POSE_PERFORM`: `from,secs` publishes nothing from song second `from` for `secs` of wall time, a hung pose source; the stall watchdog (`DC3_POSE_STALL_MS`) should then pause the song. Tested by `PoseStallTest` | `native/src/platform/PosePerformer_Native.cpp` |
 | `DC3_PERF_LOG` | off | Every 5 s: `DC3 PERF: fps= pose_fps= persons=` (game frames/s, sensor frames accepted/s, mean people) | `native/src/platform/GestureMgr_Native.cpp` |
-| `DC3_POSE_STATS` | off | Read by `pose_server.py`: every 5 s `POSE_STATS: fps= infer_ms_mean= infer_ms_p95= persons= sent= dropped=` on stderr | `native/scripts/pose_server.py` |
+| `DC3_POSE_STATS` | off | Read by `pose_server.py`: every 5 s `POSE_STATS: fps= infer_ms_mean= infer_ms_p95= persons= sent= dropped= window_s= camera_fps=` on stderr (`fps` = frames processed, `camera_fps` = frames the camera delivered; absent with `--no-capture-thread` or a video file) | `native/scripts/pose_server.py` |
 | `DC3_FOOTAGE_PRE`, `DC3_FOOTAGE_CONTROL` | `8`, unset | `footage_camera.py`: seconds of clip before song time 0; a file holding `CLIP PRE`, re-read every 0.5 s (a driver changes the dancer between songs) | `scripts/playtest/footage_camera.py` |
 
 ### Capture and output
