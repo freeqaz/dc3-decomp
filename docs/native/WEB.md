@@ -951,6 +951,26 @@ in `start()`, so an error that arrives while the camera prompt is open stops
 the stream rather than leaving it on. On the player page the card is fixed
 full screen, inside the safe-area insets.
 
+**The owner's phone, 2026-11-15 (np-ios-version).** The owner reported the
+page "still busted on iOS 27". The nginx access log for that phone says
+otherwise about the version (MEASURED, 43 requests from one address): its
+user agent was `Version/26.6.1` at 01:19 UTC and `Version/26.6.3` at 01:35,
+so the update it took was an iOS 26 point release. Each visit fetched
+`index.html` and the three head scripts and never `dc3-web.js`: the page
+refused before the engine download, as it should on Safari 26. No request
+from any device has carried `Version/27`. **So a real iOS 27 phone has still
+not opened the site**, and W-32 and pose on Safari stay untested. The OS token
+in an iPhone user agent is frozen at `18_7` from iOS 26 on, so `Version/` is
+the only token that tells 26 from 27.
+
+The card could not show any of this: it said "update to iOS 27" to a phone
+whose owner believed it had. It now names what the device reports ("This
+device reports iOS 26.6.3 (Safari 26.6.3)"), says an iOS 26 update is not
+enough, and a device that reports 27 or newer and still lacks the feature is
+told it is a page fault or a device restriction rather than to update.
+Chrome and Firefox on iPhone carry no `Version/` token and get no version
+line. `window.dc3SafariVersion` holds the parsed value.
+
 **Layout.** The viewport meta has `viewport-fit=cover`, plus the
 `apple-mobile-web-app-*` and `theme-color` metas (Add to Home Screen opens it
 full screen). `overscroll-behavior:none` stops the rubber-band scroll and
@@ -1044,7 +1064,8 @@ to CPU when creating it throws. `<video>` carries `playsinline`. Whether
 MediaPipe's GPU delegate actually works on iOS WebKit is open; LiteRT has an
 open report of WebGPU trouble on iOS ([google-ai-edge/LiteRT-LM#2616](https://github.com/google-ai-edge/LiteRT-LM/issues/2616)).
 
-**Checks.** `scripts/web/phone.mjs --port P` now has 36 checks (21 before).
+**Checks.** `scripts/web/phone.mjs --port P` now has 39 checks (21 before
+np-ios, 36 after it).
 New ones:
 
 - iPhone 15 portrait and landscape with JSPI removed: the card asks for iOS 27
@@ -1058,6 +1079,11 @@ New ones:
   emulated): the button shows, and a tap resumes the context and hides the
   button.
 - No vertical scroll, in both orientations.
+- The version on the card (np-ios-version): an iPhone user agent with
+  `Version/26.6.3` is told it reports iOS 26.6.3 and needs 27; one with
+  `Version/27.0` and no JSPI is not told to update; `CriOS` gets no version
+  line. Three sabotages of the page (no 27 branch, no version line, a
+  hardcoded version) each fail 1 or 2 of these.
 
 `--only iphone|sound` runs just those. Run against main's page before np-ios,
 `--only iphone` failed 9 checks: the owner's screenshot (camera asked for,

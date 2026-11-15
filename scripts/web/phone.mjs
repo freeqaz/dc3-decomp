@@ -28,6 +28,11 @@
 //                         (W-31: the owner's iPhone had the camera panel and
 //                         the buttons over the message)
 //   mac safari, no JSPI   the card names Safari 27
+//   version on the card   an iPhone whose user agent says Version/26.6.3
+//                         (the owner's phone after "updating to iOS 27") is
+//                         told it reports iOS 26.6.3; one that says 27.0 is
+//                         not told to update to 27; Chrome on iPhone (no
+//                         Version/ token) gets no version line
 //   sound button          iOS's audio rule, emulated in an init script (a
 //                         context starts suspended; resume() needs a user
 //                         activation): once the game runs with its
@@ -198,6 +203,29 @@ try {
         check(/Safari 27/.test(R.text) && /Chrome or Edge 137/.test(R.text) && !/iOS 27/.test(R.text),
             `mac safari, no JSPI: "${R.text.replace(/\s+/g, ' ').slice(0, 110)}…"`);
         await ctx.close();
+    }
+
+    // --- the card names the version the phone reports ------------------------
+    // The owner's phone said "iOS 27" and its user agent said Version/26.6.3
+    // (nginx access log, 2026-11-15): an iOS 26 point update, not iOS 27. The
+    // OS token is frozen at 18_7, so Version/ is the only evidence.
+    if (!only || only === 'iphone') {
+        const ua = (v) => `Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) ${v} Mobile/15E148 Safari/604.1`;
+        const cases = [
+            ['iphone on 26.6.3', ua('Version/26.6.3'), (t) => /reports iOS 26\.6\.3 \(Safari 26\.6\.3\)/.test(t) && /needs iOS 27/.test(t) && /Upgrade to iOS 27/.test(t), '26.6.3'],
+            ['iphone on 27.0, no JSPI', ua('Version/27.0'), (t) => /reports iOS 27\.0 /.test(t) && !/needs iOS 27/.test(t) && !/Software Update/.test(t), '27.0'],
+            ['chrome on iphone', ua('CriOS/151.0.7000.10'), (t) => !/This device reports/.test(t) && /needs iOS 27/.test(t), null],
+        ];
+        for (const [name, userAgent, good, version] of cases) {
+            const { ctx, page } = await open({ device: { ...iphone, userAgent }, noJspi: true, query: '' });
+            await sleep(3000);
+            const R = await refusal(page);
+            const seen = await page.evaluate(() => window.dc3SafariVersion);
+            check(R.blocked === 'JSPI unavailable' && good(R.text) && seen === version,
+                `${name}: version ${seen} "${R.text.replace(/\s+/g, ' ').slice(0, 150)}…"`);
+            if (version === '26.6.3') await page.screenshot({ path: path.join(out, 'iphone-26.6.3.png') });
+            await ctx.close();
+        }
     }
 
     // --- sound: iOS's gesture rule (emulated), the "Tap for sound" button -----
