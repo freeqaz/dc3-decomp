@@ -313,7 +313,10 @@ ObjPtrList<WorldReflection> &LiveReflections() {
 } // namespace
 
 void NativeWarmLoadedDir(ObjectDir *dir) {
-    if (!dir || !gWgpuRnd || !gWgpuRnd->Gpu().IsReady()) return;
+    // The renderer's resources, not just the device: on the web the device
+    // comes up asynchronously and boot dirs can finish loading first (their
+    // pipelines are then made at their first draw, as before).
+    if (!dir || !gWgpuRnd || !gWgpuRnd->Gpu().IsReady() || !gWgpuRnd->GpuResourcesReady()) return;
     const auto t0 = std::chrono::steady_clock::now();
     Contexts c;
     c.world = gWgpuRnd->WorldPassContext(false);
