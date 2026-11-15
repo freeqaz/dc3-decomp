@@ -63,7 +63,43 @@ let geometry = null;
 // nothing; without it the look runs here after the frame's single pass.
 let probe = null;
 let cfg = null;
-let lastTsMs = -1;
+// MediaPipe's clock.  NOT the capture timestamp: tasks-vision hands each
+// result's timestamp back to JS as a 32-bit count of milliseconds, which stops
+// at 2^31-1 ms = 24.86 days, and the camera clock on Chromium is the time since
+// boot.  On a machine that has been up longer than that (a Mac that sleeps
+// instead of rebooting), every frame with a person in it reports the same
+// result timestamp, PoseLandmarker re-sends its "free_memory" packet at that
+// timestamp, and the graph fails for good: "Packet timestamp mismatch ...
+// free_memory" on every later frame, and nobody is ever tracked.  A frame with
+// nobody in it takes a different route and is unaffected, so it fails the
+// moment someone walks in.  MEASURED: 24.0 days up runs, 25.0 days fails.
+// So MediaPipe gets a clock that starts at 0 with the first frame and keeps
+// the capture intervals, in WHOLE milliseconds: two capture times a fraction
+// of a millisecond apart come out of the subtraction below a microsecond
+// short, and MediaPipe truncates to microseconds (MEASURED: frames 1 us apart
+// were refused as "expected 1 but received 0").  captureSec, the sensor
+// timestamp the engine reads, is still the capture time, and the smoothing
+// filters get the same zero-based clock unrounded (mpClockMs).
+let lastTsMs = -1;        // what MediaPipe was last given
+let mpClockMs = 0;        // the same clock, not rounded
+let lastCaptureMs = null;
+const MP_MAX_STEP_MS = 60000;
+function mediapipeMs(captureMs) {
+    let step = 0;
+    if (lastCaptureMs !== null) {
+        step = captureMs - lastCaptureMs;
+        // A repeated or earlier timestamp (a camera switch restarts the clock)
+        // moves 1 ms; a jump ahead is capped, so no camera clock can run this
+        // one out.
+        if (!(step > 0)) step = 1;
+        else if (step > MP_MAX_STEP_MS) step = MP_MAX_STEP_MS;
+    }
+    lastCaptureMs = captureMs;
+    mpClockMs += step;
+    // VIDEO mode needs strictly increasing timestamps.
+    lastTsMs = Math.max(lastTsMs + 1, Math.round(mpClockMs));
+    return lastTsMs;
+}
 let busy = false;
 let seq = 0;
 
@@ -330,10 +366,8 @@ function detect(img, tsMs, st, frame) {
 let lastCapUs = null;
 let capPeriodUs = null;
 
-function processImage(img, tsMs, captureSec, wantRaw, waitMs, capUs, availAt) {
-    // VIDEO mode needs strictly increasing timestamps.
-    if (tsMs <= lastTsMs) tsMs = lastTsMs + 1;
-    lastTsMs = tsMs;
+function processImage(img, captureMs, captureSec, wantRaw, waitMs, capUs, availAt) {
+    const tsMs = mediapipeMs(captureMs);
     const [width, height] = sourceSize(img);
     const st = {};   // per-stage ms (scripts/pose_bench/web_pose_fps.mjs)
     if (waitMs !== undefined) st.wait = waitMs;
@@ -355,7 +389,7 @@ function processImage(img, tsMs, captureSec, wantRaw, waitMs, capUs, availAt) {
     const res = detect(input.image, tsMs, st, img);
     const t1 = performance.now();
     const poses = posesFromResult(res);
-    const persons = geometry.process(poses, width, height, tsMs);
+    const persons = geometry.process(poses, width, height, mpClockMs);
     const { floats, count } = packPersons(persons);
     const t2 = performance.now();
     st.infer = t1 - t0i;
@@ -405,11 +439,11 @@ async function pumpStream(readable) {
         const waitMs = performance.now() - w0;
         if (done) break;
         try {
-            // VideoFrame.timestamp is the capture time in microseconds: it is
-            // both MediaPipe's VIDEO-mode clock and the sensor timestamp the
-            // engine takes frame intervals from (as Xbox does from
-            // NUI_SKELETON_FRAME), so a late-delivered frame keeps its true
-            // interval.
+            // VideoFrame.timestamp is the capture time in microseconds: the
+            // sensor timestamp the engine takes frame intervals from (as Xbox
+            // does from NUI_SKELETON_FRAME), so a late-delivered frame keeps
+            // its true interval.  MediaPipe's VIDEO-mode clock is derived from
+            // it (mediapipeMs).
             const captureSec = frame.timestamp ? frame.timestamp / 1e6 : performance.now() / 1000;
             processImage(frame, captureSec * 1000, captureSec, false, waitMs, frame.timestamp || null, availAt);
         } catch (e) {
@@ -426,10 +460,8 @@ function probeFrame(msg) {
     let found = 0;
     const t = performance.now();
     try {
-        let ts = msg.tsMs;
-        if (ts <= lastTsMs) ts = lastTsMs + 1;
-        lastTsMs = ts;
-        const r = landmarker.detectForVideo(msg.image, ts);
+        // msg.tsMs is the main worker's MediaPipe clock (whole ms, from 0).
+        const r = landmarker.detectForVideo(msg.image, mediapipeMs(msg.tsMs));
         found = r.landmarks ? r.landmarks.length : 0;
         if (r.close) r.close();
     } finally {
