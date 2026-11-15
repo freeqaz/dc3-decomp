@@ -28,6 +28,10 @@
 #   scripts/web/build.sh --page-only    # deploy the page (index.html, pose/, worklet) only
 #   MILO_ENGINE_PATH=/path/to/engine scripts/web/build.sh   # build against that engine checkout
 #
+# DLC: scripts/web/gen_dlc_web_assets.sh (after the sidecars, skipped by
+# --no-sfx) gives every imported package's song previews a .webm and its
+# milos' kXMA samples an .ogg; a no-op without orig-assets/dlc.
+#
 # kXMA SFX sidecars: scripts/web/gen_sfx_sidecars.sh fills
 # native/web/build/sfx_sidecars/ with an .ogg for every key in
 # native/web/sfx_sidecars.manifest (first run ~1 min; then a cheap check). It
@@ -202,6 +206,9 @@ FAILED=()
 deploy_page
 if [ "$BUILD_SFX" = "1" ]; then
     "$REPO_ROOT/scripts/web/gen_sfx_sidecars.sh" || FAILED+=("sfx-sidecars")
+    # DLC (orig-assets/dlc, when imported): song previews as .webm and the
+    # packages' kXMA sidecars; the packages themselves are served in place.
+    "$REPO_ROOT/scripts/web/gen_dlc_web_assets.sh" || FAILED+=("dlc-web-assets")
 fi
 
 # Build one configuration (mode = release | debug) into its own emcc build dir
@@ -336,6 +343,8 @@ if [ "${#FAILED[@]}" -gt 0 ]; then
             continue
         elif [ "$mode" = sfx-sidecars ]; then
             echo "FAILED: sfx sidecars -- see scripts/web/gen_sfx_sidecars.sh output above (--no-sfx skips)" >&2
+        elif [ "$mode" = dlc-web-assets ]; then
+            echo "FAILED: DLC web assets -- see scripts/web/gen_dlc_web_assets.sh output above (--no-sfx skips)" >&2
         elif [ -f "$DEPLOY_DIR/$mode/dc3-web.wasm" ]; then
             echo "BUILD FAILED: $mode -- $DEPLOY_DIR/$mode/ still holds the PREVIOUS build" >&2
         else

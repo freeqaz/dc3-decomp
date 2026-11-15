@@ -11,6 +11,7 @@
 
 #include "platform/WebMovieImpl.h"
 #include "os/Debug.h"
+#include "os/File.h"
 
 #include <emscripten.h>
 #include <emscripten/html5.h>
@@ -249,6 +250,17 @@ bool WebMovieImpl::BeginFromFile(
 
     mFilename = path;
     mLoop = loop;
+
+    // A path on a content drive (a DLC song's preview,
+    // cnt00000000:/songs/milkshake/milkshake_prev.bik) is not a server path:
+    // qualify it through the drive (File_Web.cpp: /data/dlc/<package>/songs/...)
+    // and drop the MEMFS root, giving the /api/file path the server answers
+    // from its DLC root (dlc/<package>/songs/...). Disc paths are unchanged.
+    char qualified[512];
+    if (strchr(path, ':')) {
+        FileQualifiedFilename(qualified, sizeof(qualified), path);
+        path = strncmp(qualified, "/data/", 6) == 0 ? qualified + 6 : qualified;
+    }
 
     // Rewrite .bik path to .webm for browser-native decoding
     // e.g., "/videos/intro.bik" → "/videos/intro.webm"

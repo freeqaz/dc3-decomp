@@ -331,9 +331,27 @@ const char *SongMgr::CachedPath(Symbol shortname, const char *cc, int version) c
     if (!(UsingCD()
           || (data && (data->IsOnDisc() || (version != 0 && data->Version() < version)))
           || !strstr(cc, ".milo"))) {
+#ifdef HX_NATIVE
+        // The image turns cache mode on to build the path and then OFF, which on
+        // the 360 is putting it back: this branch only runs when !UsingCD(), a
+        // dev kit loading loose files, where cache mode is off. Native web is
+        // !UsingCD() too (MEMFS, no ark) but runs with cache mode ON
+        // (App.cpp), so the image's `false` turned it off for the session at
+        // the first downloaded song: every later FileCache::Add of a .milo
+        // asked for the loose name (`songs/thehustle/thehustle.milo`, 404)
+        // instead of `gen/thehustle.milo_xbox`, PreloadPanel failed, and the
+        // game went back to the title screen. Measured on web, disc song
+        // after three DLC songs (np-webdlc). Restore what was there instead,
+        // which is the image's behaviour wherever the image runs.
+        const bool oldCacheMode = DirLoader::CacheMode();
+        DirLoader::SetCacheMode(true);
+        cc = DirLoader::CachedPath(cc, false);
+        DirLoader::SetCacheMode(oldCacheMode);
+#else
         DirLoader::SetCacheMode(true);
         cc = DirLoader::CachedPath(cc, false);
         DirLoader::SetCacheMode(false);
+#endif
     }
     return cc;
 }

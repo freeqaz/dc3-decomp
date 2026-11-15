@@ -16,6 +16,12 @@ API endpoints:
   GET /api/bundle/sfx_pcm        — the boot set of .ogg kXMA SFX sidecars in
                                    one bundle (keys in native/web/sfx_bundle.keys;
                                    see scripts/web/gen_sfx_sidecars.sh)
+  GET /api/bundle/dlc            — every DLC package's songs/*.dta as
+                                   dlc/<package>/songs/<file> (the song lists
+                                   ContentMgr discovers from; empty without DLC)
+  GET /api/file/dlc/<pkg>/<path> — a file of a DLC package, from the DLC root
+                                   (--dlc-dir / DC3_DLC_ASSETS / <assets>/../dlc,
+                                   i.e. orig-assets/dlc, served in place)
   GET /                          — index.html (build artifacts)
   GET /dc3-web.{js,wasm}         — WASM build output
 """
@@ -45,6 +51,13 @@ BUILD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "build")
 SCREEN_MANIFEST_DIR = os.path.dirname(os.path.abspath(__file__))
 _SCREEN_NAME_RE = re.compile(r"^[a-z0-9_]+$")
 ASSETS_DIR = None  # Set via --assets-dir, DC3_ASSETS env, or auto-detect
+# Downloadable content (PLAN D-7, W-23..W-28; docs/native/DLC.md "Web"): the
+# directory scripts/dlc/import.sh fills, one extracted package per subdirectory.
+# Served IN PLACE (never copied): /api/file/dlc/<package>/<path> reads
+# DLC_DIR/<package>/<path>; the game asks for that path because a mounted
+# package's drive maps to /data/dlc/<package> in MEMFS. None = no DLC.
+DLC_DIR = None
+DLC_REL = "dlc"
 
 # kXMA SFX sidecars (W-7). scripts/web/gen_sfx_sidecars.sh writes an .ogg for
 # every key in native/web/sfx_sidecars.manifest into the deploy dir; requests
@@ -281,6 +294,46 @@ def read_manifest(manifest_path):
     return paths
 
 
+def dlc_packages():
+    """Package directory names under DLC_DIR (dot-dirs skipped, as
+    ContentMgr_Native skips them), sorted; [] without DLC."""
+    if not DLC_DIR or not os.path.isdir(DLC_DIR):
+        return []
+    return sorted(d for d in os.listdir(DLC_DIR)
+                  if not d.startswith(".") and os.path.isdir(os.path.join(DLC_DIR, d)))
+
+
+def build_dlc_bundle_entries():
+    """The /api/bundle/dlc entry set: each package's songs/*.dta/.dtb (the
+    files HamSongMgr's content pattern `songs*.dta` matches in `songs/`, plus
+    any other DTA beside them), keyed dlc/<package>/songs/<file>. Nothing else
+    of a package is in it: milos, moggs, MIDI and album art are fetched on
+    demand per song, so boot grows only by the song lists."""
+    entries = []
+    for pkg in dlc_packages():
+        songs = os.path.join(DLC_DIR, pkg, "songs")
+        if not os.path.isdir(songs):
+            continue
+        for f in sorted(os.listdir(songs)):
+            full = os.path.join(songs, f)
+            if os.path.isfile(full) and os.path.splitext(f)[1].lower() in (".dta", ".dtb"):
+                with open(full, "rb") as fh:
+                    entries.append((f"{DLC_REL}/{pkg}/songs/{f}", fh.read()))
+    return entries
+
+
+def resolve_dlc_path(safe_rel):
+    """`dlc/<package>/<path>` (already normpath'd, no leading ..) → the file
+    under DLC_DIR, or None. Only for paths under the dlc/ prefix."""
+    if not DLC_DIR:
+        return None
+    parts = safe_rel.split(os.sep, 1)
+    if len(parts) != 2 or parts[0] != DLC_REL:
+        return None
+    full = os.path.join(DLC_DIR, parts[1])
+    return full if os.path.isfile(full) else None
+
+
 def build_config_bundle_entries():
     """Build the /api/bundle (config DTA/DTB) entry set — walks ASSETS_DIR for
     .dta/.dtb, restores "(..)"→"..". Returns [(rel, bytes), ...]."""
@@ -434,6 +487,8 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
             self._serve_screen_bundle(path[len("/api/bundle/screen/"):])
         elif path == "/api/bundle/sfx_pcm":
             self._serve_sfx_bundle()
+        elif path == "/api/bundle/dlc":
+            self._serve_dlc_bundle()
         elif path.startswith("/api/file/"):
             rel = path[len("/api/file/"):]
             self._serve_asset_file(rel)
@@ -445,7 +500,8 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
         # whether the server must be restarted to pick up a server.py change
         # (scripts/web/deploy.sh; the build dir is read per request, the code is not).
         body = json.dumps({"status": "ok", "server_sha256": SERVER_SHA256,
-                           "build_dir": BUILD_DIR}).encode()
+                           "build_dir": BUILD_DIR, "dlc_dir": DLC_DIR,
+                           "dlc_packages": dlc_packages()}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -556,6 +612,16 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
         # cache_name is per-screen so each screen's compressed artifact is
         # distinct; the fingerprint inside _emit_bundle rebuilds on drift.
         self._emit_bundle(entries, cache_name=f"screen-{name}")
+
+    def _serve_dlc_bundle(self):
+        """Every DLC package's song list (build_dlc_bundle_entries), fetched by
+        main_web.cpp at boot when DLC is on. No DLC: an empty bundle (count=0),
+        which the client unpacks to nothing."""
+        entries = build_dlc_bundle_entries()
+        self.log_message("dlc-bundle: %d files from %d packages, %.1f KB",
+                         len(entries), len(dlc_packages()),
+                         sum(len(d) for _r, d in entries) / 1e3)
+        self._emit_bundle(entries, cache_name="dlc")
 
     def _serve_sfx_bundle(self):
         """The boot set of .ogg kXMA SFX sidecars as one compressed bundle (the
@@ -738,6 +804,9 @@ class DC3Handler(http.server.SimpleHTTPRequestHandler):
             return
 
         full_path = os.path.join(ASSETS_DIR, safe)
+        # A DLC package's file: dlc/<package>/<path> from DLC_DIR, in place.
+        if safe.split(os.sep, 1)[0] == DLC_REL:
+            full_path = resolve_dlc_path(safe) or os.path.join(ASSETS_DIR, safe)
         if os.path.dirname(safe) == SFX_SIDECAR_REL:
             generated = os.path.join(SFX_SIDECAR_DIR, os.path.basename(safe))
             if os.path.isfile(generated):
@@ -858,6 +927,19 @@ def _find_assets_dir():
     return None
 
 
+def _find_dlc_dir(assets_dir):
+    """The DLC root: DC3_DLC_ASSETS, else <assets>/../dlc (orig-assets/dlc next
+    to orig-assets/extracted, where scripts/dlc/import.sh puts packages)."""
+    env = os.environ.get("DC3_DLC_ASSETS")
+    if env is not None:
+        return os.path.realpath(env) if env and os.path.isdir(env) else None
+    if assets_dir:
+        c = os.path.join(os.path.dirname(assets_dir), "dlc")
+        if os.path.isdir(c):
+            return os.path.realpath(c)
+    return None
+
+
 def _default_encode_cache_dir():
     """Default on-disk encode cache location: native/web/.cache/encoded/
     (next to this script, gitignored). Overridable via DC3_ENCODE_CACHE."""
@@ -869,13 +951,19 @@ def _default_encode_cache_dir():
 
 
 def main():
-    global ASSETS_DIR, ENCODE_CACHE_DIR, ENCODE_ENABLED, BROTLI_BIN, GZIP_BIN
+    global ASSETS_DIR, DLC_DIR, ENCODE_CACHE_DIR, ENCODE_ENABLED, BROTLI_BIN, GZIP_BIN
 
     parser = argparse.ArgumentParser(description="DC3 Web Dev Server")
     parser.add_argument(
         "--assets-dir",
         default=None,
         help="Path to extracted game assets (default: DC3_ASSETS env or auto-detect)",
+    )
+    parser.add_argument(
+        "--dlc-dir",
+        default=None,
+        help="DLC root, one extracted package per subdirectory (default: "
+             "DC3_DLC_ASSETS env, else <assets>/../dlc; '' = no DLC)",
     )
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument(
@@ -888,6 +976,10 @@ def main():
     args = parser.parse_args()
 
     ASSETS_DIR = args.assets_dir or _find_assets_dir()
+    if args.dlc_dir is not None:
+        DLC_DIR = os.path.realpath(args.dlc_dir) if args.dlc_dir and os.path.isdir(args.dlc_dir) else None
+    else:
+        DLC_DIR = _find_dlc_dir(ASSETS_DIR)
 
     # Wire-compression setup: probe encoder CLIs once; a missing binary just
     # narrows the negotiation (brotli → gzip → raw), never errors.
@@ -913,6 +1005,10 @@ def main():
         print(f"  Assets:  {ASSETS_DIR}")
     else:
         print("  Assets:  NOT CONFIGURED (set --assets-dir or DC3_ASSETS)")
+    if DLC_DIR:
+        print(f"  DLC:     {DLC_DIR} ({len(dlc_packages())} packages: {', '.join(dlc_packages())})")
+    else:
+        print("  DLC:     none")
     print(f"  URL:     http://0.0.0.0:{args.port} (accessible remotely)")
     print(f"  API:     http://0.0.0.0:{args.port}/api/manifest")
     print(f"  COOP/COEP headers enabled")

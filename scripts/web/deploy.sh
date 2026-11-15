@@ -136,6 +136,25 @@ if [ -n "$KEY" ]; then
 else
     echo "  FAIL SFX sidecar: no key in native/web/sfx_sidecars.manifest" >&2; FAILS=$((FAILS + 1))
 fi
+# DLC (PLAN W-28): when this checkout has imported packages (orig-assets/dlc,
+# scripts/dlc/import.sh), the server must report them, serve their song lists
+# and a file inside one, and every preview/sidecar the web needs must exist
+# (gen_dlc_web_assets.sh, run by build.sh). Without packages, nothing to check.
+DLC_ROOT="${DC3_DLC_ASSETS:-$REPO_ROOT/orig-assets/dlc}"
+DLC_PREV="$(find -L "$DLC_ROOT" -mindepth 4 -maxdepth 4 -path '*/songs/*/*_prev.webm' -print -quit 2>/dev/null || true)"
+if [ -n "$(find -L "$DLC_ROOT" -mindepth 2 -maxdepth 2 -name songs -type d -print -quit 2>/dev/null || true)" ]; then
+    NPKG="$(python3 -c 'import json,sys
+try: print(len(json.loads(sys.argv[1]).get("dlc_packages") or []))
+except Exception: print(0)' "$(health)")"
+    if [ "$NPKG" -gt 0 ]; then echo "  ok   DLC packages served: $NPKG"; else echo "  FAIL DLC: $DLC_ROOT has packages but /api/health lists none (server started with --dlc-dir ''?)" >&2; FAILS=$((FAILS + 1)); fi
+    probe "DLC song lists" "/api/bundle/dlc" head
+    if [ -n "$DLC_PREV" ]; then
+        probe "DLC preview" "/api/file/dlc/${DLC_PREV#"$DLC_ROOT"/}" head
+    else
+        echo "  FAIL DLC preview: no *_prev.webm under $DLC_ROOT (run scripts/web/gen_dlc_web_assets.sh)" >&2; FAILS=$((FAILS + 1))
+    fi
+    if DC3_DLC_ASSETS="$DLC_ROOT" "$REPO_ROOT/scripts/web/gen_dlc_web_assets.sh" --check | sed 's/^/  /'; then :; else FAILS=$((FAILS + 1)); fi
+fi
 if [ "$BROWSER" = 1 ]; then
     say "browser smoke test (scripts/web/smoke-test.mjs --port $PORT)"
     if ! node "$REPO_ROOT/scripts/web/smoke-test.mjs" --port "$PORT"; then FAILS=$((FAILS + 1)); fi
