@@ -996,14 +996,17 @@ song, and checks:
 
 Exit 1 if a check fails, 2 if the run broke. `--profile record` is the negative
 control: on this rig it fails exactly the three BC checks. MEASURED, headless
-Chromium 1223, RTX 3090, box load 30-93, one song each (song index 3,
-thehustle, rollerrink):
+Chromium 1223, RTX 3090, box load 30-102, one song each, `--song-index 3`.
+Before the np-webdlc rebase that index was thehustle (rollerrink); with DLC
+in the song list it is dragosteadintei (DLC, dclive), so the table has both:
 
 | profile | result | device features | GPU textures live (by format) | wasm heap peak | menu | song load | fps (20 s) |
 |---|---|---|---|---|---|---|---|
-| `mobile` | PASS | none | 519, **296.8 MB** (rgba8unorm 501 / 228.5 MB) | 462.0 MB | 12.9 s | 35.7 s | 58.3 |
-| `bare` | PASS | none | 296.9 MB | 467.9 MB | 10.1 s | 45.0 s | 26 (box load) |
-| `record` | 3 FAIL (control) | texture-compression-bc | **149.8 MB** (bc3 ×332, bc1 ×124) | 467.9 MB | 10.2 s | 35.6 s | 59.4 |
+| `mobile`, rollerrink | PASS | none | 519, **296.8 MB** (rgba8unorm 501 / 228.5 MB) | 462.0 MB | 12.9 s | 35.7 s | 58.3 |
+| `bare`, rollerrink | PASS | none | 296.9 MB | 467.9 MB | 10.1 s | 45.0 s | 26 (box load) |
+| `record`, rollerrink | 3 FAIL (control) | texture-compression-bc | **149.8 MB** (bc3 ×332, bc1 ×124) | 467.9 MB | 10.2 s | 35.6 s | 59.4 |
+| `mobile`, dclive (rebased) | PASS | none | 485, **281.3 MB** (rgba8unorm 467 / 223.3 MB) | 389.9 MB | 11.4 s | 38.0 s | 44.7 |
+| `record`, dclive (rebased) | 3 FAIL (control) | texture-compression-bc (+ core-features-and-limits) | **146.9 MB** (bc3 ×308, bc1 ×116) | 390.0 MB | 14.8 s | 35.4 s | 57.2 |
 
 What this settles:
 
@@ -1014,8 +1017,8 @@ What this settles:
   4×, which every WebGPU device supports for those formats.
 - Without BC, `TextureConvert` decodes DXT1/3/5/DXN to RGBA8 on the CPU, and
   the song draws correctly: the roller-rink screenshot matches the BC run.
-  **The cost is GPU texture memory: 297 MB instead of 150 MB (+147 MB, ~2×)**
-  for one song's venue. ETC2/ASTC transcoding or dropping the top mip when
+  **The cost is GPU texture memory: 297 MB instead of 150 MB (+147 MB) in
+  rollerrink, 281 MB instead of 147 MB (+134 MB) in dclive, about 2×.** ETC2/ASTC transcoding or dropping the top mip when
   BC is missing would claw it back (W-32).
 - The first song run under both profiles also found a web regression on main
   at the time: `PointTestPass` left `depthClearValue` at the C++ default of
@@ -1027,7 +1030,7 @@ What this settles:
 **Memory (W-32).** The build asks for `ALLOW_MEMORY_GROWTH` with
 `MAXIMUM_MEMORY=1024MB` (dc3's override of the engine's 512 MB, W-6), a 4 MB
 stack, and emcc's default initial memory (16 MB, INFERRED). One song peaks at
-462-468 MB of wasm heap (MEASURED, above), plus about 297 MB of GPU textures
+390-468 MB of wasm heap (MEASURED, above, by venue), plus 281-297 MB of GPU textures
 without BC. The pose worker's own heap (tasks-vision wasm and the model) is
 not measured (H-89). Safari's per-tab limit on an iPhone is not published, and
 a 1 GB wasm reservation plus ~300 MB of textures is the most likely reason an
