@@ -120,6 +120,8 @@ probe() { # probe NAME URL [method]
 say "smoke test against $BASE"
 probe "page" "/index.html"
 probe "audio worklet" "/audio-worklet.js"
+probe "touch buttons" "/touch_controls.js"
+probe "gpu profile (?gpu_profile=)" "/gpu_profile.js"
 for v in release debug; do
     if [ -f "$REPO_ROOT/native/web/build/$v/dc3-web.wasm" ]; then
         probe "$v wasm" "/$v/dc3-web.wasm" head
