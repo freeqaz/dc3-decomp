@@ -639,3 +639,168 @@ TEST(OutputResolution, TheRowsKnobParses) {
     ScopedLookOverride enhanced(LookProfile::Enhanced);
     EXPECT_EQ(Look().outputMaxRowsExplicit, -1);
 }
+
+// The web build's row cap and its printed reason (WebOutputRowCap /
+// DescribeRowCap, gfx/GpuDevice.h). A browser cannot say whether its adapter
+// is discrete, so: the knob (MILO_OUTPUT_MAX_ROWS through ?env=) wins both
+// ways on any adapter -- over the phone rule too; an adapter without
+// texture-compression-bc (a phone or tablet; ?gpu_profile=mobile|bare) gets
+// 720 rows; anything else the 1080 rows an integrated desktop adapter gets.
+// The boot line prints which, and why. Sabotages, each red here: the phone
+// rule above the knob; the BC test inverted; the web default not read from
+// outputMaxRowsIntegrated (a discrete-style "no cap"); the reason text
+// swapped.
+TEST(OutputResolution, TheWebCapSaysWhichAndWhy) {
+    ScopedLookOverride enhanced(LookProfile::Enhanced);
+    EXPECT_EQ(Look().outputMaxRowsNoBc, 720);
+    struct Row {
+        int knob;
+        bool bc;
+        int rows;
+        RowCapSource source;
+        const char *text;
+    };
+    const Row rows[] = {
+        {-1, true, 1080, RowCapSource::WebDefault, "1080 rows: web default"},
+        {-1, false, 720, RowCapSource::NoBcAdapter, "720 rows: adapter lacks texture-compression-bc"},
+        {0, false, 0, RowCapSource::Knob, "no cap: knob (MILO_OUTPUT_MAX_ROWS)"},
+        {1440, false, 1440, RowCapSource::Knob, "1440 rows: knob (MILO_OUTPUT_MAX_ROWS)"},
+        {1080, false, 1080, RowCapSource::Knob, "1080 rows: knob (MILO_OUTPUT_MAX_ROWS)"},
+        {720, true, 720, RowCapSource::Knob, "720 rows: knob (MILO_OUTPUT_MAX_ROWS)"},
+        {0, true, 0, RowCapSource::Knob, "no cap: knob (MILO_OUTPUT_MAX_ROWS)"},
+    };
+    for (const Row &r : rows) {
+        GpuDeviceDesc d;
+        d.outputMaxRowsIntegrated = Look().outputMaxRowsIntegrated;
+        d.outputMaxRowsNoBc = Look().outputMaxRowsNoBc;
+        d.outputMaxRowsExplicit = r.knob;
+        const RowCapChoice c = WebOutputRowCap(d, r.bc);
+        char buf[96];
+        EXPECT_EQ(c.rows, r.rows) << r.text;
+        EXPECT_EQ((int)c.source, (int)r.source) << r.text;
+        EXPECT_STREQ(DescribeRowCap(c, buf, sizeof(buf)), r.text);
+    }
+    // Retail sets none of the caps (its frame is the original's 1280x720 and
+    // never follows): no cap, said so.
+    ScopedLookOverride retail(LookProfile::Retail);
+    GpuDeviceDesc d;
+    d.outputMaxRowsIntegrated = Look().outputMaxRowsIntegrated;
+    d.outputMaxRowsNoBc = Look().outputMaxRowsNoBc;
+    const RowCapChoice c = WebOutputRowCap(d, false);
+    char buf[96];
+    EXPECT_EQ(c.rows, 0);
+    EXPECT_STREQ(DescribeRowCap(c, buf, sizeof(buf)), "no cap: none set");
+}
+
+// The web frame (WebFrameDesc + ResolveFrameSizesWithCap, as GpuDevice_Web
+// resolves it): the canvas's buffer is the logical 16:9 fitted into the
+// canvas's box in device pixels, held to the web cap, drawn at render scale 1
+// whatever the look asks for (the web never supersamples), and never below
+// kOutputMinRows (640x360): a collapsed panel or a tiny embedded page gets a
+// 640x360 frame scaled down into its box, not a 40x22 one (whose quarter-size
+// DOF and bloom-chain targets would be a few texels, or empty). Sabotages,
+// each red here: WebFrameDesc keeping the look's 2x; WebFrameDesc keeping an
+// explicit MILO_RENDER_SCALE; the floor dropped; the floor applied before the
+// cap with a low knob instead of after (knob 200 must still give 360 rows);
+// the floor applied headless; the capped width taken from the fitted
+// rectangle (the phone's 2079x1170 box at the 1080 knob gave 1921 wide).
+TEST(OutputResolution, TheWebFrameFollowsTheCanvasBox) {
+    ScopedLookOverride enhanced(LookProfile::Enhanced);
+    struct Row {
+        int knob;
+        bool bc;
+        int boxW, boxH;  // the canvas's box, device pixels
+        int outW, outH;
+        const char *why;
+    };
+    const Row rows[] = {
+        {-1, true, 1280, 720, 1280, 720, "1280x720 viewport, dpr 1"},
+        {-1, true, 1920, 1080, 1920, 1080, "1920x1080 viewport, dpr 1"},
+        {-1, true, 2560, 1440, 1920, 1080, "1280x720 viewport, dpr 2: the 1080 cap"},
+        {-1, true, 3840, 2160, 1920, 1080, "a 4K monitor: 1080 rows, CSS-scaled 2x"},
+        {0, true, 3840, 2160, 3840, 2160, "a 4K monitor, knob 0: its own size"},
+        {-1, true, 2560, 1600, 1920, 1080, "16:10 box: letterboxed, capped"},
+        {-1, false, 2079, 1170, 1280, 720, "dpr-3 phone, landscape: 720 rows"},
+        {-1, false, 1170, 658, 1170, 658, "dpr-3 phone, portrait: under the cap"},
+        {1080, false, 2079, 1170, 1920, 1080, "phone, knob 1080: the knob wins"},
+        {-1, true, 1279, 719, 1278, 719, "a box a pixel short: fitted, not stretched"},
+        {-1, true, 80, 45, 640, 360, "a tiny embed: the 640x360 floor"},
+        {-1, true, 1, 1, 640, 360, "a 1x1 box: the floor"},
+        {-1, true, 0, 0, 640, 360, "an empty box: the floor, no divide by zero"},
+        {200, true, 1920, 1080, 640, 360, "knob 200: the floor beats it"},
+    };
+    for (const Row &r : rows) {
+        GpuDeviceDesc in;
+        in.renderScale = Look().renderScale;  // 2: the desktop's
+        in.renderScaleIntegrated = 2.0f;      // even a profile that would
+        in.renderScaleExplicit = 2.0f;        // supersample, or asked for
+        in.outputFollowsTarget = true;
+        in.logicalWidth = 1280;
+        in.logicalHeight = 720;
+        in.outputMaxRowsIntegrated = Look().outputMaxRowsIntegrated;
+        in.outputMaxRowsNoBc = Look().outputMaxRowsNoBc;
+        in.outputMaxRowsExplicit = r.knob;
+        const GpuDeviceDesc d = WebFrameDesc(in);
+        const int cap = WebOutputRowCap(d, r.bc).rows;
+        const FrameSizes s = ResolveFrameSizesWithCap(d, false, true, r.boxW, r.boxH, cap);
+        EXPECT_EQ(s.outputW, r.outW) << r.why;
+        EXPECT_EQ(s.outputH, r.outH) << r.why;
+        EXPECT_FLOAT_EQ(s.scale, 1.0f) << r.why;
+        EXPECT_EQ(s.drawnW, r.outW) << r.why;
+        EXPECT_EQ(s.drawnH, r.outH) << r.why;
+    }
+    // The floor is the shared rule's (a desktop window too), for a frame
+    // presented to a window or canvas only: a tiny desktop window gets a
+    // 640x360 output (2x on a discrete GPU), a headless frame the size asked.
+    GpuDeviceDesc d;
+    d.renderScale = Look().renderScale;
+    d.renderScaleIntegrated = Look().renderScaleIntegrated;
+    d.outputFollowsTarget = true;
+    d.logicalWidth = 1280;
+    d.logicalHeight = 720;
+    FrameSizes s = ResolveFrameSizes(d, true, true, 300, 170);
+    EXPECT_EQ(s.outputW, 640);
+    EXPECT_EQ(s.outputH, 360);
+    EXPECT_EQ(s.drawnH, 720) << "2x on a discrete GPU";
+    s = ResolveFrameSizes(d, true, false, 320, 180);
+    EXPECT_EQ(s.outputW, 320) << "headless: the size asked for";
+    EXPECT_EQ(s.outputH, 180) << "headless: the size asked for";
+}
+
+// The canvas's size is taken once per settled size (SettledSize,
+// kWebResizeSettleMs = 250): a browser's resize and fullscreen events come in
+// bursts, and each taken size re-creates every size-keyed target. A burst of
+// sizes 16 ms apart takes nothing until the last has held 250 ms, then takes
+// it exactly once; a burst that ends back at the taken size takes nothing.
+// Sabotages, each red here: taking every new size (no settle); restarting the
+// clock on every Offer instead of on every change (never settles); taking the
+// same size again each frame after it settled.
+TEST(OutputResolution, TheCanvasSizeIsTakenOncePerSettledSize) {
+    SettledSize f(kWebResizeSettleMs);
+    f.Take(1280, 720);
+    double t = 0.0;
+    int takes = 0;
+    auto frame = [&](int w, int h) { takes += f.Offer(w, h, t) ? 1 : 0; t += 16.0; };
+    // A drag: 30 sizes, one a frame.
+    for (int i = 0; i < 30; i++) frame(1280 + 20 * i, 720 + 11 * i);
+    EXPECT_EQ(takes, 0) << "nothing taken mid-drag";
+    // Hold the last size for a second.
+    for (int i = 0; i < 63; i++) frame(1280 + 20 * 29, 720 + 11 * 29);
+    EXPECT_EQ(takes, 1) << "the settled size taken once";
+    EXPECT_EQ(f.TakenWidth(), 1280 + 20 * 29);
+    EXPECT_EQ(f.TakenHeight(), 720 + 11 * 29);
+    // A fullscreen toggle: one jump, held.
+    for (int i = 0; i < 63; i++) frame(1920, 1080);
+    EXPECT_EQ(takes, 2);
+    // A burst that comes back to the taken size: nothing to do.
+    for (int i = 0; i < 5; i++) frame(1000 + i, 600);
+    for (int i = 0; i < 63; i++) frame(1920, 1080);
+    EXPECT_EQ(takes, 2) << "back at the taken size";
+    // Exactly at the interval: 250 ms after the change, not before.
+    SettledSize g(250.0);
+    g.Take(100, 100);
+    EXPECT_FALSE(g.Offer(200, 200, 1000.0));
+    EXPECT_FALSE(g.Offer(200, 200, 1249.0));
+    EXPECT_TRUE(g.Offer(200, 200, 1250.0));
+    EXPECT_FALSE(g.Offer(200, 200, 1251.0));
+}
