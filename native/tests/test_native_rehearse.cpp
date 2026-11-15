@@ -220,7 +220,7 @@ struct EngineRun {
 // (POST /api/dta/eval), waitfor SECONDS SCREEN..., shot NAME (screenshot to
 // $shots/NAME.png). Each run has its own empty persistence root and the
 // port the engine bound. Bounded throughout; the engine is killed by PID, never by pattern.
-EngineRun RunEngine(const std::string &drive) {
+EngineRun RunEngine(const std::string &drive, const std::string &extraEnv = "") {
     EngineRun r;
     std::string bin = BinaryDir() + "/dc3-native";
     std::string script = BinaryDir() + "/../../scripts/dc3-input-flows/idle-main.txt";
@@ -257,7 +257,7 @@ EngineRun RunEngine(const std::string &drive) {
        << "( MILO_HEADLESS=1 MILO_RENDER=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1"
        << EngineHttpPortShellEnv(dir) << " MILO_MAX_FRAMES=0"
        << " DC3_CACHE_DIR=" << dir << "/cache DC3_SAVE_DIR=" << dir << "/saves"
-       << " MILO_INPUT_SCRIPT=" << script
+       << " MILO_INPUT_SCRIPT=" << script << extraEnv
        << " timeout 420 ./dc3-native > " << log << " 2>&1 & echo $! > " << log << ".pid ); "
        // The engine binds its own port and reports it (engine_http_port.h).
        << "pid=$(cat " << log << ".pid); " << EngineHttpApiShell(dir, "pid", 180)
@@ -324,15 +324,19 @@ constexpr int kCrowdPairs = 4;
 EngineRun RunPerformCrowd(const char *song) {
     std::ostringstream d;
     d << EnterGameplay(song, "perform")
-      << "waitfor 180 game_screen; echo \"DRIVER: game=$(scr)\"; sleep 4; "
+      << "waitfor 180 game_screen; echo \"DRIVER: game=$(scr)\"; "
+      << "echo \"DRIVER: gameframe $(curl -s -m 5 $api/frame)\"; sleep 4; "
       << "echo \"DRIVER: crowds $(ev '{do ($n 0) {{$hamdirector get cur_world} iterate WorldCrowd $c"
          " {set $n {+ $n 1}}} $n}')\"; "
       << "for i in $(seq 1 " << kCrowdPairs << "); do sleep 2; shot a$i; "
       << "  ev '{{$hamdirector get cur_world} iterate WorldCrowd $c {$c set_showing FALSE}}' > /dev/null; "
       << "  shot b$i; "
       << "  ev '{{$hamdirector get cur_world} iterate WorldCrowd $c {$c set_showing TRUE}}' > /dev/null; "
-      << "done; ";
-    return RunEngine(d.str());
+      << "done; "
+      << "echo \"DRIVER: endframe $(curl -s -m 5 $api/frame)\"; ";
+    // MILO_GPU_COUNTERS: log-only ([GPUCOUNT] every 10 frames), read by
+    // NoPipelineCreatedAfterLoad below.
+    return RunEngine(d.str(), " MILO_GPU_COUNTERS=10");
 }
 
 } // namespace
@@ -452,6 +456,76 @@ constexpr double kRinkWhiteMax = 0.004;
 
 } // namespace
 
+// The frame a "DRIVER: <tag> {...\"frame\":N...}" line reports (/api/frame), or -1.
+int DriverFrame(const std::string &driver, const char *tag) {
+    const std::string key = std::string("DRIVER: ") + tag + " ";
+    size_t at = driver.find(key);
+    if (at == std::string::npos) return -1;
+    size_t eol = driver.find('\n', at);
+    size_t f = driver.find("\"frame\":", at);
+    if (f == std::string::npos || f > eol) return -1;
+    return atoi(driver.c_str() + f + 8);
+}
+
+// No render pipeline is compiled once the load is over (dc3 PLAN H-33, engine
+// doc section 39): DirLoader::Cleanup's NativeWarmLoadedDir compiled, or
+// queued, every pipeline the loaded venue, song and HUD can draw with, so
+// from game_screen on the [GPUCOUNT] pipelineCreates count stays where the
+// load left it. Non-vacuous: some pipelines were warmed, and the window is
+// several hundred drawn frames of the venue with its crowds shown and hidden.
+// Runs with MILO_PIPELINE_CACHE=0 (MILO_TEST_ENV), so the answer does not
+// depend on what the box has cached. The full-song version is
+// GameplayTelemetryTest.NoPipelineCompiledAfterGameplayStarts
+// (DC3_GAMEPLAY_TESTS, off by default; this is the default gate's guard).
+// Sabotage-checked: PipelineManager::WarmAsync refusing one key (warmed
+// 133 -> 132 / 130 -> 129) fails both venues ("pipelines compiled after the
+// load ... frame 4110: +1"); dropping a key that venue does not draw in this
+// window (the rink's disco-ball flare rect) passes, as it should.
+void ExpectNoPipelineCreatedAfterLoad(const char *song, const EngineRun &run) {
+    const int gameFrame = DriverFrame(run.driver, "gameframe");
+    const int endFrame = DriverFrame(run.driver, "endframe");
+    ASSERT_GT(gameFrame, 0) << song << ": no frame for game_screen\n" << run.driver;
+    ASSERT_GT(endFrame, gameFrame + 300)
+        << song << ": too few frames after game_screen (" << gameFrame << ".." << endFrame << ")";
+    struct Count { int frame; unsigned long long creates, warms; };
+    std::vector<Count> counts;
+    std::istringstream in(run.output);
+    std::string line;
+    while (std::getline(in, line)) {
+        const size_t at = line.find("[GPUCOUNT] frame=");
+        if (at == std::string::npos) continue;
+        const size_t cr = line.find(" pipelineCreates=", at);
+        const size_t wa = line.find(" pipelineWarms=", at);
+        if (cr == std::string::npos || wa == std::string::npos) continue;
+        counts.push_back({atoi(line.c_str() + at + 17),
+                          strtoull(line.c_str() + cr + 17, nullptr, 10),
+                          strtoull(line.c_str() + wa + 15, nullptr, 10)});
+    }
+    ASSERT_FALSE(counts.empty()) << song << ": no [GPUCOUNT] line (MILO_GPU_COUNTERS not honoured?)";
+    const Count *atGame = nullptr;
+    for (const Count &c : counts)
+        if (c.frame <= gameFrame) atGame = &c;
+    ASSERT_NE(atGame, nullptr) << song << ": no [GPUCOUNT] line before game_screen (frame "
+                               << gameFrame << ")";
+    const Count *atEnd = nullptr;
+    for (const Count &c : counts)
+        if (c.frame <= endFrame) atEnd = &c;
+    ASSERT_GT(atEnd->frame, atGame->frame + 300) << song << ": counters stopped at frame " << atEnd->frame;
+    EXPECT_GT(atEnd->warms, 0u) << song << ": no pipeline was warmed at load (vacuous)";
+    std::string where;
+    unsigned long long prev = atGame->creates;
+    for (const Count &c : counts) {
+        if (c.frame <= atGame->frame || c.frame > atEnd->frame) continue;
+        if (c.creates != prev)
+            where += " frame " + std::to_string(c.frame) + ": +" + std::to_string(c.creates - prev) + ";";
+        prev = c.creates;
+    }
+    printf("%s: pipelineCreates %llu at game_screen (frame %d), %llu at frame %d; %llu warmed\n", song,
+           atGame->creates, atGame->frame, atEnd->creates, atEnd->frame, atEnd->warms);
+    EXPECT_EQ(atEnd->creates, atGame->creates)
+        << song << ": pipelines compiled after the load (game_screen at frame " << gameFrame << "):" << where;
+}
+
 class PerformCrowdTest : public ::testing::Test {
 protected:
     void Check(const char *song, double whiteMax) {
@@ -473,6 +547,7 @@ protected:
                 crowds = atoi(run.driver.c_str() + v + 8);
         }
         printf("%s: %d WorldCrowd in the venue\n", song, crowds);
+        ExpectNoPipelineCreatedAfterLoad(song, run);
         ASSERT_GE(crowds, 1) << song << ": no WorldCrowd in the venue, nothing to test\n"
                              << run.driver;
         std::string pairs;
