@@ -183,14 +183,17 @@ Rnd::Rnd()
 #include "platform/LookProfile.h"
 // Native inspection (np-gfx-post round 10): {rnd native_look retail|enhanced}
 // switches the engine's DC3_LOOK profile at run time, so one frozen frame can
-// be graded both ways; {rnd native_look} alone reports it. Returns the profile
-// now in force.
+// be graded both ways; post_retail|post_enhanced switch only the post chain's
+// fields (the rest of the profile, e.g. alpha-cut coverage, untouched);
+// {rnd native_look} alone reports it. Returns the profile now in force.
 static Symbol NativeLook(const DataArray *msg) {
     if (msg->Size() > 2) {
         const Symbol s = msg->Sym(2);
         if (s == "retail") milo::SetLookProfileForInspection(milo::LookProfile::Retail);
         else if (s == "enhanced") milo::SetLookProfileForInspection(milo::LookProfile::Enhanced);
-        else MILO_NOTIFY("native_look: %s is not retail or enhanced", s.Str());
+        else if (s == "post_retail") milo::SetLookPostForInspection(false);
+        else if (s == "post_enhanced") milo::SetLookPostForInspection(true);
+        else MILO_NOTIFY("native_look: %s is not retail, enhanced, post_retail or post_enhanced", s.Str());
     }
     return milo::LookProfileName(milo::Look().profile);
 }
