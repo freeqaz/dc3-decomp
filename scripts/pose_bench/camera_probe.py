@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """How a real camera delivers frames to the pose server's capture loop (PLAN L-3).
 
-Opens the camera exactly as pose_server.py does (open_camera: 640x480, 30 fps,
-CAP_PROP_BUFFERSIZE 1), then stands in for the server's per-frame work with a
-busy wait of W ms and reports, per W:
+Opens the camera as pose_server.py does (open_camera: 640x480, 30 fps,
+CAMERA_BUFFERS driver buffers; --buffers N overrides), then stands in for the
+server's per-frame work with a busy wait of W ms and reports, per W:
 
   fps      frames the work loop got per second
   age      capture -> the loop has the frame (ms; device stamp, V4L2 is
@@ -12,9 +12,15 @@ busy wait of W ms and reports, per W:
   dup      frames whose device stamp repeated (the same buffer handed back)
 
 for two capture shapes:
-  seq      read() then work, in one loop (pose_server.py before np-pose-perf)
+  seq      read() then work, in one loop (pose_server.py --no-capture-thread)
   thread   a grabber thread reads continuously into a newest-wins slot and
-           the work loop takes the newest frame (waits only if none is new)
+           the work loop takes the newest frame (waits only if none is new;
+           pose_server.py's NewestFrameCapture)
+
+--buffers 1 is what the server asked for until np-gpd-camfps (2026-11-14). It
+halves the delivered rate in BOTH shapes on a UVC camera, at any W, which is
+why this probe's first run (np-pose-perf) saw no difference between them:
+compare --buffers 1 and --buffers 2 at --work 0 before reading anything else.
 
   python scripts/pose_bench/camera_probe.py [--camera 0] [--secs 6]
       [--work 0,20,30,40,50] [--fourcc MJPG|YUYV] [--json out.jsonl]
@@ -120,6 +126,8 @@ def main():
     ap.add_argument("--secs", type=float, default=6.0)
     ap.add_argument("--work", default="0,20,30,40,50")
     ap.add_argument("--fourcc", default=None)
+    ap.add_argument("--buffers", type=int, default=None,
+                    help="CAP_PROP_BUFFERSIZE (default: the server's CAMERA_BUFFERS)")
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
     import cv2
@@ -129,13 +137,16 @@ def main():
             cap, _ = pose_server.open_camera(cv2, args.camera, 640, 480)
             if args.fourcc:
                 cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*args.fourcc))
+            if args.buffers:
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, args.buffers)
             fcc = int(cap.get(cv2.CAP_PROP_FOURCC))
             fcc = "".join(chr((fcc >> 8 * i) & 0xFF) for i in range(4))
             for _ in range(10):
                 cap.read()   # settle exposure / stream start
             rows = (run_seq if shape == "seq" else run_thread)(cap, cv2, w, args.secs)
             cap.release()
-            s = {"shape": shape, "work_ms": w, "fourcc": fcc, **summary(rows)}
+            s = {"shape": shape, "work_ms": w, "fourcc": fcc,
+                 "buffers": args.buffers or pose_server.CAMERA_BUFFERS, **summary(rows)}
             print(json.dumps(s), flush=True)
             if args.json:
                 with open(args.json, "a") as f:

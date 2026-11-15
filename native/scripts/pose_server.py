@@ -92,9 +92,17 @@ metadata-only node) -- so a fixed index is not a camera:
 Every open -- the first, and each reopen after a loss -- resolves again.
 Without V4L2 (macOS), auto is index 0 and an index is passed to OpenCV as is.
 
-Camera mode asks for 640x480 at 30 fps with a one-frame driver buffer (a
-deeper buffer hands MediaPipe stale frames whenever inference is slower than
-the camera). The packet timestamp is the frame's capture time: the device's
+Camera mode asks for 640x480 at 30 fps with CAMERA_BUFFERS = 2 driver buffers
+and reads the camera on its own thread (NewestFrameCapture); the loop below
+takes the newest frame and never an older one. One buffer is not "the newest
+frame": uvcvideo fills a buffer only if it was queued when that frame began,
+and OpenCV queues its buffer back at the next read(), so with one buffer every
+other frame has nowhere to go. Measured on the GPD's camera (np-gpd-camfps,
+docs/native/POSE_INPUT.md#capture-buffers-np-gpd-camfps-2026-11-14): 15 fps
+from a sensor running at 30, 7.7 from 15. The thread is what keeps the second
+buffer from handing MediaPipe a stale frame when inference is slower than the
+camera. --no-capture-thread reads in the loop as before (still two buffers).
+The packet timestamp is the frame's capture time: the device's
 own buffer timestamp when the backend reports one on this process's monotonic
 clock (V4L2 does), else the moment read() returned. MediaPipe's VIDEO-mode
 timestamp is derived from the same reading and forced strictly increasing (it
@@ -110,6 +118,7 @@ import os
 import socket
 import struct
 import sys
+import threading
 import time
 
 # Protocol v2 magic. Chosen large so it cannot collide with a v1 packet, whose
@@ -144,6 +153,9 @@ EXIT_NO_DEPS = 6
 EXIT_CAMERA_LOST = 7
 
 CAMERA_FPS = 30.0
+CAMERA_BUFFERS = 2            # driver buffers; 1 halves the delivered rate (see above)
+NEWEST_FRAME_WAIT_S = 0.25    # NewestFrameCapture.read(): no new frame this long = a failed read
+FAILED_READ_PAUSE_S = 0.01    # ... and its thread's pause after a failed device read
 FIRST_FRAME_TIMEOUT_S = 3.0   # an opened device that never delivers is "no camera"
 CAMERA_LOST_AFTER_S = 2.0     # consecutive failed reads mid-run
 CAMERA_REOPEN_DELAYS_S = (0.5, 1.0, 2.0, 4.0)  # then every 4 s
@@ -263,8 +275,8 @@ def resolve_camera(spec, devices, log=None):
 def open_camera(cv2, index, width, height, fps=CAMERA_FPS,
                 first_frame_timeout=FIRST_FRAME_TIMEOUT_S,
                 clock=time.monotonic, sleep=time.sleep):
-    """Open camera `index`, request width x height @ fps with a 1-frame buffer,
-    and wait for a first frame. Returns (cap, frame). Raises ServerExit
+    """Open camera `index`, request width x height @ fps with CAMERA_BUFFERS
+    driver buffers, and wait for a first frame. Returns (cap, frame). Raises ServerExit
     (EXIT_NO_CAMERA) if it will not open or opens but sends nothing -- a
     /dev/video node that is a metadata or output device opens fine and never
     delivers a picture."""
@@ -278,7 +290,7 @@ def open_camera(cv2, index, width, height, fps=CAMERA_FPS,
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
     cap.set(cv2.CAP_PROP_FPS, fps)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, CAMERA_BUFFERS)
     deadline = clock() + first_frame_timeout
     while True:
         ok, frame = cap.read()
@@ -290,6 +302,115 @@ def open_camera(cv2, index, width, height, fps=CAMERA_FPS,
                              f"camera {index} opened but sent no frame in "
                              f"{first_frame_timeout:.1f} s")
         sleep(0.01)
+
+
+class NewestFrameCapture:
+    """A camera read on its own thread: read() hands out the newest frame the
+    device has delivered, once, and get(CAP_PROP_POS_MSEC) is that frame's own
+    stamp. The slice of cv2.VideoCapture the server loop uses (read / get /
+    release), so the loop is the same with or without it.
+
+    Why a thread: the camera needs a free buffer at the start of every frame
+    (CAMERA_BUFFERS), and a loop that reads only when inference is done would
+    get the oldest queued frame, not the newest. The thread reads every frame
+    as it completes; frames inference had no time for are replaced
+    (`replaced`), never queued.
+
+    read() returns (False, None) when the device read failed, or when no new
+    frame arrived within `wait_s`; the caller's lost-camera timing is the same
+    as for a cv2 read that fails. `read_time` is when the frame last returned
+    came off the device (None after a failed read).
+
+    Only the thread touches the capture once it runs, release included:
+    release() asks it to stop and returns, and the thread releases the device
+    when its read() comes back (cv2.VideoCapture is not safe to release under
+    a read in flight; a stalled V4L2 device holds read() for up to 10 s)."""
+
+    def __init__(self, cap, cv2, clock=time.monotonic, wait_s=NEWEST_FRAME_WAIT_S,
+                 pause=time.sleep):
+        self._cap, self._clock, self._wait_s, self._pause = cap, clock, wait_s, pause
+        self._pos_prop = cv2.CAP_PROP_POS_MSEC
+        self._cond = threading.Condition()
+        self._frame = None
+        self._seq = 0             # frames the thread has read
+        self._taken = 0           # _seq of the frame read() last returned
+        self._pos_msec = 0.0      # of the frame waiting in _frame
+        self._arrived = None
+        self._failed = False      # the thread's most recent device read failed
+        self._stop = False
+        # open_camera() has just read the first frame: its stamp is the one a
+        # get() before our first read() means.
+        self._taken_pos_msec = self._device_pos_msec()
+        self.read_time = None
+        self.replaced = 0         # frames overwritten before read() took them
+        self._thread = threading.Thread(target=self._grab, name="pose-capture", daemon=True)
+        self._thread.start()
+
+    @property
+    def frames_read(self):
+        """Frames the device has delivered to the thread so far."""
+        with self._cond:
+            return self._seq
+
+    def _device_pos_msec(self):
+        try:
+            return float(self._cap.get(self._pos_prop))
+        except Exception:
+            return 0.0
+
+    def _grab(self):
+        try:
+            while True:
+                with self._cond:
+                    if self._stop:
+                        return
+                ok, frame = self._cap.read()
+                ok = bool(ok) and frame is not None
+                now = self._clock()
+                pos = self._device_pos_msec() if ok else 0.0
+                with self._cond:
+                    if self._stop:
+                        return
+                    if ok:
+                        if self._seq != self._taken:
+                            self.replaced += 1
+                        self._seq += 1
+                        self._frame, self._pos_msec, self._arrived = frame, pos, now
+                    self._failed = not ok
+                    self._cond.notify_all()
+                if not ok:
+                    self._pause(FAILED_READ_PAUSE_S)   # a device that is gone fails at once
+        finally:
+            try:
+                self._cap.release()
+            except Exception:
+                pass
+
+    def read(self):
+        with self._cond:
+            if self._seq == self._taken and not self._failed:
+                self._cond.wait_for(lambda: self._seq != self._taken or self._failed or self._stop,
+                                    timeout=self._wait_s)
+            if self._seq == self._taken:
+                self.read_time = None
+                return False, None
+            self._taken = self._seq
+            frame, self._frame = self._frame, None
+            self._taken_pos_msec, self.read_time = self._pos_msec, self._arrived
+            return True, frame
+
+    def get(self, prop):
+        if prop == self._pos_prop:
+            with self._cond:
+                return self._taken_pos_msec
+        return 0.0   # the device belongs to the thread; ask it before wrapping
+
+    def release(self, join_s=0.5):
+        with self._cond:
+            self._stop = True
+            self._cond.notify_all()
+        if self._thread is not threading.current_thread():
+            self._thread.join(join_s)
 
 
 class CaptureClock:
@@ -491,12 +612,26 @@ class Stats:
         self.persons = 0
         self.last_sent = 0
         self.last_dropped = 0
+        self.last_camera = None   # (capture object, its frames_read) at the last line
 
     def frame(self, infer_s, persons):
         self.infer.append(infer_s)
         self.persons += persons
 
-    def maybe_print(self, outbox):
+    def camera_fps(self, cap, dt):
+        """Frames per second the camera itself delivered over the window, or
+        None when the capture does not count them (no capture thread, a video
+        file) or was reopened inside the window."""
+        count = getattr(cap, "frames_read", None)
+        if not isinstance(count, int):
+            self.last_camera = None
+            return None
+        prev, self.last_camera = self.last_camera, (cap, count)
+        if prev is None or prev[0] is not cap or dt <= 0:
+            return None
+        return (count - prev[1]) / dt
+
+    def maybe_print(self, outbox, cap=None):
         now = time.monotonic()
         dt = now - self.t0
         if dt < self.PERIOD_S:
@@ -505,11 +640,16 @@ class Stats:
         ms = sorted(x * 1000.0 for x in self.infer)
         sent = outbox.sent_packets if outbox else 0
         dropped = outbox.dropped_packets if outbox else 0
+        # fps = frames this server processed; camera_fps = frames the camera
+        # delivered. fps well under camera_fps: inference is the limit.
+        # Both low: the camera is (exposure in a dim room).
+        cam = self.camera_fps(cap, dt)
         print("POSE_STATS: fps=%.1f infer_ms_mean=%.1f infer_ms_p95=%.1f persons=%.2f "
-              "sent=%d dropped=%d window_s=%.1f" % (
+              "sent=%d dropped=%d window_s=%.1f%s" % (
                   n / dt, (sum(ms) / n) if n else 0.0, ms[int(0.95 * (n - 1))] if n else 0.0,
                   (self.persons / n) if n else 0.0, sent - self.last_sent,
-                  dropped - self.last_dropped, dt), file=sys.stderr, flush=True)
+                  dropped - self.last_dropped, dt,
+                  "" if cam is None else " camera_fps=%.1f" % cam), file=sys.stderr, flush=True)
         self.t0 = now
         self.infer = []
         self.persons = 0
@@ -547,6 +687,10 @@ def parse_args(argv=None):
                              "inference with one dancer; a second player is found up to S s "
                              "later. 0 (default) = num_poses 2 on every frame "
                              "(docs/native/POSE_INPUT.md#performance)")
+    parser.add_argument("--no-capture-thread", dest="capture_thread", action="store_false",
+                        help="Read the camera in the processing loop instead of on its own "
+                             "thread (NewestFrameCapture). With inference slower than the "
+                             "camera this hands MediaPipe an older frame; for comparison.")
     parser.add_argument("--show", action="store_true", help="Show debug visualization window")
     parser.add_argument("--source-latency-ms", type=float, default=None, metavar="MS",
                         help="Declare this source's scoring latency to the game (0..1000 ms). "
@@ -624,7 +768,14 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
             h, w = f.shape[:2]
             print(f"Camera {source} delivering {w}x{h} "
                   f"(driver reports {c.get(cv2.CAP_PROP_FPS):g} fps)", file=sys.stderr)
+            if getattr(args, "capture_thread", True):
+                c = NewestFrameCapture(c, cv2, clock=clock)
             return c, f
+
+        def arrival(c):
+            """When the frame c.read() just returned came off the device."""
+            t = getattr(c, "read_time", None)
+            return clock() if t is None else t
 
         cap, first_frame = open_resolved()
         stamps = CaptureClock(cv2)
@@ -726,7 +877,7 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
                 read_time = clock()
             else:
                 ret, frame = cap.read()
-                read_time = clock()
+                read_time = clock() if video_mode else arrival(cap)
                 if not ret or frame is None:
                     if video_mode:
                         if args.loop:
@@ -815,7 +966,7 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
 
             frame_id += 1
             if stats:
-                stats.maybe_print(outbox)
+                stats.maybe_print(outbox, cap)
 
     except KeyboardInterrupt:
         print("\nShutting down", file=sys.stderr)
