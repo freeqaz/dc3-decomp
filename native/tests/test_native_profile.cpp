@@ -100,6 +100,19 @@ TEST(Dc3ProfileTest, DevTableCarriesTheDeveloperDefaults) {
     }
 }
 
+// The web build lists DLC songs only when DC3_DLC reaches it (main_web.cpp
+// WebDlcEnabled, PLAN W-23): a desktop-only row is never applied there, and the
+// web song select then silently lacks every package (measured: 54 rows, no
+// milkshake, before this row was made web-wide).
+TEST(Dc3ProfileTest, DlcIsADevDefaultOnWebToo) {
+    for (const Dc3ProfileDefault &row : Rows()) {
+        if (std::string(row.name) != "DC3_DLC") continue;
+        EXPECT_FALSE(row.desktopOnly) << "DC3_DLC must apply on web as well as desktop";
+        return;
+    }
+    FAIL() << "DC3_DLC is not a dev default";
+}
+
 TEST(Dc3ProfileTest, AnExplicitVariableAlwaysWins) {
     ScopedProfileEnv scope;
     setenv("DC3_HTTP", "0", 1);
