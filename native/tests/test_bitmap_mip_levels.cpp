@@ -23,8 +23,10 @@
 // mips, drawn ~2.5x minified) lost half its 1-px stroke intensity.
 //
 // Expected levels are min(NumMips() + 1, 2) -- the original's rule, not a
-// number read off native. Needs a GPU (skips without one); the asset half
-// needs the game data.
+// number read off native. It is the DC3_LOOK=retail rule (LookSettings
+// bitmapMipLevels 2), so both tests run under that profile; the enhanced
+// look's whole-chain upload is test_look_sampling.cpp. Needs a GPU (skips
+// without one); the asset half needs the game data.
 
 #include "test_helpers.h"
 
@@ -32,6 +34,7 @@
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
 #include "os/File.h"
+#include "platform/LookProfile.h"
 #include "platform/Rnd_Wgpu.h"
 #include "platform/TexGpu.h"
 #include "rndobj/Bitmap.h"
@@ -80,6 +83,7 @@ protected:
 // kBitmapMaxMipLevels set to 0) -- the 256 texture uploads 5 levels, red.
 TEST_F(BitmapMipLevelsTest, ARegularTextureGetsBaseAndOneMipAtMost) {
     if (IsSkipped()) return;
+    milo::ScopedLookOverride retail(milo::LookProfile::Retail);
     struct Case {
         int size;
         bool mips;
@@ -103,6 +107,7 @@ TEST_F(BitmapMipLevelsTest, ARegularTextureGetsBaseAndOneMipAtMost) {
 // nothing.
 TEST_F(BitmapMipLevelsTest, ShippedTexturesKeepTheOriginalsLevelCount) {
     if (IsSkipped()) return;
+    milo::ScopedLookOverride retail(milo::LookProfile::Retail);
     const char *milos[] = {"ui/resource/fonts/default.milo", "world/shared/camera.milo"};
     int checked = 0, deep = 0;
     for (const char *path : milos) {
