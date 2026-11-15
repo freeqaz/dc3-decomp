@@ -30,6 +30,28 @@
 //                            people standing in the MENUS are both bound by the
 //                            image itself, RoundRobinForStandingStill, so the
 //                            second person has to arrive during the song.)
+// And one in real time (np-player-identity): the image's recoverer and the
+// chooser count UI seconds, which DC3_FAST_TIME does not compress, so who is
+// unbound when is only faithful in real time.  The sensor is a replayed pose
+// session written here (DC3_POSE_PERFORM=session:, song-synced) -- two people
+// in a pose taken from the recorded two-player session:
+//   LostPlayerStandInTest    the player (tracker id 5), and from song 12 s a
+//                            second person (9) who never raises a hand.
+//                            20-24 s the detector loses the player: the song
+//                            goes on with the second person standing in, and
+//                            when the player is seen again she is bound again
+//                            and the stand-in is nobody again.  At 30 s the
+//                            detector finds the player 0.55 m to the side as
+//                            somebody new (tracker id 7): a new body near
+//                            where she stood, bound to her within the
+//                            image's recovery second.  Never
+//                            paused, player 2 never bound.  Before the image
+//                            was told of these bindings (NativeAutoAssignPlayers,
+//                            GestureMgr::SetTrackedSkeletons) the chooser undid
+//                            the second at once -- the song paused on that
+//                            frame -- and after the first was left holding the
+//                            stand-in's id as a player id, which it gave to
+//                            player 2 with no raised hand.
 // Players are sampled from /api/pose/target every half second of the song;
 // DC3_SCORING_DEBUG prints the auto-assign counter.
 //
@@ -219,6 +241,166 @@ PerformRun RunPerform(const char *sensorArgs, int waitSeconds) {
     return r;
 }
 
+// The pose of one dancer in the recorded two-player session (song 3, first
+// frame: 1.4 m from the camera, arms out, feet out of the picture): camera
+// space x y z and the confidence 0/1/2.
+const float kRecordedPose[20][4] = {
+    { -0.0430f, -0.2809f, 1.4338f, 2 }, { -0.0400f, -0.2243f, 1.4581f, 2 },
+    { -0.1176f, 0.0427f, 1.3848f, 2 },  { -0.1159f, 0.2071f, 1.3289f, 2 },
+    { -0.2616f, 0.0086f, 1.4390f, 2 },  { -0.2943f, -0.1953f, 1.4561f, 1 },
+    { -0.4158f, -0.2773f, 1.3767f, 2 }, { -0.4565f, -0.3091f, 1.3512f, 1 },
+    { 0.0339f, 0.0444f, 1.3354f, 2 },   { 0.2121f, -0.1325f, 1.3035f, 2 },
+    { 0.4003f, -0.2466f, 1.2405f, 2 },  { 0.4453f, -0.2867f, 1.2254f, 2 },
+    { -0.1219f, -0.3968f, 1.4987f, 2 }, { -0.3451f, -0.5287f, 1.3572f, 1 },
+    { -0.0513f, -0.6138f, 1.5364f, 0 }, { 0.0806f, -0.3591f, 1.3982f, 2 },
+    { 0.0588f, -0.4895f, 1.2814f, 2 },  { 0.0622f, -0.6739f, 1.4687f, 0 },
+    { -0.0163f, -0.6534f, 1.5395f, 0 }, { 0.0519f, -0.7197f, 1.4710f, 0 },
+};
+
+void WritePerson(std::ofstream &out, int trackId, float dx, float dy) {
+    out << "P " << trackId << " 1";
+    char buf[96];
+    for (int j = 0; j < 20; j++) {
+        snprintf(buf, sizeof buf, " %.4f %.4f %.4f %d", kRecordedPose[j][0] + dx,
+            kRecordedPose[j][1] + dy, kRecordedPose[j][2], (int)kRecordedPose[j][3]);
+        out << buf;
+    }
+    out << "\n";
+}
+
+// A pose session (dc3-pose-session v1, PoseSession_Native.cpp), 30 frames a
+// second from song -4 s to 50 s, levelled as the recording was: the player
+// (tracker id 5, 0.35 m left of the axis) out of the picture from 20 to 24 s,
+// and from 30 s under tracker id 7 another 0.55 m to the left (further than
+// People takes for the same person at once, nearer than Players' reach half a
+// second on); a second person (9, 0.45 m right) from 12 s.
+bool WriteStandInSession(const std::string &path) {
+    std::ofstream out(path);
+    out << "# dc3-pose-session v1\n# test_native_second_person.cpp LostPlayerStandInTest\n";
+    int seq = 0;
+    for (int i = -4 * 30; i <= 50 * 30; i++, seq++) {
+        double song = i / 30.0;
+        bool player = song < 20.0 || song >= 24.0;
+        bool second = song >= 12.0;
+        char head[200];
+        snprintf(head, sizeof head, "F %d %d %.6f %.6f %d %.6f 1 1 0.0116923293 0.988781333 -0.148912057 %d\n",
+            seq, 2 * seq, 100.0 + song, song, 1000 + seq, 5000.0 + song, (player ? 1 : 0) + (second ? 1 : 0));
+        out << head;
+        if (player && song < 30.0)
+            WritePerson(out, 5, -0.35f, 0.0f);
+        else if (player)
+            WritePerson(out, 7, -0.90f, 0.0f);
+        if (second)
+            WritePerson(out, 9, 0.45f, 0.0f);
+    }
+    return out.good();
+}
+
+struct SessionRun {
+    std::string setupError;
+    std::string output; // engine log
+    std::string driver;
+    bool Entered(const char *screen) const {
+        return output.find(std::string("Screen '") + screen + "' Enter") != std::string::npos;
+    }
+    // Every "DC3 SCORING: player->slot binding p0=A p1=B" line from `from` on.
+    std::vector<std::pair<int, int>> Bindings(size_t from) const {
+        std::vector<std::pair<int, int>> v;
+        const char *key = "DC3 SCORING: player->slot binding p0=";
+        for (size_t at = output.find(key, from); at != std::string::npos; at = output.find(key, at + 1)) {
+            int p0 = -9, p1 = -9;
+            if (sscanf(output.c_str() + at + strlen(key), "%d p1=%d", &p0, &p1) == 2)
+                v.push_back(std::make_pair(p0, p1));
+        }
+        return v;
+    }
+    // The song second of the last unpaused gameplay telemetry line.
+    double LastPlayingSecs() const {
+        std::istringstream ss(output);
+        std::string line;
+        double best = -1.0;
+        while (std::getline(ss, line)) {
+            if (line.compare(0, 8, "DC3_TEL:") || line.find("screen=game_screen ") == std::string::npos
+                || line.find(" gamePaused=0 ") == std::string::npos)
+                continue;
+            size_t at = line.find(" realSecs=");
+            if (at != std::string::npos)
+                best = atof(line.c_str() + at + 10);
+        }
+        return best;
+    }
+};
+
+// Real time, headless with no GPU; plays until the pause screen, or gameplay
+// telemetry past `stopSecs`, or the bounded wait runs out.
+SessionRun RunStandInSession(double stopSecs) {
+    SessionRun r;
+    std::string dir = BinaryDir();
+    std::string bin = dir + "/dc3-native";
+    if (!Exists(bin)) {
+        r.setupError = "dc3-native does not exist at " + bin + " (scripts/native_test.sh builds it)";
+        return r;
+    }
+    char tmpl[] = "/tmp/dc3-standin-XXXXXX";
+    char *root = mkdtemp(tmpl);
+    if (!root) {
+        r.setupError = "mkdtemp failed";
+        return r;
+    }
+    std::string R = root;
+    if (!SeedAllTutorialsSeen(R)) {
+        r.setupError = "could not seed the global options cache under " + R;
+        return r;
+    }
+    std::string session = R + "/two.dc3session";
+    if (!WriteStandInSession(session)) {
+        r.setupError = "could not write " + session;
+        return r;
+    }
+    std::string route = R + "/route.txt";
+    {
+        std::ofstream f(route);
+        f << kRoute;
+    }
+    std::string log = R + "/engine.log";
+    char stop[32];
+    snprintf(stop, sizeof stop, "%.1f", stopSecs);
+
+    std::ostringstream sh;
+    sh << kShellTimeoutLookup << "cd " << dir << " || exit 1; "
+       << "( MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1"
+       << " MILO_MAX_FRAMES=0 DC3_TEL=1 DC3_TEL_INTERVAL=15 DC3_CONTROLLER_MODE=forced"
+       << " DC3_SCORING_DEBUG=1"
+       << " DC3_CACHE_DIR=" << R << "/cache DC3_SAVE_DIR=" << R << "/saves"
+       << " MILO_INPUT_SCRIPT=" << route << " DC3_POSE=external"
+       << " DC3_POSE_PERFORM=session:" << session << " DC3_POSE_SESSION_SYNC=song"
+       << " exec ${t:+$t 200} ./dc3-native > " << log << " 2>&1 ) & epid=$!; "
+       << "end=$((SECONDS+170)); "
+       << "until grep -aqF \"Screen 'perform_pause_screen' Enter\" " << log << " 2>/dev/null"
+       << " || awk -v s=" << stop
+       << " '/^DC3_TEL:.*screen=game_screen / { for (i = 1; i <= NF; i++) if ($i ~ /^realSecs=/)"
+          " { split($i, a, \"=\"); if (a[2] + 0 >= s) found = 1 } } END { exit !found }' "
+       << log << " 2>/dev/null"
+       << " || [ $SECONDS -ge $end ] || ! kill -0 $epid 2>/dev/null; do sleep 0.5; done; "
+       << "echo \"DRIVER: stop after ${SECONDS}s, engine alive=$(kill -0 $epid 2>/dev/null && echo 1 || echo 0)\"; "
+       << "kill $epid 2>/dev/null; sleep 1; kill -9 $epid 2>/dev/null; "
+       << "cat " << log;
+    FILE *p = popen(sh.str().c_str(), "r");
+    if (!p) {
+        r.setupError = "popen failed";
+        return r;
+    }
+    char buf[8192];
+    while (fgets(buf, sizeof buf, p)) {
+        if (!strncmp(buf, "DRIVER:", 7))
+            r.driver += buf;
+        else
+            r.output += buf;
+    }
+    pclose(p);
+    return r;
+}
+
 class PerformFixture : public ::testing::Test {
 protected:
     void SetUp() override {
@@ -247,6 +429,7 @@ double SongSecs(const std::string &sample) {
 
 class ReacquiredDancerTest : public PerformFixture {};
 class SecondPersonPerformTest : public PerformFixture {};
+class LostPlayerStandInTest : public PerformFixture {};
 
 } // namespace
 
@@ -258,6 +441,12 @@ TEST_F(ReacquiredDancerTest, ADancerWithANewIdIsBoundAndScored) {
 
     // Score just before the jump, and whether she is on her new id (101)
     // afterwards.  Judged 30..140 s: YMCA's last move ends before 140.
+    // The tracking id is a person's (Dc3PoseIdentity::People), not the
+    // tracker's: the body under tracker id 101 is somebody new at the jump
+    // (out of reach, and a new tracker id), nobody else goes by that number,
+    // and it is that one person from then on -- through the four times the
+    // synthetic sensor stands its one body up 0.5 m from where it danced, or
+    // puts it back, in one frame (PoseIdentity_Native.h, ONE BODY ALONE).
     long before = -1;
     int after = 0, onNewId = 0, p2Bound = 0;
     for (const std::string &s : r.samples) {
@@ -331,4 +520,49 @@ TEST_F(SecondPersonPerformTest, AnUnjoinedSecondPersonDoesNotTakeTheSong) {
     EXPECT_FALSE(r.Entered("perform_pause_screen")) << where;
     EXPECT_TRUE(r.Entered("perform_endgame_screen")) << r.driver << where;
     EXPECT_GT(Field(r.last, 0, "score"), 0) << "player 1 not scored: " << r.last << where;
+}
+
+TEST_F(LostPlayerStandInTest, TheStandInIsNobodyAgainAndTheSongNeverPauses) {
+    SessionRun r = RunStandInSession(42.0);
+    ASSERT_TRUE(r.setupError.empty()) << r.setupError;
+    std::string where = "/tmp/claude-1000/second_person_standin_" + std::to_string((int)getpid()) + ".log";
+    {
+        std::ofstream f(where);
+        if (f.is_open())
+            f << r.driver << r.output;
+    }
+    size_t game = r.output.find("Screen 'game_screen' Enter");
+    ASSERT_NE(game, std::string::npos) << "never reached gameplay; " << r.driver << where;
+
+    // The run has to contain what it is about, in this order: the second
+    // person (tracking id 9) bound for the lost player; the player bound again
+    // by her own id and the stand-in released; the player bound to the new
+    // body where she stood.
+    size_t standIn = r.output.find("DC3 SCORING: bind p0 -> tracking id 9 ", game);
+    ASSERT_NE(standIn, std::string::npos)
+        << "nobody stood in for the lost player (paused instead?); " << where;
+    EXPECT_NE(r.output.find("rule=auto", standIn), std::string::npos) << where;
+    size_t back = r.output.find("DC3 SCORING: bind p0 -> tracking id 5 ", standIn);
+    ASSERT_NE(back, std::string::npos) << "the player was not bound again when she returned; " << where;
+    size_t released = r.output.find("DC3 SCORING: stand-in tracking id 9 released by p0", standIn);
+    ASSERT_NE(released, std::string::npos) << where;
+    size_t near = r.output.find("DC3 SCORING: bind p0 -> tracking id 7 ", released);
+    ASSERT_NE(near, std::string::npos)
+        << "the player was not bound to the new body where she stood; " << where;
+    EXPECT_NE(r.output.find("rule=near", near), std::string::npos) << where;
+
+    EXPECT_FALSE(r.Entered("perform_pause_screen"))
+        << "the song paused with the player or a stand-in in view; " << where;
+    EXPECT_GE(r.LastPlayingSecs(), 41.0) << "the song did not play on to the stop; " << r.driver << where;
+
+    // Nobody joined: player 2 is never on a skeleton, and after the stand-in
+    // is released the second person's id is never bound again.
+    std::vector<std::pair<int, int>> all = r.Bindings(game);
+    ASSERT_FALSE(all.empty()) << where;
+    for (const std::pair<int, int> &b : all)
+        EXPECT_EQ(b.second, -1) << "player 2 on a skeleton (slot " << b.second
+                                << ") with nobody having joined; " << where;
+    EXPECT_GE(all.back().first, 0) << "player 1 not on a skeleton at the stop; " << where;
+    EXPECT_EQ(r.output.find("-> tracking id 9 ", released), std::string::npos)
+        << "the stand-in was bound again after she was released; " << where;
 }

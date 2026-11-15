@@ -33,6 +33,28 @@ Also pinned, with each detection's torso length given:
   * MediaPipeBackend.process and the web PoseGeometry.process hand the engine
     one person for a body reported twice.
 
+One track, one body (np-player-identity). A recorded two-player session
+(640x480, 8-10 Hz) had 13 ids for three bodies in one song: with two dancers
+MediaPipe often reports one of them per frame, and its landmark tracking walks
+from one body onto the other. The old pairing let a track take any detection
+within max_dist (a quarter of the picture, 0.75 m at dancing distance) and the
+leftover rule then deleted the neighbour's track. Also pinned, with sizes and
+the frame's time given:
+  * a single detection that walks from one dancer onto the other does not
+    carry the first dancer's id over there, and both have their own ids when
+    both are reported again;
+  * two dancers who both step the same way in one frame keep their own ids
+    (the pairing is the best one overall, not closest pair first);
+  * a lost dancer's id waits for her and is not handed to a body 0.2 of the
+    picture away -- that one is somebody new (the wrong-person control);
+  * one frame reported on the neighbour does not cost the dancer her id;
+  * on the session's own two-dancer stretches (hip positions from the
+    recording, native/tests/data/pose/two_dancers_hips.txt) each dancer is one
+    id. The file holds what the tracker handed over, not what MediaPipe gave
+    it: suppressed second reports are not in it, so the old tracker run on it
+    does not retrace the recorded ids frame for frame -- it does show the same
+    fault (one id on two bodies, a dancer renumbered).
+
 Plain unittest; registered with ctest as PoseTracker.Python.
 Run: python3 tests/test_pose_tracker.py
 """
@@ -111,6 +133,53 @@ SIZED_SEQUENCES = {
 }
 
 
+# A camera at the played session's rate: a frame every 0.1 s, torso 0.18 of
+# the picture (2.5 m away), two dancers 0.16 apart (45 cm).
+PERIOD = 0.1
+T = (0.18,)
+L = (0.60, 0.72)
+R = (0.44, 0.72)
+
+
+def at(p, dx, dy=0.0):
+    return (round(p[0] + dx, 4), round(p[1] + dy, 4)) + T
+
+
+TIMED_SEQUENCES = {
+    # Only one of the two is reported, and the report walks from L onto R.
+    "slide_onto_the_neighbour": frames(
+        (10, [L + T, R + T]), (1, [at(L, -0.053)]), (1, [at(L, -0.107)]), (1, [R + T]), (5, [L + T, R + T])),
+    # Both sidestep 0.085 (24 cm) between two frames.
+    "both_step_the_same_way": frames((10, [L + T, R + T]), (5, [at(L, 0.085), at(R, 0.085)])),
+    # R is lost for a second and found 0.10 from where she was.
+    "lost_and_found_nearby": frames((10, [L + T, R + T]), (10, [L + T]), (5, [L + T, at(R, -0.10)])),
+    # R is lost, and a body appears 0.20 (56 cm) from where she was.
+    "a_body_too_far_to_be_her": frames((10, [L + T, R + T]), (10, [L + T]), (5, [L + T, at(R, -0.20)])),
+    # Reported on the neighbour 0.14 away for one frame after a short gap.
+    "one_frame_on_the_neighbour": frames((10, [L + T]), (3, []), (1, [at(L, -0.14, 0.03)]), (5, [L + T])),
+}
+
+HIPS = os.path.join(REPO, "native", "tests", "data", "pose", "two_dancers_hips.txt")
+
+
+def recorded(section):
+    """[(seconds, [(tracker id, x metres, u, v, torso), ...]), ...] of one
+    section of the recorded session's hip positions."""
+    out, inside = [], False
+    with open(HIPS) as f:
+        for line in f:
+            t = line.split()
+            if not t or t[0] == "#":
+                continue
+            if t[0] == "S":
+                inside = t[1] == section
+            elif inside and t[0] == "F":
+                out.append((float(t[1]), []))
+            elif inside and t[0] == "D":
+                out[-1][1].append((int(t[1]), float(t[2]), float(t[5]), float(t[6]), float(t[7])))
+    return out
+
+
 def python_ids(seq):
     t = CentroidTracker()
     return [t.update([tuple(c) for c in cents]) for cents in seq]
@@ -119,6 +188,23 @@ def python_ids(seq):
 def python_sized_ids(seq, **kw):
     t = CentroidTracker(**kw)
     return [t.update([tuple(c[:2]) for c in cents], [c[2] for c in cents]) for cents in seq]
+
+
+def python_timed_ids(seq, **kw):
+    t = CentroidTracker(**kw)
+    return [t.update([tuple(c[:2]) for c in cents], [c[2] for c in cents], k * PERIOD)
+            for k, cents in enumerate(seq)]
+
+
+def python_recorded_ids(section):
+    """One row per detection: (seconds into the section, recorded tracker id,
+    x in metres, the id this tracker gives it)."""
+    t, rows = CentroidTracker(), []
+    rec = recorded(section)
+    for when, dets in rec:
+        ids = t.update([(d[2], d[3]) for d in dets], [d[4] for d in dets], when)
+        rows += [(when - rec[0][0], d[0], d[1], i) for d, i in zip(dets, ids)]
+    return rows
 
 
 class TrackerIdentity(unittest.TestCase):
@@ -191,6 +277,67 @@ class OneBodyOneTrack(unittest.TestCase):
         self.assertEqual(t.update([A, A2]), [1, 2])
 
 
+class OneTrackOneBody(unittest.TestCase):
+    def test_a_report_that_walks_onto_the_neighbour_does_not_take_her_id(self):
+        ids = python_timed_ids(TIMED_SEQUENCES["slide_onto_the_neighbour"])
+        self.assertEqual(ids[9], [1, 2])
+        self.assertEqual(ids[12], [2], "the report on R's spot is R")
+        self.assertEqual(ids[13:], [[1, 2]] * 5, "a dancer was renumbered: %s" % ids[10:])
+
+    def test_two_dancers_who_step_the_same_way_keep_their_ids(self):
+        ids = python_timed_ids(TIMED_SEQUENCES["both_step_the_same_way"])
+        self.assertEqual(ids[10:], [[1, 2]] * 5, "closest pair first swaps them")
+
+    def test_a_lost_dancers_id_waits_for_her(self):
+        ids = python_timed_ids(TIMED_SEQUENCES["lost_and_found_nearby"])
+        self.assertEqual(ids[15], [1])
+        self.assertEqual(ids[20:], [[1, 2]] * 5)
+
+    def test_a_body_too_far_to_be_the_lost_dancer_is_somebody_new(self):
+        ids = python_timed_ids(TIMED_SEQUENCES["a_body_too_far_to_be_her"])
+        self.assertEqual(ids[20:], [[1, 3]] * 5, "56 cm from where R was lost a second ago")
+
+    def test_one_frame_on_the_neighbour_does_not_cost_her_id(self):
+        ids = python_timed_ids(TIMED_SEQUENCES["one_frame_on_the_neighbour"])
+        self.assertEqual([frame for frame in ids if frame], [[1]] * 16, ids)
+
+    def test_without_sizes_a_track_still_reaches_max_dist(self):
+        t = CentroidTracker()
+        t.update([L])
+        self.assertEqual(t.update([(L[0] - 0.24, L[1])]), [1])
+        self.assertEqual(t.update([(L[0] - 0.50, L[1])]), [2])
+
+
+class TheRecordedSession(unittest.TestCase):
+    """The two dancers of the recorded session, told apart by where they
+    stood (the same stretches as test_native_pose_identity.cpp)."""
+
+    @staticmethod
+    def ids(rows, t0, t1, x0, x1):
+        return {i for when, _, x, i in rows if t0 <= when <= t1 and x0 <= x <= x1}
+
+    def test_song_2_each_dancer_is_one_id(self):
+        rows = python_recorded_ids("song2")
+        self.assertEqual(len(rows), 229, "two_dancers_hips.txt changed")
+        left = self.ids(rows, 0.0, 21.0, -0.85, -0.5)
+        centre = self.ids(rows, 0.0, 9.0, -0.15, 0.2) | self.ids(rows, 12.0, 21.0, -0.3, 0.2)
+        self.assertEqual(len(left), 1, "the left dancer: %s" % left)
+        self.assertEqual(len(centre), 1, "the centre dancer: %s" % centre)
+        self.assertNotEqual(left, centre)
+        self.assertNotIn(None, {r[3] for r in rows}, "a recorded detection was dropped as a second report")
+
+    def test_song_3_two_dancers_two_ids(self):
+        rows = python_recorded_ids("song3")
+        self.assertEqual(len(rows), 705, "two_dancers_hips.txt changed")
+        # The right dancer: recorded id 38 until 15.8 s, then 43.
+        right = {i for when, rec, _, i in rows if (when < 15.7 and rec == 38) or (when > 16.5 and rec == 43)}
+        self.assertEqual(len(right), 1, right)
+        # The left dancer steps up to the camera at 10 s and back.
+        left = self.ids(rows, 0.0, 9.0, -0.6, -0.05) | self.ids(rows, 11.0, 50.0, -0.6, -0.05)
+        self.assertEqual(len(left), 1, "the left dancer: %s" % left)
+        self.assertEqual(len({r[3] for r in rows}), 2, "two dancers were in view")
+
+
 def synthetic_pose(root=(0.1, 0.0, 2.5), width=640, height=480, hfov_deg=58.51):
     """A standing person as MediaPipe would report her: 33 world landmarks
     (hip-relative metres, y down) and their image positions through the
@@ -227,14 +374,18 @@ class Landmark:
 class BackendDropsTheSecondReport(unittest.TestCase):
     """MediaPipeBackend.process with MediaPipe replaced by a canned result."""
 
-    def backend(self, poses):
-        import math
-        import pose_mediapipe as pm
-
+    @staticmethod
+    def canned(poses):
         class Result:
             pose_world_landmarks = [[Landmark(*p) for p in world] for world, _ in poses]
             pose_landmarks = [[Landmark(*p) for p in image] for _, image in poses]
             segmentation_masks = None
+        return Result
+
+    def backend(self, poses):
+        import math
+        import pose_mediapipe as pm
+        canned = self.canned
 
         class FakeMp:
             class ImageFormat:
@@ -245,8 +396,10 @@ class BackendDropsTheSecondReport(unittest.TestCase):
                 return data
 
         class FakeLandmarker:
+            result = canned(poses)
+
             def detect_for_video(self, image, ts_ms):
-                return Result
+                return self.result
 
         b = pm.MediaPipeBackend.__new__(pm.MediaPipeBackend)   # no model load
         b._mp, b.probe, b._landmarker, b.segmentation = FakeMp, None, FakeLandmarker(), False
@@ -273,13 +426,29 @@ class BackendDropsTheSecondReport(unittest.TestCase):
         out = self.run_poses([synthetic_pose(root=(-0.40, 0.0, 2.5)), synthetic_pose(root=(0.40, 0.0, 2.5))])
         self.assertEqual([tid for tid, _ in out], [1, 2])
 
+    def test_the_frame_time_reaches_the_tracker(self):
+        # 40 cm (two thirds of a torso) in one second is her; in one 30 fps
+        # frame it would not be. Only the time between the two calls says.
+        try:
+            import cv2  # noqa: F401
+            import numpy as np
+        except ImportError:
+            self.skipTest("cv2/numpy not installed")
+        b = self.backend([synthetic_pose(root=(0.0, 0.0, 2.5))])
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        self.assertEqual([tid for tid, _ in b.process(frame, 0)], [1])
+        b._landmarker.result = self.canned([synthetic_pose(root=(0.40, 0.0, 2.5))])
+        self.assertEqual([tid for tid, _ in b.process(frame, 1000)], [1])
+        b._landmarker.result = self.canned([synthetic_pose(root=(0.80, 0.0, 2.5))])
+        self.assertEqual([tid for tid, _ in b.process(frame, 1033)], [2], "control: 40 cm in a frame")
+
 
 @unittest.skipUnless(shutil.which("node"), "node not installed: web parity not checked")
 class TrackerWebParity(unittest.TestCase):
     def test_the_web_port_gives_the_same_ids(self):
         script = (
             "import { CentroidTracker } from %s;\n"
-            "const { plain, sized } = JSON.parse(process.argv[1]);\n"
+            "const { plain, sized, timed, period, sessions } = JSON.parse(process.argv[1]);\n"
             "const out = {};\n"
             "for (const [name, seq] of Object.entries(plain)) {\n"
             "  const t = new CentroidTracker();\n"
@@ -289,14 +458,31 @@ class TrackerWebParity(unittest.TestCase):
             "  const t = new CentroidTracker();\n"
             "  out[name] = seq.map((c) => t.update(c.map((d) => [d[0], d[1]]), c.map((d) => d[2])));\n"
             "}\n"
+            "for (const [name, seq] of Object.entries(timed)) {\n"
+            "  const t = new CentroidTracker();\n"
+            "  out[name] = seq.map((c, k) => t.update(c.map((d) => [d[0], d[1]]), c.map((d) => d[2]), k * period));\n"
+            "}\n"
+            "for (const [name, seq] of Object.entries(sessions)) {\n"
+            "  const t = new CentroidTracker();\n"
+            "  out[name] = seq.flatMap(([when, c]) =>\n"
+            "    t.update(c.map((d) => [d[0], d[1]]), c.map((d) => d[2]), when));\n"
+            "}\n"
             "console.log(JSON.stringify(out));\n" % json.dumps("file://" + GEOMETRY_JS)
         )
+        sessions = {name: [(when, [d[2:] for d in dets]) for when, dets in recorded(name)]
+                    for name in ("song2", "song3")}
         res = subprocess.run(
             ["node", "--input-type=module", "-e", script,
-             json.dumps({"plain": SEQUENCES, "sized": SIZED_SEQUENCES})],
+             json.dumps({"plain": SEQUENCES, "sized": SIZED_SEQUENCES, "timed": TIMED_SEQUENCES,
+                         "period": PERIOD, "sessions": sessions})],
             capture_output=True, text=True, timeout=60)
         self.assertEqual(res.returncode, 0, res.stderr)
         js = json.loads(res.stdout)
+        for name, seq in TIMED_SEQUENCES.items():
+            self.assertEqual(js[name], python_timed_ids(seq), name)
+        for name in sessions:
+            self.assertEqual(js[name], [r[3] for r in python_recorded_ids(name)], name)
+            self.assertGreater(len(js[name]), 200, name)
         for name, seq in SEQUENCES.items():
             self.assertEqual(js[name], python_ids(seq), name)
         for name, seq in SIZED_SEQUENCES.items():
@@ -324,6 +510,24 @@ class TrackerWebParity(unittest.TestCase):
         js = json.loads(res.stdout)
         self.assertEqual(js["twice"], [[1, 0]])
         self.assertEqual(js["two"], [[1, 0], [2, 1]])
+
+    def test_the_web_geometry_gives_the_tracker_the_frame_time(self):
+        # As BackendDropsTheSecondReport.test_the_frame_time_reaches_the_tracker.
+        def pose(x):
+            world, image = synthetic_pose(root=(x, 0.0, 2.5))
+            return [{"world": world, "image": image, "vis": [1.0] * 33}]
+        script = (
+            "import { PoseGeometry } from %s;\n"
+            "const steps = JSON.parse(process.argv[1]);\n"
+            "const g = new PoseGeometry();\n"
+            "console.log(JSON.stringify(steps.map(([poses, ms]) =>\n"
+            "  g.process(poses, 640, 480, ms).map((p) => p.trackId))));\n" % json.dumps("file://" + GEOMETRY_JS)
+        )
+        steps = [(pose(0.0), 0), (pose(0.40), 1000), (pose(0.80), 1033)]
+        res = subprocess.run(["node", "--input-type=module", "-e", script, json.dumps(steps)],
+                             capture_output=True, text=True, timeout=60)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertEqual(json.loads(res.stdout), [[1], [1], [2]])
 
 
 if __name__ == "__main__":

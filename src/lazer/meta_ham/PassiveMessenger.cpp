@@ -325,6 +325,14 @@ void PassiveMessenger::TriggerGenericMsg(
     Symbol s1, Symbol s2, PassiveMessageType pmt, Symbol s3, int i
 ) {
     String localize = Localize(s1, false, TheLocale);
+#ifdef HX_NATIVE
+    // Which banner, and when: in a headless replay the engine log is the only
+    // record of one ("New player detected!" is join_in_progress; counted per
+    // song in docs/native/POSE_INPUT.md).
+    extern bool Dc3EnvFlag(const char *, bool);
+    if (Dc3EnvFlag("DC3_SCORING_DEBUG", false))
+        MILO_LOG("DC3 SCORING: passive message %s\n", s1.Str());
+#endif
     TriggerMessage(localize, pmt, s2, s3, i);
 }
 

@@ -240,41 +240,142 @@ class CentroidTracker:
       * a detection no track claims that lies on a kept detection is a second
         report of that body and gets no id (None), so no track;
       * a track that went unmatched and lies on a matched detection is a
-        leftover of that body (a twin from a jump past max_dist) and is
-        forgotten at once rather than competing for the next frames.
-    Two established tracks are never merged, and nothing here reaches further
-    than the body radius, so two players side by side are not touched.
+        leftover of that body (a twin from a jump) and is forgotten at once
+        rather than competing for the next frames -- unless the two tracks
+        were ever both matched in one frame: then they are two people, and
+        the unmatched one is a dancer MediaPipe did not report this frame.
     Without sizes the radius is 0 and neither rule applies.
+
+    One track, one body (reach_start, reach_speed, reach_ratio;
+    np-player-identity). With
+    two dancers MediaPipe often reports one of them per frame, and its own
+    landmark tracking walks from one body onto the other. A recorded
+    two-player session (640x480 at 8-10 Hz) had 13 ids for three bodies in
+    one song, and one id carried from the centre dancer onto the left one in
+    three frames while the left dancer's track was deleted -- by the leftover
+    rule above -- and the centre dancer came back as somebody new. The old
+    pairing let a track take any detection within max_dist, a quarter of the
+    picture: 0.75 m at dancing distance, with two dancers 0.43-0.81 m apart.
+    Now, when sizes are given:
+      * a track reaches a detection only within its body's own range:
+        reach_start torso lengths at once (25 cm), growing by reach_speed
+        torso lengths for each second it has gone unmatched, up to
+        reach_ratio (45 cm, under the nearest two dancers stand) -- and never
+        further than max_dist. Measured: a dancer's hip moves under 8 cm
+        between frames 95% of the time, under 27 cm 99%;
+      * the pairing is the one that matches the most detections for the least
+        total distance, not closest-pair-first, so of two tracks that can
+        both reach a detection the one standing there gets it and the other
+        keeps waiting for its own body;
+      * a track is also looked for where it was a moment ago (the anchor:
+        its position at least anchor_seconds before the last one). MediaPipe
+        reports a dancer on her neighbour for a single frame now and then
+        (song 3 of that session, 37.2 s in); the track's last position is
+        then somewhere she never was, and without the anchor she came back as
+        somebody new one frame later;
+      * a lost body's track waits max_missing frames, as before.
+    Positions are not predicted forward: at 8-10 Hz a dancer has reversed by
+    the next frame as often as not, and the step sizes above sit well inside
+    the reach as they are.
+    The engine applies the same rule again in metres (PoseIdentity_Native.h),
+    because a tracker id can still change (a real step of more than the reach
+    during a dropout); this class is what keeps the ids it hands over, the
+    per-track depth filter and the person masks on the right body.
+    Without sizes every track reaches max_dist, as before.
     """
 
-    def __init__(self, max_dist=0.25, max_missing=60, body_ratio=0.5):
+    def __init__(self, max_dist=0.25, max_missing=60, body_ratio=0.5,
+                 reach_start=0.5, reach_speed=1.0, reach_ratio=0.9,
+                 anchor_seconds=0.5, frame_seconds=1.0 / 30.0):
         self.max_dist = max_dist
         self.max_missing = max_missing
         self.body_ratio = body_ratio
+        self.reach_start = reach_start
+        self.reach_ratio = reach_ratio
+        self.reach_speed = reach_speed
+        self.anchor_seconds = anchor_seconds
+        self.frame_seconds = frame_seconds
         self._next_id = 1
-        self._tracks = {}  # id -> [centroid(np.array 2), missing_frames]
+        # id -> [centroid(np.array 2), missing_frames, size, unmatched_seconds,
+        #        ids it was matched in one frame with, anchor centroid or
+        #        None, anchor age in seconds]
+        self._tracks = {}
+        self._last_now = None
 
-    def update(self, centroids, sizes=None):
+    def _reach(self, track, size, seconds):
+        """How far a detection of torso length `size` can be from where
+        `track` was `seconds` ago."""
+        if size is None:
+            return self.max_dist
+        body = max(float(size), track[2] or 0.0)
+        ratio = min(self.reach_ratio, self.reach_start + self.reach_speed * seconds)
+        return min(self.max_dist, ratio * body)
+
+    def update(self, centroids, sizes=None, now=None):
         """centroids: list of (x, y) in normalized image space; sizes: each
-        one's torso length (shoulder centre to hip centre) in the same space.
-        Returns a list of ids, None for a duplicate report of a body."""
+        one's torso length (shoulder centre to hip centre) in the same space;
+        now: the frame's time in seconds (without it a frame is
+        frame_seconds). Returns a list of ids, None for a duplicate report of
+        a body."""
         count = len(centroids)
         radius = [self.body_ratio * float(s) for s in sizes] if sizes is not None else [0.0] * count
         points = [np.asarray(c, dtype=float) for c in centroids]
         assigned = [None] * count
+
+        step = self.frame_seconds
+        if now is not None and self._last_now is not None and now > self._last_now:
+            step = float(now) - self._last_now
+        if now is not None:
+            self._last_now = float(now)
+        for track in self._tracks.values():
+            track[3] += step
+            track[6] += step
+
+        # Every track each detection is within reach of, nearest first; then
+        # the pairing with the most matches and the least total distance
+        # (a handful of detections and tracks: exhaustive, in track-id order
+        # so the web port takes the same one).
+        tids = sorted(self._tracks)
+        cand = []
+        for di in range(count):
+            size = sizes[di] if sizes is not None else None
+            row = []
+            for tid in tids:
+                track = self._tracks[tid]
+                dist = float(np.linalg.norm(points[di] - track[0]))
+                within = dist <= self._reach(track, size, track[3])
+                if track[5] is not None:
+                    from_anchor = float(np.linalg.norm(points[di] - track[5]))
+                    if from_anchor <= self._reach(track, size, track[6]) and (
+                            not within or from_anchor < dist):
+                        within, dist = True, from_anchor
+                if within:
+                    row.append((dist, tid))
+            row.sort()
+            cand.append(row)
+        best = [-1, 0.0, [None] * count]
+        pick = [None] * count
         used = set()
 
-        # Greedy nearest-neighbour over all (track, detection) pairs, closest first.
-        pairs = []
-        for tid, (prev, _missing) in self._tracks.items():
-            for di in range(count):
-                pairs.append((float(np.linalg.norm(points[di] - prev)), tid, di))
-        pairs.sort()
-        for dist, tid, di in pairs:
-            if dist > self.max_dist or tid in used or assigned[di] is not None:
-                continue
-            assigned[di] = tid
-            used.add(tid)
+        def solve(di, matched, total):
+            if matched + (count - di) < best[0]:
+                return
+            if di == count:
+                if matched > best[0] or (matched == best[0] and total < best[1] - 1e-12):
+                    best[0], best[1], best[2] = matched, total, list(pick)
+                return
+            for dist, tid in cand[di]:
+                if tid in used:
+                    continue
+                used.add(tid)
+                pick[di] = tid
+                solve(di + 1, matched + 1, total + dist)
+                used.discard(tid)
+            pick[di] = None
+            solve(di + 1, matched, total)
+
+        solve(0, 0, 0.0)
+        assigned = list(best[2])
 
         # Unmatched detections become new tracks -- unless they lie on a
         # detection already kept (matched ones first, then in order): that is
@@ -290,16 +391,27 @@ class CentroidTracker:
             self._next_id += 1
             kept.append(di)
 
-        # Refresh matched tracks; forget a leftover lying on a matched body;
-        # age out the rest.
+        # Refresh matched tracks (and note who was seen with whom); forget a
+        # leftover lying on a matched body; age out the rest.
+        together = [tid for tid in assigned if tid is not None]
         for di, tid in enumerate(assigned):
             if tid is not None:
-                self._tracks[tid] = [points[di], 0]
+                old = self._tracks.get(tid)
+                seen_with = old[4] if old else set()
+                seen_with.update(t for t in together if t != tid)
+                anchor, anchor_age = (old[5], old[6]) if old else (None, 0.0)
+                if old and (anchor is None or anchor_age >= self.anchor_seconds):
+                    # Where it was before this match becomes the anchor once
+                    # the anchor it has is old enough.
+                    anchor, anchor_age = old[0], old[3]
+                size = float(sizes[di]) if sizes is not None else None
+                self._tracks[tid] = [points[di], 0, size, 0.0, seen_with, anchor, anchor_age]
         for tid in list(self._tracks):
             if tid in assigned:
                 continue
-            prev = self._tracks[tid][0]
-            if any(float(np.linalg.norm(points[k] - prev)) <= radius[k] for k in kept):
+            prev, seen_with = self._tracks[tid][0], self._tracks[tid][4]
+            if any(float(np.linalg.norm(points[k] - prev)) <= radius[k]
+                   and assigned[k] not in seen_with for k in kept):
                 del self._tracks[tid]
                 continue
             self._tracks[tid][1] += 1
@@ -310,6 +422,7 @@ class CentroidTracker:
 
     def reset(self):
         self._tracks.clear()
+        self._last_now = None
 
 
 class SecondPersonProbe:
@@ -601,7 +714,7 @@ class MediaPipeBackend:
 
         self.last_masks = []
         if not res.pose_world_landmarks:
-            self._tracker.update([])
+            self._tracker.update([], None, timestamp_ms / 1000.0)
             timing["track"] = (clock() - t2) * 1e3
             return []
         seg = getattr(res, "segmentation_masks", None) or []
@@ -635,7 +748,7 @@ class MediaPipeBackend:
 
         t3 = clock()
         timing["geom"] = (t3 - t2) * 1e3
-        ids = self._tracker.update(centroids, sizes)
+        ids = self._tracker.update(centroids, sizes, timestamp_ms / 1000.0)
         self._frame_count += 1
         t_s = timestamp_ms / 1000.0
         out = []

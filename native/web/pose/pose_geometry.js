@@ -91,38 +91,112 @@ export class OneEuroFilter {
 // bodyRatio: one body, one track. Within bodyRatio x a detection's torso
 // length, an unclaimed detection lying on a kept one is a second report of
 // that body (id null), and an unmatched track lying on a matched detection is
-// forgotten (the measurement is on the Python class).
+// forgotten (the measurement is on the Python class) -- unless the two tracks
+// were ever both matched in one frame: then they are two people.
+// reachStart, reachSpeed, reachRatio: one track, one body. With sizes, a track
+// reaches a detection only within reachStart torso lengths, growing by
+// reachSpeed for each second it has gone unmatched up to reachRatio, and never
+// further than maxDist; a track is also looked for where it was a moment ago
+// (the anchor: its position at least anchorSeconds before the last one); the
+// pairing is the one that matches the most detections for the least total
+// distance (np-player-identity: a recorded
+// two-player session, measurements on the Python class). The engine applies
+// the same rule again in metres (PoseIdentity_Native.h), on this path too.
 export class CentroidTracker {
-    constructor(maxDist = 0.25, maxMissing = 60, bodyRatio = 0.5) {
+    constructor(maxDist = 0.25, maxMissing = 60, bodyRatio = 0.5,
+        reachStart = 0.5, reachSpeed = 1.0, reachRatio = 0.9, anchorSeconds = 0.5,
+        frameSeconds = 1.0 / 30.0) {
         this.maxDist = maxDist;
         this.maxMissing = maxMissing;
         this.bodyRatio = bodyRatio;
+        this.reachStart = reachStart;
+        this.reachSpeed = reachSpeed;
+        this.reachRatio = reachRatio;
+        this.anchorSeconds = anchorSeconds;
+        this.frameSeconds = frameSeconds;
         this._nextId = 1;
-        this._tracks = new Map(); // id -> { c: [x, y], missing }
+        // id -> { c: [x, y], missing, size, unmatched (seconds), seenWith,
+        //         anchor: [x, y] | null, anchorAge (seconds) }
+        this._tracks = new Map();
+        this._lastNow = null;
+    }
+
+    _reach(tr, size, seconds) {
+        if (size === null) return this.maxDist;
+        const body = Math.max(size, tr.size || 0.0);
+        const ratio = Math.min(this.reachRatio, this.reachStart + this.reachSpeed * seconds);
+        return Math.min(this.maxDist, ratio * body);
     }
 
     // centroids: [[x, y], ...] in normalised image space; sizes: each one's
     // torso length (shoulder centre to hip centre) in the same space, or
-    // omitted. Returns ids, null for a duplicate report of a body.
-    update(centroids, sizes) {
+    // omitted; now: the frame's time in seconds, or omitted (a frame is then
+    // frameSeconds). Returns ids, null for a duplicate report of a body.
+    update(centroids, sizes, now) {
+        const count = centroids.length;
         const radius = centroids.map((c, di) => (sizes ? this.bodyRatio * sizes[di] : 0));
         const apart = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
-        const assigned = new Array(centroids.length).fill(null);
+
+        const timed = now !== undefined && now !== null;
+        let step = this.frameSeconds;
+        if (timed && this._lastNow !== null && now > this._lastNow) step = now - this._lastNow;
+        if (timed) this._lastNow = now;
+        for (const tr of this._tracks.values()) {
+            tr.unmatched += step;
+            tr.anchorAge += step;
+        }
+
+        // Every track each detection is within reach of, nearest first (ties
+        // like Python's tuple sort: dist, track id); then the pairing with
+        // the most matches and the least total distance, searched in the
+        // same order as the Python class.
+        const tids = [...this._tracks.keys()].sort((a, b) => a - b);
+        const cand = centroids.map((c, di) => {
+            const row = [];
+            for (const tid of tids) {
+                const tr = this._tracks.get(tid);
+                const size = sizes ? sizes[di] : null;
+                let dist = apart(c, tr.c);
+                let within = dist <= this._reach(tr, size, tr.unmatched);
+                if (tr.anchor !== null) {
+                    const fromAnchor = apart(c, tr.anchor);
+                    if (fromAnchor <= this._reach(tr, size, tr.anchorAge) && (!within || fromAnchor < dist)) {
+                        within = true;
+                        dist = fromAnchor;
+                    }
+                }
+                if (within) row.push([dist, tid]);
+            }
+            row.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+            return row;
+        });
+        let bestMatched = -1;
+        let bestTotal = 0.0;
+        let assigned = new Array(count).fill(null);
+        const pick = new Array(count).fill(null);
         const used = new Set();
-        // Greedy nearest-neighbour, closest first; ties broken like Python's
-        // tuple sort (dist, track id, detection index).
-        const pairs = [];
-        for (const [tid, tr] of this._tracks) {
-            centroids.forEach((c, di) => {
-                pairs.push([apart(c, tr.c), tid, di]);
-            });
-        }
-        pairs.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
-        for (const [dist, tid, di] of pairs) {
-            if (dist > this.maxDist || used.has(tid) || assigned[di] !== null) continue;
-            assigned[di] = tid;
-            used.add(tid);
-        }
+        const solve = (di, matched, total) => {
+            if (matched + (count - di) < bestMatched) return;
+            if (di === count) {
+                if (matched > bestMatched || (matched === bestMatched && total < bestTotal - 1e-12)) {
+                    bestMatched = matched;
+                    bestTotal = total;
+                    assigned = pick.slice();
+                }
+                return;
+            }
+            for (const [dist, tid] of cand[di]) {
+                if (used.has(tid)) continue;
+                used.add(tid);
+                pick[di] = tid;
+                solve(di + 1, matched + 1, total + dist);
+                used.delete(tid);
+            }
+            pick[di] = null;
+            solve(di + 1, matched, total);
+        };
+        solve(0, 0, 0.0);
+
         // Unmatched detections become new tracks -- unless they lie on a
         // detection already kept (matched ones first, then in order).
         const kept = [];
@@ -135,12 +209,29 @@ export class CentroidTracker {
             assigned[di] = this._nextId++;
             kept.push(di);
         });
+        // Refresh matched tracks (and note who was seen with whom); forget a
+        // leftover lying on a matched body; age out the rest.
+        const together = assigned.filter((tid) => tid !== null);
         centroids.forEach((c, di) => {
-            if (assigned[di] !== null) this._tracks.set(assigned[di], { c: [c[0], c[1]], missing: 0 });
+            const tid = assigned[di];
+            if (tid === null) return;
+            const old = this._tracks.get(tid);
+            const seenWith = old ? old.seenWith : new Set();
+            for (const other of together) if (other !== tid) seenWith.add(other);
+            let anchor = old ? old.anchor : null;
+            let anchorAge = old ? old.anchorAge : 0.0;
+            if (old && (anchor === null || anchorAge >= this.anchorSeconds)) {
+                anchor = old.c;
+                anchorAge = old.unmatched;
+            }
+            this._tracks.set(tid, {
+                c: [c[0], c[1]], missing: 0, size: sizes ? sizes[di] : null, unmatched: 0.0, seenWith,
+                anchor, anchorAge,
+            });
         });
         for (const [tid, tr] of [...this._tracks]) {
             if (assigned.includes(tid)) continue;
-            if (kept.some((k) => apart(centroids[k], tr.c) <= radius[k])) {
+            if (kept.some((k) => apart(centroids[k], tr.c) <= radius[k] && !tr.seenWith.has(assigned[k]))) {
                 this._tracks.delete(tid);
                 continue;
             }
@@ -150,7 +241,10 @@ export class CentroidTracker {
         return assigned;
     }
 
-    reset() { this._tracks.clear(); }
+    reset() {
+        this._tracks.clear();
+        this._lastNow = null;
+    }
 }
 
 // Solve a 3x3 system with partial pivoting (numpy.linalg.solve's LU). Returns
@@ -263,7 +357,7 @@ export class PoseGeometry {
     // poses: [{ world: [[x,y,z]*33], image: [[x,y]*33] | null, vis: [33] | null }]
     process(poses, width, height, timestampMs) {
         if (!poses.length) {
-            this._tracker.update([]);
+            this._tracker.update([], undefined, timestampMs / 1000.0);
             return [];
         }
         const people = [];
@@ -283,7 +377,7 @@ export class PoseGeometry {
             sizes.push(Math.hypot((imageXY[L_SHOULDER][0] + imageXY[R_SHOULDER][0]) * 0.5 - hipC[0],
                 (imageXY[L_SHOULDER][1] + imageXY[R_SHOULDER][1]) * 0.5 - hipC[1]));
         }
-        const ids = this._tracker.update(centroids, sizes);
+        const ids = this._tracker.update(centroids, sizes, timestampMs / 1000.0);
         this._frameCount += 1;
         const tS = timestampMs / 1000.0;
         const out = [];
