@@ -388,6 +388,31 @@
                        (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
         const IS_MAC_SAFARI = !IS_IOS && /Macintosh/.test(navigator.userAgent) &&
                               /Safari\//.test(navigator.userAgent) && !/Chrom(e|ium)|Edg\/|Firefox/.test(navigator.userAgent);
+        // What this Safari says it is. On iPhone and iPad the OS token in the
+        // user agent is frozen at "18_7" from iOS 26 on, so the Version/ token
+        // is the only one that tells iOS 26 from iOS 27, and Safari's version is
+        // the iOS version. Other iOS browsers (CriOS, FxiOS) carry no Version/
+        // token: null, and the card then says nothing about the version.
+        const SAFARI_VERSION = (function () {
+            const m = /Version\/(\d+(?:\.\d+)*)/.exec(navigator.userAgent);
+            return m && /Safari\//.test(navigator.userAgent) && !/Chrom(e|ium)|Edg\//.test(navigator.userAgent) ? m[1] : null;
+        })();
+        const SAFARI_MAJOR = SAFARI_VERSION ? parseInt(SAFARI_VERSION, 10) : 0;
+        // The iOS advice for a missing feature that Safari 27 has. A phone that
+        // already reports 27 must not be told to update to 27.
+        function iosAdvice() {
+            const has = SAFARI_VERSION
+                ? 'This device reports iOS ' + SAFARI_VERSION + ' (Safari ' + SAFARI_VERSION + '). '
+                : '';
+            if (SAFARI_MAJOR >= 27) {
+                return has + 'That version should be able to run the game, so this is a fault in the page or a ' +
+                    'restriction on the device (Lockdown Mode, for example).';
+            }
+            return has + 'The game needs iOS 27 (Safari 27) or newer: Settings › General › Software Update. ' +
+                'An iOS 26 update there is not enough; iOS 27 can be listed separately, lower on that screen, as ' +
+                '“Upgrade to iOS 27”. Every iPhone browser uses Safari\'s engine, so Chrome or Firefox on the phone will not help.';
+        }
+        window.dc3SafariVersion = SAFARI_VERSION;  // scripts/web/phone.mjs reads it
         // Console level for one engine stderr line: 'error' | 'warn' | 'log'.
         // "timer error is large" is the image's song-clock diagnostic
         // (StandardStream::UpdateTime, a MILO_LOG), a warning, not a failure.
@@ -429,7 +454,7 @@
             const browserHelp = isMobile
                 ? (IS_IOS
                     // Safari has WebGPU from iOS 26; JSPI arrives with iOS 27.
-                    ? 'On iPhone and iPad the game needs iOS 27 (Safari 27) or newer. Update iOS in Settings › General › Software Update. Other iPhone browsers use the same engine as Safari, so switching browser does not help.'
+                    ? iosAdvice()
                     : 'On Android, use Chrome 137 or newer; WebGPU needs Android 12+ and a supported GPU (chrome://gpu shows "WebGPU: Hardware accelerated").')
                 : isFirefox
                 ? 'Firefox: WebGPU requires Nightly with <code>dom.webgpu.enabled=true</code> in <code>about:config</code>.'
@@ -449,15 +474,14 @@
         // the WASM instantiate with an error that names neither feature.
         if (typeof WebAssembly === 'undefined' || typeof WebAssembly.Suspending !== 'function') {
             const jspiHelp = IS_IOS
-                ? 'On iPhone and iPad, update to iOS 27 (Safari 27), which adds it: Settings › General › Software Update. ' +
-                  'Every iPhone browser uses Safari\'s engine, so Chrome or Firefox on the phone will not help.'
+                ? iosAdvice()
                 : IS_MAC_SAFARI
                 ? 'Safari 26 does not have it; Safari 27 does. Update Safari (macOS Software Update), or use Chrome or Edge 137 or newer.'
                 : 'Use Chrome or Edge 137 or newer (Windows, macOS, Linux, Android), or Safari 27 or newer on a Mac.';
             refuseBoot('JSPI unavailable',
                 '<strong>This browser lacks WebAssembly JSPI.</strong><br>' +
                 '<span style="color:#aaa">DC3 needs WebGPU and WebAssembly JSPI. ' + jspiHelp + '</span>',
-                'JSPI (WebAssembly.Suspending) not available — refusing to boot engine');
+                'JSPI (WebAssembly.Suspending) not available' + (SAFARI_VERSION ? ' (Safari ' + SAFARI_VERSION + ')' : '') + ' — refusing to boot engine');
         }
         {
             setStatus('Loading…', 'loading');
