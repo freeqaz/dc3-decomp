@@ -2103,7 +2103,9 @@ if(BUILD_TESTS)
         tests/test_dta_eval_endpoint.cpp
         tests/test_camera_yuv_decode.cpp
         tests/test_camera_stream.cpp
+        tests/test_depthbuffer3d.cpp
         tests/test_native_camera_view.cpp
+        tests/test_native_boxyman.cpp
         tests/test_native_crowd.cpp
         tests/test_native_shadow.cpp
         tests/test_native_shadow_stream.cpp
