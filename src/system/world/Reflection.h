@@ -25,6 +25,11 @@ public:
 
     OBJ_MEM_OVERLOAD(0x16)
     NEW_OBJ(WorldReflection)
+#ifdef HX_NATIVE
+    // What DrawShowing draws mirrored: the native load-time pipeline warm
+    // (native/src/platform/PipelineWarm.cpp) asks for their reflection keys.
+    const ObjPtrList<RndDrawable> &Draws() const { return mDraws; }
+#endif
 
 protected:
     WorldReflection();

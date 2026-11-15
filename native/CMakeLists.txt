@@ -1269,6 +1269,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/NetXbox_Stub.cpp
     src/platform/KinectShare_Stub.cpp
     src/platform/Cache_Stub.cpp
+    src/platform/PipelineWarm.cpp   # load-time material pipeline warm (DirLoader, H-33)
     src/platform/ChecksumData_Stub.cpp
     src/platform/Keygen_Stub.cpp
     src/platform/NetworkSocket_Stub.cpp
@@ -1460,6 +1461,7 @@ set(DC3_WEB_CORE_SOURCES
     # HX_NATIVE branch calls CacheMgrCreateNativeBackend(), which only this TU
     # defines. (The engine's own Cache_Stub.cpp is a comment-only placeholder.)
     src/platform/Cache_Stub.cpp
+    src/platform/PipelineWarm.cpp
     src/platform/WebMovieImpl.cpp
     src/platform/NetXbox_Stub.cpp
     src/platform/KinectShare_Stub.cpp
@@ -2086,6 +2088,8 @@ if(BUILD_TESTS)
         tests/test_spot_beam_frame_cost.cpp # spotperf: an unchanged beam set uploads nothing per frame
         tests/test_text_frame_cost.cpp # framecost: unchanged text uploads nothing per frame
         tests/test_fixed_key_pipelines.cpp # framecost: fixed-key pass pipelines are compiled at Init
+        tests/test_pipeline_warm.cpp # hitch: a loaded dir's material pipelines are compiled before its first draw
+        tests/test_pipeline_disk_cache.cpp # hitch: the persistent pipeline cache reads back exactly or misses
         tests/test_tex_share.cpp # framecost: byte-identical bitmaps share one GPU texture
         tests/test_color_pack_roundtrip.cpp
         tests/test_retail_char_shading.cpp
@@ -2314,6 +2318,11 @@ if(BUILD_TESTS)
     # list -- and runs the same tests -- as one without
     # (ContentMgr_Native.cpp NativeDlcRoots).
     list(APPEND MILO_TEST_ENV "DC3_DLC=0")
+    # No test reads or writes the persistent pipeline cache (Dawn's blob
+    # cache, milo-native-engine gfx/PipelineDiskCache.h) unless it names its
+    # own fresh directory: a result must not depend on what an earlier run --
+    # or the developer's game -- left in ~/.local/share/dc3/cache.
+    list(APPEND MILO_TEST_ENV "MILO_PIPELINE_CACHE=0")
     set(MILO_TEST_GATES_ON "")
     set(MILO_TEST_GATES_OFF "")
     # MILO_TEST_GATE_PROBES records, for every probed gate, the exact path whose
