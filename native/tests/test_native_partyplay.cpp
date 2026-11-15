@@ -29,6 +29,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include "platform/ExecutablePath.h"
+#include "test_tmp.h"
 #include "engine_http_port.h"
 #include "shell_timeout.h"
 
@@ -66,12 +67,11 @@ struct HttpRun {
 // and the first-run move tutorial's presence depends on that state
 // (ProfileMgr::HasSeenTutorial's `mGlobalOptionsSaveState != kMetaProfileLoaded`
 // fallback).  mkdtemp gives every run the same empty start and keeps the write
-// here.  Same mechanism as test_dta_flow.cpp's MakePersistenceRoot().
+// here.  Same mechanism as test_dta_flow.cpp's MakePersistenceRoot(), and the
+// same lifetime (MakeTestTempDir: removed at exit if the run passed).
 std::string PersistenceRoot() {
-    char tmpl[] = "/tmp/dc3-http-input-XXXXXX";
-    char *dir = mkdtemp(tmpl);
-    if (!dir) return std::string();
-    std::string root(dir);
+    std::string root = MakeTestTempDir("dc3-http-input");
+    if (root.empty()) return std::string();
     mkdir((root + "/cache").c_str(), 0755);
     mkdir((root + "/saves").c_str(), 0755);
     return root;
@@ -104,8 +104,8 @@ HttpRun RunHttpPressOnMain(int tries) {
     std::string persist = PersistenceRoot();
     if (persist.empty()) {
         r.setupError =
-            "could not create a temporary persistence root (mkdtemp "
-            "'/tmp/dc3-http-input-XXXXXX'); without one the engine would read "
+            "could not create a temporary persistence root (MakeTestTempDir "
+            "'dc3-http-input' under " + TestTempBase() + "); without one the engine would read "
             "and write ~/.local/share/dc3 instead";
         return r;
     }

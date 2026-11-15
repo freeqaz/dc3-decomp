@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include "platform/ExecutablePath.h"
+#include "test_tmp.h"
 #include "shell_timeout.h"
 
 // ---------------------------------------------------------------------------
@@ -124,13 +125,13 @@ static constexpr int kDtaFlowMaxFrames = 8000;
 // scripts/dc3-input-flows/ymca.txt drives) on every machine, and keeps all of
 // the engine's state inside the fixture.
 //
-// The directory is deliberately left behind, as test_cache_native.cpp's
-// MakeTempRoot() does, so a failure can be re-run against the same state.
+// MakeTestTempDir (test_helpers.h): it lives until the process exits -- a
+// second boot reuses it (reuseRoot) -- and is removed then if the run passed.
+// A failing run keeps it and prints its path, so a failure can be re-run
+// against the same state.
 static std::string MakePersistenceRoot() {
-    char tmpl[] = "/tmp/dc3-dta-flow-XXXXXX";
-    char *dir = mkdtemp(tmpl);
-    if (!dir) return std::string();
-    std::string root(dir);
+    std::string root = MakeTestTempDir("dc3-dta-flow");
+    if (root.empty()) return std::string();
     mkdir((root + "/cache").c_str(), 0755);
     mkdir((root + "/saves").c_str(), 0755);
     return root;
@@ -207,8 +208,8 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = kEngineWallClockSeco
     std::string persistence = reuseRoot.empty() ? MakePersistenceRoot() : reuseRoot;
     if (persistence.empty()) {
         pre.setupError =
-            "could not create a temporary persistence root (mkdtemp "
-            "'/tmp/dc3-dta-flow-XXXXXX').  The engine's cache and save "
+            "could not create a temporary persistence root (MakeTestTempDir "
+            "'dc3-dta-flow' under " + TestTempBase() + ").  The engine's cache and save "
             "directories have to be owned by the fixture: without them the "
             "flow's screen chain depends on whatever ~/.local/share/dc3/cache "
             "holds on this machine, and the run would write there.";
@@ -310,10 +311,7 @@ protected:
 
     void TearDown() override {
         if (HasFailure() && sRanEngine) {
-            std::string path = "/tmp/claude-1000/dta_flow_";
-            auto *info = ::testing::UnitTest::GetInstance()->current_test_info();
-            if (info) path += info->name();
-            path += "_" + std::to_string((int)getpid()) + ".log"; // per run: shared by concurrent gates
+            std::string path = TestLogPath("dta_flow"); // pid in the name: concurrent gates
             std::ofstream f(path);
             if (f.is_open()) {
                 f << sResult.output;
@@ -684,11 +682,10 @@ protected:
                          << result.setupError;
     }
 
-    static void Dump(const DtaRunResult &result) {
-        auto *info = ::testing::UnitTest::GetInstance()->current_test_info();
-        std::string path = "/tmp/claude-1000/dta_flow_";
-        if (info) path += info->name();
-        path += "_" + std::to_string((int)getpid()) + ".log"; // per run: shared by concurrent gates
+    // `tag` names a second run of the same test (DlcSongFlowTest's warm boot),
+    // which would otherwise overwrite the first one's dump.
+    static void Dump(const DtaRunResult &result, const char *tag = "") {
+        std::string path = TestLogPath(std::string("dta_flow") + tag); // pid in the name
         std::ofstream f(path);
         if (f.is_open()) {
             f << result.output;
@@ -1508,8 +1505,8 @@ protected:
         // short of playing.  kDlcFlowFrames leaves room; the wall clock bounds it.
         // A root holding only this package, so other packages imported next
         // to it cannot move Milkshake in the song list (the flow counts downs).
-        char tmpl[] = "/tmp/dc3-dlc-root-XXXXXX";
-        const char *root = mkdtemp(tmpl);
+        std::string rootDir = MakeTestTempDir("dc3-dlc-root");
+        const char *root = rootDir.empty() ? nullptr : rootDir.c_str();
         std::string pkg = GetDlcDir() + "/" + kMilkshakePackage;
         if (!root || symlink(pkg.c_str(), (std::string(root) + "/" + kMilkshakePackage).c_str())) {
             sResult.setupError = "could not make a one-package DLC root for " + pkg;
@@ -1540,7 +1537,7 @@ protected:
     void TearDown() override {
         if (HasFailure() && sRanEngine) {
             Dump(sResult);
-            if (sRanWarm) Dump(sWarm);
+            if (sRanWarm) Dump(sWarm, "_warm");
         }
     }
 };

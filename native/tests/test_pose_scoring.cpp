@@ -295,10 +295,8 @@ static std::string PerformerHeadlessBoot(const char *performValue) {
     dir = dir.substr(0, dir.rfind('/'));
     std::string binary = dir + "/dc3-native";
     if (access(binary.c_str(), X_OK) != 0) return "";
-    char tmpl[] = "/tmp/dc3-p13-XXXXXX";
-    char *root = mkdtemp(tmpl);
-    if (!root) return "";
-    std::string R = root;
+    std::string R = MakeTestTempDir("dc3-p13"); // removed at exit on a pass
+    if (R.empty()) return "";
     std::string cmd = std::string(kShellTimeoutLookup) +
         "env -u DC3_POSE -u DC3_POSE_NO_SPAWN MILO_HEADLESS=1 MILO_NORENDER=1 "
         "MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1 MILO_MAX_FRAMES=30 "

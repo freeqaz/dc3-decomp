@@ -232,8 +232,8 @@ EngineRun RunEngine(const std::string &drive) {
         r.setupError = "input flow script missing: " + script;
         return r;
     }
-    // Inside this process's scratch dir (removed when it exits); one dir per
-    // engine run.
+    // Inside this process's scratch dir (removed when it exits if the run
+    // passed, kept if it failed -- test_tmp.h); one dir per engine run.
     const std::string &scratch = TestScratchDir();
     if (scratch.empty()) {
         r.setupError = "no per-process scratch dir";

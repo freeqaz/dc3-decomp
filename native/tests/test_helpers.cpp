@@ -5,7 +5,14 @@
 #include <csignal>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <algorithm>
+#include <cctype>
+#include <cerrno>
+#include <climits>
+#include <ctime>
+#include <dirent.h>
 #include <filesystem>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -81,8 +88,6 @@ void EnsureSymbolInit() {
     InitMakeString();
 }
 
-static void RemoveTestScratchDir();
-
 void EngineTeardown() {
     // Rnd::Terminate must run BEFORE SystemTerminate because it uses Symbols,
     // DataArrays, and the object system (e.g. SetName, RELEASE of ObjectDirs).
@@ -102,7 +107,7 @@ void EngineTeardown() {
     // have already been reported to stdout, _exit() is safe here. We query
     // GTest for the correct exit code to preserve pass/fail signaling.
     int exitCode = testing::UnitTest::GetInstance()->Failed() ? 1 : 0;
-    RemoveTestScratchDir(); // _exit skips the atexit that would
+    FinishTestTmp(); // _exit skips the atexit that would
     _exit(exitCode);
 }
 
@@ -309,40 +314,340 @@ const char *GetTestBikPath() {
     return nullptr;
 }
 
-static void RemoveTestScratchDir();
-static bool sScratchUsed = false;
-static int sScratchOwner = 0; // a forked death-test child inherits the atexit; it must not delete
+// ============================================================================
+// Test temp dirs and logs (np-tmpleak) -- the policy is in test_helpers.h
+// ============================================================================
 
-const std::string &TestScratchDir() {
-    // Lower-case only: the engine's file layer case-folds paths (an mkdtemp
-    // suffix with capitals is not found again).  mkdir is the atomic claim; a
-    // leftover dir of a dead process with this pid moves on to the next n.
-    // Under /tmp/claude-1000 as the fixed paths it replaces were, so anything
-    // a killed run leaves behind is on the box's scratch expiry.
-    static std::string dir = [] {
-        std::string base = "/tmp/claude-1000";
-        mkdir(base.c_str(), 0755);
-        for (int n = 0; n < 1000; n++) {
-            std::string d = base + "/milo-tests-" + std::to_string((int)getpid()) + "-" +
-                std::to_string(n);
-            if (mkdir(d.c_str(), 0700) == 0) {
-                sScratchUsed = true;
-                sScratchOwner = (int)getpid();
-                atexit(RemoveTestScratchDir);
-                return d;
-            }
-        }
+namespace {
+
+struct TmpEntry {
+    std::string path;
+    bool isDir;
+    int owner;              // getpid() of the process that created it
+    bool announced = false; // its "kept" line has been printed
+};
+
+struct TmpRegistry {
+    std::mutex mu;
+    std::vector<TmpEntry> entries;
+    bool hooked = false;
+};
+
+// Leaked on purpose.  It is read by an atexit handler and by EngineTeardown,
+// and a static object can already be destroyed by then -- which is how
+// TestScratchDir()'s cleanup came to remove nothing at all (test_helpers.h).
+TmpRegistry &Registry() {
+    static TmpRegistry *r = new TmpRegistry;
+    return *r;
+}
+
+bool EnvOn(const char *name) {
+    const char *v = getenv(name);
+    return v && *v && strcmp(v, "0") != 0;
+}
+
+// Whether `name` carries `pid`'s token in the shape the helpers make it.
+bool NameIsOwnedBy(const std::string &name, int pid, bool isDir) {
+    const std::string p = std::to_string(pid);
+    if (isDir) {
+        if (name.rfind("milo-tests-" + p + "-", 0) == 0)
+            return true;
+        return name.rfind("dc3-", 0) == 0 && name.find("-p" + p + "-") != std::string::npos;
+    }
+    return name.find("-p" + p + ".") != std::string::npos;
+}
+
+// The guard in front of every removal: an absolute path with no "..", not a
+// top-level entry, created by THIS process (a forked child inherits the
+// registry and must not delete its parent's dirs), and named with this
+// process's pid token.
+bool SafeToRemove(const TmpEntry &e) {
+    const std::string &p = e.path;
+    if (p.empty() || p[0] != '/' || p.find("/..") != std::string::npos)
+        return false;
+    size_t slash = p.rfind('/');
+    if (slash == 0 || slash + 1 >= p.size())
+        return false;
+    if (e.owner != (int)getpid())
+        return false;
+    return NameIsOwnedBy(p.substr(slash + 1), e.owner, e.isDir);
+}
+
+void RemoveEntry(const TmpEntry &e) {
+    if (!SafeToRemove(e))
+        return;
+    struct stat st;
+    if (lstat(e.path.c_str(), &st) != 0)
+        return;
+    if (e.isDir) {
+        if (!S_ISDIR(st.st_mode))
+            return;
+        std::error_code ec;
+        std::filesystem::remove_all(e.path, ec);
+    } else if (S_ISREG(st.st_mode)) {
+        unlink(e.path.c_str());
+    }
+}
+
+void PrintKept(const std::string &path, const char *why) {
+    if (access(path.c_str(), F_OK) != 0)
+        return; // a log that was never written
+    fprintf(stderr, "[test-tmp] kept (%s): %s\n", why, path.c_str());
+}
+
+void FinishAtExit() { FinishTestTmp(); }
+
+void Register(const std::string &path, bool isDir) {
+    TmpRegistry &r = Registry();
+    std::lock_guard<std::mutex> lock(r.mu);
+    for (const TmpEntry &e : r.entries)
+        if (e.path == path)
+            return;
+    r.entries.push_back({path, isDir, (int)getpid()});
+    if (!r.hooked) {
+        r.hooked = true;
+        atexit(FinishAtExit);
+    }
+}
+
+// Why everything is being kept, or nullptr to remove it.
+const char *KeepReason() {
+    if (TestTmpKeepAll())
+        return "DC3_KEEP_TEST_TMP=1";
+    auto *ut = ::testing::UnitTest::GetInstance();
+    if (ut->current_test_info())
+        return "the process exited inside a test";
+    if (ut->Failed())
+        return "this run failed";
+    return nullptr;
+}
+
+std::string NormalizedBase(const char *dir) {
+    std::string b = (dir && *dir) ? dir : "/tmp";
+    while (b.size() > 1 && b.back() == '/')
+        b.pop_back();
+    return b;
+}
+
+std::string TryMkdtemp(const std::string &base, const std::string &name) {
+    mkdir(base.c_str(), 0755); // /tmp/claude-1000, <build>/tmp: may not exist yet
+    std::string tmpl = base + "/" + name + "XXXXXX";
+    std::vector<char> buf(tmpl.begin(), tmpl.end());
+    buf.push_back('\0');
+    if (!mkdtemp(buf.data()))
         return std::string();
-    }();
+    return std::string(buf.data());
+}
+
+bool HasUpper(const std::string &s) {
+    for (char c : s)
+        if (c >= 'A' && c <= 'Z')
+            return true;
+    return false;
+}
+
+// The owner pid in a helper-made dir name, or 0 if it is not one:
+//   milo-tests-<pid>-<n>          (TestScratchDir)
+//   dc3-<prefix>-p<pid>-XXXXXX    (MakeTestTempDir)
+long OwnerPidOf(const char *name) {
+    static const char kScratch[] = "milo-tests-";
+    if (strncmp(name, kScratch, sizeof(kScratch) - 1) == 0) {
+        const char *p = name + sizeof(kScratch) - 1;
+        char *end = nullptr;
+        long pid = strtol(p, &end, 10);
+        if (end == p || *p == '-' || *p == '+' || *end != '-' || !end[1])
+            return 0;
+        for (const char *q = end + 1; *q; q++)
+            if (*q < '0' || *q > '9')
+                return 0;
+        return pid;
+    }
+    if (strncmp(name, "dc3-", 4) != 0)
+        return 0;
+    const char *last = strrchr(name, '-');
+    if (!last || strlen(last + 1) != 6)
+        return 0;
+    for (const char *q = last + 1; *q; q++)
+        if (!isalnum((unsigned char)*q))
+            return 0;
+    const char *d = last;
+    while (d > name && d[-1] >= '0' && d[-1] <= '9')
+        d--;
+    // at least "dc3-x" before "-p<digits>"
+    if (d == last || d - name < 7 || d[-1] != 'p' || d[-2] != '-')
+        return 0;
+    return strtol(d, nullptr, 10);
+}
+
+// Each milo-tests process sweeps once, before its first test.
+class TestTmpSweepEnvironment : public ::testing::Environment {
+public:
+    void SetUp() override {
+        if (TestTmpKeepAll())
+            return;
+        std::vector<std::string> bases = {TestTempBase("/tmp"), TestTempBase("/tmp/claude-1000"),
+                                          "/tmp", "/tmp/claude-1000"};
+        std::sort(bases.begin(), bases.end());
+        bases.erase(std::unique(bases.begin(), bases.end()), bases.end());
+        for (const std::string &b : bases) {
+            int n = SweepDeadTestTmp(b, kTestTmpSweepMinAgeSeconds);
+            if (n > 0)
+                fprintf(stderr, "[test-tmp] swept %d dir(s) of dead test processes from %s\n", n,
+                        b.c_str());
+        }
+    }
+};
+
+::testing::Environment *const sTestTmpSweepEnv =
+    ::testing::AddGlobalTestEnvironment(new TestTmpSweepEnvironment);
+
+} // namespace
+
+std::string TestTempBase(const char *fallback) {
+    const char *t = getenv("TMPDIR");
+    return NormalizedBase((t && *t) ? t : fallback);
+}
+
+bool TestTmpKeepAll() { return EnvOn("DC3_KEEP_TEST_TMP") || EnvOn("MILO_TEST_KEEP_SCRATCH"); }
+
+std::string MakeTestTempDir(const char *prefix, const char *fallbackBase) {
+    std::string pre = prefix ? prefix : "dc3-tmp";
+    if (pre.rfind("dc3-", 0) != 0)
+        pre = "dc3-" + pre; // the sweep recognises only dc3-...-p<pid>-XXXXXX
+    const std::string name = pre + "-p" + std::to_string((int)getpid()) + "-";
+    const std::string fallback = NormalizedBase(fallbackBase);
+    const std::string base = TestTempBase(fallback.c_str());
+    std::string dir;
+    if (base.size() + 1 + name.size() + 6 <= kTestTempDirMaxLen)
+        dir = TryMkdtemp(base, name);
+    if (dir.empty() && base != fallback)
+        dir = TryMkdtemp(fallback, name);
+    if (!dir.empty())
+        Register(dir, true);
     return dir;
 }
 
-// The dir is this process's alone (it created it), so it goes when the process
-// does: at exit, and in EngineTeardown, which _exit()s past atexit.
-// MILO_TEST_KEEP_SCRATCH=1 keeps it.
-static void RemoveTestScratchDir() {
-    if (!sScratchUsed || sScratchOwner != (int)getpid() || getenv("MILO_TEST_KEEP_SCRATCH"))
+std::string TestTempFile(const std::string &stem, const char *ext, const char *fallbackBase) {
+    std::string e = (ext && *ext) ? ext : ".log";
+    if (e[0] != '.')
+        e = "." + e;
+    const std::string base = TestTempBase(fallbackBase);
+    mkdir(base.c_str(), 0755);
+    std::string path = base + "/" + stem + "-p" + std::to_string((int)getpid()) + e;
+    Register(path, false);
+    return path;
+}
+
+std::string TestLogPath(const std::string &stem) {
+    auto *info = ::testing::UnitTest::GetInstance()->current_test_info();
+    return TestTempFile(info ? stem + "_" + info->name() : stem);
+}
+
+void FinishTestTmp() {
+    TmpRegistry &r = Registry();
+    std::vector<TmpEntry> mine;
+    {
+        std::lock_guard<std::mutex> lock(r.mu);
+        for (const TmpEntry &e : r.entries)
+            if (e.owner == (int)getpid())
+                mine.push_back(e);
+        r.entries.clear();
+    }
+    const char *why = KeepReason();
+    // Newest first: a dir made inside another registered dir goes before it.
+    for (auto it = mine.rbegin(); it != mine.rend(); ++it) {
+        if (why) {
+            if (!it->announced)
+                PrintKept(it->path, why);
+        } else {
+            RemoveEntry(*it);
+        }
+    }
+}
+
+ScopedTestDir::ScopedTestDir(const char *prefix, const char *fallbackBase)
+    : mPath(MakeTestTempDir(prefix, fallbackBase)) {}
+
+ScopedTestDir::~ScopedTestDir() {
+    if (mPath.empty())
         return;
-    std::error_code ec;
-    std::filesystem::remove_all(TestScratchDir(), ec);
+    TmpRegistry &r = Registry();
+    std::lock_guard<std::mutex> lock(r.mu);
+    for (size_t i = 0; i < r.entries.size(); i++) {
+        TmpEntry &e = r.entries[i];
+        if (e.path != mPath)
+            continue;
+        if (e.owner != (int)getpid())
+            return; // a forked child leaving the scope: the dir is its parent's
+        if (TestTmpKeepAll() || ::testing::Test::HasFailure()) {
+            // Left registered: the run has failed, so the exit policy keeps it.
+            PrintKept(e.path, TestTmpKeepAll() ? "DC3_KEEP_TEST_TMP=1" : "this test failed");
+            e.announced = true;
+            return;
+        }
+        TmpEntry gone = e;
+        r.entries.erase(r.entries.begin() + i);
+        RemoveEntry(gone);
+        return;
+    }
+}
+
+int SweepDeadTestTmp(const std::string &base, long minAgeSeconds) {
+    DIR *dir = opendir(base.c_str());
+    if (!dir)
+        return 0;
+    const time_t now = time(nullptr);
+    const uid_t uid = getuid();
+    int removed = 0;
+    while (struct dirent *de = readdir(dir)) {
+        long pid = OwnerPidOf(de->d_name);
+        if (pid <= 1 || pid > INT_MAX)
+            continue;
+        std::string path = base + "/" + de->d_name;
+        struct stat st;
+        if (lstat(path.c_str(), &st) != 0 || !S_ISDIR(st.st_mode) || st.st_uid != uid)
+            continue;
+        if (now - st.st_mtime < minAgeSeconds)
+            continue;
+        // Alive -- or EPERM, a live process that is not ours -- keeps its dir.
+        if (kill((pid_t)pid, 0) == 0 || errno != ESRCH)
+            continue;
+        std::error_code ec;
+        std::filesystem::remove_all(path, ec);
+        if (!ec)
+            removed++;
+    }
+    closedir(dir);
+    return removed;
+}
+
+const std::string &TestScratchDir() {
+    // Lower-case only: the engine's file layer case-folds paths (an mkdtemp
+    // suffix with capitals is not found again), so a $TMPDIR with capitals
+    // falls back to /tmp/claude-1000.  mkdir is the atomic claim; a leftover
+    // dir of a dead process with this pid moves on to the next n.  The string
+    // is leaked so that nothing that runs at exit can outlive it.
+    static const std::string *dir = [] {
+        std::vector<std::string> bases;
+        std::string base = TestTempBase("/tmp/claude-1000");
+        if (!HasUpper(base))
+            bases.push_back(base);
+        if (base != "/tmp/claude-1000")
+            bases.push_back("/tmp/claude-1000");
+        for (const std::string &b : bases) {
+            mkdir(b.c_str(), 0755);
+            for (int n = 0; n < 1000; n++) {
+                std::string d = b + "/milo-tests-" + std::to_string((int)getpid()) + "-" +
+                    std::to_string(n);
+                if (mkdir(d.c_str(), 0700) == 0) {
+                    Register(d, true);
+                    return new std::string(d);
+                }
+                if (errno != EEXIST)
+                    break;
+            }
+        }
+        return new std::string();
+    }();
+    return *dir;
 }

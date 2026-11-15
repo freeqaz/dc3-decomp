@@ -33,6 +33,7 @@
 #include <X11/Xutil.h>
 #endif
 #include "platform/ExecutablePath.h"
+#include "test_tmp.h"
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -88,11 +89,10 @@ std::string Tail(const std::string &s, size_t n = 3000) {
 
 // An empty persistence root, as the other engine tests use, so a run neither
 // reads nor writes the developer's ~/.local/share/dc3.
+// MakeTestTempDir: removed at exit if the run passed, kept if it failed.
 std::string MakeRunDir() {
-    char tmpl[] = "/tmp/dc3-native-exit-XXXXXX";
-    char *dir = mkdtemp(tmpl);
-    if (!dir) return std::string();
-    std::string root(dir);
+    std::string root = MakeTestTempDir("dc3-native-exit");
+    if (root.empty()) return std::string();
     mkdir((root + "/cache").c_str(), 0755);
     mkdir((root + "/saves").c_str(), 0755);
     return root;

@@ -44,11 +44,12 @@ bool Pump(CacheMgr *mgr, int frames = 8) {
     return mgr->IsDone();
 }
 
+// MakeTestTempDir: removed at exit if the run passed (a test that gets to its
+// end also removes it itself), kept and printed if it failed.
 std::string MakeTempRoot() {
-    char tmpl[] = "/tmp/dc3-cache-native-XXXXXX";
-    char *dir = mkdtemp(tmpl);
-    EXPECT_NE(dir, nullptr);
-    return dir ? std::string(dir) : std::string();
+    std::string dir = MakeTestTempDir("dc3-cache-native");
+    EXPECT_FALSE(dir.empty());
+    return dir;
 }
 
 bool PathExists(const std::string &path) {

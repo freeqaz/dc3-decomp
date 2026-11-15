@@ -38,6 +38,7 @@
 #include <unistd.h>
 #include <vector>
 #include "platform/ExecutablePath.h"
+#include "test_tmp.h"
 
 namespace {
 
@@ -101,13 +102,11 @@ CrowdRun RunYmca() {
         r.setupError = "missing " + flow;
         return r;
     }
-    char tmpl[] = "/tmp/dc3-crowd-XXXXXX";
-    char *root = mkdtemp(tmpl);
-    if (!root) {
-        r.setupError = "mkdtemp failed";
+    std::string R = MakeTestTempDir("dc3-crowd"); // removed at exit on a pass
+    if (R.empty()) {
+        r.setupError = "MakeTestTempDir failed under " + TestTempBase();
         return r;
     }
-    std::string R = root;
     mkdir((R + "/cache").c_str(), 0755);
     mkdir((R + "/saves").c_str(), 0755);
     std::string log = R + "/engine.log";
@@ -148,8 +147,7 @@ CrowdRun RunYmca() {
 }
 
 std::string SaveLog(const CrowdRun &r) {
-    std::string path = std::string("/tmp/dc3-crowd-")
-        + ::testing::UnitTest::GetInstance()->current_test_info()->name() + ".log";
+    std::string path = TestLogPath("crowd"); // pid in the name; removed at exit on a pass
     std::ofstream f(path);
     if (f.is_open())
         f << r.driver << r.output;

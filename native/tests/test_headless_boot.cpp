@@ -17,6 +17,7 @@
 #include <climits>
 #include <cerrno>
 #include "platform/ExecutablePath.h"
+#include "test_tmp.h"
 #include "png_read.h"
 #include "shell_timeout.h"
 
@@ -60,12 +61,11 @@ struct RunResult {
 // move tutorial appears depends on what it found there
 // (ProfileMgr::HasSeenTutorial's `mGlobalOptionsSaveState != kMetaProfileLoaded`
 // fallback).  mkdtemp gives every run the same empty start and keeps the write
-// here.  Same mechanism as test_dta_flow.cpp's MakePersistenceRoot().
+// here.  Same mechanism as test_dta_flow.cpp's MakePersistenceRoot(), and the
+// same lifetime (MakeTestTempDir: removed at exit if the run passed).
 static std::string MakePersistenceRoot() {
-    char tmpl[] = "/tmp/dc3-headless-boot-XXXXXX";
-    char *dir = mkdtemp(tmpl);
-    if (!dir) return std::string();
-    std::string root(dir);
+    std::string root = MakeTestTempDir("dc3-headless-boot");
+    if (root.empty()) return std::string();
     mkdir((root + "/cache").c_str(), 0755);
     mkdir((root + "/saves").c_str(), 0755);
     return root;
@@ -208,9 +208,7 @@ static void PrintOutputTail(const std::string &output, size_t maxBytes = 2000) {
 // (np-harness).
 static std::string WriteInputScript(const std::vector<std::pair<int, std::string>> &inputs) {
     static int sCount = 0;
-    std::string path = std::string(getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp/claude-1000")
-                       + "/dc3_test_input_" + std::to_string((int)getpid()) + "_" +
-                       std::to_string(sCount++) + ".txt";
+    std::string path = TestTempFile("dc3_test_input_" + std::to_string(sCount++), ".txt");
     std::ofstream f(path);
     for (auto &entry : inputs)
         f << entry.first << " " << entry.second << "\n";
@@ -256,12 +254,11 @@ TEST(HeadlessBootNoGameData, ExitsWithAnErrorNotASignal) {
     std::string binary = GetDc3NativePath();
     if (access(binary.c_str(), X_OK) != 0)
         GTEST_SKIP() << "dc3-native binary not found at " << binary;
-    char tmpl[] = "/tmp/dc3-no-game-data-XXXXXX";
-    char *empty = mkdtemp(tmpl);
-    ASSERT_NE(empty, nullptr);
+    ScopedTestDir emptyDir("dc3-no-game-data");
+    ASSERT_TRUE(emptyDir.ok());
+    const char *empty = emptyDir.c_str();
     auto result = RunHeadless(100, nullptr, 60, {{"DC3_DATA", empty}}, empty);
     PrintOutputTail(result.output);
-    rmdir(empty);
     EXPECT_FALSE(result.timedOut);
     EXPECT_EQ(result.signal, 0) << CrashSummary(result);
     EXPECT_EQ(result.exitCode, 1);
@@ -602,10 +599,9 @@ static bool IsTargetOfTheFrame(const GpuTarget &t, int frameW, int frameH) {
 // source sized from the output again (DC3BloomSource... at 1920x1080 and
 // bloom 480x270 -- not in the allow-list); a pass sized from a hard 1280x720.
 TEST_F(HeadlessBootTest, A1080pOutputDrawsEveryPassAtTheFramesSize) {
-    char tmpl[] = "/tmp/dc3-outres-XXXXXX";
-    char *shots = mkdtemp(tmpl);
-    ASSERT_NE(shots, nullptr);
-    const std::string dir(shots);
+    ScopedTestDir shots("dc3-outres");
+    ASSERT_TRUE(shots.ok());
+    const std::string dir(shots.path());
     auto result = RunHeadless(300, nullptr, 180,
                               {{"MILO_RENDER", "1"}, {"DC3_FAST_BOOT", "1"},
                                {"MILO_WIDTH", "1920"}, {"MILO_HEIGHT", "1080"},
