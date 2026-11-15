@@ -17,6 +17,8 @@
 // dc3's header by path: "platform/NativeSettings.h" can resolve to the
 // engine's older copy, which does not carry the profile API.
 #include "../src/platform/NativeSettings.h"
+#include "../src/platform/DebugPanel.h"
+#include "os/Debug.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -86,7 +88,7 @@ TEST(Dc3ProfileTest, DevIsTheDefaultAndAppliesEveryRow) {
 // not silently in a playtest.
 TEST(Dc3ProfileTest, DevTableCarriesTheDeveloperDefaults) {
     std::map<std::string, std::string> want = {
-        {"DC3_DEV_OPTIONS", "1"}, {"DC3_DEV_MENU", "1"},  {"DC3_RND_OVERLAYS", "1"},
+        {"DC3_DEV_OPTIONS", "1"}, {"DC3_DEV_MENU", "1"},  {"DC3_RND_OVERLAYS", "log"},
         {"DC3_HTTP", "1"},        {"DC3_TEL", "api"},     {"DC3_TAG_MODALS", "dev"},
         {"MILO_INPUT_LOG", "1"},  {"DC3_MOVE_RATING_LOG", "1"}, {"MILO_PERF", "1"},
         {"DC3_DLC", "1"},
@@ -254,4 +256,71 @@ TEST(Dc3ProfileTest, DlcRootsFollowDc3DlcAndDc3DlcDir) {
     rmdir(data.c_str());
     if (savedData) setenv("DC3_DATA", oldData.c_str(), 1); else unsetenv("DC3_DATA");
     if (savedDir) setenv("DC3_DLC_DIR", oldDir.c_str(), 1); else unsetenv("DC3_DLC_DIR");
+}
+
+// ---------------------------------------------------------------------------
+// np-notifyband: the debug build's notices (cheat_display -- every MILO_NOTIFY
+// at notify_level 1, e.g. "P1_area1_far01.shot ... creating target cache for
+// boombox.trans, targets changed while playing camera" across gameplay) are
+// not drawn over the picture by default; the console game never drew them.
+// They still reach the log (DC3 OVERLAY lines; MILO_NOTIFY: from the dev tap),
+// DC3_RND_OVERLAYS=1 draws them again, and a FAIL -- which never went through
+// an overlay -- is printed exactly as before.  The end-to-end half (a real
+// dc3-native: "DC3 OVERLAY: drawn on screen" absent by default, present with
+// the switch) is HeadlessBootTest.DevProfileIsTheDefault /
+// OverlaysSwitchDrawsThem.
+//
+// Sabotages (each turns a test here red):
+//  - the dev row back to "1"            -> DebugNoticesAreLoggedNotDrawnByDefault
+//  - RndOverlaysModeFor("1") -> log     -> TheSwitchDrawsThem
+//  - Debug::Fail's "FAIL: " print skipped unless DC3_RND_OVERLAYS draws
+//                                        -> AFailIsStillPrintedUnderTheDefault
+//    (it survived a first version that matched "FAIL: <msg>" as a substring:
+//    the dev tap's "MILO_FAIL: <msg>" line carried it)
+// ---------------------------------------------------------------------------
+
+TEST(Dc3ProfileTest, DebugNoticesAreLoggedNotDrawnByDefault) {
+    ScopedProfileEnv scope;
+    Dc3ProfileApply();
+    EXPECT_EQ(DebugPanel::RndOverlaysModeFor(getenv("DC3_RND_OVERLAYS")),
+              DebugPanel::kRndOverlaysLog)
+        << "the dev profile (the default, desktop and web) draws the debug notices over the "
+           "picture; DC3_RND_OVERLAYS=" << Env("DC3_RND_OVERLAYS");
+}
+
+TEST(Dc3ProfileTest, TheSwitchDrawsThem) {
+    ScopedProfileEnv scope;
+    setenv("DC3_RND_OVERLAYS", "1", 1);
+    Dc3ProfileApply();
+    EXPECT_EQ(Env("DC3_RND_OVERLAYS"), "1") << "the profile overrode an explicit switch";
+    EXPECT_EQ(DebugPanel::RndOverlaysModeFor(getenv("DC3_RND_OVERLAYS")),
+              DebugPanel::kRndOverlaysDraw)
+        << "DC3_RND_OVERLAYS=1 no longer draws the notices";
+}
+
+TEST(Dc3ProfileTest, ReleaseNeitherDrawsNorCollectsThem) {
+    ScopedProfileEnv scope;
+    setenv("DC3_PROFILE", "release", 1);
+    Dc3ProfileApply();
+    EXPECT_EQ(DebugPanel::RndOverlaysModeFor(getenv("DC3_RND_OVERLAYS")),
+              DebugPanel::kRndOverlaysOff);
+}
+
+TEST(Dc3ProfileTest, AFailIsStillPrintedUnderTheDefault) {
+    ScopedProfileEnv scope;
+    Dc3ProfileApply();
+    const char *fatal = getenv("MILO_FATAL_FAILS");
+    ASSERT_TRUE(!fatal || !*fatal || strcmp(fatal, "0") == 0)
+        << "MILO_FATAL_FAILS is set: a FAIL would abort the test binary";
+    testing::internal::CaptureStderr();
+    TheDebug.Fail("np-notifyband: a FAIL under the default overlay mode", nullptr);
+    const std::string err = "\n" + testing::internal::GetCapturedStderr();
+    // A line of its own that STARTS with "FAIL: " -- Debug::Fail's print, what
+    // a terminal, engine.log and the browser console (console.error) show.  The
+    // dev tap's "MILO_FAIL: <msg>" line contains the same text, so a substring
+    // match would pass on the tap alone (it did: the FAIL sabotage in the
+    // header comment survived until this was anchored).
+    EXPECT_NE(err.find("\nFAIL: np-notifyband: a FAIL under the default overlay mode\n"),
+              std::string::npos)
+        << "a FAIL is no longer printed when the debug notices are not drawn:" << err;
 }

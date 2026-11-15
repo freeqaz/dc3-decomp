@@ -80,10 +80,16 @@ static const Dc3ProfileDefault kDc3DevDefaults[] = {
      "the original debug build's development menu ({ui show_dev_menu}): its "
      "extra modes in Choose Mode, its extra campaign difficulty rows",
      "the original's dev menu: extra Choose Mode modes, difficulty rows"},
-    {"DC3_RND_OVERLAYS", "1", false,
-     "the original's on-screen RndOverlays (cheat_display notices, the "
-     "framerate/stats/timer quick cheats) drawn in the corner",
-     "on-screen notices and quick-cheat stats, top-left"},
+    // `log`, not `1` (np-notifyband): the debug build's notices (cheat_display,
+    // every MILO_NOTIFY -- "creating target cache ..." across gameplay) are a
+    // developer's, and the console game never drew them over the picture.
+    // They still reach the log as `DC3 OVERLAY [<name>]` lines, and the dev tap
+    // (DC3_TAG_MODALS) still prints each as MILO_NOTIFY:. DC3_RND_OVERLAYS=1
+    // draws them in the corner again. FAILs never went through an overlay.
+    {"DC3_RND_OVERLAYS", "log", false,
+     "the original's RndOverlays (cheat_display notices, the framerate/stats/"
+     "timer quick cheats) logged as DC3 OVERLAY lines, not drawn (1 draws them)",
+     "debug notices + quick-cheat stats to the log only (=1 draws them)"},
     {"DC3_HTTP", "1", true,
      "HTTP debug server on 127.0.0.1 (DC3_HTTP_PORT unset: 9090 when free in a "
      "window, else a kernel-assigned port; printed as DC3_HTTP_PORT=<n>)",

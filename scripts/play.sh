@@ -46,10 +46,11 @@
 #   --fast-boot        skip the intro and title (straight to the main menu)
 #   --overlays         draw the debug build's on-screen notices (cheat_display:
 #                      every MILO_NOTIFY, the quick-cheat fps/stats) top-left,
-#                      as dc3-native's dev profile does.  Without it they only
+#                      (DC3_RND_OVERLAYS=1).  Without it they only
 #                      go to engine.log (`DC3 OVERLAY [...]` lines), so a
 #                      player sees the game, not developer messages
-#                      (DC3_RND_OVERLAYS=log; set DC3_RND_OVERLAYS=1 for the same)
+#                      (DC3_RND_OVERLAYS=log, the dev profile's default too since
+#                      np-notifyband; set DC3_RND_OVERLAYS=1 for --overlays)
 #   --home DIR         saves, settings cache and sessions (default
 #                      ~/.local/share/dc3/playtest; $DC3_PLAYTEST_HOME)
 #   --session-dir DIR  put this session's files in DIR (default

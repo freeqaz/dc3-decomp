@@ -12,7 +12,8 @@ bool IsVisible();
 void Toggle();
 void SetVisible(bool v);
 void DrawNotices(); // NativeNotice banner/corner line; same call window as Draw()
-// DC3_RND_OVERLAYS (dev profile default 1; play.sh default log): the original's RndOverlays
+// DC3_RND_OVERLAYS (dev profile default log, since np-notifyband; release off;
+// 1 draws them): the original's RndOverlays
 // (cheat_display, the quick-cheat framerate/stats/timer overlays ...).
 // PollRndOverlays runs every frame inside BeginDrawing/EndDrawing, with or
 // without ImGui (it also prints `DC3 OVERLAY [<name>] <line>` on stderr when an
@@ -21,7 +22,8 @@ void DrawNotices(); // NativeNotice banner/corner line; same call window as Draw
 void PollRndOverlays();
 void DrawRndOverlays();
 // DC3_RND_OVERLAYS's value: off (unset/0), log (`log`: collected and logged,
-// never drawn -- scripts/play.sh's default), draw (`1`: logged and drawn).
+// never drawn -- the dev profile's and scripts/play.sh's default), draw (`1`:
+// logged and drawn).
 enum RndOverlaysMode { kRndOverlaysOff, kRndOverlaysLog, kRndOverlaysDraw };
 RndOverlaysMode RndOverlaysModeFor(const char *value);
 
