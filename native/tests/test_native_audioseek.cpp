@@ -280,6 +280,11 @@ TEST_F(NativeAudioSeekTest, ReceiverPlaysEveryByteTheImageCycleAdmits) {
     const int kNumBuffers = 6;
     const int kFrames = 735; // 60 fps at 44.1 kHz
     StreamReceiverNative r(kNumBuffers, false);
+    // Hard left is FL at the voice volume under the image's pan law (PLAN
+    // H-115), so the left channel carries each sample at unity gain. A centred
+    // mono voice is C, 3 dB down on each side, and could not be read back
+    // sample for sample.
+    r.SetPan(-1.0f);
     r.Play();
     int next = 0; // samples written so far; sample i carries (int16_t)i
     std::vector<int16_t> played;
