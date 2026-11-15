@@ -12,6 +12,11 @@ namespace {
 // The image's frame: one refresh of a 60 Hz TV.
 constexpr double kImageFrameMs = 1000.0 / 60.0;
 
+// LoadMgr's own default (Loader.cpp, LoadMgr::LoadMgr). The image raises the
+// budget above it only while a loading screen is up (PreloadPanel::Load and
+// the game panel's load handler set 14; their finish_load puts 10 back).
+constexpr float kImageDefaultMs = 10.0f;
+
 double sFrameTargetFps = 0.0;
 
 Dc3LoaderBudget &Budget() {
@@ -38,7 +43,12 @@ float Dc3LoaderBudget::Step(float current, double targetFps) {
         mHave = true;
         mSpareMs = 0.0f; // a new image value starts from its floor
     }
-    mFloorMs = (float)Dc3LoaderBudgetMs(mImageMs, targetFps);
+    // A loading screen's raised share is kept as the image has it: nothing
+    // moves on a loading screen but its spinner, and scaling it only spread
+    // the song load over twice the frames, each drawn (song select -> game
+    // 0.92 -> 0.97 s at 120 fps).
+    mFloorMs = mImageMs > kImageDefaultMs ? mImageMs
+                                          : (float)Dc3LoaderBudgetMs(mImageMs, targetFps);
     float next = mFloorMs;
     if (mSpareMs > 0.0f && mFloorMs < mImageMs)
         next = std::fmin(mFloorMs + mSpareMs, mImageMs);

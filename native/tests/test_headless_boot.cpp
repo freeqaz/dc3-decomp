@@ -319,8 +319,8 @@ TEST_F(HeadlessBootTest, FrameCapWhenAsked) {
 // the image's 10 ms of a 60 Hz frame is 5 ms at a 120 fps cap, 10 ms at 60,
 // and the image's own value with no cap. Each "loader budget" line reports what
 // LoadMgr holds (read back through its setter); every one must be the image's
-// value (10 or 14 ms) scaled by 60 / cap, so a budget scaled twice (5 -> 2.5)
-// fails too. The pure rule is test_loader_budget.cpp.
+// value (10 or 14 ms) scaled by 60 / cap (14, a loading screen's share, is
+// kept), so a budget scaled twice (5 -> 2.5) fails too. The pure rule is test_loader_budget.cpp.
 TEST_F(HeadlessBootTest, LoaderBudgetFollowsTheFrameCap) {
     struct Case {
         const char *cap;
@@ -362,7 +362,8 @@ TEST_F(HeadlessBootTest, LoaderBudgetFollowsTheFrameCap) {
                 << line;
             EXPECT_DOUBLE_EQ(fps, c.fps) << line;
             EXPECT_TRUE(image == 10.0 || image == 14.0) << "not an image budget: " << line;
-            EXPECT_NEAR(budget, image * 60.0 / c.fps, 0.006) << line;
+            // A loading screen's raised share (above the 10 ms default) is kept.
+            EXPECT_NEAR(budget, image > 10.0 ? image : image * 60.0 / c.fps, 0.006) << line;
         }
         EXPECT_GE(lines, 1);
     }

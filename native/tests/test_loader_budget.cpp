@@ -35,10 +35,11 @@ TEST(LoaderBudget, StepTracksWhatTheImageSets) {
     // Unchanged since: still the image's 10, not 5 scaled again.
     EXPECT_EQ(b.Step(applied, 120.0), applied);
     EXPECT_EQ(b.ImageMs(), 10.0f);
-    // The game panel's load handler sets 14.
+    // The game panel's load handler sets 14, a loading screen's share: kept.
     applied = b.Step(14.0f, 120.0);
-    EXPECT_NEAR(applied, 7.0f, 1e-5f);
+    EXPECT_EQ(applied, 14.0f);
     EXPECT_EQ(b.ImageMs(), 14.0f);
+    EXPECT_EQ(b.Step(applied, 120.0), 14.0f);
     // finish_load sets 10 again.
     applied = b.Step(10.0f, 120.0);
     EXPECT_NEAR(applied, 5.0f, 1e-5f);
@@ -56,15 +57,30 @@ TEST(LoaderBudget, StepAtSixtyAndUncappedLeavesTheValue) {
 }
 
 TEST(LoaderBudget, AWholeScaledValueIsNotMistakenForTheImages) {
-    // At 84 fps 14 ms scales to exactly 10: the image's later 10 must still
-    // read as the image's and be scaled, not kept.
+    // At 100 fps 10 ms scales to exactly 6: a later 6 from the image (the DTA
+    // can set any value with set_loader_period) must still read as the
+    // image's and be scaled, not kept.
     Dc3LoaderBudget b;
-    float applied = b.Step(14.0f, 84.0);
-    EXPECT_NEAR(applied, 10.0f, 1e-5f);
-    EXPECT_NE(applied, 10.0f);
-    applied = b.Step(10.0f, 84.0);
-    EXPECT_EQ(b.ImageMs(), 10.0f);
-    EXPECT_NEAR(applied, 10.0f * 60.0f / 84.0f, 1e-4f);
+    float applied = b.Step(10.0f, 100.0);
+    EXPECT_NEAR(applied, 6.0f, 1e-5f);
+    EXPECT_NE(applied, 6.0f);
+    applied = b.Step(6.0f, 100.0);
+    EXPECT_EQ(b.ImageMs(), 6.0f);
+    EXPECT_NEAR(applied, 3.6f, 1e-4f);
+}
+
+TEST(LoaderBudget, ALoadingScreensRaisedShareIsKept) {
+    // Above LoadMgr's 10 ms default is the image's loading-screen share.
+    Dc3LoaderBudget b;
+    EXPECT_EQ(b.Step(14.0f, 120.0), 14.0f);
+    EXPECT_EQ(b.FloorMs(), 14.0f);
+    b.EndFrame(1.0, 120.0, true);
+    EXPECT_EQ(b.Step(14.0f, 120.0), 14.0f);
+    EXPECT_EQ(b.Step(14.0f, 240.0), 14.0f);
+    // At or under the default it is scaled.
+    EXPECT_NEAR(b.Step(10.0f, 120.0), 5.0f, 1e-5f);
+    Dc3LoaderBudget c;
+    EXPECT_NEAR(c.Step(8.0f, 120.0), 4.0f, 1e-5f);
 }
 
 TEST(LoaderBudget, FollowsAChangedFrameTarget) {
@@ -132,8 +148,9 @@ TEST(LoaderBudget, ANewImageValueStartsAtItsFloor) {
     float applied = b.Step(10.0f, 120.0);
     b.EndFrame(1.0, 120.0, true);
     b.Step(applied, 120.0);
-    // The game panel's load handler sets 14: 7 ms, no carried spare time.
-    EXPECT_NEAR(b.Step(14.0f, 120.0), 7.0f, 1e-5f);
+    // finish_load-style 10 again after a 14: 5 ms, no carried spare time.
+    EXPECT_EQ(b.Step(14.0f, 120.0), 14.0f);
+    EXPECT_NEAR(b.Step(10.0f, 120.0), 5.0f, 1e-5f);
 }
 
 TEST(LoaderBudget, NoSpareTimeWithoutAFrameTargetOrAtSixty) {

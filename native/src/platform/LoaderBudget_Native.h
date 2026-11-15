@@ -12,9 +12,11 @@
 // Native keeps the image's duty ratio instead: before each frame's poll, the
 // budget the image last asked for is scaled by (frame period / 16.7 ms), from
 // the frame pacer's actual target (Dc3FramePacer on desktop, Dc3RafGate on the
-// web). 10 ms is 5 ms at 120 fps and stays 10 ms at 60; 14 ms is 7 ms at 120.
+// web). 10 ms is 5 ms at 120 fps and stays 10 ms at 60.
 // With no frame target (uncapped, a display at or under 60 Hz that vsync
 // paces, or the target not known yet) the image's value is left as it is.
+// So is a value above LoadMgr's 10 ms default: the image raises it (to 14)
+// only while a loading screen is up, and that share is kept.
 //
 // That scaled value is a floor. While something is still loading at the end
 // of a frame, the time the frame had left before its period (less a 0.5 ms
