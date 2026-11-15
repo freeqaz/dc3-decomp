@@ -442,7 +442,7 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
     }
     mCamShot->ApplyDynamicOffsetPostLookAt(tf);
 #ifdef HX_NATIVE
-    static const bool sCamDiag3 = std::getenv("DC3_CAM_DIAG3") != nullptr;  // H-107: read once; nothing in the process writes it
+    static const bool sCamDiag3 = std::getenv("DC3_CAM_DIAG3") != nullptr;  // H-110: read once; nothing in the process writes it
     if (sCamDiag3) {
         fprintf(stderr,
             "DC3_CAM_DIAG3 shot=%s hT=%d b3=%d hasParent=%d "
@@ -621,7 +621,7 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
 
     mCamShot->ApplyFinalCamTransform(resultTf);
 #ifdef HX_NATIVE
-    static const bool sCamDiag2 = std::getenv("DC3_CAM_DIAG2") != nullptr;  // H-107: read once; nothing in the process writes it
+    static const bool sCamDiag2 = std::getenv("DC3_CAM_DIAG2") != nullptr;  // H-110: read once; nothing in the process writes it
     if (sCamDiag2) {
         // Pin down where camera roll enters: keyframe transforms (thisTf/otherTf),
         // LookAt targets (mLastTargetPos), or the blend. upZ = m.z.z (world-up
@@ -1392,7 +1392,7 @@ void CamShot::SetFrame(float frame, float blend) {
                 CamShotFrame *frame54 = nullptr;
                 GetKey(frame, frame50, frame54, f48);
 #ifdef HX_NATIVE
-                static const bool sCamDiag2 = std::getenv("DC3_CAM_DIAG2") != nullptr;  // H-107: read once; nothing in the process writes it
+                static const bool sCamDiag2 = std::getenv("DC3_CAM_DIAG2") != nullptr;  // H-110: read once; nothing in the process writes it
                 if (sCamDiag2) {
                     int prevIdx = frame50 && !mKeyframes.empty()
                         ? (int)(frame50 - &mKeyframes[0]) : -1;

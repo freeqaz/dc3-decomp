@@ -315,7 +315,7 @@ TEST_F(HeadlessBootTest, FrameCapWhenAsked) {
     EXPECT_GE(slept, 1.0) << "the cap did not sleep";
 }
 
-// PLAN H-107: outside gameplay the loader keeps the image's per-poll budget at
+// PLAN H-110: outside gameplay the loader keeps the image's per-poll budget at
 // any frame target -- boot, the attract and title screens are where scaling it
 // to the period made the load slower (0.1-0.3 s, 6 pairs of 6). Each "loader
 // budget" line reports what LoadMgr holds (read back through its setter);

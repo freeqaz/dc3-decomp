@@ -3190,7 +3190,7 @@ void Dc3KneeLog(const char *evt) {
     // 2026-07-02: gate to GAMEPLAY frames (>3000) so the trace shows the real
     // in-song poll order (pose vs IK vs servo), and add pelvis Z — the sink is
     // a pelvis-height retarget (HamIKEffector pelvis effector) being stomped.
-    static const bool sIkDiag = getenv("DC3_IK_DIAG") != nullptr;  // H-107: read once; nothing in the process writes it
+    static const bool sIkDiag = getenv("DC3_IK_DIAG") != nullptr;  // H-110: read once; nothing in the process writes it
     if (!sIkDiag || gDc3PollSeq >= 120
         || HamDirector_SelectCameraSetFrameCount() <= 3000)
         return;

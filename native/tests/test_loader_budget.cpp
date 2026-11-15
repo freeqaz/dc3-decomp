@@ -1,4 +1,4 @@
-// PLAN H-107: on native, while gameplay is on screen, the loader's per-poll
+// PLAN H-110: on native, while gameplay is on screen, the loader's per-poll
 // budget follows the frame period, so the image's duty ratio (10 ms of a
 // 16.7 ms frame) is kept at any cap; everywhere else it is the image's value.
 // The engine-run halves: a capped boot keeps the image's value outside

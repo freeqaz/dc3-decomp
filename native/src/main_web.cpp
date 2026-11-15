@@ -463,7 +463,7 @@ int dc3RafGate(double nowMs) {
     if (sGate->Decisions() != sLogged) {
         sLogged = sGate->Decisions();
         printf("DC3 Web: frame cap %s (display ~%.1f Hz from rAF)\n", sGate->Why(), sGate->RefreshHz());
-        // H-107: the loader's per-poll budget follows the frame the gate runs
+        // H-110: the loader's per-poll budget follows the frame the gate runs
         // (0 when vsync paces a <=60 Hz display: the image's 10 ms stands).
         Dc3LoaderBudgetSetFrameTarget(sGate->TargetFps());
     }

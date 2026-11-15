@@ -109,7 +109,7 @@ void CharBonesMeshes::PoseMeshes() {
         {
             static int sFootikLog = 0;
             const char *nm = (*curMesh) ? (*curMesh)->Name() : nullptr;
-            static const bool sIkDiag = getenv("DC3_IK_DIAG") != nullptr;  // H-107: read once; nothing in the process writes it
+            static const bool sIkDiag = getenv("DC3_IK_DIAG") != nullptr;  // H-110: read once; nothing in the process writes it
             if (sIkDiag && sFootikLog < 24 && nm && strstr(nm, "footik")) {
                 sFootikLog++;
                 fprintf(stderr, "DC3_IK_DIAG FootikPos[%d] dir=%s mesh=%s ptr=%p pos=(%.4f,%.4f,%.4f)\n",

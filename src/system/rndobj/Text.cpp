@@ -2709,7 +2709,7 @@ void RndText::DrawShowing() {
             RndMesh *mesh = (*it)->Mesh(i);
             if (mesh) {
 #ifdef HX_NATIVE
-                static const bool sTextDiag = getenv("DC3_TEXT_DIAG") != nullptr;  // H-107: read once; nothing in the process writes it
+                static const bool sTextDiag = getenv("DC3_TEXT_DIAG") != nullptr;  // H-110: read once; nothing in the process writes it
                 if (sTextDiag) {
                     static int sTD = 0;
                     String ascii = TextASCII();

@@ -681,15 +681,18 @@ TEST_F(PerformCrowdTest, AlleyCrowdAddsNoWhiteFigures) { Check("iceicebaby", kAl
 // Roller rink (the crowd's figures landed on the dancers' bodies).
 TEST_F(PerformCrowdTest, RollerRinkCrowdAddsNoWhiteFigures) { Check("ymca", kRinkWhiteMax); }
 
-// PLAN H-107: the budget LoadMgr::Poll sees, read from the running engine
+// PLAN H-110: the budget LoadMgr::Poll sees, read from the running engine
 // through the image's own setter (set_loader_period returns what it held; the
 // read puts it straight back): in the main menu it is the image's 10 ms at
 // any frame target, and with gameplay on screen (game_screen the bottom
 // screen) it is the image's 10 ms scaled to the pacer's period -- 5 ms at a
-// 120 fps target, 10 ms at 60. The end of a song and the run-up to results
-// load with gameplay on screen, and 10 ms of each 8.3 ms frame stretched them
-// to 12-22 ms (docs section 41). The pure rule is test_loader_budget.cpp, the
-// boot half HeadlessBootTest.LoaderBudgetIsTheImagesOutsideGameplay.
+// 120 fps target, 10 ms at 60 -- and back in the main menu it is 10 ms again.
+// Unpaced (DC3_FPS_CAP=0, what a headless run without a cap gets) it is the
+// image's everywhere: no line may report a scaled value or gameplay. The end
+// of a song and the run-up to results load with gameplay on screen, and 10 ms
+// of each 8.3 ms frame stretched them to 12-22 ms (docs section 41). The pure
+// rule is test_loader_budget.cpp, the boot half
+// HeadlessBootTest.LoaderBudgetIsTheImagesOutsideGameplay.
 namespace {
 
 double DriverValue(const std::string &driver, const char *tag) {
@@ -708,7 +711,11 @@ EngineRun RunLoaderBudget(const char *cap) {
     d << "echo \"DRIVER: menu_period $(ev '" << read << "')\"; "
       << EnterGameplay("ymca", "perform")
       << "waitfor 180 game_screen; echo \"DRIVER: game=$(scr)\"; sleep 3; "
-      << "echo \"DRIVER: game_period $(ev '" << read << "')\"; ";
+      << "echo \"DRIVER: game_period $(ev '" << read << "')\"; "
+      // Out of gameplay again: game_screen is no longer the bottom screen.
+      << "echo \"DRIVER: leave $(ev '{ui goto_screen main_screen}')\"; "
+      << "waitfor 120 main_screen; echo \"DRIVER: back=$(scr)\"; sleep 2; "
+      << "echo \"DRIVER: back_period $(ev '" << read << "')\"; ";
     return RunEngine(d.str(), std::string(" DC3_FPS_CAP=") + cap);
 }
 
@@ -716,9 +723,11 @@ EngineRun RunLoaderBudget(const char *cap) {
 
 class LoaderBudgetGameplayTest : public ::testing::Test {
 protected:
+    // cap "0": unpaced.
     void Check(const char *cap, double gameMs) {
         if (!getenv("DC3_DTA_FLOW_TESTS"))
             GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable (requires game assets)";
+        const bool paced = strcmp(cap, "0") != 0;
         EngineRun run = RunLoaderBudget(cap);
         if (!run.setupError.empty())
             GTEST_FAIL() << run.setupError;
@@ -727,17 +736,41 @@ protected:
             << run.output.substr(run.output.size() > 4000 ? run.output.size() - 4000 : 0);
         const double menu = DriverValue(run.driver, "menu_period");
         const double game = DriverValue(run.driver, "game_period");
-        printf("loader budget at a %s fps target: main menu %.4f ms, gameplay %.4f ms\n", cap, menu, game);
+        const double back = DriverValue(run.driver, "back_period");
+        printf("loader budget at DC3_FPS_CAP=%s: main menu %.4f ms, gameplay %.4f ms, main menu after "
+               "gameplay %.4f ms\n",
+               cap, menu, game, back);
         EXPECT_NEAR(menu, 10.0, 0.001) << "the main menu's budget is not the image's 10 ms\n" << run.driver;
-        EXPECT_NEAR(game, gameMs, 0.001) << "gameplay's budget at a " << cap << " fps target\n"
-                                         << run.driver;
-        // The engine's own line agrees (it reads LoadMgr back too).
+        EXPECT_NEAR(game, gameMs, 0.001) << "gameplay's budget at DC3_FPS_CAP=" << cap << "\n" << run.driver;
+        ASSERT_NE(run.driver.find("DRIVER: back=main_screen"), std::string::npos) << run.driver;
+        EXPECT_NEAR(back, 10.0, 0.001) << "leaving gameplay did not put the image's 10 ms back\n"
+                                       << run.driver;
+        // The engine's own lines agree (they read LoadMgr back too).
+        if (!paced) {
+            int lines = 0;
+            for (size_t pos = run.output.find("loader budget "); pos != std::string::npos;
+                 pos = run.output.find("loader budget ", pos + 1)) {
+                lines++;
+                const std::string l = run.output.substr(pos, run.output.find('\n', pos) - pos);
+                EXPECT_TRUE(l == "loader budget 10.00 ms a poll (the image's; no frame target)" ||
+                            l == "loader budget 14.00 ms a poll (the image's; no frame target)")
+                    << "an unpaced run did not keep the image's value: " << l;
+            }
+            EXPECT_GE(lines, 1) << "no loader budget line";
+            return;
+        }
         const std::string line = "loader budget " + std::string(gameMs == 5.0 ? "5.00" : "10.00") +
                                  " ms a poll (the image's 10.00 ms at a " + cap +
                                  ".00 fps frame target; gameplay is on screen)";
-        EXPECT_NE(run.output.find(line), std::string::npos) << "no '" << line << "' line";
+        const size_t on = run.output.find(line);
+        EXPECT_NE(on, std::string::npos) << "no '" << line << "' line";
+        const std::string off = std::string("loader budget 10.00 ms a poll (the image's; ") + cap +
+                                ".00 fps frame target, gameplay is not on screen)";
+        EXPECT_NE(run.output.find(off, on == std::string::npos ? 0 : on), std::string::npos)
+            << "no '" << off << "' line after gameplay";
     }
 };
 
 TEST_F(LoaderBudgetGameplayTest, HalfTheImagesShareAtA120Target) { Check("120", 5.0); }
 TEST_F(LoaderBudgetGameplayTest, TheImagesShareAtA60Target) { Check("60", 10.0); }
+TEST_F(LoaderBudgetGameplayTest, TheImagesShareUnpaced) { Check("0", 10.0); }

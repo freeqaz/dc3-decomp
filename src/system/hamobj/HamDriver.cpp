@@ -91,7 +91,7 @@ void HamDriver::Poll() {
         static int sSeqLog = 0;
         const char *pp = PathName(this);
         bool isMain = pp && strstr(pp, "main.milo") && !strstr(pp, "backup");
-        static const bool sIkDiag = getenv("DC3_IK_DIAG") != nullptr;  // H-107: read once; nothing in the process writes it
+        static const bool sIkDiag = getenv("DC3_IK_DIAG") != nullptr;  // H-110: read once; nothing in the process writes it
         if (sIkDiag && sSeqLog < 40 && isMain
             && HamDirector_SelectCameraSetFrameCount() > 3000) {
             sSeqLog++;
@@ -121,7 +121,7 @@ void HamDriver::Poll() {
         {
             extern int HamDirector_SelectCameraSetFrameCount();
             static int sWLog = 0;
-            static const bool sIkDiag = getenv("DC3_IK_DIAG") != nullptr;  // H-107: read once; nothing in the process writes it
+            static const bool sIkDiag = getenv("DC3_IK_DIAG") != nullptr;  // H-110: read once; nothing in the process writes it
             if (sIkDiag && sWLog < 40
                 && HamDirector_SelectCameraSetFrameCount() > 3000) {
                 sWLog++;

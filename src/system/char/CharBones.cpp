@@ -778,7 +778,7 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
                     {
                         const char *mn = myBonesItr->name.Str();
                         static int sSAlog = 0;
-                        static const bool sIkDiag = getenv("DC3_IK_DIAG") != nullptr;  // H-107: read once; nothing in the process writes it
+                        static const bool sIkDiag = getenv("DC3_IK_DIAG") != nullptr;  // H-110: read once; nothing in the process writes it
                         if (sIkDiag && mn && std::strstr(mn, "footik") && sSAlog < 8) {
                             sSAlog++;
                             const float *fp = (const float *)mStart;

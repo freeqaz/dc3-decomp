@@ -792,7 +792,7 @@ App::App(int argc, char **argv) {
 // > crash guard / ImGui / HTTP hooks, and derefs managers native never creates), so this
 // > mirrors its POLL part call for call, in the image's order. (w22-ml)
 static void Dc3NativeFramePoll() {
-    // PLAN H-107: the loader's per-poll budget at the frame pacer's period (the
+    // PLAN H-110: the loader's per-poll budget at the frame pacer's period (the
     // image's 10 ms of a 60 Hz frame is 5 ms at 120 fps), before SystemPoll runs
     // LoadMgr::Poll. See platform/LoaderBudget_Native.h.
     Dc3LoaderBudgetApply();
@@ -838,7 +838,7 @@ static void Dc3NativeFramePoll() {
         // DC3_NATIVE_SCORING=0. Web goes default-on too (CheckForSkeletonLoss
         // early-returns on __EMSCRIPTEN__).
         extern bool Dc3EnvFlag(const char *, bool);
-        // H-107: read once; nothing in the process writes either (the same
+        // H-110: read once; nothing in the process writes either (the same
         // decision GestureMgr_Native.cpp caches as sSensorFeedEnabled).
         static const bool sPollGestures =
             Dc3EnvFlag("DC3_NATIVE_SCORING", true) || Dc3EnvFlag("DC3_POSE_SELFTEST", false);
@@ -1210,7 +1210,7 @@ void App::RunWithoutDebugging() {
         }
         const Dc3FrameCap cap = Dc3FrameCapDecide(getenv("DC3_FPS_CAP"), windowed, refreshHz);
         framePacer.SetTarget(cap.fps);
-        Dc3LoaderBudgetSetFrameTarget(framePacer.TargetFps());  // H-107
+        Dc3LoaderBudgetSetFrameTarget(framePacer.TargetFps());  // H-110
         MILO_LOG("DC3 Native: frame cap: %s\n", cap.why);
     }
 
@@ -1299,7 +1299,7 @@ void App::RunWithoutDebugging() {
             extern bool Dc3EnvFlag(const char *, bool);
             return Dc3EnvFlag("DC3_DRAW_CRASH_GUARD", false);
         }();
-        static const bool sNoUiDraw = getenv("DC3_HUD_ONLY") || getenv("DC3_NO_UI");  // H-107: read once; nothing in the process writes it
+        static const bool sNoUiDraw = getenv("DC3_HUD_ONLY") || getenv("DC3_NO_UI");  // H-110: read once; nothing in the process writes it
         if (TheUI && !sNoUiDraw) {
             if (!sDrawCrashGuard) {
                 TheUI->Draw();

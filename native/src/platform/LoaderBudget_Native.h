@@ -1,4 +1,4 @@
-// The loader's per-poll budget on native during gameplay (PLAN H-107).
+// The loader's per-poll budget on native during gameplay (PLAN H-110).
 //
 // LoadMgr::Poll gives loading up to mPeriod ms of every frame while anything
 // loads (src/system/utl/Loader.cpp). The image sets it to 10 ms (LoadMgr's

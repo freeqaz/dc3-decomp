@@ -572,7 +572,7 @@ void HamIKEffector::Poll() {
         const char *pp = PathName(this);
         bool isMain = pp && strstr(pp, "main.milo") && !strstr(pp, "backup");
         bool isAnkle = pp && strstr(pp, "ankle.ikf");
-        static const bool sIkDiag = getenv("DC3_IK_DIAG") != nullptr;  // H-107: read once; nothing in the process writes it
+        static const bool sIkDiag = getenv("DC3_IK_DIAG") != nullptr;  // H-110: read once; nothing in the process writes it
         if (sIkDiag && sIkSeqLog < 40 && isMain && isAnkle
             && HamDirector_SelectCameraSetFrameCount() > 3000) {
             sIkSeqLog++;
