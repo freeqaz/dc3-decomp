@@ -70,7 +70,7 @@ void Multiply(const Transform &a, const Transform &b, Transform &out) {
     out.v.y = vy;
     out.v.z = vz;
 #else
-    // Lane history (13 lines moved): docs/decomp/notes/system/math/mtx.md
+    // Lane history (13 lines moved): docs/decomp/notes/system/math/Mtx.md
     const Vector3 &v = a.v;
     const Transform &t = b;
     if (&t != &out) {
@@ -91,12 +91,12 @@ void Multiply(const Transform &a, const Transform &b, Transform &out) {
 }
 
 
-// Lane history (10 lines moved): docs/decomp/notes/system/math/mtx.md
+// Lane history (10 lines moved): docs/decomp/notes/system/math/Mtx.md
 // > w25-gd stop note: one fmuls operand order differs (min.x.y * xdot; the image lists
 // > the load first, we list xdot first).
 void FastInvert(const Hmx::Matrix3 &min, Hmx::Matrix3 &mout) {
     float xdot = Dot(min.x, min.x);
-    // Lane history (8 lines moved): docs/decomp/notes/system/math/mtx.md
+    // Lane history (8 lines moved): docs/decomp/notes/system/math/Mtx.md
     const float &xy = min.x.y;
     if (xdot != 0)
         xdot = 1.0f / xdot;
@@ -147,7 +147,7 @@ float Det(const Hmx::Matrix4 &m) {
     return det;
 }
 
-// Lane history (95 lines moved): docs/decomp/notes/system/math/mtx.md
+// Lane history (95 lines moved): docs/decomp/notes/system/math/Mtx.md
 // > Do not retry either variant without a new idea for pinning the schedule. (w3-m)
 // > Verdicts: Do not retry (w3-m)
 void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {
@@ -165,7 +165,7 @@ void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {
     float a20 = m.z.x, a21 = m.z.y, a22 = m.z.z, a23 = m.z.w;
     float a30 = m.w.x, a31 = m.w.y, a32 = m.w.z, a33 = m.w.w;
 
-    // Lane history (13 lines moved): docs/decomp/notes/system/math/mtx.md
+    // Lane history (13 lines moved): docs/decomp/notes/system/math/Mtx.md
     // > Cofactors for columns 1,2,3 stored directly to output rows y,z,w.
     out.y.Set(
         (-(((a22 * a33) * a10) - ((((a23 * a32) * a10) - (((a20 * a32) * a13) - (((a22 * a30) * a13) + -((a23 * a30) * a12)))) + ((a20 * a33) * a12))) * invDet),

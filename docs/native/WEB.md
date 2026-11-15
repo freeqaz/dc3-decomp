@@ -355,6 +355,56 @@ delegate is the default now (`pose_delegate=AUTO`), 26–28 pose frames/s
 delivered with the game on the rig, at the old default's score; the probe
 runs in its own worker but stays opt-in.
 
+### Camera clock (W-35, np-pose-ts)
+
+**Fault (2026-11-14, a Mac in Chrome).** The console filled with
+`[dc3-pose] worker: inference: ... Packet timestamp mismatch on a calculator
+receiving from stream "free_memory". Current minimum expected timestamp is
+4166704915261 but received 4166704915260`, one per camera frame, and the pose
+panel stayed on "Camera ready — waiting for the game…": no pose ever reached the
+game.
+
+**Cause (MEASURED on the rig, same message reproduced).** On Chromium
+`VideoFrame.timestamp` is the time since boot, and the worker passed it to
+`detectForVideo` as MediaPipe's clock. tasks-vision hands each result's
+timestamp back to JS as a 32-bit count of milliseconds, which stops at
+2^31−1 ms = 24.86 days. `PoseLandmarker` keeps the latest result timestamp and,
+after every frame, sends a `free_memory` packet at it. Past 24.86 days of
+uptime every result with a person in it reports the same saturated timestamp,
+`free_memory` is sent twice at one timestamp, and the graph refuses every frame
+from then on. A frame with nobody in it takes another route (an empty-packet
+listener with the true timestamp), so the page works until someone walks into
+view. 4166704915260 µs is 48.2 days. A machine that was rebooted in the last
+24 days never shows it, which is every machine it had been tested on.
+
+| capture clock | old worker | fixed worker |
+|---|---|---|
+| just booted | ok | ok |
+| 24.0 days | ok | ok |
+| 25.0 days, person in view | fails at frame 2 | ok |
+| 48.2 days, nobody for 40 frames, then a person | fails at frame 41 | ok |
+| passes 2^31 ms mid-run | fails at the crossing | ok |
+
+**Fix.** `mediapipeMs()` in `pose_worker.js`: MediaPipe gets a clock that starts
+at 0 with the first frame and advances by the capture intervals, in whole
+milliseconds (capture times a fraction of a millisecond apart lose a microsecond
+in the subtraction, and MediaPipe truncates to microseconds). A repeated or
+earlier timestamp advances 1 ms; one step is capped at 60 s, so that clock takes
+over 24 days of continuous tracking to reach the limit. `captureSec`, the sensor
+timestamp the engine reads, is still the capture time, and the smoothing filters
+get the zero-based clock unrounded.
+
+**Check.** `node scripts/web/pose-clock.mjs --port P --frames DIR` drives the
+shipped worker with 14 capture clocks (uptimes to 400 days, repeats, jumps back
+and ahead, 1 µs steps) and requires a pose for every frame and no worker error.
+`--sabotage` serves the worker with the old clock and requires the long-uptime
+clocks to fail. MEASURED on the rig, 200 frames per clock: 14 of 14 pass on
+the CPU and the GPU delegate; with `--sabotage` the 8 long-uptime clocks fail
+(198 of 200 frames each) and the 6 others pass. `pose_parity.mjs browser`
+gives the same result file before and after the change. Not covered: Safari and Firefox (their `VideoFrame.timestamp`
+origin was not measured; the zero-based clock does not depend on it), and the
+Mac that reported it has not re-run the page yet.
+
 ### Pose pipeline (W-17..W-22, np-webpose)
 
 #### The path a camera frame takes
@@ -1129,6 +1179,7 @@ Scripts live in `scripts/web/` and share `scripts/web/lib/core.mjs`:
 (one song with a fake camera or none, per-second heap/pose/score samples),
 `page-states.mjs` (W-8, W-13), `phone.mjs` (W-16, W-31: touch, iPhone
 refusal, sound), `mobile-gpu.mjs` (W-29: one song under `?gpu_profile=`),
+`pose-clock.mjs` (W-35: the pose worker under any camera clock),
 `song-order.mjs` (prints which song each
 `--song-index` selects), `attract-movie.mjs` (W-11: the intro movie's pixels
 are on the canvas), `gesture-menus.mjs --skip-attract` (a gesture skips the
