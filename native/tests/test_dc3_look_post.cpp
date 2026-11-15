@@ -581,7 +581,9 @@ TEST_F(DC3LookPostTest, EnhancedDofKeepsTheRadiusWithoutCreases) {
            "creases (share of the profile's curvature on one phase of 4; 0.25 = none) %.3f -> %.3f\n",
            energy[0], energy[1], energy[1] / energy[0], spread[0], spread[1], crease[0], crease[1]);
     EXPECT_NEAR(energy[1] / energy[0], 1.0, 0.03);
-    EXPECT_NEAR(spread[1] / spread[0], 1.0, 0.05) << "the blur radius is retail's";
+    // Uncompensated taps read +4% (the tent and the B-spline add their own
+    // variance); 2% separates the two.
+    EXPECT_NEAR(spread[1] / spread[0], 1.0, 0.02) << "the blur radius is retail's";
     EXPECT_GT(crease[0], 0.45) << "retail's bilinear read creases (non-vacuous)";
     EXPECT_LT(crease[1], 0.38) << "the B-spline read does not";
     dof.Terminate();
