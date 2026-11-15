@@ -19,6 +19,7 @@
 
 #include "test_helpers.h"
 #include "gfx/PipelineManager.h"
+#include "gfx/ShippedWgsl.h"
 #include "obj/Object.h"
 #include "rndobj/BaseMaterial.h"
 #include "rndobj/Mat.h"
@@ -29,6 +30,14 @@
 #include "rndobj/Font.h"
 #include "rndobj/Text.h"
 #include "utl/FilePath.h"
+#include "platform/LookProfile.h"
+
+#include <cmath>
+#include <cstdlib>
+#include <limits>
+#include <cstring>
+#include <map>
+#include <string>
 
 // Declared here, not via "platform/MaterialSetup.h": dc3's own
 // native/src/platform/MaterialSetup.h (a pre-engine copy) is earlier on the
@@ -38,6 +47,13 @@ bool MeshDrawsAsGlyph(RndMesh *mesh, bool skinned);
 bool MeshShadesAsText(RndMesh *mesh);
 void MarkTextGlyphMesh(RndMesh *mesh);
 bool IsMarkedTextGlyphMesh(RndMesh *mesh);
+// Engine platform/MaterialSetup.h (same tokens: one definition).
+enum class CutCoverage : unsigned char { None, AlphaToCoverage, Sharpened };
+bool BlendWeightsByAlpha(int blend);
+CutCoverage CutCoverageRule(bool alphaCut, int blend, int threshold, milo::LookProfile look,
+                            bool shapeAlphaToCoverage);
+CutCoverage MaterialCutCoverage(BaseMaterial *mat);
+float MaterialAlphaThreshold(bool alphaCut, int threshold);
 
 // The pipeline key's WgpuBlend and BaseMaterial::Blend share one numbering;
 // BlendSkipsFringeFade takes either.
@@ -215,4 +231,241 @@ TEST_F(NativeGlyphRenderTest, RndTextMarksItsGlyphPages) {
     EXPECT_GT(meshes, 0) << "the text built no page mesh (font " << font->Name() << ")";
     delete text;
     delete fonts;
+}
+
+// ---- alpha cut: the look profile's coverage rule ---------------------------
+// DC3's alpha cut is the alpha test and nothing more: NgMat::SetBasicState
+// (dc3 src/system/rndobj/Mat_NG.cpp) sets SetAlphaTestEnable(mAlphaCut) and
+// SetAlphaFunc(5, mAlphaThreshold) -- 5 maps to the 360's D3DCMP_GREATER
+// through RndRenderState::SetAlphaFunc's table (0x8208A138) -- and the image
+// never calls D3DDevice_SetRenderState_AlphaToMaskEnable. The engine used to
+// turn on hardware alpha-to-coverage for every alpha-cut material in the 4x
+// MSAA frame, so a premultiplied glyph at alpha a resolved to a * a of its
+// colour: song select's faded list rows (Eagle-Light(47), alpha 0.5) drew at
+// ~0.6 of the original and every glyph edge thinned.
+//
+// DC3_LOOK=retail keeps the original (no coverage anywhere). The default
+// enhanced look anti-aliases an alpha cut whose edge is a hard step with a
+// sharpened coverage mask (CutCoverage::Sharpened), and leaves a cut at 0
+// under an alpha-weighted blend -- every glyph -- to the blend alone.
+// rb3-xenon (the same shape, kAlphaCutUsesCoverage) keeps hardware coverage.
+//
+// The rows are real materials from a census of what DC3 draws (scratch
+// Mesh_Wgpu instrumentation over boot -> song select -> OMG at 45 s in all six
+// venues, peak and normal, 2026-11-14): blend, threshold and first-seen alpha.
+// Sabotage, each run and then restored (2026-11-14):
+//  - rule: Sharpened also for a cut at 0 under PreMultAlpha -> RuleOnCensus,
+//    CensusMaterials and SongSelectListFont red;
+//  - rule: Sharpened only for blend Src (the first guess before the census)
+//    -> RuleOnCensus (palm, peak band, icons, award star rows) and
+//    CensusMaterials (DLV_PalmTree) red;
+//  - kAlphaCutUsesCoverage = true in RndShape_DC3.h -> CensusMaterials and
+//    SongSelectListFont red (the rule table passes the shape flag itself);
+//  - kAlphaTestGreater = false -> AlphaTestIsRetailsGreater red.
+namespace {
+struct CutRow {
+    const char *mat;  // material in the census (venue / screen)
+    int blend;
+    int threshold;
+    CutCoverage enhanced;
+};
+const CutRow kCensusRows[] = {
+    // text: cut at 0 under PreMultAlpha, faded to 0.5 / 0.147 on screen
+    {"Eagle-Light(47).mat (song select list font)", BaseMaterial::kPreMultAlpha, 0, CutCoverage::None},
+    // button icons: SrcAlpha cut at 80
+    {"icons.mat (help bar button glyphs)", BaseMaterial::kBlendSrcAlpha, 80, CutCoverage::Sharpened},
+    // dancers' hair cards, opaque
+    {"lima05_hair.mat (player dancer hair)", BaseMaterial::kBlendSrc, 110, CutCoverage::Sharpened},
+    {"rasa05_hair_backface.mat", BaseMaterial::kBlendSrc, 150, CutCoverage::Sharpened},
+    {"dci01_bd03_hair.mat (backup dancer)", BaseMaterial::kBlendSrc, 110, CutCoverage::Sharpened},
+    // streetside crowd clothing, opaque, faded to 0.917
+    {"tshirt1.mat (streetside)", BaseMaterial::kBlendSrc, 150, CutCoverage::Sharpened},
+    // foliage: dclive palms are alpha-blended AND cut at 90
+    {"DLV_PalmTree.mat (dclive)", BaseMaterial::kBlendSrcAlpha, 90, CutCoverage::Sharpened},
+    {"peakmode_band1.mat (peak)", BaseMaterial::kBlendSrcAlpha, 90, CutCoverage::Sharpened},
+    {"peak_cityscape.mat", BaseMaterial::kBlendSrcAlpha, 170, CutCoverage::Sharpened},
+    // alpha-blended, cut at 0: the blend fades the edge
+    {"peak_columns_1.mat", BaseMaterial::kBlendSrcAlpha, 0, CutCoverage::None},
+    {"arrow_glow.mat (overlay ribbon)", BaseMaterial::kBlendSrcAlpha, 0, CutCoverage::None},
+    {"star_award.mat (score star)", BaseMaterial::kBlendSrcAlphaAdd, 32, CutCoverage::Sharpened},
+    {"peak_carpet_edge.mat", BaseMaterial::kBlendSrcAlphaAdd, 0, CutCoverage::None},
+    // multiply ignores alpha: a cut at 0 is still a step
+    {"ribbon_dullbloom.mat (main ribbon)", BaseMaterial::kBlendMultiply, 0, CutCoverage::Sharpened},
+};
+const char *Name(CutCoverage c) {
+    switch (c) {
+    case CutCoverage::None: return "None";
+    case CutCoverage::AlphaToCoverage: return "AlphaToCoverage";
+    case CutCoverage::Sharpened: return "Sharpened";
+    }
+    return "?";
+}
+}  // namespace
+
+TEST(NativeGlyphRender, AlphaCutCoverageRuleOnCensusMaterials) {
+    using milo::LookProfile;
+    for (const CutRow &r : kCensusRows) {
+        EXPECT_EQ(Name(CutCoverageRule(true, r.blend, r.threshold, LookProfile::Enhanced, false)),
+                  Name(r.enhanced))
+            << r.mat << " (blend " << r.blend << ", threshold " << r.threshold << ") enhanced";
+        EXPECT_EQ(Name(CutCoverageRule(true, r.blend, r.threshold, LookProfile::Retail, false)),
+                  Name(CutCoverage::None))
+            << r.mat << ": DC3_LOOK=retail is the alpha test alone";
+        // rb3-xenon: Native look, shape coverage on -> unchanged hardware coverage.
+        EXPECT_EQ(Name(CutCoverageRule(true, r.blend, r.threshold, LookProfile::Native, true)),
+                  Name(CutCoverage::AlphaToCoverage))
+            << r.mat << ": rb3-xenon must keep alpha-to-coverage";
+        EXPECT_EQ(Name(CutCoverageRule(false, r.blend, r.threshold, LookProfile::Enhanced, false)),
+                  Name(CutCoverage::None))
+            << r.mat << " without its alpha cut";
+    }
+    EXPECT_EQ(Name(CutCoverageRule(true, BaseMaterial::kBlendDest, 110, LookProfile::Enhanced, false)),
+              Name(CutCoverage::None)) << "blend Dest draws nothing";
+    EXPECT_EQ(Name(CutCoverageRule(true, BaseMaterial::kBlendSrc, 0, LookProfile::Enhanced, false)),
+              Name(CutCoverage::Sharpened)) << "an opaque cut at 0 is a step";
+    EXPECT_TRUE(BlendWeightsByAlpha(BaseMaterial::kPreMultAlpha));
+    EXPECT_FALSE(BlendWeightsByAlpha(BaseMaterial::kBlendSrc));
+}
+
+TEST(NativeGlyphRender, LookProfileSwitch) {
+    const char *e = getenv("DC3_LOOK");
+    const bool retailEnv = e && strcmp(e, "retail") == 0;
+    EXPECT_EQ(milo::Look().Retail(), retailEnv) << "DC3_LOOK=" << (e ? e : "(unset)");
+    EXPECT_EQ(milo::Look().Enhanced(), !retailEnv) << "DC3's default look is enhanced";
+    {
+        milo::ScopedLookOverride retail(milo::LookProfile::Retail);
+        EXPECT_TRUE(milo::Look().Retail());
+        EXPECT_FALSE(milo::Look().Enhanced());
+    }
+    EXPECT_EQ(milo::Look().Retail(), retailEnv) << "the override did not restore";
+    EXPECT_STREQ(milo::LookProfileName(milo::LookProfile::Enhanced), "enhanced");
+    EXPECT_STREQ(milo::LookProfileName(milo::LookProfile::Retail), "retail");
+}
+
+// Retail's alpha test passes ABOVE the threshold (D3DCMP_GREATER), so a cut at
+// 0 drops alpha-0 texels: the shader discards below the uniform, which must
+// therefore sit just past the reference value.
+// The shader discards `a < uniform` (fs_main; fs_cutout's coverage is 0 there
+// too), and a discarded fragment writes neither colour nor depth. Retail passes
+// iff a > threshold (D3DCMP_GREATER): at every census threshold, a texel AT the
+// threshold must be discarded -- at 0 that is every alpha-0 texel, which must
+// stay out of the depth buffer -- and the very next float must pass. The
+// uniform does not depend on the look, so this holds in both.
+TEST(NativeGlyphRender, AlphaTestIsRetailsGreater) {
+    EXPECT_EQ(MaterialAlphaThreshold(false, 110), 0.0f) << "no cut, no test";
+    for (int thr : {0, 32, 80, 90, 110, 130, 150, 170, 255}) {
+        const float uniform = MaterialAlphaThreshold(true, thr);
+        const float at = thr / 255.0f;
+        EXPECT_TRUE(at < uniform) << "thr " << thr << ": alpha == threshold passes"
+                                  << (thr == 0 ? " (alpha-0 texels write colour and depth)" : "");
+        EXPECT_GE(uniform, std::numeric_limits<float>::min())
+            << "thr " << thr << ": a denormal reference may flush to 0 on the GPU";
+        if (thr > 0) {
+            const float above = std::nextafter(at, 2.0f);
+            EXPECT_FALSE(above < uniform) << "thr " << thr << ": alpha just above the threshold is dropped";
+        }
+    }
+    // Above 0 the uniform is exactly the next float: nothing above the
+    // threshold is dropped, however close (texel x fade products are not
+    // 8-bit values).
+    EXPECT_EQ(MaterialAlphaThreshold(true, 110), std::nextafter(110 / 255.0f, 2.0f));
+}
+
+// The sharpened cutout (fs_cutout) must test what retail's alpha test tests:
+// texel alpha x material fade x vertex alpha, the alpha baseColor holds once
+// the texel is multiplied in, sharpened over that product's own footprint. A
+// coverage taken from the texel alpha alone keeps a faded cutout whole where
+// the original erodes it (Eagle-Light rows, tshirt fades to 0.917). This
+// reads the WGSL the dc3 flavor compiles: a structural check (fwidth runs
+// only in a fragment stage, so the compute harness cannot run this line);
+// the frames are the behavioural evidence.
+TEST(NativeGlyphRender, CutoutCoverageTestsTheFadedAlpha) {
+    const std::string s = StandardWgslSource();
+    const size_t fn = s.find("fn shadeStandard(");
+    ASSERT_NE(fn, std::string::npos) << "no shadeStandard in the standard WGSL";
+    const size_t call = s.find("gCutCoverage = cutoutCoverage(", fn);
+    ASSERT_NE(call, std::string::npos) << "shadeStandard sets no cutout coverage";
+    const size_t argBegin = s.find('(', call) + 1;
+    const size_t argEnd = s.find_first_of(",)", argBegin);
+    const std::string arg = s.substr(argBegin, argEnd - argBegin);
+    const std::string def = "let " + arg + " = baseColor.a;";
+    const size_t defAt = s.find(def, fn);
+    ASSERT_NE(defAt, std::string::npos)
+        << "coverage tests '" << arg << "', which is not baseColor.a (the faded product)";
+    EXPECT_LT(defAt, call);
+    // Taken after the texel multiplies in: the last texel-alpha use before
+    // the definition sits after the texture sample.
+    const size_t sample = s.find("textureSample(diffuseTex", fn);
+    ASSERT_NE(sample, std::string::npos);
+    const size_t texelMul = s.rfind("diffuseSample.a", defAt);
+    EXPECT_TRUE(texelMul != std::string::npos && texelMul > sample)
+        << "'" << arg << "' is read before the texel alpha multiplies in";
+    // Its footprint (the third argument) is the product's.
+    const size_t argsEnd = s.find(')', argBegin);
+    const size_t argW = s.rfind(',', argsEnd) + 1;
+    std::string w = s.substr(argW, argsEnd - argW);
+    w.erase(0, w.find_first_not_of(' '));
+    EXPECT_NE(s.find("let " + w + " = fwidth(" + arg + ");", fn), std::string::npos)
+        << "coverage footprint '" << w << "' is not fwidth(" << arg << ")";
+    // No second test of a separate fade alpha in front of it.
+    EXPECT_EQ(s.find("cutFadeA", fn), std::string::npos) << "a separate fade test is back";
+}
+
+// Real materials as the game loads them, through MaterialCutCoverage under
+// each look. Every file must load and hold the named alpha-cut material, or
+// the test proves nothing.
+TEST_F(NativeGlyphRenderTest, CensusMaterialsGetTheirCoverage) {
+    if (IsSkipped()) return;
+    struct Want { const char *file; const char *mat; CutCoverage enhanced; };
+    const Want wants[] = {
+        {"ui/resource/fonts/default/gen/eagle-light(47).milo_xbox", "Eagle-Light(47).mat", CutCoverage::None},
+        {"world/dclive/gen/dclive.milo_xbox", "DLV_PalmTree.mat", CutCoverage::Sharpened},
+        {"world/streetside/gen/streetside.milo_xbox", "tshirt1.mat", CutCoverage::Sharpened},
+        {"char/main/dancer/gen/lima05.milo_xbox", "lima05_hair.mat", CutCoverage::Sharpened},
+    };
+    for (const Want &w : wants) {
+        ObjectDir *dir = DirLoader::LoadObjects(FilePath(w.file), nullptr, nullptr);
+        if (!dir) GTEST_SKIP() << "no archive asset " << w.file;
+        RndMat *found = nullptr;
+        for (ObjDirItr<RndMat> it(dir, true); it != nullptr; ++it)
+            if (strcmp(it->Name(), w.mat) == 0) found = it;
+        ASSERT_NE(found, nullptr) << w.mat << " not in " << w.file;
+        ASSERT_TRUE(found->GetAlphaCut()) << w.mat << " lost its alpha cut";
+        {
+            milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
+            EXPECT_EQ(Name(MaterialCutCoverage(found)), Name(w.enhanced))
+                << w.mat << " (blend " << (int)found->GetBlend() << ", threshold "
+                << found->GetAlphaThreshold() << ") enhanced";
+        }
+        {
+            milo::ScopedLookOverride look(milo::LookProfile::Retail);
+            EXPECT_EQ(Name(MaterialCutCoverage(found)), Name(CutCoverage::None))
+                << w.mat << " retail: the alpha test alone";
+        }
+        delete dir;
+    }
+}
+
+// Every alpha-cut material of the song-select list font: no coverage under
+// either look (the faded-row case). At least one PreMultAlpha cut must be seen.
+TEST_F(NativeGlyphRenderTest, SongSelectListFontGetsNoCoverage) {
+    if (IsSkipped()) return;
+    ObjectDir *font = DirLoader::LoadObjects(
+        FilePath("ui/resource/fonts/default/gen/eagle-light(47).milo_xbox"), nullptr, nullptr);
+    if (!font) GTEST_SKIP() << "no archive UI fonts (ui/resource/fonts/default/gen/eagle-light(47).milo_xbox)";
+    int cutPremult = 0;
+    for (milo::LookProfile p : {milo::LookProfile::Enhanced, milo::LookProfile::Retail}) {
+        milo::ScopedLookOverride look(p);
+        for (ObjDirItr<RndMat> it(font, true); it != nullptr; ++it) {
+            RndMat *mat = it;
+            if (!mat->GetAlphaCut()) continue;
+            if (mat->GetBlend() == BaseMaterial::kPreMultAlpha) cutPremult++;
+            EXPECT_EQ(Name(MaterialCutCoverage(mat)), Name(CutCoverage::None))
+                << mat->Name() << " (alpha cut, threshold " << mat->GetAlphaThreshold()
+                << ", blend " << (int)mat->GetBlend() << ") look " << milo::LookProfileName(p);
+        }
+    }
+    EXPECT_GT(cutPremult, 0) << "no alpha-cut PreMultAlpha material in " << font->Name()
+                             << "; the faded-row case was not examined";
+    delete font;
 }
