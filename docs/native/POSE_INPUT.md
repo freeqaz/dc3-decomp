@@ -914,8 +914,10 @@ np-video-calib's stream fixtures: 50 in-song dropouts, the longest 1.2 s,
   "not seen". Then the slot is released and the image's recovery gives its own
   1 s. Exceptions:
   - Not for someone seen for under 500 ms (a false detection).
-  - Ended early when a new id appears within 0.3 m of the held hip (she is
-    back under another id).
+  - With `DC3_POSE_REACQUIRE_MS=0` only: ended early when a new id appears
+    within 0.3 m of the held hip (she is back under another id). By default
+    the identity layer decides that (P-18): a detection where she stood is
+    her and keeps her id, and a different id next to her is her neighbour.
   - `0` turns it off. Capped at 5 s.
 
 **Before / after (MEASURED, live `pose_server`, same clip and driver).**
@@ -1030,6 +1032,252 @@ dropouts, and the 8 changes with the player at the keyboard or walking back
 from it, where one to five joints are tracked and the hip guess moves by more
 than `max_dist` between frames. Not measured: a live replay, and the score.
 
+### P-18: two dancers, one identity each (`np-player-identity`)
+
+**State (2026-11-15): on branch `np-player-identity`, not landed.**
+
+**Reported (2026-11-14, GPD webcam at 8-10 Hz, two people, three songs).**
+Player 2 dropped out ten seconds into a song and never came back, with "New
+player detected! Raise your hand to join." on screen; in the next song player
+1's HUD ended up on the other dancer.
+
+**Cause (MEASURED by real-time replay of that session's `pose.dc3session`).**
+The game's skeleton tracking id was the tracker's id, and the tracker's id did
+not stay with a body:
+
+- `CentroidTracker` let a track take any detection within `max_dist` (0.75 m
+  at dancing distance), nearest pair first. MediaPipe often reports one of two
+  dancers per frame, so an id walked onto the neighbour, the neighbour's track
+  was deleted as a twin (P-17's rule 2) and she came back as somebody new: 13
+  ids for three bodies in song 3. One id also changed bodies when a person
+  walked behind the dancer (song 3, 131-133 s).
+- `NativeAutoAssignPlayers` bound a player with no skeleton to the first valid
+  unclaimed slot, and player 2 only in two-player modes (W-10). So a lost
+  player 1 took whoever was first, and a lost player 2 in Perform was gone
+  until the image's raised-hand join fired again.
+
+**Fix, three layers.** Each is one body, one identity; `DC3_POSE_REACQUIRE_MS=0`
+turns the two engine layers back to the old rules.
+
+1. **Tracker** (`CentroidTracker`, `pose_mediapipe.py` and `pose_geometry.js`,
+   parity-tested). With body sizes given:
+   - a track reaches a detection within `reach_start` (0.5) torso lengths,
+     about 25 cm, growing by `reach_speed` (1.0) per second unmatched up to
+     `reach_ratio` (0.9), about 45 cm, and never past `max_dist`. `update()`
+     takes the frame's time for that; both backends pass it;
+   - the pairing is the one with the most matches for the least total
+     distance, not nearest pair first;
+   - the twin rule spares a track that was ever matched in the same frame as
+     the matched one (two people, not a twin);
+   - a track is also looked for at its anchor, where it was at least 0.5 s
+     before its last match, so one frame reported on the neighbour costs no id.
+   No forward prediction: at 8-10 Hz the measured step is under 8 cm (p95) and
+   a dancer has reversed by the next frame as often as not.
+2. **People** (`native/src/platform/PoseIdentity_Native.h`, called from
+   `IdentifyPeople` in `GestureMgr_Native.cpp` before the frame fill and the
+   slot map). Tracker id and hip position in, the game's tracking id out. A
+   detection is the remembered person it is nearest to: within 0.25 m, growing
+   0.5 m/s while unseen, up to 0.45 m (1.5 m for her own tracker id); also
+   looked for at her anchor; the tracker's id is worth 5 cm, no more. One
+   tracker id on two bodies is two people. A lost person is remembered for the
+   window (`DC3_POSE_REACQUIRE_MS`, default 5000). A recorded session still
+   holds the tracker's ids, so a replay decides again.
+   - The picture moved: when every person seen in the last frame is in this
+     one under the same tracker id, nobody else is, no detection is where
+     somebody else was, and they have all gone the same way (within 0.1 m)
+     further than reach allows, it is the camera that moved. They keep their
+     ids, and remembered positions and anchors move with them. Consecutive
+     frames only, and two people or more: one person alone has nobody to
+     agree with and is the next rule. `scripts/synthetic_kinect.py` moves the
+     picture this way several times a song, which is how the gate found it.
+   - One body alone: the only person seen in the last frame, as the only
+     detection in this one, under the same tracker id, out of her reach and
+     of everybody else's, is still her. One body in view is one person, one
+     slot, one player. The tracker's id alone is not proof, so the jump is on
+     trial for 0.5 s: where she was before it is kept as her anchor (it does
+     not move with her), and a body that turns up there in that time, and is
+     nobody else, is her; the body that jumped is then somebody new. See
+     "One body, two slots" below.
+   - Slot map: a different id next to a held person no longer ends her hold,
+     and a person People has seen for 0.5 s is held from her first frame back
+     in a slot. Without that, two dancers 0.28 m apart reported on alternate
+     frames each lost her slot on every frame of the other's.
+3. **Players** (same header, called from `NativeAutoAssignPlayers`). A player
+   whose skeleton was lost is bound again, same player index, in every mode:
+   - `same-id`: her own tracking id is back, within the window;
+   - `near`: a body that appeared after she was lost, within 0.3 m growing
+     0.5 m/s up to 0.75 m of where she stood. Valid skeletons first, then
+     tracked ones (a dancer 1.4 m from the camera with her feet out of the
+     picture fails the image's quality filter);
+   - `auto`: the old rule, now after a 700 ms wait for her own body, and to
+     the skeleton nearest where she stood. The wait holds only while the
+     image still holds her binding; once the image has unbound her she takes
+     the nearest skeleton in the same sensor frame (see "Fast time" below). Whoever it takes while the player
+     is still remembered is a **stand-in**: the song is not paused, the player
+     is still looked for, and her own id or a new body where she stood takes
+     the binding back. Past the window the stand-in is the player;
+   - a player the image unbound with her skeleton in view is left alone (W-10
+     stands), and a body known before she was lost is never her.
+   After a binding made here GestureMgr's player ids are set to the ids the
+   players hold (`SetTrackedSkeletons`). Without it the chooser undid a
+   binding made during the image's recovery second (pause on the next frame
+   with nobody else playing), and a released stand-in stayed a player id
+   nobody held, which `SetPlayerSkeletonNavData` gives to the free player:
+   she was bound as player 2 with no raised hand and rated for 49 measures.
+
+**Wrong-person control.** Nobody becomes a player by standing there. A body
+out of reach of where the lost player stood, a body that was in view before
+she was lost, and anybody after the window go through the image's own join
+(raised hand), as before. The exception is the stand-in for player 1, which
+is the old auto-assign and ends when she is back. `DC3_POSE_REACQUIRE_MS=0`
+is the strict behaviour throughout: tracker ids straight through, no memory,
+the P-12 newcomer rule.
+
+One body alone that jumps keeps its identity, on trial (MEASURED). Over the
+whole recorded evening (5,964 camera frames) a lone body jumps out of reach
+under its own tracker id 4 times. Three are one person walking in at 5-7 m
+whose depth estimate moves 0.6 to 3 m in a frame; without the rule she was
+three people (47 tracking ids over the evening, 44 with it). The fourth is
+song 3 at 132.7 s: somebody walks past 0.5 m behind the dancer, and the only
+detection in one frame is the dancer's tracker id on the passer-by, with the
+dancer back under a new tracker id in the next. The passer-by is the dancer
+for that one frame, the dancer is found where she was and is herself again,
+and the passer-by is a new id when she is seen next
+(`Song3SomebodyWalksPastBehindTheDancerAndTheirTrackerIdsSwap`, 10 s of the
+recording). Two earlier versions were wrong and are the reason for the
+trial:
+
+- NEGATIVE RESULT: a one-person "picture moved", which took where she was
+  along with her. The passer-by kept the dancer's identity, player 1 and her
+  score, for the rest of the song.
+- NEGATIVE RESULT: no rule for one person (the branch as its second gate ran
+  it). A lone
+  body that jumped was somebody new unless her anchor happened to be old
+  enough to reach her; see "One body, two slots".
+
+The rule for two or more fires 0 times on the recording.
+
+**Before / after (MEASURED, real-time replay of the recorded pose; fast time
+is not faithful here, the image's recovery and join count UI seconds).**
+"strict" is the branch with `DC3_POSE_REACQUIRE_MS=0`; "before" is main
+`7de3bf403`. Song 2 is the stretch with both dancers; they walk out at about
+33 s and the game pauses, so its whole song is measures 3-15.
+
+| Song 2 (seg8) | before | strict | after |
+|---|---|---|---|
+| Tracking ids in the game | not logged | 5 | 2 |
+| Player 1 bound to | not logged | 3 ids | 1 id |
+| Player 2 bound | m4-7, then never | m4-7, then never | whole song, 1 id |
+| "New player detected!" | on screen at beats 44, 52, 60 | 4 times | never |
+| Player 1 moves rated | 13 (m3-15) | 12 | 13 (m3-15) |
+| Player 2 moves rated | 4 (m4-7) | 4 (m4-7) | 13 (m3-15) |
+| Player 2 score | 0 | 0 | 1,331 (1,514 in a second run) |
+| Player 1's cards change side (5 sampled beats) | 2 | 2 | 0 |
+
+| Song 3 (seg13) | before | strict | after | after, again |
+|---|---|---|---|---|
+| Tracking ids in the game, results screen included | not logged | 15 | 10 | 10 |
+| Player 1 bound to | not logged | 10 ids | the left dancer all song (ids 38, 43; 1.2 s on a stand-in at m4) | same |
+| Player 1 moves, score | 67, 76,282 | 61, 38,200 | 66, 101,692 | 66, 101,194 |
+| Player 2 joined (raised hand) | not logged | m13, again m32 and m61 | m11 | m11 |
+| Player 2 moves, score | 1 | 47 (m14-75), 88,090 | 36 (m12-53), 24,060 | 36, 26,326 |
+| "New player detected!" | on screen at beats 30, 120 | 5 times | 5 times | 5 times |
+| Player 1's cards change side (10 sampled beats) | 1 | 4 | 1, at player 2's join | 1 |
+
+Song 3 read against the recording's positions:
+
+- The left dancer is player 1 from start to end (checked at 8 s, 22-30 s and
+  130-135 s). In the strict run player 1's binding follows the tracker's id 38
+  onto the right dancer by 8 s. At 130-133 s a person walks behind the dancer
+  and the tracker swaps their ids: from then on the strict run's player 1 is
+  the person standing at the back (x +1.4 m, z 3.3 m) and the dancer is scored
+  as player 2. After: the dancer keeps her tracking id (43, under tracker id
+  52) and the walker is a new id nobody binds.
+- The right dancer never joined in the live session. In every replay, strict
+  included, the image's own raised-hand filter joins her at measure 11-13, so
+  the banners before that are the game asking a real newcomer to raise a hand
+  and are left alone. The identity rules do not bind her: she is player 1's
+  stand-in for 1.2 s at measure 4 (the camera lost player 1 for 1.9 s) and is
+  nobody again when player 1 is back. She walks out at 112 s (measure 53),
+  more than the window, and is not bound again. The two players' scores add
+  up to about the same in both runs (126,290 strict, 125,752 after); the
+  difference is whose they are.
+- HUD in the screenshots (beats 14 to 300): strict has player 1's cards
+  right, left, right, left, right; after, right until player 2 joins, then
+  left with player 2's on the right to the end. Before has one change too (at
+  beat 160, under "New player joined"), with one player on screen all song.
+
+Both replays were run again on the branch head after the two gate fixes
+below. Same bindings in the same order (song 3: 25 bind lines, same rules and
+ids; song 2: 4), and the moved-picture rule fired 0 times. Song 3: player 1
+66 moves, 112,426; player 2 36 moves (m12-53), 23,799. Song 2: player 1 13
+moves, player 2 12 moves, 2,917.
+
+And again with the one-body rule. Song 3: the same 25 bind
+lines, rules and ids; the rule fires once, at 132.7 s ("the one body in view
+jumped ... still tracking id 43"), and the passer-by's frame no longer claims
+a slot (36 slot claims, 37 before). Player 1 66 moves, 103,389; player 2 36
+moves (m12-53), 27,767. Song 2: the same 4 bind lines and 10 slot claims, the
+rule fires 0 times; 13 and 13 moves, player 2 2,844.
+
+`DC3_POSE_HOLD_MS=3000` was measured as a second lever on an earlier build of
+the branch and not taken: both song-2 dancers rated to measure 17 instead of
+15, but a longer hold also delays every real exit.
+
+**Fast time (MEASURED; the branch's first gate failed two tests on it).**
+Under `DC3_FAST_TIME` the UI clock advances 1/30 s a frame and song time and
+the synthetic sensor's stamps 1/120 s, so the image's one-second recovery is
+250 ms of sensor time. Players' waits are sensor time (`near` needs 280 ms
+for a body 0.44 m away, `auto` waited 700 ms), so the image unbound the player
+first and `Game::CheckForSkeletonLoss` paused the song
+(`ReacquiredDancerTest`, 0 of 3 alone; 1 of 1 with `DC3_POSE_REACQUIRE_MS=0`).
+The `auto` wait now ends when the image unbinds her. `NativeAutoAssignPlayers`
+runs before the callbacks of every delivered sensor frame and the game's check
+is one of those callbacks, so the stand-in is bound before the check. In a
+real session the clocks agree and `auto` at 700 ms comes before the image's
+unbind at 1 s. `SecondPersonPerformTest` failed on the synthetic sensor's
+moving picture (player 1 on 3 tracking ids, 4 re-binds); see People above.
+
+**One body, two slots (MEASURED; the branch's second gate failed
+`BoxymanTest` on it).** The test's one body is stood up at (0, 0.9, 2.5) and
+put at the first move's position in the next frame, 0.48 m away as People
+measures it, under the same tracker id. Reach from her last position is
+0.31 m; her anchor reaches that far only when it is 0.45 s old or more, and
+it is replaced every 0.5 s. So in most runs she was somebody new: a second
+tracking id in a second sensor slot, the image's "New player detected!"
+(`join_in_progress`) with one dancer in the room, her old slot held beside
+her for the hold's second, and then player 1 bound to the new slot by the
+`near` rule. `/api/camera` read `"slots":[2,-1]`: player 1 on NUI index 2,
+nobody as player 2. It was never one body as two players (Players binds a
+skeleton to one player; `OneBodyIsNeverBothPlayers`). `BoxymanTest` failed 6
+of 7 runs before the rule and passes 9 of 9 with the one-body rule, which
+fired in 5 of those 9 (in the other 4 her anchor reached). With the rule
+taken out again it fails 4 of 4. With the `auto` wait change ("Fast time"
+above) taken out as well it fails 1 of 4, the same second slot; the other three
+runs had no second person. So the fault is People's and came with it; how
+often a run meets it depends on how old the anchor is when the first move
+starts, and in these few runs that was more often with the gate fixes in
+(not explained). Before People the tracker's id was the tracking id and a
+jump cost nothing.
+
+In a two-player mode with one body in view she is player 1 and player 2 is
+nobody; the game pauses and asks for the second player
+(`OnePersonBattleTest`, unchanged). One case is left where one body is in two
+slots: a body that reappears out of reach under a NEW tracker id while her
+old slot is still held (at most 1 s). Position and the tracker both say
+somebody new, as on main. In a two-player mode the new slot can be bound as
+player 2 for that second.
+
+**Not verified.** A dancer who goes undetected for more than 0.5 s while the
+tracker's id for her sits on somebody else, out of her reach, has given that
+body her identity (once in the recorded evening the id sat there for one
+frame). Live people: the replays carry the recorded tracker's ids,
+so the tracker change is shown by its tests only, and banner timing and HUD
+feel are from screenshots at fixed beats. Real-time replays vary between
+runs: song 3 player 1 scored 101,692, 101,194, 112,426 and 103,389 on the
+same bindings, and song 2 player 2 was rated 13, 13, 12 and 13 moves. Two people who cross with one of them
+undetected for more than about a second are told apart by position only.
+
 ### Tests
 
 - `tests/test_pose_tracker.py` (ctest `PoseTracker.Python`):
@@ -1057,11 +1305,36 @@ than `max_dist` between frames. Not measured: a live replay, and the score.
 - `native/tests/test_native_second_person.cpp` (`DC3_DTA_FLOW_TESTS`,
   `scripts/synthetic_kinect.py --jump-at` / `--second-person-from`):
   - `ReacquiredDancerTest`: at 20 s she reappears 0.6 m away under a new
-    id. She is on the new id in every later sample, re-bound at most 6 times,
-    and scored to the end;
+    id. She is on tracking id 101 in every later sample, re-bound at most 6
+    times (2 measured: the join and the jump; the chooser unbinding her every
+    frame is thousands) and scored to the end. Between the first gate's fixes and the
+    one-body rule the id assertion had been loosened to "bound, and not who
+    she was", because the synthetic sensor's one body was a new person each
+    of the four times it was stood up or put back; it is the original
+    assertion again;
   - `SecondPersonPerformTest`: a second person walks in at 20 s and never
     raises a hand. Player 2 is never bound, player 1 keeps her id, and the song
     is scored.
+  - `LostPlayerStandInTest` (P-18, real time, a pose session the test writes
+    with two people in a pose from the recording): the player is lost
+    20-24 s (a stand-in, then her own id back) and found 0.55 m aside under a
+    new tracker id at 30 s. Never paused, player 2 never bound, the stand-in
+    released and not bound again.
+- P-18 identity:
+  - `tests/test_pose_tracker.py` `OneTrackOneBody` (6) and `TheRecordedSession`
+    (song 2 and song 3's two-dancer stretches from
+    `native/tests/data/pose/two_dancers_hips.txt`), py and js. Main's tracker
+    fails 5 of them.
+  - `native/tests/test_native_pose_identity.cpp` (59): `PoseIdentityPeopleTest`
+    (31: 9 the moved picture and what is not one, 9 the one body alone, its
+    trial and what is not a jump), `PoseIdentityPlayersTest` (23, one of them
+    that one body is never both players), and the recorded stretches through
+    People (5: the picture never moves in them; the walk-past at 132.7 s).
+  - `native/tests/test_native_pose_socket.cpp` `PoseSensorIdentityTest` (6):
+    through `BuildSensorFrame`. `OneBodyThatJumpsIsStillOneSkeleton` is
+    `BoxymanTest`'s fault without the anchor's phase (a 0.6 m jump, out of
+    any anchor's reach): it fails with the rule taken out.
+    `PoseSensorHoldTest`'s newcomer case is now the strict-mode test.
 - **Sabotage, all caught:**
   - C++ hold: off, presence gate removed, bound removed, re-acquire check
     removed, inferred flag removed (5 of 5).
@@ -1072,6 +1345,17 @@ than `max_dist` between frames. Not measured: a live replay, and the score.
     dancer's scoring stops at the jump (112,944 → 147,696).
   - `TwoPlayer` / `OnePerson` / `NoCamera` battle tests still pass with the
     fix.
+  - P-18: tracker 11 of 11 (py and js); `PoseIdentity_Native.h` 54 of 54
+    against the unit tests alone (13 of them the one-body rule and its
+    trial), control clean; `GestureMgr_Native.cpp` 5 of 5
+    (`PoseSensorIdentityTest`). Flow, each rebuilt and run: the image not
+    told of a binding (`LostPlayerStandInTest`); the `auto` wait outlasting
+    the image's unbind (`ReacquiredDancerTest` pauses at the jump); the moved
+    picture off (`SecondPersonPerformTest`: 3 tracking ids, 4 re-binds); the
+    candidate rule removed (`ReacquiredDancerTest`: 1,316 re-binds); the
+    one-body rule off (`OneBodyThatJumpsIsStillOneSkeleton` fails, two
+    skeletons; `BoxymanTest` 4 of 4 failed, each with a second slot and
+    `join_in_progress`).
 
 ### Latency on the live path (L-4)
 
