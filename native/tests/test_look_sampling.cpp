@@ -8,8 +8,9 @@
 // sample per pixel. Enhanced (the default) uploads whole chains filtered 16x
 // anisotropically with a -1 LOD bias on world textures, keeps text and HUD at
 // the original's two levels and unbiased, and draws 2x2 supersampled on a
-// discrete GPU (not on an integrated one), text and HUD still sampled once
-// per output pixel.
+// discrete GPU when it presents to a window (not on an integrated one, not
+// headless unless MILO_RENDER_SCALE asks), text and HUD still sampled once per
+// output pixel.
 
 #include "test_helpers.h"
 
@@ -91,7 +92,7 @@ TEST_F(LookSamplingTest, RetailIsTheOriginalAndEnhancedDepartsAsDocumented) {
         EXPECT_EQ(Look().uiMipLevels, 2) << "text/HUD keep the original's two levels";
         EXPECT_TRUE(Look().cubeMipChain);
         EXPECT_EQ(Look().lodBias, -1.0f) << "world one level sharper (text/HUD exempt)";
-        EXPECT_EQ(Look().renderScale, 2.0f) << "2x2 supersampling on a discrete GPU";
+        EXPECT_EQ(Look().renderScale, 2.0f) << "2x2 supersampling on a discrete GPU (windowed)";
         // A handheld's iGPU spends ~2 ms on the 1x main pass; a render scale
         // multiplies that by its square, so it stays off there.
         EXPECT_EQ(Look().renderScaleIntegrated, 1.0f);
@@ -310,29 +311,111 @@ TEST_F(LookSamplingTest, RenderScaleBoxFiltersTheWholeFootprint) {
             << ": not the mean of its 4x4 footprint";
 }
 
-// The render scale follows the adapter class: GpuDeviceDesc::renderScale on a
-// discrete GPU, renderScaleIntegrated on anything else. On a discrete adapter
-// this catches the integrated value applied to it (or the class never read);
-// the converse needs an integrated adapter. Sabotage: applyRenderScale reading
-// renderScaleIntegrated only -- red here.
-TEST_F(LookSamplingTest, RenderScaleFollowsTheAdapterClass) {
+// The render scale rule (ResolveRenderScale, gfx/GpuDevice.h), as a table.
+// The DEFAULT is the adapter class's (renderScale discrete, renderScaleIntegrated
+// otherwise), applies only to a frame presented to a window -- a headless run
+// (gates, flow tests, readback-only captures) draws 1x -- and is capped so the
+// drawn frame fits 3840x2160, rounded down to a whole scale. An EXPLICIT scale
+// (MILO_RENDER_SCALE) is clamped to [1, 2] and wins everywhere, cap included.
+// Sabotages, each red here: the headless rule removed; the adapter classes
+// swapped; the cap removed; the cap applied to an explicit scale; the
+// whole-number rounding removed; the explicit clamp removed.
+TEST(LookRenderScale, TheRuleAsATable) {
+    struct Row {
+        float discrete, integrated, asked;
+        bool isDiscrete, windowed;
+        int w, h;
+        float want;
+        const char *why;
+    };
+    const Row rows[] = {
+        {2, 1, 0, true, false, 1280, 720, 1, "headless: the default does not apply"},
+        {2, 2, 0, false, false, 1280, 720, 1, "headless on any adapter"},
+        {2, 1, 0, true, true, 1280, 720, 2, "windowed 720p frame, discrete: 2560x1440"},
+        {2, 1, 0, false, true, 1280, 720, 1, "windowed, integrated: renderScaleIntegrated"},
+        {1, 2, 0, false, true, 1280, 720, 2, "the integrated default is the integrated one"},
+        {2, 1, 0, true, true, 1920, 1080, 2, "1080p frame: 3840x2160, at the cap"},
+        {2, 1, 0, true, true, 2560, 1440, 1, "1440p frame: the cap is 1.5, whole scales only"},
+        {2, 1, 0, true, true, 3840, 2160, 1, "4K frame: no supersampling past 3840x2160"},
+        {2, 1, 0, true, true, 2560, 1080, 1, "ultrawide 2560x1080: the width caps it (1.5)"},
+        {3, 1, 0, true, true, 640, 360, 2, "a default above 2 clamps to 2"},
+        {1, 1, 0, true, true, 1280, 720, 1, "retail / native: off"},
+        {2, 1, 1.5f, true, false, 1280, 720, 1.5f, "asked for: headless too, fractional kept"},
+        {1, 1, 2, false, false, 1280, 720, 2, "asked for: any adapter, any profile default"},
+        {2, 1, 2, true, true, 3840, 2160, 2, "asked for: may exceed the cap, up to 2"},
+        {2, 1, 1, true, true, 1280, 720, 1, "asked for 1: the default is turned off"},
+        {2, 1, 3, true, true, 1280, 720, 2, "asked above 2: clamped to 2"},
+        {2, 1, 0.5f, true, true, 1280, 720, 1, "asked below 1: clamped to 1"},
+    };
+    for (const Row &r : rows) {
+        GpuDeviceDesc d;
+        d.renderScale = r.discrete;
+        d.renderScaleIntegrated = r.integrated;
+        d.renderScaleExplicit = r.asked;
+        EXPECT_FLOAT_EQ(ResolveRenderScale(d, r.isDiscrete, r.windowed, r.w, r.h), r.want)
+            << r.why;
+    }
+    // The cap holds wherever the default applies: a scaled frame never
+    // exceeds 3840x2160 drawn, the scale is a whole number >= 1, and an output
+    // already past the cap is simply not supersampled.
+    GpuDeviceDesc d;
+    d.renderScale = 2.0f;
+    for (int h = 360; h <= 2880; h += 36) {
+        const int w = h * 16 / 9;
+        const float s = ResolveRenderScale(d, true, true, w, h);
+        if (s > 1.0f) {
+            EXPECT_LE(s * w, 3840.0f + 0.5f) << w << "x" << h;
+            EXPECT_LE(s * h, 2160.0f + 0.5f) << w << "x" << h;
+        }
+        EXPECT_EQ(s, (float)(int)s) << w << "x" << h;
+        EXPECT_GE(s, 1.0f);
+        EXPECT_EQ(s, h <= 1080 ? 2.0f : 1.0f) << w << "x" << h;
+    }
+}
+
+// MILO_RENDER_SCALE's parse (milo::ParseRenderScaleKnob): unset/empty = 0 (the
+// profile default), a number clamps to [1, 2], anything else is reported bad
+// and ignored. Sabotage: the [1, 2] clamp removed, or "2x" accepted -- red.
+TEST(LookRenderScale, TheKnobParses) {
+    struct Row { const char *v; float want; bool bad; };
+    const Row rows[] = {
+        {nullptr, 0, false}, {"", 0, false}, {"1", 1, false}, {"1.5", 1.5f, false},
+        {"2", 2, false}, {"4", 2, false}, {"0.5", 1, false}, {"0", 0, true},
+        {"-1", 0, true}, {"abc", 0, true}, {"2x", 0, true}, {"nan", 0, true},
+    };
+    for (const Row &r : rows) {
+        bool bad = !r.bad;
+        EXPECT_FLOAT_EQ(milo::ParseRenderScaleKnob(r.v, &bad), r.want) << (r.v ? r.v : "(unset)");
+        EXPECT_EQ(bad, r.bad) << (r.v ? r.v : "(unset)");
+    }
+    // A profile override does not carry an explicit scale: the knob is the
+    // process's, read once with DC3_LOOK.
+    ScopedLookOverride enhanced(LookProfile::Enhanced);
+    EXPECT_EQ(Look().renderScaleExplicit, 0.0f);
+}
+
+// GpuDevice::Init applies the rule: a headless device given a render-scale
+// DEFAULT (both adapter classes, so whichever this box has) draws 1x; asked
+// explicitly it draws 2x and reads back at its output size. Sabotage:
+// applyRenderScale reading desc.renderScale directly (the old rule) -- red on
+// the first device; ignoring renderScaleExplicit -- red on the second.
+TEST_F(LookSamplingTest, AHeadlessDeviceDrawsOneXUnlessAsked) {
     if (IsSkipped()) return;
     if (!HaveGpu()) GTEST_SKIP() << "no GPU device";
-    for (int discreteScaled = 0; discreteScaled < 2; discreteScaled++) {
+    for (int asked = 0; asked < 2; asked++) {
         GpuDevice d;
         GpuDeviceDesc desc;
         desc.headless = true;
         desc.width = 64;
         desc.height = 36;
-        desc.renderScale = discreteScaled ? 2.0f : 1.0f;
-        desc.renderScaleIntegrated = discreteScaled ? 1.0f : 2.0f;
+        desc.renderScale = 2.0f;
+        desc.renderScaleIntegrated = 2.0f;
+        desc.renderScaleExplicit = asked ? 2.0f : 0.0f;
         if (!d.Init(desc)) GTEST_SKIP() << "no second headless device";
-        const bool expectScaled = discreteScaled ? d.IsDiscreteGpu() : !d.IsDiscreteGpu();
-        EXPECT_EQ(d.RenderScaled(), expectScaled)
-            << (d.IsDiscreteGpu() ? "discrete" : "non-discrete") << " adapter, renderScale "
-            << desc.renderScale << ", renderScaleIntegrated " << desc.renderScaleIntegrated;
+        EXPECT_EQ(d.RenderScaled(), asked != 0)
+            << (asked ? "asked for 2x" : "a default only") << " on a headless device";
         EXPECT_EQ(d.OutputWidth(), 64);
-        EXPECT_EQ(d.WindowWidth(), expectScaled ? 128 : 64);
+        EXPECT_EQ(d.WindowWidth(), asked ? 128 : 64);
         d.Shutdown();
     }
 }

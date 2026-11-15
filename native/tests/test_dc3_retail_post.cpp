@@ -1985,8 +1985,7 @@ TEST_F(DC3RetailPostGpuTest, RenderScaledFrameKeepsTheOutputPixelBloom) {
     desc.headless = true;
     desc.width = kW;
     desc.height = kH;
-    desc.renderScale = 2.0f;            // whichever adapter class this is
-    desc.renderScaleIntegrated = 2.0f;
+    desc.renderScaleExplicit = 2.0f;    // asked for: a headless default is 1x
     if (!scaled.Init(desc)) GTEST_SKIP() << "no second headless device";
     ASSERT_TRUE(scaled.RenderScaled());
     ASSERT_EQ(scaled.WindowWidth(), 2 * kW);
