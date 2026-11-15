@@ -84,6 +84,9 @@ TEST_F(LookSamplingTest, RetailIsTheOriginalAndEnhancedDepartsAsDocumented) {
         EXPECT_TRUE(Look().cubeMipChain) << "DxCubeTex::Sync: numMips = mNumMips + 1";
         EXPECT_EQ(Look().renderScale, 1.0f) << "one sample per pixel";
         EXPECT_EQ(Look().renderScaleIntegrated, 1.0f);
+        EXPECT_FALSE(Look().outputFollowsTarget)
+            << "the original draws a 1280x720 frame, scaled to the display";
+        EXPECT_EQ(Look().outputMaxRowsIntegrated, 0);
     }
     {
         ScopedLookOverride enhanced(LookProfile::Enhanced);
@@ -96,6 +99,8 @@ TEST_F(LookSamplingTest, RetailIsTheOriginalAndEnhancedDepartsAsDocumented) {
         // A handheld's iGPU spends ~2 ms on the 1x main pass; a render scale
         // multiplies that by its square, so it stays off there.
         EXPECT_EQ(Look().renderScaleIntegrated, 1.0f);
+        EXPECT_TRUE(Look().outputFollowsTarget) << "the frame at the window's resolution";
+        EXPECT_EQ(Look().outputMaxRowsIntegrated, 1080) << "a handheld draws at most 1080 rows";
     }
 }
 
@@ -532,4 +537,105 @@ TEST_F(LookSamplingTest, AFollowingDeviceDrawsItsTargetsSize) {
         EXPECT_FLOAT_EQ(d.RenderScaleFor(512), 1.0f) << why << ": a 512 render target";
         d.Shutdown();
     }
+}
+
+// The output's row cap (OutputRowCap / ResolveFrameSizes, gfx/GpuDevice.h).
+// Enhanced on a NON-discrete adapter presenting to a window holds the output
+// to 1080 rows at its 16:9 shape (a handheld's 2560x1600 panel gets a
+// 1920x1080 frame, scaled up into the window by the present path); discrete
+// adapters and headless frames are not capped by default. MILO_OUTPUT_MAX_ROWS
+// (outputMaxRowsExplicit) overrides it both ways on any adapter, headless
+// included: 0 = no cap, 720 / 1440 = that many rows. The render scale is then
+// resolved from the capped output, under the 3840x2160 drawn cap as before.
+// Sabotages, each red here: the cap applied on a discrete adapter; the cap
+// ignored on an integrated one; the knob ignored, or its 0 read as "unset";
+// the knob limited to integrated adapters; the capped width not rescaled to
+// the shape; the render scale resolved before the cap.
+TEST(OutputResolution, AnIntegratedAdapterIsCappedAt1080Rows) {
+    ScopedLookOverride enhanced(LookProfile::Enhanced);
+    struct Row {
+        bool discrete, windowed;
+        int knob;
+        float asked;
+        int targetW, targetH;
+        int outW, outH;
+        float scale;
+        int drawnW, drawnH;
+        const char *why;
+    };
+    const Row rows[] = {
+        // Discrete: unchanged (no cap).
+        {true, true, -1, 0, 1920, 1080, 1920, 1080, 2, 3840, 2160, "discrete 1080p window: 2x"},
+        {true, true, -1, 0, 2560, 1440, 2560, 1440, 1, 2560, 1440, "discrete 1440p window: 1x"},
+        {true, true, -1, 0, 3840, 2160, 3840, 2160, 1, 3840, 2160, "discrete 4K window: 1x"},
+        // Integrated: at most 1080 rows.
+        {false, true, -1, 0, 1280, 720, 1280, 720, 1, 1280, 720, "integrated 720p window: under the cap"},
+        {false, true, -1, 0, 1920, 1080, 1920, 1080, 1, 1920, 1080, "integrated 1080p window: at the cap"},
+        {false, true, -1, 0, 2560, 1600, 1920, 1080, 1, 1920, 1080, "integrated 2560x1600 panel: 1080 rows"},
+        {false, true, -1, 0, 3840, 2160, 1920, 1080, 1, 1920, 1080, "integrated 4K window: 1080 rows"},
+        {false, false, -1, 0, 2560, 1440, 2560, 1440, 1, 2560, 1440, "integrated headless: not capped"},
+        {false, true, -1, 2, 2560, 1600, 1920, 1080, 2, 3840, 2160, "integrated, asked for 2x: 1080 rows drawn 2x"},
+        // The knob, both directions, any adapter.
+        {false, true, 0, 0, 2560, 1600, 2560, 1440, 1, 2560, 1440, "knob 0 on the handheld: no cap"},
+        {false, true, 1440, 0, 2560, 1600, 2560, 1440, 1, 2560, 1440, "knob 1440 on the handheld"},
+        {false, true, 720, 0, 2560, 1600, 1280, 720, 1, 1280, 720, "knob 720 on the handheld"},
+        {true, true, 720, 0, 3840, 2160, 1280, 720, 2, 2560, 1440, "knob 720 on a discrete 4K window: 2x"},
+        {true, true, 1440, 0, 3840, 2160, 2560, 1440, 1, 2560, 1440, "knob 1440 on a discrete 4K window"},
+        {true, true, 0, 0, 1920, 1080, 1920, 1080, 2, 3840, 2160, "knob 0 on a discrete 1080p window"},
+        {true, false, 720, 0, 1920, 1080, 1280, 720, 1, 1280, 720, "knob 720 headless"},
+        {true, true, 1440, 0, 1920, 1080, 1920, 1080, 2, 3840, 2160, "a cap above the window: no effect"},
+        // The 3840x2160 drawn cap is unchanged by the row cap.
+        {true, true, 2160, 0, 3840, 2160, 3840, 2160, 1, 3840, 2160, "knob 2160 at 4K: still 1x"},
+        {true, true, 1080, 0, 3840, 2160, 1920, 1080, 2, 3840, 2160, "knob 1080 at 4K: 2x, at the cap"},
+        {true, true, 900, 0, 3840, 2160, 1600, 900, 2, 3200, 1800, "knob 900 at 4K: 1600x900, 2x"},
+    };
+    for (const Row &r : rows) {
+        GpuDeviceDesc d;
+        d.renderScale = Look().renderScale;
+        d.renderScaleIntegrated = Look().renderScaleIntegrated;
+        d.renderScaleExplicit = r.asked;
+        d.outputFollowsTarget = true;
+        d.logicalWidth = 1280;
+        d.logicalHeight = 720;
+        d.outputMaxRowsIntegrated = Look().outputMaxRowsIntegrated;
+        d.outputMaxRowsExplicit = r.knob;
+        const FrameSizes s = ResolveFrameSizes(d, r.discrete, r.windowed, r.targetW, r.targetH);
+        EXPECT_EQ(s.outputW, r.outW) << r.why;
+        EXPECT_EQ(s.outputH, r.outH) << r.why;
+        EXPECT_FLOAT_EQ(s.scale, r.scale) << r.why;
+        EXPECT_EQ(s.drawnW, r.drawnW) << r.why;
+        EXPECT_EQ(s.drawnH, r.drawnH) << r.why;
+    }
+    // Not following (Retail, rb3, rb3-xenon): no row cap applies to the fixed
+    // frame, knob or not.
+    GpuDeviceDesc d;
+    d.frameWidth = 1280;
+    d.frameHeight = 720;
+    d.outputMaxRowsIntegrated = 1080;
+    d.outputMaxRowsExplicit = 360;
+    const FrameSizes s = ResolveFrameSizes(d, false, true, 2560, 1600);
+    EXPECT_EQ(s.outputW, 1280);
+    EXPECT_EQ(s.outputH, 720);
+}
+
+// MILO_OUTPUT_MAX_ROWS's parse (milo::ParseOutputRowsKnob): unset/empty = -1
+// (the profile default), a whole number >= 0 is taken as is (0 = no cap),
+// anything else is reported bad and ignored. Sabotage: "0" read as unset, or
+// "1080p" accepted -- red.
+TEST(OutputResolution, TheRowsKnobParses) {
+    struct Row { const char *v; int want; bool bad; };
+    const Row rows[] = {
+        {nullptr, -1, false}, {"", -1, false}, {"0", 0, false}, {"720", 720, false},
+        {"1080", 1080, false}, {"1440", 1440, false}, {"-1", -1, true}, {"1080p", -1, true},
+        {"abc", -1, true}, {"1.5", -1, true}, {"99999", -1, true},
+    };
+    for (const Row &r : rows) {
+        bool bad = !r.bad;
+        EXPECT_EQ(milo::ParseOutputRowsKnob(r.v, &bad), r.want) << (r.v ? r.v : "(unset)");
+        EXPECT_EQ(bad, r.bad) << (r.v ? r.v : "(unset)");
+    }
+    // A profile override does not carry the knob: it is the process's, read
+    // once with DC3_LOOK.
+    ScopedLookOverride enhanced(LookProfile::Enhanced);
+    EXPECT_EQ(Look().outputMaxRowsExplicit, -1);
 }
