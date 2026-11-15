@@ -26,7 +26,9 @@
 
 #include "test_helpers.h"
 
+#include "gfx/GpuDevice.h"
 #include "gfx/PipelineCount.h"
+#include "gfx/PipelineManager.h"
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
 #include "platform/Rnd_Wgpu.h"
@@ -39,6 +41,7 @@
 
 #include <chrono>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -131,4 +134,178 @@ TEST_F(PipelineWarmTest, ALoadedDirDrawsWithNoPipelineCreate) {
     delete text;
     delete star;
     delete fonts;
+}
+
+// ---- the hand-managed lifetime of an in-flight warm -------------------------
+//
+// PipelineManager::PendingWarm is owned by mWarmPending until its entry is
+// removed; ReleasePending then deletes it if its callback has run (done), or
+// marks it abandoned and the callback deletes it when it runs. Callbacks run
+// only in this thread's ProcessEvents / WaitAny (AllowProcessEvents). Each
+// case below ends with PipelineManager::LivePendingWarms() back where it
+// started: an entry deleted twice or never is a count that does not return
+// (and, under ASan, a use-after-free or a leak report). Each runs on a
+// headless device of its own, so the device and the manager can be destroyed
+// in the orders the case is about without touching the engine's.
+//
+// Sabotage, one at a time (2026-11-15), each red: ReleasePending deleting an
+// unfinished entry -> the removal-first case finds 0 of its 4 entries left
+// while their callbacks still hold them; the callback ignoring `abandoned` ->
+// 4 abandoned entries never deleted (removal-first, and after the device
+// loss); DrainWarms not waiting -> Terminate leaves 8 entries behind.
+
+namespace {
+
+class PipelineWarmLifetimeTest : public EngineTestFixture {
+protected:
+    bool InitOwn() {
+        if (!gWgpuRnd || !gWgpuRnd->Gpu().IsReady()) return false;  // MILO_NORENDER / no adapter
+        GpuDeviceDesc desc;
+        desc.headless = true;
+        desc.width = 64;
+        desc.height = 64;
+        if (!mGpu.Init(desc)) return false;
+        mGpuUp = true;
+        mGpu.AcquireHeadlessFrame();  // the headless surface format
+        mPm = new PipelineManager();
+        mPm->Init(&mGpu);
+        mBase = PipelineManager::LivePendingWarms();
+        return true;
+    }
+    void TearDown() override {
+        if (mPm) {
+            mPm->Terminate();
+            delete mPm;
+        }
+        if (mGpuUp) mGpu.Shutdown();
+        EngineTestFixture::TearDown();
+    }
+    // 18 distinct keys: every blend, with and without alpha write.
+    PipelineKey Key(int i) {
+        PipelineKey key{};
+        key.targetFormat = mGpu.SurfaceFormat();
+        key.sampleCount = 1;
+        key.hasDepth = false;
+        key.blend = (WgpuBlend)(i % 9);
+        key.alphaWrite = (i / 9) % 2 != 0;
+        return key;
+    }
+    int Live() const { return PipelineManager::LivePendingWarms() - mBase; }
+    // Poll until nothing is outstanding (bounded).
+    bool PollOut() {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+        while (mPm->WarmsOutstanding() > 0) {
+            if (std::chrono::steady_clock::now() > deadline) return false;
+            mPm->PollWarms();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return true;
+    }
+    // Run callbacks with no manager in the way, until `live` (bounded).
+    bool ProcessUntil(int live) {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+        while (Live() != live) {
+            if (std::chrono::steady_clock::now() > deadline) return false;
+            mGpu.Instance().ProcessEvents();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return true;
+    }
+    GpuDevice mGpu;
+    bool mGpuUp = false;
+    PipelineManager *mPm = nullptr;
+    int mBase = 0;
+};
+
+} // namespace
+
+// Callback before removal. PollWarms issues, a later PollWarms' ProcessEvents
+// runs the callback (done), and that same PollWarms takes the result in and
+// deletes the entry; a draw on a key still in flight waits in GetPipeline
+// (WaitAny runs the callback) and then deletes it. Both pipelines land in the
+// cache, and the draws after them create nothing.
+TEST_F(PipelineWarmLifetimeTest, ACallbackThatRunsFirstLeavesTheEntryToItsOwner) {
+    if (IsSkipped()) return;
+    if (!InitOwn()) GTEST_SKIP() << "no GPU device (MILO_NORENDER or no adapter)";
+    ASSERT_TRUE(mPm->WarmAsync(Key(0)));
+    ASSERT_TRUE(mPm->WarmAsync(Key(1)));
+    mPm->PollWarms();  // issues both; their callbacks cannot have run yet
+    EXPECT_EQ(Live(), 2);
+    // Key 1 by a draw: waits, then the draw deletes the entry.
+    const uint64_t c0 = GpuPipelineCreateCount();
+    EXPECT_TRUE(mPm->GetPipeline(Key(1)));
+    EXPECT_EQ(mPm->GetWarmStats().waited, 1u);
+    EXPECT_EQ(Live(), 1);
+    // Key 0 by the poll.
+    ASSERT_TRUE(PollOut()) << "a warm never finished";
+    EXPECT_EQ(Live(), 0);
+    EXPECT_EQ(mPm->GetWarmStats().finished, 2u);
+    EXPECT_EQ(mPm->GetWarmStats().failed, 0u);
+    EXPECT_TRUE(mPm->GetPipeline(Key(0)));
+    EXPECT_EQ(GpuPipelineCreateCount(), c0) << "a draw compiled a warmed key";
+}
+
+// Removal before callback. The manager goes while its warms are in flight
+// (the destructor, as a web drain or a web draw that takes its key early
+// does: neither can wait). Its entries are not deleted then -- their
+// callbacks still hold them -- but marked abandoned, and each callback
+// deletes its own when it runs.
+TEST_F(PipelineWarmLifetimeTest, AnEntryRemovedFirstIsDeletedByItsCallback) {
+    if (IsSkipped()) return;
+    if (!InitOwn()) GTEST_SKIP() << "no GPU device (MILO_NORENDER or no adapter)";
+    for (int i = 0; i < 4; i++) ASSERT_TRUE(mPm->WarmAsync(Key(i)));
+    mPm->PollWarms();
+    ASSERT_EQ(Live(), 4);
+    delete mPm;  // no Terminate: nothing waits
+    mPm = nullptr;
+    EXPECT_EQ(Live(), 4) << "the destructor deleted an entry its callback still holds";
+    ASSERT_TRUE(ProcessUntil(0)) << "abandoned entries left: " << Live();
+    for (int i = 0; i < 20; i++) mGpu.Instance().ProcessEvents();
+    EXPECT_EQ(Live(), 0);
+}
+
+// Shutdown with warms outstanding: Terminate (WgpuRnd's shutdown, before the
+// device goes) waits out every one in flight natively, deletes them, and
+// drops the ones not yet issued.
+TEST_F(PipelineWarmLifetimeTest, TerminateWithWarmsOutstandingDeletesEveryEntry) {
+    if (IsSkipped()) return;
+    if (!InitOwn()) GTEST_SKIP() << "no GPU device (MILO_NORENDER or no adapter)";
+    for (int i = 0; i < 12; i++) ASSERT_TRUE(mPm->WarmAsync(Key(i)));
+    mPm->PollWarms();  // issues kWarmIssuePerFrame, the rest stay queued
+    ASSERT_EQ(Live(), PipelineManager::kWarmIssuePerFrame);
+    ASSERT_GT(mPm->WarmsOutstanding(), (size_t)PipelineManager::kWarmIssuePerFrame);
+    mPm->Terminate();
+    EXPECT_EQ(Live(), 0);
+    EXPECT_EQ(mPm->WarmsOutstanding(), 0u);
+    delete mPm;
+    mPm = nullptr;
+    for (int i = 0; i < 20; i++) mGpu.Instance().ProcessEvents();
+    EXPECT_EQ(Live(), 0) << "entries left after Terminate";
+}
+
+// Device loss with warms outstanding. The device is destroyed under them;
+// their callbacks still run (failed or not), the frames' PollWarms -- which
+// WgpuRnd::BeginDrawing still calls on a lost device -- takes them in, and
+// Terminate then has nothing left. A manager deleted after the loss with its
+// warms in flight leaves them to their callbacks as above.
+TEST_F(PipelineWarmLifetimeTest, ADeviceLostUnderItsWarmsLeavesNoEntryBehind) {
+    if (IsSkipped()) return;
+    if (!InitOwn()) GTEST_SKIP() << "no GPU device (MILO_NORENDER or no adapter)";
+    for (int i = 0; i < 6; i++) ASSERT_TRUE(mPm->WarmAsync(Key(i)));
+    mPm->PollWarms();
+    ASSERT_EQ(Live(), 6);
+    mGpu.Device().Destroy();
+    ASSERT_TRUE(PollOut()) << "warms on a destroyed device never completed";
+    EXPECT_EQ(Live(), 0);
+    const PipelineManager::WarmStats &s = mPm->GetWarmStats();
+    printf("[PipelineWarmLifetime] after the device was destroyed: %llu finished, %llu failed\n",
+           (unsigned long long)s.finished, (unsigned long long)s.failed);
+    EXPECT_EQ(s.finished + s.failed, 6u);
+    // Issued after the loss, then the manager deleted before the callbacks.
+    for (int i = 6; i < 10; i++) ASSERT_TRUE(mPm->WarmAsync(Key(i)));
+    mPm->PollWarms();
+    EXPECT_EQ(Live(), 4);
+    delete mPm;
+    mPm = nullptr;
+    ASSERT_TRUE(ProcessUntil(0)) << "abandoned entries left after the loss: " << Live();
 }
