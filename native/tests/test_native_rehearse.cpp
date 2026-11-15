@@ -258,7 +258,12 @@ EngineRun RunEngine(const std::string &drive, const std::string &extraEnv = "") 
        << EngineHttpPortShellEnv(dir) << " MILO_MAX_FRAMES=0"
        << " DC3_CACHE_DIR=" << dir << "/cache DC3_SAVE_DIR=" << dir << "/saves"
        << " MILO_INPUT_SCRIPT=" << script << extraEnv
-       << " timeout 420 ./dc3-native > " << log << " 2>&1 & echo $! > " << log << ".pid ); "
+       // Line-buffered stdout: the engine's printf log (stdout) and its
+       // counters (stderr) share the log file, and a check that reads one
+       // against the other (ExpectNoPipelineCreatedAfterLoad: the [GPUCOUNT]
+       // line before "Screen 'game_screen' Enter") needs them in the order
+       // they were written. A block-buffered stdout lands kilobytes late.
+       << " timeout 420 stdbuf -oL -eL ./dc3-native > " << log << " 2>&1 & echo $! > " << log << ".pid ); "
        // The engine binds its own port and reports it (engine_http_port.h).
        << "pid=$(cat " << log << ".pid); " << EngineHttpApiShell(dir, "pid", 180)
        << "shots=" << r.shotDir << "; "
@@ -470,60 +475,96 @@ int DriverFrame(const std::string &driver, const char *tag) {
 // No render pipeline is compiled once the load is over (dc3 PLAN H-101, engine
 // doc section 39): DirLoader::Cleanup's NativeWarmLoadedDir compiled, or
 // queued, every pipeline the loaded venue, song and HUD can draw with, so
-// from game_screen on the [GPUCOUNT] pipelineCreates count stays where the
-// load left it. Non-vacuous: some pipelines were warmed, and the window is
-// several hundred drawn frames of the venue with its crowds shown and hidden.
-// Runs with MILO_PIPELINE_CACHE=0 (MILO_TEST_ENV), so the answer does not
-// depend on what the box has cached. The full-song version is
-// GameplayTelemetryTest.NoPipelineCompiledAfterGameplayStarts
+// from game_screen on no draw creates one: [GPUCOUNT] pipelineCreates minus
+// pipelineLoadCreates (the creates made inside a load's own warm) stays where
+// the load left it.
+//
+// The window starts at the last [GPUCOUNT] line before the engine's own
+// "Screen 'game_screen' Enter" log line, in output order, not at the frame the
+// driver first polled game_screen: the driver polls over HTTP and lags the
+// transition by up to ~100 frames, which is exactly where gameplay's first
+// draws are. Measured 2026-11-15: with the driver's frame as the anchor a
+// draw-time create (RndTexBlender's base-map rect, a key the warm did not then
+// derive) escaped in four gate runs of five and failed the fifth.
+//
+// The subtraction is needed because the venue's last dir can finish loading
+// a few frames after game_screen Enter, and its own warm is load cost, not a
+// draw's. Non-vacuous: some pipelines were warmed, and the window is several
+// hundred drawn frames of the venue with its crowds shown and hidden. Runs
+// with MILO_PIPELINE_CACHE=0 (MILO_TEST_ENV), so the answer does not depend
+// on what the box has cached. The full-song version is part of
+// GameplayTelemetryTest.WorldPipelineConvergesDuringGameplay
 // (DC3_GAMEPLAY_TESTS, off by default; this is the default gate's guard).
-// Sabotage-checked: PipelineManager::WarmAsync refusing one key (warmed
-// 133 -> 132 / 130 -> 129) fails both venues ("pipelines compiled after the
-// load ... frame 4110: +1"); dropping a key that venue does not draw in this
-// window (the rink's disco-ball flare rect) passes, as it should.
+// Sabotage-checked 2026-11-15, three ways: (1) the RndTexBlender rect warm
+// removed fails the alley ("frame 3480: +1 ... vs:vs_2d/fs:fs_2d") in three
+// runs of three; (2) PipelineManager::WarmAsync refusing the one skinned
+// key both venues first draw on gameplay's second counter line (MainSkinned
+// blend 4 z 2 cull 1, 4 samples, no alpha write) fails both, at Enter + 10
+// frames, inside the lag the driver's frame used to leave unchecked;
+// (3) refusing a key either venue never draws in this window passes.
 void ExpectNoPipelineCreatedAfterLoad(const char *song, const EngineRun &run) {
-    const int gameFrame = DriverFrame(run.driver, "gameframe");
     const int endFrame = DriverFrame(run.driver, "endframe");
-    ASSERT_GT(gameFrame, 0) << song << ": no frame for game_screen\n" << run.driver;
-    ASSERT_GT(endFrame, gameFrame + 300)
-        << song << ": too few frames after game_screen (" << gameFrame << ".." << endFrame << ")";
-    struct Count { int frame; unsigned long long creates, warms; };
+    // creates: every pipeline created; loads: of them, inside a load's warm.
+    // A draw-time create is creates - loads.
+    struct Count { int frame; unsigned long long creates, loads, warms; };
     std::vector<Count> counts;
+    int anchor = -1;  // index in counts of the last line before game_screen Enter
+    bool entered = false;
     std::istringstream in(run.output);
     std::string line;
     while (std::getline(in, line)) {
+        if (!entered && line.find("Screen 'game_screen' Enter") != std::string::npos) {
+            entered = true;
+            anchor = (int)counts.size() - 1;
+        }
         const size_t at = line.find("[GPUCOUNT] frame=");
         if (at == std::string::npos) continue;
         const size_t cr = line.find(" pipelineCreates=", at);
+        const size_t lc = line.find(" pipelineLoadCreates=", at);
         const size_t wa = line.find(" pipelineWarms=", at);
-        if (cr == std::string::npos || wa == std::string::npos) continue;
+        if (cr == std::string::npos || lc == std::string::npos || wa == std::string::npos) continue;
         counts.push_back({atoi(line.c_str() + at + 17),
                           strtoull(line.c_str() + cr + 17, nullptr, 10),
+                          strtoull(line.c_str() + lc + 21, nullptr, 10),
                           strtoull(line.c_str() + wa + 15, nullptr, 10)});
     }
     ASSERT_FALSE(counts.empty()) << song << ": no [GPUCOUNT] line (MILO_GPU_COUNTERS not honoured?)";
-    const Count *atGame = nullptr;
-    for (const Count &c : counts)
-        if (c.frame <= gameFrame) atGame = &c;
-    ASSERT_NE(atGame, nullptr) << song << ": no [GPUCOUNT] line before game_screen (frame "
-                               << gameFrame << ")";
+    ASSERT_TRUE(entered) << song << ": no \"Screen 'game_screen' Enter\" line in the engine log";
+    ASSERT_GE(anchor, 0) << song << ": no [GPUCOUNT] line before game_screen Enter";
+    const Count *atGame = &counts[anchor];
+    ASSERT_GT(endFrame, atGame->frame + 300)
+        << song << ": too few frames after game_screen (" << atGame->frame << ".." << endFrame << ")";
     const Count *atEnd = nullptr;
     for (const Count &c : counts)
         if (c.frame <= endFrame) atEnd = &c;
     ASSERT_GT(atEnd->frame, atGame->frame + 300) << song << ": counters stopped at frame " << atEnd->frame;
     EXPECT_GT(atEnd->warms, 0u) << song << ": no pipeline was warmed at load (vacuous)";
     std::string where;
-    unsigned long long prev = atGame->creates;
+    unsigned long long prev = atGame->creates - atGame->loads;
     for (const Count &c : counts) {
         if (c.frame <= atGame->frame || c.frame > atEnd->frame) continue;
-        if (c.creates != prev)
-            where += " frame " + std::to_string(c.frame) + ": +" + std::to_string(c.creates - prev) + ";";
-        prev = c.creates;
+        const unsigned long long drawn = c.creates - c.loads;
+        if (drawn != prev)
+            where += " frame " + std::to_string(c.frame) + ": +" + std::to_string(drawn - prev) + ";";
+        prev = drawn;
     }
-    printf("%s: pipelineCreates %llu at game_screen (frame %d), %llu at frame %d; %llu warmed\n", song,
-           atGame->creates, atGame->frame, atEnd->creates, atEnd->frame, atEnd->warms);
-    EXPECT_EQ(atEnd->creates, atGame->creates)
-        << song << ": pipelines compiled after the load (game_screen at frame " << gameFrame << "):" << where;
+    // What was compiled there, by frame and label ([GPUPIPE], one line a frame
+    // that creates any; a "load:" label is a load's warm, "wait:warm" a draw
+    // waiting for its warm).
+    std::istringstream pipes(run.output);
+    while (std::getline(pipes, line)) {
+        const size_t at = line.find("[GPUPIPE] frame=");
+        if (at == std::string::npos) continue;
+        const int f = atoi(line.c_str() + at + 16);
+        if (f > atGame->frame && f <= atEnd->frame) where += "\n  " + line.substr(at);
+    }
+    printf("%s: pipelineCreates %llu before game_screen Enter (frame %d), %llu at frame %d (%llu of "
+           "them by a load's warm after it); %llu warmed\n",
+           song, atGame->creates, atGame->frame, atEnd->creates, atEnd->frame, atEnd->loads - atGame->loads,
+           atEnd->warms);
+    EXPECT_EQ(atEnd->creates - atEnd->loads, atGame->creates - atGame->loads)
+        << song << ": pipelines compiled at a draw after the load (counted from frame " << atGame->frame
+        << ", the last [GPUCOUNT] before game_screen Enter):" << where;
 }
 
 class PerformCrowdTest : public ::testing::Test {

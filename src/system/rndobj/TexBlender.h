@@ -30,6 +30,12 @@ public:
     OBJ_MEM_OVERLOAD(0x1B);
     NEW_OBJ(RndTexBlender)
     static void Init() { REGISTER_OBJ_FACTORY(RndTexBlender) }
+#ifdef HX_NATIVE
+    // The native load-time pipeline warm (native/src/platform/PipelineWarm.cpp):
+    // DrawShowing draws the base map as a rect into the output texture.
+    RndTex *BaseMap() const { return mBaseMap; }
+    RndTex *OutputTextures() const { return mOutputTextures; }
+#endif
 
 protected:
     RndTexBlender();

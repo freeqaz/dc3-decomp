@@ -47,6 +47,7 @@
 // call it.
 
 #include "obj/Data.h"
+#include "gfx/PipelineCount.h"
 #include "obj/DataUtl.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
@@ -64,12 +65,14 @@
 #include "rndobj/PropKeys.h"
 #include "rndobj/Ribbon.h"
 #include "rndobj/ScreenMask.h"
+#include "rndobj/TexBlender.h"
 #include "rndobj/Text.h"
 #include "ui/PanelDir.h"
 #include "world/Reflection.h"
 
 #include "platform/MeshPipelineKey.h"
 #include "platform/Part_Wgpu.h"
+#include "platform/TexGpu.h"
 #include "platform/Rnd_Wgpu.h"
 
 #include <chrono>
@@ -234,6 +237,19 @@ private:
         const std::vector<MatKeyVariant> v = VariantsOf(mat, a->second);
         return WarmMeshPipelines(mesh, ctx, v.data(), (int)v.size());
     }
+    // RndTexBlender::DrawShowing draws its base map as a rect into its output
+    // texture (rendered with no z) with the shader manager's work material
+    // after SetupMaterial: blend Src, the base map as its texture. Wherever
+    // the blender is visited, that is the pass it draws in. This warms that
+    // rect only (DrawBlendList's controller meshes are drawn as meshes).
+    // Found by PerformCrowdTest: an outfit's normal-map blender
+    // (lilt04_jacket_norm) compiled this rect on gameplay's first frames.
+    int QueueTexBlender(RndTexBlender *b) {
+        if (!b->BaseMap() || !b->OutputTextures()) return 0;
+        MeshPassContext ctx = gWgpuRnd->TexturePassContext(false);
+        ctx.targetFormat = ChooseRenderTargetFormat(b->OutputTextures());
+        return gWgpuRnd->WarmRectPipelines((WgpuBlend)RndMat::kBlendSrc, true, ctx);
+    }
     // What draws a mesh that is in no dir (a ribbon's own), or draws without
     // a mesh (a particle system; a flare's or a screen mask's rect).
     int QueueOther(Hmx::Object *obj, const MeshPassContext &ctx) {
@@ -247,6 +263,8 @@ private:
             return f->GetMat() ? gWgpuRnd->WarmRectPipelines(f->GetMat(), ctx) : 0;
         if (RndScreenMask *m = dynamic_cast<RndScreenMask *>(obj))
             return m->GetMat() ? gWgpuRnd->WarmRectPipelines(m->GetMat(), ctx) : 0;
+        if (RndTexBlender *b = dynamic_cast<RndTexBlender *>(obj))
+            return QueueTexBlender(b);
         if (RndParticleSys *p = dynamic_cast<RndParticleSys *>(obj)) {
             RndMat *mat = p->GetMat();
             if (!mat) return 0;
@@ -318,6 +336,11 @@ void NativeWarmLoadedDir(ObjectDir *dir) {
     // pipelines are then made at their first draw, as before).
     if (!dir || !gWgpuRnd || !gWgpuRnd->Gpu().IsReady() || !gWgpuRnd->GpuResourcesReady()) return;
     const auto t0 = std::chrono::steady_clock::now();
+    // What this creates synchronously (rect and particle keys) is the load's
+    // cost: counted as pipelineLoadCreates, so a guard can tell it from a create
+    // at a draw when a dir finishes loading on the frame its screen appears.
+    pipelinecount::LoadScope loadScope;
+    const uint64_t created0 = GpuPipelineLoadCreateCount();
     Contexts c;
     c.world = gWgpuRnd->WorldPassContext(false);
     c.reflection = gWgpuRnd->WorldPassContext(true);
@@ -336,9 +359,11 @@ void NativeWarmLoadedDir(ObjectDir *dir) {
         for (auto d = draws.begin(); d != draws.end(); ++d)
             queued += warm.QueueDrawable(*d, c.reflection, 0);
     }
-    if (queued > 0)
-        fprintf(stderr, "[PIPEWARM] %s: %d keys queued (walk %.2f ms)\n",
-                dir->Name() ? dir->Name() : "?", queued,
+    const uint64_t created = GpuPipelineLoadCreateCount() - created0;
+    if (queued > 0 || created > 0)
+        fprintf(stderr, "[PIPEWARM] frame=%d %s: %d keys queued, %llu created (walk %.2f ms)\n",
+                gWgpuRnd->FrameID(), dir->Name() ? dir->Name() : "?", queued,
+                (unsigned long long)created,
                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                     .count());
 }
