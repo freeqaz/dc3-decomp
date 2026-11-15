@@ -1233,11 +1233,18 @@ others is not comparable to them.
 
 ## Player on screen (P-4)
 
-**State (2026-11-13, `np-player-view`):** the player's silhouette is drawn by
-the decompiled `StreamRenderer` from the camera picture, in the main-menu
-player boxes (`cursor.milo`) and the gameplay box. Verified on screenshots from
-synthetic frames and from real MediaPipe masks over a video; never on a live
-webcam. Photos are not done (below).
+**State (2026-11-15):** with a camera stream the player is drawn in three
+places. (1) The silhouette in the main-menu player boxes (`cursor.milo`) and the
+gameplay box, by the decompiled `StreamRenderer` (`np-player-view`, 2026-11-13).
+(2) The cube figure of the Perform freestyle section and of the loading screen,
+by the decompiled `DepthBuffer3D` with its shader run on the CPU (`np-boxyman`,
+2026-11-15, [below](#the-cube-figure-depthbuffer3d-np-boxyman-2026-11-15)).
+(3) The photos: freestyle takes its 16 and shows them at the end of the section
+(MEASURED 2026-11-15); the engine fix the results-screen photos needed is in the
+pinned engine (below, "Left"). All of it verified on screenshots from synthetic
+frames, the silhouette also from real MediaPipe masks over a video; never on a
+live webcam by an agent. Without a camera nothing changes: no stream, nothing
+drawn.
 
 ### Who reads the Kinect image streams (ground truth: the decompiled code)
 
@@ -1247,7 +1254,7 @@ webcam. Photos are not done (below).
 | `StreamRenderer::DrawToTexture` (`.sr` objects) | depth\|player and/or colour per display mode (`DisplayStreams` = {2,1,1,1,1,2,3,3,3}: bit 1 depth, bit 2 colour); player colours by `GetPlayerIndexes` (game player *i* → NUI index skeleton+1); `mNumBlurs` blur passes; output = its render-target texture | each draw of a showing `.sr` |
 | — `cursor.milo` `depth_buffer_left/right.sr` | mode 4 (player colours), blur 1 → `depth_buffer_*.tex`, drawn on the menu and gameplay boxes (`buffer_*` meshes, `srcAlphaAdd`) | menus, gameplay HUD |
 | — `StreamRendererColor.sr` (augmented photo) | mode 8 crew photo: colour, background × `mCrewPhotoBackgroundBrightness` | photo moments |
-| `DepthBuffer3D` | depth\|player at the 384-texel pitch (`row*0x180`) → a voxel grid (`grid_80by60`) | gameplay, where shown |
+| `DepthBuffer3D` | depth\|player twice: on the CPU at the 384-texel pitch (`row*0x180`, an 80×60 scan for the player's bounds and nearest depth → the zoom rectangle and depth window), and as the vertex texture of the `depthbuffer_3d` shader, which turns `grid_80by60_cube.mesh` into the cube figure | Perform freestyle and the loading screen (`ui/boxyman/boxyman.milo`, four objects); Bust a Move and the `timey_wimey` visualizers |
 | `FreestyleMoveRecorder` | depth\|player (`src += 0x600` shorts = 4 rows) → a palette texture via `TexelsLock` | freestyle recording |
 | `LiveCameraInput::TextureStore` (`StoreColorBuffer` / `StoreDepthBuffer` / `…Clip`) | colour → 640×480 16-bpp scratch texture (`YUVtoRGB`), depth → same | `ui store_color_buff_at` etc.; **no shipped script sends these** (party photos use `store_texture_at` / `store_texture_clip_at`, which copy a `TexRenderer` output) |
 | `HamUI::Draw` snapshot | `take_snapshot` → `IncrementSnapshotCount`, `TexRenderer.rndtex` in `augmented_photo` renders into a 640×480 snapshot target | `midi_parsers.dta` `take` events, unless photos are disabled; `kinect camera max_snapshots` is 1 under `_DEBUG` |
@@ -1302,7 +1309,9 @@ StreamRenderer::DrawToTexture, HX_NATIVE body: compose on the CPU
   Still hidden, with corrected comments:
   `pose_flash*` (an avatar `TexRenderer` → `projection.rndtex`, not the camera),
   `grid_80by60`
-  (`DepthBuffer3D`'s voxel template; its draw is a native stub). `preview.mesh`
+  (`DepthBuffer3D`'s cube template: on its own it is a flat 80×60 sheet of
+  cubes; the object draws it through its shader, natively through the CPU port,
+  never as a plain mesh). `preview.mesh`
   (the song-preview movie `preview.tmov`) is no longer hidden (`np-media`): the
   movie decodes, and the card's opaque album meshes cover it as in Xenia (PLAN
   G-15). The ring that
@@ -1353,9 +1362,178 @@ StreamRenderer::DrawToTexture, HX_NATIVE body: compose on the CPU
   (`rrggbbaa`). Works headless (`MILO_NORENDER=1`): `DrawToTexture` runs and the
   CPU copy is what it reports.
 
+### The cube figure (`DepthBuffer3D`, `np-boxyman`, 2026-11-15)
+
+**The report.** Milkshake in Perform on desktop with a webcam: the freestyle
+section ("in the groove") showed nothing of the player.
+
+**Before (MEASURED, Better Off Alone, synthetic v3 sensor, GPU, screenshots
+`/home/free/tmp/np-boxyman-run.gcJD/shots/`):** at beat 260 the venue, dancers
+and HUD give way to the visualizer: a purple tunnel, floor rings and the 3D
+"keep it up" texts, and nobody in it (`c3.png`, `c7.png`); draws per frame fall
+from ~430 to ~117. The slideshow at the end did show camera pictures
+(`c14.png`). `DepthBuffer3D::DrawShowing` was an empty `HX_NATIVE` stub.
+
+**What the original shows, and how that is known.** Not from a capture: Xenia
+has no Kinect image, so the figure cannot appear there. From three sources:
+
+- *The data.* `ui/boxyman/boxyman.milo` holds four `DepthBuffer3D`
+  (`boxyman1_p1`, `boxyman2_p1` with the purple palette `gradient_purple_mid.tex`,
+  `boxyman1_p2`, `boxyman2_p2` with a blue one; opacity 1.0 and 0.5, tile
+  0.8×0.8, `fisheye_x` 4, `stretch_near_camera` 0.6, `max_zoom` 4,
+  `max_depth_zoom` 5, `draw_non_players` 0), all drawing
+  `grid_80by60_cube.mesh`: 80×60 cells of 4 units, each a small cube of three
+  quads (front, left side, top; 57,613 vertices, 28,800 faces; material
+  `kBlendSrcAlpha`, z-mode transparent). `perform_legacy.dta` shows them from
+  `on_freestyle_start` to `on_freestyle_stop`; the loading screen shows them too.
+- *The code.* `DepthBuffer3D::DrawShowing` (decompiled) scans the depth\|player
+  image for each game player's bounds and nearest depth, eases a zoom rectangle
+  and a 0.2-wide depth window onto them, binds the image as a **vertex texture**,
+  sets seven constant registers (0x41..0x47) and draws the grid mesh once per
+  tile with `mMeshVersion = 0x1d`, which selects the `depthbuffer_3d` shader.
+- *The shader.* Its microcode is in the game's `xbox_shaders` archive (one
+  permutation). Dumped with `milo-native-engine/tools/rb3-dc3-parity/xobx.py`,
+  disassembled with `xenia-gpu-shader-compiler --shader_output_type=ucode` (the
+  blob's literal-constant prefix stripped first); 128 vertex and 13 pixel
+  instructions. What it does, per cell (*m*, *n*) of the grid: look at the image
+  at `u = x0 + m/N.x·(x1−x0)`, `v = y0 + (1 − n/N.y)·(y1−y0)` (N = tile·(80,60) − 1;
+  row 0 is the bottom of the image); take four samples a quarter cell either
+  side, and per vertex four more a sixth of a cell either side of the vertex's
+  own place; a sample counts if its player index is the wanted one (register
+  0x47.z; 0 = anybody who is somebody). No sample of the cell counts, or the
+  cell is off the image → the whole cube collapses to the origin. Otherwise
+  coverage = share of the eight that count, and the cube is scaled by it about
+  its centre (so the silhouette's edge is made of smaller, fainter cubes), laid
+  out at `4·gap` per cell, spread by `1/tile`, bent by the fisheye term, and
+  pushed out of the grid plane by its depth:
+  `y −= 200·sat(1 − ((mm − 256)/4096 − near)/(far − near))^stretch`, depth being
+  the cell's nearest counted sample (a vertex follows its own samples up to 50 mm
+  nearer). The pixel shader samples the 1D palette at
+  `((depth + 16·|cell coordinate| + 128·[not the front face] + 128·[the left face] − 256)/4096 + offset)·scale`
+  (wrap), so the three faces of a cube are three steps along the gradient and
+  the colour runs in rings from the grid's corner; alpha = palette alpha ×
+  opacity × coverage; a body that is neither game player is flat 0.3 grey.
+
+So the original shows the player as a relief of cubes, coloured by the palette
+gradient, zoomed to fill the frame, with a half-transparent second layer; the
+second player's two objects draw nothing while there is no second player.
+
+**What native does now.** The shipped `DrawShowing` runs unchanged (the scan,
+the zoom, the registers); three `HX_NATIVE` islands: return when there is no
+camera stand-in or no texels (a 360 always has both), keep the registers in a
+file-static (the engine's `TheShaderMgr` setters are no-ops), and, where the
+image calls `mMesh->DrawShowing()` under the shader, call
+`NativeDepthBuffer3DDrawTile`. That runs a line-for-line transcription of the
+microcode on the CPU (`native/src/platform/DepthBuffer3D_Native.{h,cpp}`,
+instruction numbers in the comments) over the grid mesh's vertices and draws the
+surviving cubes as ordinary meshes at the object's world transform
+(`DepthBuffer3DDraw_Native.cpp`): prelit material with the grid material's own
+blend / z / cull state, the palette as its diffuse texture with the shader's
+palette coordinate as u, material alpha = opacity, vertex alpha = coverage (the
+standard pipeline multiplies exactly those three); the grey cells go to a second
+untextured mesh. No engine change: the standard mesh pipeline is enough.
+
+**After (MEASURED, same run shape, screenshots
+`/home/free/tmp/np-boxyman-run.R89a/shots/final_*.png`, sheets
+`sheet_final_a.png`, `sheet_final_b.png`, `sheet_slideshow.png`):** from beat
+~264 the figure stands in the tunnel, built of cubes, purple at first, then
+green/yellow/cyan as the game animates the palette, zooming in over the first
+beats (cells per layer 620 → 230–270); it follows the sensor's pose frame by
+frame. At beat 284 the visualizer ends and the slideshow shows the photos; the
+venue returns at 292. Per frame: four tile draws reach the shader, two with cubes
+(player 1's two layers), 230–660 cells each, 6 triangles and 12 vertices a cell.
+On the loading screen the same objects now draw the player in the blue tunnel
+above "LOADING" (`/home/free/tmp/np-boxyman-run.Q1qW/shots/pre_1..4.png`); before,
+that tunnel was empty.
+
+**Cost (MEASURED, GPU rig at load ~30, unpaced, inside freestyle):** 148 fps
+with the figure, 418 fps with the four objects hidden: ~4.4 ms a frame for the
+two layers (the shader over the grid's 4,800 cells and the vertices of the live
+ones, then a rebuild and upload of two meshes). The first version called `RndMesh::Sync(0x3f)`; the face bit makes
+`OnSync` split the faces into bone-palette patches, quadratic in the face count
+(12 fps at 600 cells). `Sync(0x1f)` uploads the same data.
+
+**The photos in freestyle (MEASURED, same run):** `{ui num_snapshots}` climbs
+0 → 16 between beats 268 and 277 and stays 16; `color.tex` (the crew-photo
+`StreamRenderer`) is composed 33 times; three screenshots of the slideshow at
+beats 284 / 286 / 288 show three different poses of the sensor's person
+(`sheet_slideshow.png`), i.e. distinct pictures, not one repeated. The slideshow
+worked before this branch as well (`c14.png` above). NOT MEASURED: that all 16
+differ; the results screen's three photos in Perform.
+
+**Limits — what is not the original's picture, and what was not checked.**
+
+- **No depth relief.** The native depth image holds one depth per person (the
+  hip depth the tracker reports, 2500 mm without one), so every cube of a player
+  sits at one distance out of the grid plane and the gradient runs only with the
+  rings, not with the body's shape. A Kinect gives each texel its own depth: the
+  original figure is a relief. Needs per-pixel depth from the camera path
+  (monocular depth, or a real depth camera), not a change here.
+- **Per-triangle face terms.** The pixel shader's two tests on interpolated
+  values (`front != 1`, `column == 1`) are applied per triangle. For the shipped
+  cube mesh every triangle's vertices agree or the test is false across its
+  interior, so the result is the same; a different template mesh could differ on
+  triangle edges.
+- **Palette filtering.** The palette is sampled as a 2D texture at v = 0.5
+  through the standard material path (the image uses a 1D fetch on the same
+  128×8 texture); the filter is the standard material's, not checked against
+  the image's sampler state.
+- **Unused inputs, as in the image:** the shipped shader does not read
+  `mDrawPlayer1/2`, `mDrawNonPlayers` (register 0x43.xyz), the palette-animation
+  pair in 0x42.zw, or the grooviness / hip-joint data `DrawShowing` computes;
+  the port does not either.
+- **Sheet mode** (`mDrawSheet`, `DrawLargeQuad`: no shipped object sets it) and a
+  depth source that is not the camera stream (`mPlayerPaletteTex`-style textures
+  with no CPU texels) draw nothing natively.
+- **Orientation** follows the shader (image left → mesh −x, image top → mesh +z)
+  and the camera path's mirror; it was not compared with a capture of a 360.
+- **Loading screen:** the figure appears there because the same decompiled code
+  and data draw the four objects on `real_loading_screen`; that the original
+  does so was not compared with a capture.
+- **Not built:** the web build (the sources are in `DC3_WEB_CORE_SOURCES`).
+  **Not run:** Bust a Move, the `timey_wimey` visualizers, two players, a live
+  webcam, Milkshake itself (the report's song; Better Off Alone has the same
+  freestyle section and is what the fixtures play).
+- The log line `dropping boxyman palette animation` during freestyle is the
+  shipped `SetPlayerPalette` path, unchanged.
+
+**Tests.** `native/tests/test_depthbuffer3d.cpp` (milo-tests, no engine, 14
+cases): every expected number is worked out from the shader's arithmetic, on a
+synthetic grid with the shipped cube layout and a 320×240 image at the 384 pitch
+whose padding holds a close player (a reader that takes the width for the pitch
+draws it). Nobody → nothing; a player in the image's top-left → 21×16 cubes at
+low x, high z; a cell inside the player is the mesh cube moved by its depth; an
+edge cube's coverage 4/8 and 2/8 and its size; near/far, the window's ends and
+the stretch exponent; the 50 mm vertex clamp; the player selector; grey for a
+non-player; the palette coordinate and the three face steps; the zoom rectangle;
+cells off the image; tile 0.8 → 64×48 cells over the whole grid; no batch over
+65,535 vertices. `native/tests/test_native_boxyman.cpp` (`DC3_DTA_FLOW_TESTS`,
+headless, no GPU, `DC3_FAST_TIME`): `BoxymanTest` plays Better Off Alone past
+freestyle with a v3 sensor and asserts cubes on the loading screen, >500 more
+draws with cubes during the song, a person-sized cell count of game player 1
+standing out of the grid plane, and 16 photos (29 s); `NoCameraBoxymanTest`
+asserts a v2 sensor gets through the loading screen with nothing drawn (12 s).
+`GET /api/camera` has a `boxyman` member (draws, draws with cubes, the last
+draw's cells / triangles / bounds and registers); it works headless.
+
+**Sabotage (each built and run):** in the shader port — the `1 − v` flip, the
+player selector, the image pitch, the coverage scale, the 50 mm clamp, the
+left-face term (two ways), the off-image test, the 65,535 split, the non-player
+test, the depth sign, the stretch exponent, the dead-cell test, an empty
+`ShadeTile`, the grey colour, the tile factor: 16 of 16 fail at least one unit
+test. In the game wiring (dc3-native rebuilt each time) — the tile draw not
+called (the old stub's effect), the depth texture not handed over, register 0x47
+not filed: `BoxymanTest` fails each; the no-camera return removed:
+`NoCameraBoxymanTest` fails (SIGSEGV before the loading screen). 4 of 4.
+
 ### Left
 
-- **Photos: root-caused (`np-media`); the fix is an engine change, not landed.**
+- **Photos: root-caused (`np-media`); the engine fix is LANDED and pinned.**
+  (Corrected 2026-11-15: this entry said "not landed". Engine `c810e49` reached
+  the engine's main with the merge `d832e72` and is an ancestor of the pin
+  `5f5d9ed`; `MILO_READBACK_GPU_RENDER_TARGET` is defined there, so
+  `TexRendererClearTest` compiles against the pinned engine. Not re-measured
+  here: the results-screen photos on the pinned engine.)
   Where the game shows them: `perform_endgame_panel reveal_photos` puts up to three
   snapshots on `result_photoshare_photo1..3.mesh` after the results timer, in every
   mode **except** campaign, rhythm battle, holla back and fitness playlists
@@ -1388,7 +1566,9 @@ StreamRenderer::DrawToTexture, HX_NATIVE body: compose on the CPU
   Harness note: under `MILO_HEADLESS` the UI clock advances 1/30 s per frame
   (`UIManager::Poll`), so an unpaced GPU run passes the results timers in a second or
   two; pace it (`DC3_HTTP_PACE_FPS=30`) to see them.
-- `DepthBuffer3D`'s draw (native stub), `FreestyleMoveRecorder`'s palette
+- `DepthBuffer3D`: per-pixel depth (the figure has no relief), and the other
+  limits listed under "The cube figure" above.
+- `FreestyleMoveRecorder`'s palette
   (`TexelsLock` on a texture with no CPU texels natively), the
   `TextureStore::StoreColorBuffer` family (same: a 16-bpp `kScratch` `RndTex`
   has no bitmap natively, so `TexelsLock` returns null — unreachable from
