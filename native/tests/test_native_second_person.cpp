@@ -439,57 +439,40 @@ TEST_F(ReacquiredDancerTest, ADancerWithANewIdIsBoundAndScored) {
     std::string where = Dump(r);
     ASSERT_TRUE(r.Entered("game_screen")) << "never reached gameplay; " << r.driver << where;
 
-    // Score and tracking id just before the jump, and what she is bound to
+    // Score just before the jump, and whether she is on her new id (101)
     // afterwards.  Judged 30..140 s: YMCA's last move ends before 140.
     // The tracking id is a person's (Dc3PoseIdentity::People), not the
-    // tracker's: the body under tracker id 101 is bound as tracking id 101
-    // at the jump (nobody else goes by that number), and is a new person
-    // again each time the synthetic sensor stands its one body up 0.5 m from
-    // where it danced, or puts it back, in one frame (four times in this
-    // song).  One person
-    // alone out of reach is somebody new (PoseIdentity_Native.h, kMovedAgree:
-    // in the recorded session that was a passer-by under the dancer's
-    // tracker id), and the player is bound to the new body where she stood.
-    // So: bound in every sample, never again to who she was before the jump.
-    long before = -1, idBefore = -1;
-    int after = 0, bound = 0, onOldId = 0, p2Bound = 0;
+    // tracker's: the body under tracker id 101 is somebody new at the jump
+    // (out of reach, and a new tracker id), nobody else goes by that number,
+    // and it is that one person from then on -- through the four times the
+    // synthetic sensor stands its one body up 0.5 m from where it danced, or
+    // puts it back, in one frame (PoseIdentity_Native.h, ONE BODY ALONE).
+    long before = -1;
+    int after = 0, onNewId = 0, p2Bound = 0;
     for (const std::string &s : r.samples) {
         double song = SongSecs(s);
-        if (song > 0.0 && song < 20.0) {
+        if (song > 0.0 && song < 20.0)
             before = Field(s, 0, "score");
-            idBefore = Field(s, 0, "trackingId");
-        }
         if (song < 30.0 || song > 140.0)
             continue;
         after++;
-        if (Field(s, 0, "trackingId") > 0)
-            bound++;
-        if (Field(s, 0, "trackingId") == idBefore)
-            onOldId++;
+        if (Field(s, 0, "trackingId") == 101)
+            onNewId++;
         if (Field(s, 1, "trackingId") > 0)
             p2Bound++;
     }
     ASSERT_GE(before, 0) << "no sample before the jump; " << where;
-    ASSERT_GT(idBefore, 0) << "player 1 not bound before the jump; " << where;
     ASSERT_GE(after, 5) << "the song was not sampled after the jump; " << r.driver << where;
-    EXPECT_EQ(bound, after) << "player 1 bound in only " << bound << " of " << after
-                            << " samples after the jump; " << where;
-    EXPECT_EQ(onOldId, 0) << "player 1 still on the tracking id from before the jump ("
-                          << idBefore << ") in " << onOldId << " samples; " << where;
-    EXPECT_NE(r.output.find("DC3 SCORING: bind p0 -> tracking id 101 "), std::string::npos)
-        << "the body under the new tracker id was never bound; " << where;
+    EXPECT_EQ(onNewId, after) << "player 1 bound to her new tracking id in only " << onNewId
+                              << " of " << after << " samples; " << where;
     EXPECT_EQ(p2Bound, 0) << "player 2 bound in a one-player mode; " << where;
 
     int rebind0, rebind1;
     r.Rebinds(rebind0, rebind1);
     EXPECT_GE(rebind0, 2) << "the auto-assign never re-bound her (no counter, or no jump); "
                           << where;
-    // Six in this song, every run: the join, the jump, and one for each of
-    // the four times the synthetic sensor stands its body up or puts it back
-    // (a new person each time, see above).  The chooser unbinding her every
-    // frame is thousands (6,059 with the candidate rule removed).
-    EXPECT_LE(rebind0, 12) << "player 1 was re-bound " << rebind0
-                           << " times: the chooser unbinds her every frame; " << where;
+    EXPECT_LE(rebind0, 6) << "player 1 was re-bound " << rebind0
+                          << " times: the chooser unbinds her every frame; " << where;
     EXPECT_EQ(rebind1, 0) << where;
 
     EXPECT_FALSE(r.Entered("perform_pause_screen")) << where;

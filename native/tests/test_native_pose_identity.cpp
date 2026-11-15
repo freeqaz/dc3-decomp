@@ -314,14 +314,13 @@ TEST(PoseIdentityPeopleTest, ATrackerIdWhereSomebodyElseWasIsNotThePictureMoving
 }
 
 TEST(PoseIdentityPeopleTest, OnePersonAloneIsNotThePictureMoving) {
-    // Nobody to agree with, and the tracker's id by itself is not evidence
-    // (Song3ThePasserByUnderTheDancersTrackerIdIsNotTheDancer, below).
+    // Nobody to agree with: that is the one-body rule's (below), which keeps
+    // where she was.
     People people;
     for (int i = 0; i < 12; i++)
         See(people, { At(101, 0.6f, 0.9f, 2.5f) });
-    EXPECT_NE(See(people, { At(101, 0.4f, 0.0f, 1.6f) })[0], 101);
+    See(people, { At(101, 0.4f, 0.0f, 1.6f) });
     EXPECT_EQ(people.Moved(), 0);
-    EXPECT_EQ(people.Remembered(), 2);
 }
 
 TEST(PoseIdentityPeopleTest, WhereSheWasAMomentAgoMovesWithThePicture) {
@@ -374,6 +373,172 @@ TEST(PoseIdentityPeopleTest, AJumpAfterFramesWereMissedIsNotThePictureMoving) {
     EXPECT_EQ(consecutive.Moved(), 1) << "the same jump, next frame";
     EXPECT_EQ(ids[0], 5);
     EXPECT_EQ(ids[1], 9);
+}
+
+// --- one body alone ---------------------------------------------------------
+//
+// BoxymanTest's one body: stood up at (0, 0.9, 2.5), then at the first move's
+// position, 0.48 m away as People measures it, in the next frame under the
+// same tracker id.  It was somebody new -- a second slot, "New player
+// detected!" for a lone dancer -- unless her anchor happened to be old enough
+// to reach (0.45 s or more: these jump when it is at its youngest).
+
+TEST(PoseIdentityPeopleTest, OneBodyAloneThatJumpsIsStillHer) {
+    // 0.1 s frames: the anchor is taken on the 2nd, 7th and 12th sightings.
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { At(5, 0.0f, 0.9f, 2.5f) });
+    EXPECT_EQ(See(people, { At(5, 0.02f, 0.08f, 2.02f) })[0], 5);
+    EXPECT_EQ(people.Jumped(), 1);
+    EXPECT_EQ(people.Remembered(), 1) << "one body, one person";
+    // She dances on there, stands up again and goes back: one person.
+    for (int i = 0; i < 30; i++)
+        ASSERT_EQ(See(people, { At(5, 0.02f, 0.08f, 2.02f) })[0], 5) << "frame " << i;
+    EXPECT_EQ(See(people, { At(5, 0.0f, 0.9f, 2.5f) })[0], 5);
+    for (int i = 0; i < 3; i++)
+        EXPECT_EQ(See(people, { At(5, 0.02f, 0.08f, 2.02f) })[0], 5);
+    EXPECT_EQ(people.Remembered(), 1);
+    EXPECT_EQ(people.Reacquired(), 0);
+    EXPECT_EQ(people.Moved(), 0);
+}
+
+TEST(PoseIdentityPeopleTest, AJumpIsOnTrialAndTheBodyWhereSheWasIsHer) {
+    // The wrong-person control, as recorded (song 3, 132.7 s): the dancer's
+    // tracker id is on somebody walking past 0.5 m away for one frame, and
+    // the dancer is back under a new tracker id in the next.
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { Det(51, 0.09f, 2.36f) });
+    EXPECT_EQ(See(people, { Det(51, 0.59f, 2.57f) })[0], 51) << "one body, as the tracker said";
+    ASSERT_EQ(people.Jumped(), 1);
+    EXPECT_EQ(See(people, { Det(52, 0.01f, 2.54f) })[0], 51) << "the dancer, where she was";
+    // The passer-by, when she is seen again, is somebody else: the dancer's
+    // tracking id stayed with the dancer.
+    std::vector<int> ids = See(people, { Det(52, 0.01f, 2.5f), Det(51, 1.06f, 2.97f) });
+    EXPECT_EQ(ids[0], 51);
+    EXPECT_NE(ids[1], 51);
+    EXPECT_GE(ids[1], Dc3PoseIdentity::kPrivateIdBase);
+}
+
+TEST(PoseIdentityPeopleTest, WithBothInViewAfterAJumpTheOneWhereSheWasIsHer) {
+    // The same, with the passer-by still in the next frame under the dancer's
+    // tracker id: the pairing alone would leave the dancer's identity on it
+    // (the nearer body, and the tracker's id), and the dancer somebody new.
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { Det(51, 0.09f, 2.36f) });
+    ASSERT_EQ(See(people, { Det(51, 0.59f, 2.57f) })[0], 51);
+    std::vector<int> ids = See(people, { Det(51, 0.66f, 2.6f), Det(52, 0.01f, 2.54f) });
+    EXPECT_EQ(ids[1], 51) << "the body where the dancer was";
+    EXPECT_NE(ids[0], 51) << "the body that jumped is somebody new";
+    // And it stays that way.
+    for (int i = 0; i < 10; i++) {
+        ids = See(people, { Det(51, 0.7f + 0.05f * i, 2.6f), Det(52, 0.01f, 2.54f) });
+        ASSERT_EQ(ids[1], 51) << "frame " << i;
+        ASSERT_NE(ids[0], 51) << "frame " << i;
+    }
+    EXPECT_EQ(people.Remembered(), 2);
+}
+
+TEST(PoseIdentityPeopleTest, TheTrialIsAsLongHoweverOldHerAnchorWas) {
+    // 0.12 s frames: the anchor is taken on the 2nd, 6th and 10th sightings,
+    // so at the 13th -- the jump -- the one she has is 0.48 s old and about to
+    // be replaced.  The place she jumped from is kept from the jump on: the
+    // passer-by is seen alone once more, and then both.
+    const float dt = 0.12f;
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { Det(51, 0.0f) }, dt);
+    ASSERT_EQ(See(people, { Det(51, 0.6f) }, dt)[0], 51);
+    ASSERT_EQ(people.Jumped(), 1);
+    ASSERT_EQ(See(people, { Det(51, 0.65f) }, dt)[0], 51);
+    std::vector<int> ids = See(people, { Det(51, 0.7f), Det(52, 0.0f) }, dt);
+    EXPECT_EQ(ids[1], 51) << "the body where the dancer was, 0.24 s after the jump";
+    EXPECT_NE(ids[0], 51);
+}
+
+TEST(PoseIdentityPeopleTest, DuringTheTrialOnlyABodyWhereSheWasAndNobodyElseIsHer) {
+    // Somebody new elsewhere in the picture is somebody new.
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { Det(5, 0.0f) });
+    ASSERT_EQ(See(people, { Det(5, 0.7f) })[0], 5);
+    std::vector<int> ids = See(people, { Det(5, 0.75f), Det(6, -1.5f) });
+    EXPECT_EQ(ids[0], 5);
+    EXPECT_EQ(ids[1], 6);
+
+    // And a remembered person found near where she jumped from is that
+    // person: 9 stood 0.4 m to her left and was lost 1.2 s ago.
+    People known;
+    for (int i = 0; i < 12; i++)
+        See(known, { Det(5, 0.0f), Det(9, -0.4f) });
+    for (int i = 0; i < 12; i++)
+        See(known, { Det(5, 0.0f) });
+    ASSERT_EQ(See(known, { Det(5, 0.7f) })[0], 5);
+    ASSERT_EQ(known.Jumped(), 1);
+    ids = See(known, { Det(5, 0.75f), Det(9, -0.22f) });
+    EXPECT_EQ(ids[0], 5);
+    EXPECT_EQ(ids[1], 9);
+}
+
+TEST(PoseIdentityPeopleTest, TheTrialEndsAndABodyWhereSheWasIsThenSomebodyNew) {
+    // She really did jump (kAnchorSec later the place she jumped from is no
+    // longer hers): a second person who walks in there is a second person.
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { Det(5, 0.0f) });
+    ASSERT_EQ(See(people, { Det(5, 0.7f) })[0], 5);
+    for (int i = 0; i < 8; i++) // 0.8 s
+        ASSERT_EQ(See(people, { Det(5, 0.7f) })[0], 5);
+    std::vector<int> ids = See(people, { Det(5, 0.7f), Det(6, 0.0f) });
+    EXPECT_EQ(ids[0], 5);
+    EXPECT_EQ(ids[1], 6);
+}
+
+TEST(PoseIdentityPeopleTest, ANewTrackerIdOutOfReachIsNotAJump) {
+    // The tracker says somebody new, and position does not say otherwise.
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { Det(5, 0.0f) });
+    EXPECT_EQ(See(people, { Det(6, 0.7f) })[0], 6);
+    EXPECT_EQ(people.Jumped(), 0);
+    EXPECT_EQ(people.Remembered(), 2);
+}
+
+TEST(PoseIdentityPeopleTest, WithTwoInViewAFrameAgoOneBodyIsNotAJump) {
+    // One of the two is missing, and which is the question position answers:
+    // the body out of everybody's reach is somebody new.
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { Det(5, -0.4f), Det(9, 0.4f) });
+    EXPECT_NE(See(people, { Det(9, 1.2f) })[0], 9);
+    EXPECT_EQ(people.Jumped(), 0);
+    // And a tracker id that turns up where the other one was is the other
+    // one, alone in the frame or not.
+    People slide;
+    for (int i = 0; i < 12; i++)
+        See(slide, { Det(5, -0.4f), Det(9, 0.4f) });
+    for (int i = 0; i < 3; i++)
+        See(slide, { Det(5, -0.4f) });
+    EXPECT_EQ(See(slide, { Det(5, 0.4f) })[0], 9);
+    EXPECT_EQ(slide.Jumped(), 0);
+}
+
+TEST(PoseIdentityPeopleTest, AfterFramesWereMissedOneBodyIsNotAJump) {
+    // Only between consecutive frames, like the picture: over a gap reach has
+    // grown to say how far she can have gone, and 1.4 m in 0.6 s is not it.
+    People people;
+    for (int i = 0; i < 12; i++)
+        See(people, { Det(5, 0.0f) });
+    EXPECT_NE(See(people, { Det(5, 1.4f) }, 0.6f)[0], 5);
+    EXPECT_EQ(people.Jumped(), 0);
+    // And not when she was missed for a frame in between.
+    People gap;
+    for (int i = 0; i < 12; i++)
+        See(gap, { Det(5, 0.0f) });
+    See(gap, {});
+    EXPECT_NE(See(gap, { Det(5, 0.7f) })[0], 5);
+    EXPECT_EQ(gap.Jumped(), 0);
 }
 
 // --- the recording ---------------------------------------------------------
@@ -473,7 +638,7 @@ TEST(PoseIdentityRecordingTest, Song2TheTwoDancersKeepTheirIdsThroughTheTrackers
 TEST(PoseIdentityRecordingTest, TheRecordedPeopleNeverMoveThePicture) {
     // The rule above is for a picture that moves.  Nothing in the recorded
     // session is one: two dancers and a bystander, tracker ids that slide.
-    for (const char *section : { "song2", "song3" }) {
+    for (const char *section : { "song2", "song3", "song3_walkby" }) {
         std::vector<RecordedFrame> frames = LoadSection(section);
         ASSERT_FALSE(frames.empty()) << section;
         People people;
@@ -515,6 +680,27 @@ TEST(PoseIdentityRecordingTest, Song3TheRightDancerIsOnePersonForFiftySeconds) {
     EXPECT_EQ(Show(left), "43 ");
     // Five tracker ids, three people (the left dancer twice).
     EXPECT_EQ(Show(Ids(seen, 0.0f, 50.0f, -10.0f, 10.0f)), "38 42 43 ");
+}
+
+TEST(PoseIdentityRecordingTest, Song3SomebodyWalksPastBehindTheDancerAndTheirTrackerIdsSwap) {
+    // 132.7 s into song 3, one dancer in view (tracker id 51).  Somebody
+    // comes in from the left as 52, passes 0.5 m behind her unseen, and comes
+    // out on the right as 51 -- alone in that frame, the dancer undetected --
+    // while the dancer is 52 from the next frame on.
+    std::vector<RecordedFrame> frames = LoadSection("song3_walkby");
+    ASSERT_EQ(frames.size(), 91u);
+    std::vector<Sighting> seen = Replay(frames, kWindowMs);
+    EXPECT_EQ(Show(Ids(seen, 0.0f, 10.0f, -0.3f, 0.2f)), "51 ")
+        << "the dancer is one person, before and after";
+    EXPECT_EQ(Show(Ids(seen, 2.2f, 3.5f, -1.5f, -0.5f)), "52 ") << "the passer-by on her way in";
+    std::set<int> after = Ids(seen, 6.0f, 10.0f, 1.0f, 2.0f);
+    ASSERT_EQ(after.size(), 1u) << Show(after);
+    EXPECT_GE(*after.begin(), Dc3PoseIdentity::kPrivateIdBase)
+        << "and on her way out: not the dancer, whose tracker id she has";
+    // Strict (DC3_POSE_REACQUIRE_MS=0): the dancer's tracking id walks off.
+    std::vector<Sighting> strict = Replay(frames, 0);
+    EXPECT_EQ(Show(Ids(strict, 0.0f, 10.0f, -0.3f, 0.2f)), "51 52 ");
+    EXPECT_EQ(Show(Ids(strict, 6.0f, 10.0f, 1.0f, 2.0f)), "51 ");
 }
 
 // ===========================================================================
@@ -944,6 +1130,36 @@ TEST_F(PoseIdentityPlayersTest, ATwoPlayerModeAutoAssignsBoth) {
     Tick(2);
     EXPECT_EQ(mBound[0], 501);
     EXPECT_EQ(mBound[1], 502);
+}
+
+TEST_F(PoseIdentityPlayersTest, OneBodyIsNeverBothPlayers) {
+    // A two-player mode with one body in view: she is player 1 and player 2
+    // is nobody (the game pauses and asks for the second: OnePersonBattleTest).
+    Skeleton(0, 601, 0.0f);
+    for (int i = 0; i < 180; i++) {
+        Tick(2);
+        ASSERT_EQ(mBound[0], 601) << "frame " << i;
+        ASSERT_EQ(mBound[1], -1) << "frame " << i;
+    }
+    // And a lost player 2 is not found in player 1's body, in either mode,
+    // though it comes to stand where she stood.
+    for (int autoPlayers = 1; autoPlayers <= 2; autoPlayers++) {
+        mPlayers = Players();
+        mBound[0] = mBound[1] = -1;
+        mBinds[0] = mBinds[1] = 0;
+        Gone(0);
+        Gone(1);
+        TwoPlaying();
+        Gone(1);
+        Ticks(40, autoPlayers);
+        Unbind(1);
+        Skeleton(0, 201, -0.7f);
+        for (int i = 0; i < 120; i++) {
+            Tick(autoPlayers);
+            ASSERT_EQ(mBound[0], 201) << "mode " << autoPlayers << " frame " << i;
+            ASSERT_EQ(mBound[1], -1) << "mode " << autoPlayers << " frame " << i;
+        }
+    }
 }
 
 TEST_F(PoseIdentityPlayersTest, ZeroIsTheOldRule) {

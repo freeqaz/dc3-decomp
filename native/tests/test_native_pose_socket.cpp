@@ -878,6 +878,28 @@ TEST_F(PoseSensorIdentityTest, TwoDancersReportedInTurnBothStayInTheirSlots) {
     }
 }
 
+TEST_F(PoseSensorIdentityTest, OneBodyThatJumpsIsStillOneSkeleton) {
+    // BoxymanTest's one body: 0.5 m between two frames under its own tracker
+    // id when the first move starts.  It was somebody new in a second slot --
+    // the old one held for a second beside it, "New player detected!" for a
+    // lone dancer, and player 1 on NUI index 2.
+    int slot = Present(201, 0.0f, 31);
+    ASSERT_GE(slot, 0);
+    const SkeletonFrame *f = Frame({ { 201, 0.6f } });
+    ASSERT_NE(f, nullptr);
+    EXPECT_EQ(SlotOf(f, 201), slot) << "the same tracking id in the same slot";
+    EXPECT_EQ(Tracked(f), 1) << "one body in view is one skeleton";
+    EXPECT_EQ(f->mSkeletonDatas[slot].mJointTrackingState[kJointHipCenter], kConfidenceTracked);
+    EXPECT_NEAR(f->mSkeletonDatas[slot].mJointPositions[kJointHipCenter].x, 0.6f, 1e-4f);
+    // And back, and on: never a second skeleton.
+    for (int i = 0; i < 40; i++) {
+        f = Frame({ { 201, i % 8 == 3 ? 0.0f : 0.6f } });
+        ASSERT_NE(f, nullptr);
+        ASSERT_EQ(SlotOf(f, 201), slot) << "frame " << i;
+        ASSERT_EQ(Tracked(f), 1) << "frame " << i;
+    }
+}
+
 TEST_F(PoseSensorIdentityTest, ASessionRecordsTheTrackersIdsSoAReplayDecidesAgain) {
     const char *tmp = getenv("TMPDIR");
     std::string dir = std::string((tmp && *tmp) ? tmp : "/tmp") + "/dc3_identity_XXXXXX";

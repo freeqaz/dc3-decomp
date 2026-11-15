@@ -107,22 +107,38 @@ static const float kHeightWeight = 0.5f;
 // between consecutive frames (kMovedFrameSec); a detection within somebody
 // else's reach is decided by position as always (that is the tracker id
 // sliding onto the neighbour, which is what this layer is for).
-// TWO PEOPLE OR MORE.  One person alone has nobody to agree with, and her
-// tracker id by itself is not evidence: in the recorded session (song 3,
-// 132.7 s) the one detection in a frame was the dancer's tracker id on a
-// person walking past 0.5 m away, and the dancer was back under a new id in
-// the next.  Taking the tracker's word there gives the passer-by the
-// dancer's identity -- player 1, and her score -- for the rest of the song
-// (measured over the whole recorded evening, 5,964 frames: a one-person rule
-// fires 4 times, that one among them; this rule, never).  A lone body out of
-// reach is somebody new, and Players binds a lost player to a new body near
-// where she stood.
+// Two people or more: one person alone has nobody to agree with (below).
 // The synthetic sensor moves the picture several times a song: it stands
 // every body up at (x, 0.9, 2.5) whenever the game has no move to show and
 // puts them back at the move's position (y ~0.05, z ~2.0) when it has, all in
 // one frame under the same ids.  Without this rule each of those made
 // everybody somebody new, and with two people in view player 1 changed
 // tracking id mid-song.
+//
+// ONE BODY ALONE.  The only person seen in the last frame, and the only
+// detection in this one, under the same tracker id, out of her reach and out
+// of everybody else's: she is still her -- one body in view is one person,
+// one slot, one player.  The tracker's id by itself is not proof, so the jump
+// is on trial for kAnchorSec: where she was before it becomes her anchor, and
+// a body that turns up there in that time, and is nobody else, is her -- with
+// the body that jumped still in view too, which is then somebody new.
+// In the recorded session, over the whole evening (5,964 camera frames), a
+// lone body jumps 4 times.  Three are one person whose depth estimate jumps
+// as she walks in (0.6 to 3 m in a frame at 5-7 m from the camera): without
+// this rule she was three people.  The fourth (song 3, 132.7 s) is the
+// dancer's tracker id on somebody walking past 0.5 m away for one frame, with
+// the dancer back under a new id in the next: the passer-by is the dancer for
+// that one frame, as the tracker said, and the dancer is found at the anchor
+// and is herself again.  (Moving the anchor along with her, as the picture
+// rule does, left the passer-by with the dancer's identity, player 1 and her
+// score, for the rest of the song: measured.)
+// Without this rule a lone body that jumped was somebody new unless her
+// anchor happened to be old enough to reach her.  BoxymanTest's one body
+// jumps 0.48 m when the first move starts: a second person, in a second slot,
+// under "New player detected!", in most runs.
+// What is left: a dancer who goes undetected for longer than kAnchorSec while
+// the tracker's id for her sits on somebody else out of her reach has given
+// that body her identity.
 static const float kMovedAgree = 0.1f;
 static const float kMovedFrameSec = 0.5f;
 
@@ -207,6 +223,9 @@ public:
         if (PictureMoved(dets, count, dtSec, search)) {
             // bestPick is each detection's own person, moved with the picture.
             mMoved++;
+        } else if (OneBodyAlone(dets, count, dtSec, search)) {
+            // bestPick is the one person there is; her anchor is where she was.
+            mJumped++;
         } else {
             // The pairing that leaves the fewest detections new, then the
             // least total distance (at most six detections with a handful of
@@ -215,6 +234,7 @@ public:
             for (int p = 0; p < mCount; p++)
                 search.used[p] = false;
             Solve(search, 0, 0.0f);
+            JumpOnTrial(dets, count, search);
         }
 
         bool seen[kMaxPeople];
@@ -233,13 +253,14 @@ public:
                 if (known.rawId != dets[i].rawId)
                     mReacquired++;
                 // Where she was before this sighting becomes the anchor once
-                // the anchor she has is old enough.
+                // the anchor she has is old enough (and a jump's trial is over).
                 if (!known.hasAnchor || known.anchorSec >= kAnchorSec) {
                     known.hasAnchor = true;
                     known.ax = known.x;
                     known.ay = known.y;
                     known.az = known.z;
                     known.anchorSec = known.unseenSec;
+                    known.jumped = false;
                 }
                 // A sighting is worth the time since the last one, at most a
                 // slow camera's frame.
@@ -305,6 +326,8 @@ public:
     int Reacquired() const { return mReacquired; }
     // Times the picture moved under the people in it (kMovedAgree).
     int Moved() const { return mMoved; }
+    // Times one body alone jumped out of reach and stayed who she was.
+    int Jumped() const { return mJumped; }
 
 private:
     struct Person {
@@ -318,6 +341,7 @@ private:
         float seenSec;    // how long she has been seen in all
         float ageSec;     // how long ago she was first seen
         bool seenLast;    // she was in the last frame
+        bool jumped;      // ONE BODY ALONE: the anchor is where she jumped from
     };
     static constexpr float kSightingSec = 0.2f;
     struct Search {
@@ -429,6 +453,60 @@ private:
         return true;
     }
 
+    // See ONE BODY ALONE.  True: s.bestPick[0] is her, her anchor is where she
+    // was before this frame, and the jump is on trial.
+    bool OneBodyAlone(const Detection *dets, int count, float dtSec, Search &s) {
+        if (count != 1 || dets[0].rawId < 0 || dtSec > kMovedFrameSec)
+            return false;
+        if (s.numCand[0] != 0)
+            return false; // within somebody's reach: position decides
+        int her = -1;
+        for (int p = 0; p < mCount; p++) {
+            if (!mPeople[p].seenLast)
+                continue;
+            if (her >= 0)
+                return false; // two were in view a frame ago: one is missing
+            her = p;
+        }
+        if (her < 0 || mPeople[her].rawId != dets[0].rawId)
+            return false;
+        Person &who = mPeople[her];
+        who.hasAnchor = true;
+        who.ax = who.x;
+        who.ay = who.y;
+        who.az = who.z;
+        who.anchorSec = who.unseenSec;
+        who.jumped = true;
+        s.bestPick[0] = her;
+        return true;
+    }
+
+    // See ONE BODY ALONE.  The pairing has a person whose jump is on trial on
+    // the body that jumped (it is the nearer one, and has her tracker id) and
+    // a body where she jumped from that is nobody: that one is her.
+    void JumpOnTrial(const Detection *dets, int count, Search &s) {
+        for (int i = 0; i < count; i++) {
+            int p = s.bestPick[i];
+            if (p < 0 || !mPeople[p].jumped)
+                continue;
+            const Person &who = mPeople[p];
+            float reach = kReachBase + kReachSpeed * who.anchorSec;
+            if (reach > kReach)
+                reach = kReach;
+            float here = Distance(dets[i].x, dets[i].y, dets[i].z, who.ax, who.ay, who.az);
+            for (int k = 0; k < count; k++) {
+                if (k == i || s.bestPick[k] >= 0 || dets[k].rawId < 0)
+                    continue;
+                float da = Distance(dets[k].x, dets[k].y, dets[k].z, who.ax, who.ay, who.az);
+                if (da <= reach && da < here) {
+                    s.bestPick[k] = p;
+                    s.bestPick[i] = -1;
+                    break;
+                }
+            }
+        }
+    }
+
     int NewPerson(int rawId, bool *seen) {
         int p = mCount;
         if (mCount < kMaxPeople) {
@@ -460,6 +538,7 @@ private:
         mPeople[p].seenSec = 0.0f;
         mPeople[p].ageSec = 0.0f;
         mPeople[p].seenLast = false;
+        mPeople[p].jumped = false;
         return p;
     }
 
@@ -468,6 +547,7 @@ private:
     int mNextPrivate = kPrivateIdBase;
     int mReacquired = 0;
     int mMoved = 0;
+    int mJumped = 0;
 };
 
 // ---------------------------------------------------------------------------
