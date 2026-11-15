@@ -103,8 +103,11 @@ static const Dc3ProfileDefault kDc3DevDefaults[] = {
     // Installed content, as on a 360 with packages on its drive: the original
     // lists every installed package's songs, so this is the original's
     // behaviour for the content present, not a change to it.  A box without
-    // <data>/dlc is unaffected; ctest pins DC3_DLC=0 (MILO_TEST_ENV).
-    {"DC3_DLC", "1", true,
+    // <data>/dlc is unaffected; ctest pins DC3_DLC=0 (MILO_TEST_ENV).  Web too
+    // (PLAN W-23): the page fetches the packages' song lists at boot only when
+    // this is on, so a server with no packages, or ?profile=release, costs
+    // nothing.
+    {"DC3_DLC", "1", false,
      "every DLC package under <data>/dlc mounted (orig-assets/dlc, made by "
      "scripts/dlc/import.sh; DC3_DLC_DIR names other roots)",
      "downloadable songs from orig-assets/dlc, when it exists"},

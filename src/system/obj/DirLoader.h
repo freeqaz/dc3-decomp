@@ -59,6 +59,11 @@ public:
     static bool sPrintTimes;
     static ObjectDir *TopSaveDir() { return sTopSaveDir; }
     static void SetCacheMode(bool);
+#ifdef HX_NATIVE
+    // Not in the image: SongMgr::CachedPath reads it to restore the mode it
+    // borrows (see there).
+    static bool CacheMode() { return sCacheMode; }
+#endif
     static void SetPathEvalCallback(bool (*cb)(const char *)) { sPathEval = cb; }
 
     static Symbol GetDirClass(const char *);

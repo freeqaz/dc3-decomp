@@ -816,6 +816,15 @@ build's own `DecodeXMAToPCM`; `gen_sfx_ogg.py` encodes the `.ogg`.
 - `?env=DC3_SFX_OGG_OFF=1` (raw `.pcm` A/B arm) still only has the 1035 old
   `.pcm` files; the rest 404 on that arm.
 
+### DLC (W-23..W-28, np-webdlc)
+
+The web build lists and plays the DLC packages in `orig-assets/dlc` (the same
+130-row song select as desktop with both DC2 packs). The server serves the
+packages in place; a boot fetches only their song lists (`/api/bundle/dlc`,
+15 KB brotli) and a song's files are fetched when it opens them. Design,
+measurements and the driver (`scripts/web/dlc-songs.mjs`) are in
+[DLC.md](DLC.md#web-d-7-w-23w-28-lane-np-webdlc).
+
 ## Page (W-8)
 
 The default page is for players: the game canvas fills the window at 16:9 on
@@ -987,7 +996,9 @@ change) or when the server does not answer, then waits up to 30 s for the new
 hash. The smoke test fetches the page, the worklet, each built variant's
 wasm/js, the vendored tasks-vision bundle and the `full` model (no CDN), the
 intro movie through the asset API, and one SFX sidecar named in
-`native/web/sfx_sidecars.manifest`.
+`native/web/sfx_sidecars.manifest`. With DLC packages in the checkout it also requires `/api/health` to list
+them, `/api/bundle/dlc` and one package preview to answer, and
+`scripts/web/gen_dlc_web_assets.sh --check` to pass (W-28).
 
 | exit | meaning |
 |---|---|
