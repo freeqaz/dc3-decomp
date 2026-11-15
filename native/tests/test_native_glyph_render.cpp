@@ -395,8 +395,11 @@ TEST(NativeGlyphRender, CutoutCoverageTestsTheFadedAlpha) {
     EXPECT_LT(defAt, call);
     // Taken after the texel multiplies in: the last texel-alpha use before
     // the definition sits after the texture sample.
-    const size_t sample = s.find("textureSample(diffuseTex", fn);
-    ASSERT_NE(sample, std::string::npos);
+    // The texel is fetched through diffuseSample() (standard_wgsl.inc: the
+    // LOD bias and, in a render-scaled frame, output-pixel sampling for text).
+    ASSERT_NE(s.find("fn diffuseSample("), std::string::npos) << "no diffuseSample helper";
+    const size_t sample = s.find("= diffuseSample(", fn);
+    ASSERT_NE(sample, std::string::npos) << "shadeStandard does not sample the diffuse texture";
     const size_t texelMul = s.rfind("diffuseSample.a", defAt);
     EXPECT_TRUE(texelMul != std::string::npos && texelMul > sample)
         << "'" << arg << "' is read before the texel alpha multiplies in";
