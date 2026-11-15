@@ -2,8 +2,19 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- viewport-fit=cover: in landscape the picture may use the whole screen
+         (the CSS keeps it inside the safe-area insets: notch, home bar).
+         Phones: docs/native/WEB.md "Phones: iPhone and iPad" (PLAN W-31). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="theme-color" content="#000000">
     <title>Dance Central 3</title>
+    <!-- ?gpu_profile=mobile|bare|record: mask the WebGPU adapter like an
+         iPhone's and record what the engine asks for (PLAN W-29). Does
+         nothing without the parameter. -->
+    <script src="gpu_profile.js"></script>
     <style>
         /* Two layouts (W-8). Default: the player page -- the game canvas fills
            the window at 16:9, the pose panel sits on it (pose/pose_input.js),
@@ -11,7 +22,9 @@
            ?debug=true) adds the developer harness: status bar, key help,
            pause/step and the engine console, under an 80vh canvas. */
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { height: 100%; }
+        /* No rubber-band scroll, pull-to-refresh or double-tap zoom on a phone
+           (W-31): the page never scrolls in the player layout. */
+        html, body { height: 100%; overscroll-behavior: none; }
         body {
             background: #000;
             display: flex;
@@ -19,15 +32,30 @@
             align-items: center;
             justify-content: center;
             min-height: 100vh;
+            min-height: 100dvh;
             overflow: hidden;
             font-family: 'Segoe UI', system-ui, sans-serif;
             color: #ccc;
+            touch-action: manipulation;
+            -webkit-text-size-adjust: 100%;
+            -webkit-tap-highlight-color: transparent;
         }
         #canvas-container {
             position: relative;
-            /* Largest 16:9 box that fits the window. */
-            width: min(100vw, calc(100vh * 16 / 9));
-            height: min(100vh, calc(100vw * 9 / 16));
+            /* Largest 16:9 box that fits the visible window inside the
+               safe-area insets. 100dvh, not 100vh: on iOS 100vh includes the
+               area under Safari's toolbars, so a 100vh box overflows the
+               screen; the env() insets are 0 everywhere but a notched phone
+               (viewport-fit=cover). */
+            --safe-w: calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+            --safe-h: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+            width: min(var(--safe-w), calc(var(--safe-h) * 16 / 9));
+            height: min(var(--safe-h), calc(var(--safe-w) * 9 / 16));
+        }
+        @supports (height: 100dvh) {
+            #canvas-container {
+                --safe-h: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+            }
         }
         #dc3-canvas {
             width: 100%;
@@ -59,6 +87,23 @@
         }
         #loading.error { color: #f99; }
         #loading.error .spinner { display: none; }
+        /* A refused or failed boot owns the whole screen (W-31): on a phone in
+           portrait the 16:9 box is a strip, and the message overflowed it
+           under the touch buttons and the camera panel. Those are not shown
+           (touch_controls.js / pose_input.js check window.dc3BootBlocked)
+           or are hidden here if the failure came later. */
+        html:not(.dev) #loading.error {
+            position: fixed; inset: 0; z-index: 40;
+            padding: max(24px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-right, 0px))
+                     max(24px, env(safe-area-inset-bottom, 0px)) max(24px, env(safe-area-inset-left, 0px));
+        }
+        html.dc3-failed #dc3-touch, html.dc3-failed #pose-panel, html.dc3-failed #dc3-sound { display: none !important; }
+        #dc3-sound {
+            position: fixed; z-index: 25; left: 50%; transform: translateX(-50%);
+            top: max(10px, env(safe-area-inset-top, 0px)); display: none;
+            background: #000c; color: #fff; border: 1px solid #c0f; border-radius: 18px;
+            padding: 8px 16px; font: 600 15px/1.2 system-ui, sans-serif; cursor: pointer;
+        }
         #loading-text { max-width: 760px; line-height: 1.5; }
         #loading-text code { color: #fc6; }
         @keyframes dc3spin { to { transform: rotate(360deg); } }
@@ -136,6 +181,62 @@
             function on(v) { return v !== null && v !== '0' && v !== 'false' && v !== 'off'; }
             window.dc3DevPage = on(q.get('dev')) || (on(q.get('debug')) && q.get('dev') === null);
             if (window.dc3DevPage) document.documentElement.classList.add('dev');
+        })();
+    </script>
+    <script>
+        // Sound on a phone (W-31). iOS (and Chrome's autoplay policy) start an
+        // AudioContext suspended until a user gesture, and on iOS only the END
+        // of a touch (touchend / pointerup / click) counts as one -- the
+        // engine's own resume listeners are keydown/click/touchstart, and the
+        // on-screen buttons' keys are synthetic (no gesture at all). A camera
+        // player may never touch the screen. So: every AudioContext the page
+        // makes is tracked, any gesture resumes the suspended ones (iOS also
+        // has "interrupted", after a call or Siri), and on a touch-only device
+        // a "Tap for sound" button shows while one is still not running.
+        (function() {
+            var Orig = window.AudioContext || window.webkitAudioContext;
+            if (!Orig) return;
+            var ctxs = window.dc3AudioContexts = [];
+            var Tracked = class extends Orig {
+                constructor(opts) { super(opts); ctxs.push(this); }
+            };
+            window.AudioContext = Tracked;
+            if (window.webkitAudioContext) window.webkitAudioContext = Tracked;
+            function silent() {
+                return ctxs.filter(function(c) { return c.state !== 'running' && c.state !== 'closed'; });
+            }
+            function unlock() {
+                silent().forEach(function(c) { c.resume().catch(function() {}); });
+                setTimeout(update, 250);
+            }
+            ['pointerup', 'touchend', 'click', 'keydown'].forEach(function(t) {
+                document.addEventListener(t, unlock, { capture: true, passive: true });
+            });
+            var q = new URLSearchParams(location.search).get('sound_button');
+            var touchOnly = !(window.matchMedia && window.matchMedia('(any-pointer: fine)').matches) &&
+                            ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+            var useButton = q === '1' || (q !== '0' && touchOnly);
+            var btn = null;
+            function update() {
+                if (!btn) return;
+                var loadingEl = document.getElementById('loading');
+                var running = !loadingEl || loadingEl.classList.contains('hidden');
+                btn.style.display = (running && silent().length) ? 'block' : 'none';
+            }
+            window.dc3SoundState = function() {
+                return { contexts: ctxs.map(function(c) { return c.state; }),
+                         button: !!btn && btn.style.display === 'block' };
+            };
+            if (!useButton) return;
+            document.addEventListener('DOMContentLoaded', function() {
+                btn = document.createElement('button');
+                btn.id = 'dc3-sound';
+                btn.type = 'button';
+                btn.textContent = 'Tap for sound';
+                btn.addEventListener('click', unlock);
+                document.body.appendChild(btn);
+                setInterval(update, 1000);
+            });
         })();
     </script>
     <script>
@@ -263,8 +364,55 @@
                 loading.classList.remove('hidden');
                 var sv = document.getElementById('splash-video');
                 if (sv) sv.remove();  // it sits above everything
+                // The error card owns the screen: no touch buttons, no camera
+                // panel over it, and the camera is let go (W-31).
+                document.documentElement.classList.add('dc3-failed');
+                if (typeof window.dc3PoseShutdown === 'function') window.dc3PoseShutdown();
             }
         }
+        // The page will not boot the engine here. Everything that would start
+        // alongside it (the camera, the touch buttons: separate scripts that
+        // still run after this one throws) checks window.dc3BootBlocked.
+        function refuseBoot(reason, html, logLine) {
+            window.dc3BootBlocked = reason;
+            setStatus(html, 'error');
+            status.style.maxWidth = '900px';
+            status.style.textAlign = 'center';
+            log(logLine, true);
+            throw new Error(reason);
+        }
+        // Apple's mobile devices: every iOS/iPadOS browser is WebKit, so a
+        // missing feature there is fixed by updating iOS, never by another
+        // browser. iPadOS Safari reports a Mac user agent; touch tells it apart.
+        const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+                       (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+        const IS_MAC_SAFARI = !IS_IOS && /Macintosh/.test(navigator.userAgent) &&
+                              /Safari\//.test(navigator.userAgent) && !/Chrom(e|ium)|Edg\/|Firefox/.test(navigator.userAgent);
+        // What this Safari says it is. On iPhone and iPad the OS token in the
+        // user agent is frozen at "18_7" from iOS 26 on, so the Version/ token
+        // is the only one that tells iOS 26 from iOS 27, and Safari's version is
+        // the iOS version. Other iOS browsers (CriOS, FxiOS) carry no Version/
+        // token: null, and the card then says nothing about the version.
+        const SAFARI_VERSION = (function () {
+            const m = /Version\/(\d+(?:\.\d+)*)/.exec(navigator.userAgent);
+            return m && /Safari\//.test(navigator.userAgent) && !/Chrom(e|ium)|Edg\//.test(navigator.userAgent) ? m[1] : null;
+        })();
+        const SAFARI_MAJOR = SAFARI_VERSION ? parseInt(SAFARI_VERSION, 10) : 0;
+        // The iOS advice for a missing feature that Safari 27 has. A phone that
+        // already reports 27 must not be told to update to 27.
+        function iosAdvice() {
+            const has = SAFARI_VERSION
+                ? 'This device reports iOS ' + SAFARI_VERSION + ' (Safari ' + SAFARI_VERSION + '). '
+                : '';
+            if (SAFARI_MAJOR >= 27) {
+                return has + 'That version should be able to run the game, so this is a fault in the page or a ' +
+                    'restriction on the device (Lockdown Mode, for example).';
+            }
+            return has + 'The game needs iOS 27 (Safari 27) or newer: Settings › General › Software Update. ' +
+                'An iOS 26 update there is not enough; iOS 27 can be listed separately, lower on that screen, as ' +
+                '“Upgrade to iOS 27”. Every iPhone browser uses Safari\'s engine, so Chrome or Firefox on the phone will not help.';
+        }
+        window.dc3SafariVersion = SAFARI_VERSION;  // scripts/web/phone.mjs reads it
         // Console level for one engine stderr line: 'error' | 'warn' | 'log'.
         // "timer error is large" is the image's song-clock diagnostic
         // (StandardStream::UpdateTime, a MILO_LOG), a warning, not a failure.
@@ -288,16 +436,12 @@
         // hides navigator.gpu, and the generic "no WebGPU" advice below would
         // send the player to browser flags that cannot help.
         if (!window.isSecureContext) {
-            setStatus(
+            refuseBoot('insecure context',
                 '<strong>This page needs a secure connection.</strong><br>' +
                 '<span style="color:#aaa">WebGPU, the camera and game audio only work over ' +
                 '<code>https://</code> (or on <code>localhost</code>). Open the https address of ' +
                 'this server instead of <code>' + location.origin.replace(/[<>&]/g, '') + '</code>.</span>',
-                'error');
-            log('not a secure context — refusing to boot engine', true);
-            const sv = document.getElementById('splash-video');
-            if (sv) sv.remove();
-            throw new Error('insecure context');
+                'not a secure context — refusing to boot engine');
         }
         // Hard stop if WebGPU isn't available — without it the canvas is just
         // black after the splash, and we'd otherwise download 12MB of assets
@@ -306,45 +450,38 @@
             const ua = navigator.userAgent;
             const isFirefox = /Firefox/.test(ua);
             const isChromium = /Chrom(e|ium)/.test(ua);
-            const isMobile = /Android|iPhone|iPad|Mobile/.test(ua);
+            const isMobile = IS_IOS || /Android|Mobile/.test(ua);
             const browserHelp = isMobile
-                ? (/iPhone|iPad/.test(ua)
-                    ? 'On iPhone and iPad, Safari has WebGPU from iOS 26 but not the WebAssembly JSPI this build needs, so the game cannot run there yet.'
+                ? (IS_IOS
+                    // Safari has WebGPU from iOS 26; JSPI arrives with iOS 27.
+                    ? iosAdvice()
                     : 'On Android, use Chrome 137 or newer; WebGPU needs Android 12+ and a supported GPU (chrome://gpu shows "WebGPU: Hardware accelerated").')
                 : isFirefox
                 ? 'Firefox: WebGPU requires Nightly with <code>dom.webgpu.enabled=true</code> in <code>about:config</code>.'
+                : IS_MAC_SAFARI
+                ? 'On a Mac, use Safari 27 or newer, or Chrome/Edge 137 or newer.'
                 : isChromium
                 ? 'Chrome/Chromium on Linux: launch with <code>--enable-unsafe-webgpu --enable-features=Vulkan</code>, or toggle <code>chrome://flags/#enable-unsafe-webgpu</code>.'
                 : 'Use a Chromium-based browser with WebGPU enabled, or Firefox Nightly with <code>dom.webgpu.enabled</code>.';
-            setStatus(
+            refuseBoot('WebGPU unavailable',
                 '<strong>WebGPU not available in this browser.</strong><br>' +
                 '<span style="color:#aaa">DC3 needs WebGPU to render. ' + browserHelp + '</span>',
-                'error');
-            status.style.maxWidth = '900px';
-            status.style.textAlign = 'center';
-            log('WebGPU not available — refusing to boot engine (would render black)', true);
-            // Hide the splash overlay so the error is visible.
-            const sv = document.getElementById('splash-video');
-            if (sv) sv.remove();
-            // Stop here — don't load the WASM module.
-            throw new Error('WebGPU unavailable');
+                'WebGPU not available — refusing to boot engine (would render black)');
         }
-        // The build also needs JSPI (WebAssembly.Suspending; Chrome/Edge 137+).
-        // Safari 26 has WebGPU and passes the check above, but has no JSPI, so
-        // without this it fails later inside the WASM instantiate with an
-        // error that names neither feature.
+        // The build also needs JSPI (WebAssembly.Suspending): Chrome/Edge 137+,
+        // and Safari 27 (iOS 27 / macOS). Safari 26 has WebGPU and passes the
+        // check above but has no JSPI, so without this it fails later inside
+        // the WASM instantiate with an error that names neither feature.
         if (typeof WebAssembly === 'undefined' || typeof WebAssembly.Suspending !== 'function') {
-            setStatus(
+            const jspiHelp = IS_IOS
+                ? iosAdvice()
+                : IS_MAC_SAFARI
+                ? 'Safari 26 does not have it; Safari 27 does. Update Safari (macOS Software Update), or use Chrome or Edge 137 or newer.'
+                : 'Use Chrome or Edge 137 or newer (Windows, macOS, Linux, Android), or Safari 27 or newer on a Mac.';
+            refuseBoot('JSPI unavailable',
                 '<strong>This browser lacks WebAssembly JSPI.</strong><br>' +
-                '<span style="color:#aaa">DC3 needs WebGPU and JSPI. Use Chrome or Edge 137 or newer ' +
-                '(also on macOS). Safari and Firefox are not supported yet.</span>',
-                'error');
-            status.style.maxWidth = '900px';
-            status.style.textAlign = 'center';
-            log('JSPI (WebAssembly.Suspending) not available — refusing to boot engine', true);
-            const sv = document.getElementById('splash-video');
-            if (sv) sv.remove();
-            throw new Error('JSPI unavailable');
+                '<span style="color:#aaa">DC3 needs WebGPU and WebAssembly JSPI. ' + jspiHelp + '</span>',
+                'JSPI (WebAssembly.Suspending) not available' + (SAFARI_VERSION ? ' (Safari ' + SAFARI_VERSION + ')' : '') + ' — refusing to boot engine');
         }
         {
             setStatus('Loading…', 'loading');
@@ -420,9 +557,11 @@
                 if (splashVid) splashVid.muted = false;
                 document.removeEventListener('keydown', splashUnmute);
                 document.removeEventListener('click', splashUnmute);
+                document.removeEventListener('touchend', splashUnmute);
             }
             document.addEventListener('keydown', splashUnmute);
             document.addEventListener('click', splashUnmute);
+            document.addEventListener('touchend', splashUnmute);
             // Skip on Space/Enter/Escape
             function splashSkip(e) {
                 if (e.type === 'keydown' && e.key !== ' ' && e.key !== 'Enter' && e.key !== 'Escape') return;
