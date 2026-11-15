@@ -1,6 +1,8 @@
 // Native frame cap -- see FramePacer_Native.h.
 #include "FramePacer_Native.h"
 
+#include "gfx/FrameCost.h"  // the sleep is the frame-times pace_ms column
+
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -82,6 +84,7 @@ void Dc3FramePacer::Pace() {
     }
     mNext += period;
     if (mNext > now) {
+        framecost::Scope slept(framecost::kPace);
         std::this_thread::sleep_until(mNext);
         mSleptS += std::chrono::duration<double>(Clock::now() - now).count();
         mPaced++;

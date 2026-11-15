@@ -336,7 +336,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "e05c8b970a9587974439f23cd9db3349999b243a"
+set(MILO_ENGINE_PIN "34dd1a91a254a02bbe744e2076a748cb6031b16d"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -2036,6 +2036,7 @@ if(BUILD_TESTS)
 
     add_executable(milo-tests
         tests/test_helpers.cpp
+        tests/test_test_tmp.cpp
         tests/telemetry_parser.cpp
         tests/test_gates.cpp
         tests/test_gameplay_telemetry.cpp
@@ -2090,6 +2091,7 @@ if(BUILD_TESTS)
         tests/test_retail_lighting.cpp
         tests/test_spot_beam_frame_cost.cpp # spotperf: an unchanged beam set uploads nothing per frame
         tests/test_text_frame_cost.cpp # framecost: unchanged text uploads nothing per frame
+        tests/test_scene_bind_group_cost.cpp # framecost4: camera switches reuse their scene bind groups
         tests/test_fixed_key_pipelines.cpp # framecost: fixed-key pass pipelines are compiled at Init
         tests/test_pipeline_warm.cpp # hitch: a loaded dir's material pipelines are compiled before its first draw
         tests/test_pipeline_disk_cache.cpp # hitch: the persistent pipeline cache reads back exactly or misses

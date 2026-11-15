@@ -42,6 +42,7 @@ import argparse
 import io
 import json
 import os
+import shutil
 import sys
 import tempfile
 import time
@@ -80,9 +81,19 @@ def write_session(path, songs):
         f.write("\n".join(lines) + "\n")
 
 
+def scratch_dir(test, prefix):
+    """A tempfile.mkdtemp dir removed when `test` ends.  These are synthetic
+    inputs rebuilt on every run, so a failure loses nothing by it; set
+    DC3_KEEP_TEST_TMP=1 to keep them anyway (native/tests/test_tmp.h)."""
+    d = tempfile.mkdtemp(prefix=prefix)
+    if os.environ.get("DC3_KEEP_TEST_TMP", "0") in ("", "0"):
+        test.addCleanup(shutil.rmtree, d, True)
+    return d
+
+
 class PoseSessionTest(unittest.TestCase):
     def setUp(self):
-        self.dir = tempfile.mkdtemp(prefix="playtest_kit_")
+        self.dir = scratch_dir(self, "playtest_kit_")
         self.path = os.path.join(self.dir, "pose.dc3session")
         menus = [i * 0.5 for i in range(80)]                 # shell clock 0..39.5
         song1 = [-5 + i / 30 for i in range(30 * 40)]       # count-in, 35 s of song
@@ -209,7 +220,7 @@ DC3 UI: Screen 'perform_endgame_screen' Enter (from '<null>')
 
 class SessionSummaryTest(unittest.TestCase):
     def setUp(self):
-        self.dir = tempfile.mkdtemp(prefix="playtest_sum_")
+        self.dir = scratch_dir(self, "playtest_sum_")
         self.log = os.path.join(self.dir, "engine.log")
 
     def write(self, text):
@@ -272,7 +283,7 @@ class AssetManifestTest(unittest.TestCase):
     def test_ok_missing_short_and_capitals(self):
         # Capitals in the data path are fine since PLAN H-17 was fixed (the
         # game keeps a host directory's spelling); the check used to refuse it.
-        base = tempfile.mkdtemp(prefix="playtest_assets_")
+        base = scratch_dir(self, "playtest_assets_")
         good = os.path.join(base, "good")
         mp = self.make_box(good)
         self.assertEqual(self.check(good, mp)[0], 0)

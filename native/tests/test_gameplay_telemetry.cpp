@@ -25,6 +25,7 @@
 
 #include "telemetry_parser.h"
 #include "platform/ExecutablePath.h"
+#include "test_tmp.h"
 #include "shell_timeout.h"
 
 // ---------------------------------------------------------------------------
@@ -152,10 +153,7 @@ protected:
 
     void TearDown() override {
         if (HasFailure() && sRanEngine) {
-            std::string path = "/tmp/claude-1000/gameplay_tel_";
-            auto *info = ::testing::UnitTest::GetInstance()->current_test_info();
-            if (info) path += info->name();
-            path += "_" + std::to_string((int)getpid()) + ".log"; // per run: shared by concurrent gates
+            std::string path = TestLogPath("gameplay_tel"); // pid in the name: concurrent gates
             std::ofstream f(path);
             if (f.is_open()) {
                 f << sResult.output;

@@ -41,6 +41,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "platform/ExecutablePath.h"
+#include "test_tmp.h"
 #include "engine_http_port.h"
 #include "shell_timeout.h"
 
@@ -137,13 +138,11 @@ BattleRun RunBattle(int people, const char *stopScreens, int waitSeconds) {
         r.setupError = "python3 is not runnable; the synthetic sensor needs it";
         return r;
     }
-    char tmpl[] = "/tmp/dc3-twoplayer-XXXXXX";
-    char *root = mkdtemp(tmpl);
-    if (!root) {
-        r.setupError = "mkdtemp '/tmp/dc3-twoplayer-XXXXXX' failed";
+    std::string R = MakeTestTempDir("dc3-twoplayer"); // removed at exit on a pass
+    if (R.empty()) {
+        r.setupError = "MakeTestTempDir 'dc3-twoplayer' failed under " + TestTempBase();
         return r;
     }
-    std::string R = root;
     if (!SeedAllTutorialsSeen(R)) {
         r.setupError = "could not seed the global options cache under " + R;
         return r;
@@ -210,9 +209,7 @@ protected:
             GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable (requires game assets)";
     }
     static std::string Dump(const BattleRun &r) {
-        std::string path = "/tmp/claude-1000/twoplayer_" +
-            std::string(::testing::UnitTest::GetInstance()->current_test_info()->name()) + "_" +
-            std::to_string((int)getpid()) + ".log";
+        std::string path = TestLogPath("twoplayer"); // removed at exit on a pass
         std::ofstream f(path);
         if (f.is_open())
             f << r.driver << r.players << r.output;

@@ -232,8 +232,8 @@ EngineRun RunEngine(const std::string &drive, const std::string &extraEnv = "") 
         r.setupError = "input flow script missing: " + script;
         return r;
     }
-    // Inside this process's scratch dir (removed when it exits); one dir per
-    // engine run.
+    // Inside this process's scratch dir (removed when it exits if the run
+    // passed, kept if it failed -- test_tmp.h); one dir per engine run.
     const std::string &scratch = TestScratchDir();
     if (scratch.empty()) {
         r.setupError = "no per-process scratch dir";
@@ -567,6 +567,57 @@ void ExpectNoPipelineCreatedAfterLoad(const char *song, const EngineRun &run) {
         << ", the last [GPUCOUNT] before game_screen Enter):" << where;
 }
 
+// The scene bind group is reused, not made per camera switch (engine doc
+// section 40): WriteSceneUniforms runs ~55 times a song frame, once per camera
+// a panel or the venue switches to, and each write used to create a bind group
+// (one call into the browser each on the web). Now a frame that writes its
+// scene blocks as an earlier frame did takes the groups that frame made, so
+// over gameplay sceneBgCreates stays well under one a frame while
+// sceneBgWrites runs at tens a frame. Measured 2026-11-15 over a rollerrink
+// song: 117 creates for 970,000 writes, 18,500 frames; before, 53 a frame. The
+// default gate (MILO_GPU_COUNTERS=10): alley 8 creates over 2860 frames, rink 41
+// over 2020.
+// Sabotage-checked 2026-11-15: WriteSceneUniforms back on a create per write
+// fails both venues (alley 47.7, rink 48.4 creates a frame).
+void ExpectSceneBindGroupsReused(const char *song, const EngineRun &run) {
+    const int endFrame = DriverFrame(run.driver, "endframe");
+    struct Count { int frame; unsigned long long writes, creates; };
+    std::vector<Count> counts;
+    int anchor = -1;
+    bool entered = false;
+    std::istringstream in(run.output);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!entered && line.find("Screen 'game_screen' Enter") != std::string::npos) {
+            entered = true;
+            anchor = (int)counts.size() - 1;
+        }
+        const size_t at = line.find("[GPUCOUNT] frame=");
+        if (at == std::string::npos) continue;
+        const size_t w = line.find(" sceneBgWrites=", at);
+        const size_t c = line.find(" sceneBgCreates=", at);
+        if (w == std::string::npos || c == std::string::npos) continue;
+        counts.push_back({atoi(line.c_str() + at + 17), strtoull(line.c_str() + w + 15, nullptr, 10),
+                          strtoull(line.c_str() + c + 16, nullptr, 10)});
+    }
+    ASSERT_TRUE(entered && anchor >= 0) << song << ": no [GPUCOUNT] sceneBgWrites line before game_screen Enter";
+    const Count *atGame = &counts[anchor], *atEnd = nullptr;
+    for (const Count &c : counts)
+        if (c.frame <= endFrame) atEnd = &c;
+    ASSERT_NE(atEnd, nullptr) << song << ": no [GPUCOUNT] line by the driver's end frame " << endFrame;
+    const int frames = atEnd->frame - atGame->frame;
+    ASSERT_GT(frames, 300) << song << ": too few frames after game_screen";
+    const unsigned long long writes = atEnd->writes - atGame->writes;
+    const unsigned long long creates = atEnd->creates - atGame->creates;
+    printf("%s: scene bind groups over %d gameplay frames: %llu writes, %llu creates\n", song, frames,
+           writes, creates);
+    // Non-vacuous: gameplay switches cameras every frame.
+    EXPECT_GE(writes, 10ull * frames) << song << ": " << writes << " scene writes in " << frames << " frames";
+    EXPECT_LT(creates, (unsigned long long)frames)
+        << song << ": " << creates << " scene bind groups created in " << frames << " gameplay frames ("
+        << (double)creates / frames << " a frame) for " << writes << " writes";
+}
+
 class PerformCrowdTest : public ::testing::Test {
 protected:
     void Check(const char *song, double whiteMax) {
@@ -589,6 +640,7 @@ protected:
         }
         printf("%s: %d WorldCrowd in the venue\n", song, crowds);
         ExpectNoPipelineCreatedAfterLoad(song, run);
+        ExpectSceneBindGroupsReused(song, run);
         ASSERT_GE(crowds, 1) << song << ": no WorldCrowd in the venue, nothing to test\n"
                              << run.driver;
         std::string pairs;

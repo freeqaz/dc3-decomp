@@ -31,6 +31,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include "platform/ExecutablePath.h"
+#include "test_tmp.h"
 #include "shell_timeout.h"
 
 namespace {
@@ -82,10 +83,8 @@ TEST_F(PadWithAPersonTest, RaisedHandsDoNotTakeThePadUnderForcedControllerMode) 
     const std::string fixture = dir + "/../tests/data/pose/hands_up_held.dc3pose";
     ASSERT_TRUE(Exists(bin)) << bin << " (scripts/native_test.sh builds it)";
     ASSERT_TRUE(Exists(fixture)) << fixture;
-    char tmpl[] = "/tmp/dc3-pad-person-XXXXXX";
-    char *root = mkdtemp(tmpl);
-    ASSERT_NE(root, nullptr);
-    const std::string R = root;
+    const std::string R = MakeTestTempDir("dc3-pad-person"); // removed at exit on a pass
+    ASSERT_FALSE(R.empty()) << "MakeTestTempDir failed under " << TestTempBase();
     const std::string route = R + "/route.txt";
     std::ofstream(route) << kRoute;
     const std::string log = R + "/engine.log";

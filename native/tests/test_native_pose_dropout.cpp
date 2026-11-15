@@ -45,6 +45,7 @@
 #include <unistd.h>
 #include <vector>
 #include "platform/ExecutablePath.h"
+#include "test_tmp.h"
 #include "shell_timeout.h"
 
 namespace {
@@ -178,13 +179,11 @@ DropoutRun RunDropout(const std::vector<Gap> &gaps, const char *holdMs, double s
         r.setupError = "dc3-native does not exist at " + bin + " (scripts/native_test.sh builds it)";
         return r;
     }
-    char tmpl[] = "/tmp/dc3-dropout-XXXXXX";
-    char *root = mkdtemp(tmpl);
-    if (!root) {
-        r.setupError = "mkdtemp failed";
+    std::string R = MakeTestTempDir("dc3-dropout"); // removed at exit on a pass
+    if (R.empty()) {
+        r.setupError = "MakeTestTempDir failed under " + TestTempBase();
         return r;
     }
-    std::string R = root;
     if (!SeedAllTutorialsSeen(R)) {
         r.setupError = "could not seed the global options cache under " + R;
         return r;
@@ -248,9 +247,7 @@ protected:
             GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable (requires game assets)";
     }
     static std::string Dump(const DropoutRun &r) {
-        std::string path = "/tmp/claude-1000/pose_dropout_" +
-            std::string(::testing::UnitTest::GetInstance()->current_test_info()->name()) + "_" +
-            std::to_string((int)getpid()) + ".log";
+        std::string path = TestLogPath("pose_dropout"); // removed at exit on a pass
         std::ofstream f(path);
         if (f.is_open())
             f << r.driver << r.output;
