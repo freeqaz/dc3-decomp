@@ -205,10 +205,13 @@ TEST_F(RetailLightingTest, ProjectedShadowLightDrawsItsCastersWhereTheReceiversL
     ASSERT_EQ(drawn.meshes.size(), 1u);
     EXPECT_EQ(drawn.meshes[0], caster);
 
-    // The rasteriser's texel for a world point must be the receiver's uv.
-    // (For an orthonormal light. The casters are drawn through the light's
+    // The rasteriser's texel for a world point must be the receiver's uv,
+    // offset by half a texel of the image's 256x256 map (for an orthonormal light. The casters are drawn through the light's
     // inverse and the receivers read its raw rows, and the two part when the
     // light is scaled: ScaledLightDrawsItsCastersThroughTheInverse.)
+    // Sabotage: dropping the half-texel offset from ProjShadowCasterClip
+    // fails the uv checks here and in the scaled test.
+    const float kHalfTexel = 0.5f / 256.0f;
     const Transform p = spot->Projection();
     const Vector3 pts[] = {Vector3(0, 0, 0), Vector3(30, -20, 0), Vector3(-50, 40, 10)};
     for (const Vector3 &w : pts) {
@@ -222,8 +225,10 @@ TEST_F(RetailLightingTest, ProjectedShadowLightDrawsItsCastersWhereTheReceiversL
         const float r0 = p.m.x.x * w.x + p.m.y.x * w.y + p.m.z.x * w.z + p.v.x;
         const float r1 = p.m.x.y * w.x + p.m.y.y * w.y + p.m.z.y * w.z + p.v.y;
         const float r2 = p.m.x.z * w.x + p.m.y.z * w.y + p.m.z.z * w.z + p.v.z;
-        EXPECT_NEAR(texU, r0 / r2, 1e-5f);
-        EXPECT_NEAR(texV, r1 / r2, 1e-5f);
+        // Half a 256-texel along +u and +v: the image rasterises the casters
+        // with D3D9 pixel centres and reads them bilinearly (§15).
+        EXPECT_NEAR(texU, r0 / r2 + kHalfTexel, 1e-5f);
+        EXPECT_NEAR(texV, r1 / r2 + kHalfTexel, 1e-5f);
         EXPECT_EQ(clip[2], 0.0f);   // casters at depth 0: a coverage map
     }
 
@@ -288,8 +293,8 @@ TEST_F(RetailLightingTest, ScaledLightDrawsItsCastersThroughTheInverse) {
         // The light's local frame by hand: w - pos = xL*m.x + yL*m.y + zL*m.z.
         const float xL = w.x, zL = w.y / sc, yL = -(w.z - 300.0f) / sc;
         const float cw = top + (bot - top) * yL / range;
-        const float wantU = 0.5f * xL / cw + 0.5f;
-        const float wantV = 0.5f - 0.5f * zL / cw;
+        const float wantU = 0.5f * xL / cw + 0.5f + 0.5f / 256.0f;   // + D3D9's half texel
+        const float wantV = 0.5f - 0.5f * zL / cw + 0.5f / 256.0f;
 
         const float *m = drawn.clipFromWorld;
         float clip[4];
