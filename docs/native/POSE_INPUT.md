@@ -971,9 +971,73 @@ same auto-assign and chooser, over a looping mjpeg whose loop point is the
 same kind of cut. The tracker change is ported (parity test below). A local
 web rerun of two songs is in PLAN W-10.
 
+### P-17: one dancer, two ids (`np-track-onebody`)
+
+**Reported (2026-11-14, GPD, Milkshake twice through `scripts/play.sh --dlc`).**
+"Player detection kept dropping": the HUD flickered, most when the player
+stood close to the keyboard.
+
+**Cause (MEASURED on that session's `pose.dc3session`, 4,704 sensor frames,
+8.5 minutes).** She was never lost: there is no gap for P-12's hold to
+cover. Her tracking id changed instead. The set of ids in view changed 164
+times; 84 of those were one person becoming another id on consecutive frames
+with her hip moved 5 cm (median). 41 ids were handed out.
+
+- MediaPipe at `num_poses 2` reports one body twice on some frames. In that
+  session the two hip centres were 1 to 17 cm apart. Two real people were
+  never closer than 43 cm.
+- The second report became a second track on the same body. From then on a
+  frame's single detection went to whichever twin's last position was nearer,
+  so the id alternated: 4⇄5, 12⇄13, 24⇄26, 34⇄36, 36⇄37, 36⇄40.
+- A jump past `max_dist` (her hips are a guess below the frame at the
+  keyboard) left the old track behind as a twin the same way.
+- Each change is a new person to the engine: P-12's hold is refused (a
+  newcomer within 0.3 m), the slot is released, the player is unbound and
+  bound again, and the root depth filter restarts (the twins' depths differed
+  by about 0.1 m). `ymca_oneid` under "Track-id changes" below is what that costs
+  in score.
+
+**Fix (`CentroidTracker`, `pose_mediapipe.py` and `pose_geometry.js`).** One
+body, one track. The body radius is half the detection's own torso length in
+the image (`body_ratio` 0.5), about 25 cm of real space at any distance.
+
+1. A detection no track claims that lies within the radius of a kept
+   detection is a second report of that body. It gets no id, no track, and is
+   not sent to the engine.
+2. A track that went unmatched and lies within the radius of a matched
+   detection is forgotten at once.
+
+Two established tracks are never merged, and neither rule reaches past the
+body radius, so two players side by side are not touched. A wider rule was
+measured and not taken: preferring any track seen last frame over an older
+one gives the same result on this session (59 changes against 61) but would
+swap two players standing within `max_dist` of each other.
+
+**Before / after (the session's hip centres replayed through both trackers;
+image positions re-projected from the recorded joints, so the old tracker's
+replay is the baseline, not the 164 recorded):**
+
+| Tracker | Id-set changes | One-body id changes | Ids handed out |
+|---|---|---|---|
+| before | 142 | 45 | 31 |
+| after | 61 | 8 | 32 |
+
+The second song (3.4 minutes) has no one-body id change (12 recorded, 7 in
+the old tracker's replay). The first, which includes a pause with the player
+at the keyboard, has 4 (35 recorded, 20 replayed). What is left: a second
+person really was in view for 2 to 8 s at a time (enter and leave), real
+dropouts, and the 8 changes with the player at the keyboard or walking back
+from it, where one to five joints are tracked and the hip guess moves by more
+than `max_dist` between frames. Not measured: a live replay, and the score.
+
 ### Tests
 
 - `tests/test_pose_tracker.py` (ctest `PoseTracker.Python`):
+  - one body reported twice is one id, tracked already or new that frame; a
+    track left behind by a jump is forgotten; two people side by side, just
+    outside the radius, or coming together under established tracks keep
+    their ids; `MediaPipeBackend.process` and the web `PoseGeometry.process`
+    hand over one person; web parity on all of it (9 of 9 sabotages caught);
   - a 1.43 s dropout keeps the id; past 2 s is a new person; the bound is
     exactly 60 frames;
   - two people keep their ids through one dropping out, in either detection
@@ -2331,6 +2395,7 @@ measures 4–43). Replayed as a session (`--performer session:`,
    The gain is in m15–m21, where the 29–35 s flicker sits: m15 ok →
    awesome under `off`. Not changed here: an id flicker is the tracker's
    (P-12's `CentroidTracker`), and merging ids is a tracker decision.
+   Taken up in [P-17](#p-17-one-dancer-two-ids-np-track-onebody).
 
 ### The camera stops or the dancer leaves (H-94)
 

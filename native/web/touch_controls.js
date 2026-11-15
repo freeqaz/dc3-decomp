@@ -18,6 +18,13 @@
     var force = q.get('touch');
     var fine = window.matchMedia && window.matchMedia('(any-pointer: fine)').matches;
     var show = force === '1' || (force !== '0' && !fine && ('ontouchstart' in window || navigator.maxTouchPoints > 0));
+    // The page refused to boot the engine (no secure context, WebGPU or
+    // JSPI): its message owns the screen, and buttons would only cover it
+    // (W-31: on an iPhone they sat over the JSPI message).
+    if (window.dc3BootBlocked) {
+        window.dc3TouchControls = { shown: false, presses: 0, blocked: String(window.dc3BootBlocked) };
+        return;
+    }
     window.dc3TouchControls = { shown: !!show, presses: 0 };
     if (!show) return;
 
@@ -29,11 +36,13 @@
         '  -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; padding:0; }' +
         '#dc3-touch button.on { background:#c0f8; border-color:#fff; }' +
         '#dc3-touch { --b:min(15vmin, 72px); --g:calc(var(--b) * 0.1); }' +
-        '#dc3-touch .dpad { position:absolute; left:calc(var(--g) * 3); bottom:calc(var(--g) * 3);' +
+        '#dc3-touch .dpad { position:absolute; left:calc(var(--g) * 3 + env(safe-area-inset-left, 0px));' +
+        '  bottom:calc(var(--g) * 3 + env(safe-area-inset-bottom, 0px));' +
         '  width:calc(var(--b) * 3); height:calc(var(--b) * 3); }' +
-        '#dc3-touch .face { position:absolute; right:calc(var(--g) * 3); bottom:calc(var(--g) * 3);' +
+        '#dc3-touch .face { position:absolute; right:calc(var(--g) * 3 + env(safe-area-inset-right, 0px));' +
+        '  bottom:calc(var(--g) * 3 + env(safe-area-inset-bottom, 0px));' +
         '  width:calc(var(--b) * 2.6); height:calc(var(--b) * 3); }' +
-        '#dc3-touch .hint { position:absolute; left:50%; top:calc(var(--g) * 2); transform:translateX(-50%);' +
+        '#dc3-touch .hint { position:absolute; left:50%; top:calc(var(--g) * 2 + env(safe-area-inset-top, 0px)); transform:translateX(-50%);' +
         '  color:#ccc; background:#000b; border:1px solid #555; border-radius:6px; padding:6px 10px;' +
         '  font:14px/1.35 system-ui,sans-serif; max-width:90vw; text-align:center; display:none; pointer-events:auto; }' +
         '@media (orientation:portrait) { #dc3-touch .hint { display:block; } }';
