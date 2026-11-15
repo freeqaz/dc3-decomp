@@ -13,6 +13,13 @@
 #
 # usage: scripts/gpu/look_capture.sh <out-dir> [--binary B] [--song S]
 #            [--venues a,b,c] [--seconds N] [--port-base P] [--states peak,normal]
+#            [--scale F]
+#
+# The capture is headless, and a headless engine draws at 1x: DC3_LOOK=enhanced's
+# 2x supersampling is a default only for a window.  --scale F asks for an
+# internal render scale (MILO_RENDER_SCALE=F, clamped to [1, 2]), e.g. --scale 2
+# to see the windowed enhanced look.  Off by default, and an inherited
+# MILO_RENDER_SCALE is dropped, so two sheets differ only where asked.
 #
 # <out-dir> must not exist (a stale picture from an earlier run would read as
 # this run's).  GPU run: needs the sandbox off; takes the shared GPU lock.
@@ -22,7 +29,7 @@
 # writing a contact sheet, so this script counts the frames itself.
 set -u
 
-usage() { sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+usage() { sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
 [ $# -ge 1 ] || usage
 OUT=$1; shift
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
@@ -34,6 +41,7 @@ VENUES=dci,dclive,houseparty,rollerrink,streetside,throneroom
 SECONDS_IN=45
 PORT=19300
 STATES=peak,normal
+SCALE=
 while [ $# -gt 0 ]; do
     case $1 in
         --binary) BIN=$2; shift 2 ;;
@@ -42,12 +50,18 @@ while [ $# -gt 0 ]; do
         --seconds) SECONDS_IN=$2; shift 2 ;;
         --port-base) PORT=$2; shift 2 ;;
         --states) STATES=$2; shift 2 ;;
+        --scale) SCALE=$2; shift 2 ;;
         *) usage ;;
     esac
 done
 [ -e "$OUT" ] && { echo "look_capture: $OUT exists; give a fresh directory" >&2; exit 1; }
 [ -x "$BIN" ] || { echo "look_capture: no binary at $BIN" >&2; exit 1; }
 mkdir -p "$OUT" || exit 1
+unset MILO_RENDER_SCALE
+if [ -n "$SCALE" ]; then
+    export MILO_RENDER_SCALE=$SCALE
+    echo "look_capture: internal render scale $SCALE (MILO_RENDER_SCALE)"
+fi
 LOCK=${DC3_GPU_LOCK:-/home/free/tmp/claude-1000/gpu1.lock}
 [ -e "$LOCK" ] || LOCK=$OUT/.gpu.lock
 

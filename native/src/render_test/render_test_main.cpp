@@ -355,8 +355,8 @@ int main(int argc, char** argv) {
     }
 
     // ---- Screenshot ----
-    int w = gWgpuRnd->Gpu().WindowWidth();
-    int h = gWgpuRnd->Gpu().WindowHeight();
+    int w = gWgpuRnd->Gpu().OutputWidth();
+    int h = gWgpuRnd->Gpu().OutputHeight();
     size_t pixelSize = (size_t)w * h * 4;
     uint8_t* pixels = (uint8_t*)malloc(pixelSize);
 
