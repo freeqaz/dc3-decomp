@@ -1459,7 +1459,16 @@ ones, then a rebuild and upload of two meshes). The first version called `RndMes
 beats 284 / 286 / 288 show three different poses of the sensor's person
 (`sheet_slideshow.png`), i.e. distinct pictures, not one repeated. The slideshow
 worked before this branch as well (`c14.png` above). NOT MEASURED: that all 16
-differ; the results screen's three photos in Perform.
+differ.
+
+**The photos on the results screen (MEASURED 2026-11-15, one run to the end of
+the song, engine checkout at `5e8768c`, which is ahead of the pin `5f5d9ed`):**
+`perform_endgame_screen` shows three photo frames with three different poses of
+the sensor's person (`/home/free/tmp/np-boxyman-run.CKdN/shots/res_17.png`;
+all 35 shots of the end of the song in `sheet_results.png` beside it).
+`{ui num_snapshots}` reads 17 there (16 from freestyle + the final pose). The
+person is the synthetic sensor's flat orange figure, so this says the pictures
+arrive on the meshes, not what a webcam picture looks like there.
 
 **Limits — what is not the original's picture, and what was not checked.**
 
@@ -1485,8 +1494,25 @@ differ; the results screen's three photos in Perform.
 - **Sheet mode** (`mDrawSheet`, `DrawLargeQuad`: no shipped object sets it) and a
   depth source that is not the camera stream (`mPlayerPaletteTex`-style textures
   with no CPU texels) draw nothing natively.
+- **The registers come from a function that is not fully matched.**
+  `DepthBuffer3D::DrawMesh` is 100%; `DrawShowing`, which computes the zoom
+  rectangle, the depth window and the player selector the shader is run with,
+  is 83.65% (`report.json` fuzzy, main checkout, 2026-11-15). The shader port is
+  exact about what it is given; whether the zoom it is given equals the image's
+  to the last float is not established.
+- **Framing.** At zoom 1 the rectangle is the full width by 1/1.2 of the height
+  (the `1.2f` aspect factor in `DrawShowing`), centred on the player. The
+  synthetic person fills the whole camera height, so its head and a raised hand
+  can fall above the rectangle (MEASURED: `texZoom` v 0.117..0.95 with the mask
+  reaching row 0; `/home/free/tmp/np-boxyman-run.CKdN/shots/orient_b270.png`). A
+  dancer a Kinect sees at 2–3 m does not fill the height. INFERRED to be the
+  image's behaviour from that constant, not compared with a capture.
 - **Orientation** follows the shader (image left → mesh −x, image top → mesh +z)
-  and the camera path's mirror; it was not compared with a capture of a 360.
+  and the camera path's mirror. MEASURED: at one instant the figure and the
+  gameplay silhouette box (`depth_buffer_right.tex`, the mirror view
+  `CameraViewTest` pins) show the same arm raised on the same side
+  (`orient_b270.png` and the 40×30 grid printed with it). Not compared with a
+  capture of a 360.
 - **Loading screen:** the figure appears there because the same decompiled code
   and data draw the four objects on `real_loading_screen`; that the original
   does so was not compared with a capture.
@@ -1532,8 +1558,9 @@ not filed: `BoxymanTest` fails each; the no-camera return removed:
   (Corrected 2026-11-15: this entry said "not landed". Engine `c810e49` reached
   the engine's main with the merge `d832e72` and is an ancestor of the pin
   `5f5d9ed`; `MILO_READBACK_GPU_RENDER_TARGET` is defined there, so
-  `TexRendererClearTest` compiles against the pinned engine. Not re-measured
-  here: the results-screen photos on the pinned engine.)
+  `TexRendererClearTest` compiles against the pinned engine. The results-screen
+  photos were seen on engine `5e8768c` (see "The photos on the results screen"
+  above), not on the pin itself.)
   Where the game shows them: `perform_endgame_panel reveal_photos` puts up to three
   snapshots on `result_photoshare_photo1..3.mesh` after the results timer, in every
   mode **except** campaign, rhythm battle, holla back and fitness playlists
