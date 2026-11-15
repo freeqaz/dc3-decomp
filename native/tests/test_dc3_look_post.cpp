@@ -300,7 +300,11 @@ TEST_F(DC3LookPostTest, EnhancedBloomKeepsEnergyAndExtentAndStopsWobbling) {
             wgpu::Texture scene = Upload(W, H, Dot(W, H, cx, cy));
             for (int e = 0; e < 2; e++) {
                 RetailPostParams p = BloomTerm(streak, c6);
-                p.enhPrecision = true;   // both sides 16-bit: this test is about the filter
+                // Both sides 16-bit and linear (no dead zone): this test is
+                // about the filters (SixteenBitSetsKeepRetailsDeadZone is
+                // about the dead zone).
+                p.enhPrecision = true;
+                p.enhLinear = true;
                 p.enhFilter = e == 1;
                 m[e].push_back(Measure(RunBloomHdr(chain, scene, W, H, p), W, H));
             }
@@ -363,6 +367,14 @@ TEST_F(DC3LookPostTest, EnhancedBloomKeepsEnergyAndExtentAndStopsWobbling) {
         }
         EXPECT_LT(wobble[1], wobble[0] * 0.5) << "a moving dot's bloom follows it";
         if (streak) EXPECT_LT(cv[1], cv[0] * 0.5) << "and the streak stops blinking";
+        if (!streak) {
+            // The plain arm, absolute: 0.010 px and CV 0.0002 measured. The
+            // tent with its bilinear pairs' weights flattened (0.25 each)
+            // reads 0.067 px / 0.0017; the coarse sets upsampled bilinearly
+            // in the combine (their texel creases back) 0.037 px.
+            EXPECT_LT(wobble[1], 0.02) << "the tent and the B-spline keep the plain bloom on the dot";
+            EXPECT_LT(cv[1], 0.001) << "and its energy steady";
+        }
     }
     chain.Terminate();
 }
@@ -405,6 +417,53 @@ TEST_F(DC3LookPostTest, SixteenBitSetsRemoveTheBloomStaircase) {
     EXPECT_GT(bigSteps[0], 50) << "retail's 8-bit sets make a staircase (non-vacuous)";
     EXPECT_LE(maxStep[1], 1) << "RGBA16Float sets give a smooth ramp";
     EXPECT_EQ(bigSteps[1], 0);
+    chain.Terminate();
+}
+
+// postPrecision keeps retail's dead zone. Retail's 8-bit sets round every
+// pass to the nearest level, so a dim surface's own glow (colour x mask under
+// half a level) and the far tails of a halo are gone; linear 16-bit sets
+// bloom them (dci's dark floor rose 1.2 levels on real frames). The shipped
+// sets keep it as a knee; enhLinear (tests only) shows what it removes.
+// Plain arm, bloom term mean over the frame: a uniform dim field (colour 40,
+// mask 3: 0.47 levels into set0) and a sparse field of 2x2 dots.
+TEST_F(DC3LookPostTest, SixteenBitSetsKeepRetailsDeadZone) {
+    constexpr int W = 1280, H = 720;
+    struct Field { const char *name; int colour, mask; bool dots; };
+    const Field fields[] = {{"uniform dim surface", 40, 3, false},
+                            {"dots at 255", 255, 255, true},
+                            {"dots at 64", 64, 255, true}};
+    RB3RetailPost chain;
+    chain.Init(Gpu());
+    for (const Field &fd : fields) {
+        std::vector<uint8_t> px((size_t)W * H * 4, 0);
+        for (int y = 0; y < H; y++)
+            for (int x = 0; x < W; x++) {
+                uint8_t *p = &px[((size_t)y * W + x) * 4];
+                const bool on = !fd.dots || ((x % 37) < 2 && (y % 29) < 2);
+                p[0] = p[1] = p[2] = on ? (uint8_t)fd.colour : 0;
+                p[3] = (uint8_t)fd.mask;
+            }
+        wgpu::Texture scene = Upload(W, H, px);
+        double mean[3] = {};   // retail, shipped enhanced, linear
+        for (int k = 0; k < 3; k++) {
+            RetailPostParams p = BloomTerm(false, 3.0f);
+            p.enhPrecision = p.enhFilter = k > 0;
+            p.enhLinear = k == 2;
+            const auto g = RunChain(chain, scene, W, H, p);
+            for (float v : g) mean[k] += v;
+            mean[k] /= g.size();
+        }
+        printf("DC3LookPost dead zone, %s: bloom term mean retail %.3f, enhanced %.3f, linear %.3f levels\n",
+               fd.name, mean[0], mean[1], mean[2]);
+        if (!fd.dots) {
+            EXPECT_LT(mean[0], 0.05) << "retail's 8-bit sets drop the dim surface's glow (non-vacuous)";
+            EXPECT_GT(mean[2], 2.0) << "linear sets bloom it (the dark-floor lift)";
+            EXPECT_LT(mean[1], 0.05) << "the shipped sets drop it as retail does";
+        } else {
+            EXPECT_NEAR(mean[1] / mean[0], 1.0, 0.15) << "the dots' glow keeps retail's energy";
+        }
+    }
     chain.Terminate();
 }
 
