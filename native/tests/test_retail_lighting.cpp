@@ -19,12 +19,15 @@
 //   * a projected_blend 1 light publishes its cone, and the caster pass
 //     hands back exactly the shadow objects with a clip transform that lands
 //     each caster where a receiver's (c95 . p, c96 . p) / (c97 . p) reads it;
-//     the map is only reported valid on the frame after it was drawn.
+//     the map is only reported valid on the frame after it was drawn;
+//   * a character in that list casts what retail's Character::DrawLod draws in
+//     the occlusion pass, and nothing else (CharacterCastsWhatDrawLodDraws).
 //
 // CPU only: no GPU, no game data.
 
 #include "test_helpers.h"
 
+#include "char/Character.h"
 #include "gfx/UniformStructs.h"
 #include "math/Mtx.h"
 #include "obj/Dir.h"
@@ -37,6 +40,7 @@
 #include "rndobj/ShaderMgr.h"
 #include "rndobj/Tex.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -238,6 +242,113 @@ TEST_F(RetailLightingTest, ProjectedShadowLightDrawsItsCastersWhereTheReceiversL
     rndshape::CollectProjShadowCasters(none);
     spot->SetShadowOverride(nullptr);
     delete caster;
+}
+
+namespace {
+
+// A character built the way a loaded one is: its own drawables (mDraws), LODs
+// with opaque groups, an optional shadow group.
+class ShadowTestCharacter : public Character {
+public:
+    void AddDraw(RndDrawable *d) { NativeAddDraw(d); }
+    void SetLods(int n) { mLods.resize(n); }
+    void AddLodOpaque(int lod, RndDrawable *d) { mLods[lod].mOpaque.push_back(d); }
+    void AddLodTranslucent(int lod, RndDrawable *d) { mLods[lod].mTranslucent.push_back(d); }
+    void AddShadow(RndDrawable *d) { mShadow.push_back(d); }
+    void ClearShadow() { mShadow.clear(); }
+    void SetLastLod(int lod) { mLastLod = lod; }
+};
+
+} // namespace
+
+// Retail draws a light's shadow objects with DrawShowing in kDrawOcclusion
+// (NgLight::RenderShadows). For a character that is Character::DrawLod's
+// occlusion branch: nothing unless floor_shadow is set and the draw mode has
+// the opaque bit; then DrawLodOrShadow: the `shadow` group if it holds
+// anything, else DrawOpaque -- the character's own drawables and the current
+// LOD's opaque group. A hidden drawable draws nothing (RndDrawable::Draw).
+// Native used to expand every mesh under the character: all LODs, the shadow
+// meshes on top of the body, hidden props, translucent groups.
+// Sabotages: expanding a character as a plain dir (ignoring the shadow group,
+// the LOD and floor_shadow) fails every block below; dropping the Showing()
+// check fails the hidden-prop expectation; taking LOD 0 instead of the last
+// drawn LOD fails the no-shadow-group block.
+TEST_F(RetailLightingTest, CharacterCastsWhatDrawLodDraws) {
+    RndLight *spot = MakeLight(RndLight::kFakeSpot, Vector3(0.0f, 0.0f, 300.0f));
+    Hmx::Matrix3 rot;
+    rot.x.Set(1.0f, 0.0f, 0.0f);
+    rot.y.Set(0.0f, 0.0f, -1.0f);
+    rot.z.Set(0.0f, 1.0f, 0.0f);
+    spot->SetLocalRot(rot);
+    spot->SetRange(400.0f);
+    spot->SetTopRadius(5.0f);
+    spot->SetBotRadius(120.0f);
+    spot->SetProjectedBlend(1);
+
+    ShadowTestCharacter *chr = new ShadowTestCharacter();
+    RndMesh *prop = Hmx::Object::New<RndMesh>();         // shown, outside any LOD
+    RndMesh *hiddenProp = Hmx::Object::New<RndMesh>();   // hidden
+    hiddenProp->SetShowing(false);
+    RndMesh *lod0 = Hmx::Object::New<RndMesh>();
+    RndMesh *lod1 = Hmx::Object::New<RndMesh>();
+    RndMesh *lod1Translucent = Hmx::Object::New<RndMesh>();
+    RndMesh *shadowMesh = Hmx::Object::New<RndMesh>();
+    chr->AddDraw(prop);
+    chr->AddDraw(hiddenProp);
+    chr->SetLods(2);
+    chr->AddLodOpaque(0, lod0);
+    chr->AddLodOpaque(1, lod1);
+    chr->AddLodTranslucent(1, lod1Translucent);
+    chr->SetLastLod(1);
+    // A loose mesh as well, so the light always has a caster and the frames
+    // where the character contributes nothing still publish a set.
+    RndMesh *loose = Hmx::Object::New<RndMesh>();
+    ObjPtrList<RndDrawable> casters(spot);
+    casters.push_back(chr);
+    casters.push_back(loose);
+    spot->SetShadowOverride(&casters);
+
+    auto collect = [&]() {
+        Write();
+        rndshape::ProjShadowCasters drawn;
+        EXPECT_TRUE(rndshape::CollectProjShadowCasters(drawn));
+        std::vector<RndMesh *> got(drawn.meshes.begin(), drawn.meshes.end());
+        std::sort(got.begin(), got.end());
+        return got;
+    };
+    auto sorted = [](std::vector<RndMesh *> v) {
+        std::sort(v.begin(), v.end());
+        return v;
+    };
+
+    // With a shadow group: that group only.
+    chr->AddShadow(shadowMesh);
+    EXPECT_EQ(collect(), sorted({shadowMesh, loose}))
+        << "a character with a shadow group casts that group and nothing else";
+
+    // Without one: its own shown drawables and the last LOD's opaque group.
+    chr->ClearShadow();
+    EXPECT_EQ(collect(), sorted({prop, lod1, loose}))
+        << "no shadow group: DrawOpaque at the current LOD, hidden props excluded";
+
+    // floor_shadow off, or a draw mode without the opaque bit: nothing.
+    chr->SetFloorShadow(false);
+    EXPECT_EQ(collect(), sorted({loose})) << "floor_shadow off casts nothing";
+    chr->SetFloorShadow(true);
+    chr->SetDrawMode(Character::kCharDrawTranslucent);
+    EXPECT_EQ(collect(), sorted({loose})) << "a translucent-only draw mode casts nothing";
+    chr->SetDrawMode(Character::kCharDrawAll);
+
+    // A hidden character casts nothing, shadow group or not.
+    chr->AddShadow(shadowMesh);
+    chr->SetShowing(false);
+    EXPECT_EQ(collect(), sorted({loose})) << "a hidden character casts nothing";
+
+    rndshape::ProjShadowCasters none;
+    rndshape::CollectProjShadowCasters(none);
+    spot->SetShadowOverride(nullptr);
+    delete chr;
+    for (RndMesh *m : {prop, hiddenProp, lod0, lod1, lod1Translucent, shadowMesh, loose}) delete m;
 }
 
 // Houseparty holds two projected lights with shadow objects in one frame
