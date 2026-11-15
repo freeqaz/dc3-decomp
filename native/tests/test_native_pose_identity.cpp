@@ -499,6 +499,122 @@ TEST_F(PoseIdentityPlayersTest, PlayerOneWaitsForHerOwnBodyThenTakesTheNearest) 
     EXPECT_EQ(mLastRule[0], Dc3PoseIdentity::kRuleAuto);
 }
 
+// Song 3 in the recording, four measures in: the camera lost player 1 (the
+// left dancer) for 1.7 s and the right dancer, who never joined, got her
+// binding -- and kept it for 41 measures.
+TEST_F(PoseIdentityPlayersTest, AStandInGivesThePlayerBackWhenSheReturns) {
+    Skeleton(0, 301, -0.4f);
+    Tick();
+    ASSERT_EQ(mBound[0], 301);
+    Skeleton(1, 302, 0.4f); // dancing along, never bound
+    Ticks(60);
+    Gone(0);
+    Ticks(30);
+    ASSERT_EQ(mBound[0], 302) << "the song goes on with the stand-in";
+    ASSERT_EQ(mLastRule[0], Dc3PoseIdentity::kRuleAuto);
+    EXPECT_TRUE(mPlayers.StandIn(0));
+    Ticks(30);
+    EXPECT_EQ(mBinds[0], 2);
+    // She is back 2 s after she went, in another slot.
+    Skeleton(2, 301, -0.3f);
+    Players::Result r = Tick();
+    EXPECT_EQ(mBound[0], 301) << "the player herself, not whoever stood in";
+    EXPECT_EQ(r.rule[0], Dc3PoseIdentity::kRuleSameId);
+    EXPECT_EQ(r.slot[0], 2);
+    EXPECT_FALSE(mPlayers.StandIn(0));
+    Ticks(60);
+    EXPECT_EQ(mBinds[0], 3) << "and it stays";
+    EXPECT_EQ(mBound[0], 301);
+}
+
+TEST_F(PoseIdentityPlayersTest, AStandInGivesThePlayerBackToANewBodyWhereSheStood) {
+    Skeleton(0, 301, -0.4f);
+    Tick();
+    Skeleton(1, 302, 0.4f);
+    Ticks(60);
+    Gone(0);
+    Ticks(60);
+    ASSERT_EQ(mBound[0], 302);
+    Skeleton(0, 399, -0.2f); // a tracking id nobody had, 20 cm from her place
+    Players::Result r = Tick();
+    EXPECT_EQ(mBound[0], 399);
+    EXPECT_EQ(r.rule[0], Dc3PoseIdentity::kRuleNear);
+}
+
+TEST_F(PoseIdentityPlayersTest, AfterTheWindowTheStandInIsThePlayer) {
+    Skeleton(0, 301, -0.4f);
+    Tick();
+    Skeleton(1, 302, 0.4f);
+    Ticks(60);
+    Gone(0);
+    Ticks(170); // 5.6 s
+    ASSERT_EQ(mBound[0], 302);
+    EXPECT_FALSE(mPlayers.StandIn(0));
+    Skeleton(2, 301, -0.3f);
+    Ticks(30);
+    EXPECT_EQ(mBound[0], 302) << "301 walks back in as anybody would: the normal join";
+    EXPECT_EQ(mBinds[0], 2);
+}
+
+TEST_F(PoseIdentityPlayersTest, ABindingTheImageMadeMeanwhileIsNotAStandIn) {
+    // Player 1 is lost, a stand-in is asked for, and the image binds somebody
+    // else of its own (a hand raised): that one joined, and stays.
+    Skeleton(0, 301, -0.4f);
+    Tick();
+    Skeleton(1, 302, 0.4f);
+    Skeleton(2, 303, 1.2f);
+    Ticks(60);
+    Gone(0);
+    Ticks(30);
+    ASSERT_EQ(mBound[0], 302);
+    mBound[0] = 303;
+    Ticks(5);
+    Skeleton(0, 301, -0.4f);
+    Ticks(30);
+    EXPECT_EQ(mBound[0], 303);
+}
+
+TEST_F(PoseIdentityPlayersTest, ABodyKnownBeforeSheWasLostIsNotHerInANewSlotEither) {
+    // The slot a skeleton is in starts again when the slot is given up and
+    // taken back (a body the camera sees every other frame).  How long the
+    // PERSON has been known does not.
+    TwoPlaying();
+    Skeleton(2, 203, -0.2f); // half a metre from player 2, there all along
+    mSlots[2].ageMs = 20000.0f;
+    Ticks(30);
+    Gone(1);
+    Ticks(40);
+    Unbind(1);
+    Gone(2);
+    Tick();
+    Skeleton(4, 203, -0.2f);
+    mSlots[4].ageMs = 21500.0f;
+    Ticks(30);
+    EXPECT_EQ(mBound[1], -1) << "the neighbour is not player 2";
+    // Control: with the person's age unknown the slot's own is all there is,
+    // and a body that has just taken a slot looks new.
+    Gone(4);
+    Tick();
+    Skeleton(5, 203, -0.2f);
+    Ticks(2);
+    EXPECT_EQ(mBound[1], 203);
+}
+
+TEST_F(PoseIdentityPlayersTest, PlayerOneUnboundInViewTakesTheNearestToWhereSheWas) {
+    // The image takes player 1's binding away with her skeleton in view; the
+    // auto-assign gives her one again at once, as it always did -- the body
+    // where she was, not the first slot.
+    Skeleton(0, 302, -1.0f);
+    Skeleton(1, 301, 0.3f);
+    Tick();
+    ASSERT_EQ(mBound[0], 302) << "a first join is the first valid skeleton";
+    mBound[0] = 301; // the chooser moved her
+    Ticks(30);
+    Unbind(0);
+    Tick();
+    EXPECT_EQ(mBound[0], 301);
+}
+
 TEST_F(PoseIdentityPlayersTest, PlayerOneDoesNotHopOntoPlayerTwosBody) {
     // Song 3 in the recording: binding p0 0 -> 2 -> 0 -> 1.  Both lost, then
     // player 2's skeleton returns first: it is hers.

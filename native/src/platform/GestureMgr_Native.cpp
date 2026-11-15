@@ -531,6 +531,8 @@ static void NativeAutoAssignPlayers(float elapsedMs) {
             skel.JointPos(kCoordCamera, kJointHipCenter, hip);
             slots[s].x = hip.x;
             slots[s].z = hip.z;
+            float age = gPeople.AgeSec(slots[s].id);
+            slots[s].ageMs = age >= 0.0f ? age * 1000.0f : -1.0f;
         }
     }
     int boundId[2] = { -1, -1 };
@@ -550,7 +552,14 @@ static void NativeAutoAssignPlayers(float elapsedMs) {
             continue;
         TheGameData->AssignSkeleton(p, result.assign[p]);
         sAutoAssignCount[p]++;
-        if (sDebug)
+        // One line per change: where the image does not keep a binding (the
+        // results screen) the same one is asked for every frame.
+        static int sLastAssign[2] = { -1, -1 };
+        static int sLastRule[2] = { 0, 0 };
+        bool changed = result.assign[p] != sLastAssign[p] || result.rule[p] != sLastRule[p];
+        sLastAssign[p] = result.assign[p];
+        sLastRule[p] = result.rule[p];
+        if (sDebug && changed)
             fprintf(stderr,
                 "DC3 SCORING: bind p%d -> tracking id %d slot %d rule=%s lost=%.0fms dist=%.2fm\n",
                 p, result.assign[p], result.slot[p], Dc3PoseIdentity::RuleName(result.rule[p]),

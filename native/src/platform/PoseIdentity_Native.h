@@ -139,6 +139,7 @@ public:
         for (int p = 0; p < mCount; p++) {
             mPeople[p].unseenSec += dtSec;
             mPeople[p].anchorSec += dtSec;
+            mPeople[p].ageSec += dtSec;
             if (mPeople[p].unseenSec <= windowSec)
                 mPeople[kept++] = mPeople[p];
         }
@@ -253,6 +254,16 @@ public:
         }
         return 0.0f;
     }
+    // How long ago the person with this tracking id was first seen, in
+    // seconds (-1: nobody known).  Players asks: a body that was there before
+    // a player was lost is not that player, whatever slot it is in now.
+    float AgeSec(int id) const {
+        for (int p = 0; p < mCount; p++) {
+            if (mPeople[p].id == id)
+                return mPeople[p].ageSec;
+        }
+        return -1.0f;
+    }
 
     int Remembered() const { return mCount; }
     // Times a person was recognised under a different tracker id.
@@ -268,6 +279,7 @@ private:
         float ax, ay, az; // where she was a moment before that (kAnchorSec)
         float anchorSec;  // how long ago
         float seenSec;    // how long she has been seen in all
+        float ageSec;     // how long ago she was first seen
     };
     static constexpr float kSightingSec = 0.2f;
     struct Search {
@@ -332,6 +344,7 @@ private:
         mPeople[p].hasAnchor = false;
         mPeople[p].anchorSec = 0.0f;
         mPeople[p].seenSec = 0.0f;
+        mPeople[p].ageSec = 0.0f;
         return p;
     }
 
@@ -368,6 +381,13 @@ static const float kFreshSlackMs = 250.0f;
 // image unbinds her and Game::CheckForSkeletonLoss pauses the song, which for
 // one dancer whom the camera lost and found somewhere else is worse than
 // being generous.
+// Whoever she takes then is a STAND-IN: the song goes on, and the player
+// herself is still looked for until the window ends -- her own tracking id,
+// or a new body where she stood, takes the binding back.  (Song 3 of the
+// recorded session: the camera lost the left dancer, who was player 1, for
+// 1.7 s four measures in; the right dancer, who never joined, was bound in
+// her place and kept the binding and the score for 41 measures while the
+// player danced on unbound.)  Only past the window is the stand-in the player.
 static const float kAutoWaitMs = 700.0f;
 
 struct SlotView {
@@ -375,6 +395,10 @@ struct SlotView {
     bool valid = false;   // and it passes the image's quality filter
     int id = -1;          // its tracking id
     float x = 0.0f, z = 0.0f; // hip centre, camera space, metres
+    // How long ago this person was first seen (People::AgeSec, ms); -1 = not
+    // known, and Players uses the time the id has been in this slot -- which
+    // starts again whenever a slot is given up and taken back.
+    float ageMs = -1.0f;
 };
 
 enum Rule {
@@ -447,11 +471,22 @@ public:
             for (int p = 0; p < kPlayers; p++) {
                 Memory &m = mMem[p];
                 if (r.slot[p] >= 0) {
+                    const SlotView &on = slots[r.slot[p]];
+                    m.placed = true;
+                    m.px = on.x;
+                    m.pz = on.z;
+                    if (OnStandIn(p, boundId)) {
+                        // The song goes on with a stand-in; she is still lost.
+                        m.lostMs += elapsedMs;
+                        if (m.lostMs <= (float)windowMs)
+                            continue;
+                    }
                     m.known = true;
                     m.lost = false;
+                    m.standIn = false;
                     m.id = boundId[p];
-                    m.x = slots[r.slot[p]].x;
-                    m.z = slots[r.slot[p]].z;
+                    m.x = on.x;
+                    m.z = on.z;
                     m.lostMs = 0.0f;
                 } else if (m.known) {
                     bool inView = Find(slots, m.id) >= 0;
@@ -475,10 +510,11 @@ public:
         for (int s = 0; s < kSlots; s++)
             claimed[s] = (r.slot[0] == s || r.slot[1] == s);
 
-        // 1. A lost player whose own tracking id is back.
+        // 1. A lost player whose own tracking id is back (she may be on a
+        //    stand-in meanwhile: Looking).
         for (int p = 0; p < kPlayers; p++) {
             const Memory &m = mMem[p];
-            if (r.slot[p] >= 0 || !m.known || !m.lost)
+            if (!Looking(p, r, boundId))
                 continue;
             int s = Find(slots, m.id);
             if (s >= 0 && !claimed[s])
@@ -491,13 +527,14 @@ public:
             float bestD = 0.0f;
             for (int p = 0; p < kPlayers; p++) {
                 const Memory &m = mMem[p];
-                if (r.slot[p] >= 0 || !m.known || !m.lost)
+                if (!Looking(p, r, boundId))
                     continue;
                 float reach = kRebindBase + kRebindSpeed * m.lostMs * 0.001f;
                 if (reach > kRebindMax)
                     reach = kRebindMax;
                 for (int s = 0; s < kSlots; s++) {
-                    if (!slots[s].valid || claimed[s] || mSlotAgeMs[s] > m.lostMs + (float)holdMs + kFreshSlackMs)
+                    float age = slots[s].ageMs >= 0.0f ? slots[s].ageMs : mSlotAgeMs[s];
+                    if (!slots[s].valid || claimed[s] || age > m.lostMs + (float)holdMs + kFreshSlackMs)
                         continue;
                     float d = Flat(m, slots[s]);
                     if (d <= reach && (bestP < 0 || d < bestD)) {
@@ -513,7 +550,8 @@ public:
         }
         // 3. The auto-assign: a player nobody has to ask for takes a free
         //    skeleton, a quality-filter-valid one first -- the one nearest to
-        //    where she stood if that is known, else the first.
+        //    where she stood if that is known, else the first.  While she is
+        //    remembered and lost it is a stand-in (kAutoWaitMs).
         for (int pass = 0; pass < 2; pass++) {
             bool requireValid = (pass == 0);
             for (int p = 0; p < autoPlayers && p < kPlayers; p++) {
@@ -529,11 +567,11 @@ public:
                         continue;
                     if (claimed[s])
                         continue;
-                    if (!m.known) {
+                    if (!m.known && !m.placed) {
                         best = s;
                         break;
                     }
-                    float d = Flat(m, slots[s]);
+                    float d = m.known ? Flat(m, slots[s]) : Flat(m.px, m.pz, slots[s]);
                     if (best < 0 || d < bestD) {
                         best = s;
                         bestD = d;
@@ -548,6 +586,7 @@ public:
 
     bool Remembered(int p) const { return mMem[p].known; }
     bool Lost(int p) const { return mMem[p].known && mMem[p].lost; }
+    bool StandIn(int p) const { return Lost(p) && mMem[p].standIn; }
 
 private:
     struct Memory {
@@ -556,7 +595,23 @@ private:
         int id = -1;
         float x = 0.0f, z = 0.0f;
         float lostMs = 0.0f;
+        bool standIn = false; // lost, and bound to `standInId` meanwhile
+        int standInId = -1;
+        bool placed = false;  // where the skeleton she was last bound to stood,
+        float px = 0.0f, pz = 0.0f; // kept when `known` is not (the auto-assign)
     };
+
+    // Lost, and bound meanwhile to the stand-in the auto-assign gave her (a
+    // binding to anybody else is the image's, and that one is the player).
+    bool OnStandIn(int p, const int *boundId) const {
+        const Memory &m = mMem[p];
+        return m.known && m.lost && m.standIn && boundId[p] == m.standInId;
+    }
+    // Lost and to be found: with no skeleton, or on a stand-in.
+    bool Looking(int p, const Result &r, const int *boundId) const {
+        const Memory &m = mMem[p];
+        return m.known && m.lost && (r.slot[p] < 0 || OnStandIn(p, boundId));
+    }
 
     static int Find(const SlotView *slots, int id) {
         for (int s = 0; s < kSlots; s++) {
@@ -565,12 +620,15 @@ private:
         }
         return -1;
     }
-    static float Flat(const Memory &m, const SlotView &slot) {
-        float dx = slot.x - m.x, dz = kDepthWeight * (slot.z - m.z);
+    static float Flat(float x, float z, const SlotView &slot) {
+        float dx = slot.x - x, dz = kDepthWeight * (slot.z - z);
         return sqrtf(dx * dx + dz * dz);
     }
+    static float Flat(const Memory &m, const SlotView &slot) { return Flat(m.x, m.z, slot); }
     void Bind(Result &r, bool *claimed, const SlotView *slots, const int *boundId, int p, int s,
               int rule, float distance) {
+        if (r.slot[p] >= 0)
+            claimed[r.slot[p]] = false; // the stand-in is free again
         r.slot[p] = s;
         claimed[s] = true;
         Memory &m = mMem[p];
@@ -586,9 +644,13 @@ private:
         if (rule != kRuleAuto && m.known) {
             m.id = slots[s].id;
             m.lost = false;
+            m.standIn = false;
             m.lostMs = 0.0f;
             m.x = slots[s].x;
             m.z = slots[s].z;
+        } else if (rule == kRuleAuto && m.known && m.lost) {
+            m.standIn = true;
+            m.standInId = slots[s].id;
         }
     }
 
