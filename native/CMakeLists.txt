@@ -2053,6 +2053,7 @@ if(BUILD_TESTS)
         tests/test_ham_provider.cpp
         tests/test_subsystems.cpp
         tests/test_loader_thread_stack.cpp
+        tests/test_background_mute.cpp
         tests/test_bone_ground_truth.cpp
         tests/test_headless_boot.cpp
         tests/test_native_exit.cpp
