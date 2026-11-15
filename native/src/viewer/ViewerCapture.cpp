@@ -260,8 +260,8 @@ int RunScreenshot(ScreenshotMode& m, ViewerScene& scene,
     }
 
     // Readback framebuffer and save
-    int w = gWgpuRnd->Gpu().WindowWidth();
-    int h = gWgpuRnd->Gpu().WindowHeight();
+    int w = gWgpuRnd->Gpu().OutputWidth();
+    int h = gWgpuRnd->Gpu().OutputHeight();
     size_t pixelSize = (size_t)w * h * 4;
     uint8_t* pixels = (uint8_t*)malloc(pixelSize);
 
@@ -288,8 +288,8 @@ int RunScreenshot(ScreenshotMode& m, ViewerScene& scene,
 int RunVideo(VideoMode& m, ViewerScene& scene,
              AnimState& anim, CharAnimState& charAnim,
              RndCam* cam, const ViewerConfig& cfg) {
-    int w = gWgpuRnd->Gpu().WindowWidth();
-    int h = gWgpuRnd->Gpu().WindowHeight();
+    int w = gWgpuRnd->Gpu().OutputWidth();
+    int h = gWgpuRnd->Gpu().OutputHeight();
     size_t pixelSize = (size_t)w * h * 4;
     uint8_t* pixels = (uint8_t*)malloc(pixelSize);
 

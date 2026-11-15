@@ -1009,7 +1009,7 @@ TEST_F(DC3RetailPostGpuTest, OverrideAloneGradesTheFrame) {
         Hmx::Rect rect(0.0f, 0.0f, (float)TheRnd.Width(), (float)TheRnd.Height());
         TheRnd.DrawRect(rect, Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f), mat, nullptr, nullptr);
         TheRnd.EndDrawing();
-        const int w = gpu.WindowWidth(), h = gpu.WindowHeight();
+        const int w = gpu.OutputWidth(), h = gpu.OutputHeight();
         std::vector<uint8_t> px((size_t)w * h * 4);
         if (!gpu.ReadbackFrame(px.data(), px.size())) return false;
         red = px[((size_t)(h / 2) * w + w / 2) * 4] / 255.0f;
@@ -1745,4 +1745,152 @@ TEST_F(DC3RetailPostTest, DOFProcKeepsNgDOFProcSetParameters) {
     delete menu;
     delete game;
     delete cam;
+}
+
+// Render scale (LookSettings::renderScale, GpuDeviceDesc::renderScale): a
+// frame drawn at 2x its output size and box-filtered down must grade like the
+// 1x frame. DC3's chain measures its bloom targets (w/4, w/16 of the frame) and
+// its chromatic offset (offset / TheRnd.Width()) in the original's 1280x720
+// pixels; drawn at 2x and left alone, the bloom came out half as wide and
+// twice as tight and the colour fringe half as far apart (the song-select
+// glyphs grew a hard halo). The scaled device runs the same pattern twice --
+// once at its output size (a target that is not the frame: scale 1), once
+// upscaled 2x nearest at its drawn size -- and the 2x result, averaged 2x2,
+// must be the 1x result. Sabotage: PostProcPass passing the scene, not the
+// output-sized copy, as the bloom source, or the chroma offset dividing by the
+// drawn width -- red.
+TEST_F(DC3RetailPostGpuTest, RenderScaledFrameKeepsTheOutputPixelBloom) {
+    if (IsSkipped()) return;
+    GpuDevice scaled;
+    GpuDeviceDesc desc;
+    desc.headless = true;
+    desc.width = kW;
+    desc.height = kH;
+    desc.renderScale = 2.0f;            // whichever adapter class this is
+    desc.renderScaleIntegrated = 2.0f;
+    if (!scaled.Init(desc)) GTEST_SKIP() << "no second headless device";
+    ASSERT_TRUE(scaled.RenderScaled());
+    ASSERT_EQ(scaled.WindowWidth(), 2 * kW);
+    ASSERT_EQ(scaled.OutputWidth(), kW);
+    ASSERT_EQ(scaled.RenderScaleFor(2 * kW), 2.0f);
+    ASSERT_EQ(scaled.RenderScaleFor(kW), 1.0f);
+    scaled.AcquireHeadlessFrame();      // the headless surface format
+    auto &dev = scaled.Device();
+
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    pp->SetProperty("bloom_intensity", DataNode(1.0f));
+    pp->SetProperty("chromatic_aberration_offset", DataNode(2.0f));  // whole output pixels
+    RndPostProc *prev = RndPostProc::Current();
+    pp->Select();
+    PostProcPass pass;
+    pass.Init(scaled);
+
+    // The pattern at output size: a dark field outside the bloom mask, bright
+    // 4x4 blocks inside it, and a 1-px vertical line (the fringe).
+    auto pattern = [](int x, int y, uint8_t *p) {
+        const bool block = (x % 32) >= 8 && (x % 32) < 12 && (y % 24) >= 10 && (y % 24) < 14;
+        const bool line = x == 70;
+        const uint8_t v = block ? 240 : line ? 200 : 20;
+        p[0] = v;
+        p[1] = line ? 60 : v;
+        p[2] = line ? 120 : v;
+        p[3] = block ? 255 : 0;
+    };
+    auto run = [&](int s) {
+        const int w = kW * s, h = kH * s;
+        wgpu::TextureDescriptor d{};
+        d.size = {(uint32_t)w, (uint32_t)h, 1};
+        d.format = wgpu::TextureFormat::RGBA8Unorm;
+        d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst |
+            wgpu::TextureUsage::RenderAttachment;
+        wgpu::Texture scene = dev.CreateTexture(&d);
+        std::vector<uint8_t> px((size_t)w * h * 4);
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) pattern(x / s, y / s, &px[((size_t)y * w + x) * 4]);
+        wgpu::TexelCopyTextureInfo dst{};
+        dst.texture = scene;
+        wgpu::TexelCopyBufferLayout layout{};
+        layout.bytesPerRow = w * 4;
+        wgpu::Extent3D ext = {(uint32_t)w, (uint32_t)h, 1};
+        scaled.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+        d.format = scaled.SurfaceFormat();
+        d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+        wgpu::Texture frame = dev.CreateTexture(&d);
+        wgpu::TextureDescriptor b{};
+        b.size = {1, 1, 1};
+        b.format = wgpu::TextureFormat::RGBA8Unorm;
+        b.usage = wgpu::TextureUsage::TextureBinding;
+        wgpu::Texture black = dev.CreateTexture(&b);
+        wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView(),
+                          blackView = black.CreateView(), noDepth;
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        pass.Run(enc, sceneView, scene, w, h, noDepth, 1, frameView, blackView, scaled);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        scaled.Queue().Submit(1, &cmd);
+        std::vector<uint8_t> out((size_t)w * h * 4);
+        EXPECT_TRUE(scaled.ReadbackTexture(frame, w, h, out.data(), out.size()));
+        // Back to output size: the 2x2 box the present applies.
+        std::vector<float> g((size_t)kW * kH * 3);
+        for (int y = 0; y < kH; y++)
+            for (int x = 0; x < kW; x++)
+                for (int c = 0; c < 3; c++) {
+                    float sum = 0;
+                    for (int j = 0; j < s; j++)
+                        for (int i = 0; i < s; i++)
+                            sum += out[(((size_t)(y * s + j)) * w + (x * s + i)) * 4 + c];
+                    g[((size_t)y * kW + x) * 3 + c] = sum / (s * s);
+                }
+        return g;
+    };
+    const std::vector<float> one = run(1), two = run(2);
+    double halo1 = 0, halo2 = 0, worst = 0, sum = 0;
+    for (int y = 0; y < kH; y++)
+        for (int x = 0; x < kW; x++)
+            for (int c = 0; c < 3; c++) {
+                const size_t i = ((size_t)y * kW + x) * 3 + c;
+                const double d = std::fabs(one[i] - two[i]);
+                worst = std::max(worst, d);
+                sum += d;
+                // The halo: the dark field around the blocks, off the line.
+                const bool field = (x % 32) >= 14 && (x % 32) < 20 && (x < 60 || x > 80);
+                if (field && c == 1) {
+                    halo1 += one[i] - 20;
+                    halo2 += two[i] - 20;
+                }
+            }
+    printf("DC3RetailPost render scale 2: mean |1x - 2x| %.3f, worst %.1f (of 255); halo 1x %.1f "
+           "2x %.1f\n", sum / (kW * kH * 3), worst, halo1, halo2);
+    EXPECT_GT(halo1, 50.0) << "no bloom reached the field; the comparison proves nothing";
+    EXPECT_NEAR(halo2, halo1, 0.1 * halo1) << "the 2x frame's bloom spread is not the 1x frame's";
+    EXPECT_LT(sum / (kW * kH * 3), 1.0) << "the 2x frame does not grade like the 1x frame";
+    EXPECT_LT(worst, 12.0);
+
+    pass.Terminate();
+    if (prev) prev->Select(); else pp->Unselect();
+    delete pp;
+    scaled.Shutdown();
+}
+
+// Depth of field under a render scale: NgDOFProc's blur offsets
+// (SetVHBlurWeights) grow with the blur target, the quarter of the 1280x720
+// frame; a 2x-drawn frame must blur across the same part of the screen, so
+// its offsets are the 1x frame's. Sabotage: SceneBlurOffsets ignoring
+// renderScale -- the 2x offsets double, red.
+TEST(DC3RetailPostDof, RenderScaledFrameKeepsTheBlurSpan) {
+    for (int vertical = 0; vertical < 2; vertical++) {
+        float one[8][2], two[8][2], direct[8][2];
+        DofPass::SceneBlurOffsets(vertical != 0, 1280, 720, 1.0f, 1.0f, one);
+        DofPass::SceneBlurOffsets(vertical != 0, 2560, 1440, 2.0f, 1.0f, two);
+        DofPass::RetailBlurOffsets(vertical != 0, 320, 180, 1.0f, direct);
+        bool nonzero = false;
+        for (int i = 0; i < 8; i++)
+            for (int c = 0; c < 2; c++) {
+                EXPECT_FLOAT_EQ(one[i][c], direct[i][c]) << "1x is not the retail quarter's";
+                EXPECT_FLOAT_EQ(two[i][c], one[i][c])
+                    << (vertical ? "vertical" : "horizontal") << " tap " << i
+                    << ": the 2x frame's blur span differs from the 1x frame's";
+                nonzero |= one[i][c] != 0.0f;
+            }
+        EXPECT_TRUE(nonzero) << "all-zero offsets prove nothing";
+    }
 }
