@@ -5,8 +5,9 @@
 // every beam to the engine's NativeSpotBeamRenderer each frame; WgpuRnd::
 // SubmitSpotBeams makes sure the beam's shaft mesh is on the GPU. The shafts
 // are Spotlight::Generate's BuildNG* meshes: unnamed, finished with Sync, and
-// otherwise left alone. EnsureMeshUploaded takes every unnamed mesh for an
-// RndText glyph page and re-reads it on every call, so graphics batch 5
+// otherwise left alone. EnsureMeshUploaded took every unnamed mesh for an
+// RndText glyph page and re-read it on every call (until np-framecost, which
+// made every mesh sync-gated; test_text_frame_cost.cpp), so graphics batch 5
 // re-uploaded every beam every frame -- an unpack plus a new vertex and index
 // buffer per beam, with the old pair released -- which a GPD handheld
 // (Radeon 890M, RADV) measured as ~1.2 ms of main-thread CPU at rollerrink's
@@ -18,7 +19,7 @@
 // a real geometry change still reaches the GPU: a beam mesh's Sync makes the
 // next frame upload exactly that mesh.
 //
-// Sabotage (round1/README.txt): SubmitSpotBeams back on EnsureMeshUploaded
+// Sabotage (round1/README.txt): SubmitSpotBeams back on the per-call re-read
 // fails "steady frame uploaded" with one upload per beam per frame.
 //
 // GPU: needs a device (skips under MILO_NORENDER or with no adapter).
