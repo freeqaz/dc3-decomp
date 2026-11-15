@@ -211,6 +211,16 @@ protected:
         }
         return true;
     }
+    // Keep running callbacks for a while after the count is settled, so a
+    // callback that would touch a deleted entry has run before the case ends
+    // (under ASan, a heap-use-after-free there).
+    void ProcessFor(std::chrono::milliseconds d) {
+        const auto end = std::chrono::steady_clock::now() + d;
+        while (std::chrono::steady_clock::now() < end) {
+            mGpu.Instance().ProcessEvents();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
     GpuDevice mGpu;
     bool mGpuUp = false;
     PipelineManager *mPm = nullptr;
@@ -260,7 +270,7 @@ TEST_F(PipelineWarmLifetimeTest, AnEntryRemovedFirstIsDeletedByItsCallback) {
     mPm = nullptr;
     EXPECT_EQ(Live(), 4) << "the destructor deleted an entry its callback still holds";
     ASSERT_TRUE(ProcessUntil(0)) << "abandoned entries left: " << Live();
-    for (int i = 0; i < 20; i++) mGpu.Instance().ProcessEvents();
+    ProcessFor(std::chrono::seconds(1));
     EXPECT_EQ(Live(), 0);
 }
 
@@ -279,7 +289,7 @@ TEST_F(PipelineWarmLifetimeTest, TerminateWithWarmsOutstandingDeletesEveryEntry)
     EXPECT_EQ(mPm->WarmsOutstanding(), 0u);
     delete mPm;
     mPm = nullptr;
-    for (int i = 0; i < 20; i++) mGpu.Instance().ProcessEvents();
+    ProcessFor(std::chrono::seconds(1));
     EXPECT_EQ(Live(), 0) << "entries left after Terminate";
 }
 
