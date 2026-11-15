@@ -62,6 +62,7 @@ void Dc3LoaderBudgetApply() {
     static bool sLogged = false;
     static float sLoggedApplied = 0.0f, sLoggedImageMs = 0.0f;
     static double sLoggedFps = -1.0;
+    static bool sLoggedGameplay = false;
     // LoadMgr has a setter and no getter; the setter returns what it held.
     const float current = TheLoadMgr.SetLoaderPeriod(0.0f);
     TheLoadMgr.SetLoaderPeriod(current);
@@ -70,7 +71,8 @@ void Dc3LoaderBudgetApply() {
     const float next = budget.Step(current, fps, gameplay);
     if (next != current)
         TheLoadMgr.SetLoaderPeriod(next);
-    if (!sLogged || next != sLoggedApplied || budget.ImageMs() != sLoggedImageMs || fps != sLoggedFps) {
+    if (!sLogged || next != sLoggedApplied || budget.ImageMs() != sLoggedImageMs || fps != sLoggedFps
+        || gameplay != sLoggedGameplay) {
         // What the loader holds now, read back from LoadMgr (not `next`): the
         // line reports the budget LoadMgr::Poll will see.
         const float held = TheLoadMgr.SetLoaderPeriod(next);
@@ -78,6 +80,7 @@ void Dc3LoaderBudgetApply() {
         sLoggedApplied = next;
         sLoggedImageMs = budget.ImageMs();
         sLoggedFps = fps;
+        sLoggedGameplay = gameplay;
         if (!(fps > 0.0))
             MILO_LOG("DC3 Native: loader budget %.2f ms a poll (the image's; no frame target)\n", held);
         else if (gameplay)

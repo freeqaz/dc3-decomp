@@ -56,5 +56,6 @@ double Dc3LoaderBudgetFrameTarget();
 bool Dc3GameplayOnScreen();
 
 // Before the frame's SystemPoll: TheLoadMgr's budget for this frame. Logs one
-// line whenever the budget, the image's value or the frame target changes.
+// line whenever the budget, the image's value, the frame target or whether
+// gameplay is on screen changes.
 void Dc3LoaderBudgetApply();
