@@ -479,6 +479,22 @@ long OwnerPidOf(const char *name) {
     return strtol(d, nullptr, 10);
 }
 
+// The scratch dir `pid` most recently claimed under one of `bases`: the
+// highest n of an existing milo-tests-<pid>-<n> dir that is ours.  A process
+// claims the lowest free n, so a higher n is always the newer claim.
+std::string NewestScratchDirOf(int pid, const std::vector<std::string> &bases) {
+    const uid_t uid = getuid();
+    for (const std::string &b : bases) {
+        for (int n = 999; n >= 0; n--) {
+            std::string d = b + "/milo-tests-" + std::to_string(pid) + "-" + std::to_string(n);
+            struct stat st;
+            if (lstat(d.c_str(), &st) == 0 && S_ISDIR(st.st_mode) && st.st_uid == uid)
+                return d;
+        }
+    }
+    return std::string();
+}
+
 // Each milo-tests process sweeps once, before its first test.
 class TestTmpSweepEnvironment : public ::testing::Environment {
 public:
@@ -634,6 +650,22 @@ const std::string &TestScratchDir() {
             bases.push_back(base);
         if (base != "/tmp/claude-1000")
             bases.push_back("/tmp/claude-1000");
+        // A "threadsafe" death test re-executes this binary: the child has a
+        // new pid, runs the test body again (so it wants a scratch dir again)
+        // and then _exits inside ASSERT_EXIT, so nothing of its own cleanup
+        // runs.  Its dir goes INSIDE the parent's, which the parent removes
+        // with its own.  (The 2026-11-15 after-gate left exactly one dir, from
+        // ChunkStreamTest.ReadDeadReturnsOnFailedStream's child.)
+        if (!std::string(GTEST_FLAG_GET(internal_run_death_test)).empty()) {
+            std::string parent = NewestScratchDirOf((int)getppid(), bases);
+            if (!parent.empty()) {
+                std::string d = parent + "/milo-tests-" + std::to_string((int)getpid()) + "-0";
+                if (mkdir(d.c_str(), 0700) == 0) {
+                    Register(d, true);
+                    return new std::string(d);
+                }
+            }
+        }
         for (const std::string &b : bases) {
             mkdir(b.c_str(), 0755);
             for (int n = 0; n < 1000; n++) {

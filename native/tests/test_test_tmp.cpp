@@ -298,3 +298,29 @@ TEST(TestTmpHelper, SweepRemovesOnlyDeadOwnersOldDirs) {
     EXPECT_TRUE(Exists(link));
     EXPECT_TRUE(Exists(target + "/keep"));
 }
+
+// A "threadsafe" death test re-executes the binary: the child has its own pid,
+// runs this body again, and _exits inside ASSERT_EXIT, so no cleanup of its own
+// ever runs.  Its scratch dir must therefore sit INSIDE the parent's, where the
+// parent's removal takes it.  It used to be a top-level milo-tests-<childpid>-0
+// (ChunkStreamTest.ReadDeadReturnsOnFailedStream left one per gate).
+TEST(TestTmpHelper, ThreadsafeDeathTestChildScratchIsInsideTheParents) {
+    const std::string &mine = TestScratchDir();
+    ASSERT_FALSE(mine.empty());
+    GTEST_FLAG_SET(death_test_style, "threadsafe");
+    ASSERT_EXIT(
+        {
+            std::ofstream(TestScratchDir() + "/from-the-child") << getpid() << "\n";
+            _exit(0);
+        },
+        ::testing::ExitedWithCode(0), "");
+    GTEST_FLAG_SET(death_test_style, "fast");
+    int nested = 0;
+    std::error_code ec;
+    for (const auto &e : std::filesystem::directory_iterator(mine, ec))
+        if (e.is_directory() && e.path().filename().string().rfind("milo-tests-", 0) == 0 &&
+            Exists(e.path().string() + "/from-the-child"))
+            nested++;
+    EXPECT_EQ(nested, 1) << "the death-test child's scratch dir is not inside " << mine
+                         << ", so nothing removes it when the child _exits";
+}
