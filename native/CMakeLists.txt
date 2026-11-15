@@ -2072,6 +2072,8 @@ if(BUILD_TESTS)
         tests/test_retail_lighting.cpp
         tests/test_spot_beam_frame_cost.cpp # spotperf: an unchanged beam set uploads nothing per frame
         tests/test_text_frame_cost.cpp # framecost: unchanged text uploads nothing per frame
+        tests/test_fixed_key_pipelines.cpp # framecost: fixed-key pass pipelines are compiled at Init
+        tests/test_tex_share.cpp # framecost: byte-identical bitmaps share one GPU texture
         tests/test_color_pack_roundtrip.cpp
         tests/test_retail_char_shading.cpp
         tests/test_screen_aligned_texgen.cpp
