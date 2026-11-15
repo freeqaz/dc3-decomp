@@ -42,7 +42,14 @@
 // score_star_display holds its score stars that way).
 //
 // A draw whose key this misses compiles at the draw, as before; a draw whose
-// key is still compiling waits for it (never skips). The pipelines are DC3's
+// key is still compiling waits for it (never skips).
+//
+// The same walk queues every visited dir's textures (QueueGpuTexWarm; PLAN
+// H-116): the image creates a texture as it loads (DxTex::SyncBitmap), the
+// native renderer at its first draw -- the game screen's first frame, and in
+// the song every flashcard and HUD piece the first time it shows. The renderer
+// creates the queued ones a budget's worth a frame (PumpGpuTexWarms), and the
+// game screen waits for the queue (NativeTexWarmHoldsGameScreen, below). The pipelines are DC3's
 // content and DC3's passes, so the walk is DC3's: rb3 and rb3-xenon do not
 // call it.
 
@@ -65,6 +72,7 @@
 #include "rndobj/PropKeys.h"
 #include "rndobj/Ribbon.h"
 #include "rndobj/ScreenMask.h"
+#include "rndobj/Tex.h"
 #include "rndobj/TexBlender.h"
 #include "rndobj/Text.h"
 #include "ui/PanelDir.h"
@@ -226,6 +234,17 @@ public:
         return n;
     }
 
+    // Queue every visited dir's textures for the renderer to create ahead of
+    // their first draw (QueueGpuTexWarm; PLAN H-116).
+    int QueueTextures() {
+        int n = 0;
+        for (const std::pair<ObjectDir *, int> &d : mOrder) {
+            for (ObjDirItr<RndTex> it(d.first, false); it != nullptr; ++it)
+                n += QueueGpuTexWarm(it) ? 1 : 0;
+        }
+        return n;
+    }
+
     const std::vector<WorldReflection *> &Reflections() const { return mReflections; }
     AnimatedStates mAnimated;
 
@@ -359,11 +378,50 @@ void NativeWarmLoadedDir(ObjectDir *dir) {
         for (auto d = draws.begin(); d != draws.end(); ++d)
             queued += warm.QueueDrawable(*d, c.reflection, 0);
     }
+    const int textures = warm.QueueTextures();
     const uint64_t created = GpuPipelineLoadCreateCount() - created0;
-    if (queued > 0 || created > 0)
-        fprintf(stderr, "[PIPEWARM] frame=%d %s: %d keys queued, %llu created (walk %.2f ms)\n",
+    if (queued > 0 || created > 0 || textures > 0)
+        fprintf(stderr,
+                "[PIPEWARM] frame=%d %s: %d keys queued, %llu created, %d textures queued "
+                "(walk %.2f ms)\n",
                 gWgpuRnd->FrameID(), dir->Name() ? dir->Name() : "?", queued,
-                (unsigned long long)created,
+                (unsigned long long)created, textures,
                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                     .count());
+}
+
+bool NativeTexWarmHoldsGameScreen() {
+    // GamePanel::PollForLoading's last gate (HX_NATIVE; PLAN H-116): the game
+    // screen comes up once the textures its dirs queued are created, so its
+    // first frame -- and the song -- creates none (each frame of the hold
+    // creates the budget's worth, PumpGpuTexWarms). Bounded: past
+    // kHoldLimitMs it lets the screen come up, and the rest are created by the
+    // pump or at their draw, as before.
+    constexpr double kHoldLimitMs = 5000.0;
+    static bool sHolding = false, sGaveUp = false;
+    static std::chrono::steady_clock::time_point sSince;
+    static size_t sPendingAtStart = 0;
+    const size_t pending = GpuTexWarmsPending();
+    const auto now = std::chrono::steady_clock::now();
+    if (pending == 0) {
+        if (sHolding)
+            fprintf(stderr, "[TEXWARM] game screen held %.1f ms for %zu textures\n",
+                    std::chrono::duration<double, std::milli>(now - sSince).count(),
+                    sPendingAtStart);
+        sHolding = sGaveUp = false;
+        return false;
+    }
+    if (!sHolding) {
+        sHolding = true;
+        sSince = now;
+        sPendingAtStart = pending;
+    }
+    if (sGaveUp) return false;
+    if (std::chrono::duration<double, std::milli>(now - sSince).count() > kHoldLimitMs) {
+        sGaveUp = true;
+        fprintf(stderr, "[TEXWARM] game screen hold gave up after %.0f ms, %zu textures pending\n",
+                kHoldLimitMs, pending);
+        return false;
+    }
+    return true;
 }

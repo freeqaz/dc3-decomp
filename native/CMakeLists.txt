@@ -2100,6 +2100,7 @@ if(BUILD_TESTS)
         tests/test_pipeline_warm.cpp # hitch: a loaded dir's material pipelines are compiled before its first draw
         tests/test_pipeline_disk_cache.cpp # hitch: the persistent pipeline cache reads back exactly or misses
         tests/test_tex_share.cpp # framecost: byte-identical bitmaps share one GPU texture
+        tests/test_tex_warm.cpp # H-116: load-time texture warm queue (QueueGpuTexWarm / PumpGpuTexWarms)
         tests/test_color_pack_roundtrip.cpp
         tests/test_retail_char_shading.cpp
         tests/test_screen_aligned_texgen.cpp
