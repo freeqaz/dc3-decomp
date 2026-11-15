@@ -419,9 +419,57 @@ if [ "$NO_ASSETS" = "1" ]; then
 fi
 
 LOG="$(mktemp -t native_test.XXXXXX.log)"
+
+# What the run leaves in temp space (np-tmpleak, 2026-11-15: /tmp's per-user
+# quota filled with test leftovers and every gate on the box failed EDQUOT).
+# Informational only -- it never changes the exit code.  Two numbers, because
+# only one of them can be attributed:
+#   * $BUILD_DIR/tmp is ctest's $TMPDIR (MILO_TEST_ENV) and belongs to this
+#     build dir alone, so the entries that appear there during the run are
+#     exactly this run's leftovers.  A passing test removes its own; what stays
+#     is a failing test's evidence (it printed "[test-tmp] kept ...: <path>").
+#   * /tmp's quota for this user, before vs after.  Box-wide: it moves with
+#     every other gate and session running at the same time, so it is context,
+#     not this run's number.
+TMP_RUN_DIR="$BUILD_DIR/tmp"
+tmp_quota_kb() {
+    command -v quota >/dev/null 2>&1 || return 0
+    quota -w --show-mntpoint -u "$(id -un)" 2>/dev/null | awk '$2 == "/tmp" { print $3; exit }'
+}
+TMP_BEFORE_LIST="$(ls -A "$TMP_RUN_DIR" 2>/dev/null | sort)"
+TMP_QUOTA_BEFORE="$(tmp_quota_kb)"
+
 # shellcheck disable=SC2086
 ( cd "$BUILD_DIR" && ctest "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}" ) 2>&1 | tee "$LOG"
 CTEST_RC=${PIPESTATUS[0]}
+
+report_tmp_footprint() {
+    local after new n bytes quota_after delta names
+    after="$(ls -A "$TMP_RUN_DIR" 2>/dev/null | sort)"
+    new="$(comm -13 <(printf '%s\n' "$TMP_BEFORE_LIST" | sed '/^$/d') \
+                    <(printf '%s\n' "$after" | sed '/^$/d'))"
+    n=0; bytes=0
+    if [ -n "$new" ]; then
+        n=$(printf '%s\n' "$new" | wc -l)
+        bytes=$(cd "$TMP_RUN_DIR" && printf '%s\0' $new | xargs -0 du -scb 2>/dev/null | tail -1 | cut -f1)
+        names=$(printf '%s\n' "$new" | head -3 | tr '\n' ' ')
+    fi
+    quota_after="$(tmp_quota_kb)"
+    if [ -n "$TMP_QUOTA_BEFORE" ] && [ -n "$quota_after" ]; then
+        delta="$(( quota_after - TMP_QUOTA_BEFORE )) KiB (box-wide, includes concurrent gates)"
+    else
+        delta="n/a (no quota on /tmp)"
+    fi
+    echo
+    printf 'tmp footprint: this run left %d entries, %s bytes in %s; /tmp quota for %s moved %s\n' \
+        "$n" "${bytes:-0}" "$TMP_RUN_DIR" "$(id -un)" "$delta"
+    if [ "$n" -gt 0 ]; then
+        local more=""
+        [ "$n" -gt 3 ] && more="..."
+        echo "               (kept by failing tests or killed processes: ${names}${more})"
+    fi
+}
+report_tmp_footprint
 
 # ctest prints "100% tests passed out of N" when nothing failed, and
 # "X% tests passed, F tests failed out of N" when something did. Parse both --

@@ -1307,13 +1307,11 @@ protected:
         out.floor = f->mFloorNormal;
         return true;
     }
+    // MakeTestTempDir: removed at exit if the run passed, kept if it failed.
     static std::string TempPath(const char *name) {
-        const char *tmp = getenv("TMPDIR");
-        std::string dir = std::string((tmp && *tmp) ? tmp : "/tmp") + "/dc3_session_XXXXXX";
-        std::vector<char> buf(dir.begin(), dir.end());
-        buf.push_back('\0');
-        EXPECT_NE(mkdtemp(buf.data()), nullptr);
-        return std::string(buf.data()) + "/" + name;
+        std::string dir = MakeTestTempDir("dc3-session");
+        EXPECT_FALSE(dir.empty());
+        return dir + "/" + name;
     }
 };
 
