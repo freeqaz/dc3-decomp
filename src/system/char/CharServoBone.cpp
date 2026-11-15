@@ -230,7 +230,8 @@ void CharServoBone::MoveToFacing(Transform &tf) {
     // should be ~0 (floor plane). If facingPos.z is large-negative on dancers it
     // is the pelvis-drop root cause (the ~-10u sink). Compare main.milo dancers
     // vs the clean iconman.
-    if (getenv("DC3_IK_DIAG")) {
+    static const bool sIkDiag = getenv("DC3_IK_DIAG") != nullptr;  // H-110: read once; nothing in the process writes it
+    if (sIkDiag) {
         static int sFacingLog = 0;
         const char *p = PathName(this);
         if (sFacingLog < 18 && p && mFacingPos) {

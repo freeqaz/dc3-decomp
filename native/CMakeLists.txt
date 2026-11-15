@@ -336,7 +336,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "638f264e3d1271f6750f581608f26bc1f1ebffde"
+set(MILO_ENGINE_PIN "1b5b6fd0fd2dd35ebb782cd04dddbe49de90c093"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -1283,6 +1283,7 @@ set(DC3_NATIVE_CORE_SOURCES
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/PoseSession_Native.cpp>  # DC3_POSE_RECORD, session: replay (PLAN L-1)
     src/platform/DtaEvalSupport.cpp   # DTA eval state guard + result serializer (unit-tested)
     $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:src/platform/FramePacer_Native.cpp>  # H-29 frame cap (DC3_FPS_CAP)
+    src/platform/LoaderBudget_Native.cpp  # H-110 the loader's per-poll budget follows the frame
     src/engine_stubs_generated.cpp
     src/StubTrace.cpp
     src/native_link_glue.cpp
@@ -1421,6 +1422,8 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/DtaEvalSupport.cpp
     # Dc3FrameCapDecide + Dc3RafGate: the rAF loop's frame cap (H-34).
     src/platform/FramePacer_Native.cpp
+    # H-110: the loader's per-poll budget follows the gate's frame.
+    src/platform/LoaderBudget_Native.cpp
     # Web stand-ins for the XDK/NUI/XNet entry points (exact XDK signatures).
     # Dropped in 466a3a591 as a "deleted file" -- it was not deleted, and its
     # absence left those symbols as unresolved wasm imports.
@@ -2171,6 +2174,7 @@ if(BUILD_TESTS)
         tests/test_native_glyph_render.cpp
         tests/test_native_ui_material_terms.cpp
         tests/test_frame_pacer.cpp     # H-29 frame cap + engine CPU-use guards
+        tests/test_loader_budget.cpp   # H-110 the loader's per-poll budget follows the frame
         tests/test_bind_group_cache.cpp # H-30/H-31 cached bind groups, staged uniform rings
         tests/test_fringe_fade.cpp # np-gfx-sharp item 8: DC3 draws no alpha fringe fade
         tests/test_map_sampler_wrap.cpp # np-gfx-sharp item 8: a material's tex_wrap clamps its maps
