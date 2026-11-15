@@ -153,6 +153,14 @@ FetchContent_Declare(imgui
 FetchContent_MakeAvailable(imgui)
 if(NOT EMSCRIPTEN)
     # Desktop: GLFW + Dawn backends
+    if(APPLE)
+        # imgui_impl_wgpu.cpp makes a CAMetalLayer through Cocoa on macOS, so it
+        # is Objective-C++ there.  As plain C++ it does not compile (MEASURED on
+        # macOS 15.7 / Apple clang, 2026-11-13).
+        enable_language(OBJCXX)
+        set_source_files_properties(${imgui_SOURCE_DIR}/backends/imgui_impl_wgpu.cpp
+            PROPERTIES LANGUAGE OBJCXX)
+    endif()
     add_library(imgui STATIC
         ${imgui_SOURCE_DIR}/imgui.cpp
         ${imgui_SOURCE_DIR}/imgui_draw.cpp
@@ -328,7 +336,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "9f6291a0f56a831c7c2d3a3f6847bf3bfa1851c6"
+set(MILO_ENGINE_PIN "65f1bc0acf53883a03e0d508299c0e766c396fe5"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -2061,6 +2069,7 @@ if(BUILD_TESTS)
         tests/test_asset_loading.cpp
         tests/test_postproc_noise.cpp
         tests/test_bitmap_mip_levels.cpp
+        tests/test_look_sampling.cpp
         tests/test_dc3_retail_post.cpp
         tests/test_merge_scope_parity.cpp
         tests/test_merge_lifecycle.cpp

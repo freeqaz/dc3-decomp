@@ -129,7 +129,7 @@ def main(argv=None):
         for b in found[rel]:
             print(f"{rel}:{b.mstart + 1}-{b.end + 1}: {b.nmoved}-line lane-note wall in src/ "
                   f"(allowed here: {allowed.get(rel, 0)}).  Lane history goes in "
-                  f"{sidecar_rel(rel)} -- run: python3 scripts/notes/migrate_notes.py {rel}")
+                  f"{sidecar_rel(rel, root)} -- run: python3 scripts/notes/migrate_notes.py {rel}")
     for rel, have, may in stale:
         print(f"{rel}: allowance says {may} wall(s), the file has {have}.  Lock it in: "
               f"python3 scripts/notes/check_no_lane_walls.py --write")

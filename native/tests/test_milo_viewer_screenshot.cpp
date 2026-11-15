@@ -677,3 +677,156 @@ TEST_F(MiloViewerPosePipeline, DriverStartBeatUsesClipRelativeSeconds) {
     unlink(posePath.str().c_str());
     unlink(pngPath.str().c_str());
 }
+
+// ---------------------------------------------------------------------------
+// Render scale (MILO_RENDER_SCALE / GpuDeviceDesc::renderScale) in the viewer.
+// ---------------------------------------------------------------------------
+
+#include <zlib.h>
+
+// An 8-bit, non-interlaced RGB or RGBA PNG (what stb_image_write writes) as
+// RGB. False on anything else.
+static bool ReadPngRgb(const std::string& path, int& w, int& h, std::vector<uint8_t>& rgb) {
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) return false;
+    std::vector<uint8_t> b;
+    uint8_t buf[65536];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), f)) > 0) b.insert(b.end(), buf, buf + n);
+    fclose(f);
+    static const uint8_t kSig[8] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
+    if (b.size() < 8 || memcmp(b.data(), kSig, 8) != 0) return false;
+    auto be32 = [&](size_t o) {
+        return (uint32_t)b[o] << 24 | (uint32_t)b[o + 1] << 16 | (uint32_t)b[o + 2] << 8 | b[o + 3];
+    };
+    int channels = 0;
+    std::vector<uint8_t> z;
+    for (size_t o = 8; o + 12 <= b.size();) {
+        const uint32_t len = be32(o);
+        if (o + 12 + len > b.size()) return false;
+        const char* type = (const char*)&b[o + 4];
+        const uint8_t* d = &b[o + 8];
+        if (!memcmp(type, "IHDR", 4)) {
+            w = (int)be32(o + 8);
+            h = (int)be32(o + 12);
+            if (d[8] != 8 || d[12] != 0) return false;  // 8-bit, not interlaced
+            channels = d[9] == 6 ? 4 : d[9] == 2 ? 3 : 0;
+            if (!channels) return false;
+        } else if (!memcmp(type, "IDAT", 4)) {
+            z.insert(z.end(), d, d + len);
+        } else if (!memcmp(type, "IEND", 4)) {
+            break;
+        }
+        o += 12 + len;
+    }
+    if (!channels || w <= 0 || h <= 0) return false;
+    const size_t stride = (size_t)w * channels;
+    std::vector<uint8_t> raw((stride + 1) * h);
+    uLongf rawLen = raw.size();
+    if (uncompress(raw.data(), &rawLen, z.data(), z.size()) != Z_OK || rawLen != raw.size())
+        return false;
+    std::vector<uint8_t> px(stride * h);
+    for (int y = 0; y < h; y++) {
+        const uint8_t filter = raw[y * (stride + 1)];
+        const uint8_t* in = &raw[y * (stride + 1) + 1];
+        uint8_t* out = &px[y * stride];
+        const uint8_t* up = y ? &px[(y - 1) * stride] : nullptr;
+        for (size_t i = 0; i < stride; i++) {
+            const int a = i >= (size_t)channels ? out[i - channels] : 0;
+            const int u = up ? up[i] : 0;
+            const int c = (up && i >= (size_t)channels) ? up[i - channels] : 0;
+            int v = in[i];
+            switch (filter) {
+            case 0: break;
+            case 1: v += a; break;
+            case 2: v += u; break;
+            case 3: v += (a + u) / 2; break;
+            case 4: {
+                const int p = a + u - c, pa = abs(p - a), pb = abs(p - u), pc = abs(p - c);
+                v += (pa <= pb && pa <= pc) ? a : (pb <= pc ? u : c);
+                break;
+            }
+            default: return false;
+            }
+            out[i] = (uint8_t)v;
+        }
+    }
+    rgb.resize((size_t)w * h * 3);
+    for (size_t i = 0; i < (size_t)w * h; i++)
+        for (int c = 0; c < 3; c++) rgb[i * 3 + c] = px[i * channels + c];
+    return true;
+}
+
+// A render-scaled viewer shot is the 1x shot, supersampled: the character in
+// the same place at the same size. BeginFramePass built the camera's viewport
+// from the DRAWN frame's size, which FrameViewport then scaled again, so a 2x
+// frame got a viewport twice its size and the screenshot showed the top-left
+// quarter of the picture, magnified (the game reselects its camera every
+// frame, in output pixels, and hid it; the viewer never does). Sabotage:
+// BeginFramePass building the viewport from curW x curH again -- the
+// silhouette's centroid moves by ~half the frame, red.
+TEST(MiloViewerScreenshot, RenderScaledShotIsTheOneXShotSupersampled) {
+    const std::string viewer = GetViewerPath();
+    if (!FileExists(viewer)) GTEST_SKIP() << "milo-viewer binary not found at " << viewer;
+    const std::string miloLib = GetMiloLibRoot();
+    if (miloLib.empty()) GTEST_SKIP() << "MILO_LIB not set and HOME not available";
+    const std::string charPath = miloLib + "/char/main/dancer/gen/aubrey01.milo_xbox";
+    if (!FileExists(charPath)) GTEST_SKIP() << "Required DC3 assets not found under " << miloLib;
+
+    struct Shot { std::string png; RunResult run; int w = 0, h = 0; std::vector<uint8_t> rgb; };
+    Shot shots[2];
+    for (int s = 0; s < 2; s++) {
+        std::ostringstream png;
+        png << "/tmp/milo_viewer_render_scale_" << getpid() << "_" << (s ? "2x" : "1x") << ".png";
+        shots[s].png = png.str();
+        std::ostringstream cmd;
+        cmd << kShellTimeoutLookup
+            << "ASAN_OPTIONS='alloc_dealloc_mismatch=0:halt_on_error=0:detect_odr_violation=0' "
+            << "${t:+$t 120} env -u MILO_RENDER_SCALE MILO_CLEAR_COLOR=0.75,0.75,0.75 "
+            << (s ? "MILO_RENDER_SCALE=2 " : "") << "\"" << viewer << "\" \"" << charPath
+            << "\" --screenshot \"" << shots[s].png << "\" --width 640 --height 360 2>&1";
+        shots[s].run = RunCommand(cmd.str());
+        if (OutputHasNullBackend(shots[s].run.output) || OutputHasGpuFailure(shots[s].run.output)) {
+            unlink(shots[0].png.c_str());
+            unlink(shots[1].png.c_str());
+            GTEST_SKIP() << "GPU unavailable; cannot compare rendered screenshots";
+        }
+        ASSERT_TRUE(ReadPngRgb(shots[s].png, shots[s].w, shots[s].h, shots[s].rgb))
+            << "no readable screenshot at " << shots[s].png << "; viewer output:\n"
+            << shots[s].run.output;
+    }
+    // Non-vacuous: the second shot really was drawn at 2x.
+    EXPECT_NE(shots[1].run.output.find("render scale 2.00 (asked for)"), std::string::npos)
+        << "the 2x run did not draw scaled; the comparison proves nothing:\n"
+        << shots[1].run.output;
+    ASSERT_EQ(shots[0].w, 640);
+    ASSERT_EQ(shots[0].h, 360);
+    ASSERT_EQ(shots[1].w, 640) << "a scaled frame leaves the renderer at its output size";
+    ASSERT_EQ(shots[1].h, 360);
+
+    // The silhouette against the light clear colour: area and centroid.
+    double area[2] = {0, 0}, cx[2] = {0, 0}, cy[2] = {0, 0};
+    for (int s = 0; s < 2; s++) {
+        const std::vector<uint8_t>& p = shots[s].rgb;
+        const double bg = 0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2];  // corner pixel
+        for (int y = 0; y < 360; y++)
+            for (int x = 0; x < 640; x++) {
+                const uint8_t* q = &p[((size_t)y * 640 + x) * 3];
+                const double l = 0.299 * q[0] + 0.587 * q[1] + 0.114 * q[2];
+                const double cov = std::min(1.0, std::max(0.0, (bg - l) / 64.0));
+                area[s] += cov;
+                cx[s] += cov * x;
+                cy[s] += cov * y;
+            }
+        if (area[s] > 0) { cx[s] /= area[s]; cy[s] /= area[s]; }
+    }
+    printf("MiloViewerScreenshot render scale: silhouette 1x area %.0f at (%.1f, %.1f); 2x area "
+           "%.0f at (%.1f, %.1f)\n", area[0], cx[0], cy[0], area[1], cx[1], cy[1]);
+    ASSERT_GT(area[0], 2000.0) << "no character in the 1x shot; the comparison proves nothing";
+    EXPECT_NEAR(area[1] / area[0], 1.0, 0.05) << "the 2x shot's character is not the 1x size";
+    EXPECT_NEAR(cx[1], cx[0], 1.5) << "the 2x shot's character moved";
+    EXPECT_NEAR(cy[1], cy[0], 1.5) << "the 2x shot's character moved";
+
+    unlink(shots[0].png.c_str());
+    unlink(shots[1].png.c_str());
+}
