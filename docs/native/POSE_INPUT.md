@@ -2116,6 +2116,16 @@ under `camera_fps` means inference is the limit, both low means the camera
 is. `--no-capture-thread` reads the camera in the loop (two buffers still),
 for comparison.
 
+**Not verified.** The capture numbers above come from probes that open the
+camera the way the server does (`cv2.VideoCapture`, V4L2, the same
+properties) with a sleep for inference; the probe's `thread` shape is what
+`NewestFrameCapture` implements. The changed `pose_server.py` itself has not
+run on the GPD's camera: the box left the tailnet (about 21:20 PST, ten
+minutes after the last measurement) before that run. Nothing was measured
+with a person in view, so detection, two-dancer inference in a live session
+and the score are all open. The capture thread has not run on macOS
+(AVFoundation); `--no-capture-thread` is the way back there.
+
 Tests: `tests/test_pose_server.py` — `CameraRequestTest` (two buffers),
 `NewestFrameCaptureTest` (newest wins and is handed out once; a frame's
 stamp and arrival time stay its own while the thread reads on; a failed
