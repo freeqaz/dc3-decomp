@@ -2176,6 +2176,7 @@ if(BUILD_TESTS)
         tests/test_map_sampler_wrap.cpp # np-gfx-sharp item 8: a material's tex_wrap clamps its maps
         tests/test_headless_frames_in_flight.cpp # H-75 a headless frame loop stays within 2 frames of the GPU
         tests/test_host_path_case.cpp  # H-17/H-23 upper-case host directories
+        tests/test_asyncfile_not_found.cpp  # H-107 a not-found open is silent, as in the image
         tests/test_present_scale.cpp  # H-18 fit the frame into the window
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
