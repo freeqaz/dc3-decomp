@@ -88,16 +88,25 @@ export class OneEuroFilter {
 // maxMissing (frames): how long a lost person keeps her id -- 60 = 2 s at
 // 30 fps, so a dancer MediaPipe loses for ~1.4 s comes back as the same
 // player (PLAN P-12; the reasoning is on the Python class).
+// bodyRatio: one body, one track. Within bodyRatio x a detection's torso
+// length, an unclaimed detection lying on a kept one is a second report of
+// that body (id null), and an unmatched track lying on a matched detection is
+// forgotten (the measurement is on the Python class).
 export class CentroidTracker {
-    constructor(maxDist = 0.25, maxMissing = 60) {
+    constructor(maxDist = 0.25, maxMissing = 60, bodyRatio = 0.5) {
         this.maxDist = maxDist;
         this.maxMissing = maxMissing;
+        this.bodyRatio = bodyRatio;
         this._nextId = 1;
         this._tracks = new Map(); // id -> { c: [x, y], missing }
     }
 
-    // centroids: [[x, y], ...] in normalised image space. Returns ids.
-    update(centroids) {
+    // centroids: [[x, y], ...] in normalised image space; sizes: each one's
+    // torso length (shoulder centre to hip centre) in the same space, or
+    // omitted. Returns ids, null for a duplicate report of a body.
+    update(centroids, sizes) {
+        const radius = centroids.map((c, di) => (sizes ? this.bodyRatio * sizes[di] : 0));
+        const apart = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
         const assigned = new Array(centroids.length).fill(null);
         const used = new Set();
         // Greedy nearest-neighbour, closest first; ties broken like Python's
@@ -105,7 +114,7 @@ export class CentroidTracker {
         const pairs = [];
         for (const [tid, tr] of this._tracks) {
             centroids.forEach((c, di) => {
-                pairs.push([Math.hypot(c[0] - tr.c[0], c[1] - tr.c[1]), tid, di]);
+                pairs.push([apart(c, tr.c), tid, di]);
             });
         }
         pairs.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
@@ -114,17 +123,29 @@ export class CentroidTracker {
             assigned[di] = tid;
             used.add(tid);
         }
+        // Unmatched detections become new tracks -- unless they lie on a
+        // detection already kept (matched ones first, then in order).
+        const kept = [];
         centroids.forEach((c, di) => {
-            if (assigned[di] === null) assigned[di] = this._nextId++;
+            if (assigned[di] !== null) kept.push(di);
         });
         centroids.forEach((c, di) => {
-            this._tracks.set(assigned[di], { c: [c[0], c[1]], missing: 0 });
+            if (assigned[di] !== null) return;
+            if (kept.some((k) => apart(c, centroids[k]) <= Math.max(radius[di], radius[k]))) return;
+            assigned[di] = this._nextId++;
+            kept.push(di);
+        });
+        centroids.forEach((c, di) => {
+            if (assigned[di] !== null) this._tracks.set(assigned[di], { c: [c[0], c[1]], missing: 0 });
         });
         for (const [tid, tr] of [...this._tracks]) {
-            if (!assigned.includes(tid)) {
-                tr.missing += 1;
-                if (tr.missing > this.maxMissing) this._tracks.delete(tid);
+            if (assigned.includes(tid)) continue;
+            if (kept.some((k) => apart(centroids[k], tr.c) <= radius[k])) {
+                this._tracks.delete(tid);
+                continue;
             }
+            tr.missing += 1;
+            if (tr.missing > this.maxMissing) this._tracks.delete(tid);
         }
         return assigned;
     }
@@ -247,6 +268,7 @@ export class PoseGeometry {
         }
         const people = [];
         const centroids = [];
+        const sizes = [];
         for (const [poseIndex, p] of poses.entries()) {
             const world = p.world;
             const imageXY = p.image || world.map(() => [0, 0]);
@@ -255,15 +277,19 @@ export class PoseGeometry {
             if (!root) continue;
             const { joints, conf } = this.remap(world, vis, root);
             people.push({ joints, conf, rootZ: root[2], poseIndex });
-            centroids.push([(imageXY[L_HIP][0] + imageXY[R_HIP][0]) * 0.5,
-                (imageXY[L_HIP][1] + imageXY[R_HIP][1]) * 0.5]);
+            const hipC = [(imageXY[L_HIP][0] + imageXY[R_HIP][0]) * 0.5,
+                (imageXY[L_HIP][1] + imageXY[R_HIP][1]) * 0.5];
+            centroids.push(hipC);
+            sizes.push(Math.hypot((imageXY[L_SHOULDER][0] + imageXY[R_SHOULDER][0]) * 0.5 - hipC[0],
+                (imageXY[L_SHOULDER][1] + imageXY[R_SHOULDER][1]) * 0.5 - hipC[1]));
         }
-        const ids = this._tracker.update(centroids);
+        const ids = this._tracker.update(centroids, sizes);
         this._frameCount += 1;
         const tS = timestampMs / 1000.0;
         const out = [];
         people.forEach((person, k) => {
             const tid = ids[k];
+            if (tid === null) return; // a second report of a body already in `out`
             let filt = this._rootZFilters.get(tid);
             if (!filt) {
                 filt = new OneEuroFilter();
