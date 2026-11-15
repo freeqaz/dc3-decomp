@@ -138,9 +138,14 @@ TEST(TestTmpHelper, TmpdirIsTheBase) {
 
     setenv("TMPDIR", (base.path() + "//").c_str(), 1);
     EXPECT_EQ(TestTempBase("/fb"), base.path());
+    // Under $TMPDIR -- unless that path is too long for the sockets these
+    // roots hold, when it falls back to the named base.
+    const std::string name = "/dc3-tb-in-p" + std::to_string((int)getpid()) + "-";
+    const bool fits = base.path().size() + name.size() + 6 <= kTestTempDirMaxLen;
     std::string d = MakeTestTempDir("dc3-tb-in");
-    EXPECT_EQ(d.rfind(base.path() + "/dc3-tb-in-p" + std::to_string((int)getpid()) + "-", 0), 0u)
-        << d;
+    EXPECT_EQ(d.rfind((fits ? base.path() : std::string("/tmp")) + name, 0), 0u)
+        << d << (fits ? "" : " (too long for $TMPDIR: expected the /tmp fallback)");
+    EXPECT_EQ(d.size(), (fits ? base.path() : std::string("/tmp")).size() + name.size() + 6) << d;
     std::string f = TestTempFile("tb", ".txt");
     EXPECT_EQ(f, base.path() + "/tb-p" + std::to_string((int)getpid()) + ".txt");
     setenv("TMPDIR", "", 1);
