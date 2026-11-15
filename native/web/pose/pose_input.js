@@ -424,6 +424,7 @@ async function start() {
             setState('error', 'Camera error (' + (name || e) + ') — using a stand-in player', 'err', true);
         return;
     }
+    if (!ui) { for (const t of stream.getTracks()) t.stop(); stream = null; return; }  // shut down meanwhile
     const track = stream.getVideoTracks()[0];
     const s = track.getSettings();
     stats.camera = { label: track.label, width: s.width, height: s.height, frameRate: s.frameRate };
@@ -462,6 +463,7 @@ async function start() {
         setState('error', 'Pose model failed to load — playing without camera', 'err', true);
         return;
     }
+    if (!ui) { shutdown(); return; }  // the game failed while the model loaded
     setState('noperson', 'Camera on — looking for you…', 'warn');
 
     if (opt.transport === 'stream' && typeof MediaStreamTrackProcessor !== 'undefined') {
@@ -488,8 +490,28 @@ async function start() {
     }
 }
 
+// Let the camera go and take the panel down: the page's error card calls this
+// when the engine fails after the camera started (index.html setStatus).
+export function shutdown() {
+    if (stream) { for (const t of stream.getTracks()) t.stop(); stream = null; }
+    if (worker) { worker.terminate(); worker = null; }
+    const panel = document.getElementById('pose-panel');
+    if (panel) panel.remove();
+    ui = null;
+    stats.state = 'off';
+    stats.detail = 'stopped: the game did not start';
+}
+window.dc3PoseShutdown = shutdown;
+
 export function init() {
     if (opt.mode === 'off') { stats.state = 'off'; return; }
+    // The page refused to boot the engine (index.html refuseBoot): do not ask
+    // for the camera, there is no game to dance to (W-31).
+    if (window.dc3BootBlocked) {
+        stats.state = 'off';
+        stats.detail = 'engine not started: ' + window.dc3BootBlocked;
+        return;
+    }
     buildUi();
     if (opt.mode === 'manual') { setState('idle', 'Dance with your camera', '', true); return; }
     start();
