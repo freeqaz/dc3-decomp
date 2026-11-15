@@ -651,3 +651,31 @@ TEST_F(DC3LookPostTest, EnhancedDofKeepsTheRadiusWithoutCreases) {
     ui.SetCurrent(nullptr);
     delete game;
 }
+
+// {rnd native_look post_*}: the per-item tokens turn on their own post field
+// alone (the per-item cost A/B in engine doc §37.11 depends on it), and
+// post_retail / post_enhanced still set all three. Through Rnd's handler, as
+// the HTTP eval reaches it.
+TEST_F(DC3LookPostTest, NativeLookPostTokensSetTheirOwnField) {
+    milo::ScopedLookOverride keep(milo::LookProfile::Enhanced);
+    struct Case {
+        const char *token;
+        bool precision, bloomFilter, dofFilter;
+    } cases[] = {
+        {"post_retail", false, false, false},     {"post_precision", true, false, false},
+        {"post_bloom_filter", false, true, false}, {"post_dof_filter", false, false, true},
+        {"post_enhanced", true, true, true},
+    };
+    for (const Case &c : cases) {
+        char text[96];
+        snprintf(text, sizeof(text), "(nil native_look %s)", c.token);
+        DataArray *file = DataReadString(text);
+        TheRnd.Handle(file->Array(0), true);
+        file->Release();
+        const milo::LookSettings &s = milo::Look();
+        EXPECT_EQ(s.postPrecision, c.precision) << c.token;
+        EXPECT_EQ(s.postBloomFilter, c.bloomFilter) << c.token;
+        EXPECT_EQ(s.postDofFilter, c.dofFilter) << c.token;
+        EXPECT_EQ(s.profile, milo::LookProfile::Enhanced) << c.token << " changed the profile";
+    }
+}

@@ -185,6 +185,8 @@ Rnd::Rnd()
 // switches the engine's DC3_LOOK profile at run time, so one frozen frame can
 // be graded both ways; post_retail|post_enhanced switch only the post chain's
 // fields (the rest of the profile, e.g. alpha-cut coverage, untouched);
+// post_precision|post_bloom_filter|post_dof_filter turn on that one post field
+// alone (the per-item cost A/B);
 // {rnd native_look} alone reports it. Returns the profile now in force.
 static Symbol NativeLook(const DataArray *msg) {
     if (msg->Size() > 2) {
@@ -193,7 +195,11 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "enhanced") milo::SetLookProfileForInspection(milo::LookProfile::Enhanced);
         else if (s == "post_retail") milo::SetLookPostForInspection(false);
         else if (s == "post_enhanced") milo::SetLookPostForInspection(true);
-        else MILO_NOTIFY("native_look: %s is not retail, enhanced, post_retail or post_enhanced", s.Str());
+        else if (s == "post_precision") milo::SetLookPostFieldsForInspection(true, false, false);
+        else if (s == "post_bloom_filter") milo::SetLookPostFieldsForInspection(false, true, false);
+        else if (s == "post_dof_filter") milo::SetLookPostFieldsForInspection(false, false, true);
+        else MILO_NOTIFY("native_look: %s is not retail, enhanced, post_retail, post_enhanced, "
+                         "post_precision, post_bloom_filter or post_dof_filter", s.Str());
     }
     return milo::LookProfileName(milo::Look().profile);
 }
