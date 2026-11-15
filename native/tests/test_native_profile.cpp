@@ -275,6 +275,8 @@ TEST(Dc3ProfileTest, DlcRootsFollowDc3DlcAndDc3DlcDir) {
 //  - RndOverlaysModeFor("1") -> log     -> TheSwitchDrawsThem
 //  - Debug::Fail's "FAIL: " print skipped unless DC3_RND_OVERLAYS draws
 //                                        -> AFailIsStillPrintedUnderTheDefault
+//    (it survived a first version that matched "FAIL: <msg>" as a substring:
+//    the dev tap's "MILO_FAIL: <msg>" line carried it)
 // ---------------------------------------------------------------------------
 
 TEST(Dc3ProfileTest, DebugNoticesAreLoggedNotDrawnByDefault) {
@@ -312,8 +314,13 @@ TEST(Dc3ProfileTest, AFailIsStillPrintedUnderTheDefault) {
         << "MILO_FATAL_FAILS is set: a FAIL would abort the test binary";
     testing::internal::CaptureStderr();
     TheDebug.Fail("np-notifyband: a FAIL under the default overlay mode", nullptr);
-    const std::string err = testing::internal::GetCapturedStderr();
-    EXPECT_NE(err.find("FAIL: np-notifyband: a FAIL under the default overlay mode"),
+    const std::string err = "\n" + testing::internal::GetCapturedStderr();
+    // A line of its own that STARTS with "FAIL: " -- Debug::Fail's print, what
+    // a terminal, engine.log and the browser console (console.error) show.  The
+    // dev tap's "MILO_FAIL: <msg>" line contains the same text, so a substring
+    // match would pass on the tap alone (it did: the FAIL sabotage in the
+    // header comment survived until this was anchored).
+    EXPECT_NE(err.find("\nFAIL: np-notifyband: a FAIL under the default overlay mode\n"),
               std::string::npos)
-        << "a FAIL is no longer printed when the debug notices are not drawn:\n" << err;
+        << "a FAIL is no longer printed when the debug notices are not drawn:" << err;
 }
