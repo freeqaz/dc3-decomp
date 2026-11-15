@@ -2058,6 +2058,7 @@ if(BUILD_TESTS)
         tests/test_postproc_noise.cpp
         tests/test_bitmap_mip_levels.cpp
         tests/test_dc3_retail_post.cpp
+        tests/test_dc3_look_post.cpp
         tests/test_merge_scope_parity.cpp
         tests/test_merge_lifecycle.cpp
         tests/test_cascade_ref_invariant.cpp

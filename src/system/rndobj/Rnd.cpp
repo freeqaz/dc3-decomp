@@ -179,6 +179,23 @@ Rnd::Rnd()
         mDefaultTex[i] = nullptr;
 }
 
+#ifdef HX_NATIVE
+#include "platform/LookProfile.h"
+// Native inspection (np-gfx-post round 10): {rnd native_look retail|enhanced}
+// switches the engine's DC3_LOOK profile at run time, so one frozen frame can
+// be graded both ways; {rnd native_look} alone reports it. Returns the profile
+// now in force.
+static Symbol NativeLook(const DataArray *msg) {
+    if (msg->Size() > 2) {
+        const Symbol s = msg->Sym(2);
+        if (s == "retail") milo::SetLookProfileForInspection(milo::LookProfile::Retail);
+        else if (s == "enhanced") milo::SetLookProfileForInspection(milo::LookProfile::Enhanced);
+        else MILO_NOTIFY("native_look: %s is not retail or enhanced", s.Str());
+    }
+    return milo::LookProfileName(milo::Look().profile);
+}
+#endif
+
 BEGIN_HANDLERS(Rnd)
     HANDLE_ACTION(reset_postproc, RndPostProc::Reset())
     HANDLE_ACTION(reset_dof_proc, RndPostProc::ResetDofProc())
@@ -286,6 +303,9 @@ BEGIN_HANDLERS(Rnd)
     HANDLE_EXPR(default_cam, mDefaultCam)
     HANDLE_EXPR(last_proc_cmds, mLastProcCmds)
     HANDLE_EXPR(toggle_all_postprocs, mDisablePostProc = !mDisablePostProc)
+#ifdef HX_NATIVE
+    HANDLE_EXPR(native_look, NativeLook(_msg))
+#endif
     HANDLE_ACTION(recreate_defaults, CreateDefaults())
     HANDLE_ACTION(
         reload_mat_metaterials, RndMat::ReloadAndUpdateMat(_msg->Obj<ObjectDir>(2))
