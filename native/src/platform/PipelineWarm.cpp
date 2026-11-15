@@ -44,14 +44,24 @@
 // A draw whose key this misses compiles at the draw, as before; a draw whose
 // key is still compiling waits for it (never skips).
 //
-// The same walk queues every visited dir's textures (QueueGpuTexWarm; PLAN
-// H-116): the image creates a texture as it loads (DxTex::SyncBitmap), the
-// native renderer at its first draw -- the game screen's first frame, and in
-// the song every flashcard and HUD piece the first time it shows. The renderer
-// creates the queued ones a budget's worth a frame (PumpGpuTexWarms), and the
-// game screen waits for the queue (NativeTexWarmHoldsGameScreen, below). The pipelines are DC3's
-// content and DC3's passes, so the walk is DC3's: rb3 and rb3-xenon do not
-// call it.
+// Textures (PLAN H-116): the image creates a texture as it loads
+// (DxTex::SyncBitmap), the native renderer at its first draw -- the game
+// screen's first frame, and in the song every flashcard and HUD piece the
+// first time it shows. While a game is loaded (NativeTexWarmGameLoad, from
+// GamePanel::Load, to NativeTexWarmGameUnload) the same walk queues every
+// visited dir's textures (QueueGpuTexWarm), and the game's load also queues
+// what the game shows that was loaded before it, at boot: the loaded panels
+// of the game screen (the flashcard dock, the fitness HUD) and of the mode's
+// win screen (perform_endgame, which comes up with no transition), and the
+// fonts preloaded at boot (config preload_subdirs; the HUD's score numbers
+// are labels in one). Not the menus': at boot every UI panel loads, most are
+// never shown in a session, and warming all of them was measured at +31 MB
+// of texture memory on the web at the main menu (41.3 vs 10.4 MB) and +20 MB
+// at the peak. The renderer creates the queued ones a budget's worth a frame (PumpGpuTexWarms), and the game screen
+// waits for the queue (NativeTexWarmHoldsGameScreen, below).
+//
+// The pipelines are DC3's content and DC3's passes, so the walk is DC3's: rb3
+// and rb3-xenon do not call it.
 
 #include "obj/Data.h"
 #include "gfx/PipelineCount.h"
@@ -75,7 +85,11 @@
 #include "rndobj/Tex.h"
 #include "rndobj/TexBlender.h"
 #include "rndobj/Text.h"
+#include "lazer/game/GameMode.h"
 #include "ui/PanelDir.h"
+#include "ui/UI.h"
+#include "ui/UIPanel.h"
+#include "ui/UIScreen.h"
 #include "world/Reflection.h"
 
 #include "platform/MeshPipelineKey.h"
@@ -87,8 +101,11 @@
 #include <list>
 #include <map>
 #include <set>
+#include <unordered_set>
 #include <unordered_map>
 #include <vector>
+
+int NativePreloadedSubdirs(ObjectDir **out, int max);  // obj/Dir.cpp (HX_NATIVE)
 
 namespace {
 
@@ -347,7 +364,97 @@ ObjPtrList<WorldReflection> &LiveReflections() {
     return *sList;
 }
 
+// Whether a game is loaded or loading: from GamePanel::Load to its Unload.
+bool sGameTexWarm = false;
+
+// The textures of `dir` and of what it holds (its subdirs and the dirs placed
+// in it, as Warm::Visit follows them), and those its materials and its texts'
+// fonts use from other dirs (the HUD's number fonts load as dirs of their own).
+int QueueTexturesUnder(ObjectDir *dir, std::unordered_set<ObjectDir *> &seen, int depth = 0) {
+    if (!dir || depth > 32 || !seen.insert(dir).second) return 0;
+    int n = 0;
+    std::vector<ObjectDir *> children;
+    for (ObjDirItr<Hmx::Object> it(dir, false); it != nullptr; ++it) {
+        Hmx::Object *obj = it;
+        if (RndTex *tex = dynamic_cast<RndTex *>(obj)) {
+            n += QueueGpuTexWarm(tex) ? 1 : 0;
+        } else if (RndMat *mat = dynamic_cast<RndMat *>(obj)) {
+            n += QueueGpuTexWarm(mat->GetDiffuseTex()) ? 1 : 0;
+            n += QueueGpuTexWarm(mat->NormalMap()) ? 1 : 0;
+        } else if (RndText *text = dynamic_cast<RndText *>(obj)) {
+            for (int i = 0; i < text->NumStyles(); ++i) {
+                RndFont *font = dynamic_cast<RndFont *>(text->Styles()[i].mFont.Ptr());
+                for (int m = 0; font && m < font->NumMats(); ++m)
+                    if (RndMat *page = font->Mat(m)) n += QueueGpuTexWarm(page->GetDiffuseTex()) ? 1 : 0;
+            }
+        } else if (ObjectDir *child = dynamic_cast<ObjectDir *>(obj)) {
+            if (child != dir) children.push_back(child);
+        }
+    }
+    for (size_t i = 0; i < dir->SubDirs().size(); ++i) children.push_back(dir->SubDirs()[i]);
+    for (ObjectDir *child : children) n += QueueTexturesUnder(child, seen, depth + 1);
+    return n;
+}
+
+bool ScreenHolds(UIScreen *screen, UIPanel *panel) {
+    if (!screen) return false;
+    for (const PanelRef &ref : screen->PanelList())
+        if (ref.mPanel == panel) return true;
+    return false;
+}
+
 } // namespace
+
+void NativeTexWarmGameLoad(UIPanel *gamePanel) {
+    sGameTexWarm = true;
+    if (!gWgpuRnd || !gWgpuRnd->Gpu().IsReady() || !gWgpuRnd->GpuResourcesReady()) return;
+    const auto t0 = std::chrono::steady_clock::now();
+    std::unordered_set<ObjectDir *> seen;
+    int n = 0, panels = 0;
+    // The screen the game panel comes up in (the one being gone to, or the
+    // game screen by name), and the one the song ends on: the mode's
+    // win_screen (config/modes.dta), which the game goes to with no
+    // transition, so it shows its panels -- loaded at boot -- on its first
+    // frame.
+    UIScreen *game = TheUI ? TheUI->TransitionScreen() : nullptr;
+    if (!ScreenHolds(game, gamePanel)) game = ObjectDir::Main()->Find<UIScreen>("game_screen", false);
+    UIScreen *win = nullptr;
+    if (const DataNode *w = TheGameMode ? TheGameMode->Property("win_screen", false) : nullptr) {
+        const DataNode &v = w->Evaluate();
+        if (v.Type() == kDataSymbol)
+            win = ObjectDir::Main()->Find<UIScreen>(v.Sym().Str(), false);
+        else if (v.Type() == kDataObject)
+            win = v.Obj<UIScreen>();
+    }
+    for (UIScreen *screen : { game, win }) {
+        if (!screen) continue;
+        for (const PanelRef &ref : screen->PanelList()) {
+            if (ref.mPanel && ref.mPanel->LoadedDir()) {
+                n += QueueTexturesUnder(ref.mPanel->LoadedDir(), seen);
+                panels++;
+            }
+        }
+    }
+    // The fonts preloaded at boot (config preload_subdirs): each is a dir of
+    // its own, which a label names (the HUD's score numbers), so no panel's
+    // dir holds it. The other preloaded dirs are left to their first draw.
+    int fonts = 0;
+    ObjectDir *preloaded[128];
+    const int numPreloaded = NativePreloadedSubdirs(preloaded, 128);
+    for (int i = 0; i < numPreloaded; ++i) {
+        for (ObjDirItr<RndFont> it(preloaded[i], true); it != nullptr; ++it) {
+            RndFont *font = it;
+            for (int m = 0; m < font->NumMats(); ++m)
+                if (RndMat *page = font->Mat(m)) fonts += QueueGpuTexWarm(page->GetDiffuseTex()) ? 1 : 0;
+        }
+    }
+    fprintf(stderr, "[TEXWARM] game load: %d textures queued from %d loaded panels of %s and %s, "
+                    "%d from preloaded fonts (walk %.2f ms)\n",
+            n, panels, game ? game->Name() : "-", win ? win->Name() : "-", fonts,
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+}
+
+void NativeTexWarmGameUnload() { sGameTexWarm = false; }
 
 void NativeWarmLoadedDir(ObjectDir *dir) {
     // The renderer's resources, not just the device: on the web the device
@@ -378,7 +485,7 @@ void NativeWarmLoadedDir(ObjectDir *dir) {
         for (auto d = draws.begin(); d != draws.end(); ++d)
             queued += warm.QueueDrawable(*d, c.reflection, 0);
     }
-    const int textures = warm.QueueTextures();
+    const int textures = sGameTexWarm ? warm.QueueTextures() : 0;
     const uint64_t created = GpuPipelineLoadCreateCount() - created0;
     if (queued > 0 || created > 0 || textures > 0)
         fprintf(stderr,

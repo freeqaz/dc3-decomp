@@ -346,6 +346,10 @@ void GamePanel::Load() {
     mIsReplay = false;
     mPerformanceProfiler.Start();
     CreateGame();
+#ifdef HX_NATIVE
+    extern void NativeTexWarmGameLoad(UIPanel *);
+    NativeTexWarmGameLoad(this);
+#endif
     UIPanel::Load();
 }
 
@@ -471,6 +475,10 @@ bool GamePanel::IsLoaded() const {
 }
 
 void GamePanel::Unload() {
+#ifdef HX_NATIVE
+    extern void NativeTexWarmGameUnload();
+    NativeTexWarmGameUnload();
+#endif
     UIPanel::Unload();
     RELEASE(mGame);
     mPollLoadState = 0;

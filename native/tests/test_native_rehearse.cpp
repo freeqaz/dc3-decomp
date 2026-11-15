@@ -572,23 +572,37 @@ void ExpectNoPipelineCreatedAfterLoad(const char *song, const EngineRun &run) {
 // (DxTex::SyncBitmap); the native renderer creates it at its first draw, which
 // was the game screen's first frame (160-210 textures, 18-31 ms of an 55-109 ms
 // frame on the dev box) and, through the song, every flashcard, HUD meter and
-// feedback ring the first time it showed. Now DirLoader::Cleanup queues every
-// loaded dir's textures (NativeWarmLoadedDir, QueueGpuTexWarm), the renderer
+// feedback ring the first time it showed. Now, from GamePanel::Load on,
+// DirLoader::Cleanup queues every loaded dir's textures (NativeWarmLoadedDir,
+// QueueGpuTexWarm), the game's load queues what it shows that loaded at boot
+// (the game and win screens' panels, the preloaded fonts), the renderer
 // creates them a budget's worth a frame (PumpGpuTexWarms), and game_screen
 // waits for the queue to drain (GamePanel::PollForLoading, bounded). Read from
 // the [GPUCOUNT] lines: texCreates counts every create from a bitmap,
 // texWarmCreates those the warm made; a create at a draw is the difference,
 // and it must not move from the last line before "Screen 'game_screen' Enter"
-// to the driver's end frame. A re-create (the bitmap changed) counts too.
+// to the driver's end frame. A re-create (the bitmap changed) counts too. And
+// the menus are left alone: nothing is warmed before the game's load.
+// Sabotage-checked 2026-11-15: (1) no texture queued at all: no warm before
+// game_screen (vacuous) and alley +173 / rink +126 at the Enter frame; (2)
+// the hold off and a zero budget: +157 / +112; (3) warming every dir, the
+// menus' too (the first version): 551 warmed before the game's load, in both;
+// (4) without the boot-loaded set (panels, preloaded fonts): +2 at the Enter
+// frame in both (the HUD's score-number fonts) and no win screen's panels.
 void ExpectNoTextureCreatedAfterLoad(const char *song, const EngineRun &run) {
     const int endFrame = DriverFrame(run.driver, "endframe");
     struct Count { int frame; unsigned long long creates, warms; };
     std::vector<Count> counts;
-    int anchor = -1;
+    int anchor = -1, gameLoad = -1;
+    std::string gameLoadLine;
     bool entered = false;
     std::istringstream in(run.output);
     std::string line;
     while (std::getline(in, line)) {
+        if (gameLoad < 0 && line.find("[TEXWARM] game load:") != std::string::npos) {
+            gameLoad = (int)counts.size() - 1;
+            gameLoadLine = line;
+        }
         if (!entered && line.find("Screen 'game_screen' Enter") != std::string::npos) {
             entered = true;
             anchor = (int)counts.size() - 1;
@@ -609,6 +623,21 @@ void ExpectNoTextureCreatedAfterLoad(const char *song, const EngineRun &run) {
     ASSERT_NE(atEnd, nullptr) << song << ": no [GPUCOUNT] line by the driver's end frame " << endFrame;
     ASSERT_GT(atEnd->frame, atGame->frame + 300) << song << ": too few frames after game_screen";
     EXPECT_GT(atGame->warms, 0u) << song << ": no texture was warmed before game_screen (vacuous)";
+    // Scoped to the game: the menus' textures (every UI panel loads at boot)
+    // are left to their first draw, so nothing is warmed before the game's
+    // load starts.
+    ASSERT_GE(gameLoad, 0) << song << ": no [TEXWARM] game load line (or no [GPUCOUNT] before it)";
+    EXPECT_EQ(counts[gameLoad].warms, 0u)
+        << song << ": " << counts[gameLoad].warms << " textures warmed by frame " << counts[gameLoad].frame
+        << ", before the game's load (the menus' are to stay first-draw)";
+    // What the song ends on comes up with no transition, so the game's load
+    // queues its panels (loaded at boot) too; perform's win screen is
+    // perform_endgame_screen (config/modes.dta). The draw check above stops at
+    // the driver's end frame, before it.
+    const size_t of = gameLoadLine.find(" loaded panels of ");
+    EXPECT_TRUE(of != std::string::npos && atoi(gameLoadLine.c_str() + gameLoadLine.rfind(' ', of - 1) + 1) >= 3 &&
+                gameLoadLine.find(" and perform_endgame_screen,", of) != std::string::npos)
+        << song << ": the game's load did not queue the game and win screens' loaded panels: " << gameLoadLine;
     std::string where;
     unsigned long long prev = atGame->creates - atGame->warms;
     for (const Count &c : counts) {
