@@ -150,6 +150,7 @@ deploy_page() {
     # Shared, served from the root. index.html picks release/ or debug/ at runtime.
     cp "$NATIVE_DIR/web/index.html" "$DEPLOY_DIR/index.html"
     cp "$NATIVE_DIR/web/touch_controls.js" "$DEPLOY_DIR/touch_controls.js"
+    cp "$NATIVE_DIR/web/gpu_profile.js" "$DEPLOY_DIR/gpu_profile.js"
     touch "$DEPLOY_DIR/favicon.ico"
     # The engine also copies this POST_BUILD; doing it here keeps audio working
     # on a page whose wasm came from an earlier build.
