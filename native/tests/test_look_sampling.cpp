@@ -84,6 +84,9 @@ TEST_F(LookSamplingTest, RetailIsTheOriginalAndEnhancedDepartsAsDocumented) {
         EXPECT_TRUE(Look().cubeMipChain) << "DxCubeTex::Sync: numMips = mNumMips + 1";
         EXPECT_EQ(Look().renderScale, 1.0f) << "one sample per pixel";
         EXPECT_EQ(Look().renderScaleIntegrated, 1.0f);
+        EXPECT_FALSE(Look().outputFollowsTarget)
+            << "the original draws a 1280x720 frame, scaled to the display";
+        EXPECT_EQ(Look().outputMaxRowsIntegrated, 0);
     }
     {
         ScopedLookOverride enhanced(LookProfile::Enhanced);
@@ -96,6 +99,8 @@ TEST_F(LookSamplingTest, RetailIsTheOriginalAndEnhancedDepartsAsDocumented) {
         // A handheld's iGPU spends ~2 ms on the 1x main pass; a render scale
         // multiplies that by its square, so it stays off there.
         EXPECT_EQ(Look().renderScaleIntegrated, 1.0f);
+        EXPECT_TRUE(Look().outputFollowsTarget) << "the frame at the window's resolution";
+        EXPECT_EQ(Look().outputMaxRowsIntegrated, 1080) << "a handheld draws at most 1080 rows";
     }
 }
 
@@ -418,4 +423,219 @@ TEST_F(LookSamplingTest, AHeadlessDeviceDrawsOneXUnlessAsked) {
         EXPECT_EQ(d.WindowWidth(), asked ? 128 : 64);
         d.Shutdown();
     }
+}
+
+// The frame's sizes (ResolveFrameSizes, gfx/GpuDevice.h): ONE rule for every
+// window size. DC3 draws its frame at the window's size (outputFollowsTarget):
+// output = the logical 1280x720 fitted into the target, pillar- or letterboxed
+// for a target that is not 16:9; scale = ResolveRenderScale(output); drawn =
+// output * scale. With the Enhanced profile a 720p window must give exactly
+// round 3's frame (2560x1440 drawn, boxed down to 1280x720); 1080p supersamples
+// 2x to the 3840x2160 cap; 1440p and 4K draw 1x. Headless draws its own size
+// (MILO_WIDTH x MILO_HEIGHT) at 1x. A shape that does not follow (rb3 /
+// rb3-xenon: the fixed frameWidth) keeps the old frame. Sabotages, each red
+// here: output = the target, unfitted (the bars); output = the logical size
+// (the old fixed frame); the scale resolved from the target instead of the
+// output; drawn not multiplied by the scale.
+TEST(OutputResolution, TheOneRuleForEveryWindowSize) {
+    ScopedLookOverride enhanced(LookProfile::Enhanced);
+    struct Row {
+        bool follows, windowed, discrete;
+        float asked;
+        int targetW, targetH;
+        int outW, outH;
+        float scale;
+        int drawnW, drawnH;
+        const char *why;
+    };
+    const Row rows[] = {
+        {true, true, true, 0, 1280, 720, 1280, 720, 2, 2560, 1440, "720p window: round 3's 2x box-down"},
+        {true, true, true, 0, 1920, 1080, 1920, 1080, 2, 3840, 2160, "1080p window: 2x, at the cap"},
+        {true, true, true, 0, 2560, 1440, 2560, 1440, 1, 2560, 1440, "1440p window: 1x (whole scales)"},
+        {true, true, true, 0, 3840, 2160, 3840, 2160, 1, 3840, 2160, "4K window: 1x"},
+        {true, true, true, 0, 2560, 1080, 1920, 1080, 2, 3840, 2160, "ultrawide: 16:9 pillarboxed, 2x"},
+        {true, true, true, 0, 1920, 1200, 1920, 1080, 2, 3840, 2160, "16:10: letterboxed"},
+        {true, true, true, 0, 1000, 1000, 1000, 563, 2, 2000, 1126, "square: letterboxed, any size"},
+        {true, true, false, 0, 1920, 1080, 1920, 1080, 1, 1920, 1080, "integrated GPU: 1x"},
+        {true, false, true, 0, 1280, 720, 1280, 720, 1, 1280, 720, "headless default: 1280x720 at 1x"},
+        {true, false, true, 0, 1920, 1080, 1920, 1080, 1, 1920, 1080, "headless MILO_WIDTH/HEIGHT 1080p"},
+        {true, false, true, 2, 1280, 720, 1280, 720, 2, 2560, 1440, "headless, asked for 2x"},
+        {true, true, true, 2, 3840, 2160, 3840, 2160, 2, 7680, 4320, "asked for 2x at 4K: not capped"},
+        {false, true, true, 0, 1920, 1080, 1280, 720, 2, 2560, 1440, "not following: the fixed frame"},
+        {false, false, true, 0, 1920, 1080, 1920, 1080, 1, 1920, 1080, "not following, headless: target"},
+    };
+    for (const Row &r : rows) {
+        GpuDeviceDesc d;
+        d.renderScale = Look().renderScale;
+        d.renderScaleIntegrated = Look().renderScaleIntegrated;
+        d.renderScaleExplicit = r.asked;
+        d.frameWidth = 1280;
+        d.frameHeight = 720;
+        if (r.follows) {
+            d.outputFollowsTarget = true;
+            d.logicalWidth = 1280;
+            d.logicalHeight = 720;
+        }
+        const FrameSizes s = ResolveFrameSizes(d, r.discrete, r.windowed, r.targetW, r.targetH);
+        EXPECT_EQ(s.outputW, r.outW) << r.why;
+        EXPECT_EQ(s.outputH, r.outH) << r.why;
+        EXPECT_FLOAT_EQ(s.scale, r.scale) << r.why;
+        EXPECT_EQ(s.drawnW, r.drawnW) << r.why;
+        EXPECT_EQ(s.drawnH, r.drawnH) << r.why;
+    }
+    // Retail is the original: one sample per output pixel at every size.
+    ScopedLookOverride retail(LookProfile::Retail);
+    GpuDeviceDesc d;
+    d.renderScale = Look().renderScale;
+    d.renderScaleIntegrated = Look().renderScaleIntegrated;
+    d.outputFollowsTarget = true;
+    d.logicalWidth = 1280;
+    d.logicalHeight = 720;
+    for (int h : {720, 1080, 1440}) {
+        const FrameSizes s = ResolveFrameSizes(d, true, true, h * 16 / 9, h);
+        EXPECT_EQ(s.drawnH, h) << "retail at " << h << "p";
+        EXPECT_FLOAT_EQ(s.scale, 1.0f) << "retail at " << h << "p";
+    }
+}
+
+// GpuDevice::Init applies the frame rule: a headless device whose frame follows
+// its target, at 1920x1080 with a logical 1280x720, draws and reads back
+// 1920x1080 (not a 1280x720 frame in the corner), viewports scale 1.5x and the
+// frame is not supersampled; asked for 2x, it draws 3840x2160 and reads back
+// 1920x1080. Sabotages: ApplyFrameSizes ignoring the output (drawn = logical) --
+// red on WindowWidth; FrameScaleY taken from the output instead of the logical
+// size -- red on 1.5; SupersampleScale from drawn/logical -- red on 1.
+TEST_F(LookSamplingTest, AFollowingDeviceDrawsItsTargetsSize) {
+    if (IsSkipped()) return;
+    if (!HaveGpu()) GTEST_SKIP() << "no GPU device";
+    for (int asked = 0; asked < 2; asked++) {
+        GpuDevice d;
+        GpuDeviceDesc desc;
+        desc.headless = true;
+        desc.width = 1920;
+        desc.height = 1080;
+        desc.outputFollowsTarget = true;
+        desc.logicalWidth = 1280;
+        desc.logicalHeight = 720;
+        desc.renderScale = 2.0f;
+        desc.renderScaleIntegrated = 2.0f;
+        desc.renderScaleExplicit = asked ? 2.0f : 0.0f;
+        if (!d.Init(desc)) GTEST_SKIP() << "no second headless device";
+        const char *why = asked ? "asked for 2x" : "headless default";
+        EXPECT_EQ(d.OutputWidth(), 1920) << why;
+        EXPECT_EQ(d.OutputHeight(), 1080) << why;
+        EXPECT_EQ(d.WindowWidth(), asked ? 3840 : 1920) << why;
+        EXPECT_EQ(d.WindowHeight(), asked ? 2160 : 1080) << why;
+        EXPECT_EQ(d.LogicalWidth(), 1280) << why;
+        EXPECT_EQ(d.LogicalHeight(), 720) << why;
+        EXPECT_TRUE(d.FrameScaled()) << why;
+        EXPECT_FLOAT_EQ(d.FrameScaleX(), asked ? 3.0f : 1.5f) << why;
+        EXPECT_FLOAT_EQ(d.FrameScaleY(), asked ? 3.0f : 1.5f) << why;
+        EXPECT_FLOAT_EQ(d.SupersampleScale(), asked ? 2.0f : 1.0f) << why;
+        EXPECT_EQ(d.RenderScaled(), asked != 0) << why;
+        EXPECT_FLOAT_EQ(d.RenderScaleFor(d.WindowWidth()), asked ? 3.0f : 1.5f) << why;
+        EXPECT_FLOAT_EQ(d.RenderScaleFor(512), 1.0f) << why << ": a 512 render target";
+        d.Shutdown();
+    }
+}
+
+// The output's row cap (OutputRowCap / ResolveFrameSizes, gfx/GpuDevice.h).
+// Enhanced on a NON-discrete adapter presenting to a window holds the output
+// to 1080 rows at its 16:9 shape (a handheld's 2560x1600 panel gets a
+// 1920x1080 frame, scaled up into the window by the present path); discrete
+// adapters and headless frames are not capped by default. MILO_OUTPUT_MAX_ROWS
+// (outputMaxRowsExplicit) overrides it both ways on any adapter, headless
+// included: 0 = no cap, 720 / 1440 = that many rows. The render scale is then
+// resolved from the capped output, under the 3840x2160 drawn cap as before.
+// Sabotages, each red here: the cap applied on a discrete adapter; the cap
+// ignored on an integrated one; the knob ignored, or its 0 read as "unset";
+// the knob limited to integrated adapters; the capped width not rescaled to
+// the shape; the render scale resolved before the cap.
+TEST(OutputResolution, AnIntegratedAdapterIsCappedAt1080Rows) {
+    ScopedLookOverride enhanced(LookProfile::Enhanced);
+    struct Row {
+        bool discrete, windowed;
+        int knob;
+        float asked;
+        int targetW, targetH;
+        int outW, outH;
+        float scale;
+        int drawnW, drawnH;
+        const char *why;
+    };
+    const Row rows[] = {
+        // Discrete: unchanged (no cap).
+        {true, true, -1, 0, 1920, 1080, 1920, 1080, 2, 3840, 2160, "discrete 1080p window: 2x"},
+        {true, true, -1, 0, 2560, 1440, 2560, 1440, 1, 2560, 1440, "discrete 1440p window: 1x"},
+        {true, true, -1, 0, 3840, 2160, 3840, 2160, 1, 3840, 2160, "discrete 4K window: 1x"},
+        // Integrated: at most 1080 rows.
+        {false, true, -1, 0, 1280, 720, 1280, 720, 1, 1280, 720, "integrated 720p window: under the cap"},
+        {false, true, -1, 0, 1920, 1080, 1920, 1080, 1, 1920, 1080, "integrated 1080p window: at the cap"},
+        {false, true, -1, 0, 2560, 1600, 1920, 1080, 1, 1920, 1080, "integrated 2560x1600 panel: 1080 rows"},
+        {false, true, -1, 0, 3840, 2160, 1920, 1080, 1, 1920, 1080, "integrated 4K window: 1080 rows"},
+        {false, false, -1, 0, 2560, 1440, 2560, 1440, 1, 2560, 1440, "integrated headless: not capped"},
+        {false, true, -1, 2, 2560, 1600, 1920, 1080, 2, 3840, 2160, "integrated, asked for 2x: 1080 rows drawn 2x"},
+        // The knob, both directions, any adapter.
+        {false, true, 0, 0, 2560, 1600, 2560, 1440, 1, 2560, 1440, "knob 0 on the handheld: no cap"},
+        {false, true, 1440, 0, 2560, 1600, 2560, 1440, 1, 2560, 1440, "knob 1440 on the handheld"},
+        {false, true, 720, 0, 2560, 1600, 1280, 720, 1, 1280, 720, "knob 720 on the handheld"},
+        {true, true, 720, 0, 3840, 2160, 1280, 720, 2, 2560, 1440, "knob 720 on a discrete 4K window: 2x"},
+        {true, true, 1440, 0, 3840, 2160, 2560, 1440, 1, 2560, 1440, "knob 1440 on a discrete 4K window"},
+        {true, true, 0, 0, 1920, 1080, 1920, 1080, 2, 3840, 2160, "knob 0 on a discrete 1080p window"},
+        {true, false, 720, 0, 1920, 1080, 1280, 720, 1, 1280, 720, "knob 720 headless"},
+        {true, true, 1440, 0, 1920, 1080, 1920, 1080, 2, 3840, 2160, "a cap above the window: no effect"},
+        // The 3840x2160 drawn cap is unchanged by the row cap.
+        {true, true, 2160, 0, 3840, 2160, 3840, 2160, 1, 3840, 2160, "knob 2160 at 4K: still 1x"},
+        {true, true, 1080, 0, 3840, 2160, 1920, 1080, 2, 3840, 2160, "knob 1080 at 4K: 2x, at the cap"},
+        {true, true, 900, 0, 3840, 2160, 1600, 900, 2, 3200, 1800, "knob 900 at 4K: 1600x900, 2x"},
+    };
+    for (const Row &r : rows) {
+        GpuDeviceDesc d;
+        d.renderScale = Look().renderScale;
+        d.renderScaleIntegrated = Look().renderScaleIntegrated;
+        d.renderScaleExplicit = r.asked;
+        d.outputFollowsTarget = true;
+        d.logicalWidth = 1280;
+        d.logicalHeight = 720;
+        d.outputMaxRowsIntegrated = Look().outputMaxRowsIntegrated;
+        d.outputMaxRowsExplicit = r.knob;
+        const FrameSizes s = ResolveFrameSizes(d, r.discrete, r.windowed, r.targetW, r.targetH);
+        EXPECT_EQ(s.outputW, r.outW) << r.why;
+        EXPECT_EQ(s.outputH, r.outH) << r.why;
+        EXPECT_FLOAT_EQ(s.scale, r.scale) << r.why;
+        EXPECT_EQ(s.drawnW, r.drawnW) << r.why;
+        EXPECT_EQ(s.drawnH, r.drawnH) << r.why;
+    }
+    // Not following (Retail, rb3, rb3-xenon): no row cap applies to the fixed
+    // frame, knob or not.
+    GpuDeviceDesc d;
+    d.frameWidth = 1280;
+    d.frameHeight = 720;
+    d.outputMaxRowsIntegrated = 1080;
+    d.outputMaxRowsExplicit = 360;
+    const FrameSizes s = ResolveFrameSizes(d, false, true, 2560, 1600);
+    EXPECT_EQ(s.outputW, 1280);
+    EXPECT_EQ(s.outputH, 720);
+}
+
+// MILO_OUTPUT_MAX_ROWS's parse (milo::ParseOutputRowsKnob): unset/empty = -1
+// (the profile default), a whole number >= 0 is taken as is (0 = no cap),
+// anything else is reported bad and ignored. Sabotage: "0" read as unset, or
+// "1080p" accepted -- red.
+TEST(OutputResolution, TheRowsKnobParses) {
+    struct Row { const char *v; int want; bool bad; };
+    const Row rows[] = {
+        {nullptr, -1, false}, {"", -1, false}, {"0", 0, false}, {"720", 720, false},
+        {"1080", 1080, false}, {"1440", 1440, false}, {"-1", -1, true}, {"1080p", -1, true},
+        {"abc", -1, true}, {"1.5", -1, true}, {"99999", -1, true},
+    };
+    for (const Row &r : rows) {
+        bool bad = !r.bad;
+        EXPECT_EQ(milo::ParseOutputRowsKnob(r.v, &bad), r.want) << (r.v ? r.v : "(unset)");
+        EXPECT_EQ(bad, r.bad) << (r.v ? r.v : "(unset)");
+    }
+    // A profile override does not carry the knob: it is the process's, read
+    // once with DC3_LOOK.
+    ScopedLookOverride enhanced(LookProfile::Enhanced);
+    EXPECT_EQ(Look().outputMaxRowsExplicit, -1);
 }
