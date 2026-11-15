@@ -1,21 +1,18 @@
-// The loader's per-poll budget follows the frame period -- see LoaderBudget_Native.h.
+// The loader's per-poll budget during gameplay -- see LoaderBudget_Native.h.
 #include "LoaderBudget_Native.h"
 
 #include "utl/Loader.h"
+#include "ui/UI.h"
+#include "ui/UIScreen.h"
 #include "os/Debug.h"
 
-#include <chrono>
 #include <cmath>
+#include <cstring>
 
 namespace {
 
 // The image's frame: one refresh of a 60 Hz TV.
 constexpr double kImageFrameMs = 1000.0 / 60.0;
-
-// LoadMgr's own default (Loader.cpp, LoadMgr::LoadMgr). The image raises the
-// budget above it only while a loading screen is up (PreloadPanel::Load and
-// the game panel's load handler set 14; their finish_load puts 10 back).
-constexpr float kImageDefaultMs = 10.0f;
 
 double sFrameTargetFps = 0.0;
 
@@ -23,10 +20,6 @@ Dc3LoaderBudget &Budget() {
     static Dc3LoaderBudget sBudget;
     return sBudget;
 }
-
-using Clock = std::chrono::steady_clock;
-Clock::time_point sFrameStart{};
-bool sFrameStarted = false;
 
 } // namespace
 
@@ -37,21 +30,12 @@ double Dc3LoaderBudgetMs(double imageMs, double targetFps) {
     return imageMs * (1000.0 / targetFps) / kImageFrameMs;
 }
 
-float Dc3LoaderBudget::Step(float current, double targetFps) {
+float Dc3LoaderBudget::Step(float current, double targetFps, bool gameplayOnScreen) {
     if (!mHave || current != mAppliedMs) {
         mImageMs = current;
         mHave = true;
-        mSpareMs = 0.0f; // a new image value starts from its floor
     }
-    // A loading screen's raised share is kept as the image has it: nothing
-    // moves on a loading screen but its spinner, and scaling it only spread
-    // the song load over twice the frames, each drawn (song select -> game
-    // 0.92 -> 0.97 s at 120 fps).
-    mFloorMs = mImageMs > kImageDefaultMs ? mImageMs
-                                          : (float)Dc3LoaderBudgetMs(mImageMs, targetFps);
-    float next = mFloorMs;
-    if (mSpareMs > 0.0f && mFloorMs < mImageMs)
-        next = std::fmin(mFloorMs + mSpareMs, mImageMs);
+    float next = gameplayOnScreen ? (float)Dc3LoaderBudgetMs(mImageMs, targetFps) : mImageMs;
     // The image only ever sets whole milliseconds (10, 14). A value we apply
     // that is itself whole (5, 7 at 120 fps) is moved by one float step so
     // that the image setting that same number later still reads as the
@@ -63,64 +47,46 @@ float Dc3LoaderBudget::Step(float current, double targetFps) {
     return next;
 }
 
-void Dc3LoaderBudget::EndFrame(double busyMs, double targetFps, bool loaderBusy) {
-    if (!(targetFps > 0.0) || !std::isfinite(targetFps) || !loaderBusy || !(mImageMs > mFloorMs)) {
-        // Nothing waiting to load (or nothing to add): the next load starts
-        // from the floor, so it can never begin with a frame over the period.
-        mSpareMs = 0.0f;
-        return;
-    }
-    const double slack = 1000.0 / targetFps - kSpareMarginMs - busyMs;
-    double spare = mSpareMs + slack;
-    if (spare < 0.0)
-        spare = 0.0;
-    if (spare > mImageMs - mFloorMs)
-        spare = mImageMs - mFloorMs;
-    mSpareMs = (float)spare;
-}
-
 void Dc3LoaderBudgetSetFrameTarget(double fps) { sFrameTargetFps = fps > 0.0 ? fps : 0.0; }
 double Dc3LoaderBudgetFrameTarget() { return sFrameTargetFps; }
+
+bool Dc3GameplayOnScreen() {
+    if (!TheUI)
+        return false;
+    UIScreen *bottom = TheUI->BottomScreen();
+    return bottom && bottom->Name() && strcmp(bottom->Name(), "game_screen") == 0;
+}
 
 void Dc3LoaderBudgetApply() {
     Dc3LoaderBudget &budget = Budget();
     static bool sLogged = false;
-    static float sLoggedFloor = 0.0f, sLoggedImageMs = 0.0f;
+    static float sLoggedApplied = 0.0f, sLoggedImageMs = 0.0f;
     static double sLoggedFps = -1.0;
-    sFrameStart = Clock::now();
-    sFrameStarted = true;
     // LoadMgr has a setter and no getter; the setter returns what it held.
     const float current = TheLoadMgr.SetLoaderPeriod(0.0f);
     TheLoadMgr.SetLoaderPeriod(current);
     const double fps = sFrameTargetFps;
-    const float next = budget.Step(current, fps);
+    const bool gameplay = Dc3GameplayOnScreen();
+    const float next = budget.Step(current, fps, gameplay);
     if (next != current)
         TheLoadMgr.SetLoaderPeriod(next);
-    // One line whenever the image's value, the frame target or the floor
-    // changes (not for the spare time, which moves every loading frame).
-    if (!sLogged || budget.FloorMs() != sLoggedFloor || budget.ImageMs() != sLoggedImageMs
-        || fps != sLoggedFps) {
+    if (!sLogged || next != sLoggedApplied || budget.ImageMs() != sLoggedImageMs || fps != sLoggedFps) {
         // What the loader holds now, read back from LoadMgr (not `next`): the
         // line reports the budget LoadMgr::Poll will see.
         const float held = TheLoadMgr.SetLoaderPeriod(next);
         sLogged = true;
-        sLoggedFloor = budget.FloorMs();
+        sLoggedApplied = next;
         sLoggedImageMs = budget.ImageMs();
         sLoggedFps = fps;
-        if (fps > 0.0)
-            MILO_LOG("DC3 Native: loader budget %.2f ms a poll (the image's %.2f ms, at a %.2f fps "
-                     "frame target; up to %.2f ms from the frame's spare time)\n",
-                     held, budget.ImageMs(), fps, budget.ImageMs());
+        if (!(fps > 0.0))
+            MILO_LOG("DC3 Native: loader budget %.2f ms a poll (the image's; no frame target)\n", held);
+        else if (gameplay)
+            MILO_LOG("DC3 Native: loader budget %.2f ms a poll (the image's %.2f ms at a %.2f fps "
+                     "frame target; gameplay is on screen)\n",
+                     held, budget.ImageMs(), fps);
         else
-            MILO_LOG("DC3 Native: loader budget %.2f ms a poll (the image's; no frame target)\n",
-                     held);
+            MILO_LOG("DC3 Native: loader budget %.2f ms a poll (the image's; %.2f fps frame target, "
+                     "gameplay is not on screen)\n",
+                     held, fps);
     }
-}
-
-void Dc3LoaderBudgetEndFrame() {
-    if (!sFrameStarted)
-        return;
-    const double busyMs =
-        std::chrono::duration<double, std::milli>(Clock::now() - sFrameStart).count();
-    Budget().EndFrame(busyMs, sFrameTargetFps, !TheLoadMgr.Loading().empty());
 }

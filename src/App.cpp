@@ -1375,8 +1375,6 @@ void App::RunWithoutDebugging() {
                 break;
             }
         }
-        // H-107: the frame's spare time, for the next frame's loader budget.
-        Dc3LoaderBudgetEndFrame();
         // H-29: sleep out the rest of the frame period (no-op when uncapped).
         framePacer.Pace();
     }

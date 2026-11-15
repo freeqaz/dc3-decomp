@@ -426,7 +426,6 @@ static void mainLoop() {
             gFrameTraceActive = true;
         const double t0 = trace ? emscripten_get_now() : 0.0;
         sApp->RunOneFrame();
-        Dc3LoaderBudgetEndFrame();  // H-107: the frame's spare time, for the loader
         if (trace)
             FrameTraceRecord(sFrameCount, t0, emscripten_get_now());
         WebScreenBundleHook();

@@ -315,25 +315,20 @@ TEST_F(HeadlessBootTest, FrameCapWhenAsked) {
     EXPECT_GE(slept, 1.0) << "the cap did not sleep";
 }
 
-// PLAN H-107: the loader's per-poll budget follows the frame pacer's target --
-// the image's 10 ms of a 60 Hz frame is 5 ms at a 120 fps cap, 10 ms at 60,
-// and the image's own value with no cap. Each "loader budget" line reports what
-// LoadMgr holds (read back through its setter); every one must be the image's
-// value (10 or 14 ms) scaled by 60 / cap (14, a loading screen's share, is
-// kept), so a budget scaled twice (5 -> 2.5) fails too. The pure rule is test_loader_budget.cpp.
-TEST_F(HeadlessBootTest, LoaderBudgetFollowsTheFrameCap) {
+// PLAN H-107: outside gameplay the loader keeps the image's per-poll budget at
+// any frame target -- boot, the attract and title screens are where scaling it
+// to the period made the load slower (0.1-0.3 s, 6 pairs of 6). Each "loader
+// budget" line reports what LoadMgr holds (read back through its setter);
+// every one in a 60-frame boot must be the image's own value (10 ms, or a
+// loading screen's 14) and say that gameplay is not on screen. The gameplay
+// half (5 ms at 120, 10 at 60) is LoaderBudgetGameplayTest
+// (test_native_rehearse.cpp); the pure rule is test_loader_budget.cpp.
+TEST_F(HeadlessBootTest, LoaderBudgetIsTheImagesOutsideGameplay) {
     struct Case {
         const char *cap;
         double fps;
-        const char *first;
     };
-    const Case cases[] = {
-        {"120", 120.0,
-         "loader budget 5.00 ms a poll (the image's 10.00 ms, at a 120.00 fps frame target;"},
-        {"60", 60.0,
-         "loader budget 10.00 ms a poll (the image's 10.00 ms, at a 60.00 fps frame target;"},
-        {nullptr, 0.0, "loader budget 10.00 ms a poll (the image's; no frame target)"},
-    };
+    const Case cases[] = {{"120", 120.0}, {"60", 60.0}, {nullptr, 0.0}};
     for (const Case &c : cases) {
         SCOPED_TRACE(c.cap ? c.cap : "uncapped");
         std::vector<EnvVar> env;
@@ -342,30 +337,33 @@ TEST_F(HeadlessBootTest, LoaderBudgetFollowsTheFrameCap) {
         auto result = RunHeadless(60, nullptr, 120, env);
         ASSERT_EQ(result.signal, 0) << CrashSummary(result);
         ASSERT_TRUE(HasCompletionMarker(result.output)) << CrashSummary(result);
-        EXPECT_NE(result.output.find(c.first), std::string::npos) << "no '" << c.first << "' line";
         int lines = 0;
         for (size_t pos = result.output.find("loader budget "); pos != std::string::npos;
              pos = result.output.find("loader budget ", pos + 1)) {
             lines++;
             const std::string line =
                 result.output.substr(pos, result.output.find('\n', pos) - pos);
-            double budget = -1, image = -1, fps = -1;
+            double budget = -1, fps = -1;
+            int used = 0;
             if (!c.cap) {
-                EXPECT_EQ(line, "loader budget 10.00 ms a poll (the image's; no frame target)")
-                    << "an uncapped run scaled the loader budget";
-                continue;
+                ASSERT_EQ(sscanf(line.c_str(),
+                                 "loader budget %lf ms a poll (the image's; no frame target)%n",
+                                 &budget, &used),
+                          1)
+                    << line;
+            } else {
+                ASSERT_EQ(sscanf(line.c_str(),
+                                 "loader budget %lf ms a poll (the image's; %lf fps frame target, "
+                                 "gameplay is not on screen)%n",
+                                 &budget, &fps, &used),
+                          2)
+                    << "scaled outside gameplay: " << line;
+                EXPECT_DOUBLE_EQ(fps, c.fps) << line;
             }
-            ASSERT_EQ(sscanf(line.c_str(),
-                             "loader budget %lf ms a poll (the image's %lf ms, at a %lf fps",
-                             &budget, &image, &fps),
-                      3)
-                << line;
-            EXPECT_DOUBLE_EQ(fps, c.fps) << line;
-            EXPECT_TRUE(image == 10.0 || image == 14.0) << "not an image budget: " << line;
-            // A loading screen's raised share (above the 10 ms default) is kept.
-            EXPECT_NEAR(budget, image > 10.0 ? image : image * 60.0 / c.fps, 0.006) << line;
+            EXPECT_EQ(used, (int)line.size()) << line;
+            EXPECT_TRUE(budget == 10.0 || budget == 14.0) << "not the image's budget: " << line;
         }
-        EXPECT_GE(lines, 1);
+        EXPECT_GE(lines, 1) << "no loader budget line";
     }
 }
 

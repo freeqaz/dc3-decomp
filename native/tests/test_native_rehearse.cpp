@@ -680,3 +680,64 @@ protected:
 TEST_F(PerformCrowdTest, AlleyCrowdAddsNoWhiteFigures) { Check("iceicebaby", kAlleyWhiteMax); }
 // Roller rink (the crowd's figures landed on the dancers' bodies).
 TEST_F(PerformCrowdTest, RollerRinkCrowdAddsNoWhiteFigures) { Check("ymca", kRinkWhiteMax); }
+
+// PLAN H-107: the budget LoadMgr::Poll sees, read from the running engine
+// through the image's own setter (set_loader_period returns what it held; the
+// read puts it straight back): in the main menu it is the image's 10 ms at
+// any frame target, and with gameplay on screen (game_screen the bottom
+// screen) it is the image's 10 ms scaled to the pacer's period -- 5 ms at a
+// 120 fps target, 10 ms at 60. The end of a song and the run-up to results
+// load with gameplay on screen, and 10 ms of each 8.3 ms frame stretched them
+// to 12-22 ms (docs section 41). The pure rule is test_loader_budget.cpp, the
+// boot half HeadlessBootTest.LoaderBudgetIsTheImagesOutsideGameplay.
+namespace {
+
+double DriverValue(const std::string &driver, const char *tag) {
+    const std::string key = std::string("DRIVER: ") + tag + " ";
+    size_t at = driver.find(key);
+    if (at == std::string::npos) return -1.0;
+    size_t eol = driver.find('\n', at);
+    size_t v = driver.find("\"value\":", at);
+    if (v == std::string::npos || v > eol) return -1.0;
+    return strtod(driver.c_str() + v + 8, nullptr);
+}
+
+EngineRun RunLoaderBudget(const char *cap) {
+    const char *read = "{do ($p {set_loader_period 0}) {set_loader_period $p} $p}";
+    std::ostringstream d;
+    d << "echo \"DRIVER: menu_period $(ev '" << read << "')\"; "
+      << EnterGameplay("ymca", "perform")
+      << "waitfor 180 game_screen; echo \"DRIVER: game=$(scr)\"; sleep 3; "
+      << "echo \"DRIVER: game_period $(ev '" << read << "')\"; ";
+    return RunEngine(d.str(), std::string(" DC3_FPS_CAP=") + cap);
+}
+
+} // namespace
+
+class LoaderBudgetGameplayTest : public ::testing::Test {
+protected:
+    void Check(const char *cap, double gameMs) {
+        if (!getenv("DC3_DTA_FLOW_TESTS"))
+            GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable (requires game assets)";
+        EngineRun run = RunLoaderBudget(cap);
+        if (!run.setupError.empty())
+            GTEST_FAIL() << run.setupError;
+        ASSERT_NE(run.driver.find("DRIVER: game=game_screen"), std::string::npos)
+            << run.driver << "\n--- tail ---\n"
+            << run.output.substr(run.output.size() > 4000 ? run.output.size() - 4000 : 0);
+        const double menu = DriverValue(run.driver, "menu_period");
+        const double game = DriverValue(run.driver, "game_period");
+        printf("loader budget at a %s fps target: main menu %.4f ms, gameplay %.4f ms\n", cap, menu, game);
+        EXPECT_NEAR(menu, 10.0, 0.001) << "the main menu's budget is not the image's 10 ms\n" << run.driver;
+        EXPECT_NEAR(game, gameMs, 0.001) << "gameplay's budget at a " << cap << " fps target\n"
+                                         << run.driver;
+        // The engine's own line agrees (it reads LoadMgr back too).
+        const std::string line = "loader budget " + std::string(gameMs == 5.0 ? "5.00" : "10.00") +
+                                 " ms a poll (the image's 10.00 ms at a " + cap +
+                                 ".00 fps frame target; gameplay is on screen)";
+        EXPECT_NE(run.output.find(line), std::string::npos) << "no '" << line << "' line";
+    }
+};
+
+TEST_F(LoaderBudgetGameplayTest, HalfTheImagesShareAtA120Target) { Check("120", 5.0); }
+TEST_F(LoaderBudgetGameplayTest, TheImagesShareAtA60Target) { Check("60", 10.0); }
