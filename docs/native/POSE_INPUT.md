@@ -1082,6 +1082,14 @@ turns the two engine layers back to the old rules.
    tracker id on two bodies is two people. A lost person is remembered for the
    window (`DC3_POSE_REACQUIRE_MS`, default 5000). A recorded session still
    holds the tracker's ids, so a replay decides again.
+   - The picture moved: when every person seen in the last frame is in this
+     one under the same tracker id, nobody else is, no detection is where
+     somebody else was, and they have all gone the same way (within 0.1 m)
+     further than reach allows, it is the camera that moved. They keep their
+     ids, and remembered positions and anchors move with them. Consecutive
+     frames only, and two people or more: one person alone is not evidence
+     (see the wrong-person control). `scripts/synthetic_kinect.py` moves the
+     picture this way several times a song, which is how the gate found it.
    - Slot map: a different id next to a held person no longer ends her hold,
      and a person People has seen for 0.5 s is held from her first frame back
      in a slot. Without that, two dancers 0.28 m apart reported on alternate
@@ -1094,7 +1102,9 @@ turns the two engine layers back to the old rules.
      tracked ones (a dancer 1.4 m from the camera with her feet out of the
      picture fails the image's quality filter);
    - `auto`: the old rule, now after a 700 ms wait for her own body, and to
-     the skeleton nearest where she stood. Whoever it takes while the player
+     the skeleton nearest where she stood. The wait holds only while the
+     image still holds her binding; once the image has unbound her she takes
+     the nearest skeleton in the same sensor frame (see "Fast time" below). Whoever it takes while the player
      is still remembered is a **stand-in**: the song is not paused, the player
      is still looked for, and her own id or a new body where she stood takes
      the binding back. Past the window the stand-in is the player;
@@ -1114,6 +1124,16 @@ she was lost, and anybody after the window go through the image's own join
 is the old auto-assign and ends when she is back. `DC3_POSE_REACQUIRE_MS=0`
 is the strict behaviour throughout: tracker ids straight through, no memory,
 the P-12 newcomer rule.
+
+One person alone, out of reach of where she was a frame ago, is somebody new
+even under the same tracker id (NEGATIVE RESULT, measured). A one-person
+version of "the picture moved" was built first. Over the whole recorded
+evening (5,964 camera frames) it fired 4 times, one of them song 3 at
+132.7 s: the only detection in the frame was the dancer's tracker id on the
+person walking past 0.5 m away, and the dancer was back under a new id in the
+next frame. The passer-by kept the dancer's identity, player 1 and her score,
+for the rest of the song. The rule for two or more fires 0 times on that
+recording, and People's output over it is byte-identical with and without it.
 
 **Before / after (MEASURED, real-time replay of the recorded pose; fast time
 is not faithful here, the image's recovery and join count UI seconds).**
@@ -1165,14 +1185,35 @@ Song 3 read against the recording's positions:
   left with player 2's on the right to the end. Before has one change too (at
   beat 160, under "New player joined"), with one player on screen all song.
 
+Both replays were run again on the branch head after the two gate fixes
+below. Same bindings in the same order (song 3: 25 bind lines, same rules and
+ids; song 2: 4), and the moved-picture rule fired 0 times. Song 3: player 1
+66 moves, 112,426; player 2 36 moves (m12-53), 23,799. Song 2: player 1 13
+moves, player 2 12 moves, 2,917.
+
 `DC3_POSE_HOLD_MS=3000` was measured as a second lever on an earlier build of
 the branch and not taken: both song-2 dancers rated to measure 17 instead of
 15, but a longer hold also delays every real exit.
 
+**Fast time (MEASURED; the gate on `988f780c2` failed two tests on it).**
+Under `DC3_FAST_TIME` the UI clock advances 1/30 s a frame and song time and
+the synthetic sensor's stamps 1/120 s, so the image's one-second recovery is
+250 ms of sensor time. Players' waits are sensor time (`near` needs 280 ms
+for a body 0.44 m away, `auto` waited 700 ms), so the image unbound the player
+first and `Game::CheckForSkeletonLoss` paused the song
+(`ReacquiredDancerTest`, 0 of 3 alone; 1 of 1 with `DC3_POSE_REACQUIRE_MS=0`).
+The `auto` wait now ends when the image unbinds her. `NativeAutoAssignPlayers`
+runs before the callbacks of every delivered sensor frame and the game's check
+is one of those callbacks, so the stand-in is bound before the check. In a
+real session the clocks agree and `auto` at 700 ms comes before the image's
+unbind at 1 s. `SecondPersonPerformTest` failed on the synthetic sensor's
+moving picture (player 1 on 3 tracking ids, 4 re-binds); see People above.
+
 **Not verified.** Live people: the replays carry the recorded tracker's ids,
 so the tracker change is shown by its tests only, and banner timing and HUD
-feel are from screenshots at fixed beats. Real-time replays vary by a few
-percent in score between runs. Two people who cross with one of them
+feel are from screenshots at fixed beats. Real-time replays vary between
+runs: song 3 player 1 scored 101,692, 101,194 and 112,426 on the same
+bindings, and song 2 player 2 was rated 13, 13 and 12 moves. Two people who cross with one of them
 undetected for more than about a second are told apart by position only.
 
 ### Tests
@@ -1202,8 +1243,12 @@ undetected for more than about a second are told apart by position only.
 - `native/tests/test_native_second_person.cpp` (`DC3_DTA_FLOW_TESTS`,
   `scripts/synthetic_kinect.py --jump-at` / `--second-person-from`):
   - `ReacquiredDancerTest`: at 20 s she reappears 0.6 m away under a new
-    id. She is on the new id in every later sample, re-bound at most 6 times,
-    and scored to the end;
+    id. She is bound in every later sample, never to who she was before, the
+    body under the new tracker id is bound, she is re-bound at most 12 times
+    (6 measured: the join, the jump, and four times the synthetic sensor
+    stands its one body up or puts it back, a new person each time; the
+    chooser unbinding her every frame is thousands), and scored to the end.
+    Until P-18 it asserted the tracker's id (101) in every sample;
   - `SecondPersonPerformTest`: a second person walks in at 20 s and never
     raises a hand. Player 2 is never bound, player 1 keeps her id, and the song
     is scored.
@@ -1217,8 +1262,9 @@ undetected for more than about a second are told apart by position only.
     (song 2 and song 3's two-dancer stretches from
     `native/tests/data/pose/two_dancers_hips.txt`), py and js. Main's tracker
     fails 5 of them.
-  - `native/tests/test_native_pose_identity.cpp` (37): `PoseIdentityPeopleTest`,
-    `PoseIdentityPlayersTest`, and the recorded stretches through People.
+  - `native/tests/test_native_pose_identity.cpp` (48): `PoseIdentityPeopleTest`
+    (9 of them the moved picture, and what is not one), `PoseIdentityPlayersTest`,
+    and the recorded stretches through People (the picture never moves in them).
   - `native/tests/test_native_pose_socket.cpp` `PoseSensorIdentityTest` (5):
     through `BuildSensorFrame`. `PoseSensorHoldTest`'s newcomer case is now
     the strict-mode test.
@@ -1232,6 +1278,13 @@ undetected for more than about a second are told apart by position only.
     dancer's scoring stops at the jump (112,944 → 147,696).
   - `TwoPlayer` / `OnePerson` / `NoCamera` battle tests still pass with the
     fix.
+  - P-18: tracker 11 of 11 (py and js); `PoseIdentity_Native.h` 41 of 41
+    against the unit tests alone, control clean; `GestureMgr_Native.cpp` 5 of
+    5 (`PoseSensorIdentityTest`). Flow, each rebuilt and run: the image not
+    told of a binding (`LostPlayerStandInTest`); the `auto` wait outlasting
+    the image's unbind (`ReacquiredDancerTest` pauses at the jump); the moved
+    picture off (`SecondPersonPerformTest`: 3 tracking ids, 4 re-binds); the
+    candidate rule removed (`ReacquiredDancerTest`: 1,316 re-binds).
 
 ### Latency on the live path (L-4)
 
