@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 #include "audio/AudioDevice.h"
 #include "platform/StreamReceiver_Native.h"
+#include "platform/ImagePan_Native.h"
 
 #include <cmath>
 #include <cstring>
@@ -201,10 +202,11 @@ TEST(StreamReceiverNative, VolumeScaling) {
     float output[20]; // 10 stereo frames
     rcvr.RenderAudio(output, 10);
 
-    // Expected: 16384/32768 * 0.5 = 0.25 (for center pan, both channels equal)
-    float expected = (16384.0f / 32768.0f) * 0.5f;
-    EXPECT_NEAR(output[0], expected, 0.01f);
-    EXPECT_NEAR(output[1], expected, 0.01f);
+    // Centre pan is the image's C speaker, folded to each side 3 dB down
+    // (ImagePan_Native.h): 16384/32768 * 0.5 * g(-3 dB) on both channels.
+    float expected = (16384.0f / 32768.0f) * 0.5f * std::pow(10.0f, -3.0f / 20.0f);
+    EXPECT_NEAR(output[0], expected, 1e-4f);
+    EXPECT_NEAR(output[1], expected, 1e-4f);
 }
 
 TEST(StreamReceiverNative, PanLeftRight) {
@@ -219,9 +221,58 @@ TEST(StreamReceiverNative, PanLeftRight) {
     float output[20];
     rcvr.RenderAudio(output, 10);
 
-    // Left channel should be loud, right should be silent
-    EXPECT_GT(fabs(output[0]), 0.5f); // left
-    EXPECT_NEAR(output[1], 0.0f, 0.01f); // right silent
+    // Hard left is the image's FL at the voice volume: unity, not the old
+    // native law's 2x (vol * (1 - pan)), which played every hard-panned stem
+    // 6 dB hot. Right is silent.
+    EXPECT_NEAR(output[0], 32767.0f / 32768.0f, 1e-4f);
+    EXPECT_NEAR(output[1], 0.0f, 1e-6f);
+}
+
+// The image's pan law (Voice::UpdateMix), folded to stereo with the game's
+// own downmix (Synth360::Poll's DML/DMR): PLAN H-115. Worked here from the
+// image: a mono voice at pan p in [-1, 0] is FL*cos(a) + C*sin(a),
+// a = (p + 1) * pi/2; C reaches each side at g(-3 dB). Beyond +-1 the ring
+// goes to the surrounds, which the downmix brings back at g(-1.2)/g(-6.2).
+TEST(StreamReceiverNative, PanFollowsTheImagesRing) {
+    const float gC = std::pow(10.0f, -3.0f / 20.0f);
+    const float gS = std::pow(10.0f, -1.2f / 20.0f);
+    const float gR = std::pow(10.0f, -6.2f / 20.0f);
+    const float hp = 1.5707964f;
+    struct Case { float pan, left, right; } cases[] = {
+        { -1.0f, 1.0f, 0.0f },
+        { 1.0f, 0.0f, 1.0f },
+        { 0.0f, gC, gC },
+        { -0.5f, std::cos(0.5f * hp) + gC * std::sin(0.5f * hp), gC * std::sin(0.5f * hp) },
+        { 0.25f, gC * std::cos(0.25f * hp), std::sin(0.25f * hp) + gC * std::cos(0.25f * hp) },
+        { -3.0f, gS, gR },        // SL
+        { 3.0f, gR, gS },         // SR
+        { 7.0f, 1.0f, 0.0f },     // folded: Voice::SetPan, Mod(7 + 4, 8) - 4 = -1
+    };
+    for (const Case &c : cases) {
+        StreamReceiverNative rcvr(4, false);
+        int16_t pcm[10];
+        for (int i = 0; i < 10; i++) pcm[i] = 16384;
+        rcvr.StartSendImpl((unsigned char *)pcm, 20, 0);
+        rcvr.PlayImpl();
+        rcvr.SetVolume(0.8f);
+        rcvr.SetPan(c.pan);
+        float output[20];
+        rcvr.RenderAudio(output, 10);
+        EXPECT_NEAR(output[0], 0.5f * 0.8f * c.left, 1e-5f) << "pan " << c.pan;
+        EXPECT_NEAR(output[1], 0.5f * 0.8f * c.right, 1e-5f) << "pan " << c.pan;
+    }
+}
+
+// A stereo sample keeps its channels apart and scales them by the image's
+// cos/sin pair (FL = L*cos(a), FR = R*sin(a)), so at pan 0 both are 3 dB down.
+TEST(ImagePanLaw, StereoVoiceIsTheCosSinPair) {
+    float l, r;
+    ImagePan::Stereo(1.0f, 0.0f, l, r);
+    EXPECT_NEAR(l, std::pow(10.0f, -3.0f / 20.0f), 1e-3f);
+    EXPECT_NEAR(r, std::pow(10.0f, -3.0f / 20.0f), 1e-3f);
+    ImagePan::Stereo(0.5f, -1.0f, l, r);
+    EXPECT_NEAR(l, 0.5f, 1e-6f);
+    EXPECT_NEAR(r, 0.0f, 1e-6f);
 }
 
 // ============================================================================
