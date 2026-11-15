@@ -21,6 +21,7 @@
 #include "hamobj/MoveDir.h"       // MoveDir::SongSeconds (DC3_POSE_FILL)
 #include "lazer/game/GamePanel.h"  // TheGamePanel: the stall notice is for a song in play
 #include "PoseFill_Native.h"      // DC3_POSE_FILL
+#include "PoseIdentity_Native.h"  // DC3_POSE_REACQUIRE_MS: who is who
 #include "NativeNotice.h"         // DC3_POSE_STALL_MS
 #include "meta_ham/HamUI.h"          // TheHamUI -> ShellInput -> SkeletonChooser
 #include "meta_ham/ShellInput.h"
@@ -105,8 +106,13 @@ static int sSlotTrackId[NUM_SKELETONS] = {-1, -1, -1, -1, -1, -1};
 // Not held: a person who was in a slot for less than kHoldMinPresenceMs (a
 // one-frame false detection is not someone a Kinect would have acquired), and
 // a slot whose position a NEW tracking id has taken (within the image's own
-// GestureMgr::sMaxRecoveryDistance, 0.3 m): the tracker decided that is a new
-// person, and holding the old one too would put two skeletons on one body.
+// GestureMgr::sMaxRecoveryDistance, 0.3 m): holding the old one too would put
+// two skeletons on one body.  That rule was written when the tracker's id was
+// the tracking id, so a tracker that renumbered a dancer ended her hold and
+// her player binding with it.  Since np-player-identity a body that turns up
+// where a remembered person stood IS that person (gPeople, same tracking id),
+// so the rule only fires for a genuinely separate detection -- or with
+// DC3_POSE_REACQUIRE_MS=0, where it is the old behaviour.
 static const int kDefaultHoldMs = 1000;
 static const float kHoldMinPresenceMs = 500.0f;
 static const float kHoldReacquireMetres = 0.3f;
@@ -126,11 +132,22 @@ static void ResetSlotHold(int s) {
     sSlotHold[s].heldMs = 0.0f;
 }
 
+// Who is who (PoseIdentity_Native.h).  gPeople turns the tracker's ids into
+// tracking ids that stay with the body, on every camera frame, before the
+// fill and the slots see them; gPlayers re-binds a player the image unbound
+// because her skeleton was out of view (NativeAutoAssignPlayers).
+static Dc3PoseIdentity::People gPeople;
+static Dc3PoseIdentity::Players gPlayers;
+static_assert(Dc3PoseIdentity::kSlots == NUM_SKELETONS, "one SlotView per skeleton slot");
+static_assert(Dc3PoseIdentity::kMaxDetections == NativeSkeletonProvider::kMaxPersons,
+              "one Detection per provider person");
+
 static void ResetSlotMap() {
     for (int s = 0; s < NUM_SKELETONS; s++) {
         sSlotTrackId[s] = -1;
         ResetSlotHold(s);
     }
+    gPeople.Reset();
 }
 
 // DC3_POSE_HOLD_MS: 0 turns the hold off (the pre-P-12 behaviour), unset or
@@ -356,6 +373,7 @@ static int AssignSlots(const int *trackIds, const Vector3 *hips, int numValid,
     // 2. Release slots whose owner is no longer present -- unless the dropout
     //    hold keeps it (see sSlotHold).
     const int holdMs = NativePoseHoldMs();
+    const bool identified = Dc3PoseIdentity::ReacquireMs() > 0;
     bool releasedNow[NUM_SKELETONS];
     for (int s = 0; s < NUM_SKELETONS; s++) {
         releasedNow[s] = false;
@@ -363,9 +381,13 @@ static int AssignSlots(const int *trackIds, const Vector3 *hips, int numValid,
             SlotHold &h = sSlotHold[s];
             bool hold = holdMs > 0 && h.presentMs >= kHoldMinPresenceMs
                 && h.heldMs + elapsedMs <= (float)holdMs;
-            if (hold) {
+            if (hold && !identified) {
                 // A newcomer standing where the held person stood is the
-                // tracker's verdict that this is someone new.
+                // tracker's verdict that this is someone new.  (With gPeople
+                // at work a body where she stood is her, under her id; a
+                // different id that close is her neighbour, and ending her
+                // hold for it made two dancers who stand close flicker in and
+                // out of their slots on every camera frame.)
                 const Vector3 &was = h.last.joints[kJointHipCenter];
                 for (int k = 0; k < numValid && hold; k++) {
                     if (placed[k] || trackIds[k] < 0)
@@ -406,8 +428,17 @@ static int AssignSlots(const int *trackIds, const Vector3 *hips, int numValid,
                 // low-confidence joint positions either.
                 NativeSkeletonProvider::ResetJointHold(s);
                 ResetSlotHold(s);
+                // Someone gPeople has watched for that long already is a
+                // person, not a false detection: held from her first frame
+                // back.  (MediaPipe reports two dancers on alternate frames;
+                // each would otherwise lose her slot between her own.)
+                if (identified && gPeople.SeenSec(trackIds[k]) * 1000.0f >= kHoldMinPresenceMs)
+                    sSlotHold[s].presentMs = kHoldMinPresenceMs;
                 gEstimate.ResetSlot(s);
                 reassignments++;
+                static bool sDebug = Dc3EnvFlag("DC3_SCORING_DEBUG", false);
+                if (sDebug)
+                    fprintf(stderr, "DC3 SCORING: slot %d <- tracking id %d\n", s, trackIds[k]);
                 break;
             }
         }
@@ -461,6 +492,22 @@ static bool NativeModeNeedsTwoPlayers() {
 //    while unbound (a dancing camera feed in the menus, or after a re-acquire
 //    in a song) is bound here and unbound by the chooser every frame until she
 //    stands still or raises a hand.
+//
+// And it must not forget who was playing (np-player-identity).  A recorded
+// two-player session: player 2's skeleton was out of view for longer than the
+// hold plus the image's recovery second, the image unbound her, and -- Perform
+// is not a two-player mode -- nothing here bound her again: she danced the
+// rest of the song unrated under "New player detected!  Raise your hand to
+// join."  Player 1, auto-assigned "the first unclaimed slot", hopped onto the
+// other dancer and a bystander (binding 0 -> 2 -> 0 -> 1 in one song).  So
+// (Dc3PoseIdentity::Players, PoseIdentity_Native.h): a player whose skeleton
+// was LOST is remembered for DC3_POSE_REACQUIRE_MS and bound again in every
+// mode, to her own tracking id when it returns or to a body that appeared
+// near where she stood after she was lost; the auto-assign takes the skeleton
+// nearest to where the player stood, not the first.  A player the image
+// unbound while her skeleton was in view (the chooser, a one-player mode) is
+// not remembered, so the first rule above still holds.  Anyone else joins the
+// image's way.  DC3_POSE_REACQUIRE_MS=0 is the behaviour before this.
 static int sAutoAssignCount[2] = { 0, 0 };
 
 static SkeletonChooser *NativeChooser() {
@@ -468,44 +515,46 @@ static SkeletonChooser *NativeChooser() {
     return shell ? shell->GetSkeletonChooser() : nullptr;
 }
 
-static void NativeAutoAssignPlayers() {
+static void NativeAutoAssignPlayers(float elapsedMs) {
     if (!TheGameData || !TheGestureMgr)
         return;
-    const Skeleton *bound[2] = { nullptr, nullptr };
-    for (int p = 0; p < 2; p++) {
-        HamPlayerData *playerData = TheGameData->Player(p);
-        int wantId = playerData ? playerData->GetSkeletonTrackingID() : -1;
-        if (wantId < 0)
-            continue;
-        for (int s = 0; s < NUM_SKELETONS; s++) {
-            const Skeleton &skel = TheGestureMgr->GetSkeleton(s);
-            if (skel.IsTracked() && skel.TrackingID() == wantId) {
-                bound[p] = &skel;
-                break;
-            }
+    // The slots as the image has them (last frame's, post quality filter) and
+    // the id each player holds; Dc3PoseIdentity::Players decides.
+    Dc3PoseIdentity::SlotView slots[NUM_SKELETONS];
+    for (int s = 0; s < NUM_SKELETONS; s++) {
+        const Skeleton &skel = TheGestureMgr->GetSkeleton(s);
+        slots[s].tracked = skel.IsTracked();
+        slots[s].valid = skel.IsValid();
+        slots[s].id = skel.TrackingID();
+        if (slots[s].tracked || slots[s].valid) {
+            Vector3 hip;
+            skel.JointPos(kCoordCamera, kJointHipCenter, hip);
+            slots[s].x = hip.x;
+            slots[s].z = hip.z;
         }
     }
+    int boundId[2] = { -1, -1 };
+    for (int p = 0; p < 2; p++) {
+        HamPlayerData *playerData = TheGameData->Player(p);
+        boundId[p] = playerData ? playerData->GetSkeletonTrackingID() : -1;
+    }
+    static bool sDebug = Dc3EnvFlag("DC3_SCORING_DEBUG", false);
     const int autoPlayers = NativeModeNeedsTwoPlayers() ? 2 : 1;
-    for (int pass = 0; pass < 2; pass++) {
-        bool requireValid = (pass == 0);
-        for (int p = 0; p < autoPlayers; p++) {
-            if (bound[p])
-                continue;
-            for (int s = 0; s < NUM_SKELETONS; s++) {
-                const Skeleton &skel = TheGestureMgr->GetSkeleton(s);
-                if (requireValid ? !skel.IsValid() : !skel.IsTracked())
-                    continue;
-                if (bound[0] == &skel || bound[1] == &skel)
-                    continue;
-                bound[p] = &skel;
-                HamPlayerData *playerData = TheGameData->Player(p);
-                if (playerData && playerData->GetSkeletonTrackingID() != skel.TrackingID()) {
-                    TheGameData->AssignSkeleton(p, skel.TrackingID());
-                    sAutoAssignCount[p]++;
-                }
-                break;
-            }
-        }
+    Dc3PoseIdentity::Players::Result result = gPlayers.Update(
+        slots, boundId, autoPlayers, elapsedMs, Dc3PoseIdentity::ReacquireMs(), NativePoseHoldMs());
+    const Skeleton *bound[2] = { nullptr, nullptr };
+    for (int p = 0; p < 2; p++) {
+        if (result.slot[p] >= 0)
+            bound[p] = &TheGestureMgr->GetSkeleton(result.slot[p]);
+        if (result.assign[p] < 0 || !TheGameData->Player(p))
+            continue;
+        TheGameData->AssignSkeleton(p, result.assign[p]);
+        sAutoAssignCount[p]++;
+        if (sDebug)
+            fprintf(stderr,
+                "DC3 SCORING: bind p%d -> tracking id %d slot %d rule=%s lost=%.0fms dist=%.2fm\n",
+                p, result.assign[p], result.slot[p], Dc3PoseIdentity::RuleName(result.rule[p]),
+                result.lostMs[p], result.distance[p]);
     }
     if (SkeletonChooser *chooser = NativeChooser()) {
         for (int p = 0; p < 2; p++) {
@@ -514,7 +563,6 @@ static void NativeAutoAssignPlayers() {
         }
     }
 
-    static bool sDebug = Dc3EnvFlag("DC3_SCORING_DEBUG", false);
     if (sDebug) {
         static int sPrevIdx[2] = { -2, -2 };
         int idx[2];
@@ -1071,6 +1119,50 @@ static bool StallWatchTick(bool newFrame, bool delivered) {
     return true;
 }
 
+// A camera frame's people, tracker ids in, tracking ids that stay with the
+// body out (Dc3PoseIdentity::People).  `sensorTs` is the frame's capture time
+// in seconds; when successive stamps advance the elapsed time is theirs (see
+// AcceptedFrameElapsed), else the wall clock's.
+static void IdentifyPeople(NativeSkeletonProvider::PersonData *persons, int numPersons,
+                           double sensorTs) {
+    static std::chrono::steady_clock::time_point sPrevTime;
+    static bool sHavePrev = false;
+    static double sPrevTs = -1.0;
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    float dt = 1.0f / 30.0f;
+    if (sHavePrev) {
+        dt = std::chrono::duration<float>(now - sPrevTime).count();
+        if (sensorTs >= 0.0 && sPrevTs >= 0.0 && sensorTs > sPrevTs && sensorTs - sPrevTs < 10.0)
+            dt = (float)(sensorTs - sPrevTs);
+    }
+    sPrevTime = now;
+    sHavePrev = true;
+    sPrevTs = sensorTs;
+
+    Dc3PoseIdentity::Detection dets[NativeSkeletonProvider::kMaxPersons];
+    int index[NativeSkeletonProvider::kMaxPersons], ids[NativeSkeletonProvider::kMaxPersons];
+    int count = 0;
+    for (int i = 0; i < numPersons && count < NativeSkeletonProvider::kMaxPersons; i++) {
+        if (!persons[i].valid)
+            continue;
+        const Vector3 &hip = persons[i].joints[kJointHipCenter];
+        dets[count].rawId = persons[i].trackId;
+        dets[count].x = hip.x;
+        dets[count].y = hip.y;
+        dets[count].z = hip.z;
+        index[count++] = i;
+    }
+    int before = gPeople.Reacquired();
+    gPeople.Update(dets, count, dt, Dc3PoseIdentity::ReacquireMs(), ids);
+    static bool sDebug = Dc3EnvFlag("DC3_SCORING_DEBUG", false);
+    for (int k = 0; k < count; k++) {
+        if (sDebug && gPeople.Reacquired() != before && ids[k] != dets[k].rawId)
+            fprintf(stderr, "DC3 SCORING: tracker id %d is tracking id %d (x=%+.2f z=%.2f)\n",
+                dets[k].rawId, ids[k], dets[k].x, dets[k].z);
+        persons[index[k]].trackId = ids[k];
+    }
+}
+
 static const SkeletonFrame *BuildSensorFrame() {
     bool providerRunning = false;
     bool newFrame = false;
@@ -1090,10 +1182,16 @@ static const SkeletonFrame *BuildSensorFrame() {
 
         if (newFrame) {
             PoseAgeLog(TheSkeletonProvider->Timestamp());
+            // sCamera: the people as the tracker sent them -- what a session
+            // records, so a replay goes through IdentifyPeople again.
+            // sPersons: the same people under tracking ids that stay with the
+            // body -- what the fill, the slots and the image get.
+            static NativeSkeletonProvider::PersonData sCamera[NativeSkeletonProvider::kMaxPersons];
             static NativeSkeletonProvider::PersonData sPersons[NativeSkeletonProvider::kMaxPersons];
             int numPersons = TheSkeletonProvider->NumPersons();
             for (int i = 0; i < numPersons; i++)
-                sPersons[i] = TheSkeletonProvider->GetPerson(i);
+                sPersons[i] = sCamera[i] = TheSkeletonProvider->GetPerson(i);
+            IdentifyPeople(sPersons, numPersons, TheSkeletonProvider->Timestamp());
             // SkeletonFrame::Create's gravity step (PoseLevel_Native.h): the
             // slots hold raw camera space; a camera that does not know its
             // gravity gets an estimate, everything else (0,1,0).
@@ -1124,7 +1222,7 @@ static const SkeletonFrame *BuildSensorFrame() {
                     sFrame.mFloorNormal.Set(0.0f, 1.0f, 0.0f);
 #ifndef __EMSCRIPTEN__
                 // DC3_POSE_RECORD: what the sensor accepted, for an offline replay.
-                Dc3PoseSessionRecord(sPersons, numPersons, frameId, TheSkeletonProvider->Timestamp(),
+                Dc3PoseSessionRecord(sCamera, numPersons, frameId, TheSkeletonProvider->Timestamp(),
                                      unlevelled, sFrame);
 #endif
                 delivered = true;
@@ -1145,7 +1243,7 @@ static const SkeletonFrame *BuildSensorFrame() {
                     && sArrival.mFloorNormal.z == 0.0f)
                     sArrival.mFloorNormal.Set(0.0f, 1.0f, 0.0f);
 #ifndef __EMSCRIPTEN__
-                Dc3PoseSessionRecord(sPersons, numPersons, frameId, TheSkeletonProvider->Timestamp(),
+                Dc3PoseSessionRecord(sCamera, numPersons, frameId, TheSkeletonProvider->Timestamp(),
                                      unlevelled, sArrival);
 #endif
             }
@@ -1188,7 +1286,7 @@ static const SkeletonFrame *BuildSensorFrame() {
              providerRunning && TheSkeletonProvider ? TheSkeletonProvider->NumPersons() : 0);
     if (!delivered)
         return nullptr;
-    NativeAutoAssignPlayers();
+    NativeAutoAssignPlayers((float)sFrame.mElapsedMs);
     return &sFrame;
 }
 
@@ -1204,6 +1302,8 @@ const SkeletonFrame *NativeSensorCameraInput::PollNewFrame() {
 int NativeSlotForTrackId(int trackId) {
     if (trackId == -1) // the free-slot marker, never a person
         return -1;
+    // The stream labels its people with the tracker's ids.
+    trackId = gPeople.StableForRaw(trackId);
     for (int s = 0; s < NUM_SKELETONS; s++) {
         if (sSlotTrackId[s] == trackId)
             return s;

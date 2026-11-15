@@ -2146,6 +2146,7 @@ if(BUILD_TESTS)
         tests/test_native_second_person.cpp
         tests/test_native_pad_with_person.cpp  # H-20 pad presses with a person on the sensor
         tests/test_native_pose_socket.cpp
+        tests/test_native_pose_identity.cpp  # np-player-identity: who is who (People, Players)
         tests/test_native_pose_spawner.cpp
         tests/test_native_tree_paths.cpp
         tests/test_movie_audio.cpp
@@ -2196,6 +2197,7 @@ if(BUILD_TESTS)
     # worktrees. Add a file here when it starts using the macro.
     set_property(SOURCE
             tests/test_native_options.cpp
+            tests/test_native_pose_identity.cpp
             tests/test_native_tree_paths.cpp
             tests/test_null_this_guards.cpp
             tests/test_object_lifetime.cpp

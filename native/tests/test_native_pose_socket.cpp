@@ -64,6 +64,8 @@
 
 void GestureMgr_NativePreInit(); // GestureMgr_Native.cpp
 
+int NativeSlotForTrackId(int trackId); // GestureMgr_Native.cpp
+
 namespace {
 
 const uint32_t kMagic = 0x44503302u; // Skeleton_Native.cpp kProtocolMagic
@@ -750,7 +752,10 @@ TEST_F(PoseSensorHoldTest, ABriefFalseDetectionIsNotHeld) {
     EXPECT_EQ(SlotOf(f, 64), -1);
 }
 
-TEST_F(PoseSensorHoldTest, ANewIdWhereTheHeldPersonStoodEndsTheHold) {
+TEST_F(PoseSensorHoldTest, StrictANewIdWhereTheHeldPersonStoodEndsTheHold) {
+    // DC3_POSE_REACQUIRE_MS=0: the tracker's ids are the tracking ids, as
+    // before np-player-identity (PoseSensorIdentityTest has the default).
+    ScopedEnv strict("DC3_POSE_REACQUIRE_MS", "0");
     int slot = Present(65, 0.0f, 31);
     ASSERT_GE(slot, 0);
     ASSERT_EQ(SlotOf(Frame({}), 65), slot); // held
@@ -775,6 +780,125 @@ TEST_F(PoseSensorHoldTest, ANewcomerElsewhereDoesNotEndTheHold) {
     int other = SlotOf(f, 68);
     EXPECT_GE(other, 0);
     EXPECT_NE(other, slot);
+}
+
+// ---------------------------------------------------------------------------
+// Who is who (np-player-identity, PoseIdentity_Native.h): the tracking id the
+// image gets stays with the body, whatever the pose tracker calls it.  The
+// pure halves are in test_native_pose_identity.cpp; these are the slots.
+// ---------------------------------------------------------------------------
+class PoseSensorIdentityTest : public PoseSensorHoldTest {
+protected:
+    void SetUp() override {
+        unsetenv("DC3_POSE_REACQUIRE_MS"); // the default under test
+        PoseSensorHoldTest::SetUp();
+    }
+    void TearDown() override {
+        unsetenv("DC3_POSE_REACQUIRE_MS");
+        PoseSensorHoldTest::TearDown();
+    }
+    static int Tracked(const SkeletonFrame *f) {
+        int tracked = 0;
+        for (int s = 0; s < NUM_SKELETONS; s++)
+            tracked += f->mSkeletonDatas[s].mTracking == kSkeletonTracked;
+        return tracked;
+    }
+};
+
+TEST_F(PoseSensorIdentityTest, ANewTrackerIdWhereTheHeldPersonStoodIsThatPerson) {
+    int slot = Present(165, 0.0f, 31);
+    ASSERT_GE(slot, 0);
+    ASSERT_EQ(SlotOf(Frame({}), 165), slot); // held
+    // The tracker renumbers her.  She is who she was: same tracking id, same
+    // slot, a live skeleton again.
+    const SkeletonFrame *f = Frame({ { 166, 0.1f } });
+    ASSERT_NE(f, nullptr);
+    EXPECT_EQ(SlotOf(f, 165), slot);
+    EXPECT_EQ(SlotOf(f, 166), -1);
+    EXPECT_EQ(Tracked(f), 1);
+    EXPECT_EQ(f->mSkeletonDatas[slot].mJointTrackingState[kJointHipCenter], kConfidenceTracked);
+    EXPECT_NEAR(f->mSkeletonDatas[slot].mJointPositions[kJointHipCenter].x, 0.1f, 1e-4f);
+    // The camera stream labels its person masks with the tracker's id.
+    EXPECT_EQ(NativeSlotForTrackId(166), slot);
+}
+
+TEST_F(PoseSensorIdentityTest, ADancerRenumberedAfterTheHoldRanOutKeepsHerTrackingId) {
+    ASSERT_GE(Present(171, 0.0f, 31), 0);
+    const SkeletonFrame *f = nullptr;
+    for (int i = 0; i < 60; i++) // 2 s: past the hold
+        f = Frame({});
+    ASSERT_NE(f, nullptr);
+    ASSERT_EQ(SlotOf(f, 171), -1);
+    f = Frame({ { 172, 0.3f } });
+    ASSERT_NE(f, nullptr);
+    EXPECT_GE(SlotOf(f, 171), 0) << "the player bound to 171 finds her skeleton again";
+    EXPECT_EQ(SlotOf(f, 172), -1);
+    EXPECT_EQ(Tracked(f), 1);
+}
+
+TEST_F(PoseSensorIdentityTest, ANewBodyOutOfReachIsANewTrackingId) {
+    ASSERT_GE(Present(175, 0.0f, 31), 0);
+    for (int i = 0; i < 60; i++)
+        ASSERT_NE(Frame({}), nullptr);
+    const SkeletonFrame *f = Frame({ { 176, 0.7f } });
+    ASSERT_NE(f, nullptr);
+    EXPECT_EQ(SlotOf(f, 175), -1);
+    EXPECT_GE(SlotOf(f, 176), 0);
+}
+
+TEST_F(PoseSensorIdentityTest, TwoDancersReportedInTurnBothStayInTheirSlots) {
+    // The end of song 2 in the recorded session: the dancers 0.28 m apart in
+    // the picture, MediaPipe reporting one of them per frame, the tracker
+    // calling both by one id.  One of them had been unseen for longer than
+    // the hold.  Each used to lose her slot on every frame of the other's.
+    const float xa = -0.33f, xb = -0.61f;
+    const SkeletonFrame *f = nullptr;
+    for (int i = 0; i < 31; i++)
+        f = Frame({ { 181, xa }, { 182, xb } });
+    ASSERT_NE(f, nullptr);
+    int slotB = SlotOf(f, 182);
+    ASSERT_GE(slotB, 0);
+    for (int i = 0; i < 40; i++) // 1.3 s of B alone: A's hold runs out
+        f = Frame({ { 182, xb } });
+    ASSERT_EQ(SlotOf(f, 181), -1);
+
+    f = Frame({ { 182, xa } }); // A again, under B's tracker id
+    ASSERT_NE(f, nullptr);
+    int slotA = SlotOf(f, 181);
+    ASSERT_GE(slotA, 0) << "the body at A's place is A";
+    EXPECT_EQ(SlotOf(f, 182), slotB) << "and B is held, not ended by her neighbour";
+    for (int round = 0; round < 20; round++) {
+        f = Frame({ { 182, round % 2 ? xa : xb } });
+        ASSERT_NE(f, nullptr);
+        ASSERT_EQ(SlotOf(f, 181), slotA) << "round " << round;
+        ASSERT_EQ(SlotOf(f, 182), slotB) << "round " << round;
+        ASSERT_EQ(Tracked(f), 2) << "round " << round;
+        EXPECT_NEAR(f->mSkeletonDatas[slotA].mJointPositions[kJointHipCenter].x, xa, 1e-4f);
+        EXPECT_NEAR(f->mSkeletonDatas[slotB].mJointPositions[kJointHipCenter].x, xb, 1e-4f);
+    }
+}
+
+TEST_F(PoseSensorIdentityTest, ASessionRecordsTheTrackersIdsSoAReplayDecidesAgain) {
+    const char *tmp = getenv("TMPDIR");
+    std::string dir = std::string((tmp && *tmp) ? tmp : "/tmp") + "/dc3_identity_XXXXXX";
+    std::vector<char> buf(dir.begin(), dir.end());
+    buf.push_back('\0');
+    ASSERT_NE(mkdtemp(buf.data()), nullptr);
+    const std::string path = std::string(buf.data()) + "/ids.dc3session";
+    Dc3PoseSessionRecordTo(path.c_str());
+    ASSERT_GE(Present(191, 0.0f, 5), 0);
+    const SkeletonFrame *f = Frame({ { 192, 0.05f } });
+    Dc3PoseSessionRecordTo(nullptr);
+    ASSERT_NE(f, nullptr);
+    EXPECT_GE(SlotOf(f, 191), 0) << "the game saw 191";
+    std::vector<Dc3PoseSession::Frame> frames;
+    std::string err;
+    ASSERT_TRUE(Dc3PoseSession::Load(path.c_str(), frames, &err)) << err;
+    ASSERT_EQ(frames.size(), 6u);
+    ASSERT_EQ(frames.back().persons.size(), 1u);
+    EXPECT_EQ(frames.back().persons[0].trackId, 192) << "the file has what the tracker said";
+    unlink(path.c_str());
+    rmdir(buf.data());
 }
 
 TEST_F(PoseSensorSlotTest, ARepeatedFrameIdIsNotANewSensorFrame) {
@@ -1503,7 +1627,10 @@ TEST_F(PoseFillSensorTest, ADropoutReachesTheHoldExactlyAsWithTheFillOff) {
     int heldFrames[3] = { -1, -1, -1 };
     for (int mode = 0; mode < 3; mode++) {
         NativePoseFillTestSet(modes[mode], &Clock);
-        const int id = 90 + mode;
+        // One person, lost and found three times: a new tracker id 0.3 m on
+        // from where the last one was lost three seconds ago would be that
+        // same person anyway (np-player-identity), under the first id.
+        const int id = 90;
         const double lostAt = sClock + 2.0;
         auto present = [lostAt](double t) { return t < lostAt; };
         std::vector<Shown> shown = Play(4.0, 0.125, id, present);
