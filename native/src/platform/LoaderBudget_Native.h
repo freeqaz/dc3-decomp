@@ -16,6 +16,15 @@
 // With no frame target (uncapped, a display at or under 60 Hz that vsync
 // paces, or the target not known yet) the image's value is left as it is.
 //
+// That scaled value is a floor. While something is still loading at the end
+// of a frame, the time the frame had left before its period (less a 0.5 ms
+// margin) is added to the next frame's budget, up to the image's own value;
+// a frame that ran over its period takes the overrun back. So a load the
+// frame has room for (boot's warning screen: the pacer used to sleep 1.5 ms
+// of each of its frames) gets that room, and one that has none (the end of a
+// song) keeps the floor. When the loader goes idle the spare time is dropped,
+// so the first frame of the next load starts at the floor.
+//
 // The image's own setter does the work (LoadMgr::SetLoaderPeriod); nothing the
 // Xbox build compiles changes.
 #pragma once
@@ -30,13 +39,22 @@ double Dc3LoaderBudgetMs(double imageMs, double targetFps);
 // rule can be tested without an engine.
 class Dc3LoaderBudget {
 public:
+    static constexpr double kSpareMarginMs = 0.5;
+
     float Step(float current, double targetFps);
+    // After the frame: `busyMs` from its start to the pacer's sleep;
+    // `loaderBusy` = something is still loading.
+    void EndFrame(double busyMs, double targetFps, bool loaderBusy);
     float ImageMs() const { return mImageMs; }
+    float FloorMs() const { return mFloorMs; }
+    float SpareMs() const { return mSpareMs; }
     float AppliedMs() const { return mAppliedMs; }
 
 private:
     bool mHave = false;
     float mImageMs = 0.0f;
+    float mFloorMs = 0.0f;
+    float mSpareMs = 0.0f;
     float mAppliedMs = 0.0f;
 };
 
@@ -46,5 +64,9 @@ void Dc3LoaderBudgetSetFrameTarget(double fps);
 double Dc3LoaderBudgetFrameTarget();
 
 // Before the frame's SystemPoll: TheLoadMgr's budget for this frame. Logs one
-// line whenever the budget in force changes.
+// line whenever the image's value, the frame target or the floor changes.
 void Dc3LoaderBudgetApply();
+
+// At the end of the frame's work, before the pacer sleeps (the web: after the
+// rAF frame): the frame's spare time for the next frame's budget.
+void Dc3LoaderBudgetEndFrame();

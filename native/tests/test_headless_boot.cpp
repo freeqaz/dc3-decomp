@@ -329,9 +329,9 @@ TEST_F(HeadlessBootTest, LoaderBudgetFollowsTheFrameCap) {
     };
     const Case cases[] = {
         {"120", 120.0,
-         "loader budget 5.00 ms a poll (the image's 10.00 ms, at a 120.00 fps frame target)"},
+         "loader budget 5.00 ms a poll (the image's 10.00 ms, at a 120.00 fps frame target;"},
         {"60", 60.0,
-         "loader budget 10.00 ms a poll (the image's 10.00 ms, at a 60.00 fps frame target)"},
+         "loader budget 10.00 ms a poll (the image's 10.00 ms, at a 60.00 fps frame target;"},
         {nullptr, 0.0, "loader budget 10.00 ms a poll (the image's; no frame target)"},
     };
     for (const Case &c : cases) {
