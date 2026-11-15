@@ -419,3 +419,117 @@ TEST_F(LookSamplingTest, AHeadlessDeviceDrawsOneXUnlessAsked) {
         d.Shutdown();
     }
 }
+
+// The frame's sizes (ResolveFrameSizes, gfx/GpuDevice.h): ONE rule for every
+// window size. DC3 draws its frame at the window's size (outputFollowsTarget):
+// output = the logical 1280x720 fitted into the target, pillar- or letterboxed
+// for a target that is not 16:9; scale = ResolveRenderScale(output); drawn =
+// output * scale. With the Enhanced profile a 720p window must give exactly
+// round 3's frame (2560x1440 drawn, boxed down to 1280x720); 1080p supersamples
+// 2x to the 3840x2160 cap; 1440p and 4K draw 1x. Headless draws its own size
+// (MILO_WIDTH x MILO_HEIGHT) at 1x. A shape that does not follow (rb3 /
+// rb3-xenon: the fixed frameWidth) keeps the old frame. Sabotages, each red
+// here: output = the target, unfitted (the bars); output = the logical size
+// (the old fixed frame); the scale resolved from the target instead of the
+// output; drawn not multiplied by the scale.
+TEST(OutputResolution, TheOneRuleForEveryWindowSize) {
+    ScopedLookOverride enhanced(LookProfile::Enhanced);
+    struct Row {
+        bool follows, windowed, discrete;
+        float asked;
+        int targetW, targetH;
+        int outW, outH;
+        float scale;
+        int drawnW, drawnH;
+        const char *why;
+    };
+    const Row rows[] = {
+        {true, true, true, 0, 1280, 720, 1280, 720, 2, 2560, 1440, "720p window: round 3's 2x box-down"},
+        {true, true, true, 0, 1920, 1080, 1920, 1080, 2, 3840, 2160, "1080p window: 2x, at the cap"},
+        {true, true, true, 0, 2560, 1440, 2560, 1440, 1, 2560, 1440, "1440p window: 1x (whole scales)"},
+        {true, true, true, 0, 3840, 2160, 3840, 2160, 1, 3840, 2160, "4K window: 1x"},
+        {true, true, true, 0, 2560, 1080, 1920, 1080, 2, 3840, 2160, "ultrawide: 16:9 pillarboxed, 2x"},
+        {true, true, true, 0, 1920, 1200, 1920, 1080, 2, 3840, 2160, "16:10: letterboxed"},
+        {true, true, true, 0, 1000, 1000, 1000, 563, 2, 2000, 1126, "square: letterboxed, any size"},
+        {true, true, false, 0, 1920, 1080, 1920, 1080, 1, 1920, 1080, "integrated GPU: 1x"},
+        {true, false, true, 0, 1280, 720, 1280, 720, 1, 1280, 720, "headless default: 1280x720 at 1x"},
+        {true, false, true, 0, 1920, 1080, 1920, 1080, 1, 1920, 1080, "headless MILO_WIDTH/HEIGHT 1080p"},
+        {true, false, true, 2, 1280, 720, 1280, 720, 2, 2560, 1440, "headless, asked for 2x"},
+        {true, true, true, 2, 3840, 2160, 3840, 2160, 2, 7680, 4320, "asked for 2x at 4K: not capped"},
+        {false, true, true, 0, 1920, 1080, 1280, 720, 2, 2560, 1440, "not following: the fixed frame"},
+        {false, false, true, 0, 1920, 1080, 1920, 1080, 1, 1920, 1080, "not following, headless: target"},
+    };
+    for (const Row &r : rows) {
+        GpuDeviceDesc d;
+        d.renderScale = Look().renderScale;
+        d.renderScaleIntegrated = Look().renderScaleIntegrated;
+        d.renderScaleExplicit = r.asked;
+        d.frameWidth = 1280;
+        d.frameHeight = 720;
+        if (r.follows) {
+            d.outputFollowsTarget = true;
+            d.logicalWidth = 1280;
+            d.logicalHeight = 720;
+        }
+        const FrameSizes s = ResolveFrameSizes(d, r.discrete, r.windowed, r.targetW, r.targetH);
+        EXPECT_EQ(s.outputW, r.outW) << r.why;
+        EXPECT_EQ(s.outputH, r.outH) << r.why;
+        EXPECT_FLOAT_EQ(s.scale, r.scale) << r.why;
+        EXPECT_EQ(s.drawnW, r.drawnW) << r.why;
+        EXPECT_EQ(s.drawnH, r.drawnH) << r.why;
+    }
+    // Retail is the original: one sample per output pixel at every size.
+    ScopedLookOverride retail(LookProfile::Retail);
+    GpuDeviceDesc d;
+    d.renderScale = Look().renderScale;
+    d.renderScaleIntegrated = Look().renderScaleIntegrated;
+    d.outputFollowsTarget = true;
+    d.logicalWidth = 1280;
+    d.logicalHeight = 720;
+    for (int h : {720, 1080, 1440}) {
+        const FrameSizes s = ResolveFrameSizes(d, true, true, h * 16 / 9, h);
+        EXPECT_EQ(s.drawnH, h) << "retail at " << h << "p";
+        EXPECT_FLOAT_EQ(s.scale, 1.0f) << "retail at " << h << "p";
+    }
+}
+
+// GpuDevice::Init applies the frame rule: a headless device whose frame follows
+// its target, at 1920x1080 with a logical 1280x720, draws and reads back
+// 1920x1080 (not a 1280x720 frame in the corner), viewports scale 1.5x and the
+// frame is not supersampled; asked for 2x, it draws 3840x2160 and reads back
+// 1920x1080. Sabotages: ApplyFrameSizes ignoring the output (drawn = logical) --
+// red on WindowWidth; FrameScaleY taken from the output instead of the logical
+// size -- red on 1.5; SupersampleScale from drawn/logical -- red on 1.
+TEST_F(LookSamplingTest, AFollowingDeviceDrawsItsTargetsSize) {
+    if (IsSkipped()) return;
+    if (!HaveGpu()) GTEST_SKIP() << "no GPU device";
+    for (int asked = 0; asked < 2; asked++) {
+        GpuDevice d;
+        GpuDeviceDesc desc;
+        desc.headless = true;
+        desc.width = 1920;
+        desc.height = 1080;
+        desc.outputFollowsTarget = true;
+        desc.logicalWidth = 1280;
+        desc.logicalHeight = 720;
+        desc.renderScale = 2.0f;
+        desc.renderScaleIntegrated = 2.0f;
+        desc.renderScaleExplicit = asked ? 2.0f : 0.0f;
+        if (!d.Init(desc)) GTEST_SKIP() << "no second headless device";
+        const char *why = asked ? "asked for 2x" : "headless default";
+        EXPECT_EQ(d.OutputWidth(), 1920) << why;
+        EXPECT_EQ(d.OutputHeight(), 1080) << why;
+        EXPECT_EQ(d.WindowWidth(), asked ? 3840 : 1920) << why;
+        EXPECT_EQ(d.WindowHeight(), asked ? 2160 : 1080) << why;
+        EXPECT_EQ(d.LogicalWidth(), 1280) << why;
+        EXPECT_EQ(d.LogicalHeight(), 720) << why;
+        EXPECT_TRUE(d.FrameScaled()) << why;
+        EXPECT_FLOAT_EQ(d.FrameScaleX(), asked ? 3.0f : 1.5f) << why;
+        EXPECT_FLOAT_EQ(d.FrameScaleY(), asked ? 3.0f : 1.5f) << why;
+        EXPECT_FLOAT_EQ(d.SupersampleScale(), asked ? 2.0f : 1.0f) << why;
+        EXPECT_EQ(d.RenderScaled(), asked != 0) << why;
+        EXPECT_FLOAT_EQ(d.RenderScaleFor(d.WindowWidth()), asked ? 3.0f : 1.5f) << why;
+        EXPECT_FLOAT_EQ(d.RenderScaleFor(512), 1.0f) << why << ": a 512 render target";
+        d.Shutdown();
+    }
+}

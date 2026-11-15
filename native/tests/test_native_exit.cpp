@@ -931,6 +931,13 @@ TEST_F(NativeWindowTest, TheFrameIsScaledToFitTheWindow) {
     EXPECT_EQ(wide, "") << "resized to 1800x700\n" << Tail(out);
     EXPECT_EQ(tall, "") << "resized to 1000x900\n" << Tail(out);
     EXPECT_TRUE(Contains(out, "frame scaled to fit")) << Tail(out);
+    // The frame follows the window: drawn at the logical 1280x720 fitted into
+    // each size (GpuDevice::ResizeSurface re-resolving ResolveFrameSizes), not
+    // a fixed 1280x720 scaled up. Sabotage: ResizeSurface not re-resolving --
+    // red on the two resizes.
+    EXPECT_TRUE(Contains(out, "GpuDevice: frame 1600x900 out")) << Tail(out);
+    EXPECT_TRUE(Contains(out, "GpuDevice: frame 1244x700 out")) << Tail(out);
+    EXPECT_TRUE(Contains(out, "GpuDevice: frame 1000x563 out")) << Tail(out);
     ExpectNoCrash(out);
 }
 
@@ -977,6 +984,12 @@ TEST_F(NativeWindowTest, MiloFullscreenStartsFullscreen) {
     std::string out = e.Output();
     EXPECT_EQ(full, "") << Tail(out);
     EXPECT_TRUE(Contains(out, "GpuDevice: fullscreen 1920x1080")) << Tail(out);
+    // A 1080p screen gets a 1080p frame, supersampled 2x to the 3840x2160 cap
+    // on a discrete GPU (the one rule, ResolveFrameSizes).
+    EXPECT_TRUE(Contains(out, "GpuDevice: frame 1920x1080 out")) << Tail(out);
+    if (Contains(out, "on a discrete GPU"))
+        EXPECT_TRUE(Contains(out, "render scale 2.00 on a discrete GPU (3840x2160 drawn"))
+            << Tail(out);
     ExpectNoCrash(out);
 }
 
@@ -994,6 +1007,8 @@ TEST_F(NativeWindowTest, AnX11ContentScaleSizesTheWindow) {
     std::string out = e.Output();
     EXPECT_EQ(hidpi, "") << Tail(out);
     EXPECT_TRUE(Contains(out, "surface 2560x1440")) << Tail(out);
+    // A 2560x1440 frame, drawn 1x: past the cap, whole scales only.
+    EXPECT_TRUE(Contains(out, "GpuDevice: frame 2560x1440 out, render scale 1.00")) << Tail(out);
     ExpectNoCrash(out);
 }
 

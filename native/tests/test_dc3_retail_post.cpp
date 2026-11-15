@@ -2110,6 +2110,21 @@ TEST(DC3RetailPostDof, RenderScaledFrameKeepsTheBlurSpan) {
                 nonzero |= one[i][c] != 0.0f;
             }
         EXPECT_TRUE(nonzero) << "all-zero offsets prove nothing";
+        // A frame at its output's resolution (outputFollowsTarget): the scale
+        // is drawn / logical, any value -- 1.5 at 1080p, 0.75 for a 960x540
+        // window drawn 1x. Each blurs across the 1280x720 frame's span.
+        // Sabotage: the scale clamped to >= 1 -- red on 0.75.
+        const struct { int w, h; float rs; } frames[] = {{1920, 1080, 1.5f}, {960, 540, 0.75f},
+                                                        {3840, 2160, 3.0f}};
+        for (const auto &f : frames) {
+            float got[8][2];
+            DofPass::SceneBlurOffsets(vertical != 0, f.w, f.h, f.rs, 1.0f, got);
+            for (int i = 0; i < 8; i++)
+                for (int c = 0; c < 2; c++)
+                    EXPECT_NEAR(got[i][c], one[i][c], 1e-6f)
+                        << f.w << "x" << f.h << (vertical ? " vertical" : " horizontal")
+                        << " tap " << i << ": not the 1280x720 frame's blur span";
+        }
     }
 }
 

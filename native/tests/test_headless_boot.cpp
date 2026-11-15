@@ -17,7 +17,11 @@
 #include <climits>
 #include <cerrno>
 #include "platform/ExecutablePath.h"
+#include "png_read.h"
 #include "shell_timeout.h"
+
+#include <map>
+#include <set>
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -547,4 +551,139 @@ TEST_F(HeadlessBootTest, BootsFromUpperCaseHostDirectories) {
     EXPECT_EQ(fail, std::string::npos)
         << result.output.substr(fail == std::string::npos ? 0 : fail, 200);
     EXPECT_TRUE(HasCompletionMarker(result.output)) << CrashSummary(result);
+}
+
+// ---------------------------------------------------------------------------
+// Output resolution: the frame is drawn at its OUTPUT size
+// ---------------------------------------------------------------------------
+
+// One render target the engine created, from MILO_GPU_TIMERS's census line
+// "[GPUTARGET] <label> <w>x<h> samples=<n>" (gfx/GpuTimers.cpp NoteTarget).
+struct GpuTarget { std::string label; int w = 0, h = 0, samples = 0; };
+
+static std::vector<GpuTarget> ParseGpuTargets(const std::string &out) {
+    std::vector<GpuTarget> targets;
+    std::istringstream in(out);
+    std::string line;
+    while (std::getline(in, line)) {
+        const size_t at = line.find("[GPUTARGET] ");
+        if (at == std::string::npos) continue;
+        std::string rest = line.substr(at + 12);
+        const size_t s = rest.rfind(" samples=");
+        if (s == std::string::npos) continue;
+        const size_t sz = rest.rfind(' ', s - 1);
+        if (sz == std::string::npos) continue;
+        GpuTarget t;
+        t.label = rest.substr(0, sz);
+        if (sscanf(rest.c_str() + sz + 1, "%dx%d", &t.w, &t.h) != 2) continue;
+        t.samples = atoi(rest.c_str() + s + 9);
+        targets.push_back(t);
+    }
+    return targets;
+}
+
+static bool IsTargetOfTheFrame(const GpuTarget &t, int frameW, int frameH) {
+    for (int k : {1, 2, 4})
+        if (t.w == frameW / k && t.h == frameH / k) return true;
+    return false;
+}
+
+// Headless MILO_WIDTH/MILO_HEIGHT 1920x1080 draws a whole 1920x1080 frame:
+// every pass and render target is sized from the frame (frame, half, quarter),
+// none from a hard 1280x720; the 1280x720 that remain are the ones the
+// original has at any output size -- the bloom source built at the logical
+// size (bloom targets 320x180/80x45/20x11 as on the 360), the 1024x1024
+// shadow map -- and the game's own RndTex targets, which are content-sized
+// (the attract movie's 1280x720 video frame). The screenshot is 1920x1080 and
+// the menu fills it, not its top-left 1280x720. The headless DEFAULT is still
+// 1280x720 at 1x. Sabotages, each red here: ApplyFrameSizes drawing the
+// logical size (the census finds no 1920x1080 frame); FrameViewport not
+// scaling the logical viewport (the picture sits in the corner); the bloom
+// source sized from the output again (DC3BloomSource... at 1920x1080 and
+// bloom 480x270 -- not in the allow-list); a pass sized from a hard 1280x720.
+TEST_F(HeadlessBootTest, A1080pOutputDrawsEveryPassAtTheFramesSize) {
+    char tmpl[] = "/tmp/dc3-outres-XXXXXX";
+    char *shots = mkdtemp(tmpl);
+    ASSERT_NE(shots, nullptr);
+    const std::string dir(shots);
+    auto result = RunHeadless(300, nullptr, 180,
+                              {{"MILO_RENDER", "1"}, {"DC3_FAST_BOOT", "1"},
+                               {"MILO_WIDTH", "1920"}, {"MILO_HEIGHT", "1080"},
+                               {"MILO_GPU_TIMERS", "1"}, {"MILO_SCREENSHOT_DIR", dir},
+                               {"MILO_SCREENSHOT_FRAMES", "290"}});
+    ASSERT_EQ(result.signal, 0) << CrashSummary(result);
+    ASSERT_TRUE(HasCompletionMarker(result.output)) << CrashSummary(result);
+    EXPECT_NE(result.output.find("GpuDevice: frame 1920x1080 out, render scale 1.00"),
+              std::string::npos)
+        << "the frame is not 1920x1080 at 1x";
+
+    const std::vector<GpuTarget> targets = ParseGpuTargets(result.output);
+    ASSERT_FALSE(targets.empty()) << "no [GPUTARGET] census (MILO_GPU_TIMERS)";
+    std::set<std::string> frameSized;
+    bool sawBloom = false;
+    for (const GpuTarget &t : targets) {
+        printf("  target %-32s %dx%d samples=%d\n", t.label.c_str(), t.w, t.h, t.samples);
+        if (t.label.rfind("RndTex:", 0) == 0) continue;  // the game's own, content-sized
+        if (t.w == 1920 && t.h == 1080) frameSized.insert(t.label);
+        // The original's fixed sizes are exact: a bloom chain built from the
+        // 1920x1080 frame (480x270, ...) is not "frame / k", it is wrong.
+        bool ok;
+        if (t.label == "DC3BloomSourceLogicalSize")
+            ok = t.w == 1280 && t.h == 720;
+        else if (t.label == "RB3RetailBloom")
+            ok = (t.w == 320 && t.h == 180) || (t.w == 80 && t.h == 45) || (t.w == 20 && t.h == 11);
+        else if (t.label == "ShadowDepth")
+            ok = t.w == 1024 && t.h == 1024;
+        else
+            ok = IsTargetOfTheFrame(t, 1920, 1080);
+        if (t.label == "RB3RetailBloom" && t.w == 320) sawBloom = true;
+        EXPECT_TRUE(ok) << t.label << " " << t.w << "x" << t.h
+                        << ": not sized from the 1920x1080 frame (or the original's fixed size)";
+    }
+    EXPECT_TRUE(sawBloom) << "no 320x180 bloom target: the bloom chain is not the original's";
+    for (const char *want : {"HeadlessTarget", "MSAA4xColor", "DepthStencil", "PostProcIntermediate"})
+        EXPECT_TRUE(frameSized.count(want)) << want << " was not created at 1920x1080";
+
+    const std::string png = dir + "/frame_00290.png";
+    int w = 0, h = 0;
+    std::vector<uint8_t> rgb;
+    ASSERT_TRUE(ReadPngRgb(png, w, h, rgb)) << "no readable " << png;
+    unlink(png.c_str());
+    rmdir(dir.c_str());
+    EXPECT_EQ(w, 1920);
+    EXPECT_EQ(h, 1080);
+    if (w != 1920 || h != 1080) return;
+    // The share of lit pixels right of x=1280 and below y=720, which a 1280x720
+    // picture in the corner leaves black. Measured ~0.93 / ~0.55 at frame 290.
+    auto lit = [&](int x0, int y0, int x1, int y1) {
+        int n = 0, all = 0;
+        for (int y = y0; y < y1; y += 4)
+            for (int x = x0; x < x1; x += 4) {
+                const uint8_t *p = &rgb[((size_t)y * w + x) * 3];
+                all++;
+                n += p[0] + p[1] + p[2] > 30;
+            }
+        return all ? (double)n / all : 0.0;
+    };
+    EXPECT_GT(lit(1280, 0, 1920, 1080), 0.25) << "nothing drawn right of x=1280";
+    EXPECT_GT(lit(0, 720, 1280, 1080), 0.25) << "nothing drawn below y=720";
+}
+
+// The headless default is unchanged: 1280x720 at 1x, every frame target 1280x720.
+TEST_F(HeadlessBootTest, TheHeadlessDefaultIs720pAtOneX) {
+    auto result = RunHeadless(120, nullptr, 120,
+                              {{"MILO_RENDER", "1"}, {"DC3_FAST_BOOT", "1"},
+                               {"MILO_GPU_TIMERS", "1"}});
+    ASSERT_EQ(result.signal, 0) << CrashSummary(result);
+    ASSERT_TRUE(HasCompletionMarker(result.output)) << CrashSummary(result);
+    EXPECT_NE(result.output.find("GpuDevice: frame 1280x720 out, render scale 1.00"),
+              std::string::npos);
+    bool sawFrame = false;
+    for (const GpuTarget &t : ParseGpuTargets(result.output))
+        if (t.label == "HeadlessTarget") {
+            sawFrame = true;
+            EXPECT_EQ(t.w, 1280);
+            EXPECT_EQ(t.h, 720);
+        }
+    EXPECT_TRUE(sawFrame) << "no HeadlessTarget in the census";
 }
