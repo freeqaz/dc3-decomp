@@ -63,8 +63,10 @@ def flow(songs):
 MEM_RE = re.compile(r"^DC3 MEM song_select_screen rss=(\d+)MB inuse=([\d.]+)MB "
                     r"heldfree=([\d.]+)MB mmap=([\d.]+)MB .*?objects=(\d+)")
 CLASS_RE = re.compile(r"^DC3 MEM   class (\S+)\s+live=(-?\d+) delta=([+-]\d+)")
-GPU_RE = re.compile(r"^\[GPUCOUNT\] frame=(\d+) bindGroupsLive=(\d+) .*?pipelines=(\d+) "
-                    r"gpuMeshes=(\d+) gpuTextures=(\d+)")
+# Fields by name, not by adjacency: the line grows (meshUploads, pipelineCreates,
+# texHolders ... were inserted between these).
+GPU_RE = re.compile(r"^\[GPUCOUNT\] frame=(\d+) bindGroupsLive=(\d+) .*?\bpipelines=(\d+) "
+                    r".*?\bgpuMeshes=(\d+) .*?\bgpuTextures=(\d+)")
 SONG_RE = re.compile(r"highlight '(\w+)' satisfied")
 
 
