@@ -14,7 +14,16 @@
 struct QueueableCommand {
 public:
     virtual int GetType() = 0;
+#ifdef HX_NATIVE
+    // The Xbox build deletes every command through this base with a destructor
+    // that is not virtual (the image stores this vtable and frees the block, so
+    // CmdChangeProfileOnlineID's String is never destroyed). That is undefined,
+    // and because the class is abstract Apple clang compiles the delete as a
+    // trap: opening the fitness screen on a Mac killed the game.
+    virtual ~QueueableCommand() {}
+#else
     ~QueueableCommand() {}
+#endif
 };
 
 struct CmdGetFitnessGoalFromRC : public QueueableCommand {
