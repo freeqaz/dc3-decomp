@@ -133,8 +133,17 @@ DataArray *GetCharacterOutfitEntry(Symbol theChar, int idx, bool fail) {
     return nullptr;
 }
 
+#ifdef HX_NATIVE
+// H-118: how many times GetOutfitRemap has searched OUTFIT_REMAP (read by
+// test_outfit_remap_cost.cpp to hold GetEntriesForOutfit to one search a call).
+int gNativeOutfitRemapSearches = 0;
+#endif
+
 Symbol GetOutfitRemap(Symbol outfit, bool fail) {
     static Symbol OUTFIT_REMAP("OUTFIT_REMAP");
+#ifdef HX_NATIVE
+    gNativeOutfitRemapSearches++;
+#endif
     DataArray *outfitArr = DataGetMacro(OUTFIT_REMAP)->FindArray(outfit, false);
     if (outfitArr) {
         return outfitArr->Sym(1);
@@ -187,6 +196,16 @@ bool GetEntriesForOutfit(
     Symbol outfit, DataArray **charEntry, DataArray **outfitEntry, bool fail
 ) {
     static Symbol outfits("outfits");
+#ifdef HX_NATIVE
+    // H-118: the remap depends only on `outfit`, yet the image searches the
+    // whole OUTFIT_REMAP table once per character. Search it once, on the
+    // first character with an outfits array (where the image first does).
+    // HamSongMgr::GetCrewStars calls this once per song at song end, and the
+    // repeated searches were 5.5 ms of one frame. A failed search with `fail`
+    // set is repeated per character as before, so each MILO_FAIL still fires.
+    bool remapSearched = false;
+    Symbol remapResult;
+#endif
     DataArray *chars = GetCharacters();
     if (chars) {
         // for each defined character...
@@ -198,7 +217,15 @@ bool GetEntriesForOutfit(
                 DataArray *outfitsArray = curCharArray->FindArray(outfits, false);
                 if (outfitsArray) {
                     static Symbol OUTFIT_REMAP("OUTFIT_REMAP");
+#ifdef HX_NATIVE
+                    if (!remapSearched || (remapResult.Null() && fail)) {
+                        remapResult = GetOutfitRemap(outfit, fail);
+                        remapSearched = true;
+                    }
+                    Symbol remap = remapResult;
+#else
                     Symbol remap = GetOutfitRemap(outfit, fail);
+#endif
                     // if the outfit has a remapped counterpart...
                     if (!remap.Null()) {
                         // get the remapped outfit array
