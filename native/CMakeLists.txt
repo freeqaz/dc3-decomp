@@ -2098,6 +2098,7 @@ if(BUILD_TESTS)
         tests/test_scene_bind_group_cost.cpp # framecost4: camera switches reuse their scene bind groups
         tests/test_fixed_key_pipelines.cpp # framecost: fixed-key pass pipelines are compiled at Init
         tests/test_pipeline_warm.cpp # hitch: a loaded dir's material pipelines are compiled before its first draw
+        tests/test_pipeline_warm_classes.cpp # H-118: the warm walk asks each dynamic type its classes once
         tests/test_pipeline_disk_cache.cpp # hitch: the persistent pipeline cache reads back exactly or misses
         tests/test_tex_share.cpp # framecost: byte-identical bitmaps share one GPU texture
         tests/test_tex_bytes.cpp # H-116: [GPUCOUNT] texBytes / texBytesPeak count a mip chain, a shared texture once
