@@ -32,8 +32,7 @@ public:
     static void Init() { REGISTER_OBJ_FACTORY(RndTexBlender) }
 #ifdef HX_NATIVE
     // The native load-time pipeline warm (native/src/platform/PipelineWarm.cpp):
-    // DrawShowing draws the base map as a rect into the output texture.
-    RndTex *BaseMap() const { return mBaseMap; }
+    // DrawShowing composes the output texture (NativeCompose), in its format.
     RndTex *OutputTextures() const { return mOutputTextures; }
 #endif
 
@@ -43,6 +42,15 @@ protected:
     void DrawBlendList(
         const std::vector<std::pair<RndTexBlendController *, float> > &, TexState
     );
+#ifdef HX_NATIVE
+    // DrawShowing's draws through the engine's composer (platform/TexBlendHook.h);
+    // false when native has none (headless), so the decomp body runs.
+    bool NativeCompose(
+        const std::vector<std::pair<RndTexBlendController *, float> > &nearList,
+        const std::vector<std::pair<RndTexBlendController *, float> > &farList,
+        const std::vector<std::pair<RndTexBlendController *, float> > &customList
+    );
+#endif
     RndMat *SetupMaterial(RndMat *, RndTex *);
     DataNode OnGetRenderTextures(DataArray *);
 

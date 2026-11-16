@@ -2161,6 +2161,7 @@ if(BUILD_TESTS)
         tests/test_native_tree_paths.cpp
         tests/test_movie_audio.cpp
         tests/test_texrenderer_clear.cpp
+        tests/test_texblender_compose.cpp  # H-117 the TexBlender output: base over the whole target, layers at their UVs
         tests/test_native_gesture_menus.cpp
         tests/test_native_audioseek.cpp
         tests/test_native_notables.cpp

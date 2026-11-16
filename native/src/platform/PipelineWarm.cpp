@@ -237,18 +237,16 @@ private:
         const std::vector<MatKeyVariant> v = VariantsOf(mat, a->second);
         return WarmMeshPipelines(mesh, ctx, v.data(), (int)v.size());
     }
-    // RndTexBlender::DrawShowing draws its base map as a rect into its output
-    // texture (rendered with no z) with the shader manager's work material
-    // after SetupMaterial: blend Src, the base map as its texture. Wherever
-    // the blender is visited, that is the pass it draws in. This warms that
-    // rect only (DrawBlendList's controller meshes are drawn as meshes).
+    // RndTexBlender::DrawShowing composes its output through the engine's
+    // composer (TexBlender.cpp NativeCompose, gfx/TexBlendPass): the base map
+    // over the target and each controller mesh unwrapped at its UVs, in the
+    // output's format. This warms those pipelines; the blender draws every
+    // frame its controllers are active, from gameplay's first frames.
     // Found by PerformCrowdTest: an outfit's normal-map blender
-    // (lilt04_jacket_norm) compiled this rect on gameplay's first frames.
+    // (lilt04_jacket_norm) compiled on gameplay's first frames.
     int QueueTexBlender(RndTexBlender *b) {
-        if (!b->BaseMap() || !b->OutputTextures()) return 0;
-        MeshPassContext ctx = gWgpuRnd->TexturePassContext(false);
-        ctx.targetFormat = ChooseRenderTargetFormat(b->OutputTextures());
-        return gWgpuRnd->WarmRectPipelines((WgpuBlend)RndMat::kBlendSrc, true, ctx);
+        if (!b->OutputTextures()) return 0;
+        return gWgpuRnd->WarmTexBlendPipelines(b->OutputTextures());
     }
     // What draws a mesh that is in no dir (a ribbon's own), or draws without
     // a mesh (a particle system; a flare's or a screen mask's rect).
