@@ -294,9 +294,9 @@ these consumers render correctly at runtime is not re-verified here.
 | `DofPass` | Depth of field, ported from retail `NgDOFProc::DoPost`. |
 | `SpotBeamPass` | Volumetric spotlight beams, ported from retail `NgSpotlightDrawer`. |
 | `PointTestPass` | Flare occlusion queries, ported from retail `DxRnd::DoPointTests`. |
-| `TexBlendPass` | `RndTexBlender::DrawShowing`. |
+| `TexBlendPass` | `RndTexBlender::DrawShowing`: the base map over the whole output target, then each controller's mesh faces drawn into the output at their UVs with the near/far/custom map. rb3 (W16-SA) and, since PLAN H-117, dc3 (`RndTexBlender::NativeCompose`, through `platform/TexBlendHook.h`). Parameters sit in a ring buffer at a dynamic offset, bind groups come from the frame's `BindGroupCache`, and the pipelines are warmed at load (`WgpuRnd::WarmTexBlendPipelines`, from `PipelineWarm.cpp`). Before H-117 dc3 ran the decomp body: its base `DrawRect` landed in the top-left 40 %×71 % of the 512² target (next row) and its layers never landed (native `RndMesh::DrawFacesInRange` is a no-op), so dancers' cloth normal maps were partly black. |
 | `DisplayRamp` | Display gamma ramp on the finished frame. dc3 applies retail's scan-out ramp `pow(v, 0.85)`, with `(rnd (gamma 0.85))` taken from `default.dta`. It runs once, after the UI, on every output, headless included, so screenshots and look captures are post-ramp. `DC3_DISPLAY_GAMMA=off` gives the pre-ramp front buffer. |
-| `DrawRect2D` | Screen-space rects. |
+| `DrawRect2D` | Screen-space rects. On dc3 (`rndshape::kRectTargetPixels`), a rect drawn while a texture is the bound render target is in that target's own pixels, as `DxRnd::DrawRect` does with `ViewportEnable 0`; on the back buffer it stays in the 1280×720 virtual screen. rb3/rb3-xenon keep the virtual mapping everywhere. |
 
 `ShippedWgsl.h` / `ShippedWgsl_DC3.cpp` list every WGSL module the dc3 flavor
 compiles, so a test can validate all of them against a real device.
