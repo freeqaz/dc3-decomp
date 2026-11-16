@@ -163,6 +163,75 @@ void RndTexBlender::DrawBlendList(
     }
 }
 
+#ifdef HX_NATIVE
+#include "platform/TexBlendHook.h"
+
+// What DrawShowing draws, on native (PLAN H-117). The image draws the base
+// map with DxRnd::DrawRect, which turns the viewport transform off, so its
+// rect is in the bound target's own pixels and covers the whole output
+// (native's rect path mapped it against the virtual screen until the engine's
+// kRectTargetPixels). Each controller mesh is drawn with the unwrapuv shader
+// (DrawBlendList: every vertex at its UV), and native's
+// RndMesh::DrawFacesInRange draws nothing, so no layer landed. The composer
+// draws exactly the image's two steps into the output (gfx/TexBlendPass.h):
+// the base over the whole target with blend off, then each layer's faces at
+// their UVs with the near map, the far map or the controller's own map at
+// the controller's alpha, blend SrcAlpha. The bookkeeping (mRenderedStates,
+// unkc0) is the decomp's, so the image's early return still skips a frame
+// that would redraw the base alone.
+bool RndTexBlender::NativeCompose(
+    const std::vector<std::pair<RndTexBlendController *, float> > &nearListIn,
+    const std::vector<std::pair<RndTexBlendController *, float> > &farListIn,
+    const std::vector<std::pair<RndTexBlendController *, float> > &customList
+) {
+    NativeTexBlendComposer *composer = GetNativeTexBlendComposer();
+    if (!composer)
+        return false;
+    std::vector<std::pair<RndTexBlendController *, float> > nearList(nearListIn), farList(farListIn);
+    std::sort(nearList.begin(), nearList.end(), BlendSorter());
+    std::sort(farList.begin(), farList.end(), BlendSorter());
+
+    RndTex *base = mBaseMap;
+    int states = mRenderedStates;
+    if (base)
+        states = kTexBase;
+    std::vector<NativeTexBlendLayer> layers;
+    const std::vector<std::pair<RndTexBlendController *, float> > *lists[3] = {
+        &nearList, &farList, &customList
+    };
+    const TexState bits[3] = { kTexNear, kTexFar, kTexCustom };
+    for (int k = 0; k < 3; k++) {
+        RndTex *texmap = k == 0 ? (RndTex *)mNearMap : (RndTex *)mFarMap;
+        if (!(texmap || bits[k] == kTexCustom) || lists[k]->empty())
+            continue;
+        states |= bits[k];
+        for (size_t i = 0; i < lists[k]->size(); i++) {
+            RndTexBlendController *ctrl = (*lists[k])[i].first;
+            RndMesh *mesh = ctrl->Mesh();
+            if (!mesh)
+                continue;
+            if (mesh->IsSkinned()) {
+                MILO_NOTIFY_ONCE(
+                    "%s: \"%s\" should not be a skinned mesh", PathName(this), mesh->Name()
+                );
+            }
+            NativeTexBlendLayer l = { mesh->GetGeomOwner(),
+                                      bits[k] == kTexCustom ? ctrl->Tex() : texmap,
+                                      (*lists[k])[i].second };
+            layers.push_back(l);
+        }
+    }
+    if (composer->ComposeTexBlend(
+            mOutputTextures, base, layers.empty() ? nullptr : &layers[0], (int)layers.size()
+        )) {
+        mRenderedStates = states;
+    } else {
+        unkc0 = true;  // nothing drawn (no frame, or inside another target): retry
+    }
+    return true;
+}
+#endif
+
 // Lane history (42 lines moved): docs/decomp/notes/system/rndobj/TexBlender.md
 // > w26-n3 confirmed the mechanism and found the lever, which CANNOT be landed as
 // > written.
@@ -216,6 +285,10 @@ void RndTexBlender::DrawShowing() {
                 return;
             }
             unkc0 = false;
+#ifdef HX_NATIVE
+            if (NativeCompose(nearList, farList, customList))
+                return;
+#endif
             RndCam *cam = TheRnd.GetDefaultCam();
             RndCam *prevCam = RndCam::Current();
             RndTex *targetTex = prevCam->TargetTex();
