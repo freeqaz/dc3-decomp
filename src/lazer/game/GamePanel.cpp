@@ -346,10 +346,6 @@ void GamePanel::Load() {
     mIsReplay = false;
     mPerformanceProfiler.Start();
     CreateGame();
-#ifdef HX_NATIVE
-    extern void NativeTexWarmGameLoad(UIPanel *);
-    NativeTexWarmGameLoad(this);
-#endif
     UIPanel::Load();
 }
 
@@ -475,10 +471,6 @@ bool GamePanel::IsLoaded() const {
 }
 
 void GamePanel::Unload() {
-#ifdef HX_NATIVE
-    extern void NativeTexWarmGameUnload();
-    NativeTexWarmGameUnload();
-#endif
     UIPanel::Unload();
     RELEASE(mGame);
     mPollLoadState = 0;
@@ -964,13 +956,6 @@ void GamePanel::PollForLoading() {
         }
         mPollLoadState = 3;
         if (mGame->IsReady()) {
-#ifdef HX_NATIVE
-            // The textures the load queued are created a few a frame (the
-            // image created each as it loaded); wait for them, bounded
-            // (PipelineWarm.cpp; PLAN H-116).
-            extern bool NativeTexWarmHoldsGameScreen();
-            if (NativeTexWarmHoldsGameScreen()) return;
-#endif
             mPollLoadState = 4;
 #ifdef HX_NATIVE
             if (sLastState != 4) { fprintf(stderr, "DC3 GamePanel::PollForLoading() — DONE (state 4)!\n"); sLastState = 4; }

@@ -725,19 +725,6 @@ namespace {
     }
 }
 
-#ifdef HX_NATIVE
-// The dirs preloaded at boot (config preload_subdirs, PreloadSharedSubdirs),
-// for the native renderer's texture warm (native/src/platform/PipelineWarm.cpp,
-// PLAN H-116). Returns how many were written to `out`.
-int NativePreloadedSubdirs(ObjectDir **out, int max) {
-    int n = 0;
-    for (int i = 0; i < gPreloadIdx && n < max; i++) {
-        if (ObjectDir *dir = gPreloaded[i]) out[n++] = dir;
-    }
-    return n;
-}
-#endif
-
 ObjectDir::Viewport &ObjectDir::CurViewport() {
     if (mCurViewportID >= kNumViewports) {
         MILO_FAIL("%s mCurView = %d, >= kNumViewports", PathName(this), mCurViewportID);
