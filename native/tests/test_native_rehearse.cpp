@@ -495,8 +495,8 @@ int DriverFrame(const std::string &driver, const char *tag) {
 // on what the box has cached. The full-song version is part of
 // GameplayTelemetryTest.WorldPipelineConvergesDuringGameplay
 // (DC3_GAMEPLAY_TESTS, off by default; this is the default gate's guard).
-// Sabotage-checked 2026-11-15, three ways: (1) the RndTexBlender rect warm
-// removed fails the alley ("frame 3480: +1 ... vs:vs_2d/fs:fs_2d") in three
+// Sabotage-checked 2026-11-15, three ways: (1) the RndTexBlender warm (its
+// rect then; the composer's pipelines since H-117) removed fails the alley ("frame 3480: +1 ... vs:vs_2d/fs:fs_2d") in three
 // runs of three; (2) PipelineManager::WarmAsync refusing the one skinned
 // key both venues first draw on gameplay's second counter line (MainSkinned
 // blend 4 z 2 cull 1, 4 samples, no alpha write) fails both, at Enter + 10
