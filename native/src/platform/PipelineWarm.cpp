@@ -75,6 +75,7 @@
 #include "world/Reflection.h"
 
 #include "platform/MeshPipelineKey.h"
+#include "platform/PipelineWarm.h"
 #include "platform/Part_Wgpu.h"
 #include "platform/TexGpu.h"
 #include "platform/Rnd_Wgpu.h"
@@ -83,8 +84,54 @@
 #include <list>
 #include <map>
 #include <set>
+#include <typeindex>
+#include <typeinfo>
 #include <unordered_map>
 #include <vector>
+
+namespace {
+
+int gWarmTypesClassified = 0;
+
+// `obj` as a T if its classes (NativeWarmClassOf) say it is one: the one
+// dynamic_cast that succeeds, instead of every one that fails before it.
+template <class T> T *As(Hmx::Object *obj, uint32_t classes, uint32_t bit) {
+    return (classes & bit) ? dynamic_cast<T *>(obj) : nullptr;
+}
+
+} // namespace
+
+uint32_t NativeWarmClassOf(Hmx::Object *obj) {
+    if (!obj) return 0;
+    // Main thread only (the walk runs in DirLoader::Cleanup); never cleared:
+    // the set of dynamic types is the program's classes.
+    static std::unordered_map<std::type_index, uint32_t> sClasses;
+    const std::type_index type(typeid(*obj));
+    std::unordered_map<std::type_index, uint32_t>::const_iterator it = sClasses.find(type);
+    if (it != sClasses.end()) return it->second;
+    uint32_t c = 0;
+    if (dynamic_cast<RndMesh *>(obj)) c |= kWarmIsMesh;
+    if (dynamic_cast<RndText *>(obj)) c |= kWarmIsText;
+    if (dynamic_cast<HamRibbon *>(obj)) c |= kWarmIsHamRibbon;
+    if (dynamic_cast<RndRibbon *>(obj)) c |= kWarmIsRibbon;
+    if (dynamic_cast<CharFeedback *>(obj)) c |= kWarmIsCharFeedback;
+    if (dynamic_cast<RndFlare *>(obj)) c |= kWarmIsFlare;
+    if (dynamic_cast<RndScreenMask *>(obj)) c |= kWarmIsScreenMask;
+    if (dynamic_cast<RndTexBlender *>(obj)) c |= kWarmIsTexBlender;
+    if (dynamic_cast<RndParticleSys *>(obj)) c |= kWarmIsParticleSys;
+    if (dynamic_cast<RndFont *>(obj)) c |= kWarmIsFont;
+    if (dynamic_cast<RndPropAnim *>(obj)) c |= kWarmIsPropAnim;
+    if (dynamic_cast<WorldReflection *>(obj)) c |= kWarmIsReflection;
+    if (dynamic_cast<ObjectDir *>(obj)) c |= kWarmIsDir;
+    if (dynamic_cast<RndGroup *>(obj)) c |= kWarmIsGroup;
+    if (dynamic_cast<PanelDir *>(obj)) c |= kWarmIsPanelDir;
+    if (dynamic_cast<Character *>(obj)) c |= kWarmIsCharacter;
+    sClasses.emplace(type, c);
+    gWarmTypesClassified++;
+    return c;
+}
+
+int NativeWarmTypesClassified() { return gWarmTypesClassified; }
 
 namespace {
 
@@ -173,8 +220,9 @@ public:
     // under a panel or a character).
     void Visit(ObjectDir *dir, int passes, int depth = 0) {
         if (!dir || depth > 32) return;
-        if (dynamic_cast<PanelDir *>(dir)) passes |= kOverlay;
-        if (dynamic_cast<Character *>(dir)) passes |= kTexture;
+        const uint32_t dc = NativeWarmClassOf(dir);
+        if (dc & kWarmIsPanelDir) passes |= kOverlay;
+        if (dc & kWarmIsCharacter) passes |= kTexture;
         int &seen = mDirs[dir];
         if ((seen & passes) == passes) return;
         seen |= passes;
@@ -182,11 +230,12 @@ public:
         std::vector<ObjectDir *> children;
         for (ObjDirItr<Hmx::Object> it(dir, false); it != nullptr; ++it) {
             Hmx::Object *obj = it;
-            if (RndPropAnim *anim = dynamic_cast<RndPropAnim *>(obj)) {
+            const uint32_t c = NativeWarmClassOf(obj);
+            if (RndPropAnim *anim = As<RndPropAnim>(obj, c, kWarmIsPropAnim)) {
                 CollectAnimatedStates(anim, mAnimated);
-            } else if (WorldReflection *refl = dynamic_cast<WorldReflection *>(obj)) {
+            } else if (WorldReflection *refl = As<WorldReflection>(obj, c, kWarmIsReflection)) {
                 mReflections.push_back(refl);
-            } else if (ObjectDir *child = dynamic_cast<ObjectDir *>(obj)) {
+            } else if (ObjectDir *child = As<ObjectDir>(obj, c, kWarmIsDir)) {
                 if (child != dir) children.push_back(child);
             }
         }
@@ -214,10 +263,11 @@ public:
     // a dir (and what it holds), or a group of them.
     int QueueDrawable(Hmx::Object *obj, const MeshPassContext &ctx, int depth) {
         if (!obj || depth > 16) return 0;
-        if (RndMesh *mesh = dynamic_cast<RndMesh *>(obj)) return QueueMesh(mesh, ctx);
-        if (RndText *text = dynamic_cast<RndText *>(obj)) return QueueText(text, ctx);
-        if (int n = QueueOther(obj, ctx)) return n;
-        if (ObjectDir *dir = dynamic_cast<ObjectDir *>(obj)) {
+        const uint32_t c = NativeWarmClassOf(obj);
+        if (RndMesh *mesh = As<RndMesh>(obj, c, kWarmIsMesh)) return QueueMesh(mesh, ctx);
+        if (RndText *text = As<RndText>(obj, c, kWarmIsText)) return QueueText(text, ctx);
+        if (int n = QueueOther(obj, c, ctx)) return n;
+        if (ObjectDir *dir = As<ObjectDir>(obj, c, kWarmIsDir)) {
             Warm sub(mCtx);
             sub.mAnimated = mAnimated;
             sub.Visit(dir, kWorld);  // the passes mark the visit; ctx is what is queued
@@ -226,7 +276,7 @@ public:
             return n;
         }
         int n = 0;
-        if (RndGroup *group = dynamic_cast<RndGroup *>(obj)) {
+        if (RndGroup *group = As<RndGroup>(obj, c, kWarmIsGroup)) {
             for (auto it = group->Objects().begin(); it != group->Objects().end(); ++it)
                 n += QueueDrawable(*it, ctx, depth + 1);
         }
@@ -257,20 +307,20 @@ private:
     }
     // What draws a mesh that is in no dir (a ribbon's own), or draws without
     // a mesh (a particle system; a flare's or a screen mask's rect).
-    int QueueOther(Hmx::Object *obj, const MeshPassContext &ctx) {
-        if (HamRibbon *r = dynamic_cast<HamRibbon *>(obj))  // bones per segment
+    int QueueOther(Hmx::Object *obj, uint32_t c, const MeshPassContext &ctx) {
+        if (HamRibbon *r = As<HamRibbon>(obj, c, kWarmIsHamRibbon))  // bones per segment
             return QueueMaterial(r->GetMat(), true, ctx);
-        if (RndRibbon *r = dynamic_cast<RndRibbon *>(obj))  // no bones
+        if (RndRibbon *r = As<RndRibbon>(obj, c, kWarmIsRibbon))  // no bones
             return QueueMaterial(r->GetMat(), false, ctx);
-        if (CharFeedback *f = dynamic_cast<CharFeedback *>(obj))  // a character's limbs
+        if (CharFeedback *f = As<CharFeedback>(obj, c, kWarmIsCharFeedback))  // a character's limbs
             return QueueMaterial(f->GetFailMat(), true, ctx);
-        if (RndFlare *f = dynamic_cast<RndFlare *>(obj))
+        if (RndFlare *f = As<RndFlare>(obj, c, kWarmIsFlare))
             return f->GetMat() ? gWgpuRnd->WarmRectPipelines(f->GetMat(), ctx) : 0;
-        if (RndScreenMask *m = dynamic_cast<RndScreenMask *>(obj))
+        if (RndScreenMask *m = As<RndScreenMask>(obj, c, kWarmIsScreenMask))
             return m->GetMat() ? gWgpuRnd->WarmRectPipelines(m->GetMat(), ctx) : 0;
-        if (RndTexBlender *b = dynamic_cast<RndTexBlender *>(obj))
+        if (RndTexBlender *b = As<RndTexBlender>(obj, c, kWarmIsTexBlender))
             return QueueTexBlender(b);
-        if (RndParticleSys *p = dynamic_cast<RndParticleSys *>(obj)) {
+        if (RndParticleSys *p = As<RndParticleSys>(obj, c, kWarmIsParticleSys)) {
             RndMat *mat = p->GetMat();
             if (!mat) return 0;
             AnimatedStates::const_iterator a = mAnimated.find(mat);
@@ -291,7 +341,8 @@ private:
         int n = 0;
         for (std::list<RndTransformable *>::const_iterator it = text->Children().begin();
              it != text->Children().end(); ++it) {
-            if (RndMesh *page = dynamic_cast<RndMesh *>(*it)) n += WarmMeshPipelines(page, ctx);
+            if (RndMesh *page = As<RndMesh>(*it, NativeWarmClassOf(*it), kWarmIsMesh))
+                n += WarmMeshPipelines(page, ctx);
         }
         return n;
     }
@@ -299,13 +350,14 @@ private:
         int n = 0;
         for (ObjDirItr<Hmx::Object> it(dir, false); it != nullptr; ++it) {
             Hmx::Object *obj = it;
-            if (RndMesh *mesh = dynamic_cast<RndMesh *>(obj)) {
+            const uint32_t c = NativeWarmClassOf(obj);
+            if (RndMesh *mesh = As<RndMesh>(obj, c, kWarmIsMesh)) {
                 n += QueueMesh(mesh, ctx);
-            } else if (RndText *text = dynamic_cast<RndText *>(obj)) {
+            } else if (RndText *text = As<RndText>(obj, c, kWarmIsText)) {
                 n += QueueText(text, ctx);
-            } else if (int q = QueueOther(obj, ctx)) {
+            } else if (int q = QueueOther(obj, c, ctx)) {
                 n += q;
-            } else if (RndFont *font = dynamic_cast<RndFont *>(obj)) {
+            } else if (RndFont *font = As<RndFont>(obj, c, kWarmIsFont)) {
                 // Its pages draw in the world and in the overlay of whatever
                 // panel shows them, which need not be the dir it loaded with.
                 if (&ctx == &mCtx.world) {

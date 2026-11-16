@@ -10,7 +10,11 @@
 //  - a row has as many columns as the header names (a column added to one and
 //    not the other shifts every later column, silently);
 //  - the first call only starts the clock: there is no previous frame to
-//    measure, so no row.
+//    measure, so no row;
+//  - the last column, end_s (round 7, PLAN H-118), is the row's EndDrawing on
+//    the steady clock in seconds: between steady_clock readings taken around
+//    the calls, and rising row to row (perf samples taken with
+//    -k CLOCK_MONOTONIC are put in their frame by it).
 //
 // The test points the log at its own file (test_tmp.h) and sets
 // mFrameTimesStdout by hand: what stdout gets is the same bytes.
@@ -19,14 +23,18 @@
 //  - the row's prefix dropped -> red;
 //  - the prefix written in file mode too -> red;
 //  - a column added to the row and not the header -> red;
-//  - a row written on the first call -> red.
+//  - a row written on the first call -> red;
+//  - end_s written as the frame's begin, or as seconds since the log opened
+//    (round 7) -> red.
 
 #include "test_helpers.h"
 #include "test_tmp.h"
 
 #include "platform/Rnd_Wgpu.h"
 
+#include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -95,4 +103,21 @@ TEST_F(FrameTimesTest, InAFileTheLinesArePlainCsv) {
     EXPECT_EQ(lines[0].rfind("frame,period_ms,", 0), 0u) << lines[0];
     EXPECT_EQ(lines[1].find("[FT]"), std::string::npos) << lines[1];
     EXPECT_EQ(Columns(lines[1]), Columns(lines[0])) << lines[1];
+}
+
+TEST_F(FrameTimesTest, EndSIsTheSteadyClockAtEachRowsEnd) {
+    using namespace std::chrono;
+    const double before = duration<double>(steady_clock::now().time_since_epoch()).count();
+    const std::vector<std::string> lines = Log(false, 4);
+    const double after = duration<double>(steady_clock::now().time_since_epoch()).count();
+    ASSERT_EQ(lines.size(), 4u) << "header + 3 rows";
+    const std::string &header = lines[0];
+    EXPECT_EQ(header.substr(header.rfind(',') + 1), "end_s") << header;
+    double last = before;
+    for (size_t i = 1; i < lines.size(); i++) {
+        const double end = std::strtod(lines[i].c_str() + lines[i].rfind(',') + 1, nullptr);
+        EXPECT_GT(end, last) << lines[i];
+        EXPECT_LE(end, after) << lines[i];
+        last = end;
+    }
 }
