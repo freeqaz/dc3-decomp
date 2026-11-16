@@ -45,7 +45,7 @@ class Ucode:
                 op, _, args = body.partition(" ")
                 toks = [t.strip() for t in args.split(",")]
                 base = op[:-4] if op.endswith("_sat") else op
-                if op.startswith("tfetch"):
+                if op.startswith("tfetch") or op.startswith("getWeights"):
                     cur = ["tex", (op, toks), None]
                 elif base in SCALAR_OPS or base.endswith("_prev"):
                     cur = ["alu", ("nop", []), (op, toks)]
@@ -93,11 +93,24 @@ class Ucode:
         self.r = {f"r{k}": np.array(v, dtype=np.float64) for k, v in regs.items()}
         self.c = {k: np.array(v, dtype=np.float64) for k, v in consts.items()}
         ps = 0.0
+        fetch_count = {}
         for kind, vec, sca in self.ins:
             if kind == "tex":
                 op, toks = vec
                 tf = int(toks[2][2:])
-                t = np.array(tex[tf], dtype=np.float64)
+                if op.startswith("getWeights"):
+                    # getWeights2D: the bilinear fractions (fx, fy) of the
+                    # fetch position, given as tex[("w", tf)].
+                    t = np.array(list(tex[("w", tf)][:2]) + [0.0, 0.0], dtype=np.float64)
+                else:
+                    t = tex[tf]
+                    if isinstance(t, list):
+                        # one value per fetch of this tf, in program order
+                        # (a 2x2 point-sampled PCF footprint)
+                        k = fetch_count.get(tf, 0)
+                        fetch_count[tf] = k + 1
+                        t = t[k]
+                    t = np.array(t, dtype=np.float64)
                 name, _, mask = toks[0].partition(".")
                 tgt = self.r.setdefault(name, np.zeros(4)).copy()
                 for i, ch in enumerate((mask or "xyzw")[:4]):
@@ -131,6 +144,8 @@ class Ucode:
                     v = np.full(4, float(np.dot(a[0], a[1])))
                 elif b == "dp2add":
                     v = np.full(4, float(np.dot(a[0][:2], a[1][:2]) + a[2][0]))
+                elif b == "sge":
+                    v = (a[0] >= a[1]).astype(np.float64)
                 elif b == "frc":
                     v = a[0] - np.floor(a[0])
                 elif b == "floor":

@@ -2104,6 +2104,7 @@ if(BUILD_TESTS)
         tests/test_frame_times.cpp # H-116: frame-times header and rows: [FT] prefix on stdout, columns agree
         tests/test_color_pack_roundtrip.cpp
         tests/test_retail_char_shading.cpp
+        tests/test_self_shadow_caster.cpp # H-119: self-shadow casters cull backwards (bit 19)
         tests/test_screen_aligned_texgen.cpp
         tests/test_retail_tex_xfm.cpp
         tests/test_retail_flip_normal.cpp

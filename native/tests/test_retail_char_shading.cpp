@@ -43,6 +43,20 @@
 // added after the de_normal factor; the DC3 gate widened to RB3's form
 // (Rb3FormKeepsThePlainPath fails).
 //
+// And the character self-shadow map (option bit 19, item 16 (a)): kinds 5-9
+// are five of the permutations above again with bit 19 -- skin, skin without
+// rim, hair, plain with rim, and plain without rim or normal map -- whose
+// microcode point-samples the 512x512 depth map at four taps, weights them
+// bilinearly (getWeights2D) and scales every point light's term (diffuse,
+// specular, the rim's back light) by 1 - 0.75 c107 sat(N . -c108) (1 - s).
+// The test feeds the engine a 2x2 depth map holding each case's four taps
+// and a shadow-camera matrix that lands the pixel on the case's bilinear
+// fractions. Sabotages: the factor removed from the diffuse loop; the factor
+// on the box light too; the taps without the half-texel shift (floor(uv *
+// size) instead of floor(uv * size - 0.5)); the depth compare reversed; the
+// skin's specular scaled by m(Nk) instead of m(Nf); the gate on
+// scene.selfShadowColor.w dropped (SelfShadowNeedsItsCamera fails).
+//
 // Needs a GPU (skips without one). No game data.
 
 #include "test_helpers.h"
@@ -68,15 +82,33 @@ struct CharCase {
     float box[6][4];
     float want[3];
     float detailTex[4], c106[4];   // kind 4 only: the normal detail texel, (strength, tiling, 1, 1)
+    // kinds 5-9 only: the shadow map's bilinear fractions, which of its taps
+    // (-,-), (+,-), (-,+), (+,+) is lit (1) or in shadow (0), c107 and c108
+    float shadowW[2], shadowLit[4], c107[4], c108[4];
 };
 
 const CharCase kCases[] = {
 #include "retail_char_shading_cases.inc"
 };
 
-constexpr int kKinds = 5;
-const char *const kKindName[kKinds] = {"skin", "skin (no rim)", "hair", "plain + rim",
-                                       "plain + detail"};
+constexpr int kKinds = 10;
+const char *const kKindName[kKinds] = {
+    "skin", "skin (no rim)", "hair", "plain + rim", "plain + detail",
+    "skin + shadow", "skin (no rim) + shadow", "hair + shadow", "plain + rim + shadow",
+    "plain + shadow"};
+constexpr int kFirstShadowKind = 5;
+
+bool IsSkin(int kind) { return kind == 0 || kind == 1 || kind == 5 || kind == 6; }
+bool IsHair(int kind) { return kind == 2 || kind == 7; }
+bool HasRim(int kind) { return kind == 0 || kind == 3 || kind == 5 || kind == 8; }
+bool HasNormalMap(int kind) { return !IsHair(kind) && kind != 9; }
+
+// How the self-shadow map is set up for a run of Shade.
+enum class ShadowMode {
+    AsCase,     // on for kinds 5-9, with each case's taps
+    NoCamera,   // the case's taps bound, but colour .w 0: no shadow camera this frame
+    AllLit,     // on, every tap lit
+};
 
 // Appended to the standard shader: one pixel per dispatch.
 const char *kComputeTail = R"WGSL(
@@ -145,7 +177,8 @@ protected:
 
     // `projMult` is the projected light's factor (Dc3Proj.mult) for every case.
     std::vector<float> Shade(float retailLighting, const CharCase *cases, size_t n,
-                             const float projMult[3]) {
+                             const float projMult[3],
+                             ShadowMode shadowMode = ShadowMode::AsCase) {
         GpuDevice &gpu = gWgpuRnd->Gpu();
         wgpu::Device &dev = gpu.Device();
         const std::string src = std::string(StandardWgslSource()) + kComputeTail;
@@ -203,7 +236,20 @@ protected:
             e.size = size;
             return e;
         };
-        wgpu::BindGroup g0 = group(0, {entry(0, sceneBuf, sizeof(SceneUniforms))});
+        // The self-shadow map: 2x2, one tap per texel, rewritten per case.
+        // depth16unorm because it is the depth format a buffer may be
+        // copied into; 0 or 1 against the case's depth 0.5.
+        wgpu::TextureDescriptor td{};
+        td.label = "RetailCharShadingTest shadow map";
+        td.size = {2, 2, 1};
+        td.format = wgpu::TextureFormat::Depth16Unorm;
+        td.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+        wgpu::Texture shadowTex = dev.CreateTexture(&td);
+        wgpu::BindGroupEntry shadowEntry{};
+        shadowEntry.binding = 1;
+        shadowEntry.textureView = shadowTex.CreateView();
+        wgpu::BindGroup g0 =
+            group(0, {entry(0, sceneBuf, sizeof(SceneUniforms)), shadowEntry});
         wgpu::BindGroup g1 = group(1, {entry(0, matBuf, sizeof(MaterialUniforms))});
         wgpu::BindGroup g2 = group(2, {entry(0, objBuf, sizeof(ObjectUniforms))});
         wgpu::BindGroup g3 = group(3, {entry(1, inBuf, 10 * 16), entry(2, outBuf, 16)});
@@ -218,16 +264,39 @@ protected:
             }
             s.numPointLights = 3.0f;
             s.retailLighting = retailLighting;
+            const bool shadowKind = c.kind >= kFirstShadowKind;
+            uint16_t taps[4] = {0xffff, 0xffff, 0xffff, 0xffff};
+            if (shadowKind) {
+                // A constant clip position: the map's texel space t = uv *
+                // size - 0.5 lands on (fx, fy), between texel (0,0) and (1,1).
+                const float u = (c.shadowW[0] + 0.5f) / 2.0f, v = (c.shadowW[1] + 0.5f) / 2.0f;
+                s.selfShadowClip[12] = 2.0f * u - 1.0f;
+                s.selfShadowClip[13] = 1.0f - 2.0f * v;
+                s.selfShadowClip[14] = 0.5f;
+                s.selfShadowClip[15] = 1.0f;
+                Copy4(s.selfShadowColor, c.c107);
+                s.selfShadowColor[3] = shadowMode == ShadowMode::NoCamera ? 0.0f : 1.0f;
+                Copy4(s.selfShadowDir, c.c108);
+                if (shadowMode != ShadowMode::AllLit)   // NoCamera: a stale map is still bound
+                    for (int t = 0; t < 4; t++) taps[t] = c.shadowLit[t] > 0.5f ? 0xffff : 0;
+            }
+            wgpu::TexelCopyTextureInfo dst{};
+            dst.texture = shadowTex;
+            dst.aspect = wgpu::TextureAspect::DepthOnly;
+            wgpu::TexelCopyBufferLayout layout{};
+            layout.bytesPerRow = 2 * sizeof(uint16_t);
+            layout.rowsPerImage = 2;
+            const wgpu::Extent3D extent{2, 2, 1};
+            gpu.Queue().WriteTexture(&dst, taps, sizeof(taps), &layout, &extent);
             MaterialUniforms m{};
             Copy4(m.color, c.c0);
             Copy4(m.retailSpec, c.c2);
-            const bool rim = c.kind == 0 || c.kind == 3;
-            if (rim) Copy4(m.retailRim, c.c61);
+            if (HasRim(c.kind)) Copy4(m.retailRim, c.c61);
             Copy4(m.specular2Color, c.c19);
             m.deNormal = 1.0f - c.k;
-            m.shaderVariation = c.kind <= 1 ? 1.0f : c.kind == 2 ? 2.0f : 0.0f;
-            m.retailFlags[0] = 1.0f;                       // per-pixel
-            m.retailFlags[1] = c.kind == 2 ? 0.0f : 1.0f;  // normal map (hair has none)
+            m.shaderVariation = IsSkin(c.kind) ? 1.0f : IsHair(c.kind) ? 2.0f : 0.0f;
+            m.retailFlags[0] = 1.0f;                                // per-pixel
+            m.retailFlags[1] = HasNormalMap(c.kind) ? 1.0f : 0.0f;  // normal map
             m.retailFlags[2] = c.kind == 4 ? 0.0f : 1.0f;  // specular map (detail case has none)
             m.retailFlags[3] = 0.0f;                       // no rim map
             if (c.kind == 4) {
@@ -343,6 +412,7 @@ TEST_F(RetailCharShadingTest, Rb3FormKeepsThePlainPath) {
         for (int a = 0; a < 3; a++) same = same && Close(rb3[3 * i + a], dc3[3 * i + a]);
         if (!same) differ[k]++;
     }
+    // (Kinds 5-9: RB3 has no self-shadow, SelfShadowNeedsItsCamera.)
     // Skin and hair differ everywhere. The plain rim differs only by the
     // back light, which is zero where every light is in front of the pixel.
     for (int k = 0; k < 3; k++)
@@ -395,6 +465,49 @@ TEST_F(RetailCharShadingTest, ProjectedShadowScalesTheWholeDiffuseLight) {
         }
     }
     EXPECT_EQ(bad, 0) << "the projected shadow must scale the point lights with the box";
+}
+
+// The self-shadow is on only while the frame has a shadow camera (Rnd_Wgpu
+// writes selfShadowColor.w = 1 then) and only in DC3's form of the retail
+// model: without the camera, or under RB3's form, a case shades as if every
+// tap were lit, even with its map still bound. And the map does something:
+// with its taps, the cases it can reach shade differently.
+TEST_F(RetailCharShadingTest, SelfShadowNeedsItsCamera) {
+    const size_t n = sizeof(kCases) / sizeof(kCases[0]);
+    const std::vector<float> asCase = ShadeAll(2.0f);
+    const std::vector<float> noCamera = Shade(2.0f, kCases, n, kNoShadow, ShadowMode::NoCamera);
+    const std::vector<float> allLit = Shade(2.0f, kCases, n, kNoShadow, ShadowMode::AllLit);
+    const std::vector<float> rb3 = Shade(1.0f, kCases, n, kNoShadow, ShadowMode::AsCase);
+    const std::vector<float> rb3NoCamera = Shade(1.0f, kCases, n, kNoShadow, ShadowMode::NoCamera);
+    for (const auto *v : {&asCase, &noCamera, &allLit, &rb3, &rb3NoCamera})
+        ASSERT_EQ(v->size(), 3 * n);
+    int total = 0, shadowed = 0, leaks = 0, rb3Leaks = 0;
+    for (size_t i = 0; i < n; i++) {
+        if (kCases[i].kind < kFirstShadowKind) continue;
+        total++;
+        bool same = true, differ = false, rb3Same = true;
+        for (int a = 0; a < 3; a++) {
+            const size_t j = 3 * i + a;
+            same = same && Close(noCamera[j], allLit[j]);
+            differ = differ || !Close(asCase[j], allLit[j]);
+            rb3Same = rb3Same && Close(rb3[j], rb3NoCamera[j]);
+        }
+        if (!same && leaks++ < 3)
+            ADD_FAILURE() << kKindName[kCases[i].kind] << " case " << i
+                          << ": shadowed without a shadow camera";
+        if (!rb3Same && rb3Leaks++ < 3)
+            ADD_FAILURE() << kKindName[kCases[i].kind] << " case " << i
+                          << ": shadowed under RB3's form";
+        if (differ) shadowed++;
+    }
+    printf("[ retail char ] self-shadow: %d of %d cases shaded differently by their map\n",
+           shadowed, total);
+    ASSERT_GT(total, 0);
+    EXPECT_EQ(leaks, 0);
+    EXPECT_EQ(rb3Leaks, 0);
+    // A case changes only where its normal faces the shadow camera, a tap is
+    // in shadow and a point light reaches the pixel: 13 of the 60 (RTX 3090).
+    EXPECT_GE(shadowed, total / 6) << "the map's taps do not reach the shading";
 }
 
 } // namespace
