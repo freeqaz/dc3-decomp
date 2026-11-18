@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <signal.h>
 #include <sstream>
 #include <string>
 #include <sys/stat.h>
