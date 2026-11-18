@@ -9,6 +9,9 @@
 #include "rndobj\Trans.h"
 #include "utl/Loader.h"
 #include <cmath>
+#ifdef HX_NATIVE
+#include <limits>
+#endif
 
 RndRibbon::RndRibbon()
     : mLastTime(-1.0f), mNumSides(4), mMat(this), mWidth(1), mDirty(1), mActive(true),
@@ -261,6 +264,22 @@ void RndRibbon::UpdateMesh() {
     mMesh->Sync(0x1f);
 }
 
+#ifdef HX_NATIVE
+namespace {
+    // The time step UpdateChase's loop takes from a key at `frame`: `step`
+    // whenever adding it gives a later time, else the distance to the next
+    // float. Without it the loop never ends once the clock is too large for
+    // `frame + step` to register. The same repair, with the reasoning, is in
+    // HamRibbon.cpp (HamRibbon::UpdateChase is a copy of this function).
+    float ChaseStepFrom(float frame, float step) {
+        if (frame + step > frame || step != step) {
+            return step;
+        }
+        return std::nextafter(frame, std::numeric_limits<float>::infinity()) - frame;
+    }
+}
+#endif
+
 #pragma fp_contract(off)
 // Lane history (18 lines moved): docs/decomp/notes/system/rndobj/Ribbon.md
 void RndRibbon::UpdateChase() {
@@ -320,6 +339,13 @@ void RndRibbon::UpdateChase() {
             float step = mDecay / mNumSegments;
             float minDistSq = mWidth * mWidth * 0.125f;
             float nextTime = mTransforms.back().frame + step;
+#ifdef HX_NATIVE
+            // `step` is the authored step for as long as the clock can register
+            // it (ChaseStepFrom above); the Xbox path below is unchanged.
+            const float authoredStep = step;
+            step = ChaseStepFrom(mTransforms.back().frame, authoredStep);
+            nextTime = mTransforms.back().frame + step;
+#endif
             while (now > nextTime) {
                 // NOTE: caching `&mTransforms.back()` in a named local reproduces the
                 // target's +0x30/+0x40 element-relative offsets but costs a register
@@ -345,6 +371,9 @@ void RndRibbon::UpdateChase() {
                     mTransforms.push_back(key);
                     added++;
                 }
+#ifdef HX_NATIVE
+                step = ChaseStepFrom(mTransforms.back().frame, authoredStep);
+#endif
                 nextTime = mTransforms.back().frame + step;
             }
         }
