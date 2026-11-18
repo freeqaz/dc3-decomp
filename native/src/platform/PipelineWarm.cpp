@@ -34,7 +34,11 @@
 //  - under a UI panel (PanelDir): also the overlay pass (what a panel draws
 //    after it ends the world, PanelDir::DrawShowing);
 //  - under a Character: also a render-to-texture pass with depth (the
-//    character drawn into a target of its own);
+//    character drawn into a target of its own), and that pass as the
+//    self-shadow caster pass (RndShadowMap::PrepShadow's kDrawExtrude draw
+//    into the 512x512 map, which culls backwards whatever the material asks:
+//    MeshPassContext::selfShadowCaster, engine doc dc3-retail-lighting.md
+//    section 17.3);
 //  - a WorldReflection's draws: the reflection pass (cull flipped). Its draws
 //    name objects that load after it (the dancers, the in-world score star),
 //    so each later load walks every live reflection's draws again.
@@ -134,7 +138,7 @@ namespace {
 enum Pass { kWorld = 1, kOverlay = 2, kTexture = 4 };
 
 struct Contexts {
-    MeshPassContext world, reflection, overlay, texture;
+    MeshPassContext world, reflection, overlay, texture, caster;
 };
 
 // The states the loaded property animations key on each material.
@@ -247,7 +251,10 @@ public:
         for (const std::pair<ObjectDir *, int> &d : mOrder) {
             if (d.second & kWorld) n += QueueDir(d.first, mCtx.world);
             if (d.second & kOverlay) n += QueueDir(d.first, mCtx.overlay);
-            if (d.second & kTexture) n += QueueDir(d.first, mCtx.texture);
+            if (d.second & kTexture) {
+                n += QueueDir(d.first, mCtx.texture);
+                if (mCtx.caster.selfShadowCaster) n += QueueDir(d.first, mCtx.caster);
+            }
         }
         return n;
     }
@@ -396,6 +403,8 @@ void NativeWarmLoadedDir(ObjectDir *dir) {
     c.reflection = gWgpuRnd->WorldPassContext(true);
     c.overlay = gWgpuRnd->OverlayPassContext();
     c.texture = gWgpuRnd->TexturePassContext(true);
+    c.caster = c.texture;
+    c.caster.selfShadowCaster = rndshape::kSelfShadowMap;
 
     Warm warm(c);
     warm.Visit(dir, kWorld);
