@@ -37,6 +37,11 @@
 //    are bit for bit those of the Xbox path's loop, written out here. This
 //    one passes with or without the repair; it fails if the repair changes
 //    anything while the step still registers.
+//
+// RndRibbon::UpdateChase is the same loop on the same clock (HamRibbon is a
+// copy of it) and carries the same repair. No shipped .milo holds a Ribbon,
+// so nothing reaches it today; the RndRibbon* tests run the two ribbon tests
+// above on an RndRibbon with the same parameters.
 
 #include "test_helpers.h"
 
@@ -48,6 +53,7 @@
 #include "obj/DirLoader.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
+#include "rndobj/Ribbon.h"
 #include "rndobj/Trans.h"
 #include "utl/FilePath.h"
 
@@ -60,6 +66,10 @@
 #include <limits>
 #include <unistd.h>
 #include <vector>
+
+// As in HamRibbon.cpp and Ribbon.cpp, so the loop written out below sums as
+// theirs does on a target that would fuse a multiply into an add.
+#pragma fp_contract(off)
 
 namespace {
 
@@ -81,13 +91,22 @@ float SpacingAt(float x) { return std::nextafter(x, kFloatInf) - x; }
 class RibbonProbe : public HamRibbon {
 public:
     RibbonProbe() {}
+    static const char *Class() { return "HamRibbon"; }
     const Keys<Transform, Transform> &ChaseKeys() const { return mChaseKeys; }
+};
+
+// The same for an RndRibbon.
+class RndRibbonProbe : public RndRibbon {
+public:
+    RndRibbonProbe() {}
+    static const char *Class() { return "RndRibbon"; }
+    const Keys<Transform, Transform> &ChaseKeys() const { return mTransforms; }
 };
 
 // A ribbon with the cursor's parameters, set through its own property syncs,
 // following `target`.
-RibbonProbe *NewCursorRibbon(RndTransformable *target) {
-    RibbonProbe *r = new RibbonProbe;
+template <class R> R *NewCursorRibbon(RndTransformable *target) {
+    R *r = new R;
     r->SetProperty("num_sides", kCursorNumSides);
     r->SetProperty("width", kCursorWidth);
     r->SetProperty("num_segments", kCursorNumSegments);
@@ -98,7 +117,8 @@ RibbonProbe *NewCursorRibbon(RndTransformable *target) {
 }
 
 // One frame: the engine's real-time clock reads `now`, the target is at `pos`.
-void PollAt(RibbonProbe *r, RndTransformable *target, float now, const Vector3 &pos) {
+template <class R>
+void PollAt(R *r, RndTransformable *target, float now, const Vector3 &pos) {
     TheTaskMgr.SetTimeAndDelta(kTaskSeconds, now, 1.0f / 60.0f);
     target->SetLocalPos(pos);
     r->Poll();
@@ -129,17 +149,18 @@ void OnAlarm(int) {
 }
 
 // One Poll of the child: as PollAt, with the hang message naming this Poll.
-void ChildPollAt(RibbonProbe *r, RndTransformable *target, float now, const Vector3 &pos,
+template <class R>
+void ChildPollAt(R *r, RndTransformable *target, float now, const Vector3 &pos,
                  const char *phase, int frame) {
     snprintf(sHangMessage, sizeof(sHangMessage),
-             "HANG: HamRibbon::Poll did not return in %d s at clock %.6f s (phase %s, "
+             "HANG: %s::Poll did not return in %d s at clock %.6f s (phase %s, "
              "frame %d)\n",
-             kHangSeconds, now, phase, frame);
+             R::Class(), kHangSeconds, now, phase, frame);
     PollAt(r, target, now, pos);
 }
 
 // The checks that hold after every Poll, in every phase.
-void CheckKeys(const RibbonProbe *r, float now, const char *phase, int frame) {
+template <class R> void CheckKeys(const R *r, float now, const char *phase, int frame) {
     const Keys<Transform, Transform> &keys = r->ChaseKeys();
     if (keys.empty())
         Bad(2, "%s frame %d (clock %.4f): the ribbon has no keys", phase, frame, now);
@@ -168,11 +189,11 @@ void CheckKeys(const RibbonProbe *r, float now, const char *phase, int frame) {
 // Polls a cursor ribbon at 60 frames a second from one second before `limit`
 // (a power of two seconds) to four seconds after it: first with the target
 // still, as on the frozen machine, then with it moving in a straight line.
-void RunPhase(float limit) {
+template <class R> void RunPhase(float limit) {
     char phase[32];
     snprintf(phase, sizeof(phase), "2^%d s", (int)std::lround(std::log2(limit)));
     RndTransformable *target = Hmx::Object::New<RndTransformable>();
-    RibbonProbe *r = NewCursorRibbon(target);
+    R *r = NewCursorRibbon<R>(target);
 
     const double kDt = 1.0 / 60.0;
     const double start = (double)limit - 1.0;
@@ -241,13 +262,13 @@ void RunPhase(float limit) {
     delete target;
 }
 
-void PastTheStepLimitChild() {
+template <class R> void PastTheStepLimitChild() {
     signal(SIGALRM, OnAlarm);
     alarm(kHangSeconds);
     // 2^17 s is where this ribbon's step stops registering; each later power
     // of two halves what the clock can tell apart again. 2^21 s is 24 days.
     for (int exp = 17; exp <= 21; exp++)
-        RunPhase(std::ldexp(1.0f, exp));
+        RunPhase<R>(std::ldexp(1.0f, exp));
     _exit(0);
 }
 
@@ -260,13 +281,15 @@ struct OriginalKey {
     Vector3 v;
 };
 
-// HamRibbon::UpdateChase's key bookkeeping as the Xbox path has it (the part
-// that decides key times and positions; the orientation pass reads them and
-// writes neither).
+// UpdateChase's key bookkeeping as the Xbox path has it (the part that
+// decides key times and positions; the orientation pass reads them and
+// writes neither). The two classes differ in one place: RndRibbon sums the
+// squared distance as (z*z + x*x) + y*y, HamRibbon as LengthSquared does.
 struct OriginalChase {
     std::vector<OriginalKey> keys;
     float lastTime = -1.0f;
     int merged = 0, pushed = 0;
+    bool rndRibbonSum = false;
 
     void Poll(float now, const Vector3 &followed) {
         if (now < lastTime)
@@ -287,7 +310,10 @@ struct OriginalChase {
                 Interp(keys.back().v, followed, step / (now - keys.back().frame), key.v);
                 Vector3 delta;
                 Subtract(keys.back().v, key.v, delta);
-                if (LengthSquared(delta) < minDistSq) {
+                const float distSq = rndRibbonSum
+                    ? (delta.z * delta.z + delta.x * delta.x) + delta.y * delta.y
+                    : LengthSquared(delta);
+                if (distSq < minDistSq) {
                     keys.back().frame = key.frame;
                     merged++;
                 } else {
@@ -361,28 +387,41 @@ TEST_F(HamRibbonLongRun, PollReturnsAndTrailsPastTheStepLimit) {
     if (IsSkipped())
         return;
     GTEST_FLAG_SET(death_test_style, "threadsafe"); // see test_object_lifetime.cpp
-    ASSERT_EXIT(PastTheStepLimitChild(), ::testing::ExitedWithCode(0), "")
+    ASSERT_EXIT(PastTheStepLimitChild<RibbonProbe>(), ::testing::ExitedWithCode(0), "")
         << "exit 14 = a Poll did not return within " << kHangSeconds
         << " s (the UpdateChase loop cannot pass the clock); any other code is "
            "one of the checks, named on the child's stderr above";
 }
 
-TEST_F(HamRibbonLongRun, BelowTheStepLimitMatchesTheOriginalLoop) {
+TEST_F(HamRibbonLongRun, RndRibbonPollReturnsAndTrailsPastTheStepLimit) {
     if (IsSkipped())
         return;
-    // Windows of clock time below 2^17 s, each run on a fresh ribbon: small
-    // values, across 2^15 and 2^16 s (where the spacing doubles and nothing
-    // else happens), and up to a second short of 2^17.
+    GTEST_FLAG_SET(death_test_style, "threadsafe");
+    ASSERT_EXIT(PastTheStepLimitChild<RndRibbonProbe>(), ::testing::ExitedWithCode(0), "")
+        << "exit 14 = a Poll did not return within " << kHangSeconds
+        << " s (the UpdateChase loop cannot pass the clock); any other code is "
+           "one of the checks, named on the child's stderr above";
+}
+
+namespace {
+
+// Polls a ribbon of class R and the Xbox path's loop side by side over
+// windows of clock time below 2^17 s and compares every key bit for bit.
+template <class R> void CompareBelowTheStepLimit(bool rndRibbonSum) {
+    // Each window runs on a fresh ribbon: small values, across 2^15 and 2^16 s
+    // (where the spacing doubles and nothing else happens), and up to a
+    // second short of 2^17.
     const double kWindows[] = { 0.0, 1000.0, 4096.0, 32767.0, 50000.0,
                                 65535.0, 100000.0, 131068.0 };
     const double kDt = 1.0 / 60.0;
     const int kFrames = 180;
     int merged = 0, pushed = 0, compared = 0;
     for (double start : kWindows) {
-        SCOPED_TRACE(testing::Message() << "window from " << start << " s");
+        SCOPED_TRACE(testing::Message() << R::Class() << ", window from " << start << " s");
         RndTransformable *target = Hmx::Object::New<RndTransformable>();
-        RibbonProbe *r = NewCursorRibbon(target);
+        R *r = NewCursorRibbon<R>(target);
         OriginalChase original;
+        original.rndRibbonSum = rndRibbonSum;
         for (int frame = 0; frame < kFrames; frame++) {
             const float now = (float)(start + frame * kDt);
             // A circle whose speed swings between rest and 6000 units a
@@ -418,7 +457,21 @@ TEST_F(HamRibbonLongRun, BelowTheStepLimitMatchesTheOriginalLoop) {
     EXPECT_GT(merged, 500) << "the loop hardly ever merged into the newest key";
     EXPECT_GT(pushed, 500) << "the loop hardly ever pushed a key";
     EXPECT_GT(compared, 10000);
-    RecordProperty("merged", merged);
-    RecordProperty("pushed", pushed);
-    RecordProperty("keys_compared", compared);
+    ::testing::Test::RecordProperty("merged", merged);
+    ::testing::Test::RecordProperty("pushed", pushed);
+    ::testing::Test::RecordProperty("keys_compared", compared);
+}
+
+} // namespace
+
+TEST_F(HamRibbonLongRun, BelowTheStepLimitMatchesTheOriginalLoop) {
+    if (IsSkipped())
+        return;
+    CompareBelowTheStepLimit<RibbonProbe>(false);
+}
+
+TEST_F(HamRibbonLongRun, RndRibbonBelowTheStepLimitMatchesTheOriginalLoop) {
+    if (IsSkipped())
+        return;
+    CompareBelowTheStepLimit<RndRibbonProbe>(true);
 }
