@@ -11,6 +11,7 @@
 
 #include "obj/Data.h"
 #include "obj/DataFile.h"
+#include "os/Timer.h"
 #include "rndobj/Bitmap.h"
 #include "utl/BufStream.h"
 #include "utl/Compress.h"
@@ -250,6 +251,42 @@ TEST_F(Lp64LiteralTest, DataNodeLoadOfFourByteValueZeroesTheHighHalf) {
     EXPECT_EQ(fnode.UncheckedFloat(), 1.0f);
     EXPECT_EQ(reinterpret_cast<uintptr_t>(fnode.UncheckedObj()), uintptr_t(oneBits))
         << "high half of a Float node loaded over a pointer was left stale";
+}
+
+// ---------------------------------------------------------------------------
+// Timer::CyclesToMs splits the 64-bit cycle count into its two 32-bit words:
+// `unsigned long lowCycles = cycles; long highCycles = cycles >> 32;`. Those
+// are 4-byte types in the image. As 8-byte types the "low word" was the whole
+// count and the high word was added a second time, so from 2^32 cycles (71.6
+// minutes of native microseconds) a running Timer read too large by
+// high * 4,294,967 ms. TaskMgr's clock is such a Timer: it gained 71.6 minutes
+// every 71.6 minutes, in one frame each time.
+TEST(Lp64Literals, TimerCyclesToMsCountsTheHighWordOnce) {
+    Timer::Init();
+    const long long kWord = 1LL << 32;
+    // No step where the high word comes in.
+    EXPECT_NEAR(Timer::CyclesToMs(kWord - 1), 4294967.295, 1.0);
+    EXPECT_NEAR(Timer::CyclesToMs(kWord), 4294967.296, 1.0);
+    // 18.5 hours, 36.4 hours and 30 days of microseconds, to float precision.
+    const long long kCycles[] = { 66647490000LL, 131072000000LL, 2592000000000LL };
+    for (long long cycles : kCycles) {
+        const double ms = (double)cycles * 0.001;
+        EXPECT_NEAR(Timer::CyclesToMs(cycles), ms, ms * 1e-6) << cycles << " cycles";
+    }
+}
+
+// Below 2^32 cycles there is no high word: the reading is the low word's
+// product, bit for bit, whichever width the locals have.
+TEST(Lp64Literals, TimerCyclesToMsBelowTheHighWordIsTheLowWordProduct) {
+    Timer::Init();
+    const long long kCycles[] = { 0,          1,           999,         16667,
+                                  1000000,    60000000,    3600000000LL, (1LL << 32) - 1 };
+    for (long long cycles : kCycles) {
+        const float expected = (float)(unsigned int)cycles * 0.001f;
+        const float got = Timer::CyclesToMs(cycles);
+        EXPECT_EQ(memcmp(&got, &expected, sizeof(got)), 0)
+            << cycles << " cycles: " << got << " vs " << expected;
+    }
 }
 
 } // namespace

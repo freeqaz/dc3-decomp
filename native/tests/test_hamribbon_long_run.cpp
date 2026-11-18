@@ -15,8 +15,9 @@
 // registers at 65,536 (half spacing 0.0039) and stops at 131,072 (half
 // spacing 0.0078). The limit for this ribbon is 2^17 s = 36.4 hours.
 // (The native clock got there in 18.5 hours of real time: on LP64
-// Timer::CyclesToMs counts the high word of the cycle count twice, so the
-// clock gains 4,295 s every 4,295 s.)
+// Timer::CyclesToMs counted the high word of the cycle count twice, so the
+// clock gained 4,295 s every 4,295 s. Lp64Literals.TimerCyclesToMs* in
+// test_lp64_literals.cpp.)
 //
 // The Xbox image has the same loop (fadds at 0x824C7C04 / 0x824C7C70, bgt at
 // 0x824C7C78), so the repair is native only: a step that does not register is
