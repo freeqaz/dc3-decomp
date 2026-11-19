@@ -11,6 +11,10 @@
 #include "rndobj\Poll.h"
 #include "rndobj\Trans.h"
 #include "utl/Loader.h"
+#ifdef HX_NATIVE
+#include <cmath>
+#include <limits>
+#endif
 
 HamRibbon::HamRibbon()
     : mLastTime(-1), mNumSides(4), mMat(this), mWidth(1), mDirtyFlags(1), mActive(1),
@@ -145,6 +149,33 @@ void HamRibbon::SetActive(bool active) {
     mActive = active;
 }
 
+#ifdef HX_NATIVE
+namespace {
+    // The time step UpdateChase's loop takes from a key at `frame`: `step`
+    // itself whenever adding it gives a later time, which is the only case the
+    // Xbox path has. Both are floats, so from some clock value on `frame +
+    // step` rounds back to `frame`, the loop's nextTime stops moving and the
+    // loop never ends. The image has the same loop (fadds at 0x824C7C04 and
+    // 0x824C7C70, bgt at 0x824C7C78). For the cursor's two ribbons (decay 0.3
+    // over 40 segments, step 0.0075 s) that is from 2^17 s, where floats are
+    // 1/64 s apart; a native game left in the menus froze there.
+    //
+    // The step taken instead is the distance from `frame` to the next float:
+    // the smallest step the clock can express there. The loop interpolates by
+    // the same step, so each key is still where the target was at the key's
+    // time; the trail keeps its length in seconds and has as many keys as the
+    // clock can tell apart (19 for the cursor from 2^17 s, 38 just below it).
+    // Every pass now moves the newest key's time forward, so the loop ends.
+    // A NaN step is passed on: `now > NaN` is false, as on the Xbox.
+    float ChaseStepFrom(float frame, float step) {
+        if (frame + step > frame || step != step) {
+            return step;
+        }
+        return std::nextafter(frame, std::numeric_limits<float>::infinity()) - frame;
+    }
+}
+#endif
+
 #pragma fp_contract(off)
 // Lane history (43 lines moved): docs/decomp/notes/system/hamobj/HamRibbon.md
 // > RESIDUAL (w7-an, 98.0 canonical): what is left is register permutation plus two
@@ -195,6 +226,13 @@ void HamRibbon::UpdateChase() {
             float step = mDecay / mNumSegments;
             float minDistSq = mWidth * mWidth * 0.125f;
             float nextTime = mChaseKeys.back().frame + step;
+#ifdef HX_NATIVE
+            // `step` is the authored step for as long as the clock can register
+            // it (ChaseStepFrom above); the Xbox path below is unchanged.
+            const float authoredStep = step;
+            step = ChaseStepFrom(mChaseKeys.back().frame, authoredStep);
+            nextTime = mChaseKeys.back().frame + step;
+#endif
             // w21-l (value-scan row, ARTIFACT): the image re-derives back() from a
             // fresh `lwz r11, 0x90(r23)` each pass; ours keeps _M_finish from the
             // reload after push_back.  Nothing in between writes the vector.
@@ -214,6 +252,9 @@ void HamRibbon::UpdateChase() {
                     mChaseKeys.push_back(key);
                     added++;
                 }
+#ifdef HX_NATIVE
+                step = ChaseStepFrom(mChaseKeys.back().frame, authoredStep);
+#endif
                 nextTime = mChaseKeys.back().frame + step;
             }
         }

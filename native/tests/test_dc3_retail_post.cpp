@@ -53,6 +53,7 @@
 #include "gfx/DisplayRamp.h"
 #include "gfx/GpuDevice.h"
 #include "gfx/PostProcPass.h"
+#include "gfx/PresentScale.h"
 #include "gfx/RB3RetailPost.h"
 #include "platform/Rnd_Wgpu.h"
 #include "platform/rndshape/RndShape.h"
@@ -2103,6 +2104,222 @@ TEST_F(DC3RetailPostGpuTest, RenderScaledFrameKeepsTheOutputPixelBloom) {
     if (prev) prev->Select(); else pp->Unselect();
     delete pp;
     scaled.Shutdown();
+}
+
+// A frame SMALLER than the logical size (a window under 1280x720: a tiled
+// 1268x713 one, a 640x360 one). The bloom is built from the scene resampled to
+// the logical size, and the scene's alpha is the bloom mask. That copy went
+// through the window present's shader whenever it enlarged the frame, and the
+// present is opaque: alpha came out 1.0, every pixel was in the mask, and the
+// whole frame bloomed (the main menu on a handheld read twice as bright,
+// 2026-11-17). The copy now keeps alpha (PresentScale::SetKeepAlpha).
+//
+// The copy itself: a frame whose left half is outside the mask and whose
+// right half is inside it, into a target it does not fill. With keep-alpha the
+// mask arrives as drawn in all four shapes; without it (the present) the
+// result is opaque, which is the control that this test can tell the two apart.
+TEST_F(DC3RetailPostGpuTest, BloomSourceCopyKeepsTheMaskWhenItEnlarges) {
+    if (IsSkipped()) return;
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    auto &dev = gpu.Device();
+    struct Case {
+        int fw, fh;
+        const char *what;
+    };
+    const Case cases[] = {
+        {kW / 2, kH / 2, "smaller on both axes, a whole multiple"},
+        {kW - 8, kH - 6, "smaller on both axes, not a whole multiple"},
+        {kW / 2, kH, "narrower only"},
+        {kW, kH / 2, "shorter only"},
+    };
+    for (int keep = 1; keep >= 0; keep--) {
+        for (const Case &c : cases) {
+            wgpu::TextureDescriptor d{};
+            d.size = {(uint32_t)c.fw, (uint32_t)c.fh, 1};
+            d.format = wgpu::TextureFormat::RGBA8Unorm;
+            d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+            wgpu::Texture frame = dev.CreateTexture(&d);
+            std::vector<uint8_t> px((size_t)c.fw * c.fh * 4);
+            for (int y = 0; y < c.fh; y++)
+                for (int x = 0; x < c.fw; x++) {
+                    uint8_t *p = &px[((size_t)y * c.fw + x) * 4];
+                    p[0] = p[1] = p[2] = 100;
+                    p[3] = x < c.fw / 2 ? 0 : 255;
+                }
+            wgpu::TexelCopyTextureInfo dst{};
+            dst.texture = frame;
+            wgpu::TexelCopyBufferLayout layout{};
+            layout.bytesPerRow = c.fw * 4;
+            wgpu::Extent3D ext = {(uint32_t)c.fw, (uint32_t)c.fh, 1};
+            gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+
+            wgpu::TextureDescriptor t{};
+            t.size = {(uint32_t)kW, (uint32_t)kH, 1};
+            t.format = wgpu::TextureFormat::RGBA8Unorm;
+            t.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+            wgpu::Texture target = dev.CreateTexture(&t);
+            wgpu::TextureView targetView = target.CreateView();
+
+            PresentScale copy;
+            copy.SetBoxFilter(true);  // as the bloom source's copy is set up
+            copy.SetKeepAlpha(keep != 0);
+            wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+            const PresentRect r = copy.Encode(dev, enc, frame, targetView,
+                                              wgpu::TextureFormat::RGBA8Unorm, kW, kH);
+            wgpu::CommandBuffer cmd = enc.Finish();
+            gpu.Queue().Submit(1, &cmd);
+            std::vector<uint8_t> out((size_t)kW * kH * 4);
+            ASSERT_TRUE(gpu.ReadbackTexture(target, kW, kH, out.data(), out.size()));
+            ASSERT_GT(r.w, 8) << c.what;
+            ASSERT_GT(r.h, 8) << c.what;
+            // Well inside each half of the copied rectangle.
+            double outside = 0, inside = 0, grey = 0;
+            int n = 0;
+            for (int y = r.y + r.h / 4; y < r.y + 3 * r.h / 4; y++)
+                for (int i = 0; i < r.w / 8; i++) {
+                    const int xl = r.x + r.w / 8 + i, xr = r.x + 5 * r.w / 8 + i;
+                    outside += out[((size_t)y * kW + xl) * 4 + 3];
+                    inside += out[((size_t)y * kW + xr) * 4 + 3];
+                    grey += out[((size_t)y * kW + xl) * 4 + 1];
+                    n++;
+                }
+            ASSERT_GT(n, 0);
+            outside /= n;
+            inside /= n;
+            grey /= n;
+            printf("DC3RetailPost bloom source copy, %s (%dx%d into %dx%d, drawn %dx%d): alpha "
+                   "outside the mask %.1f, inside %.1f, keep-alpha %d\n",
+                   c.what, c.fw, c.fh, kW, kH, r.w, r.h, outside, inside, keep);
+            EXPECT_NEAR(grey, 100.0, 1.0) << c.what << ": the colour is copied either way";
+            EXPECT_NEAR(inside, 255.0, 1.0) << c.what;
+            if (keep)
+                EXPECT_NEAR(outside, 0.0, 1.0) << c.what << ": the mask did not survive the copy";
+            else
+                EXPECT_NEAR(outside, 255.0, 1.0)
+                    << c.what << ": the present is opaque; if this fails the keep-alpha case "
+                    << "above proves nothing";
+        }
+    }
+}
+
+// The whole chain on a device whose frame is half the logical size on each
+// axis: a mid-grey field outside the mask, bright blocks inside it. The
+// reference is the same device given a target of the logical size (not its
+// frame: scale 1, the scene is the bloom source as it always was). The half
+// frame must grade like the reference reduced 2x2 -- the blocks bloom, the
+// field does not. Sabotage: the bloom source's copy without SetKeepAlpha -- the
+// field blooms and the half frame comes out far brighter, red.
+TEST_F(DC3RetailPostGpuTest, FrameSmallerThanLogicalBloomsOnlyTheMask) {
+    if (IsSkipped()) return;
+    GpuDevice small;
+    GpuDeviceDesc desc;
+    desc.headless = true;
+    desc.width = kW / 2;
+    desc.height = kH / 2;
+    desc.outputFollowsTarget = true;
+    desc.logicalWidth = kW;
+    desc.logicalHeight = kH;
+    if (!small.Init(desc)) GTEST_SKIP() << "no second headless device";
+    ASSERT_EQ(small.WindowWidth(), kW / 2);
+    ASSERT_EQ(small.LogicalWidth(), kW);
+    ASSERT_FLOAT_EQ(small.RenderScaleFor(kW / 2), 0.5f);
+    ASSERT_EQ(small.RenderScaleFor(kW), 1.0f);
+    small.AcquireHeadlessFrame();       // the headless surface format
+    auto &dev = small.Device();
+
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    pp->SetProperty("bloom_intensity", DataNode(1.0f));
+    RndPostProc *prev = RndPostProc::Current();
+    pp->Select();
+    PostProcPass pass;
+    pass.Init(small);
+
+    // At logical pixels: 4x4 blocks in the mask on a grey field outside it.
+    // The blocks sit on even pixels, so the half frame holds them exactly.
+    auto pattern = [](int x, int y, bool masked, uint8_t *p) {
+        const bool block = (x % 32) >= 8 && (x % 32) < 12 && (y % 24) >= 10 && (y % 24) < 14;
+        p[0] = p[1] = p[2] = block ? 240 : 100;
+        p[3] = block && masked ? 255 : 0;
+    };
+    // Green of the graded frame, at the half frame's size.
+    auto run = [&](int div, bool masked) {
+        const int w = kW / div, h = kH / div;
+        wgpu::TextureDescriptor d{};
+        d.size = {(uint32_t)w, (uint32_t)h, 1};
+        d.format = wgpu::TextureFormat::RGBA8Unorm;
+        d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst |
+            wgpu::TextureUsage::RenderAttachment;
+        wgpu::Texture scene = dev.CreateTexture(&d);
+        std::vector<uint8_t> px((size_t)w * h * 4);
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) pattern(x * div, y * div, masked, &px[((size_t)y * w + x) * 4]);
+        wgpu::TexelCopyTextureInfo dst{};
+        dst.texture = scene;
+        wgpu::TexelCopyBufferLayout layout{};
+        layout.bytesPerRow = w * 4;
+        wgpu::Extent3D ext = {(uint32_t)w, (uint32_t)h, 1};
+        small.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+        d.format = small.SurfaceFormat();
+        d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+        wgpu::Texture frame = dev.CreateTexture(&d);
+        wgpu::TextureDescriptor b{};
+        b.size = {1, 1, 1};
+        b.format = wgpu::TextureFormat::RGBA8Unorm;
+        b.usage = wgpu::TextureUsage::TextureBinding;
+        wgpu::Texture black = dev.CreateTexture(&b);
+        wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView(),
+                          blackView = black.CreateView(), noDepth;
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        pass.Run(enc, sceneView, scene, w, h, noDepth, 1, frameView, blackView, small);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        small.Queue().Submit(1, &cmd);
+        std::vector<uint8_t> out((size_t)w * h * 4);
+        EXPECT_TRUE(small.ReadbackTexture(frame, w, h, out.data(), out.size()));
+        const int s = 2 / div;  // the reference is reduced 2x2, the half frame as it is
+        std::vector<float> g((size_t)(kW / 2) * (kH / 2));
+        for (int y = 0; y < kH / 2; y++)
+            for (int x = 0; x < kW / 2; x++) {
+                float sum = 0;
+                for (int j = 0; j < s; j++)
+                    for (int i = 0; i < s; i++)
+                        sum += out[(((size_t)(y * s + j)) * w + (x * s + i)) * 4 + 1];
+                g[(size_t)y * (kW / 2) + x] = sum / (s * s);
+            }
+        return g;
+    };
+    const std::vector<float> plain = run(1, false), one = run(1, true), half = run(2, true);
+    // The field: half-frame pixels at least two logical pixels clear of a block.
+    double fieldPlain = 0, fieldOne = 0, fieldHalf = 0, diff = 0;
+    int n = 0;
+    for (int y = 0; y < kH / 2; y++)
+        for (int x = 0; x < kW / 2; x++) {
+            const int lx = (2 * x) % 32, ly = (2 * y) % 24;
+            const size_t i = (size_t)y * (kW / 2) + x;
+            diff += std::fabs(one[i] - half[i]);
+            if (lx >= 6 && lx < 14 && ly >= 8 && ly < 16) continue;
+            fieldPlain += plain[i];
+            fieldOne += one[i];
+            fieldHalf += half[i];
+            n++;
+        }
+    fieldPlain /= n;
+    fieldOne /= n;
+    fieldHalf /= n;
+    diff /= (kW / 2) * (kH / 2);
+    printf("DC3RetailPost frame at half the logical size: field without a mask %.2f, with the "
+           "blocks masked %.2f at the logical size and %.2f at half; mean |logical - half| %.3f "
+           "(of 255)\n", fieldPlain, fieldOne, fieldHalf, diff);
+    EXPECT_GT(fieldOne - fieldPlain, 0.5)
+        << "the masked blocks' bloom never reached the field; the comparison proves nothing";
+    EXPECT_NEAR(fieldHalf - fieldPlain, fieldOne - fieldPlain, 0.25 * (fieldOne - fieldPlain) + 0.5)
+        << "the half frame's field does not carry the logical frame's bloom: the field itself "
+        << "is blooming (the mask was lost in the bloom source's copy) or the blocks are not";
+    EXPECT_LT(diff, 2.0) << "the half frame does not grade like the logical-size frame";
+
+    pass.Terminate();
+    if (prev) prev->Select(); else pp->Unselect();
+    delete pp;
+    small.Shutdown();
 }
 
 // Depth of field under a render scale: NgDOFProc's blur offsets
