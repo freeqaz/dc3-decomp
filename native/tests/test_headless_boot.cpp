@@ -727,6 +727,58 @@ TEST_F(HeadlessBootTest, A1080pOutputDrawsEveryPassAtTheFramesSize) {
     EXPECT_GT(lit(0, 720, 1280, 1080), 0.25) << "nothing drawn below y=720";
 }
 
+// The retail look does not follow the target (it keeps the original's
+// 1280x720 frame windowed), but headless at MILO_WIDTH x MILO_HEIGHT its frame
+// IS the target, and the game's RndCam::Select still builds every viewport
+// from TheRnd.Width/Height (1280x720). The device must know that virtual
+// resolution in either look, or a Select made mid-frame put a 1280x720
+// viewport on the frame: the menu at 1920x1080 sat in its top-left 1280x720
+// (measured: mean |d| 42.7 against the 1280x720 frame resampled, 1.7 fixed),
+// at 640x360 a quarter of it at twice the size, and in gameplay every
+// self-shadowed character's PrepShadow reselected the camera, so the world
+// after it was drawn 1% large at 1268x713 -- the "retail moves while paused"
+// pairs (it did not move; the self_shadow toggle removed the reselect).
+// Sabotages, each red here: GpuDevice::Init taking the logical size only from
+// a following desc (logical 1920x1080; the picture in the corner); WgpuRnd
+// passing the Rnd's size only when the look follows (the same).
+TEST_F(HeadlessBootTest, RetailHeadlessAtAnotherSizeKeepsViewportsInTheVirtualResolution) {
+    ScopedTestDir shots("dc3-retail-outres");
+    ASSERT_TRUE(shots.ok());
+    const std::string dir(shots.path());
+    auto result = RunHeadless(300, nullptr, 180,
+                              {{"MILO_RENDER", "1"}, {"DC3_FAST_BOOT", "1"}, {"DC3_LOOK", "retail"},
+                               {"MILO_WIDTH", "1920"}, {"MILO_HEIGHT", "1080"},
+                               {"MILO_SCREENSHOT_DIR", dir}, {"MILO_SCREENSHOT_FRAMES", "290"}});
+    ASSERT_EQ(result.signal, 0) << CrashSummary(result);
+    ASSERT_TRUE(HasCompletionMarker(result.output)) << CrashSummary(result);
+    EXPECT_NE(result.output.find("(1920x1080 drawn, logical 1280x720)"), std::string::npos)
+        << "the retail device's logical size is not the Rnd's 1280x720";
+    const std::string png = dir + "/frame_00290.png";
+    int w = 0, h = 0;
+    std::vector<uint8_t> rgb;
+    ASSERT_TRUE(ReadPngRgb(png, w, h, rgb)) << "no readable " << png;
+    unlink(png.c_str());
+    rmdir(dir.c_str());
+    ASSERT_EQ(w, 1920);
+    ASSERT_EQ(h, 1080);
+    // As in A1080pOutputDrawsEveryPassAtTheFramesSize: a picture in the
+    // 1280x720 corner leaves the rest black. Measured fixed ~0.9 / ~0.5.
+    auto lit = [&](int x0, int y0, int x1, int y1) {
+        int n = 0, all = 0;
+        for (int y = y0; y < y1; y += 4)
+            for (int x = x0; x < x1; x += 4) {
+                const uint8_t *p = &rgb[((size_t)y * w + x) * 3];
+                all++;
+                n += p[0] + p[1] + p[2] > 30;
+            }
+        return all ? (double)n / all : 0.0;
+    };
+    printf("  retail 1920x1080 lit right of 1280: %.3f, below 720: %.3f\n", lit(1280, 0, 1920, 1080),
+           lit(0, 720, 1280, 1080));
+    EXPECT_GT(lit(1280, 0, 1920, 1080), 0.25) << "nothing drawn right of x=1280";
+    EXPECT_GT(lit(0, 720, 1280, 1080), 0.25) << "nothing drawn below y=720";
+}
+
 // The headless default is unchanged: 1280x720 at 1x, every frame target 1280x720.
 TEST_F(HeadlessBootTest, TheHeadlessDefaultIs720pAtOneX) {
     auto result = RunHeadless(120, nullptr, 120,
