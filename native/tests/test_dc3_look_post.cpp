@@ -99,13 +99,31 @@ protected:
     // streak arm's two filters differ in exactly that (retail's set1 puts a
     // phase's energy into one texel 16x brighter than the average, or none),
     // so one exposure would charge them different measurement errors.
+    //
+    // `fine` (optional): the same merged with a third exposure, 16 bloomColor,
+    // wherever that is under 250 -- the halo's tails in 1/16 of a level. At
+    // bloomColor they sit under one level, where the 8-bit frame write's
+    // rounding is the GPU's own choice (an RTX 3090 rounds many values
+    // 0.50-0.56 of a level down, which ones depending on the level; a Radeon
+    // 890M and an Apple M3 round at 0.5), so a measure taken there reads the
+    // GPU, not the filter.
     std::vector<float> RunBloomHdr(RB3RetailPost &chain, const wgpu::Texture &scene, int w, int h,
-                                   RetailPostParams p) {
+                                   RetailPostParams p, std::vector<float> *fine = nullptr) {
+        std::vector<float> tails;
+        if (fine) {
+            for (float &c : p.bloomColor) c *= 16.0f;
+            tails = RunChain(chain, scene, w, h, p);
+            for (float &c : p.bloomColor) c /= 16.0f;
+        }
         const auto hi = RunChain(chain, scene, w, h, p);
         for (float &c : p.bloomColor) c /= 16.0f;
         const auto lo = RunChain(chain, scene, w, h, p);
         std::vector<float> g(lo.size());
         for (size_t i = 0; i < g.size(); i++) g[i] = hi[i] < 250.0f ? hi[i] : lo[i] * 16.0f;
+        if (fine) {
+            fine->resize(g.size());
+            for (size_t i = 0; i < g.size(); i++) (*fine)[i] = tails[i] < 250.0f ? tails[i] / 16.0f : g[i];
+        }
         return g;
     }
 };
@@ -149,6 +167,34 @@ Moments Measure(const std::vector<float> &g, int w, int h) {
     m.vx /= m.energy;
     m.vy /= m.energy;
     return m;
+}
+
+// The centroid of `g` under a round window about (wx, wy) -- weight 1 out to
+// r0, a cos^2 taper to 0 at r1 -- relative to (wx, wy). The window moves with
+// the dot and is smooth, so a field that only translates with the dot reads 0
+// at every sub-pixel phase; the frame's edges (and what the clamped samplers
+// pile up there) stay outside it.
+void WindowedCentroid(const std::vector<float> &g, int w, int h, double wx, double wy, double r0, double r1,
+                      double &ox, double &oy) {
+    double s = 0, sx = 0, sy = 0;
+    const int y0 = std::max(0, (int)(wy - r1) - 1), y1 = std::min(h, (int)(wy + r1) + 2);
+    const int x0 = std::max(0, (int)(wx - r1) - 1), x1 = std::min(w, (int)(wx + r1) + 2);
+    for (int y = y0; y < y1; y++)
+        for (int x = x0; x < x1; x++) {
+            const double dx = x - wx, dy = y - wy, r = std::sqrt(dx * dx + dy * dy);
+            if (r >= r1) continue;
+            double k = 1.0;
+            if (r > r0) {
+                const double c = std::cos(1.5707963267948966 * (r - r0) / (r1 - r0));
+                k = c * c;
+            }
+            const double v = g[(size_t)y * w + x] * k;
+            s += v;
+            sx += v * dx;
+            sy += v * dy;
+        }
+    ox = s > 0 ? sx / s : 0;
+    oy = s > 0 ? sy / s : 0;
 }
 
 // A 2x2 white dot centred at (cx, cy), area-weighted in colour so it moves by
@@ -292,6 +338,7 @@ TEST_F(DC3LookPostTest, EnhancedBloomKeepsEnergyAndExtentAndStopsWobbling) {
         // texels in x AND y, and its energy is their product).
         constexpr int kPhases = 64;
         std::vector<Moments> m[2];
+        std::vector<double> wcx[2], wcy[2];   // the windowed centroid, relative to the dot
         std::vector<double> px, py;
         for (int k = 0; k < kPhases; k++) {
             const double cx = 640.25 + 2.0 * (k % 8), cy = 360.25 + 2.0 * (k / 8);
@@ -306,26 +353,30 @@ TEST_F(DC3LookPostTest, EnhancedBloomKeepsEnergyAndExtentAndStopsWobbling) {
                 p.enhPrecision = true;
                 p.enhLinear = true;
                 p.enhFilter = e == 1;
-                m[e].push_back(Measure(RunBloomHdr(chain, scene, W, H, p), W, H));
+                std::vector<float> fine;
+                m[e].push_back(Measure(RunBloomHdr(chain, scene, W, H, p, &fine), W, H));
+                // The window: whole out to 120 px (the bloom term at
+                // bloomColor is under a level by ~100 px), gone at 240,
+                // inside the frame at every phase.
+                double ox, oy;
+                WindowedCentroid(fine, W, H, cx, cy, 120.0, 240.0, ox, oy);
+                wcx[e].push_back(ox);
+                wcy[e].push_back(oy);
             }
         }
         double energy[2], cv[2], sx[2], sy[2], wobble[2], peak[2];
         for (int e = 0; e < 2; e++) {
-            double es = 0, eq = 0, vx = 0, vy = 0, ox = 0, oy = 0, wx = 0, wy = 0;
+            double es = 0, eq = 0, vx = 0, vy = 0, wx = 0, wy = 0;
             peak[e] = 0;
             for (int k = 0; k < kPhases; k++) {
                 es += m[e][k].energy;
                 eq += m[e][k].energy * m[e][k].energy;
-                ox += m[e][k].cx - px[k];
-                oy += m[e][k].cy - py[k];
                 wx += m[e][k].energy * (m[e][k].cx - px[k]);
                 wy += m[e][k].energy * (m[e][k].cy - py[k]);
                 peak[e] = std::max(peak[e], m[e][k].peak);
             }
             energy[e] = es / kPhases;
             cv[e] = std::sqrt(std::max(0.0, eq / kPhases - energy[e] * energy[e])) / energy[e];
-            ox /= kPhases;
-            oy /= kPhases;
             wx /= es;
             wy /= es;
             // The extent of the bloom seen over time: the second moment of
@@ -340,16 +391,26 @@ TEST_F(DC3LookPostTest, EnhancedBloomKeepsEnergyAndExtentAndStopsWobbling) {
             sx[e] = std::sqrt(vx / es);
             sy[e] = std::sqrt(vy / es);
             // The centroid's RMS departure from the dot's path, a constant
-            // offset taken out (the streak's half-texel steps are retail's).
-            double w2 = 0;
+            // offset taken out (the streak's half-texel steps are retail's):
+            // the windowed centroid of the fine exposure. The whole frame's
+            // centroid at bloomColor alone read 0.010 px on an RTX 3090 and
+            // 0.025 on a Radeon 890M for the same filter -- the tails' 8-bit
+            // rounding, not the bloom (the windowed one: 0.005 px on the
+            // 3090 and with the 3090 made to round at 0.5 alike).
+            double mx = 0, my = 0, w2 = 0;
             for (int k = 0; k < kPhases; k++) {
-                const double dx = m[e][k].cx - px[k] - ox, dy = m[e][k].cy - py[k] - oy;
+                mx += wcx[e][k] / kPhases;
+                my += wcy[e][k] / kPhases;
+            }
+            for (int k = 0; k < kPhases; k++) {
+                const double dx = wcx[e][k] - mx, dy = wcy[e][k] - my;
                 w2 += dx * dx + dy * dy;
             }
             wobble[e] = std::sqrt(w2 / kPhases);
         }
         printf("DC3LookPost %s arm: energy %.0f -> %.0f (x%.3f), energy CV over %d phases %.4f -> %.4f, "
-               "extent sx %.2f -> %.2f sy %.2f -> %.2f px, centroid wobble %.3f -> %.3f px, peak %.0f / %.0f\n",
+               "extent sx %.2f -> %.2f sy %.2f -> %.2f px, centroid wobble (windowed) %.4f -> %.4f px, "
+               "peak %.0f / %.0f\n",
                streak ? "streak" : "plain", energy[0], energy[1], energy[1] / energy[0], kPhases, cv[0],
                cv[1], sx[0], sx[1], sy[0], sy[1], wobble[0], wobble[1], peak[0], peak[1]);
         EXPECT_NEAR(energy[1] / energy[0], 1.0, 0.03) << "the enhanced filter keeps the bloom's energy";
@@ -368,11 +429,19 @@ TEST_F(DC3LookPostTest, EnhancedBloomKeepsEnergyAndExtentAndStopsWobbling) {
         EXPECT_LT(wobble[1], wobble[0] * 0.5) << "a moving dot's bloom follows it";
         if (streak) EXPECT_LT(cv[1], cv[0] * 0.5) << "and the streak stops blinking";
         if (!streak) {
-            // The plain arm, absolute: 0.010 px and CV 0.0002 measured. The
-            // tent with its bilinear pairs' weights flattened (0.25 each)
-            // reads 0.067 px / 0.0017; the coarse sets upsampled bilinearly
-            // in the combine (their texel creases back) 0.037 px.
-            EXPECT_LT(wobble[1], 0.02) << "the tent and the B-spline keep the plain bloom on the dot";
+            // The plain arm: the shimmer the eye sees is retail's own, a
+            // centroid that jumps with the 4x4 box (0.317 px windowed); the
+            // enhanced filter takes 90% of it away at least. Measured 0.005
+            // px (1.5% of retail) on an RTX 3090 rounding as it does and made
+            // to round at 0.5 (as the Radeon 890M and the Apple M3 do), CV
+            // 0.0002-0.0003. The tent with
+            // its bilinear pairs' weights flattened (0.25 each) reads 0.046
+            // px (15% of retail) / CV 0.0017-0.0021 under both roundings.
+            // (Coarse sets upsampled bilinearly in the combine read 0.005
+            // px: bilinear also moves a centroid linearly, and their creases
+            // are lost under set0's; the old whole-frame bound "caught" that
+            // only through the tails' rounding, 0.037 px on the 3090.)
+            EXPECT_LT(wobble[1], 0.1 * wobble[0]) << "the tent and the B-spline keep the plain bloom on the dot";
             EXPECT_LT(cv[1], 0.001) << "and its energy steady";
         }
     }
@@ -425,8 +494,14 @@ TEST_F(DC3LookPostTest, SixteenBitSetsRemoveTheBloomStaircase) {
 // half a level) and the far tails of a halo are gone; linear 16-bit sets
 // bloom them (dci's dark floor rose 1.2 levels on real frames). The shipped
 // sets keep it as a knee; enhLinear (tests only) shows what it removes.
-// Plain arm, bloom term mean over the frame: a uniform dim field (colour 40,
-// mask 3: 0.47 levels into set0) and a sparse field of 2x2 dots.
+// Plain arm, bloom term mean: a uniform dim field (colour 40, mask 3: 0.47
+// levels into set0) and a sparse field of 2x2 dots. The mean is taken 100 px
+// in from the frame's edges: the dots run onto the border rows, where the
+// clamped samplers fold them back on themselves and retail's rounding makes
+// a band across the frame (3 levels deep on an RTX 3090, 6 where a GPU rounds
+// at 0.5; down to row 47 in retail, 85 in enhanced). Over the whole frame the
+// dim dots' mean was that band and nothing else (0.000-0.002 levels inside
+// it, 0.101 / 0.225 with it), so it measured the edge and the GPU.
 TEST_F(DC3LookPostTest, SixteenBitSetsKeepRetailsDeadZone) {
     constexpr int W = 1280, H = 720;
     struct Field { const char *name; int colour, mask; bool dots; };
@@ -451,8 +526,10 @@ TEST_F(DC3LookPostTest, SixteenBitSetsKeepRetailsDeadZone) {
             p.enhPrecision = p.enhFilter = k > 0;
             p.enhLinear = k == 2;
             const auto g = RunChain(chain, scene, W, H, p);
-            for (float v : g) mean[k] += v;
-            mean[k] /= g.size();
+            constexpr int kMargin = 100;
+            for (int y = kMargin; y < H - kMargin; y++)
+                for (int x = kMargin; x < W - kMargin; x++) mean[k] += g[(size_t)y * W + x];
+            mean[k] /= (double)(W - 2 * kMargin) * (H - 2 * kMargin);
         }
         printf("DC3LookPost dead zone, %s: bloom term mean retail %.3f, enhanced %.3f, linear %.3f levels\n",
                fd.name, mean[0], mean[1], mean[2]);
@@ -461,8 +538,94 @@ TEST_F(DC3LookPostTest, SixteenBitSetsKeepRetailsDeadZone) {
             EXPECT_GT(mean[2], 2.0) << "linear sets bloom it (the dark-floor lift)";
             EXPECT_LT(mean[1], 0.05) << "the shipped sets drop it as retail does";
         } else {
-            EXPECT_NEAR(mean[1] / mean[0], 1.0, 0.15) << "the dots' glow keeps retail's energy";
+            // 15% of retail's -- but not of a mean under the 0.05 level this
+            // test calls no glow at all (the uniform field above): a ratio
+            // of two such means reads rounding, not the look (it read 0.43 on
+            // a Radeon 890M from the edge band alone).
+            EXPECT_NEAR(mean[1], mean[0], std::max(0.15 * mean[0], 0.05)) << "the dots' glow keeps retail's energy";
         }
+    }
+    chain.Terminate();
+}
+
+// The retail look's bloom sets are 8-bit, as DC3's are (NgPostProc::
+// BloomTextureSet), and each pass rounds to the nearest level. How a GPU turns
+// a float into an 8-bit level is the GPU's choice (Vulkan allows either
+// neighbour): an RTX 3090 rounds many values 0.50-0.56 of a level down, where
+// the Radeon 890M (RADV) and Apple M3 results match rounding at 0.5, and
+// through the chain's passes that moved retail's bloom by 3% between them. So the passes round in
+// the shader (kQuant8) and the GPU's conversion has nothing left to decide.
+// A uniform field puts one value in every texel of every set, so the bloom
+// term is exact arithmetic: the plain arm's three sets each hold
+// round(colour x mask) (the blur's weights sum to 1), the streak arm's two
+// that rounded again after each of its three passes (weights summing to S).
+// Where the 3090's conversion turns up depends on the level (measured with the
+// passes' own rounding off: of 184 fields 0.505-0.545 past a level below 90,
+// 103 came out a level low), so the test sweeps every field colour x mask in
+// that band, and a band just under the half, where every rounding agrees.
+TEST_F(DC3LookPostTest, RetailSetsRoundEveryPassToTheNearestLevel) {
+    constexpr int W = 256, H = 144;   // a uniform field: the size only has to hold the sets
+    RB3RetailPost chain;
+    chain.Init(Gpu());
+    // The streak passes' weight sums (RB3RetailPost's StreakTaps: 1/3 at the
+    // centre, atten^i / 3 at +-i, atten = 0.5^(4^pass)).
+    double S[3];
+    for (int pass = 0; pass < 3; pass++) {
+        const double atten = std::pow(0.5, std::pow(4.0, pass));
+        S[pass] = 1.0 / 3.0 + 2.0 / 3.0 * (atten + atten * atten + atten * atten * atten);
+    }
+    // A tie would be measuring fp32, not the rounding: every pass's value is
+    // kept 0.005 of a level from a half.
+    auto awayFromHalf = [](double x) { return std::fabs(x - std::floor(x) - 0.5) > 0.005; };
+    const char *names[4] = {"plain", "streak", "plain, enhFilter", "streak, enhFilter"};
+    int fields[4] = {}, wrong[4] = {}, upFrom55[4] = {};
+    for (int colour = 200; colour <= 255; colour++)
+        for (int mask = 10; mask <= 90; mask++) {
+            const double v = colour * mask / 255.0;   // levels into set0
+            const double frac = v - std::floor(v);
+            if (v > 84.5) continue;   // 3 sets x 85 levels is the bloom term's 255
+            if (!(frac > 0.505 && frac < 0.545) && !(frac > 0.455 && frac < 0.495)) continue;
+            double streak = std::nearbyint(v), late = std::floor(v + 0.45);
+            bool streakOk = true;
+            for (int pass = 0; pass < 3; pass++) {
+                streakOk = streakOk && awayFromHalf(streak * S[pass]);
+                streak = std::nearbyint(streak * S[pass]);
+                late = std::floor(late * S[pass] + 0.45);
+            }
+            std::vector<uint8_t> px((size_t)W * H * 4);
+            for (size_t i = 0; i < px.size(); i += 4) {
+                px[i] = px[i + 1] = px[i + 2] = (uint8_t)colour;
+                px[i + 3] = (uint8_t)mask;
+            }
+            wgpu::Texture scene = Upload(W, H, px);
+            // Retail's passes, and enhFilter alone (family [0]: the tent, the
+            // box set1 and the B-spline combine on 8-bit sets; on a uniform
+            // field each of those keeps the value, so the same arithmetic).
+            for (int k = 0; k < 4; k++) {
+                const bool streakArm = k & 1;
+                if (streakArm && !streakOk) continue;
+                RetailPostParams p = BloomTerm(streakArm, 1.0f);
+                p.enhFilter = k >= 2;
+                const auto g = RunChain(chain, scene, W, H, p);
+                const auto mm = std::minmax_element(g.begin(), g.end());
+                const double expect = streakArm ? 2.0 * streak : 3.0 * std::nearbyint(v);
+                const double alt = streakArm ? 2.0 * late : 3.0 * std::floor(v + 0.45);
+                fields[k]++;
+                upFrom55[k] += alt != expect;
+                if (*mm.first != expect || *mm.second != expect) {
+                    if (wrong[k]++ < 3)
+                        ADD_FAILURE() << names[k] << " arm, colour " << colour << " x mask " << mask << " = " << v
+                                      << " levels: bloom term " << *mm.first << ".." << *mm.second
+                                      << ", rounding to nearest gives " << expect;
+                }
+            }
+        }
+    for (int k = 0; k < 4; k++) {
+        printf("DC3LookPost 8-bit set rounding, %s arm: %d fields, %d off rounding to nearest "
+               "(a GPU rounding up only from 0.55 of a level would put %d off)\n",
+               names[k], fields[k], wrong[k], upFrom55[k]);
+        EXPECT_GT(upFrom55[k], 10) << names[k] << " arm: the fields must tell the roundings apart (non-vacuous)";
+        EXPECT_EQ(wrong[k], 0) << names[k] << " arm";
     }
     chain.Terminate();
 }
