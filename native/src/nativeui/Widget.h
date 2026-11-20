@@ -88,6 +88,10 @@ namespace nativeui {
         virtual bool HandleEvent(const Event &) { return false; }
         // Whether focus may land here.
         virtual bool IsFocusable() const { return false; }
+        // Whether this widget, when focused, takes typed text. The integration
+        // layer turns keyboard text capture on exactly while the focused widget
+        // says yes (Screen::WantsTextInput).
+        virtual bool WantsTextInput() const { return false; }
 
         bool HasFocus() const { return hasFocus_; }
         const Rect &Bounds() const { return bounds_; }

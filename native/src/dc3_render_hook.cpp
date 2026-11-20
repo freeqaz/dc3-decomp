@@ -32,6 +32,7 @@
 
 #include "platform/GameRenderHook.h"
 #include "gfx/Canvas2D.h"
+#include "dc3_render_hook.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -46,6 +47,9 @@
 #include "rndobj/Mesh.h"
 
 namespace {
+
+// SetGameOverlayDraw's slot (dc3_render_hook.h).
+void (*sGameOverlayDraw)() = nullptr;
 
 // DC3_CANVAS2D_DEMO=1: a fixed scene from the engine's 2D canvas
 // (gfx/Canvas2D.h) drawn over the finished frame. It is the smallest example
@@ -97,6 +101,9 @@ public:
             return v && v[0] == '1';
         }();
         if (sDemo) DrawCanvas2DDemo();
+        // Whatever other glue asked to draw over the frame (the natively
+        // drawn UI's demo, DC3_NATIVEUI_DEMO).
+        if (sGameOverlayDraw) sGameOverlayDraw();
     }
 
     // Per-HamCharacter impostor / render-to-texture pre-pass — runs after
@@ -180,3 +187,5 @@ HamRenderHookAutoRegister gHamRenderHookAutoRegister;
 void RegisterHamRenderHook() {
     SetGameRenderHook(&gHamHook);
 }
+
+void SetGameOverlayDraw(void (*draw)()) { sGameOverlayDraw = draw; }

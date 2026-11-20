@@ -7,6 +7,7 @@
 #include "NativeQuit.h"
 #include "platform/JoypadKeyMap.h"
 #include "platform/ProcessSpawner_Native.h"
+#include "nativeui_host/NativeUiDemo.h"
 #include <cstdio>
 #include <cstdlib>
 #include <csignal>
@@ -335,6 +336,9 @@ int main(int argc, char **argv) {
     printf("DC3 Native Port - Starting...\n");
 
     App app(argc, argv);
+
+    // DC3_NATIVEUI_DEMO=1: the natively drawn UI's sample screen over the game.
+    nativeui_host::DemoInstall();
 
     // Exit handlers run last-registered-first, so a function-local static
     // constructed during boot would have its destructor run BEFORE a hook

@@ -8,6 +8,7 @@
 #include "platform/DtaEvalSupport.h"
 #include "platform/NativeSettings.h"
 #include "platform/MenuGesture_Native.h"
+#include "platform/TextInput_Native.h"
 #include "platform/Rnd_Wgpu.h"
 #include "telemetry/GameplayTelemetry.h"
 #include "gfx/Screenshot.h"
@@ -441,6 +442,8 @@ void HttpServer::ProcessCommands() {
             case kCmdPoseTarget:   HandlePoseTarget(*cmd); break;
             case kCmdCamera:       HandleCamera(*cmd); break;
             case kCmdMenuState:    HandleMenuState(*cmd); break;
+            case kCmdNativeUiState: HandleNativeUiState(*cmd); break;
+            case kCmdInputText:    HandleInputText(*cmd); break;
             default: cmd->result.error = "Unknown command type"; break;
         }
         {
@@ -1095,6 +1098,51 @@ void HttpServer::HandleMenuState(Command& cmd) {
     cmd.result.ok = true;
 }
 
+// native/src/nativeui_host/NativeUiDemo.cpp.  Read-only.
+namespace nativeui_host { std::string DemoStateJson(); }
+
+void HttpServer::HandleNativeUiState(Command& cmd) {
+    cmd.result.jsonData = nativeui_host::DemoStateJson();
+    cmd.result.ok = true;
+}
+
+// POST /api/input/text: `param1` is UTF-8 text to type, `param2` an edit key
+// name.  Both go into the engine's text queue (platform/TextInput_Native.h)
+// from the main thread, which is the thread that drains it; injected events
+// are queued whether or not text capture is on.
+void HttpServer::HandleInputText(Command& cmd) {
+    int typed = 0;
+    if (!cmd.param1.empty())
+        typed = TextInputInjectUtf8(cmd.param1.c_str());
+    bool keyOk = true;
+    if (!cmd.param2.empty()) {
+        static const struct { const char* name; TextInputEventType key; } kKeys[] = {
+            {"backspace", kTextInputBackspace}, {"delete", kTextInputDelete},
+            {"left", kTextInputLeft},           {"right", kTextInputRight},
+            {"home", kTextInputHome},           {"end", kTextInputEnd},
+        };
+        keyOk = false;
+        for (const auto& k : kKeys) {
+            if (cmd.param2 == k.name) {
+                TextInputInjectKey(k.key);
+                keyOk = true;
+                break;
+            }
+        }
+    }
+    if (!keyOk) {
+        cmd.result.ok = false;
+        cmd.result.httpStatus = 400;
+        cmd.result.error = "Unknown key: " + cmd.param2
+            + " (backspace, delete, left, right, home, end)";
+        return;
+    }
+    char buf[96];
+    snprintf(buf, sizeof(buf), "{\"typed\":%d,\"pending\":%d}", typed, TextInputPending());
+    cmd.result.jsonData = buf;
+    cmd.result.ok = true;
+}
+
 // StreamCompose_Native.cpp.  Read-only.
 std::string Dc3CameraJson(int gridW, int gridH);
 
@@ -1660,6 +1708,60 @@ void HttpServer::RegisterEndpoints() {
             res.set_content(JsonOk(result.jsonData), "application/json");
         } else {
             res.status = 500;
+            res.set_content(JsonError(result.error), "application/json");
+        }
+    });
+
+    // GET /api/nativeui/state — the natively drawn UI's demo (DC3_NATIVEUI_DEMO=1):
+    // the search text, the focused part, the selected row, frame stats.
+    // {"active":false} when the demo is not running.  Read-only.
+    svr->Get("/api/nativeui/state", [this](const httplib::Request&, httplib::Response& res) {
+        auto result = QueueAndWait(kCmdNativeUiState);
+        if (result.ok) {
+            res.set_content(JsonOk(result.jsonData), "application/json");
+        } else {
+            res.status = 500;
+            res.set_content(JsonError(result.error), "application/json");
+        }
+    });
+
+    // POST /api/input/text — type into the engine's text queue.  Body
+    // {"text":"queen"} types those characters (UTF-8; \" and \\ are the only
+    // escapes read), {"key":"backspace"} sends an edit key (backspace, delete,
+    // left, right, home, end); both may be given (text first).  Also accepted
+    // as query parameters ?text=...&key=....
+    svr->Post("/api/input/text", [this](const httplib::Request& req, httplib::Response& res) {
+        auto field = [&req](const char* name) {
+            std::string value;
+            const std::string quoted = std::string("\"") + name + "\"";
+            auto pos = req.body.find(quoted);
+            if (pos != std::string::npos) {
+                auto colon = req.body.find(':', pos + quoted.size());
+                auto q1 = colon == std::string::npos ? colon : req.body.find('"', colon + 1);
+                if (q1 != std::string::npos) {
+                    for (size_t i = q1 + 1; i < req.body.size() && req.body[i] != '"'; i++) {
+                        if (req.body[i] == '\\' && i + 1 < req.body.size()) i++;
+                        value += req.body[i];
+                    }
+                }
+            }
+            if (value.empty() && req.has_param(name)) value = req.get_param_value(name);
+            return value;
+        };
+        std::string text = field("text"), key = field("key");
+        for (char& c : key) {
+            if (c >= 'A' && c <= 'Z') c += 32;
+        }
+        if (text.empty() && key.empty()) {
+            res.status = 400;
+            res.set_content(JsonError("No text or key specified"), "application/json");
+            return;
+        }
+        auto result = QueueAndWait(kCmdInputText, text, key);
+        if (result.ok) {
+            res.set_content(JsonOk(result.jsonData), "application/json");
+        } else {
+            res.status = result.httpStatus;
             res.set_content(JsonError(result.error), "application/json");
         }
     });

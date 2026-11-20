@@ -1430,6 +1430,28 @@ add_library(nativeui STATIC
 target_include_directories(nativeui PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_compile_options(nativeui PRIVATE -Wall -Wextra)
 
+# nativeui_host -- the binding between nativeui and the running game
+# (docs/native/reference/NATIVE_UI.md, "Host"): the renderer on the engine's
+# Canvas2D, the game's bitmap fonts as glyph sources, the image cache on the
+# game's loader, pad/text input, NativeUiHost and the DC3_NATIVEUI_DEMO screen.
+# These are game TUs (decomp headers, the PCH, MSVC compat), so they are listed
+# on each target that runs the UI rather than built as a library: dc3-native,
+# dc3-web and milo-tests. main_native.cpp / main_web.cpp call DemoInstall(), and
+# HttpServer.cpp (dc3-native) calls DemoStateJson(), so a target that compiles
+# either needs this list.
+set(DC3_NATIVEUI_HOST_SOURCES
+    src/nativeui_host/BitmapGlyphSource.cpp
+    src/nativeui_host/CanvasRenderer.cpp
+    src/nativeui_host/FontSet.cpp
+    src/nativeui_host/GameBindings.cpp
+    src/nativeui_host/GameFonts.cpp
+    src/nativeui_host/GameImages.cpp
+    src/nativeui_host/ImageCache.cpp
+    src/nativeui_host/InputBridge.cpp
+    src/nativeui_host/NativeUiDemo.cpp
+    src/nativeui_host/NativeUiHost.cpp
+)
+
 if(EMSCRIPTEN)
 
 # ============================================================================
@@ -1547,6 +1569,7 @@ add_executable(dc3-web
     src/platform/WebSvcMgr_Stub.cpp
     src/platform/DebugPanel.cpp
     src/dc3_render_hook.cpp       # HamRenderHook (registers with milo-engine's WgpuRnd)
+    ${DC3_NATIVEUI_HOST_SOURCES}  # the natively drawn UI's host + DC3_NATIVEUI_DEMO
     ${DC3_WEB_LIFTED_ENGINE_SOURCES}
     ${DC3_WEB_ENGINE_SOURCES}
     ${DC3_WEB_CORE_SOURCES}
@@ -1640,7 +1663,7 @@ target_compile_definitions(dc3-web PRIVATE
     MILO_WEB_AUDIO_NS=dc3
 )
 
-target_link_libraries(dc3-web PRIVATE milo-engine imgui)
+target_link_libraries(dc3-web PRIVATE milo-engine imgui nativeui)
 
 # Same precompiled/force-included header every native target uses (and the
 # MSVC decomp build's /FI): decomp TUs rely on Object.h + Debug.h arriving
@@ -1735,6 +1758,7 @@ add_executable(dc3-native
     ${DC3_NATIVE_CORE_SOURCES_ENGINE}
     src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
     src/platform/DebugPanel.cpp   # deferred glue (pairs with HttpServer/DC3_HTTP_SERVER)
+    ${DC3_NATIVEUI_HOST_SOURCES}  # the natively drawn UI's host + DC3_NATIVEUI_DEMO
     # gfx set + ImGuiBackend.cpp now provided by milo-engine
 )
 # WindowLoss_X11.cpp includes Xlib (via glfw3native.h) and no decomp header:
@@ -1788,6 +1812,7 @@ target_link_libraries(dc3-native PRIVATE
     ${DC3_PLATFORM_LIBS}
     ${FFMPEG_LIBRARIES}
     imgui
+    nativeui
 )
 
 # NOTE: GFX sources include BOTH Dawn/WebGPU headers AND decomp engine headers.
@@ -2243,6 +2268,9 @@ if(BUILD_TESTS)
         tests/test_nativeui_layout.cpp   # nativeui: layout containers, focus and event routing, Screen
         tests/test_nativeui_widgets.cpp  # nativeui: ListView, Shelf, TextField, TabStrip, HintBar, Label, Image, Panel
         tests/test_nativeui_sample.cpp   # nativeui: the sample song browser, driven by events; display-list goldens
+        tests/test_nativeui_host.cpp     # nativeui_host: command translation, glyph layout, image cache, input (no GPU, no game data)
+        tests/test_nativeui_host_gpu.cpp # nativeui_host: real fonts + canvas into a render target; the demo in a running engine
+        ${DC3_NATIVEUI_HOST_SOURCES}  # the natively drawn UI's host (the code under test)
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}

@@ -51,6 +51,11 @@ namespace nativeui {
 
         Widget *Focused() const { return focus_.Focused(); }
         void SetFocus(Widget *widget) { focus_.SetFocus(widget); }
+        // True while the focused widget takes typed text (a TextField): the
+        // integration layer's cue to capture the keyboard for text.
+        bool WantsTextInput() const {
+            return focus_.Focused() && focus_.Focused()->WantsTextInput();
+        }
 
         // True if anything consumed the event.
         bool HandleEvent(const Event &event);

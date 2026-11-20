@@ -56,6 +56,7 @@ namespace nativeui {
         std::function<void(const std::string &text)> onChanged;
 
         bool IsFocusable() const override { return true; }
+        bool WantsTextInput() const override { return true; }
         bool HandleEvent(const Event &event) override;
 
     protected:
