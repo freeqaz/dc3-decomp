@@ -22,6 +22,9 @@
 #include "ui\UIPanel.h"
 #include "utl\Symbol.h"
 #include <cstdio>
+#ifdef HX_NATIVE
+#include "platform/SongSelect_Native.h"
+#endif
 
 int SongHeaderNode::GetItemCount() { return mDiscSongs + mDLCSongs; }
 
@@ -296,6 +299,11 @@ void SongSortNode::Text(UIListLabel *ull, UILabel *ul) const {
     static Symbol disc("disc");
     static Symbol dlc("dlc");
     const Symbol shortname = unk_0x48->ShortName();
+#ifdef HX_NATIVE
+    // Sorted by artist: each row names its artist.
+    if (NativeSongSelect::ArtistRowText(this, ull, ul))
+        return;
+#endif
     if (ull->Matches("song")) {
         AppLabel *app_label = dynamic_cast<AppLabel *>(ul);
         MILO_ASSERT(app_label, 513);

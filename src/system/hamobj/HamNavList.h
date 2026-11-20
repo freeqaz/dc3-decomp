@@ -152,6 +152,13 @@ private:
 
     DataNode OnMsg(const ButtonDownMsg &);
 
+#ifdef HX_NATIVE
+    /** Left/Right = previous/next section, LB/RB = a screenful, for a
+     * provider that answers nav_jump_row (song select's).  True when the
+     * button was taken.  native/src/platform/SongSelect_Native.cpp. */
+    bool NativeNavJump(JoypadAction);
+#endif
+
 protected:
     virtual void OldResourcePreload(BinStream &);
 

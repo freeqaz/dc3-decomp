@@ -8,6 +8,9 @@
 #include "os\Debug.h"
 #include "ui\UI.h"
 #include "utl\Locale.h"
+#ifdef HX_NATIVE
+#include "platform/SongSelect_Native.h"
+#endif
 
 struct NodeFind {
     NodeFind(Symbol t) : token(t) {}
@@ -73,6 +76,12 @@ const char *NavListSort::HighlightTokenStr() const {
 
 NavListSortNode *NavListSort::GetNode(Symbol s) const {
     FOREACH (it, mList) {
+#ifdef HX_NATIVE
+        // A song in Recently Played has two rows.  A name means the song's
+        // own row, never the copy (docs/native/SONG_SELECT.md).
+        if (NativeSongSelect::IsRecentRow(*it))
+            continue;
+#endif
         if (s == (*it)->GetToken())
             return *it;
     }

@@ -69,6 +69,13 @@ static bool EnsureSaveDir() {
     return (stat(dir, &st) == 0 && S_ISDIR(st.st_mode));
 }
 
+// The save directory, created: for the native-only files that live beside the
+// profile saves (song_select.txt, SongSelectState_Native.cpp).
+const char *NativeSaveDir() {
+    EnsureSaveDir();
+    return GetSaveDir();
+}
+
 // Get full path for a save file
 static void GetSavePath(char *buf, size_t bufSize, int padNum) {
     snprintf(buf, bufSize, "%s/profile_%d_%s", GetSaveDir(), padNum, kSaveFilename);
