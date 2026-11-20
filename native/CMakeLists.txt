@@ -2219,6 +2219,7 @@ if(BUILD_TESTS)
         tests/test_color_pack_roundtrip.cpp
         tests/test_retail_char_shading.cpp
         tests/test_self_shadow_caster.cpp # H-119: self-shadow casters cull backwards (bit 19)
+        tests/test_reflection_cull.cpp # H-138: every material culls backwards in the reflection (item 20 b)
         tests/test_screen_aligned_texgen.cpp
         tests/test_retail_tex_xfm.cpp
         tests/test_retail_flip_normal.cpp
