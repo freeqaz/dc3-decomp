@@ -127,10 +127,27 @@ resting on a row IS a pick: read the list with your arm down, or keep the
 hand moving). `DC3_MENU_HOLD_MS` (default 1200; `DC3_MENU_HOLD_LEFT_MS`,
 default 1800, for Back) changes how long the bar takes. Measured with the
 synthetic performer reading down a list with the hand up, 0.6 to 1.1 s a row:
-at 1200 a row got picked in 1 of 64 five-second reads of the main menu and 17
-of 64 of the song list, at 1600 in 0 and 1 of 16, at 2000 in none, for a pick
+at 1200 a row got picked in 1 of 88 five-second reads of the main menu and 20
+of 88 of the song list, at 1600 in 0 and 1 of 16, at 2000 in none, for a pick
 that takes 2.0, 2.3 and 2.7 s (the sweep: 1.6 s). If rows get picked while you
 read, start with `DC3_MENU_HOLD_MS=1600`.
+
+On a slow camera (the GPD's 7 to 11 frames a second) the menus now get the
+camera's own frames: the in-between frames the game makes for scoring are for
+songs only, because replaying two recorded GPD sessions they lost most of the
+sweeps (2 to 4 picked of the 7 that were picked by gesture when recorded; 7
+without them). `DC3_POSE_FILL_MENU=interp` is the alternative worth a try
+there if sweeps get missed: smoother, about a fifth of a second behind your
+hand. If sweeps are ignored although the highlight follows your hand, try
+`DC3_MENU_ARC_START=inferred` (or, while it runs,
+`{native_settings set_menu_arc_start inferred}` over `/api/dta/eval`): the
+original starts a sweep only on a frame where the camera sees wrist and elbow
+well, and on the GPD's recordings a raised arm was below that on a quarter to
+half of the frames. Off by default: it also lets a sweep start while the arm
+is still coming up. One thing to watch for with the sweep, in the original's
+detector too: on the synthetic performer, lowering the arm after reading a
+list picked the lit row about 2 times in 100. Numbers:
+[reference/MENU_GESTURES.md](reference/MENU_GESTURES.md).
 
 **Quit** with Ctrl+Q or by closing the window. Esc is B, not quit.
 

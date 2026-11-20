@@ -155,6 +155,7 @@ debugging and the master env-var table see [debugging/native.md](debugging/nativ
 | [native/reference/VIEWER.md](native/reference/VIEWER.md) | `milo-viewer` — how to run it, flags, scene renderer |
 | [native/reference/LIVE_STATE_PROBING.md](native/reference/LIVE_STATE_PROBING.md) | Probing live engine state on native and console — DTA eval, PROPSYNC vocabulary, syncing both sides |
 | [native/reference/CODE_STYLE.md](native/reference/CODE_STYLE.md) | Style rules for new native code |
+| [native/reference/MENU_GESTURES.md](native/reference/MENU_GESTURES.md) | Menu gestures on a webcam, measured — sweep and hold-to-select rates at 30/15/8 camera frames a second, recorded-session replays, what was tried and dropped, `scripts/menu_gesture_bench.py` |
 | [native/dta/OVERLAY_ENGINE.md](native/dta/OVERLAY_ENGINE.md) | DTA overlay engine — file overlay system design |
 | [native/dta/USAGE_GUIDE.md](native/dta/USAGE_GUIDE.md) | DTA overlay usage — settings toggles, locale strings |
 | [../native/docs/viewer-internals.md](../native/docs/viewer-internals.md), [../native/docs/scene-renderer.md](../native/docs/scene-renderer.md) | Viewer internals and the YAML scene renderer (live next to the code) |
