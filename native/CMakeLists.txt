@@ -2185,6 +2185,7 @@ if(BUILD_TESTS)
         tests/test_loader_budget.cpp   # H-110 the loader's per-poll budget follows the frame
         tests/test_bind_group_cache.cpp # H-30/H-31 cached bind groups, staged uniform rings
         tests/test_fringe_fade.cpp # np-gfx-sharp item 8: DC3 draws no alpha fringe fade
+        tests/test_invisible_draw_skip.cpp # np-tbdr: a mesh draw that cannot change a pixel is not sent
         tests/test_map_sampler_wrap.cpp # np-gfx-sharp item 8: a material's tex_wrap clamps its maps
         tests/test_headless_frames_in_flight.cpp # H-75 a headless frame loop stays within 2 frames of the GPU
         tests/test_host_path_case.cpp  # H-17/H-23 upper-case host directories
