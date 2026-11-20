@@ -264,10 +264,195 @@ That picture shows layout, colours and corners. Its text is a dot font and
 its images are made-up gradients; it says nothing about how the game's fonts
 or the GPU canvas will look.
 
+## Host: the binding to the running game (`native/src/nativeui_host/`)
+
+The core above knows no engine. `nativeui_host` is the other half: it draws a
+`Screen` with the engine's canvas and the game's fonts, feeds it the game's
+buttons and the keyboard's text, and loads its pictures. It is compiled into
+`dc3-native`, `milo-tests` and `dc3-web` (`DC3_NATIVEUI_HOST_SOURCES` in
+`native/CMakeLists.txt`).
+
+| File | What it is |
+|---|---|
+| `NativeUiHost.h` | What a panel owns: `Enter`/`Tick`/`Draw`/`OnButtonDown`/`OnButtonUp`/`Exit`, text capture, per-frame statistics. No game headers |
+| `CanvasRenderer.h` | `nativeui::Renderer` on `gfx/Canvas2D.h`. The header states every translation |
+| `GlyphSource.h`, `BitmapGlyphSource.h`, `FontSet.h` | Where glyphs come from. `FontSet` is the `TextMeasurer`; measuring and drawing are one walk over the same glyph table, so a run is exactly as wide as it was measured. A sharper source (SDF, a rasterised TrueType) implements `GlyphSource` and nothing else changes |
+| `GameFonts.h` | The game's `RndFont` atlases as glyph sources, loaded the way `UILabel` loads them |
+| `ImageCache.h`, `GameImages.h` | Pictures by path through the game's loader; `ImageHandle`s that stay valid; an LRU bound |
+| `InputBridge.h` | Pad buttons to `Action`s, the engine's text queue to `TextEvent`/`EditEvent`, held-direction repeat |
+| `GameBindings.h` | The few lines that need game headers: `ButtonDownMsg` to the host, the UI clock, the output size |
+| `NativeUiDemo.h` | `DC3_NATIVEUI_DEMO=1`: the sample browser over the running game |
+
+### A panel that owns a host
+
+```cpp
+class SongBrowserPanel : public UIPanel {
+    nativeui_host::GameFonts fonts_;              // Load() in Enter, Unload() in Exit
+    nativeui_host::GameImageLoader loader_;
+    nativeui_host::ImageCache images_{ loader_ };
+    nativeui_host::NativeUiHost host_{ fonts_.Fonts(), &images_ };
+    std::unique_ptr<nativeui::Screen> screen_;    // built from widgets, host_.Clock()
+
+    void Enter() override {                       // fonts first: widgets measure with them
+        fonts_.Load();
+        screen_ = BuildScreen({ 1280, 720 }, fonts_.Fonts(), host_.Clock());
+        host_.SetScreen(screen_.get());
+        host_.Enter(nativeui_host::GameUiSeconds());
+    }
+    void Poll() override { host_.Tick(nativeui_host::GameUiSeconds()); }
+    void Draw() override {                        // inside the panel's pass
+        nativeui_host::SetOutputSize(host_);
+        host_.Draw();
+    }
+    DataNode OnMsg(const ButtonDownMsg &msg) {    // true: the screen took it
+        return nativeui_host::OnButtonDown(host_, msg) ? DataNode(1) : DataNode(kDataUnhandled, 0);
+    }
+    DataNode OnMsg(const ButtonUpMsg &msg) { nativeui_host::OnButtonUp(host_, msg); ... }
+    void Exit() override { host_.Exit(); host_.SetScreen(nullptr); screen_.reset(); images_.Clear(); }
+};
+```
+
+- **`Enter(seconds)`** starts the screen's entrance and the host clock.
+  **`Tick(seconds)`** once a frame: advances the clock (a step is clamped to
+  0..0.25 s, so a reset or stalled UI clock never runs animations backwards
+  or skips them), polls the image cache, drains the text queue into the
+  screen, fires held-direction repeats, and updates text capture.
+  **`Draw()`** builds the frame and replays it through the canvas at
+  1280x720 logical units; outside a render pass it draws nothing.
+  **`Exit()`** releases the keyboard and any held direction.
+- A screen's animations advance when the frame is **built** (in `Draw`), by
+  the host clock's step since the last build. `Tick` without `Draw` moves no
+  animation.
+- `OnButtonDown` returns true for every button the UI has a meaning for,
+  whether or not a widget acted on it, so the game's own menu does not also
+  act on it. Square (X), Triangle (Y) and Start are not mapped and return
+  false.
+- `Stats()` after `Draw()`: display-list commands, canvas quads and draw
+  calls, glyphs, placeholder glyphs, image quads with no texture yet, and
+  microseconds to build the frame and to replay it (canvas flush included).
+
+### Fonts
+
+`GameFonts::Load()` loads `ui/resource/fonts/<name>.milo` with the game's
+loader and takes the **generated** font of the `UILabelDir`
+(`UILabelDir::FontObj("")`, what `UILabel::SetFontMat` asks for). The same
+directory also holds the artist's source font (`... old kerning.font`); its
+glyph table does not describe the generated atlas (measured: it draws `&`
+for `C`).
+
+Measured by `NativeUiHostGpuTest.GameFontsLoadWithMeasuredCells` (2026-11-20):
+
+| `FontId` | Resource | Font object | Cell (texels) | Atlas | Glyphs | Cap top / baseline / descender (of the cell) |
+|---|---|---|---|---|---|---|
+| `kDc3MenuFont` (1) | `eagle-light(47)` | `Eagle-Light(47).font` | 69 x 78 | 1 page, 1024x1024 | 170 | 0.218 / 0.769 / 0.910 |
+| `kDc3HeavyFont` (2) | `eagle_light_heavy` | `EagleLightHeavy(10_00)2x.font` | 83.5 x 89.5 | 1 page, 1024x1024 | 170 | 0.168 / 0.793 / 0.927 |
+| `kDc3IconFont` (3) | `button_icon` | `icons_buttons.font` | 85 x 85 | 1 page, 512x512 | 21 | not measured (defaults 0.2 / 0.8 / 1.0); drawn with its own colours |
+
+- Song select uses `eagle-light(47)` for every label (string scan of
+  `song_select.milo` and the `ham_list_ribbon` milos), plus `default` and
+  `icons`. No font has a kerning pair table; base kerning is 0.
+- **A text size is the height of the font's cell in logical units** (the
+  line box), not the cap height. Capitals of the menu font are 0.55 of the
+  size: `body` (26) has 14.3-unit capitals. The cap line and baseline are
+  measured from the atlas texels at load (ink rows of `H E T I` and of
+  `p g y q j`), so a label is vertically centred on what is drawn.
+- `Dc3Theme()` was **not** changed. Its sizes read well with the real font;
+  the game's own song rows have taller capitals (about 18.7 units), which
+  would be `body` 34.
+- A character the font lacks is drawn as its base letter (`é` as `e`, then
+  the other case), and failing that as an outlined box half the size wide.
+  No UVs are ever invented. All 62 disc songs' titles and artists are
+  covered by the menu font, as written and upper-cased (the demo reports
+  this at boot: `menu font lacks [] as written, [] in upper case`).
+- `eagle-light-3d*` are `RndFont3d` (a mesh per character). `LoadGameFont`
+  refuses a resource whose generated font is not a bitmap `RndFont`; a glyph
+  source for them is future work.
+
+**Sharpness.** The atlas cell is 78 texels high, so text is sharp while the
+drawn cell is at most about 78 device pixels:
+
+| Style (size) | 1280x720 | 1920x1080 | 2560x1440 |
+|---|---|---|---|
+| display (44) | 44 px, 0.56x | 66 px, 0.85x | 88 px, **1.13x** |
+| title (34) | 34 px, 0.44x | 51 px, 0.65x | 68 px, 0.87x |
+| body (26) | 26 px, 0.33x | 39 px, 0.50x | 52 px, 0.67x |
+| hint (20) | 20 px, 0.26x | 30 px, 0.38x | 40 px, 0.51x |
+
+Only display text at 1440 rows is magnified, by 13%. Seen in 4x crops of
+the demo: at 1440 and 1080 rows the strokes are clean; at 720 rows the face
+is so light that body strokes are about one pixel wide and grey rather than
+white. That is the atlas being minified three times, not blur from
+upscaling. A 4K output (2160 rows) would magnify display text 1.7x and body
+text exactly 1.0x.
+
+### Images
+
+`ImageCache::Request(path)` returns an `ImageHandle` for a path (the same
+handle every time). Loading is the game's: `TheLoadMgr.AddLoader` then
+`RndTex::SetBitmap(FileLoader*)`, as `DynamicTex` does. Nothing blocks a
+frame: at most `maxConcurrent` (4) loads in flight, at most
+`maxFinishPerPoll` (2) textures created per `Poll()`. At most `capacity`
+(64) textures are held; the least recently drawn goes first, never one drawn
+since the last `Poll()`, and a dropped texture is deleted at the **next**
+`Poll()` (the canvas resolves textures when it flushes). `onArrived` fires
+once per arrival. A failed path draws the fallback
+(`ui/image/dc_logo_keep.png`) and is not retried. `AlbumArtPath(song)` is
+`HamSongMgr::GetAlbumArtPath`. An `ImageQuad` whose handle has no texture
+yet draws nothing (the widget's placeholder shows through its fade).
+
+### Keys and buttons
+
+| Pad (keyboard) | `nativeui::Action` |
+|---|---|
+| D-pad / left stick (arrows) | `Up` `Down` `Left` `Right` |
+| A (Enter) | `Accept` |
+| B (Esc, Backspace) | `Back` |
+| LB (Q) / RB (E) | `PrevTab` / `NextTab` |
+| LT (Z) / RT (C) | `PageUp` / `PageDown` |
+| Back (Tab) | `NextTab` |
+| X, Y, Start (X, Y, Space) | not mapped: left to the game |
+
+- **Repeat.** The host repeats a held direction itself: 0.35 s, then every
+  0.08 s, on the host clock. A second press of a direction that is already
+  held is taken to be the game's own auto-repeat and is swallowed. (The
+  game's `JoypadClient` repeats D-pad buttons per `config/joypad.dta`,
+  1000 ms then 80 ms; that is from the config and code, not measured in a
+  run.)
+- **Text.** While the focused widget answers `WantsTextInput()` (a
+  `TextField` does) the host holds `TextInputSetCapture(true)`: typed
+  characters and Backspace/Delete/Home/End reach the screen as `TextEvent` /
+  `EditEvent`, and the letter keys stop being pad buttons. Left and Right
+  arrive both as text-edit keys and as D-pad presses; the host keeps the
+  pad's copy. `SetTextCapture(Always)` is type-to-search from anywhere, at
+  the cost of the letter shortcuts; `Never` leaves the keyboard alone.
+  Injected text (`TextInputInject*`, `POST /api/input/text`) is queued
+  whatever the capture state.
+
+### The demo
+
+`DC3_NATIVEUI_DEMO=1` draws `SampleBrowser` over the running game with the
+real fonts, the real canvas and real album art (the sample's made-up songs,
+every third one without a picture on purpose), and gives it the pad and the
+text queue. With the variable unset nothing is installed and no font or
+texture is loaded. `GET /api/nativeui/state` and `POST /api/input/text`
+(`docs/tools/HTTP_DEBUG_SERVER.md`) ask and drive it.
+
+Measured on main_screen (RelWithDebInfo, headless, means over the first 600
+frames): 77 display-list commands, 384 quads in 49 draw calls; 24 us to
+build the frame and 31 us to replay it at 1280x720, 30 us and 33 us at
+2560x1440.
+
+Known limits of the demo, none of the host: the game's menu underneath gets
+the same button presses; the game's own late overlays (the skeleton and
+player boxes) draw over it; and the engine's overlay hook runs at every
+post-processing flush (3 a frame on main_screen), so the demo draws on the
+last one of each frame. A real screen is a panel and draws from its own
+`Draw()`.
+
 ## What is deliberately not there yet
 
-- **A renderer, a font measurer, image loading, key and pad translation.**
-  These are the integration layer. Nothing in the game uses this library yet.
+- **A screen of the game drawn with it.** The integration layer exists (the
+  Host section above); only the demo uses it.
 - **Pointer input.** `PointerEvent` exists so the event type will not change;
   no widget handles it and there is no hit testing.
 - **Multi-line text**, wrapping, and mixed styles in one line.
@@ -283,6 +468,5 @@ or the GPU canvas will look.
 - **Upper-casing beyond Latin** (ASCII, Latin-1, Latin Extended-A).
 - **Screen-to-screen transitions.** A screen has an entrance (`PlayEnter`);
   there is no navigation stack.
-- **A web build of the library.** It is plain C++17 and is declared before
-  the Emscripten branch in CMake so that `dc3-web` can link it, but that has
-  not been built.
+- **A run in a browser.** `dc3-web` compiles and links the library and the
+  host (`scripts/web/build.sh --debug`); it has not been opened in one.

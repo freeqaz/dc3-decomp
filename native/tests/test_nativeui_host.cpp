@@ -595,8 +595,14 @@ TEST(NativeUiHostImages, ADroppedTextureLivesUntilTheNextPoll) {
     EXPECT_TRUE(loader.destroyed.empty()) << "a texture drawn this frame was deleted";
     cache.TextureFor(b);
     cache.Poll(); // a not used since: evicted, queued for deletion
+    EXPECT_EQ(cache.StateOf(a), ImageCache::kEvicted);
+    EXPECT_TRUE(loader.destroyed.empty())
+        << "evicted and deleted in the same Poll: a quad submitted before this Poll "
+           "would still name the texture when the canvas flushes";
+    EXPECT_EQ(cache.GetStats().pendingDestroy, 1);
     cache.Poll();
     ASSERT_EQ(loader.destroyed.size(), 1u);
+    EXPECT_EQ(cache.GetStats().pendingDestroy, 0);
     EXPECT_EQ(loader.destroyed[0], aTex);
     EXPECT_EQ(cache.StateOf(a), ImageCache::kEvicted);
     EXPECT_TRUE(cache.IsReady(b));
