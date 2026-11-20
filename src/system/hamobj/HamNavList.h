@@ -123,6 +123,14 @@ public:
 
     friend class HamScrollBehavior;
 
+#ifdef HX_NATIVE
+    /** What the list's rows show right now, "ROW|SLOT|TEXT" for every label
+     * with text, joined by ";;" (ROW is the provider's row, SLOT the slot's
+     * match name).  For tests: the only other way to read a row is a
+     * screenshot.  native/src/platform/SongSelect_Native.cpp. */
+    String NativeVisibleText() const;
+#endif
+
 private:
     void LinkRibbonDrawState(std::vector<HamListRibbonDrawState> &, UIListWidgetDrawState &);
     void SetRibbonMode(HamListRibbon::RibbonMode);

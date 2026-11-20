@@ -318,6 +318,7 @@ DataNode SongSortMgr::NativeHandle(DataArray *msg) {
     static Symbol save_sort("save_sort");
     static Symbol save_focus("save_focus");
     static Symbol restore_focus("restore_focus");
+    static Symbol visible_text("visible_text");
     Symbol sym = msg->Sym(1);
     if (sym == nav_jump_row) {
         // Unhandled under the classic switch: the buttons are the image's.
@@ -343,6 +344,7 @@ DataNode SongSortMgr::NativeHandle(DataArray *msg) {
         RestoreFocus(msg->Obj<Hmx::Object>(2));
         return 0;
     }
+    if (sym == visible_text) return msg->Obj<HamNavList>(2)->NativeVisibleText();
     return DATA_UNHANDLED;
 }
 
@@ -501,4 +503,21 @@ bool HamNavList::NativeNavJump(JoypadAction action) {
     int heightOnScreen = paging ? selected - mListState.FirstShowing() : 0;
     ScrollToIndex(row, Max(0, row - Max(0, heightOnScreen)));
     return true;
+}
+
+// The walk the image's LocalePanel does over a UIList, over this list.
+String HamNavList::NativeVisibleText() const {
+    String text;
+    for (int display = 0; display < mListState.NumDisplay(); display++) {
+        int row = mListState.Display2Data(display);
+        if (row < 0) continue;
+        FOREACH (it, mListWidgets) {
+            UIListLabel *slot = dynamic_cast<UIListLabel *>(*it);
+            UILabel *label = slot ? slot->ElementLabel(display) : nullptr;
+            if (!label || label->RawText().empty()) continue;
+            if (!text.empty()) text += ";;";
+            text += MakeString("%d|%s|%s", row, slot->MatchName(), label->RawText().c_str());
+        }
+    }
+    return text;
 }
