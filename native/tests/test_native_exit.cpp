@@ -458,6 +458,135 @@ TEST_F(NativeExitTest, HealthUptimeIsWallClockNotSongTime) {
     e.WaitExit(30);
 }
 
+// PLAN H-128: thermal pressure plus late frames lowers the output's row cap in
+// steps, and a cooled machine gets it back a step at a time (engine
+// gfx/ThermalGovernor.h has the rule). A real headless GPU run at 1920x1080:
+// the level is injected (PUT /api/thermal), the frames are held to 20 fps
+// against the 60 the game is meant to hold (PUT /api/pace), and the output's
+// size is read three ways -- the engine's one line per change, the size of a
+// screenshot, and GET /api/health. MILO_THERMAL_COOL_SECONDS=3 stands in for
+// the 90 s cool dwell.
+namespace {
+// "1600x900" from a PNG file's IHDR ("" when it is not a PNG).
+std::string PngSize(const std::string &path) {
+    FILE *f = fopen(path.c_str(), "rb");
+    if (!f) return std::string();
+    unsigned char h[24];
+    size_t n = fread(h, 1, sizeof h, f);
+    fclose(f);
+    if (n != sizeof h || memcmp(h, "\x89PNG\r\n\x1a\n", 8) != 0) return std::string();
+    unsigned w = (h[16] << 24) | (h[17] << 16) | (h[18] << 8) | h[19];
+    unsigned ht = (h[20] << 24) | (h[21] << 16) | (h[22] << 8) | h[23];
+    return std::to_string(w) + "x" + std::to_string(ht);
+}
+int CountOf(const std::string &s, const char *needle) {
+    int n = 0;
+    for (size_t at = s.find(needle); at != std::string::npos; at = s.find(needle, at + 1)) n++;
+    return n;
+}
+} // namespace
+
+TEST_F(NativeExitTest, ThermalPressureWithLateFramesLowersTheOutputAndCoolingRestoresIt) {
+    if (!HaveCurl()) GTEST_SKIP() << "curl not installed";
+    std::string portFile = mRunDir + "/http_port";
+    Engine e;
+    Start(e, mRunDir, {"MILO_HEADLESS=1", "DC3_HTTP=1", "DC3_HTTP_PORT=0",
+                       "DC3_HTTP_PORT_FILE=" + portFile, "DC3_LOOK=enhanced", "MILO_WIDTH=1920",
+                       "MILO_HEIGHT=1080", "MILO_THERMAL_COOL_SECONDS=3", "MILO_THERMAL_STATE",
+                       "MILO_THERMAL_GOVERNOR", "MILO_OUTPUT_MAX_ROWS", "DC3_FPS_CAP"});
+    bool up = e.WaitFor("DC3 Native: Entering main loop", 180);
+    if (!up && GpuUnavailable(e.Output())) GTEST_SKIP() << "GPU unavailable";
+    ASSERT_TRUE(up) << Tail(e.Output());
+    if (GpuUnavailable(e.Output())) GTEST_SKIP() << "GPU unavailable";
+    int port = atoi(ReadAll(portFile).c_str());
+    ASSERT_GT(port, 0) << Tail(e.Output());
+    const std::string api = "http://127.0.0.1:" + std::to_string(port) + "/api";
+    const std::string shot = mRunDir + "/shot.png";
+    auto Shot = [&] {
+        unlink(shot.c_str());
+        Curl("-o " + shot + " " + api + "/screenshot");
+        return PngSize(shot);
+    };
+    ASSERT_TRUE(Contains(e.Output(), "GpuDevice: frame 1920x1080 out")) << Tail(e.Output());
+    EXPECT_EQ(Shot(), "1920x1080");
+
+    // Late frames alone, on a machine that reports no heat: nothing moves.
+    Curl("-X PUT '" + api + "/pace?fps=20'");
+    std::this_thread::sleep_for(std::chrono::seconds(4));
+    EXPECT_FALSE(Contains(e.Output(), "GpuDevice: thermal level")) << Tail(e.Output());
+    EXPECT_NE(Curl(api + "/health").find("\"output_w\":1920,\"output_h\":1080,\"thermal_level\":-1,"
+                                         "\"thermal_row_cap\":0"),
+              std::string::npos);
+
+    // Serious pressure with those late frames: 1080 -> 900 rows, then 720.
+    EXPECT_NE(Curl("-X PUT '" + api + "/thermal?level=2'").find("\"injected\":2"),
+              std::string::npos);
+    ASSERT_TRUE(e.WaitFor("GpuDevice: thermal level 2 (serious), frames late: output 1920x1080 -> "
+                          "1600x900 (thermal row cap 900)", 30))
+        << Tail(e.Output());
+    EXPECT_EQ(Shot(), "1600x900");
+    EXPECT_NE(Curl(api + "/health").find("\"output_w\":1600,\"output_h\":900,\"thermal_level\":2,"
+                                         "\"thermal_row_cap\":900"),
+              std::string::npos);
+    ASSERT_TRUE(e.WaitFor("GpuDevice: thermal level 2 (serious), frames late: output 1600x900 -> "
+                          "1280x720 (thermal row cap 720)", 30))
+        << Tail(e.Output());
+    EXPECT_EQ(Shot(), "1280x720");
+    // The first step down is said once (the main menu: no song is on).
+    EXPECT_EQ(CountOf(e.Output(), "DC3 NOTICE [thermal]: This computer is running warm"), 1)
+        << Tail(e.Output());
+    // 720 rows is the floor: nine more seconds of the same change nothing.
+    std::this_thread::sleep_for(std::chrono::seconds(9));
+    EXPECT_EQ(CountOf(e.Output(), "GpuDevice: thermal level"), 2) << Tail(e.Output());
+    EXPECT_NE(Curl(api + "/thermal").find("\"row_cap\":720,\"base_rows\":1080,\"output_w\":1280,"
+                                          "\"output_h\":720,\"steps_down\":2,\"steps_up\":0"),
+              std::string::npos);
+
+    // Cooled (the frames are still late: that is not asked): back a step per dwell.
+    Curl("-X PUT '" + api + "/thermal?level=0'");
+    ASSERT_TRUE(e.WaitFor("GpuDevice: thermal level 0 (nominal), cooled: output 1280x720 -> "
+                          "1600x900 (thermal row cap 900)", 30))
+        << Tail(e.Output());
+    ASSERT_TRUE(e.WaitFor("GpuDevice: thermal level 0 (nominal), cooled: output 1600x900 -> "
+                          "1920x1080 (thermal row cap none)", 30))
+        << Tail(e.Output());
+    EXPECT_EQ(Shot(), "1920x1080");
+    EXPECT_EQ(CountOf(e.Output(), "GpuDevice: thermal level"), 4) << Tail(e.Output());
+    EXPECT_EQ(CountOf(e.Output(), "DC3 NOTICE [thermal]"), 1);
+    kill(e.pid, SIGTERM);
+    EXPECT_TRUE(e.WaitExit(60)) << Tail(e.Output());
+    ExpectNoCrash(e.Output());
+}
+
+// The one switch back: MILO_THERMAL_GOVERNOR=0. The same pressure and the same
+// late frames, and the frame stays the size it was asked for.
+TEST_F(NativeExitTest, ThermalGovernorSwitchedOffLeavesTheOutputAlone) {
+    if (!HaveCurl()) GTEST_SKIP() << "curl not installed";
+    std::string portFile = mRunDir + "/http_port";
+    Engine e;
+    Start(e, mRunDir, {"MILO_HEADLESS=1", "DC3_HTTP=1", "DC3_HTTP_PORT=0",
+                       "DC3_HTTP_PORT_FILE=" + portFile, "DC3_LOOK=enhanced", "MILO_WIDTH=1920",
+                       "MILO_HEIGHT=1080", "MILO_THERMAL_GOVERNOR=0", "MILO_THERMAL_STATE=3",
+                       "DC3_HTTP_PACE_FPS=20", "MILO_OUTPUT_MAX_ROWS", "DC3_FPS_CAP"});
+    bool up = e.WaitFor("DC3 Native: Entering main loop", 180);
+    if (!up && GpuUnavailable(e.Output())) GTEST_SKIP() << "GPU unavailable";
+    ASSERT_TRUE(up) << Tail(e.Output());
+    if (GpuUnavailable(e.Output())) GTEST_SKIP() << "GPU unavailable";
+    int port = atoi(ReadAll(portFile).c_str());
+    ASSERT_GT(port, 0) << Tail(e.Output());
+    const std::string api = "http://127.0.0.1:" + std::to_string(port) + "/api";
+    // Critical from the first frame, 20 fps against 60: on, this steps at ~2 s.
+    std::this_thread::sleep_for(std::chrono::seconds(8));
+    const std::string thermal = Curl(api + "/thermal");
+    EXPECT_NE(thermal.find("\"enabled\":false,\"level\":3,"), std::string::npos) << thermal;
+    EXPECT_NE(thermal.find("\"row_cap\":0,"), std::string::npos) << thermal;
+    EXPECT_NE(thermal.find("\"output_w\":1920,\"output_h\":1080,"), std::string::npos) << thermal;
+    EXPECT_FALSE(Contains(e.Output(), "GpuDevice: thermal level")) << Tail(e.Output());
+    EXPECT_FALSE(Contains(e.Output(), "DC3 NOTICE [thermal]")) << Tail(e.Output());
+    kill(e.pid, SIGTERM);
+    EXPECT_TRUE(e.WaitExit(60)) << Tail(e.Output());
+}
+
 // H-78: a quit with an HTTP request still waiting for the main thread must
 // leave through the main loop. The server's shutdown used to join a handler
 // parked in QueueAndWait's 10 s wait, so the 5 s quit grace ran out and the

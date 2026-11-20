@@ -2197,6 +2197,7 @@ if(BUILD_TESTS)
         tests/test_native_glyph_render.cpp
         tests/test_native_ui_material_terms.cpp
         tests/test_frame_pacer.cpp     # H-29 frame cap + engine CPU-use guards
+        tests/test_thermal_governor.cpp # H-128 the thermal governor's rule and its row cap (engine, pure)
         tests/test_loader_budget.cpp   # H-110 the loader's per-poll budget follows the frame
         tests/test_bind_group_cache.cpp # H-30/H-31 cached bind groups, staged uniform rings
         tests/test_fringe_fade.cpp # np-gfx-sharp item 8: DC3 draws no alpha fringe fade

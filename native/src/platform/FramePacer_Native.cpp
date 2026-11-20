@@ -2,6 +2,10 @@
 #include "FramePacer_Native.h"
 
 #include "gfx/FrameCost.h"  // the sleep is the frame-times pace_ms column
+#ifndef __EMSCRIPTEN__
+#include "NativeNotice.h"
+#include "platform/ThermalState.h"  // engine: the thermal governor's target and status
+#endif
 
 #include <cmath>
 #include <cstdio>
@@ -78,6 +82,33 @@ std::string Dc3SlowDisplayNotice(bool windowed, double refreshHz) {
              refreshHz, refreshHz);
     return buf;
 }
+
+double Dc3ThermalTargetFps(double capFps, double refreshHz) {
+    double target = capFps > 0.0 && std::isfinite(capFps) ? capFps : 60.0;
+    if (refreshHz > 0.0 && std::isfinite(refreshHz) && refreshHz < target) target = refreshHz;
+    return target;
+}
+
+std::string Dc3ThermalNotice(int stepsDown, bool alreadySaid, bool inSong) {
+    if (stepsDown <= 0 || alreadySaid || inSong) return "";
+    return "This computer is running warm, so the picture is a little softer to keep the game "
+           "smooth. It sharpens again once things cool down.";
+}
+
+#ifndef __EMSCRIPTEN__
+void Dc3ThermalSetTarget(double capFps, double refreshHz) {
+    milo::ThermalSetTargetFps(Dc3ThermalTargetFps(capFps, refreshHz));
+}
+
+void Dc3ThermalFramePoll(bool inSong) {
+    static bool sSaid = false;
+    if (sSaid) return;
+    const std::string warm = Dc3ThermalNotice(milo::ThermalGetStatus().stepsDown, sSaid, inSong);
+    if (warm.empty()) return;
+    NativeNotice::Post("thermal", warm, "", 10.0f);
+    sSaid = true;
+}
+#endif
 
 void Dc3FramePacer::SetTarget(double fps) {
     mPeriodS = fps > 0.0 ? 1.0 / fps : 0.0;

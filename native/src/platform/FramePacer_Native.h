@@ -49,6 +49,26 @@ Dc3FrameCap Dc3FrameCapDecide(const char *env, bool windowed, double refreshHz);
 constexpr double kSlowDisplayHz = 50.0;
 std::string Dc3SlowDisplayNotice(bool windowed, double refreshHz);
 
+// The thermal governor (PLAN H-128; engine gfx/ThermalGovernor.h carries the
+// rule): when the machine reports thermal pressure and the game is under its
+// frame rate, the engine lowers the output's row cap in steps (1080, 900,
+// 720), and raises it again once the machine has cooled.
+//
+// Dc3ThermalTargetFps is the rate the governor holds the game to: the frame
+// cap when there is one, else the image's 60; never above the display's own
+// rate when that is known (a 30 Hz display's 30 fps is not a late game).
+double Dc3ThermalTargetFps(double capFps, double refreshHz);
+// The banner for the first time in a session the picture is softened, or ""
+// when there is nothing to say now: no step down yet, already said, or a song
+// is on (it waits for the next menu -- nothing is put over a routine).
+std::string Dc3ThermalNotice(int stepsDown, bool alreadySaid, bool inSong);
+#ifndef __EMSCRIPTEN__
+// Give the engine's governor its target (once, when the frame cap is decided).
+void Dc3ThermalSetTarget(double capFps, double refreshHz);
+// Once per frame: post the notice when Dc3ThermalNotice has one.
+void Dc3ThermalFramePoll(bool inSong);
+#endif
+
 // Sleeps out the rest of each frame period. Call once per frame, after the
 // frame is presented (so the sleep sits between present and the next frame's
 // input poll, where it adds no input latency).
