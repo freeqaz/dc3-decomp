@@ -28,6 +28,15 @@ public:
 
 extern DOFProc *TheDOFProc;
 
+#ifdef HX_NATIVE
+// Native: the planes of the camera DOFProc::Set was last given. NgDOFProc::Set
+// computes the depth of field's scale and bias from that camera, at Set
+// (DOFProc_NG.cpp), so a camera made current between Set and the post pass
+// does not move them; the engine's DofPass reads these through the DC3
+// shape (rndshape::DofSetCamPlanes). False when Set was given no camera.
+bool NativeDOFSetCamPlanes(float &nearPlane, float &farPlane, float &zNear, float &zFar);
+#endif
+
 class DOFOverrideParams {
 public:
     DOFOverrideParams()

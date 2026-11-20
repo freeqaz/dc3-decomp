@@ -20,15 +20,31 @@ namespace {
 // camera shot with use_depth_of_field. This keeps what NgDOFProc::Set keeps,
 // with its enable rule: set only when maxBlur > 0 on the game screen, cleared
 // only by UnSet. The projected-depth scale and bias Set also derives are
-// computed by DofPass from the same values and the current camera.
+// computed by DofPass from the same values and the planes of the camera Set
+// was given (kept here at Set, as Set computes them there; NativeDOFSetCamPlanes).
+struct DOFSetCamPlanes {
+    bool valid = false;
+    float nearPlane = 1.0f, farPlane = 1000.0f, zNear = 0.0f, zFar = 1.0f;
+};
+DOFSetCamPlanes sSetCam;
+
 class NativeDOFProc : public DOFProc {
 public:
     NativeDOFProc()
         : mEnabled(false), mFocalPlane(1), mBlurDepth(1), mMinBlur(0), mMaxBlur(1) {}
     NEW_OBJ(NativeDOFProc)
 
-    virtual void Set(const RndCam *, float focalPlane, float blurDepth, float maxBlur,
+    virtual void Set(const RndCam *cam, float focalPlane, float blurDepth, float maxBlur,
                      float minBlur) {
+        // The camera's planes now, not a pointer: the shot's camera can be
+        // deselected or deleted before the post pass runs.
+        sSetCam.valid = cam != nullptr;
+        if (cam) {
+            sSetCam.nearPlane = cam->NearPlane();
+            sSetCam.farPlane = cam->FarPlane();
+            sSetCam.zNear = cam->ZRange().x;
+            sSetCam.zFar = cam->ZRange().y;
+        }
         mFocalPlane = focalPlane;
         DOFOverrideParams &dof = RndPostProc::DOFOverrides();
         mBlurDepth = Max(dof.mDepthScale * blurDepth + dof.mDepthOffset, 0.0f);
@@ -54,6 +70,15 @@ private:
     float mMaxBlur;
 };
 } // namespace
+
+bool NativeDOFSetCamPlanes(float &nearPlane, float &farPlane, float &zNear, float &zFar) {
+    if (!sSetCam.valid) return false;
+    nearPlane = sSetCam.nearPlane;
+    farPlane = sSetCam.farPlane;
+    zNear = sSetCam.zNear;
+    zFar = sSetCam.zFar;
+    return true;
+}
 #endif
 
 DOFProc::DOFProc() {}
