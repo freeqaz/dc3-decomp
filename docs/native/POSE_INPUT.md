@@ -3,8 +3,11 @@
 **State (2026-11-13, measured on Linux, no webcam):** the pipeline scores end to
 end. A recorded video fed through MediaPipe is scored; a replay of the song's own
 choreography gets all-perfect ratings; `scripts/pose_scoring_gate.sh` passes.
-**It has never been run against a live webcam**, it has a reproducible crash on a
-motionless skeleton. The player's
+**Since then (corrected 2026-11-20): the owner has played the game on real
+webcams, on the GPD and on the Mac, natively and in the browser, and it worked**
+(GPD sessions 2026-11-14/15; this paragraph used to say it had never been run
+against a live webcam). The crash on a motionless skeleton is fixed (PLAN P-1).
+Not recorded: a measured success rate for menus by gesture. The player's
 silhouette is drawn from the camera picture since `np-player-view`
 ([Player on screen](#player-on-screen-p-4)); photos are not. **Web** has a pose path since `np-web-pose` (see [Web](#web)).
 Work items: [PLAN.md](PLAN.md) track P.
@@ -1888,7 +1891,7 @@ not filed: `BoxymanTest` fails each; the no-camera return removed:
   shipped data, but a debug `ui store_color_buff_at` with a stream live would
   write through it).
 - `pose_flash*` is not a camera mesh; it belongs to the avatar projection.
-- A live webcam session (P-2), desktop and web.
+- ~~A live webcam session (P-2), desktop and web.~~ Done since by the owner (GPD, Mac, native and browser; corrected 2026-11-20).
 
 ## Web
 
@@ -3160,7 +3163,7 @@ native/build/milo-tests --gtest_filter='PoseEstimate*:PoseSensorEstimate*:PoseSe
 
 | # | Gap | Size | Platform |
 |---|---|---|---|
-| P-1 | **Crash on a motionless skeleton.** `RhythmDetector::AnalyzeData` divides by a variance that becomes zero → NaN → `SymbolKeys::SetFrame` segfault (`RhythmBattlePlayer::Poll`). A webcam trips it whenever joints are held (legs out of frame are held all song). | S–M | all |
+| P-1 | ~~Crash on a motionless skeleton.~~ **Fixed 2026-11-13 (`np-fix-still`, the sensor noise floor; [PLAN](PLAN.md) P-1).** Was: `RhythmDetector::AnalyzeData` divides by a variance that becomes zero → NaN → `SymbolKeys::SetFrame` segfault (`RhythmBattlePlayer::Poll`). A webcam trips it whenever joints are held (legs out of frame are held all song). | S–M | all |
 | P-2 | ~~Never run against a live webcam.~~ **Run against live webcams by the owner: GPD (sessions 2026-11-14/15), Mac, browser (corrected 2026-11-20).** **No-camera part done** (`np-pose-desk`): fast failure + on-screen notice (above); camera request, capture timestamps, HFOV and the lost-camera exit unit-tested against a fake capture (`tests/test_pose_server.py`). ~~Left: a real webcam session.~~ | S | all |
 | P-3 | ~~Gesture menus~~ **Done (`np-gesture-menus`)**, see [Gesture menus](#gesture-menus). A real person on a real webcam has driven the game since (owner, GPD and Mac; corrected 2026-11-20); what is still missing is a measured success rate for gesture menus on a live webcam. The depth image in the player box is P-4. | — | all |
 | P-4 | Player on screen. **Silhouette done** (`np-player-view`): protocol v3 / `dc3_camera_push` carry the picture and a person mask, a `LiveCameraInput` stand-in feeds the decompiled `StreamRenderer`, and the cursor and gameplay boxes draw the player ([Player on screen](#player-on-screen-p-4)). Photos root-caused (`np-media`): the snapshot's alpha is its TexRenderer's clear, which the engine dropped; fix in engine branch `np-media` (`c810e49`; series also in `~/tmp/np-media-engine.patch`), not landed. Left: that engine change, `DepthBuffer3D`'s draw, the `pose_flash` entries (not camera), a live webcam. | M | all |
