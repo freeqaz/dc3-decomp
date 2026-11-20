@@ -671,6 +671,11 @@ DC3_FAST_TIME=1 MILO_HEADLESS=1 MILO_NORENDER=1 \
 
 **Implementation**: `LiveInput::CurrentMs()` increments a synthetic counter per call instead of reading `mTimer.Ms()` or `mAudio.GetTime()`. Source: `src/lazer/game/LiveInput.cpp`.
 
+**Two clocks, two rates.** In fast time the game-seconds clock (`{taskmgr delta_seconds}`) advances 1/120 s per frame, while a headless engine's UI clock (`{taskmgr ui_delta_seconds}`) advances 1/30 s per frame. Anything timed in game seconds therefore takes four times as many frames as the UI animation around it. Measured 2026-11-20 on the XP reward screen (OMG, easy, choreo performer):
+
+- A 0.2 s `FlowTimer` at rate 0 (game seconds) in `play_hide_frame_sound.flow` is still pending when the panel unloads 8 frames after `hide_frame.flow` starts. Its task then logs `MILO_NOTIFY: EventTask::Poll NULL mOwner` and deletes itself: 3 such lines in the fast-time run, 0 in a real-time run of the same song. That line in a fast-time log is not a lead.
+- A duration read off the wall clock in an unpaced headless run is not a game duration. The reward screen holds 128 to 131 frames (4.3 to 4.4 s of UI time) on every run, and an unpaced run with a GPU showed it for about one second. Count frames (`/api/frame`), or pace the engine at 30 fps (`PUT /api/pace?fps=30`), before calling a screen short.
+
 ## Scripted Input System
 
 Input scripts drive the engine through menu screens. Two formats are supported:
