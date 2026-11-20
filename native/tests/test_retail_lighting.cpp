@@ -32,6 +32,8 @@
 #include "math/Mtx.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
+#include "platform/LookProfile.h"
+#include "platform/Rnd_Wgpu.h"
 #include "platform/rndshape/RndShape.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Env.h"
@@ -124,6 +126,54 @@ TEST_F(RetailLightingTest, AmbientAndPointLightsAreTheEnvironsOwn) {
     EXPECT_NEAR(s3.pointLightColors[0][0], 3.0f, 0.02f);
     EXPECT_NEAR(s3.pointLightColors[0][1], 1.5f, 0.02f);
     EXPECT_NEAR(s3.pointLightColors[0][2], 0.75f, 0.02f);
+}
+
+// Specular antialiasing (LookSettings::specularAA, item 18 (c)) reaches the
+// shader through the scene uniforms the DC3 shape writes: on under the
+// enhanced look, off under retail, so retail's per-pixel lobes are the shipped
+// exponent. Sabotage: the write dropped from WriteDC3Retail (enhanced reads 0).
+TEST_F(RetailLightingTest, SpecularAAFollowsTheLook) {
+    {
+        milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
+        EXPECT_EQ(Write().specularAA, 1.0f) << "enhanced: on";
+    }
+    {
+        milo::ScopedLookOverride look(milo::LookProfile::Retail);
+        SceneUniforms s;
+        memset(&s, 0xff, sizeof(s));   // not left from the caller's struct
+        EXPECT_TRUE(rndshape::WriteSceneLighting(s, nullptr));
+        EXPECT_EQ(s.specularAA, 0.0f) << "retail: the shipped exponent";
+    }
+}
+
+// And it stays a scene-material term: once the frame has moved onto the HUD
+// overlay pass (FlushPostProcessingForOverlay), the scene block written for the
+// HUD's lit meshes -- DC3's player-photo frame above the move cards -- carries
+// 0, so the HUD keeps the shipped exponent in either look. Measured in game
+// (item 18 c) before this rule: that frame's border was the one HUD element
+// that moved with spec AA. Sabotage: the WriteSceneUniforms overlay rule
+// removed (the overlay write reads 1).
+TEST_F(RetailLightingTest, SpecularAAStaysOffTheHudOverlay) {
+    if (!gWgpuRnd || !gWgpuRnd->Gpu().IsReady()) GTEST_SKIP() << "no GPU device";
+    milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
+    RndCam *prev = RndCam::Current();
+    RndCam *cam = Hmx::Object::New<RndCam>();
+    cam->SetFrustum(1.0f, 1000.0f, 1.0f, 0.75f);
+    TheRnd.BeginDrawing();
+    cam->Select();
+    gWgpuRnd->InvalidateSceneUniforms();
+    gWgpuRnd->EnsureSceneUniformsCurrent();
+    const float world = gWgpuRnd->LastSceneSpecularAA();
+    gWgpuRnd->FlushPostProcessingForOverlay();
+    const bool inOverlay = gWgpuRnd->FrameInOverlay();
+    gWgpuRnd->EnsureSceneUniformsCurrent();
+    const float hud = gWgpuRnd->LastSceneSpecularAA();
+    if (prev) prev->Select(); else RndCam::ClearCurrent();
+    TheRnd.EndDrawing();
+    delete cam;
+    ASSERT_TRUE(inOverlay) << "the frame reached its overlay pass";
+    EXPECT_EQ(world, 1.0f) << "world draws: on (non-vacuous)";
+    EXPECT_EQ(hud, 0.0f) << "HUD overlay draws: the shipped exponent";
 }
 
 TEST_F(RetailLightingTest, OnlyTheFirstThreeLitPointLightsInListOrder) {
