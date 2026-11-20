@@ -1816,8 +1816,9 @@ turned a test red.
 
 **Left.** Not seen on a live camera, on the Mac, or in a real dim room. The
 cube figure (`DepthBuffer3D`) reads the same mask and was not looked at under
-the refined one. 160×120 and 640×480 were not measured (the 2 px margin and the
-3×3 close are scaled by width, the speck share is relative). The mask still
+the refined one. 160×120 and 640×480 were not measured (the 2 px margin scales
+with the width and the speck share is relative, but the close is 3×3 at every
+size). The mask still
 only updates at the pose rate. A soft (alpha) mask on the wire would let the
 game draw a properly feathered edge; that is a protocol change and was not
 made.
