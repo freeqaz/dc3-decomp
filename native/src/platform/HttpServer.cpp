@@ -7,6 +7,7 @@
 #include "platform/HttpServer.h"
 #include "platform/DtaEvalSupport.h"
 #include "platform/NativeSettings.h"
+#include "platform/MenuGesture_Native.h"
 #include "platform/Rnd_Wgpu.h"
 #include "telemetry/GameplayTelemetry.h"
 #include "gfx/Screenshot.h"
@@ -439,6 +440,7 @@ void HttpServer::ProcessCommands() {
             case kCmdSceneTree:    HandleSceneTree(*cmd); break;
             case kCmdPoseTarget:   HandlePoseTarget(*cmd); break;
             case kCmdCamera:       HandleCamera(*cmd); break;
+            case kCmdMenuState:    HandleMenuState(*cmd); break;
             default: cmd->result.error = "Unknown command type"; break;
         }
         {
@@ -1084,6 +1086,15 @@ void HttpServer::HandlePoseTarget(Command& cmd) {
     cmd.result.ok = true;
 }
 
+// MenuGesture_Native.cpp.  Read-only (param1 = since, param2 = "reset"/"rows" flags).
+void HttpServer::HandleMenuState(Command& cmd) {
+    cmd.result.jsonData = Dc3MenuGesture::StateJson(
+        (unsigned)strtoul(cmd.param1.c_str(), nullptr, 10),
+        cmd.param2.find("reset") != std::string::npos,
+        cmd.param2.find("rows") != std::string::npos);
+    cmd.result.ok = true;
+}
+
 // StreamCompose_Native.cpp.  Read-only.
 std::string Dc3CameraJson(int gridW, int gridH);
 
@@ -1625,6 +1636,26 @@ void HttpServer::RegisterEndpoints() {
     svr->Get("/api/pose/target", [this](const httplib::Request& req, httplib::Response& res) {
         std::string lead = req.has_param("lead_ms") ? req.get_param_value("lead_ms") : "0";
         auto result = QueueAndWait(kCmdPoseTarget, lead);
+        if (result.ok) {
+            res.set_content(JsonOk(result.jsonData), "application/json");
+        } else {
+            res.status = 500;
+            res.set_content(JsonError(result.error), "application/json");
+        }
+    });
+
+    // GET /api/menu/state[?since=N][&reset=1][&rows=1] — every HamNavList
+    // polled this frame (ribbon mode, highlight, hand height, the swipe
+    // detector's amount / node count / hover timer) and every select with seq
+    // > since and its source, for scripts/menu_gesture_bench.py (PLAN P-3).
+    // Answered on the main thread between frames.  Read-only, except that
+    // reset=1 clears the per-list running maxima and counters.
+    svr->Get("/api/menu/state", [this](const httplib::Request& req, httplib::Response& res) {
+        std::string since = req.has_param("since") ? req.get_param_value("since") : "0";
+        std::string flags;
+        if (req.has_param("reset") && req.get_param_value("reset") != "0") flags += "reset ";
+        if (req.has_param("rows") && req.get_param_value("rows") != "0") flags += "rows";
+        auto result = QueueAndWait(kCmdMenuState, since, flags);
         if (result.ok) {
             res.set_content(JsonOk(result.jsonData), "application/json");
         } else {

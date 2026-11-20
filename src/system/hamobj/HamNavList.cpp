@@ -38,6 +38,9 @@
 #include "math/Geo.h"
 #include "world\Instance.h"
 #include <stdio.h>
+#ifdef HX_NATIVE
+#include "platform/MenuGesture_Native.h"
+#endif
 
 DECLARE_MESSAGE(LeftHandListEngagementMsg, "left_hand_list_engagement")
 LeftHandListEngagementMsg(bool b);
@@ -608,6 +611,9 @@ void HamNavList::Poll() {
             }
         }
     }
+#ifdef HX_NATIVE
+    Dc3MenuGesture::NotePoll(this);
+#endif
 }
 
 bool HamNavList::ShouldSkipSelectAnim(DataNode &node) const {
@@ -1214,6 +1220,9 @@ void HamNavList::PostUpdate(const SkeletonUpdateData *data) {
                 elapsed = skel->ElapsedMs();
                 ms = 0 < elapsed ? elapsed : 0;
                 mHandHeightFilter->Update(*skel, ms);
+#ifdef HX_NATIVE
+                Dc3MenuGesture::NoteSensorUpdate(this);
+#endif
                 return;
             }
             i++;
@@ -1335,6 +1344,7 @@ void HamNavList::SetSelecting(bool selecting) {
             provider ? provider->NumData() : -1
         );
     }
+    Dc3MenuGesture::NoteSelect(this, selected, listState.FirstShowing(), sym.Str(), selecting);
 #endif
     SetRibbonMode(HamListRibbon::kRibbonSelect);
     if (TheGestureMgr && TheGestureMgr->GesturingWithVoice()) {
