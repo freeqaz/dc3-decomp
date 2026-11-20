@@ -975,6 +975,11 @@ bool gFillModeRead = false;
 Dc3PoseFill::Mode gFillModeOverride = Dc3PoseFill::kExtrap;
 bool gFillHaveOverride = false;
 double (*gFillClock)() = nullptr;
+// The song clock, carried on at UI time while it stands still (StallClock,
+// PoseFill_Native.h: the menus).  DC3_POSE_FILL_CLOCK=song is the clock as it
+// was -- the song clock alone -- for an A/B.
+Dc3PoseFill::StallClock gFillStallClock;
+bool gFillSongClockOnly = false;
 
 void FillReadMode() {
     if (gFillModeRead)
@@ -997,10 +1002,22 @@ void FillReadMode() {
     gFill.SetGain(Dc3PoseFill::ParseGain(g, &gainOk));
     if (!gainOk)
         fprintf(stderr, "DC3_POSE_FILL_GAIN='%s' ignored (want 0 .. 1)\n", g);
+    const char *c = getenv("DC3_POSE_FILL_CLOCK");
+    gFillSongClockOnly = c && !strcmp(c, "song");
+    if (c && strcmp(c, "song") && strcmp(c, "stall"))
+        fprintf(stderr, "DC3_POSE_FILL_CLOCK='%s' ignored (want song or stall)\n", c);
+    gFillStallClock.Reset();
     gFill.Reset();
 }
 
-double FillClock() { return gFillClock ? gFillClock() : (double)MoveDir::SongSeconds(); }
+double FillClock() {
+    if (gFillClock)
+        return gFillClock();
+    double song = (double)MoveDir::SongSeconds();
+    if (gFillSongClockOnly)
+        return song;
+    return gFillStallClock.Read(song, (double)TheTaskMgr.UISeconds());
+}
 
 // Engagement changes, and delay changes of 20 ms or more, move the scorer's
 // latency; say so once each time.
@@ -1035,6 +1052,7 @@ void NativePoseFillTestSet(int mode, double (*clock)()) {
 }
 
 const Dc3PoseFill::Filler &NativePoseFiller() { return gFill; }
+double NativePoseFillClockCarried() { return gFillSongClockOnly ? 0.0 : gFillStallClock.Carried(); }
 
 // A frame the filler made due: into the slots exactly as a camera frame goes
 // when the fill is off.  Its time base is the camera's (out.ts), so the
