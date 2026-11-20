@@ -363,6 +363,7 @@ it, so a test that asserts a player-facing default pins `DC3_PROFILE=release`.
 | `DC3_WEB_DLC_KEEP` | unset | Web only: `1` keeps a played DLC song's files in MEMFS. By default they are unlinked when song select or the main menu is entered again (W-27), so a session that plays through the DLC list does not keep every song's 6–27 MB | `native/src/main_web.cpp` (`WebDlcDropSongFiles`) |
 | `DC3_CACHE_DIR` | `$HOME/.local/share/dc3/cache` | Native cache backend root (song cache etc.) | `native/src/platform/Cache_Stub.cpp` |
 | `DC3_SAVE_DIR` | `$HOME/.local/share/dc3/saves` | Memory-card / save directory | `native/src/platform/MemcardMgr_Stub.cpp` |
+| `DC3_CLASSIC_SONG_SELECT` | off | `1`: song select exactly as in the image -- three sorts, no Recently Played section, Left/Right and LB/RB inert, the sort not remembered. Off: the native song select ([SONG_SELECT.md](../native/SONG_SELECT.md)). The play history in `$DC3_SAVE_DIR/song_select.txt` is still recorded under it, only not shown | `native/src/platform/SongSelect_Native.cpp` (`Dc3ClassicSongSelect`) |
 | `DC3_FAST_BOOT` | `0` | Non-zero: the boot screens (attract → autosave warning → title → main) are force-advanced after 10 frames each. Off: no forced advance; the screens progress as the image's flow drives them. Web: `?fast_boot=1` | `src/system/ui/UI.cpp` |
 | `DC3_SHOW_SPLASH` | shown | `0` skips the splash. Never shown on web | `src/App.cpp` |
 | `DC3_PROFILE` | `dev` | `dev` or `release`: the defaults of the rows in [Profiles](#profiles-dc3_profile) | `native/src/platform/System_Native.cpp` |

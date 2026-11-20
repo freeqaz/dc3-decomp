@@ -109,6 +109,11 @@ controller mode, and 5 s without a press hands the menus back to your hands.
 Space opens the pause menu but does not close it; resume with Continue (the
 original's behaviour). The map is printed at startup.
 
+On song select, Left/Right jump to the previous/next section of the list,
+Q/E move a screenful, and Y changes the sort (Skill Level, Title, Artist,
+Source). The songs played last are at the top under Recently Played
+([SONG_SELECT.md](SONG_SELECT.md)).
+
 **Quit** with Ctrl+Q or by closing the window. Esc is B, not quit.
 
 The window opens at 1280x720 and can be resized, maximised or made
