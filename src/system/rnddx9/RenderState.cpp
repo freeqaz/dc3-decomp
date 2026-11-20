@@ -3,26 +3,41 @@
 
 RndRenderState TheRenderState;
 
-// Maps TestFunc to D3DCMPFUNC. Two banks of 8: [0-7] normal Z, [8-15] reversed Z.
+// TestFunc -> D3DCMPFUNC for the depth and stencil tests. Two banks of 8:
+// [0-7] normal Z, [8-15] reversed Z (less and greater swap). Values are the
+// image's table at 0x8208A0F8, which SetDepthFunc and SetStencilFunc index.
 D3DCMPFUNC RndRenderState::tf2cf[] = {
     // Normal Z
-    D3DCMP_ALWAYS,      // 0
-    D3DCMP_LESS,        // 1
-    D3DCMP_EQUAL,       // 2
-    D3DCMP_LESSEQUAL,   // 3
-    D3DCMP_GREATER,     // 4
-    D3DCMP_NOTEQUAL,    // 5
-    D3DCMP_GREATEREQUAL,// 6
-    D3DCMP_NEVER,       // 7
-    // Reversed Z (flip less/greater)
-    D3DCMP_ALWAYS,      // 8
-    D3DCMP_GREATER,     // 9
-    D3DCMP_EQUAL,       // 10
-    D3DCMP_GREATEREQUAL,// 11
-    D3DCMP_LESS,        // 12
-    D3DCMP_NOTEQUAL,    // 13
-    D3DCMP_LESSEQUAL,   // 14
-    D3DCMP_NEVER,       // 15
+    D3DCMP_ALWAYS, // 0
+    D3DCMP_LESS, // 1
+    D3DCMP_LESSEQUAL, // 2
+    D3DCMP_EQUAL, // 3
+    D3DCMP_NOTEQUAL, // 4
+    D3DCMP_GREATER, // 5
+    D3DCMP_GREATEREQUAL, // 6
+    D3DCMP_NEVER, // 7
+    // Reversed Z
+    D3DCMP_ALWAYS, // 8
+    D3DCMP_GREATER, // 9
+    D3DCMP_GREATEREQUAL, // 10
+    D3DCMP_EQUAL, // 11
+    D3DCMP_NOTEQUAL, // 12
+    D3DCMP_LESS, // 13
+    D3DCMP_LESSEQUAL, // 14
+    D3DCMP_NEVER, // 15
+};
+
+// TestFunc -> D3DCMPFUNC for the alpha test. The image keeps this as its own
+// 8-entry table at 0x8208A138 (no reversed-Z bank), which SetAlphaFunc indexes.
+static const D3DCMPFUNC sAlphaTestFuncs[] = {
+    D3DCMP_ALWAYS, // 0
+    D3DCMP_LESS, // 1
+    D3DCMP_LESSEQUAL, // 2
+    D3DCMP_EQUAL, // 3
+    D3DCMP_NOTEQUAL, // 4
+    D3DCMP_GREATER, // 5
+    D3DCMP_GREATEREQUAL, // 6
+    D3DCMP_NEVER, // 7
 };
 
 void RndRenderState::SetBlendEnable(bool b) {
@@ -60,7 +75,7 @@ void RndRenderState::SetAlphaTestEnable(bool b) {
 
 void RndRenderState::SetAlphaFunc(TestFunc tf, unsigned int ref) {
     D3DDevice_SetRenderState_AlphaRef(TheDxRnd.Device(), ref);
-    D3DDevice_SetRenderState_AlphaFunc(TheDxRnd.Device(), tf2cf[tf]);
+    D3DDevice_SetRenderState_AlphaFunc(TheDxRnd.Device(), sAlphaTestFuncs[tf]);
 }
 
 void RndRenderState::SetDepthTestEnable(bool b) {
