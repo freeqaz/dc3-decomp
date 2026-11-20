@@ -26,6 +26,7 @@
 
 #include "test_helpers.h"
 
+#include "platform/LookProfile.h"
 #include "platform/MeshPipelineKey.h"
 #include "platform/Rnd_Wgpu.h"
 #include "rndobj/Mat.h"
@@ -61,6 +62,30 @@ TEST_F(ReflectionCullTest, EveryMaterialCullsBackwardsInTheReflection) {
         delete next;
         delete mat;
     }
+}
+
+// {rnd native_look refl_cull_flip|refl_cull_force|refl_cull_rule}: the
+// inspection switch behind the item 20 (b) venue before/after. flip is the old
+// native rule, force is retail's, rule goes back to the shape's constant.
+TEST_F(ReflectionCullTest, InspectionSwitchSelectsFlipForceOrRule) {
+    MeshPassContext ctx;
+    ctx.targetFormat = wgpu::TextureFormat::RGBA8Unorm;
+    ctx.reflection = true;
+    RndMat *mat = Hmx::Object::New<RndMat>();
+    auto mirrored = [&](Cull cull) {
+        mat->SetCull(cull);
+        return MaterialPipelineKey(mat, false, false, false, 0, ctx).cull;
+    };
+    milo::SetReflectionCullForInspection(0);
+    EXPECT_EQ(mirrored(kCullNone), WgpuCull::None);
+    EXPECT_EQ(mirrored(kCullRegular), WgpuCull::Backwards);
+    EXPECT_EQ(mirrored(kCullBackwards), WgpuCull::Regular);
+    milo::SetReflectionCullForInspection(1);
+    EXPECT_EQ(mirrored(kCullNone), WgpuCull::Backwards);
+    milo::SetReflectionCullForInspection(-1);
+    EXPECT_EQ(milo::ReflectionCullInspection(), -1);
+    EXPECT_EQ(mirrored(kCullNone), WgpuCull::Backwards);  // the DC3 shape
+    delete mat;
 }
 
 TEST_F(ReflectionCullTest, GlyphPagesStayTwoSidedInTheReflection) {
