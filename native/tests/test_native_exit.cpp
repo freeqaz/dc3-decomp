@@ -498,6 +498,10 @@ TEST_F(NativeExitTest, ThermalPressureWithLateFramesLowersTheOutputAndCoolingRes
     if (!up && GpuUnavailable(e.Output())) GTEST_SKIP() << "GPU unavailable";
     ASSERT_TRUE(up) << Tail(e.Output());
     if (GpuUnavailable(e.Output())) GTEST_SKIP() << "GPU unavailable";
+    // The server starts after the main loop's line, and the port file is
+    // written once it is bound: wait for it (2 of 4 runs on a loaded box read
+    // the file too early and got port 0).
+    ASSERT_TRUE(e.WaitFor("[HttpServer] Listening on", 60)) << Tail(e.Output());
     int port = atoi(ReadAll(portFile).c_str());
     ASSERT_GT(port, 0) << Tail(e.Output());
     const std::string api = "http://127.0.0.1:" + std::to_string(port) + "/api";
@@ -553,6 +557,12 @@ TEST_F(NativeExitTest, ThermalPressureWithLateFramesLowersTheOutputAndCoolingRes
     EXPECT_EQ(Shot(), "1920x1080");
     EXPECT_EQ(CountOf(e.Output(), "GpuDevice: thermal level"), 4) << Tail(e.Output());
     EXPECT_EQ(CountOf(e.Output(), "DC3 NOTICE [thermal]"), 1);
+    // Every target followed the new size. A screenshot's size alone does not
+    // say so: with the headless target left at 1920x1080 (sabotaged once) the
+    // readback still copied 1600x900 texels out of it, while every frame
+    // failed validation ("The color attachment ... size (width: 1600, height:
+    // 900) does not match the size of the other attachments").
+    EXPECT_EQ(CountOf(e.Output(), "GpuDevice: WebGPU error"), 0) << Tail(e.Output());
     kill(e.pid, SIGTERM);
     EXPECT_TRUE(e.WaitExit(60)) << Tail(e.Output());
     ExpectNoCrash(e.Output());
@@ -572,6 +582,10 @@ TEST_F(NativeExitTest, ThermalGovernorSwitchedOffLeavesTheOutputAlone) {
     if (!up && GpuUnavailable(e.Output())) GTEST_SKIP() << "GPU unavailable";
     ASSERT_TRUE(up) << Tail(e.Output());
     if (GpuUnavailable(e.Output())) GTEST_SKIP() << "GPU unavailable";
+    // The server starts after the main loop's line, and the port file is
+    // written once it is bound: wait for it (2 of 4 runs on a loaded box read
+    // the file too early and got port 0).
+    ASSERT_TRUE(e.WaitFor("[HttpServer] Listening on", 60)) << Tail(e.Output());
     int port = atoi(ReadAll(portFile).c_str());
     ASSERT_GT(port, 0) << Tail(e.Output());
     const std::string api = "http://127.0.0.1:" + std::to_string(port) + "/api";
@@ -1207,6 +1221,9 @@ TEST_F(NativeWindowTest, ThermalRowCapReachesAWindowsFrame) {
                               "-> 1280x720 (thermal row cap 720)"))
         << Tail(out);
     EXPECT_TRUE(Contains(out, "output capped at 720 rows (thermal)")) << Tail(out);
+    // The frame texture followed (left at the old size, every frame fails
+    // validation against the depth and MSAA targets, which did follow).
+    EXPECT_FALSE(Contains(out, "GpuDevice: WebGPU error")) << Tail(out);
     ExpectNoCrash(out);
 }
 
