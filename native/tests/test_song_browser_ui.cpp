@@ -776,7 +776,11 @@ TEST(SongBrowserUi, NoMatchSaysSoAndOffersNothingToPick) {
     EXPECT_NEAR(headline.origin.x + WidthOf(headline) * 0.5f, list.Center().x, 1.0f)
         << "centred in the list's area";
     EXPECT_TRUE(HasRun(frame, list, "NOTHING FOUND FOR ZZQQXX"));
-    EXPECT_TRUE(RunsIn(frame, rig.PaneRect()).empty()) << "the detail pane is gone";
+    // The pane keeps its place and says how to search: no song, no command.
+    EXPECT_TRUE(HasRun(frame, rig.PaneRect(), "SEARCH"));
+    EXPECT_EQ(IconsIn(frame, rig.PaneRect(), Icon::Search), 1);
+    EXPECT_FALSE(rig.browser->DetailCommand().has_value());
+    EXPECT_TRUE(ArtQuads(frame).empty()) << "no song's art anywhere";
     EXPECT_FALSE(HasText(frame, "RESULTS")) << "no results to offer";
     EXPECT_TRUE(HasText(frame, "CLEAR SEARCH"));
 

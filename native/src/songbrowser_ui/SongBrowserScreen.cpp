@@ -92,6 +92,9 @@ namespace songbrowser_ui {
         };
         // A song's short name is a word; a key that starts with '#' cannot be one.
         constexpr char kCommandKeyMark = '#';
+        // The pane's key for the search help: marked like a command's, so it
+        // is never taken for a song's short name.
+        constexpr const char *kSearchHelpKey = "#search";
         constexpr CommandInfo kCommands[] = {
             { Command::RandomSong,
               Icon::Shuffle,
@@ -494,6 +497,18 @@ namespace songbrowser_ui {
             return model;
         }
 
+        // What the pane says while a search matches nothing: how to search,
+        // so the page keeps its right-hand column and the player a way on.
+        DetailModel SearchHelp() const {
+            DetailModel model;
+            model.key = kSearchHelpKey;
+            model.title = "Search";
+            model.icon = Icon::Search;
+            model.description =
+                "Type part of a title or an artist's name. Fewer letters find more songs.";
+            return model;
+        }
+
         // Accept on a row of the list: a command is run, a song is picked.
         void Activate(int row) {
             const int command = model_.CommandAt(row);
@@ -808,6 +823,8 @@ namespace songbrowser_ui {
                 detail_->Show(DetailFor(song));
             } else if (listCommand_ >= 0 && FocusedRegion() != Region::Recents) {
                 detail_->Show(DetailFor(*commands_[static_cast<std::size_t>(listCommand_)]));
+            } else if (model_.Searching()) {
+                detail_->Show(SearchHelp());
             } else {
                 detail_->Clear();
             }

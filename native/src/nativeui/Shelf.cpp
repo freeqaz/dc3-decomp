@@ -163,15 +163,30 @@ namespace nativeui {
         painter.PopLayer();
     }
 
+    namespace {
+        // Less than this much of the row beyond an edge counts as none.
+        constexpr float kScrolledOff = 0.5f;
+    }
+
     void Shelf::OnPaint(const Context &ctx, Painter &painter) const {
         const Rect &bounds = Bounds();
         const Metrics &metric = ctx.theme.metric;
         const float scroll = strip_.Scroll();
         const float headroom = (bounds.height - metric.shelfCardHeight) * 0.5f;
 
-        // Clip to the shelf plus the glow's reach on every side: the first and
-        // last cards sit at the very edge and still have to grow and glow.
-        painter.PushClip(bounds.Inflated(metric.glowSoftness));
+        // Clip to the shelf plus the glow's reach above and below, and to the
+        // sides only at an end of the row: there the first or last card sits at
+        // the very edge and still has to grow and glow. Where the row goes on,
+        // cards stop at the shelf's own edge, under the fade, and never reach
+        // into whatever frames the shelf.
+        const float glow = metric.glowSoftness;
+        const float bleedLeft = scroll > kScrolledOff ? 0.0f : glow;
+        const float bleedRight = strip_.MaxScroll() - scroll > kScrolledOff ? 0.0f : glow;
+        const Rect lane { bounds.x - bleedLeft,
+                          bounds.y - glow,
+                          bounds.width + bleedLeft + bleedRight,
+                          bounds.height + 2.0f * glow };
+        painter.PushClip(lane);
         painter.PushLayer({ { bounds.x - scroll, bounds.y + headroom }, 1.0f, 1.0f });
 
         // The most emphasised card is painted last so that it overlaps its neighbours.
@@ -203,7 +218,6 @@ namespace nativeui {
         // holds more than fits says so.
         const float reach = ctx.theme.metric.edgeFade;
         if (reach > 0.0f) {
-            const Rect lane = bounds.Inflated(metric.glowSoftness);
             PaintEdgeFade(painter, ctx.theme, lane, Edge::Left, scroll / reach);
             PaintEdgeFade(
                 painter, ctx.theme, lane, Edge::Right, (strip_.MaxScroll() - scroll) / reach
