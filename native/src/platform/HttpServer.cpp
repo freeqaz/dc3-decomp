@@ -13,6 +13,7 @@
 #include "gfx/Screenshot.h"
 #include "gfx/GpuDevice.h"
 #include "gfx/GpuTimers.h"
+#include "platform/ThermalState.h" // H-128: the thermal governor (GET/PUT /api/thermal)
 #include "gfx/FrameCapture.h"
 #include "obj/Data.h"
 #include "obj/DataFile.h"
@@ -549,6 +550,28 @@ void HttpServer::ProcessScreenshots() {
 // ---------------------------------------------------------------------------
 // Phase 4: Frame notification + input injection
 // ---------------------------------------------------------------------------
+
+// GET /api/thermal's body: the engine's ThermalStatus, and the frame's output
+// size read from the device (the status carries one only once the governor
+// has run).
+static std::string ThermalStatusJson() {
+    const milo::ThermalStatus t = milo::ThermalGetStatus();
+    int outW = t.outputWidth, outH = t.outputHeight;
+    if (gWgpuRnd && gWgpuRnd->Gpu().IsReady()) {
+        outW = gWgpuRnd->Gpu().OutputWidth();
+        outH = gWgpuRnd->Gpu().OutputHeight();
+    }
+    char buf[512];
+    snprintf(buf, sizeof(buf),
+             "{\"enabled\":%s,\"level\":%d,\"level_name\":\"%s\",\"injected\":%s,"
+             "\"target_fps\":%.2f,\"window_fps\":%.2f,\"late_windows\":%d,"
+             "\"row_cap\":%d,\"base_rows\":%d,\"output_w\":%d,\"output_h\":%d,"
+             "\"steps_down\":%d,\"steps_up\":%d,\"cool_s\":%.1f}",
+             t.enabled ? "true" : "false", t.level, milo::ThermalLevelName(t.level),
+             t.injected ? "true" : "false", t.targetFps, t.windowFps, t.lateWindows, t.rowCap,
+             t.baseRows, outW, outH, t.stepsDown, t.stepsUp, t.coolSeconds);
+    return buf;
+}
 
 // DC3_HTTP_PACE_FPS=<n>: cap the frame rate of a debug-server-driven run.
 //
@@ -1165,10 +1188,19 @@ void HttpServer::RegisterEndpoints() {
         // ahead of real time.
         float uptime = std::chrono::duration<float>(
             std::chrono::steady_clock::now() - mStartTime).count();
+        // H-128: the frame's output size and the thermal governor's level and
+        // row cap (0 = none); GET /api/thermal has the rest.
+        const milo::ThermalStatus t = milo::ThermalGetStatus();
+        int outW = 0, outH = 0;
+        if (gWgpuRnd && gWgpuRnd->Gpu().IsReady()) {
+            outW = gWgpuRnd->Gpu().OutputWidth();
+            outH = gWgpuRnd->Gpu().OutputHeight();
+        }
         char buf[256];
         snprintf(buf, sizeof(buf),
-            "{\"status\":\"ok\",\"frame\":%d,\"uptime_s\":%.1f,\"pid\":%d}", frame, uptime,
-            (int)getpid());
+            "{\"status\":\"ok\",\"frame\":%d,\"uptime_s\":%.1f,\"pid\":%d,"
+            "\"output_w\":%d,\"output_h\":%d,\"thermal_level\":%d,\"thermal_row_cap\":%d}",
+            frame, uptime, (int)getpid(), outW, outH, t.level, t.rowCap);
         res.set_content(JsonOk(buf), "application/json");
     });
 
@@ -1272,6 +1304,34 @@ void HttpServer::RegisterEndpoints() {
         sPacePeriod.store(fps > 0.0 ? 1.0 / fps : 0.0);
         char buf[64];
         snprintf(buf, sizeof(buf), "{\"fps\":%.3f}", fps > 0.0 ? fps : 0.0);
+        res.set_content(JsonOk(buf), "application/json");
+    });
+
+    // GET/PUT /api/thermal -- the thermal governor (PLAN H-128; engine
+    // platform/ThermalState.h). GET: what it was last given and did. PUT
+    // ?level=0..3 injects a thermal level (as MILO_THERMAL_STATE does at
+    // start); level=os (or -1) withdraws it, back to the OS's own.
+    svr->Get("/api/thermal", [](const httplib::Request&, httplib::Response& res) {
+        res.set_content(JsonOk(ThermalStatusJson()), "application/json");
+    });
+    svr->Put("/api/thermal", [](const httplib::Request& req, httplib::Response& res) {
+        if (!req.has_param("level")) {
+            res.status = 400;
+            res.set_content(JsonError("level=<0 nominal|1 fair|2 serious|3 critical|os> required"),
+                            "application/json");
+            return;
+        }
+        const std::string v = req.get_param_value("level");
+        const int level = milo::ParseThermalStateKnob(v.c_str());
+        if (level == milo::kThermalUnknown && v != "os" && v != "-1") {
+            res.status = 400;
+            res.set_content(JsonError("level must be 0, 1, 2, 3 or os"), "application/json");
+            return;
+        }
+        milo::ThermalSetInjectedLevel(level);
+        char buf[96];
+        snprintf(buf, sizeof(buf), "{\"injected\":%d,\"name\":\"%s\"}", level,
+                 level == milo::kThermalUnknown ? "os" : milo::ThermalLevelName(level));
         res.set_content(JsonOk(buf), "application/json");
     });
 

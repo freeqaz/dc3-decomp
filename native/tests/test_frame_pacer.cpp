@@ -121,6 +121,28 @@ TEST(FrameCap, ADisplayUnderFiftyHertzIsSaidOnScreen) {
     EXPECT_EQ(Dc3SlowDisplayNotice(true, std::nan("")), "");
 }
 
+// H-128: the thermal governor's target rate and its notice.
+TEST(FrameCap, TheThermalGovernorHoldsTheGameToItsCapOrTheDisplaysRate) {
+    EXPECT_EQ(Dc3ThermalTargetFps(60.0, 60.0), 60.0);
+    EXPECT_EQ(Dc3ThermalTargetFps(72.0, 144.0), 72.0);  // the cap on a 144 Hz panel
+    EXPECT_EQ(Dc3ThermalTargetFps(0.0, 0.0), 60.0);     // headless, uncapped: the image's 60
+    EXPECT_EQ(Dc3ThermalTargetFps(0.0, 144.0), 60.0);   // DC3_FPS_CAP=0 on a fast panel
+    EXPECT_EQ(Dc3ThermalTargetFps(0.0, 30.0), 30.0);    // a 30 Hz display's 30 is on time
+    EXPECT_EQ(Dc3ThermalTargetFps(60.0, 30.0), 30.0);
+    EXPECT_EQ(Dc3ThermalTargetFps(std::nan(""), std::nan("")), 60.0);
+}
+
+TEST(FrameCap, TheFirstThermalStepDownIsSaidOnceAndNotOverASong) {
+    const std::string said = Dc3ThermalNotice(1, false, false);
+    EXPECT_NE(said.find("running warm"), std::string::npos) << said;
+    EXPECT_NE(said.find("softer"), std::string::npos) << said;
+    EXPECT_LT(said.size(), 140u) << "a banner, not a paragraph";
+    EXPECT_EQ(Dc3ThermalNotice(2, false, false), said);
+    EXPECT_EQ(Dc3ThermalNotice(0, false, false), "");  // nothing lowered yet
+    EXPECT_EQ(Dc3ThermalNotice(1, true, false), "");   // once a session
+    EXPECT_EQ(Dc3ThermalNotice(1, false, true), "");   // waits for a menu
+}
+
 // --- the pacer ---------------------------------------------------------------
 
 TEST(FramePacer, SleepsRatherThanSpins) {
