@@ -190,7 +190,14 @@ Rnd::Rnd()
 // specular antialiasing alone (item 18 c's shimmer and cost A/B);
 // lod_bias_0|lod_bias_m05|lod_bias_m1 put that world texture LOD bias at
 // every render scale and lod_bias_rule restores the look's rule by scale
-// (item 19 a's A/B); {rnd native_look} alone reports it. Returns the profile
+// (item 19 a's A/B); aniso_1|aniso_4|aniso_16 put the world samplers' max
+// anisotropy at that value and aniso_rule restores the look's (item 20 e's
+// GPU-cost A/B; text and HUD untouched); refl_cull_force|refl_cull_flip|
+// refl_cull_rule set the cull of a WorldReflection's mirrored redraw to
+// retail's every-material-Backwards, the old per-material flip, or the shape's
+// rule (item 20 b's per-venue before/after from one launch; a cull change
+// selects another cached pipeline, nothing is rebuilt per frame);
+// {rnd native_look} alone reports it. Returns the profile
 // now in force.
 static Symbol NativeLook(const DataArray *msg) {
     if (msg->Size() > 2) {
@@ -208,10 +215,18 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "lod_bias_m05") milo::SetLookLodBiasForInspection(false, -0.5f);
         else if (s == "lod_bias_m1") milo::SetLookLodBiasForInspection(false, -1.0f);
         else if (s == "lod_bias_rule") milo::SetLookLodBiasForInspection(true, 0.0f);
+        else if (s == "aniso_1") milo::SetLookAnisotropyForInspection(1);
+        else if (s == "aniso_4") milo::SetLookAnisotropyForInspection(4);
+        else if (s == "aniso_16") milo::SetLookAnisotropyForInspection(16);
+        else if (s == "aniso_rule") milo::SetLookAnisotropyForInspection(0);
+        else if (s == "refl_cull_force") milo::SetReflectionCullForInspection(1);
+        else if (s == "refl_cull_flip") milo::SetReflectionCullForInspection(0);
+        else if (s == "refl_cull_rule") milo::SetReflectionCullForInspection(-1);
         else MILO_NOTIFY("native_look: %s is not retail, enhanced, post_retail, post_enhanced, "
                          "post_precision, post_bloom_filter, post_dof_filter, specular_aa_on, "
-                         "specular_aa_off, lod_bias_0, lod_bias_m05, lod_bias_m1 or "
-                         "lod_bias_rule", s.Str());
+                         "specular_aa_off, lod_bias_0, lod_bias_m05, lod_bias_m1, "
+                         "lod_bias_rule, aniso_1, aniso_4, aniso_16, aniso_rule, "
+                         "refl_cull_force, refl_cull_flip or refl_cull_rule", s.Str());
     }
     return milo::LookProfileName(milo::Look().profile);
 }
