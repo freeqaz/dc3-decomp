@@ -284,7 +284,7 @@ buttons and the keyboard's text, and loads its pictures. It is compiled into
 | `ImageCache.h`, `GameImages.h` | Pictures by path through the game's loader; `ImageHandle`s that stay valid; an LRU bound |
 | `InputBridge.h` | Pad buttons to `Action`s, the engine's text queue to `TextEvent`/`EditEvent`, held-direction repeat |
 | `GameBindings.h` | The few lines that need game headers: `ButtonDownMsg` to the host, the UI clock, the output size |
-| `NativeUiDemo.h` | `DC3_NATIVEUI_DEMO=1`: the sample browser over the running game |
+| `HostedScreen.h` | What the host runs: events in, a display list out. A `nativeui::Screen` is one through the host's own adapter; `SongBrowserScreen` through `HostedScreenOf` or a class of the caller's |
 
 ### A panel that owns a host
 
@@ -365,8 +365,9 @@ Measured by `NativeUiHostGpuTest.GameFontsLoadWithMeasuredCells` (2026-11-20):
 - A character the font lacks is drawn as its base letter (`é` as `e`, then
   the other case), and failing that as an outlined box half the size wide.
   No UVs are ever invented. All 62 disc songs' titles and artists are
-  covered by the menu font, as written and upper-cased (the demo reports
-  this at boot: `menu font lacks [] as written, [] in upper case`).
+  covered by the menu font, as written and upper-cased (measured with the
+  retired demo; the song browser's frames report `placeholder_glyphs` 0 on
+  the 45 disc songs).
 - `eagle-light-3d*` are `RndFont3d` (a mesh per character). `LoadGameFont`
   refuses a resource whose generated font is not a bitmap `RndFont`; a glyph
   source for them is future work.
@@ -382,7 +383,7 @@ drawn cell is at most about 78 device pixels:
 | hint (20) | 20 px, 0.26x | 30 px, 0.38x | 40 px, 0.51x |
 
 Only display text at 1440 rows is magnified, by 13%. Seen in 4x crops of
-the demo: at 1440 and 1080 rows the strokes are clean; at 720 rows the face
+the retired demo: at 1440 and 1080 rows the strokes are clean; at 720 rows the face
 is so light that body strokes are about one pixel wide and grey rather than
 white. That is the atlas being minified three times, not blur from
 upscaling. A 4K output (2160 rows) would magnify display text 1.7x and body
@@ -431,31 +432,28 @@ yet draws nothing (the widget's placeholder shows through its fade).
   Injected text (`TextInputInject*`, `POST /api/input/text`) is queued
   whatever the capture state.
 
-### The demo
+### The screen that uses it
 
-`DC3_NATIVEUI_DEMO=1` draws `SampleBrowser` over the running game with the
-real fonts, the real canvas and real album art (the sample's made-up songs,
-every third one without a picture on purpose), and gives it the pad and the
-text queue. With the variable unset nothing is installed and no font or
-texture is loaded. `GET /api/nativeui/state` and `POST /api/input/text`
+The song browser on song select
+(`native/src/platform/SongBrowserPanel_Native.cpp`,
+[../SONG_SELECT.md](../SONG_SELECT.md#the-song-browser)) is the host's one
+user. It is not a panel of its own: it hangs on the image's
+`SongSelectPanel` through `HX_NATIVE` hooks in that panel's `Enter`, `Exit`,
+`Poll`, `Draw` and handlers, so the classic panel stays alive underneath. It
+draws from the panel's `Draw()`, once a frame, inside the UI's render pass;
+it sets `SetTextCapture(Always)`; and it puts its own `HostedScreen` between
+the host and `SongBrowserScreen` to drop input while a pick or a leave is in
+flight. `GET /api/songbrowser/state` and `POST /api/input/text`
 (`docs/tools/HTTP_DEBUG_SERVER.md`) ask and drive it.
 
-Measured on main_screen (RelWithDebInfo, headless, means over the first 600
-frames): 77 display-list commands, 384 quads in 49 draw calls; 24 us to
-build the frame and 31 us to replay it at 1280x720, 30 us and 33 us at
-2560x1440.
-
-Known limits of the demo, none of the host: the game's menu underneath gets
-the same button presses; the game's own late overlays (the skeleton and
-player boxes) draw over it; and the engine's overlay hook runs at every
-post-processing flush (3 a frame on main_screen), so the demo draws on the
-last one of each frame. A real screen is a panel and draws from its own
-`Draw()`.
+The `DC3_NATIVEUI_DEMO` overlay that used to show `SampleBrowser` over every
+frame from the engine's overlay hook is gone, with its `/api/nativeui/state`
+endpoint and its per-frame hook in `src/App.cpp`.
 
 ## What is deliberately not there yet
 
-- **A screen of the game drawn with it.** The integration layer exists (the
-  Host section above); only the demo uses it.
+- **More than one screen of the game drawn with it.** Song select's browser
+  is the only one.
 - **Pointer input.** `PointerEvent` exists so the event type will not change;
   no widget handles it and there is no hit testing.
 - **Multi-line text**, wrapping, and mixed styles in one line.

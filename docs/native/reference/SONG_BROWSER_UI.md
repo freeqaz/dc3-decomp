@@ -8,11 +8,15 @@ into a display list. It is built from the UI framework
 no game header, no engine header, no renderer, no font code. The static
 library `songbrowser_ui` links into `dc3-native`, `dc3-web` and `milo-tests`.
 
-**What is not here.** The binding that draws a display list with the game's
-renderer and fonts, and the game panel that creates the screen, feeds it
-input and acts on a picked song, are separate work. Nothing in this page has
-been seen with the game's fonts or over the game's real background; the
-pictures come from a test-only software rasteriser with a dot font.
+**In the game.** `native/src/platform/SongBrowserPanel_Native.cpp` creates
+the screen on `song_select_panel`, runs it through `nativeui_host` (the
+game's menu font, the engine's 2D canvas, album art through `ImageCache` with
+fallback art) and acts on a picked song. When it is shown instead of the
+classic list, and what pick, back and the sounds do, is in
+[../SONG_SELECT.md](../SONG_SELECT.md#the-song-browser). The pictures this
+page's tests write come from a test-only software rasteriser with a dot font;
+pictures from the running game are made with
+`GET /api/screenshot` on a run with `DC3_SONG_BROWSER=1`.
 
 ## Layout
 
@@ -20,6 +24,10 @@ A 1280x720 logical view, drawn over the game's moving streak background. The
 screen never fills the view opaquely: it lays one scrim (`Palette::scrim`,
 black at 42%) over the whole view and one more under the list, so the
 background stays visible and the text stays readable.
+In the running game what is underneath is `background_panel` alone, which is
+faint streaks on black, so the screen reads as light text on near-black
+(seen at 1280x720, 1920x1080 and 2560x1440). The same layout is drawn at
+every output size: the canvas scales the 1280x720 view.
 
 | Part | What it holds |
 |---|---|
@@ -194,6 +202,30 @@ recorded display list. The pictures are drawn over a stand-in streaked
 backdrop; their text is a dot font (it has no `<` or `>`, so the section hint
 shows two boxes) and their album art is made-up gradients.
 
+## Seen in the running game
+
+1280x720, 1920x1080 and 2560x1440, the 45 disc songs, a five-song history
+(the pictures are not kept in the repo):
+
+- The menu font draws every label; no missing-glyph box (the state
+  endpoint's `placeholder_glyphs` is 0, asserted by
+  `NativeUiHostGpuTest.SongBrowserRunsInTheEngine`). Text is sharp at all
+  three sizes; the smallest (the row's artist, the card's second line, the
+  hint labels) is readable at 720 rows.
+- The shelf shows four cards with a five-song history; the fifth, which
+  would partly fit left of the detail pane, is not drawn, and nothing says
+  there is more to the right. Card titles longer than about 11 characters
+  are cut ("BOOM BOOM P…"), as are artists ("DEV FT. THE CA…").
+- The detail pane's last line (the source game) sits on the pane's bottom
+  edge with no margin under it.
+- A played song's stars are five small outline circles (`o o o o o`), filled
+  or not; they read as placeholders.
+- The selection bar is purple while focus is elsewhere and blue with a glow
+  while the list is focused; on the purple bar the matched part of a search
+  result stays accent blue and is legible.
+- In a search the hint bar names keys (`ENTER`, `ESC`); otherwise pad buttons
+  until something has been typed.
+
 ## Not done
 
 - Stars are round marks: the display list has no polygon primitive.
@@ -201,3 +233,5 @@ shows two boxes) and their album art is made-up gradients.
 - Section headings scroll with the list; they do not stick to the top.
 - `SongEntry::isCover` ("as made famous by") is not shown.
 - BPM has no tab (see above); the data layer can arrange by it.
+- The classic list's Playlists and Random Song rows have no counterpart.
+- No sign on the shelf that more cards lie to the right.

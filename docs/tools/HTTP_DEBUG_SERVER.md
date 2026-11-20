@@ -324,7 +324,7 @@ Button names: `confirm`/`a`, `cancel`/`b`, `start`, `select`/`back`/`option`, `u
 
 Works in both windowed and headless modes. HTTP-injected buttons are OR'd with keyboard/gamepad/script input.
 
-### Text input and the natively drawn UI
+### Text input and the song browser
 
 ```bash
 # Type text: every character is queued on the engine's text queue
@@ -339,26 +339,39 @@ curl -X POST localhost:9090/api/input/text -d '{"key":"backspace"}'
 curl -X POST 'localhost:9090/api/input/text?text=ab&key=home'
 # An unknown key name is refused: HTTP 400
 
-# The natively drawn UI demo (DC3_NATIVEUI_DEMO=1); {"active":false} without it
-curl localhost:9090/api/nativeui/state
-# {"ok":true,"data":{"active":true,"search":"cr","cursor":2,"focus":"list",
-#  "selected_row":1,"rows":130,"tab":0,"capture":false,"at_rest":true,
-#  "detail_title":"Crystal Dance","search_rect":[920,24,320,44],
-#  "list_rect":[40,296,836,358],"highlight_rect":[40,332,836,51],
-#  "stats":{"frames":715,"commands":77,"quads":384,"draw_calls":49,"glyphs":357,
-#           "placeholder_glyphs":0,"images_missing":0,"build_us":13,"replay_us":20,
-#           "mean_build_us":18.4,"mean_replay_us":25.5},
-#  "images":{"ready":8,"loading":0,"queued":0,"evictions":0,"failures":1},
-#  "songs":62,"missing_glyphs":"","missing_glyphs_upper":""}}
+# The natively drawn song browser on song select (DC3_SONG_BROWSER)
+curl localhost:9090/api/songbrowser/state
 ```
 
 `typed` is the number of characters queued by this request and `pending` the
 queue's length afterwards; the text reaches a screen on its next frame.
-Rectangles are `x,y,width,height` in the UI's 1280x720 logical units (multiply
-by output rows / 720 for screenshot pixels). `focus` is `search`, `list`,
-`recent`, `tabs`, `other` or `none`. `missing_glyphs` lists the characters of
-the disc songs' titles and artists that the menu font has no glyph for.
-Tested by `NativeUiHostGpuTest.DemoRunsInTheEngine`.
+
+`/api/songbrowser/state` always answers. What its fields mean:
+
+| Field | |
+|---|---|
+| `available` | `false` in a binary without the browser (`milo-viewer`); then only `shown` and `why` follow |
+| `mode` | `auto`, `on` or `off`: what `DC3_SONG_BROWSER`, `DC3_CLASSIC_SONG_SELECT` and the defaults resolved to |
+| `on_song_select` | `song_select_panel` is entered |
+| `eligible` | this visit can show the browser (the mode is not `off`, it is a pick-one-song visit, the catalog and the font are there) |
+| `shown` | the browser is what is drawn and what takes the pad right now |
+| `why` | the reason for `shown`, in words: `pad or keyboard in use`, `DC3_SONG_BROWSER=1`, `DC3_SONG_BROWSER=0`, `DC3_CLASSIC_SONG_SELECT=1`, `MILO_INPUT_SCRIPT is set ...`, `a tracked player is using gestures (controller mode is off)`, `an overlay or a dialog is up`, `this visit is not a pick-one-song list ...`, `not on song select` |
+| `pad_in_use`, `controller_mode` | the `auto` rule's latch, and the game's controller mode it follows |
+| `text_capture` | the browser holds the engine's text capture |
+| `leaving` | a pick or a Back is in flight; input is dropped until the screen changes |
+| `hints` | `pad` or `keyboard`: which names the hint bar shows |
+| `songs` | songs in the browser's catalog |
+| `classic_song` | the song the classic list's highlight was last put on |
+| `focus` | `search`, `tabs`, `recents` or `list` |
+| `selected_song` | the song the detail pane shows: what Accept would pick |
+| `list_song`, `recent_song` | the list's selected song and the shelf's selected card |
+| `query`, `sort`, `rows`, `recents_shown` | the search text; the arrangement (`title`, `artist`, `difficulty`, `source`, `decade`); rows in the list, headings included; whether the shelf is unfolded |
+| `highlight_rect` | the list's selection bar, `x,y,width,height` in the UI's 1280x720 logical units (multiply by output rows / 720 for screenshot pixels) |
+| `frames`, `drew`, `glyphs`, `placeholder_glyphs`, `quads`, `draw_calls`, `images_missing` | frames drawn so far and the last frame's numbers; `placeholder_glyphs` counts characters drawn as the missing-glyph box |
+
+The fields from `focus` to `highlight_rect` are present only while a visit has
+a screen. Tested by `SongBrowserInSongSelectTest`, `SongBrowserSwitchFlowTest`
+and `NativeUiHostGpuTest.SongBrowserRunsInTheEngine`.
 
 ### Screen + Frame (Phase 4)
 
@@ -584,6 +597,7 @@ print(f"Frame {tel['data']['frame']}, beat {tel['data']['beat']}")
 | `native/src/platform/HttpServer.h` | Server class, command queue, input/wait state |
 | `native/src/platform/HttpServer.cpp` | All endpoint handlers (~650 LOC) |
 | `native/src/songbrowser/SongCatalogSource_Native.cpp` | `GET /api/songs`: the catalog from the game, and the endpoint's body |
+| `native/src/platform/SongBrowserPanel_Native.cpp` | `GET /api/songbrowser/state`: the body (`StateJson`) |
 | `native/include/httplib.h` | Vendored cpp-httplib (MIT, header-only) |
 
 ## Environment Variables

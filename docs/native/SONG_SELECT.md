@@ -16,6 +16,138 @@ native-only files or under `HX_NATIVE`.
 Recently Played, the four buttons inert, the sort not remembered. The list is
 then the image's row for row (`SongSelectClassicFlowTest`).
 
+On desktop a pad or keyboard player does not see that list at all: they get
+the natively drawn **song browser** over the same panel (next section). The
+list described in the rest of this page is what a gesture player gets, what
+the web gets, and what stays loaded underneath the browser.
+
+## The song browser
+
+The screen is `songbrowser_ui::SongBrowserScreen`
+([reference/SONG_BROWSER_UI.md](reference/SONG_BROWSER_UI.md)): a Recently
+Played shelf, the list sectioned by the sort, type-to-search, a detail pane.
+`native/src/platform/SongBrowserPanel_Native.cpp` attaches it to
+`song_select_panel`.
+
+### When it shows
+
+| `DC3_SONG_BROWSER` | |
+|---|---|
+| `auto` | Shown while a pad or the keyboard is in use, the classic list while a tracked player drives the menus by gesture (the rule is below) |
+| `1` (any other true value) | Always, on the visits that qualify |
+| `0` | Never |
+| unset | Desktop: `auto`. Web: `0`. **With `MILO_INPUT_SCRIPT` set: `0`** — a scripted run drives the classic list unless it asks for the browser |
+
+`DC3_CLASSIC_SONG_SELECT=1` means never, whatever `DC3_SONG_BROWSER` says.
+The decision is logged once: `DC3 SongBrowser: mode=auto|on|off (...)`.
+
+**Which visits qualify.** The ones that show Recently Played
+(`NativeSongSelect::ShowsRecentlyPlayed()`, `song_select_mode` =
+`song_select_quickplay`): Perform, Rehearse, Dance Battle. Playlist building
+runs on another panel (`song_select_playlist_panel`) and never reaches the
+browser's hooks.
+
+**The `auto` rule**, evaluated once a frame while the panel is up:
+
+1. On entering the panel, "pad in use" is the game's controller mode
+   (`TheGestureMgr->InControllerMode()`).
+2. Controller mode on: pad in use.
+3. Controller mode off **and** a body tracked for 2.0 seconds of UI time
+   without a break: gestures in use. The browser gives way to the classic
+   list.
+4. Controller mode off and nobody tracked: no change. Nobody could use the
+   classic list, so the browser stays.
+5. A press on the browser re-enters controller mode and restarts the game's
+   idle timer, so the browser cannot be taken away under a player who is
+   pressing buttons.
+
+What that amounts to: with no camera (`DC3_CONTROLLER_MODE` resolves to
+`forced`) controller mode never ends and the browser is always the list. With
+a camera (`faithful`) the browser stays until the game's own controller-mode
+timeout (5 s without a press) and then 2 s more with a body in view; a press
+while the classic list is up re-enters controller mode as on a 360 (that
+press is swallowed by `ShellInput` unless it is B) and the browser is back on
+the next frame. Typing counts as a press.
+
+The browser also stands aside, without changing "pad in use", while the panel
+itself is not showing, an overlay panel is up, or a dialog is up.
+
+### What it does to the classic panel
+
+`song_select_panel` is loaded, entered, polled and exited exactly as before.
+While the browser is shown:
+
+- the panel's `Draw` draws the browser and nothing else, once a frame, in the
+  UI's render pass (the first draw pass);
+- `song_info_panel` is set not showing; the help bar and the cursor panel
+  (the skeleton box top left and the player camera box top right) are not
+  drawn, so the browser needs no layout insets for them; `background_panel`
+  draws underneath;
+- every pad press except Start goes to the browser and is not seen by the
+  list, the help bar or the panel's script;
+- the engine's text capture is on, so letters search instead of being pad
+  buttons. It is off the moment the browser is hidden or the panel exits.
+  Arrows, Enter, Esc and Tab are pad buttons and keep navigating.
+
+**The same song both ways.** Whenever the browser's detail song changes, the
+classic list's highlight is put on that song's own row
+(`{song_select_panel highlight_right_list_item ROW}`, the list uncollapsed
+first). That is also what keeps the game's preview and song info following
+the browser: the classic highlight settles, the panel's own
+`show_full_song_details` runs, `SongPreview` retargets. `SongPreview::Start`
+is a fade-out / mount / prepare / play state machine, so arrows held down do
+not restart audible playback per row (read from the code; not measured by
+ear). When the browser comes back after the classic list was used, it selects
+the song the classic highlight is on (a highlight on Playlists, Random Song
+or a header leaves the browser where it was).
+
+**Pick** runs `{song_select_panel special_select_song SONG}`, the handler the
+image's voice command uses, which selects the song's own row and runs the
+list's select chain. `SongBrowserInSongSelectTest` compares the outcome with
+an A press on the classic list for the same song: the same next screen
+(`multiuser_screen`) and the same `{meta_performer get_song}`, from the
+shelf, the list and a search result.
+
+**Back** with no query typed runs the panel's `on_back` (after uncollapsing,
+so it leaves instead of opening the list): `move_back_quickplay`, to
+`choose_mode_screen`. With a query typed, Back clears the query first.
+
+**Sounds** are the list's own (`right_hand.hnl`'s ribbon resource): a move
+that changes the song plays the highlight sound through the highlight itself;
+a move that does not (onto the tabs, a clear) plays the same sound directly;
+a sort change plays the list's select sound; Accept with nothing to pick
+plays `invalid_select.flow`; a pick plays what the select chain plays; leaving
+with Back adds none, as the pad's B does not.
+
+**Sort.** The tab is saved as the classic sort name where one exists
+(`by_song`, `by_artist`, `by_difficulty`, Source as `by_location`) and read
+back on the next visit. Decade is saved as `by_decade`, which the classic
+list does not have: `SongSortMgr::SavedSortIndex` answers 0 for a name it
+does not know, so the classic list opens on Skill Level and the file is left
+alone until one of the two writes a sort again.
+
+**State.** `SaveState()` on exit, restored on the next enter in the same
+run: sort, focused part, selected song and card, query, scroll. The catalog
+is refilled from the game on every enter and when the song list's size
+changes while shown.
+
+**Hints** name pad buttons (A, B, LB RB). Once text has been typed in a run
+they name keys (ENTER, ESC, TAB); the engine has no "last device used" to
+ask, so they do not switch back.
+
+### Not done
+
+- The classic list's function rows, **Playlists** and **Random Song**, have
+  no counterpart in the browser. A pad player reaches them only with
+  `DC3_SONG_BROWSER=0`.
+- Under the browser the background is close to black: `background_panel`
+  alone is faint streaks. The bright ribbons of the classic picture are not
+  drawn while the browser is.
+- In `auto`, during the 2 s before the browser gives way a gesture acts on
+  the hidden classic list; with `DC3_SONG_BROWSER=1` it always can.
+- A pad player who stands in the camera's view and presses nothing for 7 s
+  gets the classic list until the next press.
+
 ## Keys
 
 | Pad | Keyboard (desktop and web) | Song select |
@@ -168,8 +300,11 @@ persistent there.
 |---|---|
 | `native/src/platform/SongSelect_Native.{h,cpp}` | `RecentlyPlayedHeaderNode`, `ArtistCmp`, `SongSortByArtist`; the native members of `SongSort`, `SongSortMgr` and `HamNavList`; `Dc3ClassicSongSelect()` |
 | `native/src/platform/SongSelectState_Native.{h,cpp}` | the file |
+| `native/src/platform/SongBrowserPanel_Native.cpp` | the song browser on `song_select_panel`: when it shows, pick, back, sounds, the classic highlight, `GET /api/songbrowser/state`. Linked into `dc3-native`, `dc3-web` and `milo-tests` only |
+| `native/src/platform/SongBrowserHooks_Native.h` | the seven functions the panel code calls; forwarders in `SongSelect_Native.cpp`, no-ops in a binary without the browser (`milo-viewer`, the export tools) |
 | `native/dta/ui/song_select/song_select.dta` | overlay of the image's panel script (see below) |
 | `src/` hooks, all under `HX_NATIVE` | `SongSortMgr::Handle`, `SongSortMgr::SongSortMgr`, `SongSortMgr::SetupQuasiRandomSongs`, `SongSort::BuildTree`, `NavListSort::GetNode`, `SongSortNode::Text`, `HamNavList::OnMsg(const ButtonDownMsg &)`, `GamePanel::Enter` |
+| `src/` hooks of the browser, all under `HX_NATIVE` | `SongSelectPanel::Enter`, `Exit`, `Poll`, `Draw` (new override) and first in its handlers; `HelpBarPanel::Draw`; `ShellInput::Draw`; `HamNavList::NativePlayRibbonSound` (declaration) |
 
 The overlay replaces `ui/song_select/song_select.dta` whole. It differs from
 the original in four handlers:
@@ -194,6 +329,21 @@ three names, and `save_sort`, `save_focus` and `restore_focus` do nothing.
   HTTP debug server, headless, disc songs only, each on its own save
   directory. They need `DC3_DTA_FLOW_TESTS` (on by default where the assets
   are).
+- `SongBrowserInSongSelectTest` (3), `SongBrowserSwitchFlowTest` (5): the
+  song browser in the same kind of run. The first asks for it
+  (`DC3_SONG_BROWSER=1`); the second covers the switches, playlist building
+  and the `auto` rule under `DC3_CONTROLLER_MODE=faithful`.
+- `NativeUiHostGpuTest.SongBrowserRunsInTheEngine`
+  (`native/tests/test_nativeui_host_gpu.cpp`): a rendering run at 1280x720;
+  reads the frame's pixels where the state endpoint says the highlight and the
+  search field are. Needs a GPU.
+
+**Why the older tests still drive the classic list.** Every one of these runs
+sets `MILO_INPUT_SCRIPT` (the fixture's `RunEngine`), and so does every input
+script, and an unset `DC3_SONG_BROWSER` with `MILO_INPUT_SCRIPT` set means the
+classic list (`ResolveMode` in `SongBrowserPanel_Native.cpp`). That is the one
+place it is pinned. A run that drives song select over HTTP with no input
+script and no `DC3_SONG_BROWSER` gets the browser.
 
 ```bash
 ninja -C native/build milo-tests dc3-native
