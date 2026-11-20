@@ -57,6 +57,10 @@ struct Dc3MenuGestureAccess {
         bool hasDirection = false, lockedIn = false;
         int nodes = -1; // -1: not a single-user filter
         int hoverMs = -1;
+        // ArcDetector::mHadProgress: a sweep that got past half way and failed
+        // leaves the detector refusing to start another until the forearm has
+        // been seen to move back 1 cm between two frames
+        bool hadProgress = false;
         // since the last reset
         float maxSwipeAmt = 0.0f;
         int maxNodes = 0;
@@ -102,12 +106,14 @@ struct Dc3MenuGestureAccess {
         s.percentPulled = f ? f->GetPercentPulled() : 0.0f;
         s.nodes = -1;
         s.hoverMs = -1;
+        s.hadProgress = false;
         s.swipeAmt = 0.0f;
         if (DirectionGestureFilterSingleUser *single =
                 dynamic_cast<DirectionGestureFilterSingleUser *>(f)) {
             s.swipeAmt = single->mArcDetector.GetSwipeAmount();
             s.nodes = single->mArcDetector.NumJointsInPath();
             s.hoverMs = single->mArcDetector.mHoverTimer;
+            s.hadProgress = single->mArcDetector.mHadProgress;
         }
         if (wantRows) {
             s.rows.clear();
@@ -260,14 +266,15 @@ std::string StateJson(unsigned since, bool reset, bool rows) {
                  "\"at_bottom\":%d,\"scroll_dir\":%d,\"enabled\":%d,\"selection_enabled\":%d,"
                  "\"hand_height\":%.4f,\"swipe_amt\":%.4f,\"percent_pulled\":%.4f,"
                  "\"has_direction\":%d,\"locked_in\":%d,\"nodes\":%d,\"hover_ms\":%d,"
-                 "\"max_swipe_amt\":%.4f,\"max_nodes\":%d,\"polls\":%u,\"sensor_updates\":%u,"
+                 "\"had_progress\":%d,\"max_swipe_amt\":%.4f,\"max_nodes\":%d,\"polls\":%u,\"sensor_updates\":%u,"
                  "\"hold_progress\":%.3f,\"hold_armed\":%d",
                  s.hand == 0 ? "right" : "left", s.mode, s.selected, s.selectedData,
                  s.firstShowing, s.numShowing, s.numData, s.numItems, s.highlightItem,
                  s.scrollable ? 1 : 0, s.isScrolling ? 1 : 0, s.atTop ? 1 : 0, s.atBottom ? 1 : 0,
                  s.scrollDir, s.enabled ? 1 : 0, s.selectionEnabled ? 1 : 0, s.handHeight,
                  s.swipeAmt, s.percentPulled, s.hasDirection ? 1 : 0, s.lockedIn ? 1 : 0, s.nodes,
-                 s.hoverMs, s.maxSwipeAmt, s.maxNodes, s.polls, s.sensorUpdates,
+                 s.hoverMs, s.hadProgress ? 1 : 0, s.maxSwipeAmt, s.maxNodes, s.polls,
+                 s.sensorUpdates,
                  now - s.holdShownAt < 0.1f && now >= s.holdShownAt ? s.holdProgress : 0.0f,
                  s.hold.Armed() ? 1 : 0);
         out += buf;

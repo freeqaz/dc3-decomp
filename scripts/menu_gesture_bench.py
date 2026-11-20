@@ -56,7 +56,10 @@ What a trial is, and what is counted (every rate is n / trials):
            swiped at all -- while raising the arm or aiming), none (3 tries,
            no select), aim_fail (the wanted row could not be highlighted in
            8 s).  Time-to-select is from the arm starting up to the select,
-           for trials that ended ok.
+           for trials that ended ok.  Each sweep is also kept on its own
+           (result.json "sweeps": taken or not, the most arc nodes and swipe
+           amount the detector reached, and whether its had-progress latch
+           was set when the hand set off).
   read     the arm held on a row for 5 s, drifting slowly, never swiping:
            false_select if anything selects; highlight_moved if the highlight
            leaves the row.
@@ -83,6 +86,7 @@ Usage:
           on a FAIL (native/tests/test_native_gesture_menus.cpp runs it).
   scripts/menu_gesture_bench.py replay --out DIR [--session FILE]...
       [--window FILE:FROM:TO]... [--screen main_screen] [--env KEY=VALUE]...
+      [--trace]
           real recordings (a playtest's pose.dc3session): the footage outside
           songs of each --session, and/or recorded wall seconds FROM..TO,
           played by wall time in front of one screen; counts what the lists
@@ -675,6 +679,12 @@ class Performer:
                     res["at_swipe"] = dict(sym=l2["sym"], first_showing=l2["first_showing"],
                                            mode=l2["mode"], scroll_dir=l2["scroll_dir"],
                                            hand_height=l2["hand_height"], hover_ms=l2["hover_ms"])
+                # one entry a sweep: was the arc detector refusing to start one
+                # (ArcDetector::mHadProgress) when the hand set off, and what
+                # the detector made of it
+                this_sweep = dict(latched=bool(l2 and l2.get("had_progress")), nodes=0, amt=0.0,
+                                  taken=False)
+                res.setdefault("sweeps", []).append(this_sweep)
                 now = k.now()
                 arm.angle.go(now, start_angle + sweep, dur)
                 arm.tilt.go(now, tilt_end, dur)
@@ -686,10 +696,13 @@ class Performer:
                     if l2 is not None:
                         res["max_swipe_amt"] = max(res["max_swipe_amt"], l2["max_swipe_amt"])
                         res["max_nodes"] = max(res["max_nodes"], l2["max_nodes"])
+                        this_sweep["amt"] = max(this_sweep["amt"], l2["max_swipe_amt"])
+                        this_sweep["nodes"] = max(this_sweep["nodes"], l2["max_nodes"])
                     ev = self.b.take_events(st)
                     if ev:
                         fired = ev
                         res["early"] = False
+                        this_sweep["taken"] = True
                         break
                     if not dropped and k.now() >= end:
                         arm.out.go(k.now(), 0.0, 0.35)
@@ -1302,6 +1315,7 @@ def run_replay(a):
         e.eval("{ui goto_screen %s}" % a.screen)
         b.wait_screen(a.screen, timeout=30, settle=1.0)
 
+    trace = None
     try:
         b.start(a.env, session=cut)
         b.wait_screen("title_screen", timeout=180, settle=1.5)
@@ -1314,11 +1328,21 @@ def run_replay(a):
         b.take_events(st)
         lists = result["lists"]
         last = time.monotonic()
+        trace = open(os.path.join(a.out, "trace.jsonl"), "w") if a.trace else None
         while cut_time() < total + 1.0:
             time.sleep(0.1)
             now = time.monotonic()
             dt, last = now - last, now
             st = b.state(reset=True)
+            if trace:
+                tc = cut_time()
+                r = where(tc)
+                trace.write(json.dumps(dict(
+                    cut=round(tc, 2), wall=r and round(r["recorded_wall_from"] + tc - r["cut_from"], 2),
+                    lists=[[l["hand"][0], l["mode"], l["selected"], l["sym"], l["hand_height"],
+                            l["swipe_amt"], l["max_swipe_amt"], l["nodes"], l["max_nodes"],
+                            l.get("had_progress"), l["hover_ms"], l["sensor_updates"]]
+                           for l in st["lists"] if l["enabled"]])) + "\n")
             for l in st["lists"]:
                 if not l["enabled"]:
                     continue
@@ -1361,6 +1385,8 @@ def run_replay(a):
         b.note(f"FAILED: {ex}")
     finally:
         b.stop()
+        if trace:
+            trace.close()
     try:
         with open(os.path.join(a.out, "engine.log"), errors="replace") as lf:
             text = lf.read()
@@ -1535,6 +1561,11 @@ def main():
                         "screen then (a pause menu inside a song, a results screen)")
     p.add_argument("--screen", default="main_screen")
     p.add_argument("--max-seconds", type=float, default=None, help="stop adding segments after this much footage")
+    p.add_argument("--trace", action="store_true",
+                   help="write OUT/trace.jsonl: every look at the lists (ten a second) with the "
+                        "recorded wall second -- hand, mode, row, sym, hand height, swipe amount "
+                        "now and at most since the last look, arc nodes now and at most, the arc "
+                        "detector's had-progress latch, hover ms, sensor updates")
     p = sub.add_parser("replay-table", help="print replay results")
     p.add_argument("dirs", nargs="+")
     p = sub.add_parser("explore", help="developer aid: run --step actions, print the lists")
