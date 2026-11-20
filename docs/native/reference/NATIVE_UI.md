@@ -83,7 +83,7 @@ command per line; that text is the golden format the tests use.
 | `FixedAdvanceMeasurer.h` | The fake measurer the tests use |
 | `DisplayList.h` | The commands, `Describe`, `Layer`, `Painter` |
 | `Renderer.h` | The `Renderer` seam, `Replay`, `RecordingRenderer` |
-| `Theme.h` | `Palette`, `Typography`, `Spacing`, `Radii`, `Motion`, `Metrics`, tokens, `Dc3Theme()` |
+| `Theme.h` | `Palette` (with `scrim`, the wash a screen lays over the game's background, and `star`), `Typography`, `Spacing`, `Radii`, `Motion`, `Metrics` (with the browsing sizes: `searchFieldWidth`, `sidePaneWidth`, `listSecondaryShare`, the difficulty meter cell and the star mark), tokens, `Dc3Theme()` |
 | `Animation.h`, `Clock.h` | `Tween`, `Spring`, easing; the clock seam |
 | `Input.h` | The event types |
 | `Widget.h` | `Context`, `Constraints`, the `Widget` base class |
@@ -91,14 +91,17 @@ command per line; that text is the golden format the tests use.
 | `Focus.h` | `FocusManager`, spatial neighbour search |
 | `ScrollStrip.h` | The selection and scrolling rules `ListView` and `Shelf` share |
 | `Label.h`, `Image.h`, `Panel.h` | Text line; image with placeholder and fade-in; card |
-| `ListView.h` | Virtualised vertical list with sections and a gliding highlight |
+| `ListView.h` | Virtualised vertical list with sections and a gliding highlight; `SetScrollOffset` / `ScrollTarget` restore and save a scroll position |
 | `Shelf.h` | Horizontal row of cards |
 | `TextField.h` | Single-line editing (`TextEdit` is the logic alone) |
 | `TabStrip.h`, `HintBar.h` | Tabs with a gliding indicator; button hints |
 | `Screen.h` | One screen: tree, focus, events, the frame |
-| `SampleBrowser.h` | A mock song browser, the worked example |
 
-Tests are in `native/tests/test_nativeui_{core,layout,widgets,sample}.cpp`
+The worked example of a whole screen is the song browser,
+`native/src/songbrowser_ui/` ([SONG_BROWSER_UI.md](SONG_BROWSER_UI.md)); the mock
+`SampleBrowser` that used to play that part was retired when it landed.
+
+Tests are in `native/tests/test_nativeui_{core,layout,widgets,raster}.cpp`
 with helpers in `nativeui_test_support.h`. `nativeui_raster.h` is a software
 rasteriser and PNG writer for looking at a layout; it is a test tool only.
 
@@ -179,8 +182,8 @@ The rest of the contract:
 
 ## How to write a screen
 
-Build a tree, hand it to a `Screen`, wire the callbacks. `SampleBrowser.cpp`
-is the full example; the shape is:
+Build a tree, hand it to a `Screen`, wire the callbacks.
+`songbrowser_ui/SongBrowserScreen.cpp` is the full example; the shape is:
 
 ```cpp
 Screen screen({ 1280.0f, 720.0f }, Dc3Theme(), measurer, clock);
@@ -253,11 +256,11 @@ ctest --test-dir native/build -R '^UiCore' --output-on-failure
 The suites are named `UiCore*` (`NativeUi*` was already taken by
 `NativeUiMaterialAssetTest`). They need no GPU and no game data.
 
-To look at the sample screen without a GPU:
+To look at a whole screen without a GPU (the song browser's pictures):
 
 ```bash
-NATIVEUI_SAMPLE_PNG=/tmp/sample_layout.png native/build/milo-tests \
-    --gtest_filter=UiCoreSample.TheLayoutCanBeLookedAtAsAPicture
+SONG_BROWSER_UI_PNG_DIR=/tmp/ui native/build/milo-tests \
+    --gtest_filter=SongBrowserUi.Pictures
 ```
 
 That picture shows layout, colours and corners. Its text is a dot font and
