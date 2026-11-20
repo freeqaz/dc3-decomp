@@ -1183,6 +1183,33 @@ TEST_F(NativeWindowTest, ADisplayUnderFiftyHertzIsSaidAtStartup) {
     ExpectNoCrash(out);
 }
 
+// PLAN H-128, windowed: the thermal governor's row cap reaches a WINDOW's
+// frame too -- the frame texture the present pass scales into the surface is
+// made again at the new size, and the window keeps presenting and closes
+// cleanly. A 1600x1000 window's frame is 1600x900; serious pressure from the
+// first frame with the frames held to 20 fps takes it to 720 rows. (The
+// headless run above watches the sizes come back; this one is the window's
+// path through GpuDevice::SetRuntimeRowCap.)
+TEST_F(NativeWindowTest, ThermalRowCapReachesAWindowsFrame) {
+    Engine e;
+    RunWindowed(mRunDir,
+                [](Display *dpy, Window w) {
+                    std::this_thread::sleep_for(std::chrono::seconds(12));
+                    SendWmDeleteWindow(dpy, w);
+                },
+                e,
+                {"MILO_WIDTH=1600", "MILO_HEIGHT=1000", "DC3_LOOK=enhanced", "DC3_HTTP=1",
+                 "DC3_HTTP_PORT=0", "DC3_HTTP_PACE_FPS=20", "MILO_THERMAL_STATE=2",
+                 "MILO_THERMAL_GOVERNOR", "MILO_OUTPUT_MAX_ROWS"});
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_TRUE(Contains(out, "GpuDevice: thermal level 2 (serious), frames late: output 1600x900 "
+                              "-> 1280x720 (thermal row cap 720)"))
+        << Tail(out);
+    EXPECT_TRUE(Contains(out, "output capped at 720 rows (thermal)")) << Tail(out);
+    ExpectNoCrash(out);
+}
+
 // ... and says nothing on a 60 Hz one. Sabotage: Dc3SlowDisplayNotice's
 // threshold raised above 60 -- red.
 TEST_F(NativeWindowTest, ASixtyHertzDisplayGetsNoDisplayNotice) {
