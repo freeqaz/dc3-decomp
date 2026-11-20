@@ -7,7 +7,8 @@
 // with its whole chain (numMips = mNumMips + 1), and the world draws one
 // sample per pixel. Enhanced (the default) uploads whole chains filtered 16x
 // anisotropically with a LOD bias on world textures that follows the render
-// scale (MaterialLodBiasAt), keeps text and HUD at
+// scale (MaterialLodBiasAt; 0 at 1x and 2x since item 19 a, still read from
+// the scene uniforms so it can be moved without a compile), keeps text and HUD at
 // the original's two levels and unbiased, and draws 2x2 supersampled on a
 // discrete GPU when it presents to a window (not on an integrated one, not
 // headless unless MILO_RENDER_SCALE asks), text and HUD still sampled once per
@@ -100,8 +101,13 @@ TEST_F(LookSamplingTest, RetailIsTheOriginalAndEnhancedDepartsAsDocumented) {
         EXPECT_EQ(Look().maxAnisotropy, 16);
         EXPECT_EQ(Look().uiMipLevels, 2) << "text/HUD keep the original's two levels";
         EXPECT_TRUE(Look().cubeMipChain);
-        EXPECT_EQ(Look().lodBiasScale1, -1.0f) << "PROVISIONAL (item 19 a)";
-        EXPECT_EQ(Look().lodBiasScale2, -1.0f) << "PROVISIONAL (item 19 a)";
+        // Item 19 (a): 0 at both ends (-1 cost more shimmer than the
+        // sharpness it bought at every output size measured, 720-2160 rows,
+        // scale 1 and 2); the pipelines still read the bias, so the
+        // lod_bias_* tokens move it live.
+        EXPECT_EQ(Look().lodBiasScale1, 0.0f) << "item 19 (a): the scale-1 bias";
+        EXPECT_EQ(Look().lodBiasScale2, 0.0f) << "item 19 (a): the scale-2 bias";
+        EXPECT_TRUE(Look().materialLodBias) << "world pipelines stay biasable for inspection";
         EXPECT_TRUE(milo::LookTakesLodBias(Look()));
         EXPECT_EQ(Look().renderScale, 2.0f) << "2x2 supersampling on a discrete GPU (windowed)";
         // A handheld's iGPU spends ~2 ms on the 1x main pass; a render scale
