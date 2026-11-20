@@ -1573,7 +1573,8 @@ StreamRenderer::DrawToTexture, HX_NATIVE body: compose on the CPU
 - **Protocol v3** (`pose_server.py` docstring): v2 with magic `0x44503303` and,
   after the persons, `[u16 w][u16 h][u8 rgb=1][u8 mask=1][u16 0]`, `w*h*3` RGB888
   bytes, `w*h` mask bytes (0 nobody, *k* = the packet's *k*-th person; the most
-  confident mask over 0.5 wins). Sent only when the game passes `--frames`;
+  confident mask over 0.5 wins; since P-20 the mask is refined before it is
+  sent, see "The mask, measured" below). Sent only when the game passes `--frames`;
   without it the server sends v2 byte for byte as before, and the reader still
   takes v1/v2. A v3 packet does not fit the socket buffer in one write, so the
   server keeps an outbox instead of treating a short write as a disconnect.
@@ -1616,6 +1617,9 @@ StreamRenderer::DrawToTexture, HX_NATIVE body: compose on the CPU
 | at 30 fps | 2.3 MB/s | 9.2 MB/s | 36.9 MB/s |
 | `camera_block` (scale + mask) in `pose_server.py` | 0.44 ms | 0.25 ms | 0.65 ms |
 
+- The `camera_block` row is the raw mask. The refined mask (P-20, the default)
+  adds 0.5 ms per frame for one person and 0.8 ms for two at 320×240; see "The
+  mask, measured".
 - MediaPipe with masks on: median 21.7 ms per frame vs 21.6 ms off (same model).
 - Unix socket: 0.046 ms per 307 KB packet.
 - Web worker camera block: 1–3.5 ms per frame; worker masks vs desktop masks on
@@ -1650,6 +1654,173 @@ StreamRenderer::DrawToTexture, HX_NATIVE body: compose on the CPU
   `composeMsMean`, `frameAgeMsMean` and the last picture sampled on the grid
   (`rrggbbaa`). Works headless (`MILO_NORENDER=1`): `DrawToTexture` runs and the
   CPU copy is what it reports.
+
+### The mask, measured (P-20, `np-player-mask`, 2026-11-20)
+
+Reported from a live session on the M3 Air: the silhouette "feels a bit
+sketchy". This section is the measurement, what was changed, and what was not.
+
+**Method.** `scripts/pose_mask_quality.py` runs the pose server's own MediaPipe
+backend and its own `camera_block` over a clip at the wire size (320×240) and
+scores the mask that would be sent:
+
+- *still flicker*: over pairs of consecutive frames in which no tracked joint
+  (head, elbows, wrists, knees, ankles; visibility 0.5 or more) moved more than
+  1 px, the share of the person's mask that changed. This is edge noise: the
+  body did not move and the outline did.
+- *change*: the same share over every pair. Context for the row above, not a
+  defect (a dancer's mask is supposed to change).
+- *coverage*: tracked joints whose pixel is inside their own person's mask;
+  *±2 px* also counts a joint within 2 px of it.
+- *holes*: enclosed background regions per frame, and the pixels in small ones
+  (30 px or less). A hand on a hip is a real hole and only counts in the first.
+- *fragments*: pieces of a person's mask besides the largest, per frame.
+- *ghost*: mask pixels where this frame's soft mask is under 0.1, as a share of
+  the mask. Whatever a filter or a fill adds that the segmentation does not see.
+- cost of `camera_block` per frame, median and p95.
+
+Conditions: motion (60 s from 60 s into the clip); `--every 2` (15 poses a
+second); `--still` (one frame held for 20 s with seeded sensor noise, sigma 3:
+a person standing motionless, so every changed pixel is flicker); and a
+synthetic dim room (`--gain 0.3 --noise 8`). Clips: the playtest kit's
+`macarena.mp4`, `supersonic.mp4`, `macarena_duo.mp4` (two dancers) and
+`taye01_stand_dance.mp4`. **All of it is lit video or game capture, none of it
+is a webcam in a living room, and the dim room is arithmetic on a bright one.**
+
+**Baseline** (the mask as it was; `--mask raw` today), `pose_landmarker_full`:
+
+| clip, condition | still flicker (p95, pairs) | change | coverage (wrists) | holes / frame | small-hole px / frame | fragments / frame |
+|---|---|---|---|---|---|---|
+| macarena, held frame, noise 3 | 1.40 % (1.84, 285) | 1.41 % | 100 % | 2.000 (both real: arms akimbo) | 0.00 | 0.000 |
+| supersonic, held frame, noise 3 | 1.39 % (1.97, 223) | 1.44 % | 100 % | 0.027 | 0.11 | 0.000 |
+| macarena, held frame, dim | 2.75 % (3.19, 12) | 3.05 % | 99.79 % (83.0 %, of only 53 tracked) | 1.767 | 0.17 | 0.000 |
+| supersonic, motion | 3.40 % (4.91, 49) | 8.23 % | 99.72 % (98.9 %) | 0.489 | 2.00 | 0.134 |
+| macarena, motion | 1 still pair, not a measurement | 10.54 % | 99.58 % (98.6 %) | 0.626 | 2.31 | 0.107 |
+| macarena_duo, motion | 6.76 % (10.44, 282) | 10.24 % | 99.56 % (98.2 %) | 0.526 | 4.69 | 0.054 |
+| macarena, motion, 15 poses/s | no still pairs | 18.44 % | 99.60 % (98.5 %) | 0.630 | 2.27 | 0.108 |
+| macarena, motion, dim | no still pairs | 11.35 % | 98.77 % (95.7 %) | 0.547 | 1.89 | 0.103 |
+| supersonic, motion, dim | 1 still pair | 9.58 % | 98.57 % (95.8 %; elbows 97.9 %) | 0.536 | 2.12 | 0.151 |
+| taye01_stand_dance, 8 s | 2.03 % (3.60, 99) | 6.30 % | 99.95 % (99.8 %) | 1.133 | 2.33 | 0.004 |
+
+What that says: **the defect is the edge, then the arms in poor light.** A
+motionless person's outline changes by 1.4 % of the mask every frame, and by
+3.4 to 6.8 % between frames of a dance in which no joint moved a pixel. In the
+dimmed clips one tracked wrist in 23 is outside the mask. Holes (about two
+small-hole pixels a frame) and fragments (a speck every 7 to 20 frames, 0.02 %
+of the mask) are real and small. The mask also only changes when a pose
+arrives: at 15 poses a second each update moves 18.4 % of it against 10.5 % at
+30; nothing here addresses that.
+
+**What was tried, each alone** (`--variants`):
+
+| | still flicker, supersonic motion (49 pairs) | still flicker, macarena held (285 pairs) | holes / frame, macarena motion | fragments / frame, macarena motion | wrists covered, macarena dim |
+|---|---|---|---|---|---|
+| raw | 3.40 % | 1.40 % | 0.626 | 0.107 | 95.7 % |
+| hysteresis (enter 0.5, stay 0.25) | 1.96 % | 0.10 % | 0.580 | 0.095 | 97.0 % |
+| motion-aware temporal filter | 2.21 % | 0.37 % | 0.797 | 0.168 | 95.5 % |
+| filter + hysteresis | 1.50 % | 0.01 % | 0.842 | 0.172 | 96.5 % |
+| capsule on a limb the mask lost | 3.40 % | 1.40 % | 0.637 | 0.106 | 98.6 % |
+| 3×3 close + pieces under 1 % removed | 3.40 % | 1.39 % | 0.438 | 0.003 | 95.7 % |
+| **all four ("refined", the default)** | **1.52 %** | **0.01 %** | **0.421** | **0.001** | **98.9 %** |
+
+The filter alone makes holes and specks *more* frequent (it holds a pinhole
+open for a few frames); the close and the speck removal take them out again,
+which is why the four ship together and not the two that move the headline.
+
+**Kept: raw → refined.**
+
+| clip, condition | still flicker (p95) | change | coverage (wrists) | ±2 px | holes / frame | fragments / frame | ghost |
+|---|---|---|---|---|---|---|---|
+| macarena, held frame, noise 3 (285 pairs) | 1.40 (1.84) → **0.01 % (0.03)** | 1.41 → 0.01 % | 100 → 100 % | 100 → 100 % | 2.000 → 2.000 | 0 → 0 | 0.01 % |
+| supersonic, held frame, noise 3 (223) | 1.39 (1.97) → **0.02 % (0.08)** | 1.44 → 0.02 % | 100 → 100 % | 100 → 100 % | 0.027 → 0.002 | 0 → 0 | 0.01 % |
+| macarena, held frame, dim (12) | 2.75 (3.19) → 0.18 % (0.32) | 3.05 → 0.26 % | 99.79 → 100 % (83.0 → 100 %, 53 tracked) | 100 → 100 % | 1.767 → 2.002 | 0 → 0 | 0.02 % |
+| supersonic, motion (49) | 3.40 (4.91) → **1.52 % (3.30)** | 8.23 → 6.44 % | 99.72 → 99.91 % (98.9 → 99.7 %) | 99.91 → 100.00 % | 0.489 → 0.309 | 0.134 → 0.000 | 0.04 % |
+| macarena, motion | n = 1 | 10.54 → 8.87 % | 99.58 → 99.85 % (98.6 → 99.5 %) | 99.88 → 100.00 % | 0.626 → 0.421 | 0.107 → 0.001 | 0.07 % |
+| macarena_duo, motion (282) | 6.76 (10.44) → 4.68 % (8.98) | 10.24 → 8.21 % | 99.56 → 99.84 % (98.2 → 99.4 %) | 99.95 → 100.00 % | 0.526 → 0.293 | 0.054 → 0.001 | 0.24 % |
+| macarena, motion, 15 poses/s | n = 0 | 18.44 → 16.28 % | 99.60 → 99.89 % (98.5 → 99.6 %) | 99.86 → 100.00 % | 0.630 → 0.413 | 0.108 → 0.001 | 0.06 % |
+| macarena, motion, dim | n = 0 | 11.35 → 9.33 % | 98.77 → 99.69 % (95.7 → 98.9 %) | 99.56 → 99.99 % | 0.547 → 0.362 | 0.103 → 0.002 | 0.22 % |
+| supersonic, motion, dim | n = 1 | 9.58 → 7.07 % | 98.57 → 99.55 % (95.8 → 98.7 %) | 99.56 → 99.99 % | 0.536 → 0.309 | 0.151 → 0.015 | 0.20 % |
+| taye01_stand_dance, 8 s (99) | 2.03 (3.60) → 0.59 % (2.31) | 6.30 → 4.87 % | 99.95 → 99.95 % | 100 → 100 % | 1.133 → 1.175 | 0.004 → 0.000 | 0.11 % |
+
+Read it with these in mind. The mask is 3 % larger (6,481 → 6,676 px on
+macarena): hysteresis keeps the 0.25 to 0.5 fringe once a pixel is in. On the
+two dancers the still-pair flicker only falls by a third, because their figures
+are a quarter the size (1,626 px each) and the "still" pairs there are mostly
+joints moving under a pixel, not a body at rest. The dim held frame's wrist row
+is 53 samples; it is the hysteresis that recovers them, not the capsule.
+
+How each step works (`MaskRefiner` in `native/scripts/pose_server.py`):
+
+- **Filter.** Per track id, each pixel of the soft mask moves toward the new
+  value by a gain of 0.25 where it changed by under 0.125, rising to 1.0 at a
+  change of 0.5. A still edge is averaged over about four frames; a limb that
+  moved is taken at once, so nothing trails (ghost 0.01 to 0.24 %).
+- **Hysteresis.** A pixel enters at 0.5 and stays until 0.25.
+- **Lost limbs.** For each arm and leg segment whose two landmarks are tracked,
+  five points along it are tested against the mask grown by 2 px. Only if one
+  is outside is a capsule drawn along the segment (width a share of the torso
+  length). A limb the mask already covers is never touched.
+- **Tidy.** 3×3 close; pieces under 1 % of the person removed (the largest
+  always kept).
+
+State is per track id and dropped when the track leaves. Between two people the
+more confident filtered mask still wins.
+
+**Measured and dropped.**
+
+| | why |
+|---|---|
+| a capsule on every tracked limb | coverage 100.0 % everywhere, but ghost 2.5 to 3.6 % of the mask (the capsule is a guess at the limb's width) and the still flicker on supersonic only fell to 2.62 % |
+| the same at half width | ghost 0.20 to 0.45 %, flicker unchanged (1.41 %) |
+| holding a drawn capsule for 6 frames | held-frame p95 0.77 % against 0.85 %; ghost 0.03 → 0.13 % |
+| probes with no 2 px margin | macarena held frame 0.07 % (p95 0.85) against 0.01 % (0.03): the forearm capsule blinked on and off across the gap at the hip |
+| stay 0.35 instead of 0.25 | taye 0.69 % against 0.59 %; 15 poses/s change 16.85 % against 16.33 %, fragments 0.228 a frame |
+
+**Cost** (`camera_block`, 320×240, 30 s of each clip, this box at a load
+average of 15, so read the differences rather than the absolutes):
+
+| | raw median / p95 | refined median / p95 | added |
+|---|---|---|---|
+| macarena (one person) | 0.50 / 0.67 ms | 0.98 / 1.28 ms | 0.48 / 0.61 ms |
+| macarena_duo (two) | 0.48 / 0.56 ms | 1.32 / 1.71 ms | 0.84 / 1.14 ms |
+
+**The switch back** is `DC3_POSE_MASK=raw` (the game passes `--mask raw` to the
+server it starts), or `pose_server.py --mask raw` by hand. The wire format did
+not change: protocol v3, one ordinal byte per pixel.
+
+**Web still builds the raw mask.** `native/web/pose/pose_worker.js` thresholds
+at 0.5 as before; the refiner has not been ported, because it leans on OpenCV
+(resize, close, connected components, line drawing) that the worker does not
+have, and nothing here was measured in a browser. Desktop and web therefore
+differ since P-20, and the worker says so at `MASK_THRESHOLD`.
+
+**In the game** (the same dumped frame served under both masks in one engine
+run: `pose_mask_quality.py --hold frame.npz --variant raw,refined --select
+FILE`, then a headless screenshot of `main_screen` and of a song): on a dimmed
+frame the raw silhouette ends at the elbows and the refined one has both
+forearms, as plain capsules; on a normal frame the raw one has a hand detached
+from an outstretched arm and a speck beside the skirt, and the refined one has
+neither. The player box is about 125×105 px at 720p and the game blurs it, so
+the edge itself looks the same in a still. Flicker does not show in a still at
+all; `--heat DIR` writes a map of how often each pixel changed.
+
+**Tests.** `tests/test_pose_server.py`: `MaskRefinerTest` (9) and
+`MaskSwitchTest` (3). `PoseServerCommandTest` holds `DC3_POSE_MASK`. Sabotage:
+16 mutations of `pose_server.py` (hysteresis off, no filter, a plain average
+for the filter, capsules never drawn, drawn always, no probe margin, tidy
+skipped, speck share 10 %, state keyed by packet position, stale state kept,
+`run()` ignoring `--mask raw`, `run()` never refining, visibility ignored, last
+person wins, close skipped, raw threshold 0.4) and 3 of `ServerCommand` (the
+variable not passed, any value passed, `--mask` without `--frames`): 19 of 19
+turned a test red.
+
+**Left.** Not seen on a live camera, on the Mac, or in a real dim room. The
+cube figure (`DepthBuffer3D`) reads the same mask and was not looked at under
+the refined one. 160×120 and 640×480 were not measured (the 2 px margin and the
+3×3 close are scaled by width, the speck share is relative). The mask still
+only updates at the pose rate. A soft (alpha) mask on the wire would let the
+game draw a properly feathered edge; that is a protocol change and was not
+made.
 
 ### The cube figure (`DepthBuffer3D`, `np-boxyman`, 2026-11-15)
 
