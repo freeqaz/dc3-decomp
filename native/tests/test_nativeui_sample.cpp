@@ -2,6 +2,7 @@
 // the display list it produces; and one exact display-list golden for a small
 // tree.
 
+#include "nativeui_raster.h"
 #include "nativeui_test_support.h"
 
 #include "nativeui/Clock.h"
@@ -13,6 +14,7 @@
 #include "nativeui/Screen.h"
 #include "nativeui/Utf8.h"
 
+#include <cstdlib>
 #include <set>
 
 using namespace nativeui;
@@ -393,4 +395,85 @@ TEST(UiCoreSample, DisplayListGoldenForASmallCard) {
         "text 18,54.6 font=1 size=20 ls=0.8 #FFFFFFFF \"A\"\n"
         "text 44,54.6 font=1 size=20 ls=0.8 #FFFFFFB8 \"OK\"\n";
     EXPECT_EQ(Describe(screen.BuildFrame()), expected);
+}
+
+// ---------------------------------------------------------------------------
+// The software rasteriser (a test tool) and a picture of the sample
+// ---------------------------------------------------------------------------
+
+TEST(UiCoreRaster, DrawsShapesRoundCornersClipsAndText) {
+    const Color red = Color::FromRgb8(0xFF0000);
+    Raster raster(40, 40);
+    raster.Draw(RoundRectFill { { 4, 4, 20, 20 }, 10.0f, CornerColors::Solid(red), 0.0f });
+    EXPECT_FLOAT_EQ(raster.At(14, 14).r, 1.0f) << "the middle is filled";
+    EXPECT_FLOAT_EQ(raster.At(4, 4).r, 0.0f) << "the corner is rounded away";
+    EXPECT_FLOAT_EQ(raster.At(30, 30).r, 0.0f);
+
+    raster.PushClip({ 0, 30, 5, 5 });
+    raster.Draw(RoundRectFill { { 0, 26, 40, 14 }, 0.0f, CornerColors::Solid(red), 0.0f });
+    raster.PopClip();
+    EXPECT_FLOAT_EQ(raster.At(2, 32).r, 1.0f);
+    EXPECT_FLOAT_EQ(raster.At(10, 32).r, 0.0f) << "right of the clip";
+    EXPECT_FLOAT_EQ(raster.At(2, 28).r, 0.0f) << "above the clip";
+
+    Raster ring(40, 40);
+    ring.Draw(
+        RoundRectStroke { { 4, 4, 30, 30 }, 0.0f, CornerColors::Solid(red), 3.0f, 0.0f }
+    );
+    EXPECT_FLOAT_EQ(ring.At(5, 20).r, 1.0f) << "on the band, just inside the edge";
+    EXPECT_FLOAT_EQ(ring.At(19, 19).r, 0.0f) << "hollow in the middle";
+    EXPECT_FLOAT_EQ(ring.At(1, 20).r, 0.0f) << "nothing outside";
+
+    Raster text(40, 40);
+    text.Draw(TextRun { { 4, 30 }, FontId { 1 }, 20.0f, red, 0.0f, "I" });
+    float ink = 0.0f;
+    for (int y = 0; y < 40; ++y) {
+        for (int x = 0; x < 40; ++x) {
+            ink += text.At(x, y).r;
+            if (text.At(x, y).r > 0.0f) {
+                EXPECT_LT(y, 30) << "glyphs sit on the baseline";
+                EXPECT_GE(y, 30 - 14) << "and are 0.7 of the size tall";
+            }
+        }
+    }
+    EXPECT_GT(ink, 20.0f);
+
+    // One stored block: signature, IHDR, IDAT (zlib header, block header,
+    // 40 rows of a filter byte and 120 colour bytes, Adler-32), IEND.
+    const std::vector<unsigned char> png = EncodePng(40, 40, raster.Rgb8());
+    EXPECT_EQ(png.size(), 8u + 25u + (12u + 2u + 5u + 40u * 121u + 4u) + 12u);
+    EXPECT_EQ(std::string(png.begin() + 1, png.begin() + 4), "PNG");
+    EXPECT_EQ(std::string(png.end() - 8, png.end() - 4), "IEND");
+}
+
+// The sample screen through the software rasteriser. With NATIVEUI_SAMPLE_PNG
+// set to a path the picture is also written there:
+//   NATIVEUI_SAMPLE_PNG=/tmp/sample_layout.png native/build/milo-tests \
+//       --gtest_filter=UiCoreSample.TheLayoutCanBeLookedAtAsAPicture
+TEST(UiCoreSample, TheLayoutCanBeLookedAtAsAPicture) {
+    SampleRig rig;
+    rig.Settle();
+    for (int i = 0; i < 3; ++i) {
+        rig.browser.HandleEvent(Act(Action::Down));
+    }
+    const DisplayList frame = rig.Settle();
+    Raster raster(1280, 720);
+    Replay(frame, raster);
+
+    // The backdrop is the theme's black, and the highlight bar is blue where
+    // the row below it is not.
+    const Color corner = raster.At(2, 2);
+    EXPECT_LT(corner.r + corner.g + corner.b, 0.05f);
+    const Rect bar = rig.browser.SongList().HighlightRect();
+    const int nearRightEnd = static_cast<int>(bar.Right()) - 4;
+    const Color onBar = raster.At(nearRightEnd, static_cast<int>(bar.Center().y));
+    const Color belowBar = raster.At(nearRightEnd, static_cast<int>(bar.Bottom()) + 40);
+    EXPECT_GT(onBar.b, onBar.r + 0.1f);
+    EXPECT_LT(belowBar.b, onBar.b * 0.5f);
+
+    const std::vector<unsigned char> png = EncodePng(1280, 720, raster.Rgb8());
+    EXPECT_GT(png.size(), 1280u * 720u * 3u);
+    if (const char *path = std::getenv("NATIVEUI_SAMPLE_PNG")) {
+        ASSERT_TRUE(WriteFile(path, png)) << path;
+    }
 }
