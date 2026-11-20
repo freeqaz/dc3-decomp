@@ -174,6 +174,17 @@ the cap off (`MILO_OUTPUT_MAX_ROWS=0`). A 60 Hz frame is 16.7 ms.
   holds 60 with little to spare, the clock does rise in a song, and in the menus
   it stayed low while frames ran a fraction late. Not measured: the old build
   in the same window, and fullscreen.
+- **On a display at 30 Hz it is 30 frames a second, whatever the GPU does.**
+  The two launches after that session had a 3840x2160 display as the main
+  display, and macOS reported it at 30.00 Hz (`DC3 Native: frame cap: off (the
+  30.00 Hz display ...)`). The game drew 3840x2160 and the one whole session
+  (401 s) read 25.8 to 34.1 fps in all 75 `[PERF]` reports, 31 to 32 ms a frame
+  through the song. That is the display's mode, not the game: choose 60 Hz in
+  System Settings, Displays; a 4K TV may need a 1080p mode, or an HDMI 2.0
+  cable or adapter. Since PLAN H-127 a banner says so at startup. With that
+  display at 60 Hz the Retina setting matters more: by pixel count from the
+  3420x1924 column, 3840x2160 would be about 25 ms on the main menu, 27 ms on
+  song select and 20 ms in gameplay (extrapolated, not measured).
 - **The per-pass GPU timers do not separate passes on this GPU.** A tile-based
   renderer runs a frame's passes interleaved, so each pass's `MILO_GPU_TIMERS`
   figure is close to the whole frame's span. Read `gpu_span_ms`; use
