@@ -2555,7 +2555,8 @@ if(BUILD_TESTS)
     endif()
     # Per source, as for test_gates.cpp below (a value that differs between
     # boxes stays out of every other TU's ccache key).
-    set_property(SOURCE tests/test_dta_flow.cpp tests/test_mogg_v0xe.cpp APPEND PROPERTY
+    set_property(SOURCE tests/test_dta_flow.cpp tests/test_mogg_v0xe.cpp
+        tests/test_native_song_select.cpp APPEND PROPERTY
         COMPILE_DEFINITIONS "DC3_DLC_TESTS=${_dlc_tests}")
 
     # Deliberately NOT defaulted on, with the reason recorded so the next person

@@ -116,6 +116,9 @@ namespace nativeui_host {
         void SetFallback(const std::string &path);
 
         State StateOf(nativeui::ImageHandle image) const;
+        // The same for a path, without asking for it: kUnknown when nobody
+        // has requested the path.
+        State StateOfPath(const std::string &path) const;
         bool IsReady(nativeui::ImageHandle image) const { return StateOf(image) == kReady; }
         // True once the handle has something to show: its own picture, or the
         // fallback after a failure.

@@ -419,8 +419,12 @@ frame: at most `maxConcurrent` (4) loads in flight, at most
 since the last `Poll()`, and a dropped texture is deleted at the **next**
 `Poll()` (the canvas resolves textures when it flushes). `onArrived` fires
 once per arrival. A failed path draws the fallback
-(`ui/image/dc_logo_keep.png`) and is not retried. `AlbumArtPath(song)` is
-`HamSongMgr::GetAlbumArtPath`. An `ImageQuad` whose handle has no texture
+(`ui/image/dc_logo_keep.png`) and is not retried. The path of a song's cover
+comes from the song catalog (`SongEntry::albumArtPath`): the game's own
+`HamSongMgr::GetAlbumArtPath` for a disc song, and for a downloaded song the
+same file through its DLC root's drive (`dlcroot0:/<package>/songs/...`),
+which resolves whether or not the game has the package mounted. An
+`ImageQuad` whose handle has no texture
 yet draws nothing (the widget's placeholder shows through its fade).
 
 Icons are images too. `IconTextures` (`nativeui_host/IconTextures.{h,cpp}`)

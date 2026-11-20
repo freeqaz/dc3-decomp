@@ -75,6 +75,11 @@ namespace nativeui_host {
         return entry ? entry->state : kUnknown;
     }
 
+    ImageCache::State ImageCache::StateOfPath(const std::string &path) const {
+        const auto found = byPath_.find(path);
+        return found == byPath_.end() ? kUnknown : entries_[found->second - 1].state;
+    }
+
     bool ImageCache::HasPicture(nativeui::ImageHandle image) const {
         const Entry *entry = Find(image);
         if (!entry) {

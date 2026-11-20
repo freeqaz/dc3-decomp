@@ -193,6 +193,20 @@ run: sort, focused part, selected song and card, query, scroll. The catalog
 is refilled from the game on every enter and when the song list's size
 changes while shown.
 
+**Covers.** A disc song's cover is the game's own path
+(`HamSongMgr::GetAlbumArtPath`). A downloaded song's is not: the game puts the
+package's drive (`cnt00000003:`) on that path only while the package is
+mounted, which it does for one song at a time (the classic list shows a
+downloaded song's art only then: `refresh_album_art` in `ui/meta.dta`). The
+browser shows a shelf and a list of covers at once, so each DLC root gets a
+drive of its own for the whole run (`dlcroot0:`, `dlcroot1:`, ... in
+`ContentMgr_Native.cpp`) and the catalog gives a downloaded song's cover as
+`dlcroot0:/<package>/songs/<song>/<song>_keep.png`
+(`CoverPath` in `SongCatalogSource_Native.cpp`). On the web the same path is
+fetched as `dlc/<package>/songs/<song>/gen/<song>_keep.png_xbox`. A cover that
+cannot be read draws the game's logo (`ui/image/dc_logo_keep.png`) and counts
+in the state's `images_failed`.
+
 **Hints** name the device last used: the keyboard's names (ENTER, ESC, TAB)
 when the last input came from the keyboard or no real pad has been used in
 this run, the pad's (A, B, LB RB) once a real pad button arrives. They change
@@ -217,6 +231,12 @@ buttons the keyboard map and the gamepad each contributed to the last poll).
   browser stands aside, comes back on the same song, and A on the dialog ends
   where it ends over the classic list). An overlay panel over song select has
   none.
+- A package directory with a capital letter in its name (one not made by
+  `scripts/dlc/import.sh`, which makes lower-case names) shows the logo in
+  place of its songs' covers, and the log says so when the package is found:
+  a path on the root's drive is lower-cased by the game's path normalisation.
+  Measured with the megapack linked as `MegaPack`: the song is listed, picked
+  and reaches `multiuser_screen`; its cover is the logo.
 - Seen while writing that test, on the classic list too, so not the
   browser's: A on an `error_message` dialog over song select dismisses the
   dialog and also opens Playlists. Not looked into.
@@ -402,12 +422,19 @@ three names, and `save_sort`, `save_focus` and `restore_focus` do nothing.
   HTTP debug server, headless, disc songs only, each on its own save
   directory. They need `DC3_DTA_FLOW_TESTS` (on by default where the assets
   are).
-- `SongBrowserInSongSelectTest` (3), `SongBrowserSwitchFlowTest` (9): the
+- `SongBrowserInSongSelectTest` (3), `SongBrowserSwitchFlowTest` (12 where
+  the DLC megapack is imported, 11 elsewhere): the
   song browser in the same kind of run. The first asks for it
   (`DC3_SONG_BROWSER=1`); the second covers the switches, playlist building,
   the two commands against a second engine on the classic list, Rehearse and
-  Dance Battle, the hint names, the preview count, and a stand-in body that
+  Dance Battle, the hint names, the preview count, a dialog over song select,
+  and a stand-in body that
   presses nothing for 60 s of game time under `DC3_CONTROLLER_MODE=faithful`.
+  `ADownloadedSongShowsItsOwnCoverAndIsPickedAsOnTheClassicList` is the one
+  test with downloaded songs on (Milkshake, from a one-package root): its
+  cover is read through the root's drive and loads, and A on it ends on the
+  same screen with the same song as A on its row of the classic list. It is
+  compiled in only where configure finds the package (`DC3_DLC_TESTS`).
 - `SongBrowserHandsTest` (1): the whole `auto` rule against a synthetic person
   (`scripts/song_browser_hands.py` on `scripts/synthetic_kinect.py`, no input
   script): standing idle, an arm passing through, an arm held, dropped, a

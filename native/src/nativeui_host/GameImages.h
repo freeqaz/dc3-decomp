@@ -9,9 +9,10 @@
 //   Finish  RndTex::SetBitmap(loader) -- decodes the bitmap; the one step with
 //           a cost, which is why ImageCache finishes only a few per frame
 //
-// Paths are the game's: HamSongMgr::GetAlbumArtPath(song) for album art
-// ("<song dir>/<song>_keep.png"), kFallbackArtPath for the logo shown when a
-// song has none.
+// Paths are the game's: a song's cover is "<song dir>/<song>_keep.png" (the
+// song catalog gives each song's, SongEntry::albumArtPath: a downloaded
+// song's goes through its DLC root's drive, see SongCatalogSource_Native.cpp),
+// kFallbackArtPath is the logo shown when a song has none.
 #pragma once
 
 #include "nativeui_host/ImageCache.h"
@@ -39,8 +40,5 @@ namespace nativeui_host {
         std::unordered_map<int, FileLoader *> jobs_;
         int nextJob_ = 1;
     };
-
-    // The album-art path of the song with this short name ("" if unknown).
-    std::string AlbumArtPath(const char *songShortName);
 
 }

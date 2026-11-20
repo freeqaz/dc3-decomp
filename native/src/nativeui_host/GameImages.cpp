@@ -1,6 +1,5 @@
 #include "nativeui_host/GameImages.h"
 
-#include "meta_ham/HamSongMgr.h"
 #include "rndobj/Tex.h"
 #include "utl/FilePath.h"
 #include "utl/Loader.h"
@@ -66,13 +65,5 @@ namespace nativeui_host {
     }
 
     void GameImageLoader::Destroy(RndTex *texture) { delete texture; }
-
-    std::string AlbumArtPath(const char *songShortName) {
-        if (!songShortName || !*songShortName) {
-            return std::string();
-        }
-        const char *path = TheHamSongMgr.GetAlbumArtPath(Symbol(songShortName));
-        return path ? std::string(path) : std::string();
-    }
 
 }

@@ -1988,6 +1988,75 @@ TEST_F(SongBrowserSwitchFlowTest, ADialogOverSongSelectTakesThePresses) {
         << "a song was picked under the dialog\n" << browser.driver;
 }
 
+#if DC3_DLC_TESTS
+// A downloaded song shows its own cover in the browser.  The game's path to
+// it works only while the song's package is mounted, which the game does for
+// one song at a time; the browser reads it through the DLC root's drive
+// instead (SongCatalogSource_Native.cpp CoverPath).  Milkshake, from the DC2
+// DLC megapack in a one-package root, as in DlcSongFlowTest: compiled in only
+// where configure found the package (the DC3_DLC_TESTS gate), so a box
+// without it registers nothing.  The root's own name has capitals in it
+// (MakeTestTempDir), which a host path given to the game's loader would lose.
+// Then the pick: A on it ends where A on its row of the classic list ends, in
+// a second engine.
+TEST_F(SongBrowserSwitchFlowTest, ADownloadedSongShowsItsOwnCoverAndIsPickedAsOnTheClassicList) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
+    const char *const package = "dancecentral2dlcmegapack";
+    const char *env = getenv("DC3_TEST_DLC_DIR");
+    const std::string dlc = env && *env ? env : BinaryDir() + "/../../orig-assets/dlc";
+    const std::string source = dlc + "/" + package;
+    ASSERT_EQ(access((source + "/songs/milkshake/gen/milkshake_keep.png_xbox").c_str(), R_OK), 0)
+        << "DC3_DLC_TESTS is compiled in but the package's cover is gone: " << source
+        << " (reconfigure, or import it with scripts/dlc/import.sh)";
+    std::string error;
+    std::string root = MakeRoot(error);
+    ASSERT_TRUE(error.empty()) << error;
+    const std::string dlcRoot = MakeTestTempDir("dc3-dlc-root");
+    ASSERT_FALSE(dlcRoot.empty());
+    ASSERT_EQ(symlink(source.c_str(), (dlcRoot + "/" + package).c_str()), 0) << dlcRoot;
+    const std::string pick = std::string("press confirm 60; waitfor 30 multiuser_screen; ")
+        + "settle 120; echo \"DRIVER: c2 $(scr) " + kPerformerSongValue + "\"; ";
+    std::ostringstream d;
+    d << kCommandFunctions << kToSongSelect << "echo \"DRIVER: c0 $(sb)\"; "
+      << "typ milkshake 60; press down 30; settle 300; echo \"DRIVER: c1 $(sb)\"; " << pick;
+    EngineRun run = RunEngine(root, "run", d.str(), " DC3_SONG_BROWSER=1 DC3_DLC_DIR=" + dlcRoot);
+    RequireRun(true, "", run);
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string classicRoot = MakeRoot(error);
+    ASSERT_TRUE(error.empty()) << error;
+    std::ostringstream c;
+    c << kCommandFunctions << kToSongSelect
+      << "ev '{song_select_panel highlight_right_list_item {song_offer_provider "
+      << "first_data_index milkshake}}' > /dev/null; settle 90; " << pick;
+    EngineRun classic =
+        RunEngine(classicRoot, "classic", c.str(), " DC3_SONG_BROWSER=0 DC3_DLC_DIR=" + dlcRoot);
+    RequireRun(true, "", classic);
+    if (IsSkipped() || HasFatalFailure()) return;
+    const std::string c0 = DriverLine(run, "c0"), c1 = DriverLine(run, "c1");
+    ASSERT_EQ(Sb(c0, "shown"), "true") << c0;
+    // A disc song first: the control for "ready".
+    EXPECT_EQ(Sb(c0, "selected_cover"), "ready") << "the disc song's cover\n" << c0;
+    EXPECT_EQ(Sb(c0, "selected_cover_path").find(':'), std::string::npos)
+        << "a disc song's cover is the game's own path\n" << c0;
+    ASSERT_EQ(Sb(c1, "selected_song"), "milkshake")
+        << "precondition: the downloaded song is in the catalog and the search found it\n"
+        << c1;
+    EXPECT_EQ(Sb(c1, "selected_cover_path"),
+              std::string("dlcroot0:/") + package + "/songs/milkshake/milkshake_keep.png")
+        << c1;
+    EXPECT_EQ(Sb(c1, "selected_cover"), "ready")
+        << "the downloaded song shows the fallback picture, not its cover\n" << c1;
+    EXPECT_EQ(Sb(c1, "images_failed"), "0") << c1;
+    EXPECT_EQ(run.output.find("Could not load: songs/milkshake"), std::string::npos)
+        << "the cover was asked for outside its package\n" << Tail(run.output);
+    const std::string picked = DriverLine(run, "c2"), classicPicked = DriverLine(classic, "c2");
+    ASSERT_EQ(classicPicked, "multiuser_screen milkshake")
+        << "precondition: A on the classic list's row picks the downloaded song\n"
+        << Tail(classic.output);
+    EXPECT_EQ(picked, classicPicked) << "the pick from the browser against the classic list's";
+}
+#endif // DC3_DLC_TESTS
+
 // ---------------------------------------------------------------------------
 // The auto rule against a body with hands (scripts/song_browser_hands.py)
 // ---------------------------------------------------------------------------

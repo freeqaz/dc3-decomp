@@ -357,12 +357,15 @@ curl localhost:9090/api/songbrowser/state
 #  "commands":["random_song","playlists"],
 #  "command_rows":["random_song","playlists"],
 #  "songs":45,"classic_song":"aint2proud2beg","focus":"list",
-#  "selected_song":"aint2proud2beg","list_song":"aint2proud2beg",
+#  "selected_song":"aint2proud2beg",
+#  "selected_cover_path":"songs/aint2proud2beg/aint2proud2beg_keep.png",
+#  "selected_cover":"ready","list_song":"aint2proud2beg",
 #  "list_command":"","selected_command":"",
 #  "recent_song":"boomboompow","query":"","sort":"title","rows":53,"list_index":2,
 #  "recents_shown":false,"highlight_rect":[56.0,187.0,804.0,51.0],"frames":642,
 #  "drew":true,"glyphs":436,"placeholder_glyphs":0,"quads":516,"draw_calls":52,
-#  "images_missing":0,"build_us":36,"replay_us":38}}
+#  "images_missing":0,"images_ready":9,"images_failed":0,"build_us":36,
+#  "replay_us":38}}
 # Before song select has been entered in this run:
 # {"ok":true,"data":{"available":true,"on_song_select":false,"eligible":false,
 #  "shown":false,"why":"not on song select"}}
@@ -410,11 +413,13 @@ queue's length afterwards; the text reaches a screen on its next frame.
 | `classic_song` | the song the classic list's highlight was last put on |
 | `focus` | `search`, `tabs`, `recents` or `list` |
 | `selected_song` | the song the detail pane shows: what Accept would pick. Empty while the pane shows a command or the search help |
+| `selected_cover_path`, `selected_cover` | that song's cover: the path it is read from (a downloaded song's is on its DLC root's drive, `dlcroot0:/<package>/songs/...`), and how far its load has come: `not asked for`, `queued`, `loading`, `ready`, `failed` (the logo is drawn in its place) or `evicted`. Absent while the pane shows no song |
 | `list_song`, `recent_song` | the list's selected song and the shelf's selected card |
 | `list_command`, `selected_command` | the command row the list stands on, and the command the detail pane shows (`random_song`, `playlists`, or empty): what Accept would run |
 | `query`, `sort`, `rows`, `list_index`, `recents_shown` | the search text; the arrangement (`title`, `artist`, `difficulty`, `source`, `decade`); rows in the list, headings included; the selected row's index among them; whether the shelf is unfolded |
 | `highlight_rect` | the list's selection bar, `x,y,width,height` in the UI's 1280x720 logical units (multiply by output rows / 720 for screenshot pixels) |
-| `frames`, `drew`, `glyphs`, `placeholder_glyphs`, `quads`, `draw_calls`, `images_missing` | frames drawn so far and the last frame's numbers; `placeholder_glyphs` counts characters drawn as the missing-glyph box |
+| `frames`, `drew`, `glyphs`, `placeholder_glyphs`, `quads`, `draw_calls`, `images_missing` | frames drawn so far and the last frame's numbers; `placeholder_glyphs` counts characters drawn as the missing-glyph box. `images_missing` counts pictures drawn with no texture at all; a cover whose load failed is drawn as the logo and is **not** counted here |
+| `images_ready`, `images_failed` | covers held as textures now, and cover loads that have failed in this run (each of those draws the logo). 0 failed is the reading that says every cover asked for was found; these two count in a run that does not render too |
 | `build_us`, `replay_us` | the last frame's cost in microseconds: building the display list, and replaying it into the canvas. Both 0 in a run that does not render |
 
 The fields from `focus` to `highlight_rect` are present only while a visit has

@@ -18,12 +18,38 @@
 
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <set>
 #include <vector>
+
+std::string NativeContentCoverRoot(const char *contentName); // platform/ContentMgr_Native.cpp
 
 namespace songbrowser {
 
 namespace {
+
+// The path the browser reads a song's cover from.  A disc song's is the
+// game's own (HamSongMgr::GetAlbumArtPath).  A downloaded song's cover is
+// inside its package, and the game's path reaches it only through the
+// package's drive, which is there only while the package is mounted: the
+// game mounts the package of the one song it is about to show or play, and
+// SongAudioData puts the drive on the path then.  The browser shows a
+// screenful of covers at once, so for those it goes through the drive the
+// content manager keeps on the DLC root, mounted or not.
+std::string CoverPath(Symbol shortName) {
+    const char *art = TheHamSongMgr.GetAlbumArtPath(shortName);
+    if (!art || !*art) return std::string();
+    const char *content = TheHamSongMgr.ContentName(shortName, false);
+    if (!content || !*content) return art;
+    const std::string root = NativeContentCoverRoot(content);
+    if (root.empty()) return art; // no drive on its root: the game's path
+    // "cnt00000003:/songs/x/x_keep.png" while mounted, "songs/x/x_keep.png"
+    // otherwise: the part inside the package either way.
+    const char *colon = strchr(art, ':');
+    const char *inside = colon ? colon + 1 : art;
+    while (*inside == '/' || *inside == '\\') inside++;
+    return root + "/" + inside;
+}
 
 // The locale's text for `token`, into the catalog's labels; nothing when the
 // locale has none (the pure code then uses its English default).
@@ -92,8 +118,7 @@ void FillCatalogFromGame(SongCatalog &catalog, bool includeLocked) {
         entry.source = SourceFromOrigin(entry.origin);
         entry.onDisc = metadata->IsOnDisc();
         entry.isCover = metadata->IsCover();
-        const char *art = TheHamSongMgr.GetAlbumArtPath(shortName);
-        entry.albumArtPath = art ? art : "";
+        entry.albumArtPath = CoverPath(shortName);
         entry.locked = !unlocked;
         // HamStarsDisplay::SetSongImpl, mode 0: the best run over every
         // difficulty, counted once it has a score.

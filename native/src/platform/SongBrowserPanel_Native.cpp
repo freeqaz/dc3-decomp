@@ -399,6 +399,23 @@ public:
         return RunCommand(command, error);
     }
 
+    static const char *CoverStateName(nativeui_host::ImageCache::State state) {
+        switch (state) {
+        case nativeui_host::ImageCache::kQueued:
+            return "queued";
+        case nativeui_host::ImageCache::kLoading:
+            return "loading";
+        case nativeui_host::ImageCache::kReady:
+            return "ready";
+        case nativeui_host::ImageCache::kFailed:
+            return "failed";
+        case nativeui_host::ImageCache::kEvicted:
+            return "evicted";
+        default:
+            return "not asked for";
+        }
+    }
+
     std::string StateJson() const {
         using songbrowser::JsonEscape;
         std::string json = "{\"available\":true";
@@ -453,6 +470,14 @@ public:
             char numbers[256];
             json += std::string(",\"focus\":\"") + RegionName(state.focus) + "\"";
             json += ",\"selected_song\":\"" + JsonEscape(screen_->DetailSong()) + "\"";
+            // The cover of the song in the detail pane: where it is read
+            // from, and how far its load has come ("failed": the fallback
+            // picture is drawn in its place).
+            if (const songbrowser::SongEntry *shown = catalog_.Find(screen_->DetailSong())) {
+                json += ",\"selected_cover_path\":\"" + JsonEscape(shown->albumArtPath) + "\"";
+                json += std::string(",\"selected_cover\":\"")
+                    + CoverStateName(images_.StateOfPath(shown->albumArtPath)) + "\"";
+            }
             json += ",\"list_song\":\"" + JsonEscape(state.selectedSong) + "\"";
             // The command row the list stands on, and the one the pane shows.
             json += std::string(",\"list_command\":\"")
@@ -487,6 +512,11 @@ public:
         json += ",\"quads\":" + std::to_string(stats.quads);
         json += ",\"draw_calls\":" + std::to_string(stats.drawCalls);
         json += ",\"images_missing\":" + std::to_string(stats.imagesMissing);
+        // Loads that produced no picture since this panel was made (the
+        // fallback is drawn for those, so images_missing does not see them).
+        const nativeui_host::ImageCache::Stats imageStats = images_.GetStats();
+        json += ",\"images_ready\":" + std::to_string(imageStats.ready);
+        json += ",\"images_failed\":" + std::to_string(imageStats.failures);
         json += ",\"build_us\":" + std::to_string(stats.buildMicros);
         json += ",\"replay_us\":" + std::to_string(stats.replayMicros);
         json += "}";
