@@ -19,6 +19,7 @@
 #include "hamobj/HamGameData.h"   // TheGameData (player->skeleton binding)
 #include "hamobj/HamPlayerData.h" // GetSkeletonTrackingID
 #include "hamobj/MoveDir.h"       // MoveDir::SongSeconds (DC3_POSE_FILL)
+#include "lazer/game/Game.h"       // TheGame->Paused(): the pause menu is a menu (DC3_POSE_FILL_MENU)
 #include "lazer/game/GamePanel.h"  // TheGamePanel: the stall notice is for a song in play
 #include "PoseFill_Native.h"      // DC3_POSE_FILL
 #include "PoseIdentity_Native.h"  // DC3_POSE_REACQUIRE_MS: who is who
@@ -980,6 +981,9 @@ double (*gFillClock)() = nullptr;
 // was -- the song clock alone -- for an A/B.
 Dc3PoseFill::StallClock gFillStallClock;
 bool gFillSongClockOnly = false;
+// DC3_POSE_FILL_MENU: the fill's mode outside a song (FillSelectMode below).
+Dc3PoseFill::Mode gFillSongMode = Dc3PoseFill::kExtrap;
+Dc3PoseFill::Mode gFillMenuMode = Dc3PoseFill::kMenuDefaultMode;
 
 void FillReadMode() {
     if (gFillModeRead)
@@ -997,6 +1001,23 @@ void FillReadMode() {
                     v);
     }
     gFill.SetMode(mode);
+    gFillSongMode = mode;
+    gFillMenuMode = mode; // a test's override is one mode everywhere
+    if (!gFillHaveOverride) {
+        const char *m = getenv("DC3_POSE_FILL_MENU");
+        if (!m || !*m) {
+            gFillMenuMode = Dc3PoseFill::kMenuDefaultMode;
+        } else if (strcmp(m, "same") != 0) {
+            bool ok = true;
+            gFillMenuMode = Dc3PoseFill::ParseMode(m, &ok);
+            if (!ok) {
+                fprintf(stderr,
+                        "DC3_POSE_FILL_MENU='%s' ignored (want off, interp, hold, extrap, extrapc or same)\n",
+                        m);
+                gFillMenuMode = Dc3PoseFill::kMenuDefaultMode;
+            }
+        }
+    }
     const char *g = gFillHaveOverride ? nullptr : getenv("DC3_POSE_FILL_GAIN");
     bool gainOk = true;
     gFill.SetGain(Dc3PoseFill::ParseGain(g, &gainOk));
@@ -1238,12 +1259,29 @@ static void IdentifyPeople(NativeSkeletonProvider::PersonData *persons, int numP
     }
 }
 
+// DC3_POSE_FILL_MENU (PoseFill_Native.h "Outside a song"): DC3_POSE_FILL is
+// the mode while a song is being played -- the scorer's -- and everything
+// else (the menus, the pause menu, the results) has its own, by default none.
+// A test's override (NativePoseFillTestSet) is one mode everywhere.
+static void FillSelectMode() {
+    if (gFillHaveOverride)
+        return;
+    bool song = NativeSongInPlay() && !(TheGame && TheGame->Paused());
+    Dc3PoseFill::Mode want = song ? gFillSongMode : gFillMenuMode;
+    if (want == gFill.GetMode())
+        return;
+    gFill.SetModeKeepingRate(want);
+    fprintf(stderr, "DC3 POSE FILL: %s for %s\n", Dc3PoseFill::ModeName(want),
+            song ? "the song" : "the menus");
+}
+
 static const SkeletonFrame *BuildSensorFrame() {
     bool providerRunning = false;
     bool newFrame = false;
     bool delivered = false;
 
     FillReadMode();
+    FillSelectMode();
     if (TheSkeletonProvider && TheSkeletonProvider->IsRunning()) {
         providerRunning = true;
         TheSkeletonProvider->Poll();

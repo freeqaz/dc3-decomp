@@ -83,6 +83,41 @@ Mode ParseMode(const char *env, bool *ok = nullptr);
 // step).  Unset = kDefaultGain; anything else, or outside [0, 1], is the
 // default and *ok is set false.
 static const float kDefaultGain = 1.0f;
+// DC3_POSE_FILL_MENU: the mode outside a song ("same" = DC3_POSE_FILL's).
+//
+// Outside a song (np-menu-gestures).  The fill exists for the move scorer,
+// and the default mode is generous to it on purpose.  The menus read the same
+// skeleton with the image's gesture detectors (the hand's height picks the
+// row, a forearm sweep selects it), and for those an extrapolated frame is a
+// hand the player never held out.  MEASURED, an 8 Hz camera:
+//
+//   real footage -- 113 s around the 7 gesture selects of two recorded GPD
+//   playtests (7-11 camera frames/s), replayed in front of the main menu;
+//   selects, the right hand's list + the left's:
+//     extrap   4+0, 3+0, 2+0, 2+0  (the left hand had its list 22-26 s)
+//     hold     3+0, 3+0
+//     off      4+3, 4+3            (the left hand had its list 39 s)
+//     interp   5+2, 4+1
+//   Three of the 7 were made on the pause menu, where the song clock stands
+//   still and so no fill was being made when they were recorded: no run with
+//   extrap or hold repeats any of the three, both runs with off repeat all.
+//
+//   the synthetic performer (scripts/menu_gesture_bench.py), joint noise at
+//   the GPD's level, 4 lists x 30 selects x 3 seeds; selected at the first
+//   sweep / within three / a hand resting on a row 5 s saw the highlight move:
+//     extrap   330/360 (92 %)   359/360   12/96
+//     off      310/360 (86 %)   358/360    0/96
+//     interp   224/240 (93 %)   240/240    1/64   (0.2-0.3 s slower: its delay)
+//     hold     196/240 (82 %)   237/240    3/64
+//
+// So the two disagree about off against extrap at the first sweep (the
+// performer's sweep is cleaner than a person's), agree that hold is worst, and
+// only the footage is of people.  The default is off: the menus get the
+// camera's own frames, which is what they already got whenever the song clock
+// stood still.  interp is there to try (it needs the StallClock below: on a
+// stopped clock it delivers nothing at all).  docs/native/reference/
+// MENU_GESTURES.md has the tables.
+static const Mode kMenuDefaultMode = kOff;
 float ParseGain(const char *env, bool *ok = nullptr);
 const char *ModeName(Mode m);
 
@@ -155,6 +190,13 @@ public:
     static constexpr int kBuffer = 8;
 
     void SetMode(Mode m);
+    // The same, keeping what is known of the camera: its rate window and --
+    // unless the new mode is kOff -- whether the fill is engaged.  The frames
+    // buffered are dropped (they were laid out for the other mode), so the
+    // stream picks up with the next camera frame.  For the change between a
+    // song and the menus (DC3_POSE_FILL_MENU), which must not cost the song
+    // the kMinIntervals camera frames a Reset takes to engage again.
+    void SetModeKeepingRate(Mode m);
     Mode GetMode() const { return mMode; }
     void SetGain(float g); // clamped to [0, 1]
     float Gain() const { return mGain; }

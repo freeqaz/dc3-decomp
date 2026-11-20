@@ -19,6 +19,15 @@
 //                         in order, a fixed delay behind its arrival, nothing
 //                         past the newest camera frame (a stall stays a
 //                         stall), no fill across a dropout or a long gap.
+//                         AModeChangeKeepsTheCameraRate (np-menu-gestures,
+//                         DC3_POSE_FILL_MENU: the mode changes between a song
+//                         and the menus): SetModeKeepingRate keeps the rate
+//                         window, so the song's fill is engaged with the
+//                         first camera frame back.  Sabotaged (each caught):
+//                         it calls Reset() (the rate is lost: 4 failures); it
+//                         keeps the buffered frames (a frame laid out for
+//                         extrap comes out of interp); it leaves `off`
+//                         engaged.
 //   PoseFillLatencyTest  the delay reaches the scorer's latency, on top of
 //                         whichever sensor latency is in force.
 //   PoseFillStallClockTest  StallClock (np-menu-gestures): the fill's clock
@@ -741,3 +750,54 @@ TEST(PoseFillStallClockTest, AnEightHertzCameraIsFilledWhileTheSongClockIsStoppe
     EXPECT_GE(fillsStall, 40u);
 }
 
+// DC3_POSE_FILL_MENU: the change of mode between a song and the menus.
+TEST(PoseFillScheduleTest, AModeChangeKeepsTheCameraRate) {
+    double t = 10.0;
+    uint32_t id = 0;
+    auto push = [&](Filler &f) {
+        std::vector<Person> people;
+        people.push_back(MakePerson(5, (float)t));
+        Source s = MakeSource(t, t, people);
+        s.frameId = ++id;
+        bool engaged = f.Push(s);
+        t += 1.0 / 8.0;
+        return engaged;
+    };
+    Filler f;
+    f.SetMode(kExtrap);
+    f.Reset();
+    for (int i = 0; i < 16; i++)
+        push(f);
+    ASSERT_TRUE(f.Engaged()) << "an 8 Hz camera engages the fill";
+
+    // Into the menus with no fill: off is off at once ...
+    f.SetModeKeepingRate(kOff);
+    EXPECT_EQ(f.GetMode(), kOff);
+    EXPECT_FALSE(f.Engaged());
+    for (int i = 0; i < 8; i++)
+        EXPECT_FALSE(push(f)) << "off never engages";
+    // ... and back into a song: engaged with the FIRST camera frame, because
+    // the camera's rate was kept.
+    f.SetModeKeepingRate(kExtrap);
+    EXPECT_TRUE(push(f)) << "the rate window was lost with the mode";
+    // The control: SetMode forgets the camera, and takes kMinIntervals frames.
+    Filler g;
+    g.SetMode(kExtrap);
+    g.Reset();
+    for (int i = 0; i < 16; i++)
+        push(g);
+    g.SetMode(kOff);
+    g.SetMode(kExtrap);
+    EXPECT_FALSE(push(g)) << "the control engaged at once: this test cannot tell the two apart";
+
+    // Between two filling modes the fill stays engaged, and the frames
+    // buffered for the old mode are not shown by the new one.
+    f.SetModeKeepingRate(kInterp);
+    EXPECT_TRUE(f.Engaged());
+    Output o;
+    EXPECT_FALSE(f.Poll(t, o)) << "a frame buffered for extrap came out of interp";
+    EXPECT_TRUE(push(f));
+    EXPECT_GT(f.Delay(), 0.0) << "interp runs behind the camera";
+    f.SetModeKeepingRate(kInterp); // no change: nothing dropped
+    EXPECT_GT(f.Delay(), 0.0);
+}
