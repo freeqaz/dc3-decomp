@@ -53,14 +53,41 @@
 // without the fill.
 //
 // Engaged only while the camera is slow: when the trimmed mean of the last
-// kWindow camera-frame intervals (song time; RateInterval) is over
-// 1/kEngageHz, released when it falls under 1/kReleaseHz.  A 30 Hz source
+// kWindow camera periods (RateInterval) is over 1/kEngageHz; released once it
+// has stayed under 1/kReleaseHz for kReleaseDwell seconds.  A 30 Hz source
 // never engages it, so at 30 Hz every mode is the same stream as `off`.  Not
 // the median: a camera between the two thresholds delivers a mix of one- and
 // two-frame intervals of a 30 Hz grab (33 / 50 ms), and the median of such a
 // window jumps from one to the other as each frame enters it, across both
 // thresholds -- 349 engage/release changes in one web song (MEASURED,
 // np-web4).  The median still sets the interp delay and the gap limit.
+//
+// The rate is the camera's own (np-pose-steady).  A camera period is the
+// difference of two frames' stamps (Source::ts) over the frames the camera
+// delivered between them (Source::frames) -- not the song time between the
+// frames the game took (Source::arrival), which it was.  The game polls once
+// a frame and takes the newest camera frame, so its takes are whole game
+// frames apart whatever the camera does, and a game running near the
+// camera's rate read as a slow camera.  MEASURED on an M3 MacBook Air on a
+// 30 Hz display (the game at about 31 fps): the pose server sent 29.9-30.4
+// poses a second in every 5 s window and the fill engaged 19 times in 401 s,
+// each time at "camera 22.5 frames/s" -- six two-game-frame gaps among
+// fifteen takes.  The stamps are used while every interval of the window has
+// them and the camera's clock and the fill's kept pace (RateIsTheCamerasOwn);
+// otherwise the takes decide, as before.  DC3_POSE_FILL_RATE=arrival: the
+// takes always.
+//
+// The release dwell (np-pose-steady).  A tracker whose rate wanders about
+// the thresholds changed the fill every few seconds.  MEASURED on the same
+// Mac, 1019 s with the tracker slowing for stretches: 26 engagements, 19 of
+// the 23 spans under 5 s.  Each change is a change of how the motion between
+// two camera frames is made.  The fill lets go only after kReleaseDwell
+// seconds over the release rate without a break; engaging is unchanged, so
+// it is engaged wherever it was before.  Modelled cameras wandering between
+// 18 and 29 Hz: 6-30 changes a minute with no dwell, one engagement in five
+// minutes with 6 s or more; the Mac's recorded tracker rates: 13 changes
+// with none, 7 with 10 s (PoseFillDwellTest prints the table).
+// DC3_POSE_FILL_DWELL=0: no dwell.
 //
 // Fill frames are never recorded (DC3_POSE_RECORD writes camera frames as
 // they arrive) and are not counted as pose_fps.
