@@ -38,6 +38,11 @@ namespace nativeui {
         Color textDisabled; // placeholders and unavailable items
         Color imagePlaceholder; // shown where an image has not arrived
         Color imageTint; // multiplied into every image (white = unchanged)
+        // A screen drawn over the game's animated background lays this over the
+        // whole view, and again behind its columns of text, so text stays readable
+        // while the background still shows through.
+        Color scrim;
+        Color star; // an earned star
     };
 
     struct Typography {
@@ -91,6 +96,16 @@ namespace nativeui {
         float shelfCardWidth = 0.0f;
         float shelfCardHeight = 0.0f;
         float shelfFocusScale = 1.0f; // how much the selected card grows
+        // Browsing screens (the song browser):
+        float searchFieldWidth = 0.0f;
+        float sidePaneWidth = 0.0f; // the detail pane beside a list
+        float listSecondaryShare = 0.0f; // fraction of a list row's width for its
+                                         // second text column (the artist)
+        float meterCellWidth = 0.0f; // one cell of a segmented meter in a list row
+        float meterCellHeight = 0.0f;
+        float meterCellGap = 0.0f;
+        float starSize = 0.0f; // diameter of one star mark
+        float starGap = 0.0f;
     };
 
     struct Theme {

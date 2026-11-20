@@ -1,7 +1,7 @@
 // FixedAdvanceMeasurer: a deterministic TextMeasurer with no fonts behind it.
 //
 // Every code point advances by the same fraction of the font size, whatever
-// the font id. Tests, the sample screen and headless tools use it so layout
+// the font id. Tests and headless tools use it so layout
 // can be exercised with no game data. It is not for shipping screens.
 #pragma once
 

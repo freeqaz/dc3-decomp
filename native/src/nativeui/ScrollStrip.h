@@ -67,6 +67,10 @@ namespace nativeui {
         float ScrollTarget() const { return scroll_.Target(); }
         float MaxScroll() const;
         void SnapScroll() { scroll_.Snap(scroll_.Target()); }
+        // Puts the scroll position at `offset` with no glide (restoring a saved
+        // position). The usual rule still holds afterwards: the position moves
+        // the least it must to show the selection, and stays within the content.
+        void SetScroll(float offset);
         void Advance(float deltaSeconds, const SpringParams &spring);
         bool AtRest() const { return scroll_.AtRest(); }
 

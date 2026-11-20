@@ -1430,7 +1430,6 @@ add_library(nativeui STATIC
     src/nativeui/ListView.cpp
     src/nativeui/Panel.cpp
     src/nativeui/Renderer.cpp
-    src/nativeui/SampleBrowser.cpp
     src/nativeui/Screen.cpp
     src/nativeui/ScrollStrip.cpp
     src/nativeui/Shelf.cpp
@@ -1443,6 +1442,27 @@ add_library(nativeui STATIC
 )
 target_include_directories(nativeui PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_compile_options(nativeui PRIVATE -Wall -Wextra)
+
+# ============================================================================
+# songbrowser_ui -- the natively drawn song browser screen (docs/native/
+# reference/SONG_BROWSER_UI.md): a nativeui composition driven by the song
+# browser's data (DC3_SONGBROWSER_SOURCES above). Pure C++17 like nativeui: no
+# game objects, no GPU. It calls the pure part of src/songbrowser/ (catalog,
+# search, arrangements), which every target that links it already compiles
+# through DC3_SONGBROWSER_SOURCES, so the library itself carries no copy.
+# Linked into dc3-native, dc3-web and milo-tests below.
+# ============================================================================
+add_library(songbrowser_ui STATIC
+    src/songbrowser_ui/BrowserModel.cpp
+    src/songbrowser_ui/Containers.cpp
+    src/songbrowser_ui/DetailPane.cpp
+    src/songbrowser_ui/MatchText.cpp
+    src/songbrowser_ui/SongBrowserScreen.cpp
+    src/songbrowser_ui/SongWidgets.cpp
+)
+target_include_directories(songbrowser_ui PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_compile_options(songbrowser_ui PRIVATE -Wall -Wextra)
+target_link_libraries(songbrowser_ui PUBLIC nativeui)
 
 if(EMSCRIPTEN)
 
@@ -1656,6 +1676,8 @@ target_compile_definitions(dc3-web PRIVATE
 )
 
 target_link_libraries(dc3-web PRIVATE milo-engine imgui)
+# The natively drawn song browser screen (and nativeui, which it carries).
+target_link_libraries(dc3-web PRIVATE songbrowser_ui)
 
 # Same precompiled/force-included header every native target uses (and the
 # MSVC decomp build's /FI): decomp TUs rely on Object.h + Debug.h arriving
@@ -1804,6 +1826,8 @@ target_link_libraries(dc3-native PRIVATE
     ${FFMPEG_LIBRARIES}
     imgui
 )
+# The natively drawn song browser screen (and nativeui, which it carries).
+target_link_libraries(dc3-native PRIVATE songbrowser_ui)
 
 # NOTE: GFX sources include BOTH Dawn/WebGPU headers AND decomp engine headers.
 # The -D__GNUC_STDC_INLINE__ flag (in DC3_MSVC_COMPAT_FLAGS) resolves the GCC 15
@@ -2256,7 +2280,8 @@ if(BUILD_TESTS)
         tests/test_nativeui_core.cpp     # nativeui: UTF-8, text fitting, display list, theme, animation
         tests/test_nativeui_layout.cpp   # nativeui: layout containers, focus and event routing, Screen
         tests/test_nativeui_widgets.cpp  # nativeui: ListView, Shelf, TextField, TabStrip, HintBar, Label, Image, Panel
-        tests/test_nativeui_sample.cpp   # nativeui: the sample song browser, driven by events; display-list goldens
+        tests/test_nativeui_raster.cpp   # nativeui: a display-list golden; the test-only software rasteriser
+        tests/test_song_browser_ui.cpp   # the song browser screen on the real 121-song list: focus, search, sort, state, pictures
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
@@ -2332,12 +2357,13 @@ if(BUILD_TESTS)
         ${CMAKE_SOURCE_DIR}/tests/test_nativeui_core.cpp
         ${CMAKE_SOURCE_DIR}/tests/test_nativeui_layout.cpp
         ${CMAKE_SOURCE_DIR}/tests/test_nativeui_widgets.cpp
-        ${CMAKE_SOURCE_DIR}/tests/test_nativeui_sample.cpp
+        ${CMAKE_SOURCE_DIR}/tests/test_nativeui_raster.cpp
+        ${CMAKE_SOURCE_DIR}/tests/test_song_browser_ui.cpp
         TARGET_DIRECTORY milo-tests
         PROPERTIES SKIP_PRECOMPILE_HEADERS ON
                    COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility;-fno-delayed-template-parsing"
     )
-    target_link_libraries(milo-tests PRIVATE nativeui)
+    target_link_libraries(milo-tests PRIVATE nativeui songbrowser_ui)
     if(NOT APPLE)
         find_package(X11 REQUIRED)
         target_link_libraries(milo-tests PRIVATE X11::X11)
