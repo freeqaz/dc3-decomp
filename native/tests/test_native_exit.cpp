@@ -1145,7 +1145,10 @@ TEST_F(NativeWindowTest, Canvas2DDemoIsOnScreen) {
     std::string out = e.Output();
     EXPECT_EQ(why, "") << Tail(out);
     EXPECT_TRUE(Contains(out, "Canvas2D demo: 5 quads in 2 draws")) << Tail(out);
-    EXPECT_FALSE(Contains(out, "Validation error")) << Tail(out);
+    // The device's uncaptured-error line (GpuDevice.cpp): a pipeline that does
+    // not fit its pass is one. Sabotage: Canvas2D::Flush asking for a 4x
+    // pipeline in this 1x pass -- red here and on the pixels.
+    EXPECT_FALSE(Contains(out, "GpuDevice: WebGPU error")) << Tail(out);
     ExpectNoCrash(out);
 }
 
