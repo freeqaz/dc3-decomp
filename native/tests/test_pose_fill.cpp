@@ -19,8 +19,29 @@
 //                         in order, a fixed delay behind its arrival, nothing
 //                         past the newest camera frame (a stall stays a
 //                         stall), no fill across a dropout or a long gap.
-//   PoseFillLatencyTest   the delay reaches the scorer's latency, on top of
+//                         AModeChangeKeepsTheCameraRate (np-menu-gestures,
+//                         DC3_POSE_FILL_MENU: the mode changes between a song
+//                         and the menus): SetModeKeepingRate keeps the rate
+//                         window, so the song's fill is engaged with the
+//                         first camera frame back.  Sabotaged (each caught):
+//                         it calls Reset() (the rate is lost: 4 failures); it
+//                         keeps the buffered frames (a frame laid out for
+//                         extrap comes out of interp); it leaves `off`
+//                         engaged.
+//   PoseFillLatencyTest  the delay reaches the scorer's latency, on top of
 //                         whichever sensor latency is in force.
+//   PoseFillStallClockTest  StallClock (np-menu-gestures): the fill's clock
+//                         carries on at UI time while the song clock stands
+//                         still (the pause menu, between previews) and is the
+//                         song clock otherwise.  The last test drives the real
+//                         Filler: an 8 Hz camera, the song clock stopped --
+//                         0 fills on the song clock, a stream on the
+//                         StallClock.  Sabotaged: Read returning `song` alone
+//                         (no carry) fails AStoppedSongClock... and
+//                         AnEightHertzCamera...; carrying with no kStall wait
+//                         fails AValueRepeated... and two more; carrying while
+//                         the song clock moves fails AMovingSongClock...,
+//                         TheSongClockGoingBack... and two more.
 //
 // The sensor end (slots, P-12's hold, the recorder) is PoseFillSensorTest in
 // test_native_pose_socket.cpp.
@@ -584,4 +605,199 @@ TEST(PoseFillLatencyTest, TheDelayRidesOnWhicheverSensorLatencyWins) {
     Dc3DeclareSourceLatencyMs(-1);
     EXPECT_FLOAT_EQ(MoveDir::NativeLatencySeconds(), 0.1f) << "back to the default";
     MoveDir::NativeSetLatencySeconds(Dc3SensorLatencySeconds(0.1f));
+}
+
+// ---- the fill's clock outside a song -----------------------------------------
+
+TEST(PoseFillStallClockTest, AMovingSongClockPassesThroughUnchanged) {
+    StallClock c;
+    double song = 12.0, ui = 500.0;
+    for (int i = 0; i < 600; i++) {
+        song += 1.0 / 60.0;
+        ui += 1.0 / 60.0;
+        EXPECT_DOUBLE_EQ(c.Read(song, ui), song);
+        EXPECT_DOUBLE_EQ(c.Read(song, ui), song) << "a second read in the same frame";
+    }
+    EXPECT_DOUBLE_EQ(c.Carried(), 0.0);
+    EXPECT_FALSE(c.Carrying());
+}
+
+TEST(PoseFillStallClockTest, AValueRepeatedForAFrameOrTwoIsNotCountedTwice) {
+    // An audio clock read between its own updates: 0, 0, +50 ms, 0, 0, +50 ms.
+    StallClock c;
+    double song = 30.0, ui = 100.0;
+    for (int i = 0; i < 300; i++) {
+        ui += 1.0 / 60.0;
+        if (i % 3 == 2)
+            song += 0.05;
+        c.Read(song, ui);
+    }
+    EXPECT_DOUBLE_EQ(c.Carried(), 0.0);
+}
+
+TEST(PoseFillStallClockTest, AStoppedSongClockCarriesOnAtUiPace) {
+    StallClock c;
+    double song = 40.0, ui = 200.0;
+    for (int i = 0; i < 60; i++) { // 1 s of a running song clock
+        song += 1.0 / 60.0;
+        ui += 1.0 / 60.0;
+        c.Read(song, ui);
+    }
+    double last = c.Read(song, ui);
+    double stopped = last;
+    for (int i = 0; i < 180; i++) { // 3 s stopped (the pause menu)
+        ui += 1.0 / 60.0;
+        double now = c.Read(song, ui);
+        EXPECT_GE(now, last) << "never backwards";
+        EXPECT_LE(now - last, 1.0 / 60.0 + 1e-9) << "never faster than the UI clock";
+        last = now;
+    }
+    EXPECT_TRUE(c.Carrying());
+    EXPECT_NEAR(last - stopped, 3.0 - StallClock::kStall, 0.02) << "3 s, less the 0.25 s it waited";
+    // The song clock moves again, from where it stopped: the clock goes on
+    // from where IT is, by the song clock's own steps.
+    for (int i = 0; i < 60; i++) {
+        song += 1.0 / 60.0;
+        ui += 1.0 / 60.0;
+        double now = c.Read(song, ui);
+        EXPECT_NEAR(now - last, 1.0 / 60.0, 1e-9);
+        last = now;
+    }
+    EXPECT_FALSE(c.Carrying());
+}
+
+TEST(PoseFillStallClockTest, TheSongClockGoingBackStillGoesBack) {
+    // A new song: the filler drops the old timeline when its clock goes back
+    // (Filler::Push), so the step has to come through.
+    StallClock c;
+    double ui = 10.0;
+    c.Read(180.0, ui);
+    for (int i = 0; i < 120; i++) { // stopped on the results screen for 2 s
+        ui += 1.0 / 60.0;
+        c.Read(180.0, ui);
+    }
+    double before = c.Read(180.0, ui);
+    ui += 1.0 / 60.0;
+    double after = c.Read(-5.0, ui); // the next song's count-in
+    EXPECT_NEAR(before - after, 185.0, 1e-9);
+}
+
+TEST(PoseFillStallClockTest, AnEightHertzCameraIsFilledWhileTheSongClockIsStopped) {
+    // 3 s with the song clock running (the fill engages), then 3 s with it
+    // stopped.  Camera frames every 1/8 s of real time, the game at 60 fps.
+    auto run = [](Mode mode, bool stallClock, unsigned *fillsStopped, unsigned *realsStopped) {
+        Filler f;
+        f.SetMode(mode);
+        f.Reset();
+        StallClock clock;
+        double song = 20.0, ui = 300.0, nextCamera = 0.0;
+        unsigned fills0 = 0, reals0 = 0;
+        for (int i = 0; i < 360; i++) {
+            double t = i / 60.0;
+            ui += 1.0 / 60.0;
+            if (t < 3.0)
+                song += 1.0 / 60.0;
+            if (i == 180) {
+                fills0 = f.Fills();
+                reals0 = f.Reals();
+            }
+            double now = stallClock ? clock.Read(song, ui) : song;
+            if (t + 1e-9 >= nextCamera) {
+                Source s;
+                s.arrival = now;
+                s.ts = 1000.0 + nextCamera;
+                s.frameId = (uint32_t)i + 1;
+                s.numPersons = 1;
+                s.persons[0].trackId = 5;
+                s.persons[0].valid = true;
+                for (int j = 0; j < kNumJoints; j++) {
+                    s.persons[0].joints[j].Set((float)nextCamera * 0.1f, 1.0f + j * 0.1f, 2.0f);
+                    s.persons[0].confidence[j] = kConfidenceTracked;
+                }
+                s.floorNormal.Set(0.0f, 1.0f, 0.0f);
+                s.levelled = true;
+                f.Push(s);
+                nextCamera += 1.0 / 8.0;
+            }
+            Output o;
+            if (f.Engaged())
+                f.Poll(now, o);
+        }
+        EXPECT_TRUE(f.Engaged());
+        *fillsStopped = f.Fills() - fills0;
+        *realsStopped = f.Reals() - reals0;
+    };
+    unsigned fillsSong = 0, realsSong = 0, fillsStall = 0, realsStall = 0;
+    run(kExtrap, false, &fillsSong, &realsSong);
+    run(kExtrap, true, &fillsStall, &realsStall);
+    // The control, and the defect: on the song clock alone the stopped 3 s
+    // get the camera's 24 frames and not one fill.
+    EXPECT_EQ(fillsSong, 0u);
+    EXPECT_NEAR((double)realsSong, 24.0, 1.0);
+    // On the StallClock they get a stream: at least 2 fills per camera frame
+    // (30 Hz would be 2.75) once the 0.25 s wait is over.
+    EXPECT_NEAR((double)realsStall, 24.0, 1.0);
+    EXPECT_GE(fillsStall, 44u) << "fills in 3 s of a stopped song clock";
+
+    // interp is worse off on the song clock alone: its stream runs a delay
+    // BEHIND the clock, so with the clock stopped not even the camera's own
+    // frames come due -- the menus would get no skeleton at all.
+    run(kInterp, false, &fillsSong, &realsSong);
+    run(kInterp, true, &fillsStall, &realsStall);
+    EXPECT_EQ(fillsSong, 0u);
+    EXPECT_LE(realsSong, 2u) << "camera frames delivered in 3 s of a stopped song clock (interp)";
+    EXPECT_NEAR((double)realsStall, 24.0, 2.0);
+    EXPECT_GE(fillsStall, 40u);
+}
+
+// DC3_POSE_FILL_MENU: the change of mode between a song and the menus.
+TEST(PoseFillScheduleTest, AModeChangeKeepsTheCameraRate) {
+    double t = 10.0;
+    uint32_t id = 0;
+    auto push = [&](Filler &f) {
+        std::vector<Person> people;
+        people.push_back(MakePerson(5, (float)t));
+        Source s = MakeSource(t, t, people);
+        s.frameId = ++id;
+        bool engaged = f.Push(s);
+        t += 1.0 / 8.0;
+        return engaged;
+    };
+    Filler f;
+    f.SetMode(kExtrap);
+    f.Reset();
+    for (int i = 0; i < 16; i++)
+        push(f);
+    ASSERT_TRUE(f.Engaged()) << "an 8 Hz camera engages the fill";
+
+    // Into the menus with no fill: off is off at once ...
+    f.SetModeKeepingRate(kOff);
+    EXPECT_EQ(f.GetMode(), kOff);
+    EXPECT_FALSE(f.Engaged());
+    for (int i = 0; i < 8; i++)
+        EXPECT_FALSE(push(f)) << "off never engages";
+    // ... and back into a song: engaged with the FIRST camera frame, because
+    // the camera's rate was kept.
+    f.SetModeKeepingRate(kExtrap);
+    EXPECT_TRUE(push(f)) << "the rate window was lost with the mode";
+    // The control: SetMode forgets the camera, and takes kMinIntervals frames.
+    Filler g;
+    g.SetMode(kExtrap);
+    g.Reset();
+    for (int i = 0; i < 16; i++)
+        push(g);
+    g.SetMode(kOff);
+    g.SetMode(kExtrap);
+    EXPECT_FALSE(push(g)) << "the control engaged at once: this test cannot tell the two apart";
+
+    // Between two filling modes the fill stays engaged, and the frames
+    // buffered for the old mode are not shown by the new one.
+    f.SetModeKeepingRate(kInterp);
+    EXPECT_TRUE(f.Engaged());
+    Output o;
+    EXPECT_FALSE(f.Poll(t, o)) << "a frame buffered for extrap came out of interp";
+    EXPECT_TRUE(push(f));
+    EXPECT_GT(f.Delay(), 0.0) << "interp runs behind the camera";
+    f.SetModeKeepingRate(kInterp); // no change: nothing dropped
+    EXPECT_GT(f.Delay(), 0.0);
 }

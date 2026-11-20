@@ -39,6 +39,9 @@ public:
     static float mSlowFastThreshold;
 
     friend class HamNavList;
+#ifdef HX_NATIVE
+    friend struct Dc3MenuGestureAccess; // native/src/platform/MenuGesture_Native.cpp
+#endif
 
 private:
     static float sScrollSettleTime;

@@ -94,6 +94,35 @@ bool Dc3ControllerModeLatchAuto(bool providerRunning);
 // controller_mode_timeout; -1 when unset.
 int Dc3ControllerModeTimeoutMs();
 
+// Menu select, DC3_MENU_SELECT=swipe (default) | hold | both (defined in
+// MenuGesture_Native.cpp; docs/native/PLAYTEST.md "Playing").  How a hand
+// picks the highlighted row of a menu list: the original's sweep of the
+// forearm across the body, keeping the hand on the row (hold: the list's
+// slide shows the progress, DC3_MENU_HOLD_MS), or either.  Never in
+// controller mode or in a song.  It changes at run time -- the F1 key,
+// {native_settings set_menu_select hold}, {native_settings cycle_menu_select}
+// -- and every change is named in an on-screen notice.
+enum {
+    kDc3MenuSelectSwipe = 0,
+    kDc3MenuSelectHold = 1,
+    kDc3MenuSelectBoth = 2,
+    kDc3MenuSelectCount = 3
+};
+int Dc3MenuSelect();                      // the mode now (the variable, at the first call)
+const char *Dc3MenuSelectName(int mode);  // "swipe" / "hold" / "both"
+int Dc3MenuSelectParse(const char *text); // the mode, or -1
+void Dc3SetMenuSelect(int mode);          // and the notice naming it
+void Dc3MenuSelectFramePoll();            // once a frame (App.cpp): the F1 key
+
+// Sweep start, DC3_MENU_ARC_START=tracked (default) | inferred (defined in
+// MenuGesture_Native.cpp; docs/native/reference/MENU_GESTURES.md).  The
+// original starts a sweep only on a frame whose wrist and elbow are both
+// Tracked; `inferred` also starts one where the camera scored them Inferred.
+// {native_settings set_menu_arc_start inferred} changes it at run time, with
+// a notice.
+const char *Dc3MenuArcStartName();             // "tracked" / "inferred"
+bool Dc3SetMenuArcStart(const char *text);     // false: neither word
+
 // Native-only runtime settings. These are enhancements or toggles that don't
 // exist on Xbox 360 — the original build has no equivalent options.
 // On by default where they improve the experience; togglable for fidelity.

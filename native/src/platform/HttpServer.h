@@ -78,6 +78,7 @@ public:
         kCmdSceneTree,      // Full scene graph as nested JSON
         kCmdPoseTarget,     // What each player is asked to perform (synthetic sensor)
         kCmdCamera,         // Camera stream state + the player-view textures (PLAN P-4)
+        kCmdMenuState,      // What every polled HamNavList is doing + its selects (PLAN P-3)
     };
 
     struct CommandResult {
@@ -139,6 +140,7 @@ private:
     void HandleSceneTree(Command& cmd);
     void HandlePoseTarget(Command& cmd);
     void HandleCamera(Command& cmd);
+    void HandleMenuState(Command& cmd);
 
     volatile bool mRunning = false;
     int mPort = 0;

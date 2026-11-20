@@ -35,6 +35,10 @@
 #                      graphics library cannot draw into a Wayland window, and
 #                      the game falls back to Xwayland itself, PLAN H-33)
 #   --no-pose          no tracker: play with keyboard / pad only
+#   --menu-select swipe|hold|both   how a hand picks a menu row (default swipe,
+#                      the original's forearm sweep; hold: keep the hand on the
+#                      row for 1.5 s; both: either).  F1 in the game steps
+#                      through the three any time (docs/native/PLAYTEST.md)
 #   --dlc [DIR]        downloadable songs: mount every package under DIR
 #                      (default <data>/dlc, i.e. orig-assets/dlc; DIR may be a
 #                      ':'-separated list, as $DC3_DLC_DIR).  The check says how
@@ -80,6 +84,7 @@ CHECK=0; NO_PERSON=0; CAMERA="${DC3_POSE_CAMERA:-auto}"; VIDEO=""; FULLSCREEN=0;
 NO_POSE=0; FAST_BOOT=0; HOME_DIR="${DC3_PLAYTEST_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/dc3/playtest}"
 SESSION=""; REPLAY=""; REPLAY_SYNC="song"; HEADLESS=0; PACK=1; ENGINE_ARGS=()
 VIDEO_PRE=8; VIDEO_LOOP=0; WAYLAND=0; DLC="${DC3_DLC_DIR:-}"; DLC_DEFAULT=0; OVERLAYS=0
+MENU_SELECT=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1 ;;
@@ -92,6 +97,12 @@ while [ $# -gt 0 ]; do
         --wayland) WAYLAND=1 ;;
         --size) SIZE="$2"; shift ;;
         --no-pose) NO_POSE=1 ;;
+        --menu-select)
+            case "${2:-}" in
+                swipe|hold|both) MENU_SELECT="$2" ;;
+                *) echo "--menu-select wants swipe, hold or both (got '${2:-}')" >&2; exit 1 ;;
+            esac
+            shift ;;
         --dlc) if [ $# -gt 1 ] && [ "${2#-}" = "$2" ]; then DLC="$2"; shift
                else DLC=""; DLC_DEFAULT=1; fi ;;
         --no-dlc) DLC=""; DLC_DEFAULT=0; NO_DLC=1 ;;
@@ -174,6 +185,7 @@ setdef DC3_TAG_MODALS 1              # every notify / fail / assert, with a back
 # the picture, unless --overlays (or the caller's DC3_RND_OVERLAYS) says so.
 if [ "$OVERLAYS" = 1 ]; then export DC3_RND_OVERLAYS=1; else setdef DC3_RND_OVERLAYS log; fi
 setdef DC3_PERF_LOG 1                # game fps + pose fps every 5 s (PLAN L-3)
+[ -n "$MENU_SELECT" ] && export DC3_MENU_SELECT="$MENU_SELECT"   # the option wins over the environment
 setdef DC3_POSE_STATS 1              # the tracker's own rate and inference time
 setdef DC3_HTTP_PORT 0               # any free port, written to the session folder
 export DC3_HTTP_PORT_FILE="$SESSION/http_port"

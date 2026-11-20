@@ -38,6 +38,9 @@
 #include "math/Geo.h"
 #include "world\Instance.h"
 #include <stdio.h>
+#ifdef HX_NATIVE
+#include "platform/MenuGesture_Native.h"
+#endif
 
 DECLARE_MESSAGE(LeftHandListEngagementMsg, "left_hand_list_engagement")
 LeftHandListEngagementMsg(bool b);
@@ -477,6 +480,16 @@ void HamNavList::Poll() {
             }
         }
     }
+#ifdef HX_NATIVE
+    // A slide that is a hold's progress (DC3_MENU_SELECT=hold|both): the
+    // highlight keeps following the hand, so the hand can leave the row.  In
+    // the image a slide is a swipe under way and the highlight waits for it.
+    // HoldShowing is only true on a frame UpdateGestures ran its gesture arm,
+    // so not in controller, voice or edit mode.
+    if (mRibbonMode == HamListRibbon::kRibbonSlide && Dc3MenuGesture::HoldShowing(this)) {
+        DetermineHighlightedItem();
+    }
+#endif
 
     // Reset the scroll direction whenever the list isn't being hand-scrolled:
     // disengaged, driven by a controller, or driven by voice.
@@ -608,6 +621,9 @@ void HamNavList::Poll() {
             }
         }
     }
+#ifdef HX_NATIVE
+    Dc3MenuGesture::NotePoll(this);
+#endif
 }
 
 bool HamNavList::ShouldSkipSelectAnim(DataNode &node) const {
@@ -1214,6 +1230,9 @@ void HamNavList::PostUpdate(const SkeletonUpdateData *data) {
                 elapsed = skel->ElapsedMs();
                 ms = 0 < elapsed ? elapsed : 0;
                 mHandHeightFilter->Update(*skel, ms);
+#ifdef HX_NATIVE
+                Dc3MenuGesture::NoteSensorUpdate(this);
+#endif
                 return;
             }
             i++;
@@ -1335,6 +1354,7 @@ void HamNavList::SetSelecting(bool selecting) {
             provider ? provider->NumData() : -1
         );
     }
+    Dc3MenuGesture::NoteSelect(this, selected, listState.FirstShowing(), sym.Str(), selecting);
 #endif
     SetRibbonMode(HamListRibbon::kRibbonSelect);
     if (TheGestureMgr && TheGestureMgr->GesturingWithVoice()) {
@@ -1535,6 +1555,13 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
 
             mHandHeight = mHandHeightFilter->GetHandHeight();
 
+#ifdef HX_NATIVE
+            // DC3_MENU_SELECT=hold|both (native/src/platform/MenuGesture_Native.h):
+            // the hand kept on a row selects it.  False, always, under the
+            // default (swipe): the image's code below runs untouched.
+            if (Dc3MenuGesture::UpdateHold(this, handValid))
+                return;
+#endif
             if (mDirectionGestureFilter->HasDirection() && mSelectionEnabled) {
                 mDirectionGestureFilter->ClearSwipe();
                 static Message forceLetterboxOff(Symbol("force_letterbox_off"));

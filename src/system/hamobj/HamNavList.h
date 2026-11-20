@@ -122,6 +122,11 @@ public:
     static bool sForceDisengage;
 
     friend class HamScrollBehavior;
+#ifdef HX_NATIVE
+    // native/src/platform/MenuGesture_Native.cpp: reads the list's gesture
+    // state for the menu-gesture measurement (PLAN P-3).
+    friend struct Dc3MenuGestureAccess;
+#endif
 
 #ifdef HX_NATIVE
     /** What the list's rows show right now, "ROW|SLOT|TEXT" for every label

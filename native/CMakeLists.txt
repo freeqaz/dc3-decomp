@@ -1244,6 +1244,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/PoseEstimate_Native.cpp # DC3_POSE_ESTIMATE: joints the camera cannot see (np-cutoff)
+    src/platform/MenuGesture_Native.cpp # menu gestures on a webcam: measurement (np-menu-gestures)
     src/platform/NuiImageSurface_Native.cpp
     src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
     src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
@@ -1447,6 +1448,7 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/PoseEstimate_Native.cpp # DC3_POSE_ESTIMATE: joints the camera cannot see (np-cutoff)
+    src/platform/MenuGesture_Native.cpp # menu gestures on a webcam: measurement (np-menu-gestures)
     src/platform/NuiImageSurface_Native.cpp
     src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
     src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
@@ -2164,6 +2166,8 @@ if(BUILD_TESTS)
         tests/test_pose_scoring.cpp
         tests/test_pose_level.cpp
         tests/test_pose_fill.cpp
+        tests/test_menu_hold.cpp  # np-menu-gestures: hold to select's timing rule and the swipe/hold/both switch
+        tests/test_menu_arc.cpp   # np-menu-gestures: the arc detector's first node (DC3_MENU_ARC_START)
         tests/test_pose_estimate.cpp
         tests/test_pose_session.cpp
         tests/test_native_twoplayer.cpp

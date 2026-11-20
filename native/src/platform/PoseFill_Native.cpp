@@ -225,6 +225,20 @@ void Filler::SetMode(Mode m) {
     }
 }
 
+void Filler::SetModeKeepingRate(Mode m) {
+    if (m == mMode)
+        return;
+    mMode = m;
+    mCount = 0;
+    mDelivered = -1;
+    mHaveOut = false;
+    mLastShows = 0.0;
+    mSigma = -1e30;
+    mDelay = 0.0;
+    if (m == kOff)
+        mEngaged = false;
+}
+
 void Filler::Reset() {
     mEngaged = false;
     mDelay = 0.0;

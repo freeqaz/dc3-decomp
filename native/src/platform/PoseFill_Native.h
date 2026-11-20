@@ -83,6 +83,41 @@ Mode ParseMode(const char *env, bool *ok = nullptr);
 // step).  Unset = kDefaultGain; anything else, or outside [0, 1], is the
 // default and *ok is set false.
 static const float kDefaultGain = 1.0f;
+// DC3_POSE_FILL_MENU: the mode outside a song ("same" = DC3_POSE_FILL's).
+//
+// Outside a song (np-menu-gestures).  The fill exists for the move scorer,
+// and the default mode is generous to it on purpose.  The menus read the same
+// skeleton with the image's gesture detectors (the hand's height picks the
+// row, a forearm sweep selects it), and for those an extrapolated frame is a
+// hand the player never held out.  MEASURED, an 8 Hz camera:
+//
+//   real footage -- 113 s around the 7 gesture selects of two recorded GPD
+//   playtests (7-11 camera frames/s), replayed in front of the main menu;
+//   selects, the right hand's list + the left's:
+//     extrap   4+0, 3+0, 2+0, 2+0  (the left hand had its list 22-26 s)
+//     hold     3+0, 3+0
+//     off      4+3, 4+3            (the left hand had its list 39 s)
+//     interp   5+2, 4+1
+//   Three of the 7 were made on the pause menu, where the song clock stands
+//   still and so no fill was being made when they were recorded: no run with
+//   extrap or hold repeats any of the three, both runs with off repeat all.
+//
+//   the synthetic performer (scripts/menu_gesture_bench.py), joint noise at
+//   the GPD's level, 4 lists x 30 selects x 3 seeds; selected at the first
+//   sweep / within three / a hand resting on a row 5 s saw the highlight move:
+//     extrap   330/360 (92 %)   359/360   12/96
+//     off      310/360 (86 %)   358/360    0/96
+//     interp   224/240 (93 %)   240/240    1/64   (0.2-0.3 s slower: its delay)
+//     hold     196/240 (82 %)   237/240    3/64
+//
+// So the two disagree about off against extrap at the first sweep (the
+// performer's sweep is cleaner than a person's), agree that hold is worst, and
+// only the footage is of people.  The default is off: the menus get the
+// camera's own frames, which is what they already got whenever the song clock
+// stood still.  interp is there to try (it needs the StallClock below: on a
+// stopped clock it delivers nothing at all).  docs/native/reference/
+// MENU_GESTURES.md has the tables.
+static const Mode kMenuDefaultMode = kOff;
 float ParseGain(const char *env, bool *ok = nullptr);
 const char *ModeName(Mode m);
 
@@ -155,6 +190,13 @@ public:
     static constexpr int kBuffer = 8;
 
     void SetMode(Mode m);
+    // The same, keeping what is known of the camera: its rate window and --
+    // unless the new mode is kOff -- whether the fill is engaged.  The frames
+    // buffered are dropped (they were laid out for the other mode), so the
+    // stream picks up with the next camera frame.  For the change between a
+    // song and the menus (DC3_POSE_FILL_MENU), which must not cost the song
+    // the kMinIntervals camera frames a Reset takes to engage again.
+    void SetModeKeepingRate(Mode m);
     Mode GetMode() const { return mMode; }
     void SetGain(float g); // clamped to [0, 1]
     float Gain() const { return mGain; }
@@ -205,6 +247,73 @@ private:
     unsigned mFills = 0, mReals = 0;
 };
 
+// The filler's clock outside a song (np-menu-gestures).
+//
+// The filler runs on the song clock (MoveDir::SongSeconds): a camera frame's
+// arrival and every Poll are song times, and a fill is made only once that
+// clock has moved a Kinect frame on.  While a song plays that is the clock the
+// scorer runs on.  Outside one it is whatever drives TaskMgr's seconds at the
+// moment -- the shell music, a song preview -- and that STOPS: on the pause
+// menu, between previews, on the results screens.  MEASURED on two playtest
+// recordings from the GPD (7-11 camera frames a second): outside the songs the
+// song clock had not moved across 283 of 749 (38 %) and 992 of 2111 (47 %)
+// camera-frame intervals.  With the clock still, extrap and hold make no fill
+// and interp (whose stream runs behind the clock) delivers nothing at all,
+// camera frames included (PoseFillStallClockTest: 2 camera frames in 3 s).
+// The menus therefore got a stream that changed character every time a
+// preview ended.  MEASURED with the synthetic performer at 8 Hz, no noise, on
+// the left hand's Back (the song list, where the clock stops with every
+// preview), DC3_POSE_FILL=extrap: selected within three sweeps in 56 of 73
+// tries on the song clock -- 16 of the 17 misses in three runs of 5, 6 and 5
+// tries on end, the arc detector left on one node -- and in 90 of 90, each at
+// the first sweep, on this one.
+//
+// StallClock is the song clock while it moves.  Once it has stood still for
+// kStall of UI time it carries on at the UI clock's pace (which never stops:
+// the menus animate on it), and goes back to following the song clock, from
+// wherever it then is, the moment that moves again.  The song clock's own
+// steps -- forward, or back for a new song -- pass through unchanged, so
+// inside a song this is the song clock plus a constant, and the filler's
+// schedule there is what it was.  kStall keeps a clock that merely repeats a
+// value for a frame or two (an audio clock read twice between its updates)
+// from being counted twice.
+class StallClock {
+public:
+    static constexpr double kStall = 0.25;
+    // `song` and `ui` in seconds; call with the current values (any number of
+    // times a frame: with no UI time passed nothing changes).
+    double Read(double song, double ui) {
+        if (!mHave) {
+            mHave = true;
+            mSong = song;
+            mUi = ui;
+        }
+        double dUi = ui - mUi;
+        if (dUi < 0.0 || dUi > 1.0)
+            dUi = 0.0; // the UI clock was set, or a second-long hitch: not time to make up
+        if (song != mSong) {
+            mStalled = 0.0;
+        } else if (dUi > 0.0) {
+            if (mStalled >= kStall)
+                mCarried += dUi;
+            else
+                mStalled += dUi;
+        }
+        mSong = song;
+        mUi = ui;
+        return song + mCarried;
+    }
+    bool Carrying() const { return mStalled >= kStall; }
+    double Carried() const { return mCarried; } // seconds added so far
+    void Reset() { *this = StallClock(); }
+
+private:
+    bool mHave = false;
+    double mSong = 0.0, mUi = 0.0;
+    double mStalled = 0.0; // UI seconds the song clock has stood still (up to kStall)
+    double mCarried = 0.0;
+};
+
 } // namespace Dc3PoseFill
 
 // The scorer's side (Skeleton_Native.cpp): the fill's delay is added to the
@@ -217,3 +326,6 @@ float Dc3PoseFillDelaySeconds();
 // again) and a song clock (nullptr = MoveDir::SongSeconds); resets it.
 void NativePoseFillTestSet(int mode, double (*clock)());
 const Dc3PoseFill::Filler &NativePoseFiller();
+// Seconds the filler's clock has been carried on at UI time while the song
+// clock stood still (StallClock); 0 under DC3_POSE_FILL_CLOCK=song.
+double NativePoseFillClockCarried();
