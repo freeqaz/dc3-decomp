@@ -56,3 +56,39 @@ p2-reloc (2026-11-14), canonical 100.0 / fuzzy 99.706, 1 non-equal row(s): NOT A
 Every row is register-only, and `scripts/analysis/regperm_equivalence.py` finds one
 consistent target<->base value pairing at every use (parameters, call arguments, stores,
 compares): pure register permutation, no operand swap.
+
+## `?tf2cf@RndRenderState@@2PAW4_D3DCMPFUNC@@A`
+
+`RndRenderState::tf2cf` and the alpha-test table -- data, added 2026-11-20 (values corrected on branch fix-tf2cf)
+
+```text
+// The image has TWO compare tables, both const, both in .rdata:
+//   0x8208A0F8 (lbl_8208A0F8, 0x40 bytes, 16 entries): indexed by SetDepthFunc
+//     and SetStencilFunc as [ReverseZ * 8 + tf]
+//       {7,1,3,2,5,4,6,0,  7,4,6,2,5,1,3,0}
+//   0x8208A138 (lbl_8208A138, 0x20 bytes, 8 entries): indexed by SetAlphaFunc
+//       {7,1,3,2,5,4,6,0}
+// So TestFunc is 0 always, 1 less, 2 less-equal, 3 equal, 4 not-equal,
+// 5 greater, 6 greater-equal, 7 never.  Callers agree: Mat_NG's alpha test
+// passes 5 (greater), the Normal z-mode passes 1 (less), Transparent 2.
+//
+// Until 2026-11-20 the source had ONE 16-entry table with the D3D enum's own
+// order, {7,1,2,3,4,5,6,0, 7,4,2,6,1,5,3,0}, so TestFunc 2..5 mapped to the
+// wrong compare.  No ruler saw it: SetDepthFunc, SetStencilFunc and
+// SetAlphaFunc read 100.0 with 0 mismatch rows under name_check before and
+// after, because the target's tables are lbl_ symbols in ANOTHER unit's
+// object (see below), so neither the values nor the relocation names are
+// compared.  Found by reading the listing, not by a score.
+//
+// STILL OPEN, not attempted (needs splits.txt, which re-splits the target):
+//   - Both tables sit in Mat.cpp's .rdata split (0x82089FB0-0x8208A158) though
+//     only RenderState.cpp's functions reference them.  The last 0x60 bytes of
+//     that range (0x8208A0F8-0x8208A158) look like RenderState.cpp's .rdata;
+//     RenderState.cpp has no .rdata split today and Utl.cpp's starts at
+//     0x8208A158.
+//   - tf2cf is still emitted into .data (the image has it in .rdata).  Making
+//     the member const changes its type in RenderState.h, and the native
+//     engine defines the same member in src/platform/RenderState_Native.cpp
+//     against that header, so it is a two-repo change.  The alpha table is a
+//     file-static const here and does land in .rdata.
+```
