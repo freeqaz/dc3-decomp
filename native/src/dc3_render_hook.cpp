@@ -31,6 +31,10 @@
 // hook registered automatically; there is no explicit init call.
 
 #include "platform/GameRenderHook.h"
+#include "gfx/Canvas2D.h"
+
+#include <cstdio>
+#include <cstdlib>
 
 // DC3 game headers — these were the ones removed from Rnd_Wgpu.cpp in
 // Phase 0.2a. They live here in DC3 glue, never in the engine.
@@ -42,6 +46,36 @@
 #include "rndobj/Mesh.h"
 
 namespace {
+
+// DC3_CANVAS2D_DEMO=1: a fixed scene from the engine's 2D canvas
+// (gfx/Canvas2D.h) drawn over the finished frame. It is the smallest example
+// of game code drawing with the canvas inside a render pass, and it is what
+// NativeWindowTest.Canvas2DDemoIsOnScreen reads back from the window. Logical
+// 1280x720 whatever the window's size.
+void DrawCanvas2DDemo() {
+    Canvas2D* c = TheCanvas2D();
+    if (!c || !c->Begin(1280.0f, 720.0f)) return; // no pass, no device: nothing
+    c->FillRect({400, 200, 480, 320}, {0.10f, 0.10f, 0.12f, 1.0f}, 24.0f); // card
+    c->FillRect({440, 240, 100, 100}, {1, 0, 0, 1});
+    c->FillRect({590, 240, 100, 100}, {0, 1, 0, 1}, 20.0f);
+    Canvas2DQuad ring;
+    ring.rect = {740, 240, 100, 100};
+    ring.radius = 20.0f;
+    ring.border = 4.0f;
+    ring.SetColor({0, 1, 1, 1});
+    c->Quad(ring);
+    c->PushClip({440, 380, 200, 60});
+    c->FillRect({440, 380, 400, 100}, {1, 1, 0, 1}); // cut to 200x60
+    c->PopClip();
+    c->End();
+    static bool sSaid = false;
+    if (!sSaid) {
+        sSaid = true;
+        const Canvas2D::FrameStats& st = c->Stats();
+        printf("Canvas2D demo: %u quads in %u draws\n", st.quads, st.drawCalls);
+        fflush(stdout);
+    }
+}
 
 class HamRenderHook : public GameRenderHook {
 public:
@@ -56,7 +90,13 @@ public:
     // extra dispatch is needed here today. Left as a deliberate no-op slot
     // for re-introduction later.
     void DrawGameOverlay(void* /*renderCtx*/) override {
-        // No-op today. See comment above.
+        // No game overlay today (see the comment above); only the canvas
+        // demo, when asked for.
+        static const bool sDemo = [] {
+            const char* v = getenv("DC3_CANVAS2D_DEMO");
+            return v && v[0] == '1';
+        }();
+        if (sDemo) DrawCanvas2DDemo();
     }
 
     // Per-HamCharacter impostor / render-to-texture pre-pass — runs after

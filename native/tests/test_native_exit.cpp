@@ -1067,6 +1067,88 @@ TEST_F(NativeWindowTest, ASixtyHertzDisplayGetsNoDisplayNotice) {
     ExpectNoCrash(out);
 }
 
+// The engine's 2D canvas (gfx/Canvas2D.h) drawn by game code into the real
+// frame. DC3_CANVAS2D_DEMO=1 has HamRenderHook::DrawGameOverlay draw a fixed
+// scene in the overlay pass; the window's pixels are read back from the X
+// server. The window is 1280x720, so the scene's logical units are window
+// pixels. "" when every pixel is right, else the first that is not.
+//
+// A presenting window gets DC3's display gamma ramp after everything the frame
+// draws (rndshape::DisplayGamma), so only colours made of 0 and 1 come back as
+// given: the card, drawn 0.10/0.10/0.12, read back 35,35,42 here, not
+// 26,26,31. The card is therefore checked against itself: dark, and the same
+// colour wherever the scene must show it.
+std::string Canvas2DDemoLooksRight(const WindowShot &s) {
+    struct Want {
+        int x, y, r, g, b; // r < 0: the card's colour
+        const char *what;
+    };
+    static const Want kWant[] = {
+        {490, 290, 255, 0, 0, "the red square"},
+        {640, 290, 0, 255, 0, "the green rounded square"},
+        {742, 290, 0, 255, 255, "the ring's left side"},
+        {500, 410, 255, 255, 0, "the clipped bar, inside the clip"},
+        {591, 241, -1, 0, 0, "outside the green square's rounded corner (the card)"},
+        {790, 290, -1, 0, 0, "inside the ring (the card)"},
+        {700, 410, -1, 0, 0, "the clipped bar, right of the clip (the card)"},
+        {500, 460, -1, 0, 0, "the clipped bar, below the clip (the card)"},
+    };
+    if (s.w != 1280 || s.h != 720)
+        return "window is " + std::to_string(s.w) + "x" + std::to_string(s.h);
+    auto at = [&](int x, int y, int rgb[3]) {
+        const uint32_t p = s.px[(size_t)y * s.w + x];
+        rgb[0] = (p >> 16) & 0xFF;
+        rgb[1] = (p >> 8) & 0xFF;
+        rgb[2] = p & 0xFF;
+    };
+    int card[3];
+    at(420, 300, card);
+    char buf[240];
+    if (card[0] > 80 || card[1] > 80 || card[2] > 80 || card[2] <= card[0]) {
+        snprintf(buf, sizeof(buf), "the card at (420,300) is %d,%d,%d, want dark and bluer than red",
+                 card[0], card[1], card[2]);
+        return buf;
+    }
+    for (const Want &w : kWant) {
+        int got[3];
+        at(w.x, w.y, got);
+        const int want[3] = {w.r < 0 ? card[0] : w.r, w.r < 0 ? card[1] : w.g, w.r < 0 ? card[2] : w.b};
+        const int tol = w.r < 0 ? 2 : 8;
+        if (std::abs(got[0] - want[0]) > tol || std::abs(got[1] - want[1]) > tol ||
+            std::abs(got[2] - want[2]) > tol) {
+            snprintf(buf, sizeof(buf), "%s at (%d,%d) is %d,%d,%d, want %d,%d,%d", w.what, w.x, w.y,
+                     got[0], got[1], got[2], want[0], want[1], want[2]);
+            return buf;
+        }
+    }
+    return "";
+}
+
+// Sabotage (2026-11-20): DrawCanvas2DDemo's Begin given 640x360 -- red (the
+// scene is drawn twice the size, and (420,300) is the game's own picture).
+TEST_F(NativeWindowTest, Canvas2DDemoIsOnScreen) {
+    ScopedXvfbSetup setup("1920x1200x24");
+    Engine e;
+    std::string why = "never looked";
+    RunWindowed(mRunDir, [&](Display *dpy, Window w) {
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+        do {
+            XSync(dpy, False);
+            WindowShot s;
+            why = s.Grab(dpy, w) ? Canvas2DDemoLooksRight(s) : "XGetImage failed";
+            if (why.empty()) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        } while (std::chrono::steady_clock::now() < deadline);
+        SendWmDeleteWindow(dpy, w);
+    }, e, {"MILO_WIDTH=1280", "MILO_HEIGHT=720", "DC3_CANVAS2D_DEMO=1"});
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_EQ(why, "") << Tail(out);
+    EXPECT_TRUE(Contains(out, "Canvas2D demo: 5 quads in 2 draws")) << Tail(out);
+    EXPECT_FALSE(Contains(out, "Validation error")) << Tail(out);
+    ExpectNoCrash(out);
+}
+
 // HiDPI on X11: at a content scale of 2 (Xft.dpi 192) the window opens at
 // twice the size in pixels, and the frame fills it at exactly 2x.
 TEST_F(NativeWindowTest, AnX11ContentScaleSizesTheWindow) {
