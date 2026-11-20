@@ -2,6 +2,7 @@
 // See SongSelectState_Native.h and docs/native/SONG_SELECT.md.
 
 #include "SongSelectState_Native.h"
+#include "SaveStore_Web.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -79,6 +80,10 @@ bool NativeSongSelectState::Save() const {
         remove(tmpPath.c_str());
         return false;
     }
+    // Web: the file is in the save directory the page keeps in IndexedDB
+    // (PLAN W-36); tell it now, as the profile and global-options writers do,
+    // so the list survives a tab that is closed without a pagehide.
+    Dc3SaveStoreChanged();
     return true;
 }
 

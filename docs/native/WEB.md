@@ -897,8 +897,10 @@ first-run tutorial again.
 |---|---|---|---|
 | `<DC3_SAVE_DIR>/profile_0_save.dat` (every file in that directory) | `MemcardMgr_Stub.cpp` | 1,153,964 bytes | the profile: scores, stars, unlocks, per-profile options |
 | `<DC3_CACHE_DIR>/global/global` (every file in that directory) | `Cache_Stub.cpp` | 57 bytes | the global options, among them which tutorials have been seen |
+| `<DC3_SAVE_DIR>/song_select.txt` | `SongSelectState_Native.cpp` | 35 bytes after one song | song select's Recently Played list and remembered sort ([SONG_SELECT.md](SONG_SELECT.md)); stored 14 ms after the song reaches gameplay |
 
-That is 1,154,021 bytes, and nothing else is stored. Those are also all the
+That is 1,154,056 bytes after one song, and nothing else is stored
+(`save-persist.mjs` checks the set). Those are also all the
 files the game had written under the two directories after a whole song, but
 for one (`window.dc3SaveFiles()`, measured): the song cache,
 `<DC3_CACHE_DIR>/songcache/songcache`, 95,101 bytes with the DLC song lists.

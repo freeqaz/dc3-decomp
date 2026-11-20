@@ -342,7 +342,12 @@ try {
     const keys1 = (p1.store.records || []).map((r) => r.key).sort();
     check('fresh', 'the game wrote its profile save', p1.saved.length > 0, `${p1.saved.length} "saved N bytes" line(s)`);
     check('fresh', 'IndexedDB holds the profile and the global options', keys1.includes('saves/profile_0_save.dat') && keys1.includes('global/global'), JSON.stringify(p1.store.records || p1.store));
-    check('fresh', 'nothing but those two files is stored', keys1.length === 2, keys1.join(', '));
+    // Song select's own file (Recently Played and the remembered sort,
+    // docs/native/SONG_SELECT.md) is in the save directory too, written when
+    // the song reaches gameplay, so it is the third file the store holds.
+    const expected1 = ['global/global', 'saves/profile_0_save.dat', 'saves/song_select.txt'];
+    check('fresh', 'IndexedDB holds song select\'s list once the song reached gameplay', keys1.includes('saves/song_select.txt'), keys1.join(', '));
+    check('fresh', 'nothing but those three files is stored', keys1.every((k) => expected1.includes(k)), keys1.join(', '));
     // What the game has on disk that the store does NOT keep, by measurement.
     p1.files = await ev(() => (window.dc3SaveFiles ? window.dc3SaveFiles() : null)).catch(() => null);
     if (p1.files) {
