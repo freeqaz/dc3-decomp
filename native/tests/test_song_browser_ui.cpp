@@ -2041,6 +2041,23 @@ TEST(SongBrowserUi, Pictures) {
         Picture(rig.Settle(), rig.theme, "browser_command.png");
     }
     {
+        // Motion, a frame every 30 ms of the screen's clock. From the shelf
+        // down into the list: the shelf folds away, the list grows into its
+        // room and its bar fills. Then one row down: the bar glides and the
+        // pane crossfades.
+        Rig rig(PlayedCatalog(), kHistory);
+        rig.Settle();
+        rig.Press(Action::Down);
+        for (int i = 1; i <= 8; ++i) {
+            Picture(rig.Frame(0.03), rig.theme, "browser_motion_fold_" + std::to_string(i) + ".png");
+        }
+        rig.Settle();
+        rig.Press(Action::Down);
+        for (int i = 1; i <= 6; ++i) {
+            Picture(rig.Frame(0.03), rig.theme, "browser_motion_row_" + std::to_string(i) + ".png");
+        }
+    }
+    {
         Rig rig(PlayedCatalog(), kHistory);
         Picture(rig.Settle(), rig.theme, "browser_recents_focus.png");
         rig.Press(Action::Down);
