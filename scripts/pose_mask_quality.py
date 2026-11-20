@@ -13,7 +13,9 @@ offline, and reports per clip and per mask variant:
              `change` is the same over every pair (real motion included).
   coverage   of the joints MediaPipe reports as tracked (visibility >= 0.5 and
              inside the picture): head (nose), elbows, wrists, knees, ankles --
-             the share whose pixel is inside that person's mask.
+             the share whose pixel is inside that person's mask; `+-2px` the
+             share with a mask pixel within 2 px (a joint on the mask's edge
+             is not a dropped limb).
   holes      background pixels the mask encloses (not 4-connected to the
              picture's border), per frame and as a share of the mask; `small`
              counts only holes of <= 30 px (at 320x240), which a body rarely
@@ -37,11 +39,13 @@ too (a stand-in for a dim room on a laptop camera; synthetic, say so).
 
 Needs the pose environment (mediapipe, cv2, numpy), i.e. the playtest venv:
   .venv/bin/python scripts/pose_mask_quality.py --video clip.mp4 --start 60 --seconds 30
-  ... --variants raw,default            compare mask variants in one pass
+  ... --variants raw,refined            compare mask variants in one pass
   ... --dump DIR --dump-at 30,200       pictures + .npz of those frames
-  ... --hold DIR/clip_f0030.npz --variant raw --socket /tmp/s.sock
-        serve that one frame, held, as protocol v3 (for a screenshot of the
-        game drawing exactly that mask)
+  ... --dump DIR --dump-missed 6        ... of frames where the first variant drops a joint
+  ... --still --heat DIR                where the edge flickers (a map per variant)
+  ... --hold DIR/clip_f0030.npz --variant raw,refined --select FILE --socket /tmp/s.sock
+        serve that one frame, held, as protocol v3 with the mask FILE names
+        (for screenshots of the game drawing exactly that frame under each)
 """
 
 import argparse
@@ -60,10 +64,25 @@ MOTION_JOINTS = (0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28)
 TRACKED_VIS = 0.5
 SMALL_HOLE_PX = 30       # at 320x240; scaled by area for other sizes
 GHOST_BELOW = 0.1
+NEAR_PX = 2
 
-# name -> keyword arguments of pose_server.camera_block beyond today's.
+# name -> MaskRefiner options (pose_server.py).
+OFF = {"smooth": False, "hysteresis": False, "limbs": False, "tidy": False}
 VARIANTS = {
-    "raw": {},
+    "raw": None,                               # today's camera_block, no refiner
+    "hyst": dict(OFF, hysteresis=True),        # each improvement alone ...
+    "smooth": dict(OFF, smooth=True),
+    "limbs": dict(OFF, limbs=True),            # only the limbs the mask lost
+    "tidy": dict(OFF, tidy=True),
+    "sm+hyst": dict(OFF, smooth=True, hysteresis=True),
+    "refined": {},                             # ... and the shipped set (MaskRefiner defaults)
+    # the knobs tried on the way (docs/native/POSE_INPUT.md "The mask, measured")
+    "limbs-all": dict(OFF, limbs="all"),
+    "limbs-all0.5": dict(OFF, limbs="all", limb_width=0.5),
+    "limbs-m0": dict(OFF, limbs=True, limb_margin=0),
+    "sm.4": dict(OFF, smooth=True, hysteresis=True, smooth_min=0.4, smooth_full=0.3, stay=0.35),
+    "hy.35": dict(OFF, smooth=True, hysteresis=True, stay=0.35),
+    "ref-m0": dict(limb_margin=0),
 }
 
 
@@ -80,6 +99,7 @@ class Meter:
         self.area = 0
         self.still, self.change = [], []
         self.cov = {g: [0, 0] for g in GROUPS}      # inside, tracked
+        self.near = 0                               # ... within NEAR_PX of the mask
         self.holes = self.hole_px = self.small_px = self.hole_frames = 0
         self.frags = self.frag_px = self.frag_frames = 0
         self.ghost_px = 0
@@ -119,8 +139,11 @@ class Meter:
             for g, idxs in GROUPS.items():
                 for j in idxs:
                     if tracked(xy, vis, j):
+                        y, x = int(xy[j][1] * h), int(xy[j][0] * w)
                         self.cov[g][1] += 1
-                        self.cov[g][0] += bool(b[int(xy[j][1] * h), int(xy[j][0] * w)])
+                        self.cov[g][0] += bool(b[y, x])
+                        self.near += bool(b[max(0, y - NEAR_PX):y + NEAR_PX + 1,
+                                            max(0, x - NEAR_PX):x + NEAR_PX + 1].any())
             if area == 0:
                 self.no_mask += 1
             else:
@@ -163,7 +186,7 @@ class Meter:
             "change_all_pct": 100.0 * float(np.mean(self.change)) if self.change else None,
             "pairs": len(self.change),
             "coverage_pct": 100.0 * ins / tot if tot else None, "coverage_joints": tot,
-            "coverage": cov,
+            "coverage": cov, "coverage_near_pct": 100.0 * self.near / tot if tot else None,
             "holes_per_frame": self.holes / pf, "hole_frames_pct": 100.0 * self.hole_frames / pf,
             "hole_px_per_frame": self.hole_px / pf, "hole_pct_of_mask": 100.0 * self.hole_px / area,
             "small_hole_px_per_frame": self.small_px / pf,
@@ -210,10 +233,13 @@ def run_clip(path, args, names):
     cap.set(cv2.CAP_PROP_POS_FRAMES, int(round(args.start * fps)))
     total = int(round(args.seconds * fps / args.every))
     meters = {n: Meter(np, cv2, args.still_px) for n in names}
-    blocks = {n: ps.mask_variant(VARIANTS[n]) if VARIANTS[n] else None for n in names}
+    blocks = {n: None if VARIANTS[n] is None else ps.mask_variant(VARIANTS[n]) for n in names}
     rng = np.random.default_rng(1234)
     held = None
     dump_at = set(int(v) for v in args.dump_at.split(",") if v) if args.dump else set()
+    missed_left, missed_last = (args.dump_missed if args.dump else 0), -10 ** 9
+    heat = {n: None for n in names} if args.heat else {}
+    last = {}
     stem = os.path.splitext(os.path.basename(path))[0] + ("_still" if args.still else "")
     for i in range(total):
         if args.still and held is not None:
@@ -241,6 +267,20 @@ def run_clip(path, args, names):
             meters[n].ms.append((time.perf_counter() - t) * 1e3)
             ordinal = np.frombuffer(mask, dtype=np.uint8).reshape(h, w)
             meters[n].add(ordinal, ids, lms, masks)
+            if n in heat:
+                if heat[n] is None:
+                    heat[n] = np.zeros(ordinal.shape, dtype=np.float32)
+                if n in last:
+                    heat[n] += (ordinal > 0) != (last[n] > 0)
+                last[n] = ordinal.copy()
+            if n == names[0] and missed_left > 0 and i - missed_last >= 15 and i not in dump_at:
+                for k, (xy, vis) in enumerate(lms, start=1):
+                    if any(tracked(xy, vis, j) and ordinal[int(xy[j][1] * h), int(xy[j][0] * w)] != k
+                           for idxs in GROUPS.values() for j in idxs):
+                        dump_at.add(i)
+                        missed_left -= 1
+                        missed_last = i
+                        break
             if i in dump_at:
                 rgb_a = np.frombuffer(rgb, dtype=np.uint8).reshape(h, w, 3)
                 panels.append(overlay(np, cv2, rgb_a, ordinal, lms, n))
@@ -257,6 +297,21 @@ def run_clip(path, args, names):
                 frame_wh=np.array(frame.shape[1::-1]), **saved)
     cap.release()
     backend.close()
+    if heat and all(v is not None for v in heat.values()):
+        # How often each pixel changed over the run: black never, white at
+        # 30% of the frames or more. Side by side, one panel per variant.
+        os.makedirs(args.heat, exist_ok=True)
+        frames = max(meters[names[0]].frames - 1, 1)
+        panels = []
+        for n in names:
+            v = np.clip(heat[n] / (0.3 * frames), 0.0, 1.0)
+            img = cv2.applyColorMap((v * 255).astype(np.uint8), cv2.COLORMAP_INFERNO)
+            img[last[n] > 0] = np.maximum(img[last[n] > 0], 40)
+            img = cv2.resize(img, (size[0] * 2, size[1] * 2), interpolation=cv2.INTER_NEAREST)
+            cv2.putText(img, f"{n}: changes per pixel", (6, 16), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                        (0, 255, 255), 1, cv2.LINE_AA)
+            panels.append(img)
+        cv2.imwrite(os.path.join(args.heat, f"{stem}_heat.png"), np.hstack(panels))
     return {n: m.report() for n, m in meters.items()}
 
 
@@ -266,12 +321,13 @@ def fmt(v, spec="5.2f"):
 
 def print_table(clip, cond, reports):
     print(f"\n== {clip} [{cond}]")
-    print("variant      still-flicker% (p95, n)   change%  coverage% (n)   head elbow wrist  knee ankle"
+    print("variant      still-flicker% (p95, n)   change%  coverage% (n)    +-2px  head elbow wrist  knee ankle"
           "   holes/f hole-px/f small-px/f hole%   frags/f frag%  ghost%  px/person  ms med/p95")
     for n, r in reports.items():
         c = r["coverage"]
         print(f"{n:12s} {fmt(r['flicker_still_pct'])} ({fmt(r['flicker_still_p95_pct'])}, {r['still_pairs']:4d})"
               f"     {fmt(r['change_all_pct'])}  {fmt(r['coverage_pct'], '5.1f')} ({r['coverage_joints']:5d})  "
+              f"{fmt(r['coverage_near_pct'], '6.2f')} "
               + " ".join(fmt(c[g][0], "5.1f") for g in GROUPS)
               + f"   {r['holes_per_frame']:6.3f} {r['hole_px_per_frame']:8.2f} {r['small_hole_px_per_frame']:9.2f}"
               f" {r['hole_pct_of_mask']:5.2f}   {r['fragments_per_frame']:6.3f} {r['fragment_pct_of_mask']:5.2f}"
@@ -287,9 +343,25 @@ def hold(args):
     import numpy as np
     import pose_server as ps
     d = np.load(args.hold)
-    mask = d["mask_" + args.variant]
-    h, w = mask.shape
-    image = (np.ascontiguousarray(d["rgb"]).tobytes(), np.ascontiguousarray(mask).tobytes(), w, h)
+    names = [n for n in args.variant.split(",") if n]
+    images = {}
+    for n in names:
+        mask = d["mask_" + n]
+        h, w = mask.shape
+        images[n] = (np.ascontiguousarray(d["rgb"]).tobytes(), np.ascontiguousarray(mask).tobytes(), w, h)
+
+    def image_now():
+        """--select FILE names the variant to send (re-read every frame), so one
+        game run can be shown the same frame under two masks."""
+        if args.select:
+            try:
+                with open(args.select) as f:
+                    want = f.read().strip()
+                if want in images:
+                    return images[want]
+            except OSError:
+                pass
+        return images[names[0]]
     persons = [(int(t), [tuple(float(v) for v in j) for j in js]) for t, js in zip(d["ids"], d["joints"])]
     fw, fh = (int(v) for v in d["frame_wh"])
     if os.path.exists(args.socket):
@@ -304,8 +376,8 @@ def hold(args):
             frame_id = 0
             try:
                 while True:
-                    client.sendall(ps.pack_frame(frame_id, time.monotonic(), fw, fh, 20, 1, persons, image,
-                                                 flags=ps.header_flags(0)))
+                    client.sendall(ps.pack_frame(frame_id, time.monotonic(), fw, fh, 20, 1, persons,
+                                                 image_now(), flags=ps.header_flags(0)))
                     frame_id += 1
                     time.sleep(1.0 / 30.0)
             except OSError:
@@ -336,8 +408,15 @@ def main(argv=None):
     ap.add_argument("--json", default=None, help="also write the numbers here")
     ap.add_argument("--dump", default=None, metavar="DIR")
     ap.add_argument("--dump-at", default="", help="frame indices of the run, comma list")
+    ap.add_argument("--dump-missed", type=int, default=0, metavar="N",
+                    help="also dump the first N frames (15 apart) where the FIRST variant "
+                         "leaves a tracked joint outside the mask")
+    ap.add_argument("--heat", default=None, metavar="DIR",
+                    help="write a map of how often each pixel changed, per variant")
     ap.add_argument("--hold", default=None, metavar="NPZ")
-    ap.add_argument("--variant", default="raw", help="--hold: which mask of the .npz")
+    ap.add_argument("--variant", default="raw", help="--hold: which mask(s) of the .npz, comma list")
+    ap.add_argument("--select", default=None, metavar="FILE",
+                    help="--hold: a file naming the variant to send now (default: the first)")
     ap.add_argument("--socket", default="/tmp/dc3_pose.sock")
     args = ap.parse_args(argv)
     if args.hold:

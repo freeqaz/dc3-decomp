@@ -49,7 +49,9 @@ Protocol v3 (--frames WxH; PLAN P-4, the player view): v2 with magic
   [uint16 w] [uint16 h] [uint8 rgb_format = 1] [uint8 mask_format = 1] [uint16 pad]
   [w*h*3 bytes RGB888, top row first] [w*h bytes person mask]
   The mask byte is 0 for nobody, k for the k-th person of THIS packet (MediaPipe's
-  per-pose segmentation, the most confident person > 0.5 wins). w = h = 0 means
+  per-pose segmentation, the most confident person > 0.5 wins; since PLAN P-20
+  steadied, filled and tidied first -- MaskRefiner below; --mask raw is the
+  mask as it was. Same bytes on the wire either way). w = h = 0 means
   no picture this frame. The game asks for v3 by passing --frames; without it
   this server sends v2 exactly as before, so an older game is unaffected, and
   the C++ reader still accepts v1/v2 from older servers. Reader:
@@ -474,13 +476,161 @@ def parse_frames(value):
     return w, h
 
 
-def camera_block(frame_bgr, masks, size, cv2, np):
+# ---- the silhouette mask, refined (PLAN P-20) -------------------------------
+# MediaPipe's per-pose mask is soft, low-resolution and independent from frame
+# to frame. Cut at 0.5 it flickers along the edge while the player stands
+# still, opens small holes, sheds specks, and now and then loses a forearm or
+# a hand the tracker still sees (measured: scripts/pose_mask_quality.py,
+# docs/native/POSE_INPUT.md "The mask, measured"). MaskRefiner keeps a little
+# state per track id and gives the same ordinal mask with those four fixed:
+#   smooth      a per-pixel filter on the soft mask that follows a large change
+#               at once and averages a small one (so it adds no trail to a
+#               moving limb);
+#   hysteresis  a pixel turns on above MASK_ENTER and stays on down to
+#               MASK_STAY;
+#   limbs       a capsule along each limb MediaPipe reports as visible and the
+#               mask does not reach, so a tracked arm or leg is never missing
+#               from the silhouette;
+#   tidy        a 3x3 close, then pieces smaller than MASK_SPECK_SHARE of the
+#               person are dropped.
+# --mask raw (DC3_POSE_MASK=raw in the game) is the mask as it was.
+MASK_MODES = ("refined", "raw")
+MASK_ENTER = 0.5
+MASK_STAY = 0.25
+MASK_SMOOTH_MIN = 0.25     # filter weight of the new frame for a small change
+MASK_SMOOTH_FULL = 0.5     # a change this large (0..1) is followed at once
+MASK_SPECK_SHARE = 0.01
+MASK_VISIBLE = 0.5         # a landmark is "tracked" from this visibility
+MASK_LIMB_PROBES = (0.0, 0.25, 0.5, 0.75, 1.0)   # where a limb is checked against the mask
+MASK_LIMB_MARGIN = 2       # px at 320 wide: a probe this close to the mask counts as covered
+# BlazePose landmark pairs and the capsule's width as a share of the body
+# scale (the larger of shoulder-to-hip and 1.2 x shoulder width, in pixels).
+MASK_LIMBS = (
+    (11, 13, 0.17), (13, 15, 0.13), (15, 19, 0.12),      # left arm, hand
+    (12, 14, 0.17), (14, 16, 0.13), (16, 20, 0.12),      # right arm, hand
+    (23, 25, 0.28), (25, 27, 0.20), (27, 31, 0.14),      # left leg, foot
+    (24, 26, 0.28), (26, 28, 0.20), (28, 32, 0.14),      # right leg, foot
+)
+
+
+class MaskRefiner:
+    """The ordinal person mask from MediaPipe's soft masks, steadied across
+    frames (see the block comment above). One per stream; `ordinal()` once per
+    camera frame, with the frame's persons in packet order."""
+
+    def __init__(self, cv2, np, smooth=True, hysteresis=True, limbs=True, tidy=True,
+                 enter=MASK_ENTER, stay=MASK_STAY, smooth_min=MASK_SMOOTH_MIN,
+                 smooth_full=MASK_SMOOTH_FULL, limb_width=1.0, limb_margin=MASK_LIMB_MARGIN):
+        self.cv2, self.np = cv2, np
+        self.smooth, self.hysteresis, self.limbs, self.tidy = smooth, hysteresis, limbs, tidy
+        self.enter, self.stay = enter, (stay if hysteresis else enter)
+        self.smooth_min, self.smooth_full, self.limb_width = smooth_min, smooth_full, limb_width
+        self.limb_margin = limb_margin
+        self.state = {}       # track id -> (filtered soft mask, on)
+        self._kernel = np.ones((3, 3), dtype=np.uint8)
+
+    def _capsules(self, canvas, landmarks, w, h):
+        """Draw the limbs the mask lost into `canvas` (0/1): a capsule for each
+        MASK_LIMBS segment whose two landmarks are tracked and which the mask
+        does not reach (within MASK_LIMB_MARGIN) at every one of
+        MASK_LIMB_PROBES points along it. limbs="all" draws every tracked
+        segment instead. Measured and dropped: "all" (thickens limbs the mask
+        already has, adds edge flicker), no margin (a forearm resting on the
+        hip blinks across the gap beside it), holding a fill for some frames
+        (no gain)."""
+        cv2, np = self.cv2, self.np
+        xy, vis = landmarks
+        px = np.asarray(xy, dtype=np.float32) * (w, h)
+        scale = max(float(np.linalg.norm((px[11] + px[12]) * 0.5 - (px[23] + px[24]) * 0.5)),
+                    1.2 * float(np.linalg.norm(px[11] - px[12])))
+        if not (scale > 0.0) or scale > 4.0 * max(w, h):
+            return
+        near = None
+        todo = []
+        for a, b, share in MASK_LIMBS:
+            if not (vis[a] >= MASK_VISIBLE and vis[b] >= MASK_VISIBLE):
+                continue
+            if self.limbs != "all":
+                if near is None:
+                    near = canvas
+                    if self.limb_margin > 0:
+                        r = max(1, int(round(self.limb_margin * w / 320.0)))
+                        near = cv2.dilate(canvas, np.ones((2 * r + 1, 2 * r + 1), dtype=np.uint8))
+                covered = True
+                for t in MASK_LIMB_PROBES:
+                    x = int(px[a][0] + t * (px[b][0] - px[a][0]))
+                    y = int(px[a][1] + t * (px[b][1] - px[a][1]))
+                    if 0 <= x < w and 0 <= y < h and not near[y, x]:
+                        covered = False
+                        break
+                if covered:
+                    continue
+            todo.append((a, b, share))
+        for a, b, share in todo:
+            cv2.line(canvas, (int(px[a][0]), int(px[a][1])), (int(px[b][0]), int(px[b][1])),
+                     1, max(1, int(round(share * self.limb_width * scale))), cv2.LINE_8)
+
+    def ordinal(self, masks, size, ids=None, landmarks=None):
+        cv2, np = self.cv2, self.np
+        w, h = size
+        ordinal = np.zeros((h, w), dtype=np.uint8)
+        best = np.zeros((h, w), dtype=np.float32)
+        state = {}
+        for k, m in enumerate(masks, start=1):
+            if m is None:
+                continue
+            tid = ids[k - 1] if ids is not None and k - 1 < len(ids) else -k
+            s = cv2.resize(np.asarray(m, dtype=np.float32), (w, h), interpolation=cv2.INTER_LINEAR)
+            was = self.state.get(tid)
+            if was is not None and was[0].shape != s.shape:
+                was = None
+            if was is not None and self.smooth:
+                d = s - was[0]
+                gain = np.clip(np.abs(d) * (1.0 / self.smooth_full), self.smooth_min, 1.0)
+                gain *= d
+                gain += was[0]
+                s = gain
+            on = s > self.enter
+            if was is not None and self.stay < self.enter:
+                on |= was[1] & (s > self.stay)
+            state[tid] = (s, on)
+            shape = on.astype(np.uint8)
+            lm = landmarks[k - 1] if landmarks is not None and k - 1 < len(landmarks) else None
+            if self.limbs and lm is not None:
+                self._capsules(shape, lm, w, h)
+            if self.tidy:
+                shape = cv2.morphologyEx(shape, cv2.MORPH_CLOSE, self._kernel)
+                n, labels, stats, _ = cv2.connectedComponentsWithStats(shape, connectivity=8)
+                if n > 2:
+                    areas = stats[:, cv2.CC_STAT_AREA].copy()
+                    areas[0] = 0
+                    keep = areas >= max(1.0, MASK_SPECK_SHARE * float(areas.sum()))
+                    keep[int(areas.argmax())] = True
+                    keep[0] = False
+                    shape = keep[labels].astype(np.uint8)
+            # Between persons the more confident soft mask wins, as before; a
+            # filled pixel (limb, close) counts as barely over the threshold.
+            score = np.maximum(s, self.enter + 1e-3)
+            win = (shape > 0) & (score > best)
+            np.copyto(ordinal, k, where=win)
+            np.copyto(best, score, where=win)
+        self.state = state
+        return ordinal
+
+
+def camera_block(frame_bgr, masks, size, cv2, np, refiner=None, ids=None, landmarks=None):
     """(rgb_bytes, mask_bytes, w, h) for the v3 camera block: the frame scaled
     to `size` as RGB888, and one byte per pixel naming the most confident
-    person (1-based, in `masks` order) whose mask passes MASK_THRESHOLD."""
+    person (1-based, in `masks` order) whose mask passes MASK_THRESHOLD.
+    With a `refiner` (MaskRefiner) the mask is its steadied one; `ids` are the
+    persons' track ids and `landmarks` their image landmarks, in `masks`
+    order."""
     w, h = size
     rgb = cv2.cvtColor(cv2.resize(frame_bgr, (w, h), interpolation=cv2.INTER_AREA),
                        cv2.COLOR_BGR2RGB)
+    if refiner is not None:
+        ordinal = refiner.ordinal(masks, size, ids, landmarks)
+        return np.ascontiguousarray(rgb).tobytes(), ordinal.tobytes(), w, h
     ordinal = np.zeros((h, w), dtype=np.uint8)
     best = np.full((h, w), MASK_THRESHOLD, dtype=np.float32)
     for k, m in enumerate(masks, start=1):
@@ -492,6 +642,18 @@ def camera_block(frame_bgr, masks, size, cv2, np):
         ordinal[win] = k
         best[win] = m[win]
     return np.ascontiguousarray(rgb).tobytes(), ordinal.tobytes(), w, h
+
+
+def mask_variant(options):
+    """A camera_block with its own MaskRefiner(**options), for
+    scripts/pose_mask_quality.py: f(frame, masks, size, cv2, np, ids, landmarks)."""
+    box = []
+
+    def block(frame_bgr, masks, size, cv2, np, ids, landmarks):
+        if not box:
+            box.append(MaskRefiner(cv2, np, **options))
+        return camera_block(frame_bgr, masks, size, cv2, np, box[0], ids, landmarks)
+    return block
 
 
 def header_flags(latency_ms=None):
@@ -700,6 +862,11 @@ def parse_args(argv=None):
     parser.add_argument("--frames", default=None, metavar="WxH",
                         help="Also send the camera picture and a person mask at WxH "
                              "(protocol v3, the in-game player view; PLAN P-4)")
+    parser.add_argument("--mask", choices=MASK_MODES, default="refined",
+                        help="The person mask of --frames: refined (default: steadied across "
+                             "frames, holes closed, tracked limbs filled in -- MaskRefiner) or "
+                             "raw (MediaPipe's mask cut at 0.5, as before PLAN P-20). The game "
+                             "passes DC3_POSE_MASK=raw as --mask raw.")
     args = parser.parse_args(argv)
     if args.source_latency_ms is not None and not 0 <= args.source_latency_ms <= 1000:
         parser.error("--source-latency-ms wants 0..1000")
@@ -807,8 +974,12 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
     outbox = None
     frames_size = getattr(args, "frames_size", None)
     np = None
+    refiner = None
     if frames_size:
         import numpy as np  # noqa: F811 -- only the v3 path needs it
+        if getattr(args, "mask", "refined") != "raw":
+            refiner = MaskRefiner(cv2, np)
+        print(f"Person mask: {'refined' if refiner else 'raw'} (--mask)", file=sys.stderr)
     try:
         backend, num_landmarks, layout = make_backend(args)
 
@@ -948,7 +1119,9 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
                     image = ()
                     if frame is not None:
                         masks = list(getattr(backend, "last_masks", []) or [])[:len(persons)]
-                        image = camera_block(frame, masks, frames_size, cv2, np)
+                        landmarks = list(getattr(backend, "last_landmarks", []) or [])[:len(persons)]
+                        image = camera_block(frame, masks, frames_size, cv2, np, refiner,
+                                             [tid for tid, _ in persons], landmarks)
                 msg = pack_frame(frame_id, timestamp, frame_w, frame_h,
                                  num_landmarks, layout, persons, image, flags=flags)
                 try:
