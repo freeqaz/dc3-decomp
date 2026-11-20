@@ -31,6 +31,14 @@ namespace nativeui_host {
     NativeUiHost::~NativeUiHost() { SetCapture(false); }
 
     void NativeUiHost::SetScreen(nativeui::Screen *screen) {
+        plain_.screen = screen;
+        SetScreen(screen ? static_cast<HostedScreen *>(&plain_) : nullptr);
+    }
+
+    void NativeUiHost::SetScreen(HostedScreen *screen) {
+        if (screen != &plain_) {
+            plain_.screen = nullptr;
+        }
         screen_ = screen;
         repeater_.ReleaseAll();
         UpdateCapture();

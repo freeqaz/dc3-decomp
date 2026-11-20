@@ -443,7 +443,6 @@ void HttpServer::ProcessCommands() {
             case kCmdPoseTarget:   HandlePoseTarget(*cmd); break;
             case kCmdCamera:       HandleCamera(*cmd); break;
             case kCmdMenuState:    HandleMenuState(*cmd); break;
-            case kCmdNativeUiState: HandleNativeUiState(*cmd); break;
             case kCmdInputText:    HandleInputText(*cmd); break;
             case kCmdSongs:        HandleSongs(*cmd); break;
             default: cmd->result.error = "Unknown command type"; break;
@@ -1100,14 +1099,6 @@ void HttpServer::HandleMenuState(Command& cmd) {
     cmd.result.ok = true;
 }
 
-// native/src/nativeui_host/NativeUiDemo.cpp.  Read-only.
-namespace nativeui_host { std::string DemoStateJson(); }
-
-void HttpServer::HandleNativeUiState(Command& cmd) {
-    cmd.result.jsonData = nativeui_host::DemoStateJson();
-    cmd.result.ok = true;
-}
-
 // POST /api/input/text: `param1` is UTF-8 text to type, `param2` an edit key
 // name.  Both go into the engine's text queue (platform/TextInput_Native.h)
 // from the main thread, which is the thread that drains it; injected events
@@ -1713,19 +1704,6 @@ void HttpServer::RegisterEndpoints() {
         if (req.has_param("reset") && req.get_param_value("reset") != "0") flags += "reset ";
         if (req.has_param("rows") && req.get_param_value("rows") != "0") flags += "rows";
         auto result = QueueAndWait(kCmdMenuState, since, flags);
-        if (result.ok) {
-            res.set_content(JsonOk(result.jsonData), "application/json");
-        } else {
-            res.status = 500;
-            res.set_content(JsonError(result.error), "application/json");
-        }
-    });
-
-    // GET /api/nativeui/state — the natively drawn UI's demo (DC3_NATIVEUI_DEMO=1):
-    // the search text, the focused part, the selected row, frame stats.
-    // {"active":false} when the demo is not running.  Read-only.
-    svr->Get("/api/nativeui/state", [this](const httplib::Request&, httplib::Response& res) {
-        auto result = QueueAndWait(kCmdNativeUiState);
         if (result.ok) {
             res.set_content(JsonOk(result.jsonData), "application/json");
         } else {

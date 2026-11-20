@@ -1,13 +1,18 @@
 // nativeui_host without a GPU and without game data: the command translation
 // (through a recording sink), glyph layout from a hand-built bitmap font, the
 // image cache against a fake loader, the input mapping and repeat timing, and
-// the host's text capture and event routing with the sample browser.
+// the host's text capture and event routing with a two-widget test screen,
+// and the host running the real song browser screen.
 //
 // The GPU and running-engine halves are test_nativeui_host_gpu.cpp.
 
 #include <gtest/gtest.h>
 
-#include "nativeui/SampleBrowser.h"
+#include "nativeui/Label.h"
+#include "nativeui/Layout.h"
+#include "nativeui/ListView.h"
+#include "nativeui/Screen.h"
+#include "nativeui/TextField.h"
 #include "nativeui/Text.h"
 #include "nativeui_host/BitmapGlyphSource.h"
 #include "nativeui_host/CanvasRenderer.h"
@@ -16,6 +21,8 @@
 #include "nativeui_host/InputBridge.h"
 #include "nativeui_host/NativeUiHost.h"
 #include "platform/TextInput_Native.h"
+#include "songbrowser/SongCatalog.h"
+#include "songbrowser_ui/SongBrowserScreen.h"
 
 #include <cstdint>
 #include <map>
@@ -700,7 +707,7 @@ TEST(NativeUiHostInput, AHeldDirectionRepeatsAfterTheDelayThenAtTheInterval) {
 }
 
 // ---------------------------------------------------------------------------
-// The host with the sample browser
+// The host with a screen: a search field over a list
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -717,12 +724,52 @@ namespace {
         return data;
     }
 
+    // The smallest screen the host's rules can be seen on: a text field and
+    // a list of forty rows; typing with the list focused goes to the field.
+    class TestScreen {
+    public:
+        TestScreen(const nativeui::TextMeasurer &text, const nativeui::Clock &clock)
+            : screen_({ kLogicalWidth, kLogicalHeight }, nativeui::Dc3Theme(), text, clock) {
+            auto page = std::make_unique<nativeui::Column>(8.0f);
+            search_ = &page->Add(std::make_unique<nativeui::TextField>("Search"));
+            list_ = &page->Add(
+                std::make_unique<nativeui::ListView>(
+                    [](int) { return nativeui::ListRowInfo { 30.0f, true }; },
+                    [](int index) -> std::unique_ptr<nativeui::Widget> {
+                        return std::make_unique<nativeui::Label>(
+                            "Song number " + std::to_string(index), &nativeui::Typography::body
+                        );
+                    }
+                ),
+                1.0f
+            );
+            screen_.SetRoot(std::move(page));
+            list_->SetRowCount(40);
+            list_->SelectFirst();
+            screen_.SetFocus(list_);
+            screen_.onUnhandledEvent = [this](const nativeui::Event &event) {
+                if (std::holds_alternative<nativeui::TextEvent>(event)
+                    || std::holds_alternative<nativeui::EditEvent>(event)) {
+                    return search_->HandleEvent(event);
+                }
+                return false;
+            };
+        }
+        nativeui::Screen &GetScreen() { return screen_; }
+        nativeui::TextField &Search() { return *search_; }
+        nativeui::ListView &SongList() { return *list_; }
+
+    private:
+        nativeui::Screen screen_;
+        nativeui::TextField *search_ = nullptr;
+        nativeui::ListView *list_ = nullptr;
+    };
+
     class NativeUiHostTest : public ::testing::Test {
     protected:
         FontRig rig { AsciiFont() };
         NativeUiHost host { rig.fonts, nullptr };
-        nativeui::SampleBrowser browser { { kLogicalWidth, kLogicalHeight }, rig.fonts,
-                                          host.Clock() };
+        TestScreen browser { rig.fonts, host.Clock() };
         double now = 100.0;
 
         void SetUp() override {
@@ -848,7 +895,7 @@ TEST_F(NativeUiHostTest, DrawToReplaysTheFrameAndCountsIt) {
     EXPECT_GT(stats.commands, 20u);
     EXPECT_EQ(stats.quads, sink.Quads().size());
     EXPECT_GT(stats.glyphs, 100u);
-    EXPECT_EQ(stats.placeholderGlyphs, 0u) << "the sample is ASCII plus Latin-1 accents";
+    EXPECT_EQ(stats.placeholderGlyphs, 0u) << "the test screen is ASCII";
     int depth = 0;
     for (const RecordingSink::Op &op : sink.ops) {
         depth += op.kind == '+' ? 1 : op.kind == '-' ? -1 : 0;
@@ -863,4 +910,91 @@ TEST_F(NativeUiHostTest, DrawToReplaysTheFrameAndCountsIt) {
     EXPECT_FALSE(host.Stats().drew);
     EXPECT_TRUE(empty.ops.empty());
     EXPECT_FALSE(host.OnButtonDown(kPadDDown, kPadActionDown));
+}
+
+// ---------------------------------------------------------------------------
+// The host with the real song browser (a HostedScreen that is not a
+// nativeui::Screen)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+    songbrowser::SongCatalog TwelveSongs() {
+        songbrowser::SongCatalog catalog;
+        for (int i = 0; i < 12; i++) {
+            songbrowser::SongEntry song;
+            song.id = i + 1;
+            song.shortName = "song" + std::to_string(i);
+            song.title = std::string(1, (char)('A' + i)) + " Title " + std::to_string(i);
+            song.artist = "Artist " + std::to_string(11 - i);
+            song.difficultyTier = i % 7;
+            song.origin = "ham3";
+            catalog.Add(song);
+        }
+        return catalog;
+    }
+
+}
+
+TEST(NativeUiHostHostedScreen, TheSongBrowserRunsUnderTheHost) {
+    TextInputSetCapture(false);
+    TextInputClear();
+    FontRig rig { AsciiFont() };
+    rig.fonts.SetDefault(&rig.source);
+    NativeUiHost host { rig.fonts, nullptr };
+    const songbrowser::SongCatalog catalog = TwelveSongs();
+    std::vector<std::string> picks;
+    int backs = 0;
+    songbrowser_ui::Delegate delegate;
+    delegate.onPick = [&](const std::string &song) { picks.push_back(song); };
+    delegate.onBack = [&] { backs++; };
+    songbrowser_ui::SongBrowserScreen browser(
+        catalog, delegate, songbrowser_ui::Environment { rig.fonts, host.Clock() }
+    );
+    HostedScreenOf<songbrowser_ui::SongBrowserScreen> hosted(browser);
+    host.SetScreen(&hosted);
+    ASSERT_EQ(host.GetScreen(), &hosted);
+    double now = 5.0;
+    host.Enter(now);
+    host.Tick(now += 1.0 / 60.0);
+    EXPECT_TRUE(TextInputCapture()) << "the browser wants the keyboard wherever its focus is";
+
+    // Pad presses reach it: Down moves the list, Accept picks that song.
+    const std::string first = browser.SaveState().selectedSong;
+    ASSERT_FALSE(first.empty());
+    EXPECT_TRUE(host.OnButtonDown(kPadDDown, kPadActionDown));
+    host.OnButtonUp(kPadDDown, kPadActionDown);
+    const std::string second = browser.SaveState().selectedSong;
+    EXPECT_NE(second, first);
+    EXPECT_TRUE(host.OnButtonDown(kPadX, kPadActionConfirm));
+    ASSERT_EQ(picks.size(), 1u);
+    EXPECT_EQ(picks[0], second);
+
+    // Typed text reaches it through the engine's queue, and its frame is
+    // replayed through the host's renderer.
+    TextInputInjectUtf8("title 7");
+    host.Tick(now += 1.0 / 60.0);
+    EXPECT_EQ(browser.SaveState().query, "title 7");
+    RecordingSink sink;
+    for (int i = 0; i < 90; i++) {
+        host.Tick(now += 1.0 / 60.0);
+        sink.ops.clear();
+        host.DrawTo(sink);
+    }
+    EXPECT_TRUE(host.Stats().drew);
+    EXPECT_GT(host.Stats().glyphs, 40u);
+    EXPECT_EQ(browser.DetailSong(), "song7");
+
+    // Back clears the query first, then asks to leave.
+    EXPECT_TRUE(host.OnButtonDown(kPadCircle, kPadActionCancel));
+    EXPECT_EQ(browser.SaveState().query, "");
+    EXPECT_EQ(backs, 0);
+    EXPECT_TRUE(host.OnButtonDown(kPadCircle, kPadActionCancel));
+    EXPECT_EQ(backs, 1);
+
+    host.Exit();
+    EXPECT_FALSE(TextInputCapture()) << "leaving gives the keyboard back";
+    host.SetScreen(nullptr);
+    EXPECT_FALSE(host.OnButtonDown(kPadDDown, kPadActionDown));
+    TextInputClear();
 }

@@ -13,9 +13,9 @@
 //       nativeui_host::GameImageLoader mLoader;
 //       nativeui_host::ImageCache mImages { mLoader };
 //       nativeui_host::NativeUiHost mHost { mFonts.Fonts(), &mImages };
-//       std::unique_ptr<MyScreen> mScreen;               // owns a nativeui::Screen built
-//                                                        // with mFonts.Fonts() and mHost.Clock()
-//       void Enter() override  { UIPanel::Enter(); mHost.SetScreen(&mScreen->GetScreen());
+//       std::unique_ptr<MyScreen> mScreen;               // a nativeui::Screen (or a HostedScreen)
+//                                                        // built with mFonts.Fonts(), mHost.Clock()
+//       void Enter() override  { UIPanel::Enter(); mHost.SetScreen(mScreen.get());
 //                                mHost.Enter(nativeui_host::GameUiSeconds()); }
 //       void Poll() override   { UIPanel::Poll(); mHost.Tick(nativeui_host::GameUiSeconds()); }
 //       void Draw() override   { UIPanel::Draw(); nativeui_host::SetOutputSize(mHost); mHost.Draw(); }
@@ -50,9 +50,11 @@
 #include "nativeui/Screen.h"
 #include "nativeui_host/CanvasRenderer.h"
 #include "nativeui_host/FontSet.h"
+#include "nativeui_host/HostedScreen.h"
 #include "nativeui_host/ImageCache.h"
 #include "nativeui_host/InputBridge.h"
 
+#include <cstddef>
 #include <cstdint>
 
 namespace nativeui_host {
@@ -95,8 +97,13 @@ namespace nativeui_host {
         const FontSet &Fonts() const { return fonts_; }
         ImageCache *Images() const { return images_; }
 
+        // What the host runs: a nativeui::Screen, or any HostedScreen (see
+        // HostedScreen.h: SongBrowserScreen goes through HostedScreenOf).
+        // Null: nothing.  The screen is borrowed.
         void SetScreen(nativeui::Screen *screen);
-        nativeui::Screen *GetScreen() const { return screen_; }
+        void SetScreen(HostedScreen *screen);
+        void SetScreen(std::nullptr_t) { SetScreen(static_cast<HostedScreen *>(nullptr)); }
+        HostedScreen *GetScreen() const { return screen_; }
 
         // Where image handles are resolved; the image cache by default. A
         // screen whose handles are not the cache's own gives its own source.
@@ -134,10 +141,24 @@ namespace nativeui_host {
         void UpdateCapture();
         void SetCapture(bool on);
 
+        // A nativeui::Screen as a HostedScreen; the host's own, so the
+        // common case needs no adapter object from the caller.
+        class PlainScreen final : public HostedScreen {
+        public:
+            bool HandleEvent(const nativeui::Event &event) override {
+                return screen->HandleEvent(event);
+            }
+            const nativeui::DisplayList &BuildFrame() override { return screen->BuildFrame(); }
+            bool WantsTextInput() const override { return screen->WantsTextInput(); }
+            void PlayEnter() override { screen->PlayEnter(); }
+            nativeui::Screen *screen = nullptr;
+        };
+
         const FontSet &fonts_;
         ImageCache *images_;
         ImageSource *imageSource_ = nullptr;
-        nativeui::Screen *screen_ = nullptr;
+        PlainScreen plain_;
+        HostedScreen *screen_ = nullptr;
         HostClock clock_;
         bool hasGameTime_ = false;
         double lastGameSeconds_ = 0.0;
