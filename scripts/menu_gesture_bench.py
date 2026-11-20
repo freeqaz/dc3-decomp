@@ -70,8 +70,15 @@ What a trial is, and what is counted (every rate is n / trials):
            was set when the hand set off).
   read     the arm held on a row for 5 s, drifting slowly, never swiping:
            false_select if anything selects; highlight_moved if the highlight
-           leaves the row.
+           leaves the row.  Then the arm comes down: a select in the 1.2 s
+           after that is late_select, counted apart (the table's "late").
   idle     arms down for 5 s: any select or engagement is false.
+  stray    a select that no trial was watching for (it fired between two
+           trials): result.json "stray_selects", the table's "stray".  Until
+           2026-11-20 the first look of the next trial dropped these and the
+           late ones: the engine's own log of 59 runs held 1 to 3 of them for
+           every 100 reads and scans, on the code before this branch as on
+           the code after.
 
 Lists: main (the main menu), diff (the difficulty list), songs (song select:
 a row BELOW the 5th, which needs the list scrolled), back (the help bar's
@@ -532,8 +539,22 @@ class Performer:
         self.hand = spec["hand"]
         self.mode = select_mode
         self.rows = None
+        self.stray = []                 # selects nobody was watching for
 
     # -- helpers
+    def first_look(self):
+        """A trial's first look.  A select waiting here fired between two
+        trials: it is kept (stray), and since it may have moved the screen on
+        the list is put back before the trial starts."""
+        st, l = self.look(reset=True)
+        ev = self.b.take_events(st)
+        if ev:
+            self.stray.extend(ev)
+            self.to_screen(force=True)
+            st, l = self.look(reset=True)
+            self.b.take_events(st)
+        return st, l
+
     def look(self, reset=False):
         st = self.b.state(reset=reset, rows=self.rows is None)
         l = self.b.list_state(st, self.hand, self.spec["name"])
@@ -621,10 +642,9 @@ class Performer:
     def select_trial(self, target, rng):
         k, hand = self.k, self.hand
         arm = k.arms[hand]
-        st, l = self.look(reset=True)
+        st, l = self.first_look()
         if l is None:
             raise FlowError("the list under test is not on screen")
-        self.b.take_events(st)
         if self.rows is None:
             self.b.wait(0.1)
             st, l = self.look()
@@ -784,13 +804,12 @@ class Performer:
     def read_trial(self, target, rng, seconds=5.0, scan=False):
         k, hand = self.k, self.hand
         arm = k.arms[hand]
-        st, l = self.look(reset=True)
+        st, l = self.first_look()
         if l is None:
             raise FlowError("the list under test is not on screen")
-        self.b.take_events(st)
         want = self.rows.index(target)
         res = dict(target=target, outcome="clean", highlight_moved=False, events=[],
-                   max_swipe_amt=0.0, engaged=False)
+                   max_swipe_amt=0.0, engaged=False, late_events=[])
         kind, h = self.aim(l, want)
         if kind != "point":
             res["outcome"] = "skipped"
@@ -850,7 +869,7 @@ class Performer:
                     res["highlight_moved"] = True
                 trace.append([round(st["ui_seconds"], 2), l["sym"], l["selected"],
                               l["first_showing"], l["mode"], l["is_scrolling"], l["scroll_dir"],
-                              round(l["hand_height"], 3), l["hold_progress"]])
+                              round(l["hand_height"], 3), l.get("hold_progress", 0.0)])
                 del trace[:-120]
         if ev:
             res["events"] = ev
@@ -859,12 +878,20 @@ class Performer:
             # dir, hand height, hold progress] per look, for the reader
             res["trace"] = trace
         self.arms_down(0.3)
+        if not ev:
+            # the arm coming down is part of the read: a select it sets off
+            # (or one that lands just after) is this trial's, not nobody's
+            self.b.wait(0.6)
+            st, l = self.look()
+            late = self.b.take_events(st)
+            if late:
+                res["late_events"] = late
+                res["outcome"] = "late_select"
         return res
 
     # -- arms down
     def idle_trial(self, seconds=5.0):
-        st, l = self.look(reset=True)
-        self.b.take_events(st)
+        self.first_look()
         res = dict(outcome="clean", events=[], engaged=False)
         end = self.k.now() + seconds
         while self.k.now() < end:
@@ -932,7 +959,7 @@ def run_cell(a):
             result["reads"].append(r)
             b.note(f"read {i} {target}: {r['outcome']} moved={r['highlight_moved']} "
                    f"amt={r['max_swipe_amt']:.2f}")
-            p.to_screen(force=bool(r["events"]))
+            p.to_screen(force=bool(r["events"] or r["late_events"]))
         st1 = b.state()
         fill1 = st1["fill"]
         if arc0 and st1.get("arc_start"):
@@ -951,7 +978,13 @@ def run_cell(a):
             r = p.read_trial(target, random.Random(seed_for("scan", a.list, i, a.seed)), scan=True)
             result["scans"].append(r)
             b.note(f"scan {i} from {target}: {r['outcome']}")
-            p.to_screen(force=bool(r["events"]))
+            p.to_screen(force=bool(r["events"] or r["late_events"]))
+        # whatever fired after the last trial
+        b.wait(0.5)
+        p.stray.extend(b.take_events(b.state()))
+        result["stray_selects"] = p.stray
+        if p.stray:
+            b.note("stray selects: " + " ".join("%s/%s" % (e["list"], e["sym"]) for e in p.stray))
     except FlowError as ex:
         result["error"] = str(ex)
         b.note(f"FAILED: {ex}")
@@ -1491,6 +1524,10 @@ def load_results(d):
                     for f in ("fills", "reals"):
                         o["fill"][f] += r["fill"][f]
                 o["error"] = o.get("error") or r.get("error")
+                if "stray_selects" in o and "stray_selects" in r:
+                    o["stray_selects"] = o["stray_selects"] + r["stray_selects"]
+                else:
+                    o.pop("stray_selects", None)     # one part predates them: unknown
         return out
     out = {}
     for name in sorted(os.listdir(d)):
@@ -1521,6 +1558,11 @@ def summarize(r):
                 read_moved=sum(1 for x in reads if x["highlight_moved"]),
                 scans=len([x for x in r.get("scans", []) if x["outcome"] != "skipped"]),
                 scan_false=sum(1 for x in r.get("scans", []) if x["outcome"] == "false_select"),
+                # None: a result from before late and stray selects were kept
+                late=(sum(1 for x in r["reads"] + r.get("scans", [])
+                          if x["outcome"] == "late_select")
+                      if "stray_selects" in r else None),
+                stray=len(r["stray_selects"]) if "stray_selects" in r else None,
                 idles=len(r["idles"]),
                 idle_false=sum(1 for x in r["idles"] if x["outcome"] == "false_select"),
                 upp=r.get("updates_per_poll"), error=r.get("error"),
@@ -1535,7 +1577,8 @@ def print_table(d, base):
     norder = {"none": 0, "video": 1, "photo": 2, "gpd": 3}
     keys = sorted(res, key=lambda k: (order.get(k[0], 9), norder.get(k[2], 9), -float(k[1])))
     hdr = ("list   Hz  noise | first try      ok(<=3)    wrong  false  none  aim | "
-           "t med   p90 | read: false moved | scan false | idle false | upd/poll fill")
+           "t med   p90 | read: false moved | scan false | idle false | late stray | "
+           "upd/poll fill")
     print(hdr)
     print("-" * len(hdr))
     for k in keys:
@@ -1550,6 +1593,7 @@ def print_table(d, base):
                   f"{s['read_moved']:3d}/{s['reads']:<2d} | "
                   f"{('%3d/%-2d' % (s['scan_false'], s['scans'])) if s['scans'] else '   -  '}     | "
                   f"{s['idle_false']:3d}/{s['idles']:<2d}    | "
+                  f"{'   ?     ?' if s['late'] is None else '%4d %5d' % (s['late'], s['stray'])} | "
                   f"{'-' if s['upp'] is None else '%.2f' % s['upp']} "
                   f"{'   -' if s['fill'] is None else '%3.0f%%' % (100 * s['fill'])}{tag}"
                   f"{'  ERROR: ' + s['error'] if s['error'] else ''}")
