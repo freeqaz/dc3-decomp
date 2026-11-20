@@ -580,6 +580,20 @@ TEST(SongBrowserSearchTest, RowsAreOrderedByHowTheyMatched) {
     SearchResult best = SongSearch(both).Search("love");
     ASSERT_EQ(best.rows.size(), 1u);
     EXPECT_EQ(best.rows[0].matchClass, kMatchTitlePrefix);
+    // ... whichever field it is in: inside a word of the title, but the
+    // start of the artist, is an artist match; inside a word of the title and
+    // of the artist, but a word of the album, is an album match.
+    SongCatalog later;
+    later.Add(Song("artist_wins", "Glovebox", "Love Unlimited", "Gloves"));
+    later.Add(Song("album_wins", "Glovebox", "Clover", "Greatest Love Songs"));
+    SearchResult field = SongSearch(later).Search("love");
+    ASSERT_EQ(Names(later, field), List({ "artist_wins", "album_wins" }));
+    EXPECT_EQ(field.rows[0].matchClass, kMatchArtistPrefix);
+    EXPECT_EQ(field.rows[0].field, kFieldArtist);
+    EXPECT_EQ(Ranges(later, field.rows[0]), "artist:0+4=Love");
+    EXPECT_EQ(field.rows[1].matchClass, kMatchAlbum);
+    EXPECT_EQ(field.rows[1].field, kFieldAlbum);
+    EXPECT_EQ(Ranges(later, field.rows[1]), "album:9+4=Love");
 }
 
 // The same on the real list: classes never go back up, and inside a class
@@ -1601,7 +1615,7 @@ TEST(SongBrowserFlowTest, ApiSongsIsSongSelectsListAndAPlayedSongIsTheFirstRecen
       << "api songs ''; api difficulty '?sort=difficulty&recents=0'; "
       << "api title '?sort=title&recents=0'; api artist '?sort=artist&min=4&recents=0'; "
       << "api source '?sort=source&recents=0'; api search '?q=will+i+am'; "
-      << "api notsearching '?q=+'; api badsort '?sort=genre'; "
+      << "api notsearching '?q=+'; api badsort '?sort=genre'; api locked '?locked=1'; "
       // To a song row, then into the song: gameplay is what counts as played.
       << "for i in 1 2 3 4; do ev \"{song_offer_provider data_is {$L get_selected} song}\" "
       << "| grep -q '\"value\":1}' && break; press down; done; "
@@ -1638,6 +1652,26 @@ TEST(SongBrowserFlowTest, ApiSongsIsSongSelectsListAndAPlayedSongIsTheFirstRecen
     // The section names are the game's own strings.
     EXPECT_NE(songsJson.find("\"song_tier_0\":\"Warmup\""), std::string::npos);
     EXPECT_NE(songsJson.find("\"ham3\":\"Dance Central 3\""), std::string::npos);
+
+    // ?locked=1 adds the songs that only fail the unlock test, marked, and
+    // nothing else.  (A fresh profile has some: without them this run would
+    // not show that the unlock test is applied.)
+    std::string lockedJson = DriverLine(run, "locked");
+    std::vector<std::string> withLocked = JsonValues(lockedJson, "shortName");
+    size_t lockedCount = 0;
+    for (size_t at = lockedJson.find("\"locked\":true"); at != std::string::npos;
+         at = lockedJson.find("\"locked\":true", at + 1)) {
+        lockedCount++;
+    }
+    EXPECT_EQ(songsJson.find("\"locked\":true"), std::string::npos);
+    EXPECT_GT(lockedCount, 0u) << "no locked song in a fresh profile: the unlock test is not exercised";
+    EXPECT_EQ(withLocked.size(), apiSongs.size() + lockedCount);
+    for (size_t i = 0; i < apiSongs.size(); i++) {
+        EXPECT_NE(std::find(withLocked.begin(), withLocked.end(), apiSongs[i]), withLocked.end())
+            << apiSongs[i];
+    }
+    printf("[ measured ] song select lists %zu songs; %zu more are ranked, not fake, and locked\n",
+           apiSongs.size(), lockedCount);
 
     // --- The same order in every sort ---------------------------------------
     ASSERT_EQ(DriverLine(run, "sort0"), "by_difficulty");

@@ -38,6 +38,11 @@ Measured on this machine's assets, 2026-11-20: 45 songs with `DC3_DLC=0` (the
 disc), 121 with the two installed Dance Central 2 packs (45 `ham3`, 44 `ham2`,
 32 `ham2_dlc`).
 
+All three tests decide something on the disc alone: with a fresh profile one
+ranked, real song is locked (`blackandtan`, "Tan-Step"), so `?locked=1`
+answers 46, and leaving out the fake test lists songs song select does not.
+The ranked test is the game's own function, called, not copied.
+
 ## Fields
 
 One `SongEntry` a song.
@@ -243,8 +248,8 @@ each request.
   `dc3-native` answered on `GET /api/songs`.
 - `SongBrowserFlowTest` (with `DC3_DTA_FLOW_TESTS=1`): one headless
   `dc3-native`, disc songs. `GET /api/songs` has the songs of song select's
-  list; each arrangement is compared with the game's own sort; a song taken to
-  gameplay is then the first recent.
+  list; `?locked=1` adds only locked songs; each arrangement is compared with
+  the game's own sort; a song taken to gameplay is then the first recent.
 
 ```bash
 cd native/build

@@ -75,6 +75,7 @@ struct FoldedText {
 //                "will i am", "Ne-Yo" -> "ne yo", "Ain't" -> "ain t"
 //   kFoldTight   punctuation is dropped, only white space breaks words:
 //                "will.i.am" -> "william", "Ne-Yo" -> "neyo", "Ain't" -> "aint"
+//                Initials written apart join: "J. J. Fad" -> "jj fad".
 // In both: letters are lower-cased; accented Latin letters become their base
 // letters; "&" is the word "and"; "$" next to a letter is "s" ("Ke$ha" ->
 // "kesha"); "!" followed by a letter is "i" ("P!nk" -> "pink").
