@@ -5,6 +5,8 @@
  * Navigates to song_select, selects a song, monitors loading milestones,
  * detects hangs via console silence.
  *
+ * Exit: 0 the song loaded, 1 error, 2 hang, 3 the song did not load in time.
+ *
  * Usage:
  *   node scripts/web/gameplay.mjs [--song-index 3] [--timeout 90]
  *     [--hang-timeout 15] [--out DIR] [--port 8420] [--verbose]
@@ -62,11 +64,21 @@ try {
     await selectSong(page, cap, { scrolls: opts['song-index'] });
     console.log('[gameplay] Song selected, monitoring loading...');
 
-    // Fire confirmation keys in the background (non-blocking)
+    // Fire confirmation keys in the background (non-blocking) until the game
+    // screen is entered. A fixed count is not enough: a browser profile that
+    // has never played gets the first-run tutorial (five screens) between the
+    // pick and the song, and each screen waits for a press. Five presses ended
+    // inside the tutorial, where the console goes quiet, and that silence was
+    // reported as a hang.
+    const gameEntered = () => cap.logs.some(l => l.text.includes("Screen 'game_screen' Enter"));
+    let confirming = true;
+    let confirmPresses = 0;
     const confirmKeys = async () => {
-        for (let i = 0; i < 5; i++) {
+        while (confirming && !gameEntered()) {
             await new Promise(r => setTimeout(r, 2000));
+            if (!confirming || gameEntered()) break;
             await pressKey(page, 'Enter');
+            confirmPresses++;
         }
     };
     confirmKeys();
@@ -99,18 +111,26 @@ try {
         }
     }
 
+    confirming = false;
     saveLogs(cap.logs, dir);
 
     // Report
     console.log('\n=== Results ===');
     console.log(`Logs: ${cap.logs.length}, Errors: ${cap.errors.length}, Hang: ${hangDetected}`);
+    console.log(`Game screen entered: ${gameEntered()} (${confirmPresses} confirm presses)`);
     console.log('\nMilestones:');
     for (const m of MILESTONES) {
         console.log(`  ${reached[m] ? `[${reached[m]}s]` : '[ -- ]'} ${m}`);
     }
     console.log(`\nOutput: ${dir}`);
 
-    process.exit(hangDetected ? 2 : 0);
+    // Exit 0 only when the song finished loading: a run that timed out on
+    // the way (no hang, no song) is not a pass.
+    const loaded = !!reached['DONE (state 4)'];
+    if (!hangDetected && !loaded) {
+        console.log(`[gameplay] NOT LOADED: the song did not finish loading within ${opts.timeout}s`);
+    }
+    process.exit(hangDetected ? 2 : loaded ? 0 : 3);
 } catch (e) {
     console.error(`Error: ${e.message}`);
     process.exit(1);
