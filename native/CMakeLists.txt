@@ -2102,6 +2102,7 @@ if(BUILD_TESTS)
         tests/test_rndcam_projection.cpp
         tests/test_particle_color.cpp
         tests/test_drawrect_color.cpp
+        tests/test_canvas2d.cpp # the engine's batched 2D canvas (gfx/Canvas2D.h): CPU half + rendered proof
         tests/test_flare_point_test.cpp
         tests/test_gpu_timers.cpp
         tests/test_retail_lighting.cpp
