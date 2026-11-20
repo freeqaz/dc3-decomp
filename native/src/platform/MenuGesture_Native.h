@@ -20,6 +20,8 @@
 
 class HamNavList;
 
+class Skeleton;
+
 namespace Dc3MenuGesture {
 
 // What made a list select.  The image has two: a swipe
@@ -186,5 +188,16 @@ bool HoldShowing(const HamNavList *list);
 
 // Once per frame (App.cpp): F1 steps the mode (swipe -> hold -> both).
 void PollKey();
+
+// Whether `skeleton`'s hand for `list` (right_hand.hnl: the right; the help
+// bar's left_hand.hnl: the left) is, this frame, where the list needs a hand
+// to be before it takes it: the image's own test,
+// DirectionGestureFilterSingleUser::IsValidSwipePosition (the hand outside the
+// ellipse round the spine: out to the side, or well forward).  Read-only and
+// a function of the skeleton alone -- it does not depend on controller mode,
+// so the natively drawn song browser can ask it while the list is not being
+// driven by the hands (SongBrowserPanel_Native.cpp, the auto rule).  A
+// two-user filter answers with its own IsHandValid.
+bool HandInListPose(const HamNavList *list, const Skeleton &skeleton);
 
 } // namespace Dc3MenuGesture

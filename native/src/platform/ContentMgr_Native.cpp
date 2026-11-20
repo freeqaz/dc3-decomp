@@ -53,6 +53,7 @@
 #include "NativeSettings.h" // dc3's, same directory (the engine has an older one)
 #include "utl/Std.h"
 #include <algorithm>
+#include <cctype>
 #include <climits>
 #include <cstdlib>
 #include <dirent.h>
@@ -120,6 +121,14 @@ namespace {
 // XboxContent's kContentRootFormat.
 const char *const kContentRootFormat = "cnt%08x";
 
+// The drive a DLC root is on for as long as the program runs: "dlcroot0:" is
+// the first root's directory, so "dlcroot0:/<package directory>/..." reads a
+// package's file whether or not the game has the package mounted.  Not the
+// 360's: there a package's files exist only while it is mounted, and the game
+// mounts the one song it is about to show or play.  The song browser shows a
+// screenful of covers at once (NativeContentCoverRoot).
+const char *const kDlcRootDriveFormat = "dlcroot%d";
+
 bool MountDrive(const char *drive, const char *hostDir) {
     return NativeMountDrive(drive, hostDir);
 }
@@ -133,10 +142,12 @@ void UnmountDrive(const char *drive) { NativeUnmountDrive(drive); }
 // transition it keys its notifications on.
 class NativeContent : public Content {
 public:
-    NativeContent(const char *name, int index, const char *hostDir, bool discovered)
+    NativeContent(
+        const char *name, int index, const char *hostDir, const char *coverRoot, bool discovered
+    )
         : mName(name), mRoot(MakeString(kContentRootFormat, index)),
           mContentPath(MakeString("%s:", mRoot.c_str())), mHostDir(hostDir),
-          mState(discovered ? kNeedsMounting : kUnmounted), mLRM(0) {}
+          mCoverRoot(coverRoot), mState(discovered ? kNeedsMounting : kUnmounted), mLRM(0) {}
     virtual ~NativeContent() {
         if (mState == kMounting || mState == kMounted) UnmountDrive(mRoot.c_str());
     }
@@ -179,12 +190,15 @@ public:
     virtual unsigned int GetLRM() { return mLRM; }
 
     const char *HostDir() const { return mHostDir.c_str(); }
+    // "dlcrootN:/<package directory>", or "" when its DLC root has no drive.
+    const char *CoverRoot() const { return mCoverRoot.c_str(); }
 
 private:
     Symbol mName;
     String mRoot; // cntNNNNNNNN
     String mContentPath; // cntNNNNNNNN:, what Root() reports
     String mHostDir;
+    String mCoverRoot;
     State mState;
     unsigned int mLRM;
 };
@@ -326,6 +340,17 @@ public:
     // Deleting a package would delete the user's files; not on native.
     virtual bool DeleteContent(Symbol) { return false; }
 
+    // NativeContentCoverRoot.
+    std::string CoverRootOf(Symbol name) {
+        FOREACH (it, mContents) {
+            if (name == (*it)->FileName()) {
+                NativeContent *content = dynamic_cast<NativeContent *>(*it);
+                return content ? std::string(content->CoverRoot()) : std::string();
+            }
+        }
+        return std::string();
+    }
+
 protected:
     virtual void NotifyMounted(Content *c) {
         FOREACH (it, mCallbacks) {
@@ -365,6 +390,7 @@ private:
                  getenv("DC3_DLC_DIR") && *getenv("DC3_DLC_DIR") ? "DC3_DLC_DIR"
                                                                  : "DC3_DLC=1: <data>/dlc");
         int toMount = 0;
+        int rootIndex = 0;
         size_t start = 0;
         while (start <= roots.size()) {
             size_t end = roots.find(':', start);
@@ -378,6 +404,16 @@ private:
                          dlcRoot.c_str());
                 continue;
             }
+            // The root's own drive (kDlcRootDriveFormat).  The same root gets
+            // the same drive at every refresh, and mapping a name again
+            // replaces its directory, so nothing is ever unmapped.
+            std::string rootDrive = MakeString(kDlcRootDriveFormat, rootIndex++);
+            if (!MountDrive(rootDrive.c_str(), dlcRoot.c_str())) {
+                MILO_LOG("DC3 Native: no drive for DLC root '%s': the song browser shows "
+                         "no covers for its packages\n",
+                         dlcRoot.c_str());
+                rootDrive.clear();
+            }
             std::vector<std::string> names;
             struct dirent *entry;
             while ((entry = readdir(dir)) != nullptr) {
@@ -390,13 +426,19 @@ private:
             // is not knowable either, but a stable one keeps runs comparable.
             std::sort(names.begin(), names.end());
             for (size_t i = 0; i < names.size(); i++) {
-                toMount += AddPackage(dlcRoot + "/" + names[i], names[i]);
+                toMount += AddPackage(
+                    dlcRoot + "/" + names[i],
+                    names[i],
+                    rootDrive.empty() ? std::string() : rootDrive + ":/" + names[i]
+                );
             }
         }
         return toMount;
     }
 
-    int AddPackage(const std::string &packDir, const std::string &name) {
+    int AddPackage(
+        const std::string &packDir, const std::string &name, const std::string &coverRoot
+    ) {
         if (std::find(mIgnored.begin(), mIgnored.end(), String(name.c_str()))
             != mIgnored.end()) {
             return 0;
@@ -422,8 +464,24 @@ private:
         FOREACH (it, mCallbacks) {
             discovered = !(*it)->ContentDiscovered(Symbol(name.c_str())) || discovered;
         }
-        NativeContent *content =
-            new NativeContent(name.c_str(), mNextRoot++, hostDir, discovered);
+        // A path on the root's drive goes through the game's path
+        // normalisation, which lower-cases it, so a directory name with a
+        // capital letter in it cannot be reached that way.
+        // scripts/dlc/import.sh makes lower-case names; a hand-made one keeps
+        // the game's own cover path (the logo, unless the package is mounted).
+        std::string cover = coverRoot;
+        if (!cover.empty()
+            && std::any_of(name.begin(), name.end(), [](unsigned char c) {
+                   return isupper(c) != 0;
+               })) {
+            MILO_LOG("DC3 Native: DLC package '%s' has a capital letter in its directory "
+                     "name: the song browser shows the logo in place of its covers\n",
+                     name.c_str());
+            cover.clear();
+        }
+        NativeContent *content = new NativeContent(
+            name.c_str(), mNextRoot++, hostDir, cover.c_str(), discovered
+        );
         MILO_LOG("DC3 Native: DLC package '%s' at %s -> %s%s\n", name.c_str(),
                  content->Root(), hostDir, discovered ? "" : " (cached)");
         mContents.push_back(content);
@@ -565,3 +623,8 @@ private:
 
 static NativeContentMgr gContentMgr;
 ContentMgr &TheContentMgr = gContentMgr;
+
+std::string NativeContentCoverRoot(const char *contentName) {
+    if (!contentName || !*contentName) return std::string();
+    return gContentMgr.CoverRootOf(Symbol(contentName));
+}

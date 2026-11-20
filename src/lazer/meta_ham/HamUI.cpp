@@ -46,6 +46,9 @@
 #include "utl\Std.h"
 #include "utl\Symbol.h"
 #include "xdk\xapilibi\xbox.h"
+#ifdef HX_NATIVE
+#include "platform/SongBrowserHooks_Native.h"
+#endif
 
 HamUI TheHamUI;
 // Target: HamUI.obj .data:0x0 (0x82F1A8E0) -> ?TheHamUI@@3VHamUI@@A, addend 0.
@@ -708,6 +711,11 @@ DataNode HamUI::OnMsg(const ContentReadFailureMsg &msg) {
 }
 
 DataNode HamUI::OnMsg(const ButtonDownMsg &msg) {
+#ifdef HX_NATIVE
+    // Every pad press of the run passes here first: the natively drawn song
+    // browser's hint bar names the device it came from.
+    NativeSongBrowser::OnAnyButtonDown(msg.GetPadNum());
+#endif
     static ResetControllerModeTimeoutMsg resetControllerModeTimeoutMsg;
     Export(resetControllerModeTimeoutMsg, true);
     mPadNum = msg.GetPadNum();

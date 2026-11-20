@@ -30,8 +30,10 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 namespace {
@@ -214,6 +216,9 @@ std::string MakeRoot(std::string &error) {
 //   vis TAG                   DRIVER: TAG ROW|SLOT|TEXT;;...  (what the rows
 //                             on screen show: HamNavList::NativeVisibleText)
 //   file TAG                  DRIVER: TAG <song_select.txt, | for newline>
+//   sb                        GET /api/songbrowser/state (the song browser)
+//   sel                       the song browser's selected song
+//   typ TEXT [FRAMES=60]      type TEXT (POST /api/input/text), then settle
 //   play                      from a highlighted song: the whole Perform song
 //                             and back to song select (needs DC3_FAST_TIME)
 const char *const kDriverFunctions = R"SH(
@@ -234,6 +239,9 @@ rows() { echo "DRIVER: $1 $(ev '{do ($s "") {foreach_int $i 0 {song_offer_provid
 artists() { echo "DRIVER: $1 $(ev '{do ($s "") {foreach_int $i 0 {song_offer_provider num_data} {if {song_offer_provider data_is $i song} {set $s {sprint $s $i "|" {song_mgr get_artist_name_from_short_name {song_offer_provider get_token $i}} ";"}}}} $s}')"; };
 vis() { echo "DRIVER: $1 $(ev "{song_offer_provider visible_text $L}")"; };
 file() { echo "DRIVER: $1 $(tr '\n' '|' < $saves/song_select.txt 2>/dev/null)"; };
+sb() { curl -s -m 10 $api/songbrowser/state; };
+sel() { sb | sed -n 's/.*"selected_song":"\([^"]*\)".*/\1/p'; };
+typ() { curl -s -m 10 -X POST --data-binary "{\"text\":\"$1\"}" $api/input/text > /dev/null; settle ${2:-60}; };
 play() { press confirm 60; waitfor 30 multiuser_screen || return 1; settle 120; nav game_screen 3 || return 1;
   pace 0; waitfor 300 perform_final_results_screen; reached=$?; pace 240; [ $reached = 0 ] || return 1; settle 240;
   nav perform_complete_screen || return 1; settle 240; nav song_select_screen 30 || return 1; settle 300; };
@@ -1231,4 +1239,957 @@ TEST_F(SongSelectClassicFlowTest, ClassicSwitchRestoresTheImagesSongSelect) {
     ListIsTheImagesInEverySort();
     HistoryAndRememberedSortAreIgnored();
     SectionAndPageButtonsAreInert();
+}
+
+// ===========================================================================
+// The natively drawn song browser in song select
+// (native/src/platform/SongBrowserPanel_Native.cpp, docs/native/SONG_SELECT.md
+// "The song browser").
+//
+// Every run in this file has MILO_INPUT_SCRIPT set, which is what pins the
+// classic list for the suites above; the suites below ask for the browser by
+// name (DC3_SONG_BROWSER=1 or =auto).
+// ===========================================================================
+
+namespace {
+
+// The value of "key" in the browser's state answer: a string without its
+// quotes, a number or a bool as written.  Empty when the key is not there.
+std::string Sb(const std::string &json, const std::string &key) {
+    size_t at = json.find("\"" + key + "\":");
+    if (at == std::string::npos) return "";
+    at += key.size() + 3;
+    if (at >= json.size()) return "";
+    if (json[at] == '"') {
+        size_t end = json.find('"', at + 1);
+        return end == std::string::npos ? "" : json.substr(at + 1, end - at - 1);
+    }
+    size_t end = json.find_first_of(",}", at);
+    return json.substr(at, end == std::string::npos ? std::string::npos : end - at);
+}
+
+// "SCREEN SONG" of a `echo "DRIVER: tag $(scr) $(ev '{meta_performer get_song}')"` line.
+std::string Picked(const EngineRun &run, const std::string &tag) {
+    std::string line = DriverLine(run, tag);
+    size_t space = line.find(' ');
+    if (space == std::string::npos) return line;
+    return line.substr(0, space) + " " + JsonValue(line.substr(space + 1));
+}
+
+const char *const kBrowserSong = "boomboompow";
+// Two songs played, so there is a Recently Played shelf with the test's song
+// on its first card.
+const char *const kBrowserHistory = "dc3-song-select 1\nplayed boomboompow\nplayed ymca\n";
+const char *const kPerformerSong = "$(ev '{meta_performer get_song}')";
+const char *const kClassicToken = "$(ev '{song_select_panel get_selected_song_token}')";
+
+} // namespace
+
+// One engine with DC3_SONG_BROWSER=1 and a history: arrive, pick from the
+// shelf, come back, pick from the list, come back, search and pick from the
+// results, come back, clear the query, change the sort, leave with Back.
+class SongBrowserInSongSelectTest : public SongSelectFlowBase {
+protected:
+    static EngineRun sRun;
+    static EngineRun sClassic;
+    static std::string sError;
+    static bool sRan;
+
+    static void SetUpTestSuite() {
+        if (!getenv("DC3_DTA_FLOW_TESTS")) return;
+        sRan = true;
+        std::string root = MakeRoot(sError);
+        if (!sError.empty()) return;
+        WriteFile(root + "/saves/song_select.txt", kBrowserHistory);
+        const std::string song = kBrowserSong;
+        const std::string toSong = "n=0; while [ \"$(sel)\" != " + song
+            + " ] && [ $n -lt 20 ]; do press down 30; n=$((n+1)); done; ";
+        const std::string comeBack =
+            "press cancel 60; waitfor 30 song_select_screen; settle 240; ";
+        std::ostringstream d;
+        d << kToSongSelect
+          << "echo \"DRIVER: arrive $(sb)\"; echo \"DRIVER: arrive_classic " << kClassicToken << "\"; "
+          << "echo \"DRIVER: arrive_info $(ev '{song_info_panel showing}') $(ev '{song_select_panel showing}')\"; "
+          // From the shelf.
+          << "press confirm 60; waitfor 30 multiuser_screen; "
+          << "echo \"DRIVER: shelf_pick $(scr) " << kPerformerSong << "\"; echo \"DRIVER: away $(sb)\"; "
+          << comeBack << "echo \"DRIVER: return1 $(sb)\"; "
+          // From the list.
+          << "press down 30; " << toSong << "echo \"DRIVER: list_at $(sb)\"; "
+          << "echo \"DRIVER: list_classic " << kClassicToken << "\"; "
+          << "press confirm 60; waitfor 30 multiuser_screen; "
+          << "echo \"DRIVER: list_pick $(scr) " << kPerformerSong << "\"; "
+          << comeBack << "echo \"DRIVER: return2 $(sb)\"; "
+          // From search results.
+          << "typ boom; echo \"DRIVER: typed $(sb)\"; press down 30; " << toSong
+          << "echo \"DRIVER: search_at $(sb)\"; "
+          << "press confirm 60; waitfor 30 multiuser_screen; "
+          << "echo \"DRIVER: search_pick $(scr) " << kPerformerSong << "\"; "
+          << comeBack << "echo \"DRIVER: return3 $(sb)\"; "
+          // Back with a query clears it; the sort; Back without one leaves.
+          << "press cancel 60; echo \"DRIVER: cleared $(scr) $(sb)\"; "
+          << "press rb 60; echo \"DRIVER: sorted $(sb)\"; file file_sorted; "
+          << "press cancel 60; waitfor 30 choose_mode_screen; echo \"DRIVER: back $(scr) $(sb)\"; ";
+        sRun = RunEngine(root, "browser", d.str(), " DC3_SONG_BROWSER=1");
+
+        // The reference: the same song picked on the classic list with A.
+        std::string classicRoot = MakeRoot(sError);
+        if (!sError.empty()) return;
+        WriteFile(classicRoot + "/saves/song_select.txt", kBrowserHistory);
+        std::ostringstream c;
+        c << kToSongSelect << "echo \"DRIVER: state $(sb)\"; "
+          << "ev '{song_select_panel highlight_right_list_item {song_offer_provider "
+          << "first_data_index " << song << "}}' > /dev/null; settle 90; st at; "
+          << "press confirm 60; waitfor 30 multiuser_screen; "
+          << "echo \"DRIVER: pick $(scr) " << kPerformerSong << "\"; ";
+        sClassic = RunEngine(classicRoot, "classic", c.str(), " DC3_SONG_BROWSER=0");
+    }
+
+    void Require() {
+        RequireRun(sRan, sError, sRun);
+        if (IsSkipped() || HasFatalFailure()) return;
+        ASSERT_EQ(Sb(DriverLine(sRun, "arrive"), "available"), "true")
+            << "no browser state\n" << sRun.driver << "\n--- tail ---\n" << Tail(sRun.output);
+    }
+};
+
+EngineRun SongBrowserInSongSelectTest::sRun;
+EngineRun SongBrowserInSongSelectTest::sClassic;
+std::string SongBrowserInSongSelectTest::sError;
+bool SongBrowserInSongSelectTest::sRan = false;
+
+TEST_F(SongBrowserInSongSelectTest, TheBrowserIsTheListOnArrivalWithAPad) {
+    Require();
+    if (IsSkipped() || HasFatalFailure()) return;
+    const std::string arrive = DriverLine(sRun, "arrive");
+    EXPECT_EQ(Sb(arrive, "shown"), "true") << arrive;
+    EXPECT_EQ(Sb(arrive, "focus"), "recents") << "a history: the shelf has focus\n" << arrive;
+    EXPECT_EQ(Sb(arrive, "selected_song"), kBrowserSong) << arrive;
+    EXPECT_GT(atoi(Sb(arrive, "songs").c_str()), 10) << arrive;
+    EXPECT_GT(atoi(Sb(arrive, "rows").c_str()), 10) << arrive;
+    EXPECT_EQ(Sb(arrive, "text_capture"), "true") << "typing anywhere searches\n" << arrive;
+    // The classic list is underneath, on the same song, and is not shown.
+    EXPECT_EQ(DriverValue(sRun, "arrive_classic"), kBrowserSong)
+        << "the classic list's highlight follows the browser";
+    const std::string info = DriverLine(sRun, "arrive_info");
+    EXPECT_NE(info.find("\"value\":0"), std::string::npos)
+        << "song_info_panel is not shown under the browser: " << info;
+}
+
+TEST_F(SongBrowserInSongSelectTest, APickFromShelfListOrSearchIsTheClassicPick) {
+    Require();
+    if (IsSkipped() || HasFatalFailure()) return;
+    ASSERT_NE(sClassic.driver.find("DRIVER: at=song_select_screen"), std::string::npos)
+        << "the classic reference never reached song select\n" << sClassic.driver;
+    EXPECT_EQ(Sb(DriverLine(sClassic, "state"), "shown"), "false");
+    ASSERT_EQ(State(sClassic, "at").token, kBrowserSong) << DriverLine(sClassic, "at");
+    const std::string classic = Picked(sClassic, "pick");
+    ASSERT_EQ(classic, std::string("multiuser_screen ") + kBrowserSong)
+        << "the reference: A on the classic list\n" << sClassic.driver;
+    EXPECT_EQ(Picked(sRun, "shelf_pick"), classic) << "picked from Recently Played";
+    EXPECT_EQ(Sb(DriverLine(sRun, "list_at"), "focus"), "list") << DriverLine(sRun, "list_at");
+    EXPECT_EQ(DriverValue(sRun, "list_classic"), kBrowserSong)
+        << "the classic list is on the browser's song before the pick";
+    EXPECT_EQ(Picked(sRun, "list_pick"), classic) << "picked from the list";
+    EXPECT_EQ(Sb(DriverLine(sRun, "search_at"), "query"), "boom") << DriverLine(sRun, "search_at");
+    EXPECT_EQ(Picked(sRun, "search_pick"), classic) << "picked from search results";
+    // Off the screen the browser is gone and the keyboard is the game's again.
+    const std::string away = DriverLine(sRun, "away");
+    EXPECT_EQ(Sb(away, "shown"), "false") << away;
+    EXPECT_EQ(Sb(away, "text_capture"), "false") << away;
+}
+
+TEST_F(SongBrowserInSongSelectTest, TypingFiltersBackClearsThenLeavesAndTheStateComesBack) {
+    Require();
+    if (IsSkipped() || HasFatalFailure()) return;
+    const std::string arrive = DriverLine(sRun, "arrive");
+    // Typing filters.
+    const std::string typed = DriverLine(sRun, "typed");
+    EXPECT_EQ(Sb(typed, "query"), "boom") << typed;
+    EXPECT_EQ(Sb(typed, "focus"), "search") << typed;
+    EXPECT_GT(atoi(Sb(typed, "rows").c_str()), 0) << typed;
+    EXPECT_LT(atoi(Sb(typed, "rows").c_str()), atoi(Sb(arrive, "rows").c_str())) << typed;
+    EXPECT_EQ(Sb(typed, "selected_song"), kBrowserSong) << typed;
+    // The state survives leaving and returning: three visits.
+    const std::string return1 = DriverLine(sRun, "return1");
+    EXPECT_EQ(Sb(return1, "shown"), "true") << return1;
+    EXPECT_EQ(Sb(return1, "focus"), "recents") << return1;
+    EXPECT_EQ(Sb(return1, "selected_song"), kBrowserSong) << return1;
+    const std::string return2 = DriverLine(sRun, "return2");
+    EXPECT_EQ(Sb(return2, "focus"), "list") << return2;
+    EXPECT_EQ(Sb(return2, "list_song"), kBrowserSong) << return2;
+    const std::string return3 = DriverLine(sRun, "return3");
+    EXPECT_EQ(Sb(return3, "query"), "boom") << return3;
+    EXPECT_EQ(Sb(return3, "selected_song"), kBrowserSong) << return3;
+    // Back with a query clears it and stays; Back without one leaves.
+    const std::string cleared = DriverLine(sRun, "cleared");
+    EXPECT_EQ(cleared.compare(0, 19, "song_select_screen "), 0) << cleared;
+    EXPECT_EQ(Sb(cleared, "query"), "") << cleared;
+    EXPECT_EQ(Sb(cleared, "shown"), "true") << cleared;
+    const std::string back = DriverLine(sRun, "back");
+    EXPECT_EQ(back.compare(0, 19, "choose_mode_screen "), 0)
+        << "Back leaves by the panel's own on_back\n" << back;
+    EXPECT_EQ(Sb(back, "shown"), "false") << back;
+    EXPECT_EQ(Sb(back, "text_capture"), "false") << back;
+    // The sort is remembered where song select remembers its own.
+    EXPECT_EQ(Sb(DriverLine(sRun, "sorted"), "sort"), "artist") << DriverLine(sRun, "sorted");
+    EXPECT_NE(DriverLine(sRun, "file_sorted").find("sort by_artist|"), std::string::npos)
+        << DriverLine(sRun, "file_sorted");
+}
+
+// The switches: one engine each.
+class SongBrowserSwitchFlowTest : public SongSelectFlowBase {
+protected:
+    // To song select, the browser's state, one Down, the classic list's row.
+    EngineRun Visit(const std::string &env) {
+        std::string error;
+        std::string root = MakeRoot(error);
+        EXPECT_TRUE(error.empty()) << error;
+        std::ostringstream d;
+        d << kToSongSelect << "echo \"DRIVER: state $(sb)\"; st before; press down; st after; "
+          << "echo \"DRIVER: state2 $(sb)\"; ";
+        return RunEngine(root, "run", d.str(), env);
+    }
+
+    void ExpectClassic(const EngineRun &run, const char *why) {
+        RequireRun(true, "", run);
+        if (IsSkipped() || HasFatalFailure()) return;
+        const std::string state = DriverLine(run, "state");
+        EXPECT_EQ(Sb(state, "shown"), "false") << state;
+        EXPECT_EQ(Sb(state, "text_capture"), "false") << state;
+        EXPECT_NE(Sb(state, "why").find(why), std::string::npos) << state;
+        EXPECT_EQ(State(run, "after").selected, State(run, "before").selected + 1)
+            << "Down moves the classic list\n" << run.driver;
+        EXPECT_EQ(Sb(DriverLine(run, "state2"), "shown"), "false");
+    }
+};
+
+TEST_F(SongBrowserSwitchFlowTest, SwitchOffIsTheClassicList) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
+    ExpectClassic(Visit(" DC3_SONG_BROWSER=0"), "DC3_SONG_BROWSER=0");
+}
+
+TEST_F(SongBrowserSwitchFlowTest, ClassicSongSelectSwitchIsTheClassicList) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
+    ExpectClassic(
+        Visit(" DC3_SONG_BROWSER=1 DC3_CLASSIC_SONG_SELECT=1"), "DC3_CLASSIC_SONG_SELECT=1"
+    );
+}
+
+// THE pin for every run written against the classic list: an input script
+// and no DC3_SONG_BROWSER.
+TEST_F(SongBrowserSwitchFlowTest, AScriptedRunThatDoesNotAskGetsTheClassicList) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
+    ExpectClassic(Visit(" DC3_SONG_BROWSER="), "MILO_INPUT_SCRIPT");
+}
+
+// Playlists: the browser belongs to song_select_panel's pick-one-song visits.
+// The playlist screens are other panels, and stay the image's.
+TEST_F(SongBrowserSwitchFlowTest, PlaylistScreensKeepTheClassicList) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
+    std::string error;
+    std::string root = MakeRoot(error);
+    ASSERT_TRUE(error.empty()) << error;
+    std::ostringstream d;
+    d << kToSongSelect << "echo \"DRIVER: state $(sb)\"; "
+      << "ev '{song_select_panel move_on_quickplay_playlist}' > /dev/null; settle 240; "
+      << "n=0; while [ \"$(scr)\" != song_select_playlist_screen ] && [ $n -lt 10 ]; do "
+      << "press confirm 120; settle 120; n=$((n+1)); done; "
+      << "echo \"DRIVER: playlists $(scr) $(sb)\"; "
+      << "echo \"DRIVER: mode $(ev '{gamemode get song_select_mode}')\"; "
+      << "press confirm 120; settle 240; echo \"DRIVER: next $(scr) $(sb)\"; ";
+    EngineRun run = RunEngine(root, "run", d.str(), " DC3_SONG_BROWSER=1");
+    RequireRun(true, "", run);
+    if (IsSkipped() || HasFatalFailure()) return;
+    ASSERT_EQ(Sb(DriverLine(run, "state"), "shown"), "true")
+        << "precondition: the browser is on for this run\n" << run.driver;
+    const std::string playlists = DriverLine(run, "playlists");
+    ASSERT_EQ(playlists.compare(0, 28, "song_select_playlist_screen "), 0) << run.driver;
+    EXPECT_EQ(DriverValue(run, "mode"), "song_select_playlist");
+    EXPECT_EQ(Sb(playlists, "shown"), "false") << playlists;
+    EXPECT_EQ(Sb(playlists, "text_capture"), "false") << playlists;
+    const std::string next = DriverLine(run, "next");
+    EXPECT_EQ(Sb(next, "shown"), "false") << next;
+}
+
+// auto with a body in view that presses nothing: a tracked body is not
+// intent.  The stand-in skeleton is a tracked body and the image's own
+// controller-mode rules run (faithful) with a 1.5 s timeout; the pad is left
+// alone for 60 s of game time, several timeouts long.  The browser is still
+// the list, it never switched, and the first Down after the idle does what a
+// Down does -- it is not taken to wake the pad.
+TEST_F(SongBrowserSwitchFlowTest, ABodyThatPressesNothingKeepsTheBrowser) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
+    std::string error;
+    std::string root = MakeRoot(error);
+    ASSERT_TRUE(error.empty()) << error;
+    std::ostringstream d;
+    d << kToSongSelect << "press down 30; echo \"DRIVER: pad $(sb)\"; t0=$SECONDS; "
+      << Times(6, "settle 300") << "echo \"DRIVER: idle_wall $((SECONDS-t0))\"; "
+      << "echo \"DRIVER: idle $(sb)\"; "
+      << "press down 30; echo \"DRIVER: down $(sb)\"; press up 30; echo \"DRIVER: up $(sb)\"; "
+      << "press down 30; echo \"DRIVER: control $(sb)\"; ";
+    EngineRun run = RunEngine(
+        root, "run", d.str(),
+        " DC3_SONG_BROWSER=auto DC3_CONTROLLER_MODE=faithful DC3_CONTROLLER_MODE_TIMEOUT_MS=1500"
+    );
+    RequireRun(true, "", run);
+    if (IsSkipped() || HasFatalFailure()) return;
+    const std::string pad = DriverLine(run, "pad");
+    ASSERT_EQ(Sb(pad, "shown"), "true") << pad;
+    EXPECT_EQ(Sb(pad, "mode"), "auto") << pad;
+    const std::string idle = DriverLine(run, "idle");
+    ASSERT_GE(atoi(Sb(idle, "tracked_bodies").c_str()), 1)
+        << "precondition: there is a tracked body in view\n" << idle;
+    ASSERT_GE(atoi(DriverLine(run, "idle_wall").c_str()), 3)
+        << "precondition: the idle outlasted the 1.5 s controller-mode timeout twice\n"
+        << run.driver;
+    EXPECT_EQ(Sb(idle, "shown"), "true")
+        << "a person in view who presses nothing keeps the browser\n" << idle;
+    EXPECT_EQ(Sb(idle, "switches"), Sb(pad, "switches")) << "it never left\n" << idle;
+    EXPECT_EQ(Sb(idle, "hands_steering"), "false") << idle;
+    EXPECT_EQ(Sb(idle, "controller_mode"), "true")
+        << "the pad keeps the menu while the browser is shown (the hidden list must not "
+           "answer to a hand)\n" << idle;
+    EXPECT_EQ(Sb(idle, "list_song"), Sb(pad, "list_song")) << idle;
+    const std::string down = DriverLine(run, "down"), up = DriverLine(run, "up");
+    const std::string control = DriverLine(run, "control");
+    EXPECT_NE(Sb(down, "list_song"), Sb(idle, "list_song"))
+        << "the first Down after the idle was swallowed\n" << down;
+    EXPECT_EQ(Sb(up, "list_song"), Sb(idle, "list_song")) << up;
+    EXPECT_EQ(Sb(control, "list_song"), Sb(down, "list_song"))
+        << "one Down after the idle moved a different distance from one Down without it\n"
+        << run.driver;
+    EXPECT_EQ(Sb(down, "shown"), "true") << down;
+}
+
+namespace {
+
+// More driver functions, for the command, mode, hint and preview runs.
+//   val                 the "value" of a /api/dta/eval answer on stdin
+//   cmd NAME            POST /api/songbrowser/command; the answer on stdout
+//   classicrow TOKEN    the classic list's own way to a row: the highlight
+//                       walked there with the pad, then A
+//   choose TOKEN        cmd in a browser run (browser=1), classicrow otherwise
+//   rowto TOKEN         the browser's list walked up, with the pad, to the
+//                       command row TOKEN
+//   rowchoose TOKEN     in a browser run: rowto, DRIVER: on_TOKEN <state>,
+//                       then A; classicrow otherwise
+//   mode MODE           choose_mode_screen's row script for MODE, to song select
+//   seqn COUNT GAP      COUNT Down presses GAP frames apart, frame exact
+//                       (POST /api/input/sequence)
+//   padpress BUTTON     a press that stands for a real pad's ("device":"pad")
+const char *const kCommandFunctions = R"SH(
+val() { sed -n 's/.*"value":"\{0,1\}\([^"}]*\)"\{0,1\}}.*/\1/p'; };
+cmd() { curl -s -m 10 -X POST --data-binary "{\"name\":\"$1\"}" $api/songbrowser/command; };
+classicrow() { r=$(ev "{song_offer_provider first_data_index $1}" | val); n=0;
+  while [ $n -lt 80 ]; do s=$(ev "{$L get_selected}" | val); [ "$s" = "$r" ] && break;
+    if [ "$s" -lt "$r" ]; then press down 20; else press up 20; fi; n=$((n+1)); done;
+  press confirm 60; };
+choose() { if [ "$browser" = 1 ]; then echo "DRIVER: answer_$1 $(cmd $1)"; else expand; classicrow $1; fi; };
+rowto() { n=0; while [ $n -lt 12 ]; do
+    [ "$(sb | sed -n 's/.*"selected_command":"\([^"]*\)".*/\1/p')" = "$1" ] && return 0;
+    press up 30; n=$((n+1)); done; return 1; };
+rowchoose() { if [ "$browser" = 1 ]; then rowto $1; echo "DRIVER: on_$1 $(sb)"; press confirm 60;
+  else expand; classicrow $1; fi; };
+mode() { ev "{do {gamemode set_mode $1} {song_select_panel set first_time TRUE} {ui goto_screen {gamemode get newsong_screen}}}" > /dev/null;
+  settle 60; waitfor 30 song_select_screen; settle 240; };
+seqn() { b="["; for i in $(seq $1); do b="$b{\"button\":\"down\",\"delay\":$2,\"hold\":1},"; done;
+  curl -s -m 10 -X POST --data-binary "${b%,}]" $api/input/sequence > /dev/null; };
+padpress() { curl -s -m 10 -X POST --data-binary "{\"button\":\"$1\",\"device\":\"pad\"}" $api/input/press > /dev/null; settle ${2:-30}; };
+)SH";
+
+const char *const kGameMode = "$(ev '{gamemode get gameplay_mode}' | val)";
+const char *const kSongSelectMode = "$(ev '{gamemode get song_select_mode}' | val)";
+const char *const kPerformerSongValue = "$(ev '{meta_performer get_song}' | val)";
+
+// The text of the state's "commands" array, brackets and all.
+std::string Commands(const std::string &state) {
+    size_t at = state.find("\"commands\":[");
+    if (at == std::string::npos) return "";
+    size_t end = state.find(']', at);
+    return state.substr(at + 11, end == std::string::npos ? std::string::npos : end - at - 10);
+}
+
+// The text of the state's "command_rows" array (the rows the screen was
+// built with), brackets and all.
+std::string CommandRows(const std::string &state) {
+    size_t at = state.find("\"command_rows\":[");
+    if (at == std::string::npos) return "";
+    size_t end = state.find(']', at);
+    return state.substr(at + 15, end == std::string::npos ? std::string::npos : end - at - 14);
+}
+
+// The same drive against the classic list (DC3_SONG_BROWSER=0) and against
+// the browser, at the same time: [0] classic, [1] browser.
+struct TwoRuns {
+    EngineRun classic, browser;
+};
+
+TwoRuns RunBoth(const std::string &drive, std::string &error) {
+    TwoRuns runs;
+    std::string classicRoot = MakeRoot(error), browserRoot = MakeRoot(error);
+    if (!error.empty()) return runs;
+    const std::string body = std::string(kCommandFunctions) + drive;
+    std::thread classic([&] {
+        runs.classic = RunEngine(classicRoot, "classic", "browser=0; " + body, " DC3_SONG_BROWSER=0");
+    });
+    runs.browser = RunEngine(browserRoot, "browser", "browser=1; " + body, " DC3_SONG_BROWSER=auto");
+    classic.join();
+    return runs;
+}
+
+} // namespace
+
+// Random Song and Playlists: the browser's two commands run the classic
+// list's own rows (POST /api/songbrowser/command calls what
+// songbrowser_ui::Delegate::onCommand calls), so each must end where the
+// classic row ends.  The reference is a second engine on the classic list,
+// where the row is reached with the pad and picked with A.
+TEST_F(SongBrowserSwitchFlowTest, TheCommandsDoWhatTheClassicRowsDo) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
+    std::ostringstream d;
+    d << kToSongSelect << "echo \"DRIVER: state $(sb)\"; "
+      << "choose playlists; settle 240; echo \"DRIVER: p1 $(scr)\"; "
+      << "n=0; while [ \"$(scr)\" != song_select_playlist_screen ] && [ $n -lt 10 ]; do "
+      << "press confirm 120; settle 120; n=$((n+1)); done; "
+      << "echo \"DRIVER: p2 $(scr) confirms=$n mode=" << kSongSelectMode
+      << " back=$(ev '{song_select_playlist_screen get back_screen}' | val)\"; "
+      << "echo \"DRIVER: p2sb $(sb)\"; "
+      << "press cancel 120; settle 240; echo \"DRIVER: p3 $(scr) mode=" << kSongSelectMode
+      << "\"; echo \"DRIVER: p3sb $(sb)\"; settle 120; "
+      << "choose random_song; settle 240; echo \"DRIVER: r1 $(scr)\"; "
+      << "echo \"DRIVER: r1song " << kPerformerSongValue << "\"; "
+      << "echo \"DRIVER: r1known $(ev \"{song_mgr has_song " << kPerformerSongValue << "}\" | val)\"; "
+      << "echo \"DRIVER: r1sb $(sb)\"; "
+      << "settle 120; nav game_screen 3; echo \"DRIVER: r2 $(scr)\"; "
+      << "echo \"DRIVER: r2song " << kPerformerSongValue << "\"; "
+      << "echo \"DRIVER: bogus $(cmd nothing)\"; ";
+    std::string error;
+    TwoRuns runs = RunBoth(d.str(), error);
+    RequireRun(true, error, runs.classic);
+    if (IsSkipped() || HasFatalFailure()) return;
+    RequireRun(true, error, runs.browser);
+    if (IsSkipped() || HasFatalFailure()) return;
+    const EngineRun &classic = runs.classic, &browser = runs.browser;
+    const std::string state = DriverLine(browser, "state");
+    ASSERT_EQ(Sb(state, "shown"), "true") << "precondition: the browser is the list\n" << state;
+    ASSERT_EQ(Sb(DriverLine(classic, "state"), "shown"), "false") << classic.driver;
+    EXPECT_NE(Commands(state).find("\"random_song\""), std::string::npos) << state;
+    EXPECT_NE(Commands(state).find("\"playlists\""), std::string::npos) << state;
+
+    // Playlists.
+    EXPECT_NE(DriverLine(browser, "answer_playlists").find("\"ok\":true"), std::string::npos)
+        << browser.driver;
+    const std::string p1 = DriverLine(classic, "p1"), p2 = DriverLine(classic, "p2");
+    ASSERT_FALSE(p1.empty()) << classic.driver;
+    ASSERT_NE(p1, "song_select_screen") << "the classic row went nowhere\n" << classic.driver;
+    ASSERT_EQ(p2.compare(0, 28, "song_select_playlist_screen "), 0) << classic.driver;
+    EXPECT_NE(p2.find("mode=song_select_playlist "), std::string::npos) << p2;
+    EXPECT_EQ(DriverLine(browser, "p1"), p1) << "the screen after Playlists\n" << browser.driver;
+    EXPECT_EQ(DriverLine(browser, "p2"), p2)
+        << "the way to the playlist screen, its mode and its back screen\n" << browser.driver;
+    EXPECT_EQ(Sb(DriverLine(browser, "p2sb"), "shown"), "false")
+        << "the playlist screens are the image's\n" << browser.driver;
+    // Back from the playlist screen: song select, picking one song again.
+    EXPECT_EQ(DriverLine(classic, "p3"), "song_select_screen mode=song_select_quickplay")
+        << classic.driver;
+    EXPECT_EQ(DriverLine(browser, "p3"), DriverLine(classic, "p3")) << browser.driver;
+    EXPECT_EQ(Sb(DriverLine(browser, "p3sb"), "shown"), "true")
+        << "Back from the playlist screen returns to the browser\n" << browser.driver;
+
+    // Random Song: a song is chosen and the flow goes on as after a pick.
+    EXPECT_NE(DriverLine(browser, "answer_random_song").find("\"ok\":true"), std::string::npos)
+        << browser.driver;
+    ASSERT_EQ(DriverLine(classic, "r1"), "multiuser_screen") << classic.driver;
+    EXPECT_EQ(DriverLine(browser, "r1"), DriverLine(classic, "r1")) << browser.driver;
+    for (const EngineRun *run : { &classic, &browser }) {
+        const std::string song = DriverLine(*run, "r1song");
+        EXPECT_FALSE(song.empty()) << "no song was chosen\n" << run->driver;
+        EXPECT_EQ(DriverLine(*run, "r1known"), "1") << "not a song of the library\n" << run->driver;
+        EXPECT_EQ(DriverLine(*run, "r2"), "game_screen") << run->driver;
+        EXPECT_EQ(DriverLine(*run, "r2song"), song) << run->driver;
+    }
+    EXPECT_EQ(Sb(DriverLine(browser, "r1sb"), "shown"), "false") << browser.driver;
+    // A name that is not a command, and a command off song select.
+    EXPECT_NE(DriverLine(browser, "bogus").find("\"ok\":false"), std::string::npos)
+        << browser.driver;
+}
+
+// The same two commands, chosen the way a player chooses them: the browser's
+// own rows above the first section, reached with the pad and picked with A
+// (the screen's Delegate::onCommand).  The classic list's highlight follows
+// onto the row, and each choice ends where the classic row ends.
+TEST_F(SongBrowserSwitchFlowTest, TheCommandRowsAreChosenWithThePad) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
+    std::ostringstream d;
+    d << kToSongSelect << "echo \"DRIVER: state $(sb)\"; "
+      << "rowchoose playlists; settle 240; echo \"DRIVER: p1 $(scr)\"; "
+      << "n=0; while [ \"$(scr)\" != song_select_playlist_screen ] && [ $n -lt 10 ]; do "
+      << "press confirm 120; settle 120; n=$((n+1)); done; "
+      << "echo \"DRIVER: p2 $(scr) confirms=$n mode=" << kSongSelectMode << "\"; "
+      << "press cancel 120; settle 240; echo \"DRIVER: p3 $(scr) mode=" << kSongSelectMode
+      << "\"; echo \"DRIVER: p3sb $(sb)\"; settle 120; "
+      << "rowchoose random_song; settle 240; echo \"DRIVER: r1 $(scr)\"; "
+      << "echo \"DRIVER: r1song " << kPerformerSongValue << "\"; "
+      << "echo \"DRIVER: r1known $(ev \"{song_mgr has_song " << kPerformerSongValue << "}\" | val)\"; "
+      << "echo \"DRIVER: r1sb $(sb)\"; ";
+    std::string error;
+    TwoRuns runs = RunBoth(d.str(), error);
+    RequireRun(true, error, runs.classic);
+    if (IsSkipped() || HasFatalFailure()) return;
+    RequireRun(true, error, runs.browser);
+    if (IsSkipped() || HasFatalFailure()) return;
+    const EngineRun &classic = runs.classic, &browser = runs.browser;
+    const std::string state = DriverLine(browser, "state");
+    ASSERT_EQ(Sb(state, "shown"), "true") << "precondition: the browser is the list\n" << state;
+    EXPECT_EQ(CommandRows(state), "[\"random_song\",\"playlists\"]")
+        << "Perform's list has both rows, so the browser draws both\n" << state;
+    EXPECT_NE(state.find("\"list_command\":\"\""), std::string::npos)
+        << "arrival is on a song, never on a command\n" << state;
+
+    // Playlists: the row is reached, the classic list follows, A runs it.
+    const std::string onPlaylists = DriverLine(browser, "on_playlists");
+    ASSERT_EQ(Sb(onPlaylists, "selected_command"), "playlists")
+        << "Up from the first song did not reach the Playlists row\n" << browser.driver;
+    EXPECT_NE(onPlaylists.find("\"selected_song\":\"\""), std::string::npos)
+        << "no song is selected while the list stands on a command\n" << onPlaylists;
+    EXPECT_EQ(Sb(onPlaylists, "classic_song"), "playlists")
+        << "the classic list's highlight follows onto the command row\n" << onPlaylists;
+    const std::string p1 = DriverLine(classic, "p1"), p2 = DriverLine(classic, "p2");
+    ASSERT_FALSE(p1.empty()) << classic.driver;
+    ASSERT_NE(p1, "song_select_screen") << "the classic row went nowhere\n" << classic.driver;
+    EXPECT_EQ(DriverLine(browser, "p1"), p1) << "the screen after Playlists\n" << browser.driver;
+    EXPECT_EQ(DriverLine(browser, "p2"), p2) << browser.driver;
+    // Back from the playlist screen: the browser, on the row it was left on.
+    EXPECT_EQ(DriverLine(browser, "p3"), DriverLine(classic, "p3")) << browser.driver;
+    const std::string back = DriverLine(browser, "p3sb");
+    EXPECT_EQ(Sb(back, "shown"), "true") << back;
+    EXPECT_EQ(Sb(back, "list_command"), "playlists")
+        << "the browser comes back on the row it was left on\n" << back;
+
+    // Random Song: a song is chosen and the flow goes on as after a pick.
+    const std::string onRandom = DriverLine(browser, "on_random_song");
+    ASSERT_EQ(Sb(onRandom, "selected_command"), "random_song") << browser.driver;
+    EXPECT_EQ(Sb(onRandom, "classic_song"), "random_song") << onRandom;
+    ASSERT_EQ(DriverLine(classic, "r1"), "multiuser_screen") << classic.driver;
+    EXPECT_EQ(DriverLine(browser, "r1"), DriverLine(classic, "r1")) << browser.driver;
+    for (const EngineRun *run : { &classic, &browser }) {
+        EXPECT_FALSE(DriverLine(*run, "r1song").empty()) << "no song was chosen\n" << run->driver;
+        EXPECT_EQ(DriverLine(*run, "r1known"), "1") << "not a song of the library\n" << run->driver;
+    }
+    EXPECT_EQ(Sb(DriverLine(browser, "r1sb"), "shown"), "false") << browser.driver;
+}
+
+// Rehearse and Dance Battle are song_select_panel visits like Perform's: the
+// browser is the list, and a pick goes where the classic pick goes.  The
+// classic list has no function rows in Rehearse and only Random Song in Dance
+// Battle; the state says so, and a command with no row is refused.
+TEST_F(SongBrowserSwitchFlowTest, RehearseAndDanceBattleAreTheBrowsersToo) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
+    std::ostringstream d;
+    d << kToSongSelect;
+    for (const char *mode : { "practice", "dance_battle" }) {
+        d << "ev '{ui goto_screen choose_mode_screen}' > /dev/null; settle 60; "
+          << "waitfor 30 choose_mode_screen; settle 120; mode " << mode << "; "
+          << "echo \"DRIVER: " << mode << " $(scr) " << kGameMode << " " << kSongSelectMode << "\"; "
+          << "echo \"DRIVER: " << mode << "_sb $(sb)\"; "
+          << "if [ $browser = 1 ]; then echo \"DRIVER: " << mode << "_playlists $(cmd playlists)\"; "
+          << "settle 120; echo \"DRIVER: " << mode << "_after $(scr)\"; else expand; fi; "
+          << "press down 60; echo \"DRIVER: " << mode << "_sel " << kClassicToken << "\"; "
+          << "press confirm 60; settle 300; echo \"DRIVER: " << mode << "_pick $(scr)\"; "
+          << "echo \"DRIVER: " << mode << "_song " << kPerformerSongValue << "\"; ";
+    }
+    std::string error;
+    TwoRuns runs = RunBoth(d.str(), error);
+    RequireRun(true, error, runs.classic);
+    if (IsSkipped() || HasFatalFailure()) return;
+    RequireRun(true, error, runs.browser);
+    if (IsSkipped() || HasFatalFailure()) return;
+    const EngineRun &classic = runs.classic, &browser = runs.browser;
+    for (const std::string mode : { "practice", "dance_battle" }) {
+        SCOPED_TRACE(mode);
+        ASSERT_EQ(DriverLine(classic, mode), "song_select_screen " + mode + " song_select_quickplay")
+            << classic.driver;
+        EXPECT_EQ(DriverLine(browser, mode), DriverLine(classic, mode)) << browser.driver;
+        const std::string state = DriverLine(browser, mode + "_sb");
+        EXPECT_EQ(Sb(state, "shown"), "true") << state;
+        EXPECT_EQ(Commands(state).find("\"playlists\""), std::string::npos) << state;
+        EXPECT_EQ(Commands(state).find("\"random_song\"") != std::string::npos,
+                  mode == "dance_battle")
+            << "Random Song is a row in Dance Battle and not in Rehearse\n" << state;
+        EXPECT_EQ(CommandRows(state), Commands(state))
+            << "the browser draws exactly the command rows this visit's classic list has\n"
+            << state;
+        EXPECT_NE(DriverLine(browser, mode + "_playlists").find("\"ok\":false"), std::string::npos)
+            << "a command whose classic row does not exist is refused\n" << browser.driver;
+        EXPECT_EQ(DriverLine(browser, mode + "_after"), "song_select_screen") << browser.driver;
+        const std::string pick = DriverLine(classic, mode + "_pick");
+        ASSERT_FALSE(pick.empty()) << classic.driver;
+        ASSERT_NE(pick, "song_select_screen") << "the classic pick went nowhere\n" << classic.driver;
+        EXPECT_EQ(DriverLine(browser, mode + "_pick"), pick) << browser.driver;
+        for (const EngineRun *run : { &classic, &browser }) {
+            const std::string song = DriverLine(*run, mode + "_song");
+            EXPECT_FALSE(song.empty()) << run->driver;
+            EXPECT_EQ(song, DriverValue(*run, mode + "_sel"))
+                << "the song picked is the highlighted one\n" << run->driver;
+        }
+    }
+}
+
+// The hint bar names the device last used: the keyboard's names until a pad
+// button arrives, the pad's from then on, the keyboard's again after a key.
+// The names change in place (SetHintGlyphs): the screen is not built again.
+// And Start, with nobody in view to hand the menu to, changes nothing.
+TEST_F(SongBrowserSwitchFlowTest, HintNamesFollowTheDeviceLastUsed) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
+    std::string error;
+    std::string root = MakeRoot(error);
+    ASSERT_TRUE(error.empty()) << error;
+    std::ostringstream d;
+    d << kCommandFunctions << kToSongSelect << "echo \"DRIVER: h0 $(sb)\"; "
+      << "press start 30; echo \"DRIVER: start $(sb)\"; echo \"DRIVER: start_scr $(scr)\"; "
+      << "press down 30; echo \"DRIVER: start_down $(sb)\"; "
+      << "padpress down; echo \"DRIVER: h1 $(sb)\"; "
+      << "typ c 30; echo \"DRIVER: h2 $(sb)\"; "
+      << "padpress up; echo \"DRIVER: h3 $(sb)\"; "
+      << "press up 30; echo \"DRIVER: h4 $(sb)\"; ";
+    EngineRun run = RunEngine(root, "run", d.str(), " DC3_SONG_BROWSER=auto");
+    RequireRun(true, "", run);
+    if (IsSkipped() || HasFatalFailure()) return;
+    const std::string h0 = DriverLine(run, "h0");
+    ASSERT_EQ(Sb(h0, "shown"), "true") << h0;
+    EXPECT_EQ(Sb(h0, "hints"), "keyboard") << "no real pad was used in this run\n" << h0;
+    EXPECT_EQ(Sb(h0, "hint_accept"), "ENTER") << h0;
+    const std::string start = DriverLine(run, "start");
+    EXPECT_EQ(Sb(start, "shown"), "true") << start;
+    EXPECT_EQ(Sb(start, "switches"), Sb(h0, "switches")) << start;
+    EXPECT_EQ(DriverLine(run, "start_scr"), "song_select_screen") << run.driver;
+    EXPECT_NE(Sb(DriverLine(run, "start_down"), "list_song"), Sb(h0, "list_song"))
+        << "the Down after Start did not move\n" << run.driver;
+    const std::string h1 = DriverLine(run, "h1"), h2 = DriverLine(run, "h2");
+    const std::string h3 = DriverLine(run, "h3"), h4 = DriverLine(run, "h4");
+    EXPECT_EQ(Sb(h1, "hints"), "pad") << "a pad button arrived\n" << h1;
+    EXPECT_EQ(Sb(h1, "hint_accept"), "A") << h1;
+    EXPECT_EQ(Sb(h1, "pad_presses"), "1") << h1;
+    EXPECT_EQ(Sb(h2, "hints"), "keyboard") << "a character was typed\n" << h2;
+    EXPECT_EQ(Sb(h2, "hint_accept"), "ENTER") << h2;
+    EXPECT_EQ(Sb(h2, "query"), "c") << h2;
+    EXPECT_EQ(Sb(h3, "hints"), "pad") << h3;
+    EXPECT_EQ(Sb(h3, "hint_accept"), "A") << h3;
+    EXPECT_EQ(Sb(h4, "hints"), "keyboard") << "a keyboard-made button arrived\n" << h4;
+    EXPECT_EQ(Sb(h4, "hint_accept"), "ENTER") << h4;
+    for (const std::string *state : { &h1, &h2, &h3, &h4 }) {
+        EXPECT_EQ(Sb(*state, "screen_builds"), Sb(h0, "screen_builds"))
+            << "the screen was rebuilt to change the hints\n" << *state;
+    }
+}
+
+// The preview of the selected song starts once the selection has rested.
+// Five Down presses four frames apart ask the preview for five songs and
+// start one stream, the last song's; three presses 1.5 s apart start three
+// (which is also what shows that the count counts).
+TEST_F(SongBrowserSwitchFlowTest, ThePreviewWaitsForTheSelectionToRest) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
+    std::string error;
+    std::string root = MakeRoot(error);
+    ASSERT_TRUE(error.empty()) << error;
+    std::ostringstream d;
+    d << kCommandFunctions << kToSongSelect << "settle 600; echo \"DRIVER: v0 $(sb)\"; "
+      << "seqn 5 4; settle 400; echo \"DRIVER: v1 $(sb)\"; "
+      << "seqn 3 45; settle 600; echo \"DRIVER: v2 $(sb)\"; ";
+    EngineRun run = RunEngine(root, "run", d.str(), " DC3_SONG_BROWSER=auto");
+    RequireRun(true, "", run);
+    if (IsSkipped() || HasFatalFailure()) return;
+    const std::string v0 = DriverLine(run, "v0"), v1 = DriverLine(run, "v1");
+    const std::string v2 = DriverLine(run, "v2");
+    auto count = [](const std::string &state, const char *key) {
+        return atoi(Sb(state, key).c_str());
+    };
+    ASSERT_EQ(Sb(v0, "shown"), "true") << v0;
+    ASSERT_GE(count(v0, "preview_starts"), 1)
+        << "precondition: the preview runs in this engine (a stream was prepared on arrival)\n"
+        << v0;
+    ASSERT_EQ(Sb(v0, "preview_song"), Sb(v0, "list_song")) << v0;
+    EXPECT_NE(Sb(v1, "list_song"), Sb(v0, "list_song")) << v1;
+    EXPECT_EQ(count(v1, "preview_changes") - count(v0, "preview_changes"), 5)
+        << "five presses, five songs asked for\n" << v1;
+    EXPECT_EQ(count(v1, "preview_starts") - count(v0, "preview_starts"), 1)
+        << "five quick presses started this many previews\n" << v1;
+    EXPECT_EQ(Sb(v1, "preview_song"), Sb(v1, "list_song"))
+        << "the preview that plays is the song the selection rested on\n" << v1;
+    EXPECT_EQ(Sb(v1, "preview_hold"), "false") << v1;
+    EXPECT_EQ(count(v2, "preview_starts") - count(v1, "preview_starts"), 3)
+        << "three presses 1.5 s apart\n" << v2;
+}
+
+// A dialog over song select (the game's own error_message event, raised the
+// way ham_ui.dta raises it): the browser stands aside and gives the keyboard
+// back, presses under the dialog do not move it, and it is back on the same
+// song once the dialog is dismissed.  A on the dialog ends where it ends in
+// a second engine on the classic list, with no song picked in either.
+TEST_F(SongBrowserSwitchFlowTest, ADialogOverSongSelectTakesThePresses) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
+    const char *const dialog =
+        "ev '{ui_event_mgr trigger_event error_message (dummy init error_lost_leaderboards)}'"
+        " > /dev/null; settle 60; ";
+    const char *const dialogUp = "$(ev '{ui_event_mgr has_active_dialog_event}' | val)";
+    std::ostringstream d;
+    d << kToSongSelect << "press down 30; echo \"DRIVER: g0 $(sb)\"; "
+      << dialog << "echo \"DRIVER: g1 $(sb)\"; echo \"DRIVER: g1up " << dialogUp << "\"; "
+      << "press down 30; press down 30; echo \"DRIVER: g2 $(sb)\"; "
+      << "ev '{ui_event_mgr dismiss_event}' > /dev/null; settle 60; "
+      << "echo \"DRIVER: g3 $(sb)\"; echo \"DRIVER: g3up " << dialogUp << "\"; "
+      << "press down 30; echo \"DRIVER: g4 $(sb)\"; "
+      << dialog << "echo \"DRIVER: g5up " << dialogUp << "\"; press confirm 60; settle 180; "
+      << "echo \"DRIVER: g6 $(scr)\"; echo \"DRIVER: g6up " << dialogUp << "\"; "
+      << "echo \"DRIVER: g6song " << kPerformerSongValue << "\"; ";
+    std::string error;
+    TwoRuns runs = RunBoth(d.str(), error);
+    RequireRun(true, error, runs.classic);
+    if (IsSkipped() || HasFatalFailure()) return;
+    RequireRun(true, error, runs.browser);
+    if (IsSkipped() || HasFatalFailure()) return;
+    const EngineRun &classic = runs.classic, &browser = runs.browser;
+    for (const EngineRun *run : { &classic, &browser }) {
+        ASSERT_EQ(DriverLine(*run, "g1up"), "1") << "precondition: a dialog is up\n" << run->driver;
+        ASSERT_EQ(DriverLine(*run, "g3up"), "0") << "precondition: it was dismissed\n" << run->driver;
+        ASSERT_EQ(DriverLine(*run, "g5up"), "1") << "precondition: the second is up\n" << run->driver;
+    }
+    const std::string g0 = DriverLine(browser, "g0"), g1 = DriverLine(browser, "g1");
+    const std::string g2 = DriverLine(browser, "g2"), g3 = DriverLine(browser, "g3");
+    const std::string g4 = DriverLine(browser, "g4");
+    ASSERT_EQ(Sb(g0, "shown"), "true") << "precondition: the browser is the list\n" << g0;
+    ASSERT_EQ(Sb(g0, "text_capture"), "true") << g0;
+    ASSERT_FALSE(Sb(g0, "list_song").empty()) << g0;
+    // While the dialog is up.
+    EXPECT_EQ(Sb(g1, "shown"), "false") << g1;
+    EXPECT_NE(Sb(g1, "why").find("dialog"), std::string::npos) << g1;
+    EXPECT_EQ(Sb(g1, "text_capture"), "false") << "the keyboard is the game's again\n" << g1;
+    EXPECT_EQ(Sb(g2, "shown"), "false") << g2;
+    EXPECT_EQ(Sb(g2, "list_song"), Sb(g0, "list_song"))
+        << "a press under the dialog moved the browser\n" << g2;
+    // After it.
+    EXPECT_EQ(Sb(g3, "shown"), "true") << g3;
+    EXPECT_EQ(Sb(g3, "text_capture"), "true") << g3;
+    EXPECT_EQ(Sb(g3, "focus"), Sb(g0, "focus")) << g3;
+    EXPECT_EQ(Sb(g3, "list_song"), Sb(g0, "list_song")) << "back on the song it was left on\n" << g3;
+    EXPECT_EQ(Sb(g3, "screen_builds"), Sb(g0, "screen_builds"))
+        << "the screen was built again for a dialog\n" << g3;
+    EXPECT_NE(Sb(g4, "list_song"), Sb(g0, "list_song")) << "Down moves again\n" << g4;
+    // A on the dialog: what the classic list's engine does, and no pick.
+    ASSERT_FALSE(DriverLine(classic, "g6").empty()) << classic.driver;
+    EXPECT_EQ(DriverLine(browser, "g6"), DriverLine(classic, "g6"))
+        << "A on the dialog ended somewhere else than over the classic list\n" << browser.driver;
+    EXPECT_EQ(DriverLine(browser, "g6up"), DriverLine(classic, "g6up")) << browser.driver;
+    EXPECT_NE(DriverLine(browser, "g6"), "multiuser_screen")
+        << "the A went to the browser's song under the dialog\n" << browser.driver;
+    EXPECT_EQ(DriverLine(browser, "g6song"), DriverLine(classic, "g6song"))
+        << "a song was picked under the dialog\n" << browser.driver;
+}
+
+#if DC3_DLC_TESTS
+// A downloaded song shows its own cover in the browser.  The game's path to
+// it works only while the song's package is mounted, which the game does for
+// one song at a time; the browser reads it through the DLC root's drive
+// instead (SongCatalogSource_Native.cpp CoverPath).  Milkshake, from the DC2
+// DLC megapack in a one-package root, as in DlcSongFlowTest: compiled in only
+// where configure found the package (the DC3_DLC_TESTS gate), so a box
+// without it registers nothing.  The root's own name has capitals in it
+// (MakeTestTempDir), which a host path given to the game's loader would lose.
+// Then the pick: A on it ends where A on its row of the classic list ends, in
+// a second engine.
+TEST_F(SongBrowserSwitchFlowTest, ADownloadedSongShowsItsOwnCoverAndIsPickedAsOnTheClassicList) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
+    const char *const package = "dancecentral2dlcmegapack";
+    const char *env = getenv("DC3_TEST_DLC_DIR");
+    const std::string dlc = env && *env ? env : BinaryDir() + "/../../orig-assets/dlc";
+    const std::string source = dlc + "/" + package;
+    ASSERT_EQ(access((source + "/songs/milkshake/gen/milkshake_keep.png_xbox").c_str(), R_OK), 0)
+        << "DC3_DLC_TESTS is compiled in but the package's cover is gone: " << source
+        << " (reconfigure, or import it with scripts/dlc/import.sh)";
+    std::string error;
+    std::string root = MakeRoot(error);
+    ASSERT_TRUE(error.empty()) << error;
+    const std::string dlcRoot = MakeTestTempDir("dc3-dlc-root");
+    ASSERT_FALSE(dlcRoot.empty());
+    ASSERT_EQ(symlink(source.c_str(), (dlcRoot + "/" + package).c_str()), 0) << dlcRoot;
+    const std::string pick = std::string("press confirm 60; waitfor 30 multiuser_screen; ")
+        + "settle 120; echo \"DRIVER: c2 $(scr) " + kPerformerSongValue + "\"; ";
+    std::ostringstream d;
+    d << kCommandFunctions << kToSongSelect << "echo \"DRIVER: c0 $(sb)\"; "
+      << "typ milkshake 60; press down 30; settle 300; echo \"DRIVER: c1 $(sb)\"; " << pick;
+    EngineRun run = RunEngine(root, "run", d.str(), " DC3_SONG_BROWSER=1 DC3_DLC_DIR=" + dlcRoot);
+    RequireRun(true, "", run);
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string classicRoot = MakeRoot(error);
+    ASSERT_TRUE(error.empty()) << error;
+    std::ostringstream c;
+    c << kCommandFunctions << kToSongSelect
+      << "ev '{song_select_panel highlight_right_list_item {song_offer_provider "
+      << "first_data_index milkshake}}' > /dev/null; settle 90; " << pick;
+    EngineRun classic =
+        RunEngine(classicRoot, "classic", c.str(), " DC3_SONG_BROWSER=0 DC3_DLC_DIR=" + dlcRoot);
+    RequireRun(true, "", classic);
+    if (IsSkipped() || HasFatalFailure()) return;
+    const std::string c0 = DriverLine(run, "c0"), c1 = DriverLine(run, "c1");
+    ASSERT_EQ(Sb(c0, "shown"), "true") << c0;
+    // A disc song first: the control for "ready".
+    EXPECT_EQ(Sb(c0, "selected_cover"), "ready") << "the disc song's cover\n" << c0;
+    EXPECT_EQ(Sb(c0, "selected_cover_path").find(':'), std::string::npos)
+        << "a disc song's cover is the game's own path\n" << c0;
+    ASSERT_EQ(Sb(c1, "selected_song"), "milkshake")
+        << "precondition: the downloaded song is in the catalog and the search found it\n"
+        << c1;
+    EXPECT_EQ(Sb(c1, "selected_cover_path"),
+              std::string("dlcroot0:/") + package + "/songs/milkshake/milkshake_keep.png")
+        << c1;
+    EXPECT_EQ(Sb(c1, "selected_cover"), "ready")
+        << "the downloaded song shows the fallback picture, not its cover\n" << c1;
+    EXPECT_EQ(Sb(c1, "images_failed"), "0") << c1;
+    EXPECT_EQ(run.output.find("Could not load: songs/milkshake"), std::string::npos)
+        << "the cover was asked for outside its package\n" << Tail(run.output);
+    const std::string picked = DriverLine(run, "c2"), classicPicked = DriverLine(classic, "c2");
+    ASSERT_EQ(classicPicked, "multiuser_screen milkshake")
+        << "precondition: A on the classic list's row picks the downloaded song\n"
+        << Tail(classic.output);
+    EXPECT_EQ(picked, classicPicked) << "the pick from the browser against the classic list's";
+}
+#endif // DC3_DLC_TESTS
+
+// ---------------------------------------------------------------------------
+// The auto rule against a body with hands (scripts/song_browser_hands.py)
+// ---------------------------------------------------------------------------
+namespace {
+
+struct HandsRun {
+    std::string setupError;
+    int exitCode = -1;
+    std::string output;
+
+    // The line after "KIND name ".
+    std::string Line(const char *kind, const std::string &name) const {
+        const std::string prefix = std::string(kind) + " " + name + " ";
+        std::istringstream in(output);
+        std::string line;
+        while (std::getline(in, line)) {
+            if (line.compare(0, prefix.size(), prefix) == 0) return line.substr(prefix.size());
+        }
+        return "";
+    }
+    std::string Obs(const std::string &name) const { return Line("OBS", name); }
+    double Val(const std::string &name) const { return atof(Line("VAL", name).c_str()); }
+};
+
+HandsRun RunHands(const char *extraArgs) {
+    HandsRun r;
+    const std::string dir = BinaryDir();
+    const std::string bin = dir + "/dc3-native";
+    const std::string driver = dir + "/../../scripts/song_browser_hands.py";
+    if (!Exists(bin)) {
+        r.setupError = "dc3-native does not exist at " + bin + " (scripts/native_test.sh builds it)";
+        return r;
+    }
+    if (!Exists(driver)) {
+        r.setupError = "missing " + driver;
+        return r;
+    }
+    if (system("python3 -c 'import json, socket, struct, http.client' >/dev/null 2>&1") != 0) {
+        r.setupError = "python3 is not runnable; the synthetic sensor needs it";
+        return r;
+    }
+    const std::string workdir = MakeTestTempDir("dc3-songbrowser-hands");
+    if (workdir.empty()) {
+        r.setupError = "could not create a temporary work directory";
+        return r;
+    }
+    std::ostringstream sh;
+    sh << "t=$(command -v timeout || command -v gtimeout); cd " << dir << " || exit 2; "
+       << "${t:+$t -k 10 400} python3 " << driver << " --engine " << bin << " --workdir "
+       << workdir << " " << extraArgs << " 2>&1";
+    FILE *p = popen(sh.str().c_str(), "r");
+    if (!p) {
+        r.setupError = "popen failed";
+        return r;
+    }
+    char buf[8192];
+    while (fgets(buf, sizeof buf, p)) r.output += buf;
+    int status = pclose(p);
+    r.exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    if (getenv("DC3_TEST_SHOW_DRIVER")) fputs(r.output.c_str(), stderr);
+    return r;
+}
+
+} // namespace
+
+// The whole rule, with a synthetic person in front of a synthetic sensor (no
+// input script, so this is auto as a person gets it):
+//   - standing there for 60 s of game time, pressing nothing: the browser
+//   - one Down after that: exactly what one Down does
+//   - an arm through the list's pose for a quarter second: the browser
+//   - an arm HELD there: the classic list, after the hold (0.75 s)
+//   - the arm dropped: still the classic list (no flapping back)
+//   - a press: the browser at once, and it stays
+//   - a typed character with the arm still out: the browser at once, the
+//     character in the search box, and it stays although the arm is out
+//   - the arm away and out again: the classic list again
+//   - Start: the classic list (the image's own "hands" button), until a press
+// `switches` counts every show and hide, so each step is exact.
+TEST(SongBrowserHandsTest, ATrackedBodyIsNotIntentAHeldHandIs) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
+    HandsRun r = RunHands("");
+    ASSERT_TRUE(r.setupError.empty()) << r.setupError;
+    ASSERT_NE(r.output.find("\nDONE"), std::string::npos)
+        << "the driver did not finish (exit " << r.exitCode << "):\n" << r.output;
+    const std::string arrive = r.Obs("arrive");
+    ASSERT_EQ(Sb(arrive, "mode"), "auto") << arrive;
+    ASSERT_EQ(Sb(arrive, "shown"), "true")
+        << "song select reached with the pad is the browser's\n" << arrive;
+    ASSERT_GE(atoi(Sb(arrive, "tracked_bodies").c_str()), 1) << arrive;
+    const int s0 = atoi(Sb(arrive, "switches").c_str());
+    auto expect = [&](const char *name, bool shown, int switches, const char *what) {
+        const std::string state = r.Obs(name);
+        EXPECT_EQ(Sb(state, "shown"), shown ? "true" : "false") << name << ": " << what << "\n" << state;
+        EXPECT_EQ(atoi(Sb(state, "switches").c_str()), s0 + switches)
+            << name << ": " << what << " (shows and hides since arriving)\n" << state;
+        EXPECT_EQ(Sb(state, "hands_steering"), shown ? "false" : "true") << name << "\n" << state;
+        // The pad has the menu exactly while the browser is shown.
+        EXPECT_EQ(Sb(state, "controller_mode"), shown ? "true" : "false") << name << "\n" << state;
+        return state;
+    };
+
+    ASSERT_GE(r.Val("idle_wall_seconds"), 3.0)
+        << "precondition: the idle outlasted the 1.5 s controller-mode timeout twice\n" << r.output;
+    const std::string idle = expect("idle60", true, 0, "a person who presses nothing keeps the browser");
+    const std::string down = expect("after_down", true, 0, "one Down after the idle");
+    const std::string up = r.Obs("after_up"), control = r.Obs("control_down");
+    EXPECT_NE(Sb(down, "list_song"), Sb(idle, "list_song")) << "the Down was swallowed\n" << down;
+    EXPECT_EQ(Sb(up, "list_song"), Sb(idle, "list_song")) << up;
+    EXPECT_EQ(Sb(control, "list_song"), Sb(down, "list_song"))
+        << "one Down after the idle moved a different distance from one Down without it\n"
+        << r.output;
+
+    expect("short_hand", true, 0, "an arm that passes through the pose");
+    const std::string hand = expect("hand", false, 1, "a hand held in the list's pose");
+    EXPECT_EQ(Sb(hand, "hand_in_pose"), "true") << hand;
+    EXPECT_EQ(Sb(hand, "engine_text_capture"), "true")
+        << "a typed character must still be heard while the classic list is up\n" << hand;
+    EXPECT_GE(r.Val("hand_seconds"), 0.75) << "sooner than the hold\n" << r.output;
+    EXPECT_LE(r.Val("hand_seconds"), 2.0) << r.output;
+    const std::string away = expect("hand_away", false, 1, "the hand dropped: no flapping back");
+    EXPECT_EQ(Sb(away, "hand_in_pose"), "false") << away;
+    expect("press", true, 2, "a press brings the browser back at once");
+    expect("press_idle", true, 2, "and it stays");
+    expect("hand2", false, 3, "a held hand again");
+    const std::string typed = expect("typed", true, 4, "a typed character brings the browser back");
+    EXPECT_EQ(Sb(typed, "query"), "a") << "the character is the search's\n" << typed;
+    EXPECT_EQ(Sb(typed, "hand_in_pose"), "true") << "precondition: the arm is still out\n" << typed;
+    expect("typed_hold", true, 4, "the arm still out after typing does not take it back");
+    expect("rearm", false, 5, "the arm away and out again");
+    const std::string hold = expect("press_hold", true, 6, "a press with the arm out, and it stays");
+    EXPECT_EQ(Sb(hold, "hand_in_pose"), "true") << "precondition: the arm is still out\n" << hold;
+    // Start is the image's own way to hand the menu to the hands.
+    expect("start", false, 7, "Start hands the menu to the hands");
+    expect("start_hold", false, 7, "and they keep it");
+    expect("start_press", true, 8, "until a press");
 }

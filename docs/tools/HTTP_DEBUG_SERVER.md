@@ -303,6 +303,11 @@ nothing: the only drain was the engine's `JoypadPoll`, which
 # Press a button this frame
 curl -X POST localhost:9090/api/input/press -d '{"button":"confirm"}'
 
+# The same, standing for a REAL pad's button. Without "device":"pad" an
+# injected press is nobody's device, and the song browser's hint bar counts it
+# with the keyboard (?device=pad works too)
+curl -X POST localhost:9090/api/input/press -d '{"button":"down","device":"pad"}'
+
 # Queue a button sequence (delays are cumulative frames between events)
 curl -X POST localhost:9090/api/input/sequence -d '[
   {"button":"dpad_down","delay":15},
@@ -324,6 +329,104 @@ still held is released and pressed again on that frame. The per-frame rule is
 Button names: `confirm`/`a`, `cancel`/`b`, `start`, `select`/`back`/`option`, `up`/`dpad_up`, `down`/`dpad_down`, `left`/`dpad_left`, `right`/`dpad_right`, `l1`/`lb`, `r1`/`rb`, `l2`/`lt`, `r2`/`rt`, `x`, `y`, `l3`/`ls`, `r3`/`rs`.
 
 Works in both windowed and headless modes. HTTP-injected buttons are OR'd with keyboard/gamepad/script input.
+
+### Text input and the song browser
+
+```bash
+# Type text: every character is queued on the engine's text queue
+# (platform/TextInput_Native.h), as if typed. Queued whether or not anything
+# is capturing the keyboard; never presses a pad button.
+curl -X POST localhost:9090/api/input/text -d '{"text":"crystal"}'
+# {"ok":true,"data":{"typed":7,"pending":7}}
+
+# An edit key: backspace, delete, left, right, home, end
+curl -X POST localhost:9090/api/input/text -d '{"key":"backspace"}'
+# Both in one request (text first), or as query parameters:
+curl -X POST 'localhost:9090/api/input/text?text=ab&key=home'
+# An unknown key name is refused: HTTP 400
+
+# The natively drawn song browser on song select (DC3_SONG_BROWSER)
+curl localhost:9090/api/songbrowser/state
+# {"ok":true,"data":{"available":true,"mode":"on","on_song_select":true,
+#  "eligible":true,"shown":true,"why":"DC3_SONG_BROWSER=1",
+#  "hands_steering":false,"hand_in_pose":false,"tracked_bodies":0,"switches":1,
+#  "controller_mode":true,"text_capture":true,"leaving":false,
+#  "engine_text_capture":true,"hints":"keyboard","hint_accept":"ENTER",
+#  "pad_presses":0,"screen_builds":1,"preview_song":"aint2proud2beg",
+#  "preview_changes":2,"preview_starts":2,"preview_hold":false,
+#  "commands":["random_song","playlists"],
+#  "command_rows":["random_song","playlists"],
+#  "songs":45,"classic_song":"aint2proud2beg","focus":"list",
+#  "selected_song":"aint2proud2beg",
+#  "selected_cover_path":"songs/aint2proud2beg/aint2proud2beg_keep.png",
+#  "selected_cover":"ready","list_song":"aint2proud2beg",
+#  "list_command":"","selected_command":"",
+#  "recent_song":"boomboompow","query":"","sort":"title","rows":53,"list_index":2,
+#  "recents_shown":false,"highlight_rect":[56.0,187.0,804.0,51.0],"frames":642,
+#  "drew":true,"glyphs":436,"placeholder_glyphs":0,"quads":516,"draw_calls":52,
+#  "images_missing":0,"images_ready":9,"images_failed":0,"build_us":36,
+#  "replay_us":38}}
+# Before song select has been entered in this run:
+# {"ok":true,"data":{"available":true,"on_song_select":false,"eligible":false,
+#  "shown":false,"why":"not on song select"}}
+
+# The song browser's two commands: Random Song and Playlists. Runs what the
+# screen's own command rows run (songbrowser_ui::Delegate::onCommand): the
+# classic list's row of that name is selected, so the result is the classic
+# row's. ?name= works too
+curl -X POST localhost:9090/api/songbrowser/command -d '{"name":"random_song"}'
+curl -X POST localhost:9090/api/songbrowser/command -d '{"name":"playlists"}'
+# {"ok":true,"data":{"command":"playlists"}}
+# HTTP 409 with the reason when it cannot run: the browser is not shown, a
+# pick or a Back is in flight, or this visit's classic list has no such row
+# (Rehearse has neither, Dance Battle only random_song):
+# {"ok":false,"error":"the classic list has no playlists row in this mode"}
+```
+
+`typed` is the number of characters queued by this request and `pending` the
+queue's length afterwards; the text reaches a screen on its next frame.
+
+`/api/songbrowser/state` always answers. What its fields mean:
+
+| Field | |
+|---|---|
+| `available` | `false` in a binary without the browser (`milo-viewer`); then only `shown` and `why` follow |
+| `mode` | `auto`, `on` or `off`: what `DC3_SONG_BROWSER`, `DC3_CLASSIC_SONG_SELECT` and the defaults resolved to |
+| `on_song_select` | `song_select_panel` is entered |
+| `eligible` | this visit can show the browser (the mode is not `off`, it is a pick-one-song visit, the catalog and the font are there) |
+| `shown` | the browser is what is drawn and what takes the pad right now |
+| `why` | the reason for `shown`, in words: `the pad or the keyboard has the menu (no hand is steering)`, `DC3_SONG_BROWSER=1`, `DC3_SONG_BROWSER=0`, `DC3_CLASSIC_SONG_SELECT=1`, `MILO_INPUT_SCRIPT is set ...`, `a hand is steering (held where the list takes it; controller mode is off)`, `Start handed the menu to the hands`, `song select was reached by hand ...`, `an overlay or a dialog is up`, `not on song select` |
+| `hands_steering` | the `auto` rule's latch: the classic list is up for somebody's hands |
+| `hand_in_pose`, `tracked_bodies` | right now: a tracked skeleton's hand is where the song list or the help bar's list takes it (the image's `IsValidSwipePosition`); how many skeletons are tracked |
+| `switches` | times the browser was shown or hidden in this run (a flapping rule shows here) |
+| `controller_mode` | the game's controller mode; the browser keeps it on while it is shown |
+| `text_capture`, `engine_text_capture` | the browser holds the engine's text capture; the engine's capture is on at all (it stays on under the classic list in `auto`, so a typed character can bring the browser back) |
+| `leaving` | a pick, a Back or a command is in flight; input is dropped until the screen changes |
+| `hints`, `hint_accept` | `pad` or `keyboard`: the device last used; the name the hint bar shows for Accept (`A` or `ENTER`), read back from the screen (`HintGlyphsShown()`) |
+| `pad_presses` | presses counted as a real pad's in this run |
+| `screen_builds` | times the screen was built in this run (the hint names change without one) |
+| `preview_song`, `preview_changes` | the song the game's preview was last asked for; how many times that changed while the browser was shown |
+| `preview_starts`, `preview_hold` | preview streams prepared in this run (a start, as opposed to a request); the preview is waiting for the selection to rest |
+| `commands` | the commands this visit's classic list has a row for: `random_song`, `playlists` |
+| `command_rows` | the command rows the screen was built with; the same list as `commands` except for the one frame in which the classic list changed |
+| `songs` | songs in the browser's catalog |
+| `classic_song` | the song the classic list's highlight was last put on |
+| `focus` | `search`, `tabs`, `recents` or `list` |
+| `selected_song` | the song the detail pane shows: what Accept would pick. Empty while the pane shows a command or the search help |
+| `selected_cover_path`, `selected_cover` | that song's cover: the path it is read from (a downloaded song's is on its DLC root's drive, `dlcroot0:/<package>/songs/...`), and how far its load has come: `not asked for`, `queued`, `loading`, `ready`, `failed` (the logo is drawn in its place) or `evicted`. Absent while the pane shows no song |
+| `list_song`, `recent_song` | the list's selected song and the shelf's selected card |
+| `list_command`, `selected_command` | the command row the list stands on, and the command the detail pane shows (`random_song`, `playlists`, or empty): what Accept would run |
+| `query`, `sort`, `rows`, `list_index`, `recents_shown` | the search text; the arrangement (`title`, `artist`, `difficulty`, `source`, `decade`); rows in the list, headings included; the selected row's index among them; whether the shelf is unfolded |
+| `highlight_rect` | the list's selection bar, `x,y,width,height` in the UI's 1280x720 logical units (multiply by output rows / 720 for screenshot pixels) |
+| `frames`, `drew`, `glyphs`, `placeholder_glyphs`, `quads`, `draw_calls`, `images_missing` | frames drawn so far and the last frame's numbers; `placeholder_glyphs` counts characters drawn as the missing-glyph box. `images_missing` counts pictures drawn with no texture at all; a cover whose load failed is drawn as the logo and is **not** counted here |
+| `images_ready`, `images_failed` | covers held as textures now, and cover loads that have failed in this run (each of those draws the logo). 0 failed is the reading that says every cover asked for was found; these two count in a run that does not render too |
+| `build_us`, `replay_us` | the last frame's cost in microseconds: building the display list, and replaying it into the canvas. Both 0 in a run that does not render |
+
+The fields from `focus` to `highlight_rect` are present only while a visit has
+a screen. In a run that does not render (`MILO_NORENDER=1`) `drew` is false
+and `highlight_rect` and the frame's numbers are 0: nothing is laid out, but
+focus, the selected song, the query and the sort are all live. Tested by `SongBrowserInSongSelectTest`, `SongBrowserSwitchFlowTest`,
+`SongBrowserHandsTest` and `NativeUiHostGpuTest.SongBrowserRunsInTheEngine`.
 
 ### Screen + Frame (Phase 4)
 
@@ -410,6 +513,52 @@ the passes of that name per frame; `gpuSumMs` sums every pass, `gpuSpanMs` is
 first begin to last end (it includes idle gaps between submits).
 `scripts/playtest/gpu_pass_ab.py` drives a song with this endpoint and
 `/api/dta/eval` to A/B one switch.
+
+### Songs
+
+The song browser's data
+([SONG_BROWSER_DATA.md](../native/reference/SONG_BROWSER_DATA.md)): the songs
+song select lists, a search over them, or one arrangement. Built from the game
+on each request; read-only. Answers `503` with `"ok":false` while the game is
+still starting (no unlock table yet) and for an unknown `sort`.
+
+```bash
+# The catalog: every song, the play history, the recents, the section names
+curl -s localhost:9090/api/songs
+# {"ok":true,"data":{"count":45,"songs":[{"id":7035,"shortName":"12step",
+#   "title":"1, 2 Step","artist":"Ciara ft. Missy Elliott","album":"Goodies",
+#   "year":2004,"bpm":113,"lengthMs":142309,"rank":187,"difficultyTier":1,
+#   "origin":"ham3","source":"ham3","onDisc":true,"isCover":false,
+#   "albumArtPath":"songs/12step/12step_keep.png","bestStars":0,"bestScore":0,
+#   "played":false,"locked":false,"recentRank":-1}, ...],
+#   "history":[],"recents":[],
+#   "labels":{"ham3":"Dance Central 3","song_tier_0":"Warmup", ...}}}
+
+# A search (any ?q= at all, an empty one included)
+curl -s 'localhost:9090/api/songs?q=will+i+am'
+# {"ok":true,"data":{"searchMicros":24,"query":"will i am","searching":true,
+#   "words":["will","i","am"],"count":1,"rows":[{"shortName":"omg","title":"OMG",
+#   "artist":"Usher ft. will.i.am","album":"Raymond V. Raymond",
+#   "match":"artist_word","field":"artist",
+#   "ranges":[{"field":"artist","begin":10,"length":9,"text":"will.i.am"}]}]}}
+
+# An arrangement: sections and the rows in order
+curl -s 'localhost:9090/api/songs?sort=artist&min=4'
+# {"ok":true,"data":{"arrangement":"artist","count":45,
+#   "sections":[{"token":"123 - A","title":"123 - A","firstRow":0,"count":5,
+#   "recents":false}, ...],"rows":["iamthebest","indaclub", ...]}}
+```
+
+| Parameter | Meaning |
+|-----------|---------|
+| `q=TEXT` | Search. `searching` is false when the text has nothing to search for. `ranges` are bytes of the UTF-8 string; `text` is that slice. `searchMicros` is the search alone |
+| `limit=N` | At most N search rows |
+| `sort=NAME` | `title`, `artist`, `difficulty`, `source`, `decade`, `bpm` |
+| `min=N` | With `sort=title` or `artist`: join letters until a section has N songs (4 is today's artist sort) |
+| `recents=N` | Rows of Recently Played: the catalog's `recents`, and the first section of an arrangement. Default 6; 0 for none |
+| `locked=1` | Also list songs that are only locked, with `"locked":true` |
+
+`q` wins over `sort`. The examples are a disc-only run (`DC3_DLC=0`, 45 songs).
 
 ## Example Workflows
 
@@ -531,6 +680,8 @@ print(f"Frame {tel['data']['frame']}, beat {tel['data']['beat']}")
 |------|-------------|
 | `native/src/platform/HttpServer.h` | Server class, command queue, input/wait state |
 | `native/src/platform/HttpServer.cpp` | All endpoint handlers (~650 LOC) |
+| `native/src/songbrowser/SongCatalogSource_Native.cpp` | `GET /api/songs`: the catalog from the game, and the endpoint's body |
+| `native/src/platform/SongBrowserPanel_Native.cpp` | `GET /api/songbrowser/state`: the body (`StateJson`); `POST /api/songbrowser/command`: `RunCommandNamed` |
 | `native/include/httplib.h` | Vendored cpp-httplib (MIT, header-only) |
 
 ## Environment Variables
