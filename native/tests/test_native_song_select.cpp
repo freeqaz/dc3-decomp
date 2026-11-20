@@ -1923,6 +1923,71 @@ TEST_F(SongBrowserSwitchFlowTest, ThePreviewWaitsForTheSelectionToRest) {
         << "three presses 1.5 s apart\n" << v2;
 }
 
+// A dialog over song select (the game's own error_message event, raised the
+// way ham_ui.dta raises it): the browser stands aside and gives the keyboard
+// back, presses under the dialog do not move it, and it is back on the same
+// song once the dialog is dismissed.  A on the dialog ends where it ends in
+// a second engine on the classic list, with no song picked in either.
+TEST_F(SongBrowserSwitchFlowTest, ADialogOverSongSelectTakesThePresses) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
+    const char *const dialog =
+        "ev '{ui_event_mgr trigger_event error_message (dummy init error_lost_leaderboards)}'"
+        " > /dev/null; settle 60; ";
+    const char *const dialogUp = "$(ev '{ui_event_mgr has_active_dialog_event}' | val)";
+    std::ostringstream d;
+    d << kToSongSelect << "press down 30; echo \"DRIVER: g0 $(sb)\"; "
+      << dialog << "echo \"DRIVER: g1 $(sb)\"; echo \"DRIVER: g1up " << dialogUp << "\"; "
+      << "press down 30; press down 30; echo \"DRIVER: g2 $(sb)\"; "
+      << "ev '{ui_event_mgr dismiss_event}' > /dev/null; settle 60; "
+      << "echo \"DRIVER: g3 $(sb)\"; echo \"DRIVER: g3up " << dialogUp << "\"; "
+      << "press down 30; echo \"DRIVER: g4 $(sb)\"; "
+      << dialog << "echo \"DRIVER: g5up " << dialogUp << "\"; press confirm 60; settle 180; "
+      << "echo \"DRIVER: g6 $(scr)\"; echo \"DRIVER: g6up " << dialogUp << "\"; "
+      << "echo \"DRIVER: g6song " << kPerformerSongValue << "\"; ";
+    std::string error;
+    TwoRuns runs = RunBoth(d.str(), error);
+    RequireRun(true, error, runs.classic);
+    if (IsSkipped() || HasFatalFailure()) return;
+    RequireRun(true, error, runs.browser);
+    if (IsSkipped() || HasFatalFailure()) return;
+    const EngineRun &classic = runs.classic, &browser = runs.browser;
+    for (const EngineRun *run : { &classic, &browser }) {
+        ASSERT_EQ(DriverLine(*run, "g1up"), "1") << "precondition: a dialog is up\n" << run->driver;
+        ASSERT_EQ(DriverLine(*run, "g3up"), "0") << "precondition: it was dismissed\n" << run->driver;
+        ASSERT_EQ(DriverLine(*run, "g5up"), "1") << "precondition: the second is up\n" << run->driver;
+    }
+    const std::string g0 = DriverLine(browser, "g0"), g1 = DriverLine(browser, "g1");
+    const std::string g2 = DriverLine(browser, "g2"), g3 = DriverLine(browser, "g3");
+    const std::string g4 = DriverLine(browser, "g4");
+    ASSERT_EQ(Sb(g0, "shown"), "true") << "precondition: the browser is the list\n" << g0;
+    ASSERT_EQ(Sb(g0, "text_capture"), "true") << g0;
+    ASSERT_FALSE(Sb(g0, "list_song").empty()) << g0;
+    // While the dialog is up.
+    EXPECT_EQ(Sb(g1, "shown"), "false") << g1;
+    EXPECT_NE(Sb(g1, "why").find("dialog"), std::string::npos) << g1;
+    EXPECT_EQ(Sb(g1, "text_capture"), "false") << "the keyboard is the game's again\n" << g1;
+    EXPECT_EQ(Sb(g2, "shown"), "false") << g2;
+    EXPECT_EQ(Sb(g2, "list_song"), Sb(g0, "list_song"))
+        << "a press under the dialog moved the browser\n" << g2;
+    // After it.
+    EXPECT_EQ(Sb(g3, "shown"), "true") << g3;
+    EXPECT_EQ(Sb(g3, "text_capture"), "true") << g3;
+    EXPECT_EQ(Sb(g3, "focus"), Sb(g0, "focus")) << g3;
+    EXPECT_EQ(Sb(g3, "list_song"), Sb(g0, "list_song")) << "back on the song it was left on\n" << g3;
+    EXPECT_EQ(Sb(g3, "screen_builds"), Sb(g0, "screen_builds"))
+        << "the screen was built again for a dialog\n" << g3;
+    EXPECT_NE(Sb(g4, "list_song"), Sb(g0, "list_song")) << "Down moves again\n" << g4;
+    // A on the dialog: what the classic list's engine does, and no pick.
+    ASSERT_FALSE(DriverLine(classic, "g6").empty()) << classic.driver;
+    EXPECT_EQ(DriverLine(browser, "g6"), DriverLine(classic, "g6"))
+        << "A on the dialog ended somewhere else than over the classic list\n" << browser.driver;
+    EXPECT_EQ(DriverLine(browser, "g6up"), DriverLine(classic, "g6up")) << browser.driver;
+    EXPECT_NE(DriverLine(browser, "g6"), "multiuser_screen")
+        << "the A went to the browser's song under the dialog\n" << browser.driver;
+    EXPECT_EQ(DriverLine(browser, "g6song"), DriverLine(classic, "g6song"))
+        << "a song was picked under the dialog\n" << browser.driver;
+}
+
 // ---------------------------------------------------------------------------
 // The auto rule against a body with hands (scripts/song_browser_hands.py)
 // ---------------------------------------------------------------------------

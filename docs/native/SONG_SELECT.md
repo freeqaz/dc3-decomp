@@ -212,7 +212,14 @@ buttons the keyboard map and the gamepad each contributed to the last poll).
   is: it draws its own backdrop (the game's indigo, drifting slowly) over
   `background_panel`.
 - With `DC3_SONG_BROWSER=1` a hand never gets the classic list.
-- The overlay and dialog cases (the browser standing aside) have no test.
+- The dialog case has a test
+  (`SongBrowserSwitchFlowTest.ADialogOverSongSelectTakesThePresses`: the
+  browser stands aside, comes back on the same song, and A on the dialog ends
+  where it ends over the classic list). An overlay panel over song select has
+  none.
+- Seen while writing that test, on the classic list too, so not the
+  browser's: A on an `error_message` dialog over song select dismisses the
+  dialog and also opens Playlists. Not looked into.
 
 ## Keys
 
