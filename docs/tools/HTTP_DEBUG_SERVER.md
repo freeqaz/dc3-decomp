@@ -341,6 +341,18 @@ curl -X POST 'localhost:9090/api/input/text?text=ab&key=home'
 
 # The natively drawn song browser on song select (DC3_SONG_BROWSER)
 curl localhost:9090/api/songbrowser/state
+# {"ok":true,"data":{"available":true,"mode":"on","on_song_select":true,
+#  "eligible":true,"shown":true,"why":"DC3_SONG_BROWSER=1","pad_in_use":true,
+#  "controller_mode":true,"text_capture":true,"leaving":false,"hints":"pad",
+#  "songs":45,"classic_song":"aint2proud2beg","focus":"list",
+#  "selected_song":"aint2proud2beg","list_song":"aint2proud2beg",
+#  "recent_song":"boomboompow","query":"","sort":"title","rows":53,
+#  "recents_shown":false,"highlight_rect":[56.0,187.0,804.0,51.0],"frames":642,
+#  "drew":true,"glyphs":436,"placeholder_glyphs":0,"quads":516,"draw_calls":52,
+#  "images_missing":0}}
+# Before song select has been entered in this run:
+# {"ok":true,"data":{"available":true,"on_song_select":false,"eligible":false,
+#  "shown":false,"why":"not on song select"}}
 ```
 
 `typed` is the number of characters queued by this request and `pending` the
@@ -370,7 +382,9 @@ queue's length afterwards; the text reaches a screen on its next frame.
 | `frames`, `drew`, `glyphs`, `placeholder_glyphs`, `quads`, `draw_calls`, `images_missing` | frames drawn so far and the last frame's numbers; `placeholder_glyphs` counts characters drawn as the missing-glyph box |
 
 The fields from `focus` to `highlight_rect` are present only while a visit has
-a screen. Tested by `SongBrowserInSongSelectTest`, `SongBrowserSwitchFlowTest`
+a screen. In a run that does not render (`MILO_NORENDER=1`) `drew` is false
+and `highlight_rect` and the frame's numbers are 0: nothing is laid out, but
+focus, the selected song, the query and the sort are all live. Tested by `SongBrowserInSongSelectTest`, `SongBrowserSwitchFlowTest`
 and `NativeUiHostGpuTest.SongBrowserRunsInTheEngine`.
 
 ### Screen + Frame (Phase 4)
