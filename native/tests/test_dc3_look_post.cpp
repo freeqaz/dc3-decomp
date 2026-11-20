@@ -1021,6 +1021,89 @@ TEST_F(DC3LookPostTest, FollowingOutputDofKeepsTheEnhancedRadius) {
     }
 }
 
+// The depth of field's constants come from the camera NgDOFProc::Set was
+// given, at Set (DOFProc_NG.cpp: scale and bias from that camera's planes),
+// not from whichever camera is current when the post pass runs: here another
+// camera with other planes is made current between Set and the pass, and the
+// Set camera is deleted before the pass (the planes are kept, not a pointer).
+// A Set with no camera still reads the current one. Sabotage: the DC3 shape's
+// rndshape::DofSetCamPlanes returning false (DofPass back on the current
+// camera) -- the constants are the other camera's, red.
+TEST_F(DC3LookPostTest, DofTakesThePlanesOfTheCameraSetWasGiven) {
+    ASSERT_TRUE(TheDOFProc);
+    GpuDevice &gpu = Gpu();
+    UIScreen *game = Hmx::Object::New<UIScreen>();
+    game->SetName("game_screen", ObjectDir::Main());
+    class ProbeUI : public UIManager {
+    public:
+        void SetCurrent(UIScreen *sc) { mCurrentScreen = sc; }
+    } ui;
+    UIManager *savedUI = TheUI;
+    TheUI = &ui;
+    ui.SetCurrent(game);
+    RndCam *prev = RndCam::Current();
+
+    constexpr int W = 320, H = 180;
+    wgpu::TextureDescriptor zd{};
+    zd.size = {(uint32_t)W, (uint32_t)H, 1};
+    zd.format = wgpu::TextureFormat::Depth32Float;
+    zd.sampleCount = 4;
+    zd.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+    wgpu::Texture depth = gpu.Device().CreateTexture(&zd);
+    wgpu::TextureView depthView = depth.CreateView();
+    wgpu::Texture scene = UploadOn(gpu, W, H, std::vector<uint8_t>((size_t)W * H * 4, 128));
+    wgpu::TextureView sv = scene.CreateView();
+    DofPass dof;
+    auto run = [&](float out[4]) {
+        wgpu::CommandEncoder enc = gpu.Device().CreateCommandEncoder();
+        const bool ran = dof.Run(enc, sv, wgpu::TextureFormat::RGBA8Unorm, depthView, 4, W, H, gpu, false);
+        EXPECT_TRUE(ran);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        for (int i = 0; i < 4; i++) out[i] = dof.LastCompositeConstants()[i];
+    };
+    // The shot's camera (a gameplay camera's planes) and another one.
+    RndCam *shot = Hmx::Object::New<RndCam>();
+    shot->SetFrustum(10.0f, 10000.0f, 0.6024178f, 1.0f);
+    RndCam *other = Hmx::Object::New<RndCam>();
+    other->SetFrustum(1.0f, 50.0f, 0.6024178f, 1.0f);
+    const float focal = 20.0f, blurDepth = 0.5f, maxBlur = 1.0f, minBlur = 0.0f;
+    float want[4], wrong[4];
+    DofPass::RetailConstants(focal, blurDepth, maxBlur, minBlur, shot->NearPlane(), shot->FarPlane(),
+                             shot->ZRange().x, shot->ZRange().y, want);
+    DofPass::RetailConstants(focal, blurDepth, maxBlur, minBlur, other->NearPlane(), other->FarPlane(),
+                             other->ZRange().x, other->ZRange().y, wrong);
+    ASSERT_NE(want[0], wrong[0]) << "the two cameras give different constants (non-vacuous)";
+
+    shot->Select();
+    TheDOFProc->Set(shot, focal, blurDepth, maxBlur, minBlur);
+    ASSERT_TRUE(TheDOFProc->Enabled());
+    other->Select();
+    delete shot;
+    float got[4];
+    run(got);
+    printf("DC3LookPost depth of field: Set's camera (near 10, far 10000) range %.4f, offset %.4f; "
+           "the current camera (near 1, far 50) would give %.4f, %.4f; the pass read %.4f, %.4f\n",
+           want[0], want[1], wrong[0], wrong[1], got[0], got[1]);
+    for (int i = 0; i < 4; i++) EXPECT_EQ(got[i], want[i]) << "constant " << i << " is not Set's camera's";
+
+    // No camera given: the current one, as before.
+    TheDOFProc->Set(nullptr, focal, blurDepth, maxBlur, minBlur);
+    run(got);
+    for (int i = 0; i < 4; i++) EXPECT_EQ(got[i], wrong[i]) << "constant " << i << ": a Set with no camera reads the current one";
+
+    dof.Terminate();
+    TheDOFProc->UnSet();
+    if (prev)
+        prev->Select();
+    else
+        RndCam::ClearCurrent();
+    delete other;
+    TheUI = savedUI;
+    ui.SetCurrent(nullptr);
+    delete game;
+}
+
 // {rnd native_look post_*}: the per-item tokens turn on their own post field
 // alone (the per-item cost A/B in engine doc §37.11 depends on it), and
 // post_retail / post_enhanced still set all three. Through Rnd's handler, as

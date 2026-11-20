@@ -31,6 +31,7 @@
 #include "gfx/PipelineManager.h"
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
+#include "platform/LookProfile.h"
 #include "platform/Rnd_Wgpu.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Font.h"
@@ -130,6 +131,115 @@ TEST_F(PipelineWarmTest, ALoadedDirDrawsWithNoPipelineCreate) {
            (unsigned long long)queued, (unsigned long long)(s1.finished - s0.finished),
            (unsigned long long)(s1.drawn - s0.drawn), meshes.size(), seq.c_str());
 
+    delete cam;
+    delete text;
+    delete star;
+    delete fonts;
+}
+
+// item 19 (a): a discrete-GPU window resized across the render-scale step
+// (1920x1080 at 2x <-> 2560x1440 at 1x) moves the world texture LOD bias
+// (milo::MaterialLodBiasAt) and the output-pixel scale text and HUD sample at,
+// and that must compile nothing, the FIRST time too. The bias is a value in the
+// scene block, not a pipeline constant; the output-pixel scale is a pipeline
+// constant, so the cache keys on it (PipelineKey::outputPixelScale: a step
+// back finds the old pipelines) and a dir's text and HUD keys are warmed at
+// each scale the window can reach (PipelineManager::SetOutputPixelScaleRange,
+// from GpuDevice::RenderScaleRange: 1 and 2 on a discrete GPU's window). The
+// headless test device draws at 1x and cannot resize, so the step is made the
+// way a resize makes it to the renderer: the range a discrete window has is
+// given before the dirs load, the bias the scene block carries moves (through
+// the inspection switch, which writes the same field) and the manager is told
+// the frame's new output-pixel scale (BeginDrawing's SetOutputPixelScale).
+// The frame draws the dir the warm test loads, and a text, with a camera, as a
+// song draws them; the 2x side is never drawn before the step. Non-vacuous:
+// the scene block's bias is read back and has moved.
+// Sabotage (item19/a/SABOTAGE.txt): the bias baked back into the pipeline
+// (kTakesLodBias given the value, the cache keyed on it) -> the bias step
+// creates the world keys; the warm at the current scale only (WarmAtEachScale
+// one-scale) -> the step up creates the text page's; SetOutputPixelScale
+// erasing the sampling pipelines again -> the step down after up creates them.
+TEST_F(PipelineWarmTest, ARenderScaleStepCompilesNoPipeline) {
+    if (IsSkipped()) return;
+    if (!HaveGpu()) GTEST_SKIP() << "no GPU device (MILO_NORENDER or no adapter)";
+    if (!gWgpuRnd->Pipelines().MaterialTakesLodBias())
+        GTEST_SKIP() << "the run's look takes no LOD bias (DC3_LOOK=retail)";
+    PipelineManager &pm = gWgpuRnd->Pipelines();
+    const float rangeLo = pm.OutputPixelScaleLo(), rangeHi = pm.OutputPixelScaleHi();
+    pm.SetOutputPixelScaleRange(1.0f, 2.0f);  // a discrete GPU's window
+    ObjectDir *fonts = DirLoader::LoadObjects(
+        FilePath("ui/resource/fonts/gen/default.milo_xbox"), nullptr, nullptr);
+    if (!fonts) {
+        pm.SetOutputPixelScaleRange(rangeLo, rangeHi);
+        GTEST_SKIP() << "no archive UI fonts";
+    }
+    ObjectDir *star =
+        DirLoader::LoadObjects(FilePath("ui/hud/gen/score_star.milo_xbox"), nullptr, nullptr);
+    if (!star) {
+        delete fonts;
+        pm.SetOutputPixelScaleRange(rangeLo, rangeHi);
+        GTEST_SKIP() << "no archive HUD";
+    }
+    ASSERT_TRUE(DrainWarms());
+    std::vector<RndMesh *> meshes;
+    for (ObjDirItr<RndMesh> it(star, true); it != nullptr; ++it) meshes.push_back(it);
+    ASSERT_FALSE(meshes.empty());
+    RndFont *font = nullptr;
+    for (ObjDirItr<RndFont> it(fonts, true); it != nullptr && !font; ++it) font = it;
+    ASSERT_NE(font, nullptr);
+    RndText *text = Hmx::Object::New<RndText>();
+    DataArrayPtr fontProp(Symbol("styles"), 0, Symbol("font"));
+    text->SetProperty(fontProp, DataNode(font));
+    text->SetTextASCII("0123 Flashcard");
+    text->UpdateText();
+    RndCam *cam = Hmx::Object::New<RndCam>();
+    cam->SetFrustum(1.0f, 1000.0f, 1.0f, 0.75f);
+    // One frame drawing the dir (and the text) as the song draws them; returns
+    // the pipelines it created or waited for, and the bias the world draws read.
+    // pixelScale: the output-pixel scale the frame is drawn at (BeginDrawing
+    // sets the device's, 1 headless; a 2x frame's is 2).
+    auto frame = [&](float pixelScale, float &bias) {
+        const uint64_t c0 = GpuPipelineCreateCount(), w0 = GpuPipelineWaitCount();
+        TheRnd.BeginDrawing();
+        pm.SetOutputPixelScale(pixelScale);
+        RndCam *prev = RndCam::Current();
+        cam->Select();
+        for (RndMesh *m : meshes) m->DrawShowing();
+        bias = gWgpuRnd->LastSceneMaterialLodBias();
+        text->DrawShowing();
+        if (prev) prev->Select();
+        TheRnd.EndDrawing();
+        return (GpuPipelineCreateCount() - c0) + (GpuPipelineWaitCount() - w0);
+    };
+    TakeRecentPipelineLabels();
+    float b1 = 0.0f, b2 = 0.0f, b3 = 0.0f, b4 = 0.0f;
+    // The size the window starts at (1x), drawn as the warm left it.
+    const uint64_t first = frame(1.0f, b1);
+    const std::string firstLabels = Join(TakeRecentPipelineLabels());
+    // The step's bias move alone: the scene block carries a bias no frame
+    // drew with, and the world draws take it from there.
+    ASSERT_TRUE(milo::SetLookLodBiasForInspection(false, -0.25f));
+    const uint64_t biasStep = frame(1.0f, b2);
+    const std::string biasLabels = Join(TakeRecentPipelineLabels());
+    // The whole step, 1x -> 2x -> 1x, with the bias moving each time.
+    milo::SetLookLodBiasForInspection(false, -0.75f);
+    const uint64_t up = frame(2.0f, b3);
+    const std::string upLabels = Join(TakeRecentPipelineLabels());
+    milo::SetLookLodBiasForInspection(true, 0.0f);
+    const uint64_t down = frame(1.0f, b4);
+    const std::string downLabels = Join(TakeRecentPipelineLabels());
+    printf("[ScaleStep] bias %.2f -> %.2f -> %.2f -> %.2f; creates+waits: first %llu, bias "
+           "step %llu, up %llu, down %llu\n", b1, b2, b3, b4, (unsigned long long)first,
+           (unsigned long long)biasStep, (unsigned long long)up, (unsigned long long)down);
+    EXPECT_EQ(first, 0u) << firstLabels;
+    EXPECT_FLOAT_EQ(b2, -0.25f) << "the world draws read the moved bias (non-vacuous)";
+    EXPECT_FLOAT_EQ(b3, -0.75f);
+    EXPECT_NE(b1, b2);
+    EXPECT_EQ(biasStep, 0u) << biasLabels;
+    EXPECT_EQ(up, 0u) << "1x -> 2x: " << upLabels;
+    EXPECT_EQ(down, 0u) << "2x -> 1x: " << downLabels;
+    pm.SetOutputPixelScale(gWgpuRnd->Gpu().SupersampleScale());
+    pm.SetOutputPixelScaleRange(rangeLo, rangeHi);
     delete cam;
     delete text;
     delete star;

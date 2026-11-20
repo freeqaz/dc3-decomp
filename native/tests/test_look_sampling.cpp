@@ -6,7 +6,9 @@
 // constants carry no anisotropy and LOD bias 0, DxCubeTex::Sync creates a cube
 // with its whole chain (numMips = mNumMips + 1), and the world draws one
 // sample per pixel. Enhanced (the default) uploads whole chains filtered 16x
-// anisotropically with a -1 LOD bias on world textures, keeps text and HUD at
+// anisotropically with a LOD bias on world textures that follows the render
+// scale (MaterialLodBiasAt; 0 at 1x and 2x since item 19 a, still read from
+// the scene uniforms so it can be moved without a compile), keeps text and HUD at
 // the original's two levels and unbiased, and draws 2x2 supersampled on a
 // discrete GPU when it presents to a window (not on an integrated one, not
 // headless unless MILO_RENDER_SCALE asks), text and HUD still sampled once per
@@ -22,11 +24,14 @@
 #include "platform/Rnd_Wgpu.h"
 #include "platform/TexGpu.h"
 #include "rndobj/Bitmap.h"
+#include "rndobj/Cam.h"
 #include "rndobj/CubeTex.h"
 #include "rndobj/Mat.h"
+#include "rndobj/Rnd.h"
 #include "rndobj/Tex.h"
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -42,7 +47,7 @@ struct UiDrawTerms {
 UiDrawTerms UiDrawTermsFor(bool frameInOverlay);
 MaterialParams BuildMaterialParams(RndMat *mat, bool isTextMesh, const UiDrawTerms &uiTerms);
 void ApplyLookSampling(SamplerDesc &desc, bool uiClass, const milo::LookSettings &look);
-bool MaterialDrawTakesLodBias(bool uiClass, float materialLodBias);
+bool MaterialDrawTakesLodBias(bool uiClass, bool lookTakesLodBias);
 bool MaterialDrawSamplesAtOutputPixels(bool uiClass, bool toTextureTarget, float outputPixelScale);
 
 using milo::Look;
@@ -79,7 +84,9 @@ TEST_F(LookSamplingTest, RetailIsTheOriginalAndEnhancedDepartsAsDocumented) {
         ScopedLookOverride retail(LookProfile::Retail);
         EXPECT_EQ(Look().bitmapMipLevels, 2) << "DxTex::SyncBitmap: min(NumMips()+1, 2)";
         EXPECT_EQ(Look().maxAnisotropy, 1) << "fetch constant aniso_filter 0";
-        EXPECT_EQ(Look().lodBias, 0.0f) << "fetch constant lod_bias 0";
+        EXPECT_EQ(Look().lodBiasScale1, 0.0f) << "fetch constant lod_bias 0";
+        EXPECT_EQ(Look().lodBiasScale2, 0.0f);
+        EXPECT_FALSE(milo::LookTakesLodBias(Look())) << "no pipeline takes a bias";
         EXPECT_EQ(Look().uiMipLevels, 0) << "text gets the regular rule, no extra clamp";
         EXPECT_TRUE(Look().cubeMipChain) << "DxCubeTex::Sync: numMips = mNumMips + 1";
         EXPECT_EQ(Look().renderScale, 1.0f) << "one sample per pixel";
@@ -94,7 +101,14 @@ TEST_F(LookSamplingTest, RetailIsTheOriginalAndEnhancedDepartsAsDocumented) {
         EXPECT_EQ(Look().maxAnisotropy, 16);
         EXPECT_EQ(Look().uiMipLevels, 2) << "text/HUD keep the original's two levels";
         EXPECT_TRUE(Look().cubeMipChain);
-        EXPECT_EQ(Look().lodBias, -1.0f) << "world one level sharper (text/HUD exempt)";
+        // Item 19 (a): 0 at both ends (-1 cost more shimmer than the
+        // sharpness it bought at every output size measured, 720-2160 rows,
+        // scale 1 and 2); the pipelines still read the bias, so the
+        // lod_bias_* tokens move it live.
+        EXPECT_EQ(Look().lodBiasScale1, 0.0f) << "item 19 (a): the scale-1 bias";
+        EXPECT_EQ(Look().lodBiasScale2, 0.0f) << "item 19 (a): the scale-2 bias";
+        EXPECT_TRUE(Look().materialLodBias) << "world pipelines stay biasable for inspection";
+        EXPECT_TRUE(milo::LookTakesLodBias(Look()));
         EXPECT_EQ(Look().renderScale, 2.0f) << "2x2 supersampling on a discrete GPU (windowed)";
         // A handheld's iGPU spends ~2 ms on the 1x main pass; a render scale
         // multiplies that by its square, so it stays off there.
@@ -139,31 +153,86 @@ TEST_F(LookSamplingTest, WorldDrawsFilterAnisotropicallyTextKeepsTwoLevels) {
 
 // The look's LOD bias reaches world pipelines only: a text or HUD-overlay
 // draw keys an unbiased pipeline whatever the bias, as the original's samples
-// (lod_bias 0), and no bias set means no draw keys a biased one. Sabotage:
-// MaterialDrawTakesLodBias ignoring uiClass, or LodBiasFor ignoring the key --
-// red.
+// (lod_bias 0), and a look without a bias keys no biased pipeline. Sabotage:
+// MaterialDrawTakesLodBias ignoring uiClass, or LodBiasFlagFor ignoring the
+// key -- red.
 TEST_F(LookSamplingTest, TheLodBiasIsForWorldDrawsOnly) {
     if (IsSkipped()) return;
-    const float bias = -1.0f;
-    EXPECT_TRUE(MaterialDrawTakesLodBias(false, bias));
-    EXPECT_FALSE(MaterialDrawTakesLodBias(true, bias)) << "text/HUD stay unbiased";
-    EXPECT_FALSE(MaterialDrawTakesLodBias(false, 0.0f));
-    EXPECT_FALSE(MaterialDrawTakesLodBias(true, 0.0f));
+    EXPECT_TRUE(MaterialDrawTakesLodBias(false, true));
+    EXPECT_FALSE(MaterialDrawTakesLodBias(true, true)) << "text/HUD stay unbiased";
+    EXPECT_FALSE(MaterialDrawTakesLodBias(false, false));
+    EXPECT_FALSE(MaterialDrawTakesLodBias(true, false));
 
     PipelineManager pm;
-    pm.SetMaterialLodBias(bias);
+    pm.SetMaterialTakesLodBias(true);
     PipelineKey world{}, text{};
-    world.lodBias = MaterialDrawTakesLodBias(false, pm.MaterialLodBias());
-    text.lodBias = MaterialDrawTakesLodBias(true, pm.MaterialLodBias());
-    EXPECT_EQ(pm.LodBiasFor(world), bias);
-    EXPECT_EQ(pm.LodBiasFor(text), 0.0f);
+    world.lodBias = MaterialDrawTakesLodBias(false, pm.MaterialTakesLodBias());
+    text.lodBias = MaterialDrawTakesLodBias(true, pm.MaterialTakesLodBias());
+    EXPECT_EQ(pm.LodBiasFlagFor(world), 1.0f);
+    EXPECT_EQ(pm.LodBiasFlagFor(text), 0.0f);
     EXPECT_FALSE(world == text) << "the two must be distinct cached pipelines";
     EXPECT_NE(PipelineKeyHash{}(world), PipelineKeyHash{}(text));
 
     {
         ScopedLookOverride retail(LookProfile::Retail);
-        EXPECT_FALSE(MaterialDrawTakesLodBias(false, Look().lodBias));
+        EXPECT_FALSE(MaterialDrawTakesLodBias(false, milo::LookTakesLodBias(Look())));
     }
+}
+
+// The bias follows the scale a pass draws at (item 19 a): the rule's value at
+// 1x and at 2x, linear in log2(scale) between, an unknown scale read as 1x,
+// and a texture target -- drawn at its own size, never box-filtered -- at 1x
+// whatever the frame's scale. The inspection switch overrides the rule at
+// every scale and lod_bias_rule gives it back. Sabotage: MaterialLodBiasAt
+// returning lodBiasScale2 at every scale, or PassMaterialLodBias ignoring
+// toTextureTarget -- red.
+TEST_F(LookSamplingTest, TheLodBiasFollowsTheRenderScale) {
+    if (IsSkipped()) return;
+    ScopedLookOverride enhanced(LookProfile::Enhanced);
+    milo::LookSettings rule = Look();
+    rule.lodBiasScale1 = -0.25f;   // distinct values: the shape, not the look's numbers
+    rule.lodBiasScale2 = -1.25f;
+    EXPECT_FLOAT_EQ(milo::MaterialLodBiasAt(rule, 1.0f), -0.25f);
+    EXPECT_FLOAT_EQ(milo::MaterialLodBiasAt(rule, 2.0f), -1.25f);
+    EXPECT_FLOAT_EQ(milo::MaterialLodBiasAt(rule, 1.5f), -0.25f - log2f(1.5f));
+    EXPECT_FLOAT_EQ(milo::MaterialLodBiasAt(rule, 0.5f), -0.25f) << "below 1: the 1x value";
+    EXPECT_FLOAT_EQ(milo::MaterialLodBiasAt(rule, 3.0f), -1.25f) << "above 2: the 2x value";
+    EXPECT_FLOAT_EQ(milo::MaterialLodBiasAt(rule, NAN), -0.25f) << "unknown: the 1x value";
+    EXPECT_FLOAT_EQ(milo::PassMaterialLodBias(rule, false, 2.0f), -1.25f) << "the frame at 2x";
+    EXPECT_FLOAT_EQ(milo::PassMaterialLodBias(rule, true, 2.0f), -0.25f)
+        << "a texture target is drawn at 1x";
+    rule.lodBiasInspected = true;
+    rule.lodBiasInspect = -0.5f;
+    EXPECT_FLOAT_EQ(milo::MaterialLodBiasAt(rule, 1.0f), -0.5f);
+    EXPECT_FLOAT_EQ(milo::MaterialLodBiasAt(rule, 2.0f), -0.5f);
+
+    // The live switch, and the scene block: the bias a pass's block carries is
+    // the one now in force (the block is rewritten when it moves, no pipeline
+    // made). The test device draws at 1x.
+    ASSERT_TRUE(milo::SetLookLodBiasForInspection(false, -0.5f));
+    EXPECT_FLOAT_EQ(milo::MaterialLodBiasAt(Look(), 2.0f), -0.5f);
+    float written = 99.0f, writtenRule = 99.0f;
+    if (HaveGpu()) {
+        RndCam *prev = RndCam::Current();
+        RndCam *cam = Hmx::Object::New<RndCam>();
+        cam->SetFrustum(1.0f, 1000.0f, 1.0f, 0.75f);
+        TheRnd.BeginDrawing();
+        cam->Select();
+        gWgpuRnd->EnsureSceneUniformsCurrent();
+        written = gWgpuRnd->LastSceneMaterialLodBias();
+        milo::SetLookLodBiasForInspection(true, 0.0f);
+        gWgpuRnd->EnsureSceneUniformsCurrent();   // same camera: the bias alone moved
+        writtenRule = gWgpuRnd->LastSceneMaterialLodBias();
+        if (prev) prev->Select(); else RndCam::ClearCurrent();
+        TheRnd.EndDrawing();
+        delete cam;
+    }
+    milo::SetLookLodBiasForInspection(true, 0.0f);
+    EXPECT_FALSE(Look().lodBiasInspected) << "lod_bias_rule gives the rule back";
+    if (!HaveGpu()) GTEST_SKIP() << "no GPU device (the pure rule above ran)";
+    EXPECT_FLOAT_EQ(written, -0.5f) << "the inspected bias reached the scene block";
+    EXPECT_FLOAT_EQ(writtenRule, milo::MaterialLodBiasAt(Look(), gWgpuRnd->Gpu().SupersampleScale()))
+        << "and the rule's, on the next write for the same camera";
 }
 
 // A render-scaled frame keeps text and HUD art as an unscaled frame draws it:

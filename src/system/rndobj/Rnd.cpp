@@ -188,7 +188,10 @@ Rnd::Rnd()
 // post_precision|post_bloom_filter|post_dof_filter turn on that one post field
 // alone (the per-item cost A/B); specular_aa_on|specular_aa_off switch
 // specular antialiasing alone (item 18 c's shimmer and cost A/B);
-// {rnd native_look} alone reports it. Returns the profile now in force.
+// lod_bias_0|lod_bias_m05|lod_bias_m1 put that world texture LOD bias at
+// every render scale and lod_bias_rule restores the look's rule by scale
+// (item 19 a's A/B); {rnd native_look} alone reports it. Returns the profile
+// now in force.
 static Symbol NativeLook(const DataArray *msg) {
     if (msg->Size() > 2) {
         const Symbol s = msg->Sym(2);
@@ -201,9 +204,14 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "post_dof_filter") milo::SetLookPostFieldsForInspection(false, false, true);
         else if (s == "specular_aa_on") milo::SetLookSpecularAAForInspection(true);
         else if (s == "specular_aa_off") milo::SetLookSpecularAAForInspection(false);
+        else if (s == "lod_bias_0") milo::SetLookLodBiasForInspection(false, 0.0f);
+        else if (s == "lod_bias_m05") milo::SetLookLodBiasForInspection(false, -0.5f);
+        else if (s == "lod_bias_m1") milo::SetLookLodBiasForInspection(false, -1.0f);
+        else if (s == "lod_bias_rule") milo::SetLookLodBiasForInspection(true, 0.0f);
         else MILO_NOTIFY("native_look: %s is not retail, enhanced, post_retail, post_enhanced, "
-                         "post_precision, post_bloom_filter, post_dof_filter, specular_aa_on or "
-                         "specular_aa_off", s.Str());
+                         "post_precision, post_bloom_filter, post_dof_filter, specular_aa_on, "
+                         "specular_aa_off, lod_bias_0, lod_bias_m05, lod_bias_m1 or "
+                         "lod_bias_rule", s.Str());
     }
     return milo::LookProfileName(milo::Look().profile);
 }
