@@ -298,16 +298,19 @@ App::App(int argc, char **argv) {
     }
 #endif
 
-    // Splash screens (ESRB + Harmonix logos) — same as Xbox boot.
-    // Disable with DC3_SHOW_SPLASH=0.
+    // Splash screens (ESRB + Harmonix logos) — same as Xbox boot, on a first
+    // launch.  A console that has been played before (its global options are
+    // on disk) does not show them again; DC3_SHOW_SPLASH=1/0 or
+    // DC3_BOOT_INTRO=1/0 decide it whatever the disk says (the boot plan,
+    // native/src/platform/System_Native.cpp).  This is the plan's first read,
+    // before anything in this run can write the global options.
     // On web, the HTML overlay plays the splash video while WASM boots —
     // the engine's synchronous Splash system can't render on Emscripten
     // (no rAF yield), so skip it to avoid wasting boot time.
-    const char *splashEnv = getenv("DC3_SHOW_SPLASH");
+    extern bool Dc3BootShowSplash();
+    bool showSplash = Dc3BootShowSplash();
 #ifdef __EMSCRIPTEN__
-    bool showSplash = false;
-#else
-    bool showSplash = !splashEnv || strcmp(splashEnv, "0") != 0;
+    showSplash = false;
 #endif
     Splash splash;
     // The image's splash setup, verbatim: -fast (or a loose-file run) does not

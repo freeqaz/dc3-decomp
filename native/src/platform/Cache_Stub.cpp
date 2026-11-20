@@ -24,6 +24,8 @@
 //     every caller polling forever.
 
 #include "Cache_Native.h"
+#include "NativeSettings.h"
+#include "SaveStore_Web.h"
 #ifndef __EMSCRIPTEN__
 #include "gfx/PipelineDiskCache.h"
 #endif
@@ -40,6 +42,7 @@
 #include <cstring>
 #include <ctime>
 #include <dirent.h>
+#include <string>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/types.h>
@@ -92,6 +95,17 @@ static void MakeCacheDirPath(char *buf, size_t bufSize, const char *name) {
     char root[512];
     CacheRootDir(root, sizeof(root));
     snprintf(buf, bufSize, "%s/%s", root, name);
+}
+
+// The global options file: cache "global", file "global" (SaveLoadManager.cpp
+// kStrGlobalCacheName; 0x39 bytes, ProfileMgr::SaveGlobalOptions).  Its
+// presence at startup is what "this console has been played before" means to
+// the boot plan (System_Native.cpp Dc3BootPlanGet).  Declared in
+// NativeSettings.h; defined here so the root is spelt once.
+std::string Dc3GlobalOptionsPath() {
+    char dir[600];
+    MakeCacheDirPath(dir, sizeof(dir), "global");
+    return std::string(dir) + "/global";
 }
 
 // Normalise an in-cache path to a relative POSIX path ("a\b" -> "a/b",
@@ -412,6 +426,7 @@ bool CacheNative::DeleteSync(const char *cc) {
     char dir[512];
     MakeCacheDirPath(dir, sizeof(dir), mCacheID.Name());
     RemoveEmptyParents(path, dir);
+    Dc3SaveStoreChanged(); // web: drop it from the browser's store too
     mLastResult = kCache_NoError;
     return true;
 }
@@ -547,6 +562,10 @@ bool CacheNative::WriteAsync(const char *cc, void *data, unsigned int size, Hmx:
             MILO_NOTIFY("CacheNative::WriteAsync(): wrote %zu of %u bytes to '%s'\n", written, size, path);
         } else {
             mLastResult = kCache_NoError;
+            // web: the file is in MEMFS; hand it to the browser's store
+            // (W-36). The page keeps the global options cache and leaves
+            // the song cache, which every boot rebuilds, out of it.
+            Dc3SaveStoreChanged();
         }
     }
     // The op ends BEFORE the result is posted, and nothing touches `this`
@@ -580,6 +599,7 @@ bool CacheNative::DeleteAsync(const char *cc, Hmx::Object *) {
         char dir[512];
         MakeCacheDirPath(dir, sizeof(dir), mCacheID.Name());
         RemoveEmptyParents(path, dir);
+        Dc3SaveStoreChanged(); // web: drop it from the browser's store too
         mLastResult = kCache_NoError;
     }
     mOpCur = kOpNone;
@@ -812,6 +832,9 @@ bool CacheMgrNative::DeleteAsync(CacheID *id) {
     if (!ok) {
         MILO_NOTIFY("CacheMgrNative::DeleteAsync(): failed to remove '%s'\n", dir);
     }
+    // web: whatever is gone from the cache is dropped from the browser's store
+    // too (also after a partial removal: the store follows the files).
+    Dc3SaveStoreChanged();
     EndOp(kOpDelete, ok ? kCache_NoError : kCache_ErrorUnknown);
     return true;
 }

@@ -1581,6 +1581,12 @@ target_link_options(dc3-web PRIVATE
     # missing_stubs.js pre-js from milo_engine_apply_web_target_options.
     "SHELL:--pre-js ${CMAKE_CURRENT_SOURCE_DIR}/web/dc3_pre.js"
 )
+# The pre-js is pasted into dc3-web.js at link time, and a path in the link
+# options is not a dependency: without this, an edit to dc3_pre.js alone left
+# the deployed dc3-web.js as it was (measured 2026-11-20: "Built target
+# dc3-web" with no link step, and the old save-store code still served).
+set_property(TARGET dc3-web APPEND PROPERTY LINK_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/web/dc3_pre.js)
 if(MILO_WEB_ASYNC)
     target_link_options(dc3-web PRIVATE
         -sJSPI_EXPORTS=["_main","_dc3MainLoopTick","dc3MainLoopTick"]

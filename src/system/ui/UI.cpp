@@ -1,8 +1,5 @@
 #include "ui\UI.h"
 #include "UIComponent.h"
-#ifdef __EMSCRIPTEN__
-#include <emscripten/em_asm.h>
-#endif
 #include "obj\Data.h"
 #include "obj\DataFile.h"
 #include "obj\DataUtl.h"
@@ -613,24 +610,33 @@ void UIManager::Poll() {
                 const char *to;
                 int delay;
             };
-            // DC3_FAST_BOOT=1 (env var) or ?fast_boot=1 (URL param on web):
-            // skip boot screens in 10 frames instead of ~360
+            // The boot plan (native/src/platform/System_Native.cpp, PLAN H-123)
+            // decides which of the rows below run:
+            //   fast boot -- DC3_FAST_BOOT=1 (env var) or ?fast_boot=1 (URL
+            //     param on web): every row, in 10 frames instead of ~360
+            //   a console that has been played before (its global options were
+            //     on disk at startup) -- the two intro rows only, once: attract
+            //     and the autosave warning pass in 10 frames and the game then
+            //     waits on title_screen for the player, as the original does.
+            //     DC3_BOOT_INTRO=1 shows them again.
+            //   otherwise (a first launch, DC3_FAST_BOOT=0) -- none.
+            extern bool Dc3BootFast();
+            extern bool Dc3BootSkipIntro();
             static int sFastBoot = -1;
+            static bool sSkipIntro = false;
             if (sFastBoot < 0) {
-                const char *fb = getenv("DC3_FAST_BOOT");
-                sFastBoot = (fb && atoi(fb) != 0) ? 1 : 0;
-#ifdef __EMSCRIPTEN__
-                if (!sFastBoot) {
-                    sFastBoot = EM_ASM_INT({
-                        var s = location.search || "";
-                        return (s.indexOf("fast_boot=1") >= 0) ? 1 : 0;
-                    });
-                }
-#endif
+                sFastBoot = Dc3BootFast() ? 1 : 0;
+                sSkipIntro = !sFastBoot && Dc3BootSkipIntro();
                 if (sFastBoot)
                     printf("DC3 UI: Fast boot enabled (10-frame transitions)\n");
             }
-            int fast = sFastBoot ? 10 : 0;
+            // The intro is over at the first screen that is not part of it
+            // (title_screen), so the title and everything after it in the
+            // session is the player's.
+            if (sSkipIntro && strcmp(curName, "attract_screen")
+                && strcmp(curName, "autosave_warning_screen"))
+                sSkipIntro = false;
+            int fast = (sFastBoot || sSkipIntro) ? 10 : 0;
 
             static const BootAdvance sBoot[] = {
                 {"attract_screen", "autosave_warning_screen", 90},

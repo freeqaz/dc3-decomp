@@ -19,6 +19,9 @@
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 // Dc3EnvFlag — value-parsed boolean env gate for native runtime toggles.
 //
@@ -209,6 +212,112 @@ void Dc3ProfileApply() {
                 kept.c_str());
     Dc3ProfileBanner(rows, n);
 }
+
+// ---------------------------------------------------------------------------
+// The boot sequence (PLAN H-123).
+//
+// The original runs the same sequence on every launch: the ESRB and Harmonix
+// splash screens, the attract movie (83 s unless skipped), a 4 s autosave
+// warning with no skip, then the title.  That is right once.  A console whose
+// global options are on disk has shown all of it, so its next launches pass
+// the splash screens, attract and the warning and wait on the title screen.
+//
+// What decides it is the DISK, read once before the game can write the file
+// (App::App), plus three variables that each win over it when set:
+//
+//   DC3_BOOT_INTRO=1 / 0   the original sequence always / never (the one
+//                          switch back; web: ?env=DC3_BOOT_INTRO=1)
+//   DC3_SHOW_SPLASH=1 / 0  the splash screens only
+//   DC3_FAST_BOOT=1        the test suites' boot: attract, the warning, the
+//                          title confirm and the save wait all pass by
+//                          themselves, to main_screen
+//   DC3_FAST_BOOT=0        what it always gave: the original sequence, and no
+//                          screen ever passed for the player
+//
+// This is NOT a profile row and must not become one: it depends on the
+// console's state, not on who is playing, and it applies under dev and release
+// alike.  It also stays inside what the profile rules allow by default: it
+// stops at the title screen, so the confirm that sets the initial profiles and
+// $post_load_dest_screen is still the player's (DC3_FAST_BOOT, which makes
+// that confirm itself, stays opt-in).  A first launch -- and every test, since
+// each runs on its own empty DC3_CACHE_DIR -- is the original sequence.
+//
+// The warning screen is passed, not removed from the flow: its enter handler
+// preloads panels the shell needs, so the screen is still entered and left by
+// the same transition the original uses (UIManager::Poll, src/system/ui/UI.cpp).
+// ---------------------------------------------------------------------------
+static bool EnvSet(const char *v) { return v && *v; }
+
+static bool EnvOff(const char *v) {
+    return strcmp(v, "0") == 0 || strcasecmp(v, "false") == 0 || strcasecmp(v, "off") == 0 ||
+           strcasecmp(v, "no") == 0;
+}
+
+Dc3BootPlan Dc3BootPlanResolve(bool globalOptionsOnDisk, const char *showSplashEnv,
+                               const char *fastBootEnv, const char *bootIntroEnv,
+                               bool webFastBootParam) {
+    Dc3BootPlan plan;
+    plan.returning = globalOptionsOnDisk;
+    // DC3_FAST_BOOT keeps the parse UIManager::Poll always had: atoi != 0.
+    const bool fastOn = EnvSet(fastBootEnv) && atoi(fastBootEnv) != 0;
+    const bool fastOff = EnvSet(fastBootEnv) && !fastOn;
+    // An explicit DC3_FAST_BOOT=0 asks for what it always gave: the original.
+    const bool intro = EnvSet(bootIntroEnv) ? !EnvOff(bootIntroEnv)
+                                            : (fastOff || !globalOptionsOnDisk);
+    plan.showSplash = EnvSet(showSplashEnv) ? !EnvOff(showSplashEnv) : intro;
+    plan.fastBoot = fastOn || webFastBootParam;
+    plan.skipIntro = plan.fastBoot || (!intro && !fastOff);
+    if (plan.fastBoot)
+        plan.why = fastOn ? "DC3_FAST_BOOT" : "?fast_boot=1";
+    else if (EnvSet(bootIntroEnv))
+        plan.why = intro ? "DC3_BOOT_INTRO=1" : "DC3_BOOT_INTRO=0";
+    else if (fastOff)
+        plan.why = "DC3_FAST_BOOT=0";
+    else
+        plan.why = globalOptionsOnDisk ? "this console has been played before"
+                                       : "first launch on this console";
+    return plan;
+}
+
+// A regular, non-empty file: a directory of that name, or a file a failed
+// write left empty, is not a console that has been played.
+bool Dc3GlobalOptionsOnDisk() {
+    struct stat st;
+    return stat(Dc3GlobalOptionsPath().c_str(), &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0;
+}
+
+const Dc3BootPlan &Dc3BootPlanGet() {
+    static bool sDecided = false;
+    static Dc3BootPlan sPlan;
+    if (!sDecided) {
+        sDecided = true;
+        const std::string path = Dc3GlobalOptionsPath();
+        const bool onDisk = Dc3GlobalOptionsOnDisk();
+        bool webFastBoot = false;
+#ifdef __EMSCRIPTEN__
+        webFastBoot = EM_ASM_INT({
+            return ((location.search || "").indexOf("fast_boot=1") >= 0) ? 1 : 0;
+        }) != 0;
+#endif
+        sPlan = Dc3BootPlanResolve(onDisk, getenv("DC3_SHOW_SPLASH"), getenv("DC3_FAST_BOOT"),
+                                   getenv("DC3_BOOT_INTRO"), webFastBoot);
+        const char *seq = sPlan.fastBoot ? "fast boot to the main menu"
+            : sPlan.skipIntro ? "straight to the title screen"
+                              : "the original sequence";
+        fprintf(stderr,
+                "DC3 Boot: %s (%s); splash screens %s; global options %s at %s%s\n", seq,
+                sPlan.why, sPlan.showSplash ? "on" : "off", onDisk ? "found" : "not found",
+                path.c_str(),
+                sPlan.skipIntro && !sPlan.fastBoot ? "; DC3_BOOT_INTRO=1 for the original sequence"
+                                                  : "");
+    }
+    return sPlan;
+}
+
+// For PPC units, which declare these with a local `extern` (no struct).
+bool Dc3BootShowSplash() { return Dc3BootPlanGet().showSplash; }
+bool Dc3BootFast() { return Dc3BootPlanGet().fastBoot; }
+bool Dc3BootSkipIntro() { return Dc3BootPlanGet().skipIntro; }
 
 // The native controller-mode policy, DC3_CONTROLLER_MODE.
 //

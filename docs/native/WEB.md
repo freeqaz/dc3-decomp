@@ -882,6 +882,144 @@ packages in place; a boot fetches only their song lists (`/api/bundle/dlc`,
 measurements and the driver (`scripts/web/dlc-songs.mjs`) are in
 [DLC.md](DLC.md#web-d-7-w-23w-28-lane-np-webdlc).
 
+## Save data (W-36)
+
+The web build keeps the player's save data across page reloads and browser
+restarts, in the browser's IndexedDB. Before 2026-11-20 it kept nothing: the
+game's save files are ordinary files, on web they are in MEMFS, and a reload
+started a new console, so every visit had no scores, default options and every
+first-run tutorial again.
+
+**What is stored** (`native/web/dc3_pre.js`, "Save store"; database
+`dc3-save`, object store `files`, one record a file):
+
+| File | Written by | Size | Holds |
+|---|---|---|---|
+| `<DC3_SAVE_DIR>/profile_0_save.dat` (every file in that directory) | `MemcardMgr_Stub.cpp` | 1,153,964 bytes | the profile: scores, stars, unlocks, per-profile options |
+| `<DC3_CACHE_DIR>/global/global` (every file in that directory) | `Cache_Stub.cpp` | 57 bytes | the global options, among them which tutorials have been seen |
+
+That is 1,154,021 bytes, and nothing else is stored. Those are also all the
+files the game had written under the two directories after a whole song, but
+for one (`window.dc3SaveFiles()`, measured): the song cache,
+`<DC3_CACHE_DIR>/songcache/songcache`, 95,101 bytes with the DLC song lists.
+It is left out on purpose. The game builds it at every boot from the song
+lists the page fetches, as it did before there was a store, so keeping it
+would only add a second copy that can go stale against the server's packages.
+The desktop build's 67 MB pipeline cache (`<DC3_CACHE_DIR>/dawn-pipelines`)
+does not exist on web.
+
+**When.**
+
+- **Boot.** The records are written back into MEMFS before the game exists:
+  the boot state machine (`main_web.cpp`, `BOOT_FETCHING`) does not create the
+  `App` until `Module.dc3SaveReady()`, so the game's first save search finds
+  them. The read runs beside the asset bundle download; measured 7 ms on a
+  reload and 16 ms after a browser restart, for both files
+  (`[dc3-save] restored 2 file(s), 1154021 bytes, in 7 ms: …`).
+- **Each save.** Both file backends call `Dc3SaveStoreChanged()`
+  (`native/src/platform/SaveStore_Web.h`) after every write and delete. 50 ms
+  later the files whose bytes differ from what the store holds are written in
+  one transaction; measured 7.9 to 17.2 ms for the profile (113 ms once, on a
+  loaded box), 0.9 ms for the global options alone (`[dc3-save] stored (save): … in 13.4 ms`). Seen in
+  one run of one song: both files on the way from the title screen to the main
+  menu, the global options after the tutorial, and the profile twice at the
+  end of the song.
+- **Page hidden or closed.** `visibilitychange` (hidden) and `pagehide` store
+  at once whatever is still pending.
+
+**URL parameters.**
+
+| Parameter | Effect |
+|---|---|
+| `?reset_save=1` | Deletes the stored save data before the game boots: a fresh console, with every tutorial and no scores. The parameter is then taken out of the address bar, so a later reload keeps what is saved after it. The console says `[dc3-save] reset (?reset_save=1): the stored save data was deleted; this is a fresh console` |
+| `?save=off` | This page load neither reads nor writes the store (a fresh console that leaves the stored data alone). The test's negative control, and a way to see the first-run flow without losing a save |
+
+`window.dc3SaveState` reports the store (`mode`: `on`, `off`, `unavailable`;
+`loaded`, `stores`, `lastStore`, `pending`, `error`), `window.dc3SaveFlush()`
+stores now and resolves when the data is in IndexedDB, and
+`window.dc3SaveFiles()` lists every file under the two directories with its
+size and whether it is stored.
+
+**When the browser has no usable IndexedDB** (missing, refused, or no answer
+within 5 s, as in some private windows) the game boots as it did before, on a
+fresh console, and the console warns once: `[dc3-save] save data will NOT be
+kept across reloads this session: <why>`. Nothing is written in that session,
+so a store that answered late is not overwritten by the fresh console.
+
+**Why not emscripten's IDBFS.** Its sync is whole-tree and driven by
+timestamps: it writes every file whose mtime differs from the stored one and
+deletes every stored file the page does not have. A second tab that booted
+before the first one saved would, on being hidden, put its older profile back.
+Here a file is written only when its bytes differ from what this page last
+loaded or stored, and deleted only when this page deleted it. Two tabs that
+both save are still last-writer-wins, per file. It also keeps the song cache
+out of the store without a second mount, and adds no emscripten library.
+
+**Not covered.**
+
+- Browser storage is best-effort: the browser may evict it under disk
+  pressure, and clearing site data deletes it. The page does not ask for
+  `navigator.storage.persist()`.
+- The store belongs to the origin, so `http://localhost:8420` and a deployed
+  host each have their own, and the `release/` and `debug/` builds of one
+  origin share one.
+- Measured in Chromium (Playwright 1.60 headless shell) only. Safari and
+  Firefox were not run. WebKit documents a seven-day cap on script-written
+  storage for a site that is not visited and not on the home screen; that was
+  not measured here.
+- There is no export or import of a save.
+
+**Proof** (`scripts/web/save-persist.mjs`, about 7.5 minutes; needs a GPU):
+one browser profile, made new for the run, four page loads.
+
+| Load | What it shows (2026-11-20) |
+|---|---|
+| 1, fresh | store empty; `has_seen_tutorial` 0, no score; picking the song shows `tutorial_perform_it_screen_0`; after the tutorial and the whole song the score is 7581, IndexedDB holds exactly the two files above, and the only file on disk that is not stored is the song cache |
+| 2, reload | `restored 2 file(s), 1154021 bytes`; the game `loaded 1153964 bytes from …/profile_0_save.dat`; `has_seen_tutorial` 1, score 7581; the same song goes `multiuser_screen > loading_screen > … > game_screen`, no tutorial |
+| 3, the browser closed and started again on the same profile | the same as load 2 |
+| 4, `&reset_save=1` | store empty at boot, the parameter gone from the address bar, `has_seen_tutorial` 0, the tutorial shown again |
+
+```sh
+python3 native/web/server.py --port 8420 &
+node scripts/web/save-persist.mjs --port 8420                    # exit 0, CHECK PASS (26 checks)
+node scripts/web/save-persist.mjs --port 8420 --extra "&save=off"  # the control: exit 1
+```
+
+It reads the game's own state through two exported functions
+(`dc3_dta_eval`, `dc3_profile_song_score` in `main_web.cpp`), and the store
+through IndexedDB directly, not through the page's own report of it.
+
+Both controls fail, on the reload (measured 2026-11-20, the same driver):
+
+| Control | Result | The line that matters |
+|---|---|---|
+| the same build, `--extra "&save=off"` | exit 1, 15 of 26 checks failed | `FAIL [reload] picking the song goes to gameplay with no tutorial — multiuser_screen > tutorial_perform_it_screen_0`; `has_seen_tutorial = 0`; `score = -1, was 7581` |
+| a web build of the commit before the change (`da357dbf3`) | exit 1, 10 of 15 failed, 10 not asked (that build has no hooks, so the two game-state questions are neither passed nor failed) | the same screen line; `no "loaded N bytes" line`; IndexedDB empty |
+
+Exit 0 pass, 1 a check failed, 2 the run could not be judged (no boot, the
+song did not finish).
+
+### A browser that has played before boots to the title screen (H-123)
+
+With the global options back from the store, the engine's boot plan is the
+played console's: `DC3 Boot: straight to the title screen (this console has
+been played before)`. The attract movie and the 4 s autosave warning are each
+left after 10 frames, the page's splash video is taken down when the title
+screen comes up, and the game waits there for the player. A first visit, and
+`?reset_save=1`, show the original sequence; `?env=DC3_BOOT_INTRO=1` shows it
+on every load. Measured 2026-11-20 with `scripts/web/boot-time.mjs`
+(localhost, warm HTTP cache): the title screen at 6.0 to 6.5 s with nothing
+pressed, where it was 9.9 to 11.0 s after a key press on the movie; the main
+menu at 8.1 to 8.6 s, was 12.0 to 13.5 s. The table, the desktop numbers and
+the switches are in
+[debugging/native.md "Boot sequence"](../debugging/native.md#boot-sequence).
+
+```sh
+node scripts/web/boot-time.mjs --port 8420 --runs 4 --versus "&env=DC3_BOOT_INTRO=1"
+node scripts/web/boot-time.mjs --port 8420 --presses none --stop-at title_screen
+node scripts/web/boot-time.mjs --port 8420 --console first
+```
+
 ## Page (W-8)
 
 The default page is for players: the game canvas fills the window at 16:9 on
@@ -1183,7 +1321,10 @@ refusal, sound), `mobile-gpu.mjs` (W-29: one song under `?gpu_profile=`),
 `song-order.mjs` (prints which song each
 `--song-index` selects), `attract-movie.mjs` (W-11: the intro movie's pixels
 are on the canvas), `gesture-menus.mjs --skip-attract` (a gesture skips the
-intro movie). `pose-gameplay.mjs --unmute` runs the audio on the real output
+intro movie), `save-persist.mjs` (W-36: save data survives a reload and a
+browser restart, and `?reset_save=1` wipes it), `boot-time.mjs` (seconds from
+opening the page to the title screen and the main menu, on a first or a
+returning browser). `pose-gameplay.mjs --unmute` runs the audio on the real output
 device and checks the song clock (W-12, below). Menus advance with Enter (not Space).
 
 Song-select index → song (sorted by skill level; a category header repeats the
