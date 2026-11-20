@@ -344,17 +344,13 @@ TEST(UiCoreListView, TheHighlightShowsWhetherTheListHasFocus) {
     const Harness h;
     TestList t(10);
     const DisplayList idle = h.Settle(t.list, kListViewport);
-    EXPECT_EQ(
-        CommandsOf<RoundRectFill>(idle)[1].colors.topLeft, h.theme.color.highlightIdle
-    );
+    EXPECT_EQ(Nth<RoundRectFill>(idle, 1).colors.topLeft, h.theme.color.highlightIdle);
 
     FocusManager focus;
     focus.SetFocus(&t.list);
     const DisplayList focused = h.Settle(t.list, kListViewport);
-    EXPECT_EQ(CommandsOf<RoundRectFill>(focused)[1].colors.topLeft, h.theme.color.accent);
-    EXPECT_EQ(
-        CommandsOf<RoundRectFill>(focused)[1].colors.topRight, h.theme.color.accentDim
-    );
+    EXPECT_EQ(Nth<RoundRectFill>(focused, 1).colors.topLeft, h.theme.color.accent);
+    EXPECT_EQ(Nth<RoundRectFill>(focused, 1).colors.topRight, h.theme.color.accentDim);
 }
 
 TEST(UiCoreListView, SectionHeadersAreRowsTheSelectionSkips) {
@@ -475,7 +471,11 @@ namespace {
                 return &image;
             }
         }
-        return nullptr;
+        // Not there: fail the test, and hand back an empty quad so that the
+        // caller's next line does not crash the run.
+        static const ImageQuad missing {};
+        ADD_FAILURE() << "no image with id " << id << " was drawn";
+        return &missing;
     }
 
 }
@@ -553,7 +553,7 @@ TEST(UiCoreShelf, WithoutFocusTheSelectionIsOnlyAQuietRing) {
     EXPECT_EQ(rings[0].rect, FindImage(images, 100)->rect);
     EXPECT_TRUE(CommandsOf<RoundRectFill>(list).empty()) << "no glow";
     // The clip leaves the glow's reach around the shelf.
-    const ClipPush clip = CommandsOf<ClipPush>(list).at(0);
+    const ClipPush clip = Nth<ClipPush>(list, 0);
     EXPECT_EQ(clip.rect, (Rect { 0, 0, 800, 200 }).Inflated(h.theme.metric.glowSoftness));
 }
 
@@ -680,9 +680,7 @@ TEST(UiCoreTextField, PaintsPlaceholderTextAndCursor) {
     EXPECT_EQ(texts[0].text, "SEARCH");
     EXPECT_EQ(texts[0].color, theme.color.textDisabled);
     EXPECT_EQ(CommandsOf<RoundRectFill>(list).size(), 1u) << "the field, no cursor";
-    EXPECT_EQ(
-        CommandsOf<RoundRectStroke>(list)[0].colors.topLeft, theme.color.panelBorder
-    );
+    EXPECT_EQ(Nth<RoundRectStroke>(list, 0).colors.topLeft, theme.color.panelBorder);
     EXPECT_TRUE(ClipsBalanced(list));
 
     // Focused, with text: shown in the theme's case, cursor after it.
@@ -696,7 +694,7 @@ TEST(UiCoreTextField, PaintsPlaceholderTextAndCursor) {
     EXPECT_EQ(texts[0].text, "S\xC3\x89");
     EXPECT_EQ(texts[0].color, theme.color.textPrimary);
     EXPECT_EQ(field.Text(), "s\xC3\xA9") << "what was typed is what is stored";
-    EXPECT_EQ(CommandsOf<RoundRectStroke>(list)[0].colors.topLeft, theme.color.accent);
+    EXPECT_EQ(Nth<RoundRectStroke>(list, 0).colors.topLeft, theme.color.accent);
     const std::vector<RoundRectFill> fills = CommandsOf<RoundRectFill>(list);
     ASSERT_EQ(fills.size(), 2u);
     const RoundRectFill &cursor = fills[1];
@@ -710,7 +708,7 @@ TEST(UiCoreTextField, PaintsPlaceholderTextAndCursor) {
     field.HandleEvent(Key(Edit::CursorLeft));
     list = h.Settle(field, viewport);
     EXPECT_FLOAT_EQ(
-        CommandsOf<RoundRectFill>(list)[1].rect.x,
+        Nth<RoundRectFill>(list, 1).rect.x,
         theme.space.md + MeasureWidth(h.text, style, "S")
     );
 
@@ -720,11 +718,11 @@ TEST(UiCoreTextField, PaintsPlaceholderTextAndCursor) {
     }
     field.HandleEvent(Key(Edit::CursorEnd));
     list = h.Settle(field, viewport);
-    const RoundRectFill scrolledCursor = CommandsOf<RoundRectFill>(list)[1];
-    const ClipPush clip = CommandsOf<ClipPush>(list)[0];
+    const RoundRectFill scrolledCursor = Nth<RoundRectFill>(list, 1);
+    const ClipPush clip = Nth<ClipPush>(list, 0);
     EXPECT_LE(scrolledCursor.rect.Right(), clip.rect.Right() + 0.01f);
     EXPECT_GE(scrolledCursor.rect.Left(), clip.rect.Left());
-    EXPECT_LT(CommandsOf<TextRun>(list)[0].origin.x, 0.0f);
+    EXPECT_LT(Nth<TextRun>(list, 0).origin.x, 0.0f);
 }
 
 // ---------------------------------------------------------------------------
@@ -776,7 +774,7 @@ TEST(UiCoreTabStrip, PaintsLabelsAndAGlidingIndicator) {
         MeasureWidth(h.text, theme.type.body, "TITLE") + 2.0f * theme.space.md;
     const float secondWidth =
         MeasureWidth(h.text, theme.type.body, "ARTIST") + 2.0f * theme.space.md;
-    RoundRectFill bar = CommandsOf<RoundRectFill>(list).back();
+    RoundRectFill bar = Last<RoundRectFill>(list);
     EXPECT_FLOAT_EQ(bar.rect.x, 0.0f);
     EXPECT_FLOAT_EQ(bar.rect.width, firstWidth);
     EXPECT_FLOAT_EQ(bar.rect.Bottom(), theme.metric.controlHeight);
@@ -785,16 +783,16 @@ TEST(UiCoreTabStrip, PaintsLabelsAndAGlidingIndicator) {
     tabs.HandleEvent(Act(Action::NextTab));
     list = h.Frame(tabs, viewport);
     list = h.Frame(tabs, viewport, 1.0f / 60.0f);
-    bar = CommandsOf<RoundRectFill>(list).back();
+    bar = Last<RoundRectFill>(list);
     EXPECT_GT(bar.rect.x, 0.0f);
     EXPECT_LT(bar.rect.x, firstWidth + theme.space.sm) << "on its way to the second tab";
     EXPECT_FALSE(tabs.AtRest());
 
     list = h.Settle(tabs, viewport);
-    bar = CommandsOf<RoundRectFill>(list).back();
+    bar = Last<RoundRectFill>(list);
     EXPECT_FLOAT_EQ(bar.rect.x, firstWidth + theme.space.sm);
     EXPECT_FLOAT_EQ(bar.rect.width, secondWidth);
-    EXPECT_EQ(CommandsOf<TextRun>(list)[1].color, theme.color.textPrimary);
+    EXPECT_EQ(Nth<TextRun>(list, 1).color, theme.color.textPrimary);
 }
 
 // ---------------------------------------------------------------------------
@@ -844,7 +842,7 @@ TEST(UiCoreLabel, MeasuresItsTextAndFollowsTheThemeCase) {
     EXPECT_FLOAT_EQ(wanted.height, h.text.Metrics(body.font, body.size).lineHeight);
 
     const DisplayList list = h.Frame(label, wanted);
-    const TextRun run = CommandsOf<TextRun>(list).at(0);
+    const TextRun run = Nth<TextRun>(list, 0);
     EXPECT_EQ(run.text, "D\xC3\x89J\xC3\x80 VU");
     EXPECT_EQ(run.font, body.font);
     EXPECT_FLOAT_EQ(run.size, body.size);
@@ -864,7 +862,7 @@ TEST(UiCoreLabel, CutsWithAnEllipsisAndAligns) {
         "Macarena (Bayside Boys Mix)", &Typography::caption, &Palette::textSecondary
     );
     DisplayList list = h.Frame(narrow, { 120.0f, 30.0f });
-    TextRun run = CommandsOf<TextRun>(list).at(0);
+    TextRun run = Nth<TextRun>(list, 0);
     EXPECT_EQ(run.text.substr(run.text.size() - 3), "...");
     EXPECT_EQ(run.text.substr(0, 4), "MACA");
     EXPECT_LE(MeasureWidth(h.text, caption, run.text), 120.0f);
@@ -872,14 +870,14 @@ TEST(UiCoreLabel, CutsWithAnEllipsisAndAligns) {
 
     Label right("Hi", &Typography::caption, &Palette::accent, TextAlign::Right);
     list = h.Frame(right, { 120.0f, 30.0f });
-    run = CommandsOf<TextRun>(list).at(0);
+    run = Nth<TextRun>(list, 0);
     EXPECT_FLOAT_EQ(run.origin.x, 120.0f - MeasureWidth(h.text, caption, "HI"));
     EXPECT_EQ(run.color, h.theme.color.accent);
 
     Label centred("Hi", &Typography::caption, &Palette::accent, TextAlign::Center);
     list = h.Frame(centred, { 120.0f, 30.0f });
     EXPECT_FLOAT_EQ(
-        CommandsOf<TextRun>(list).at(0).origin.x,
+        Nth<TextRun>(list, 0).origin.x,
         (120.0f - MeasureWidth(h.text, caption, "HI")) * 0.5f
     );
 

@@ -114,7 +114,7 @@ TEST(UiCoreSample, FirstFrameShowsEveryPart) {
     EXPECT_TRUE(ClipsBalanced(frame));
 
     // The backdrop covers the viewport; the page sits inside its margins.
-    const RoundRectFill backdrop = std::get<RoundRectFill>(frame.commands.front());
+    const RoundRectFill backdrop = Nth<RoundRectFill>(frame, 0);
     EXPECT_EQ(backdrop.rect, (Rect { 0, 0, 1280, 720 }));
     EXPECT_EQ(backdrop.colors.topLeft, theme.color.background);
     EXPECT_FLOAT_EQ(rig.browser.Search().Bounds().Right(), 1280.0f - theme.space.xl);
@@ -138,6 +138,7 @@ TEST(UiCoreSample, FirstFrameShowsEveryPart) {
         rig.browser.SongList().RowCount(), static_cast<int>(rig.browser.Entries().size())
     );
     EXPECT_EQ(rig.browser.GetScreen().Focused(), &rig.browser.SongList());
+    ASSERT_GE(rig.browser.Entries().size(), 2u);
     ASSERT_TRUE(rig.browser.Entries().front().isHeader);
     EXPECT_EQ(rig.browser.SongList().SelectedIndex(), 1);
     ASSERT_NE(rig.browser.DetailSong(), nullptr);
@@ -180,7 +181,7 @@ TEST(UiCoreSample, TypingSearchesFromAnywhere) {
     ASSERT_LT(expected.size(), 120u);
     const std::vector<int> listed = rig.ListedSongs();
     EXPECT_EQ(std::set<int>(listed.begin(), listed.end()), expected);
-    EXPECT_EQ(listed.size(), expected.size()) << "no song listed twice";
+    ASSERT_EQ(listed.size(), expected.size()) << "no song listed twice";
 
     const DisplayList frame = rig.Settle();
     EXPECT_TRUE(HasText(frame, "ST")) << "the search field shows the query";
@@ -226,7 +227,7 @@ TEST(UiCoreSample, MovingThroughTheListAndChangingTheSort) {
     const SampleSong *before = rig.browser.DetailSong();
     EXPECT_TRUE(rig.browser.HandleEvent(Act(Action::Down)));
     const int afterDown = list.SelectedIndex();
-    EXPECT_GT(afterDown, 1);
+    ASSERT_GT(afterDown, 1);
     ASSERT_FALSE(entries[afterDown].isHeader);
     EXPECT_NE(rig.browser.DetailSong(), before);
     EXPECT_EQ(rig.browser.DetailSong(), &rig.browser.Songs()[entries[afterDown].song]);
@@ -235,7 +236,7 @@ TEST(UiCoreSample, MovingThroughTheListAndChangingTheSort) {
     // highlight ends up inside it, on the selected row.
     EXPECT_TRUE(rig.browser.HandleEvent(Act(Action::PageDown)));
     const int afterPage = list.SelectedIndex();
-    EXPECT_GE(afterPage, afterDown + 4);
+    ASSERT_GE(afterPage, afterDown + 4);
     ASSERT_FALSE(entries[afterPage].isHeader);
     EXPECT_FLOAT_EQ(list.ScrollOffset(), 0.0f);
     rig.Frame();
@@ -278,7 +279,7 @@ TEST(UiCoreSample, MovingThroughTheListAndChangingTheSort) {
             EXPECT_EQ(rig.browser.Songs()[entry.song].artist, heading);
         }
     }
-    EXPECT_GT(headings.size(), 3u);
+    ASSERT_GT(headings.size(), 3u);
     EXPECT_EQ(
         std::set<std::string>(headings.begin(), headings.end()).size(), headings.size()
     ) << "each artist has one section";
@@ -358,9 +359,7 @@ TEST(UiCoreSample, FillsWhateverViewportItIsGiven) {
     EXPECT_FLOAT_EQ(bigList.height - smallList.height, 360.0f);
     EXPECT_FLOAT_EQ(bigList.y, smallList.y);
     EXPECT_FLOAT_EQ(big.browser.Search().Bounds().Right(), 1920.0f - big.theme().space.xl);
-    EXPECT_EQ(
-        std::get<RoundRectFill>(frame.commands.front()).rect, (Rect { 0, 0, 1920, 1080 })
-    );
+    EXPECT_EQ(Nth<RoundRectFill>(frame, 0).rect, (Rect { 0, 0, 1920, 1080 }));
     EXPECT_GT(
         big.browser.SongList().BuiltRowCount(), small.browser.SongList().BuiltRowCount()
     );

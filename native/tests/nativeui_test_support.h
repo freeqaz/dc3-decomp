@@ -29,6 +29,30 @@ namespace nativeui_test {
         return out;
     }
 
+    // The `index`-th command of one kind. A list without it fails the test and
+    // yields an empty command, so a broken widget turns a test red instead of
+    // crashing the whole run.
+    template <class T>
+    T Nth(const DisplayList &list, std::size_t index) {
+        const std::vector<T> all = CommandsOf<T>(list);
+        if (index >= all.size()) {
+            ADD_FAILURE() << "wanted command #" << index << " of its kind, the list has "
+                          << all.size();
+            return T {};
+        }
+        return all[index];
+    }
+
+    template <class T>
+    T Last(const DisplayList &list) {
+        const std::vector<T> all = CommandsOf<T>(list);
+        if (all.empty()) {
+            ADD_FAILURE() << "the list has no command of that kind";
+            return T {};
+        }
+        return all.back();
+    }
+
     inline std::vector<std::string> TextsOf(const DisplayList &list) {
         std::vector<std::string> out;
         for (const TextRun &run : CommandsOf<TextRun>(list)) {
