@@ -14,11 +14,15 @@ persist. The web build plays a whole song too, and every song reaches gameplay.
 footage of a real dancer, sent through the live `pose_server` path, plays a
 whole song to the results card, with menus driven by gesture and the player's
 silhouette on screen; the web build tracks a fake camera and scores. The
-hold-still crash is fixed. **No real webcam has driven the game yet**, and a
-live player would hit a mid-song "stand in front of the sensor" pause when
-tracking drops for ~0.7 s (PLAN P-12). What stands between here and a live
-playtest is [PLAN track L](PLAN.md#track-l--live-playtest-readiness). macOS is
-prepared from Linux and has not been built on a Mac since March.
+hold-still crash is fixed. **Real webcams have driven the game since (corrected 2026-11-20): the owner
+has played on the GPD and on the Mac, natively and in the browser** (GPD sessions
+2026-11-14/15: PLAN P-17, P-18; Mac: [MACOS.md](MACOS.md)). This line said "no real
+webcam has driven the game yet" until then, which was the 2026-11-13 state. The
+mid-song "stand in front of the sensor" pause on a ~0.7 s tracking drop is fixed
+(PLAN P-12). What stands between here and a live
+playtest is [PLAN track L](PLAN.md#track-l--live-playtest-readiness). macOS builds
+and is played on a Mac, in a window, with the camera ([MACOS.md](MACOS.md),
+2026-11-15; this said "not built on a Mac since March" until 2026-11-20).
 
 ## Linux desktop
 
@@ -302,9 +306,9 @@ Footage: `scripts/video_calib/mqcXJrH5vUo.json`'s source video, cut per song by
 | Synthetic performer | All-perfect ratings, ~1.68 M at 100 s; still all perfect with webcam-like noise and 150 ms lateness. Over all 45 songs (whole song, `choreo`, `DC3_FAST_TIME`): all perfect on 43; macarena 49/4/0/0, the same on the real clock (`So_Fly_macarena` falls 0.97 → 0.92 → 0.88 → 0.79 across each 4-measure block: awesome in the 3rd and 4th, both blocks; authored: the async detector scores every repetition against the move's first expert occurrence while the Easy dance drifts, PLAN P-11); chingaling 60/0/0/1 under FAST_TIME (`Whip_Step` right after a rest, frac 0, deterministic) but 61/0/0/0 on the real clock: the image's bar-line lag, which FAST_TIME's fixed step lands on, and which the song sweep counts as a known exception (PLAN H-52). Under `DC3_FAST_TIME`, a run lasting more than ~3 min of wall clock with song time slower than wall (paced or GPU) used to stop scoring when the song stream ran out; fixed 2026-11-13 (PLAN H-10): paced 30, ymca to 50 s, 24/0/0/0 | ran; [Every song](#every-song) |
 | MediaPipe on a video file | Scored (wrong-dance clip → mostly bad/ok) | ran |
 | Motionless skeleton | SIGSEGV at ~130 s (zero variance in `RhythmDetector`) — **fixed** by the sensor noise floor (PLAN P-1); 45k-frame still run exits 0 | ran |
-| Live webcam | Never tried (no camera on the measurement box) | — |
+| Live webcam | Played by the owner on the GPD and on the Mac, natively and in the browser (corrected 2026-11-20; this row said "never tried"). GPD sessions 2026-11-14/15 are where PLAN P-17 and P-18 came from. Not measured: a success rate for menus by gesture. The measurement box itself still has no camera | owner sessions |
 | Pose server from `native/build` | A windowed boot from `native/build` spawns this tree's `pose_server.py` with the tree's model (absolute path), and the server loads it (PLAN P-10) | log, 2026-11-13 (`np-paths`, a video standing in for the camera) |
-| Gesture menus | Whole perform route by gesture alone (title → song → results → main), 10 gesture / 0 button selects; default policy `auto` (faithful with a camera). Web: same policy, title → song select → back by gesture through `dc3_pose_push`. See [POSE_INPUT](POSE_INPUT.md#gesture-menus) | `GestureMenusTest` + its forced sabotage, `scripts/web/gesture-menus.mjs`, 2026-11-13 (`np-gesture-menus`) |
+| Gesture menus | Whole perform route by gesture alone (title → song → results → main), 10 gesture / 0 button selects; default policy `auto` (faithful with a camera). Web: same policy, title → song select → back by gesture through `dc3_pose_push`. See [POSE_INPUT](POSE_INPUT.md#gesture-menus). Since 2026-11-20 (`np-menu-gestures`, PLAN P-19) the menus get the camera's own frames (no pose fill outside a song): replaying two recorded GPD sessions, 7 of the 7 recorded gesture selects are picked (2 to 4 before). Hold to select is opt-in (`DC3_MENU_SELECT`, F1). No success rate from a live person yet: [reference/MENU_GESTURES.md](reference/MENU_GESTURES.md) | `GestureMenusTest` + its forced sabotage, `scripts/web/gesture-menus.mjs`, 2026-11-13 (`np-gesture-menus`) |
 | Player silhouette (P-4) | With a camera stream the depth image inside the menu and gameplay player boxes draws the player (`np-player-view`): synthetic v3 frames and real MediaPipe masks over a video; mirrored like a Kinect. Photos: taken and revealed on battle results; they were invisible (alpha 0) before the engine fix `c810e49`, which the pinned engine contains (`np-media`; not re-measured on the pin). Perform freestyle and the loading screen draw the player as the cube figure (`DepthBuffer3D`, its 360 shader run on the CPU, `np-boxyman`): flat, not a relief, because the native depth image has one depth per person; freestyle takes its 16 photos and shows them. No camera: unchanged | screenshots + `CameraViewTest` / `NoCameraViewTest`; photos: battle screenshots, `TexRendererClearTest` in a patched scratch engine, 2026-11-13; cube figure: screenshots + `DepthBuffer3DShader.*`, `BoxymanTest` / `NoCameraBoxymanTest`, 2026-11-15 |
 | Cut-off joints (H-90..H-95) | Joints out of the picture are estimated by default (`DC3_POSE_ESTIMATE=kinematic`). Image knees crop 0.54 → 0.65 of full body, midshin 0.67 → 0.88; skeleton knees drop 0.23 → 0.48; wrong-dance and still controls stay under uncut + 1% of the right dance. Owner's YMCA (legs cut): 28,078 → 40,925, legs-seen measures unchanged. A silent pose source now pauses the song (`DC3_POSE_STALL_MS`) and play resumes when frames return. Not run live on the GPD. See [POSE_INPUT](POSE_INPUT.md#cut-off-joints-np-cutoff-2026-11-14) | `scripts/pose_cutoff/matrix.py` + `check.py` (FAST_TIME, 4 songs, load 25–48), `PoseStallTest`, 2026-11-14 (`np-cutoff`) |
 | `scripts/pose_scoring_gate.sh` | Passes (~13 min): five configs, each the whole song under `DC3_FAST_TIME`; judges means, final scores and per-move distances (`scripts/pose_gate_report.py`). Standing still out-scores a different recorded dance (P-7) | ran |
@@ -324,6 +328,11 @@ Footage: `scripts/video_calib/mqcXJrH5vUo.json`'s source video, cut per song by
 
 ## macOS — see [MACOS.md](MACOS.md)
 
+**Corrected 2026-11-20: builds on a Mac and is played there, in a window, with the
+camera (built 2026-11-13 on an M3 MacBook Air; [MACOS.md](MACOS.md) state line,
+2026-11-15).** Frame cost on that machine was measured 2026-11-19 and the menus
+halved (main menu 13.08 → 6.70 GPU ms at 1710x962; [MACOS.md](MACOS.md#frame-cost-on-the-m3-air),
+PLAN H-124, H-125). The rest of this paragraph is the 2026-11-13 state, kept as history.
 Ran windowed on a real Mac in March 2026. Not built on a Mac since. Seven known
 breakages, five of them fixable from Linux; on branch `np-macprep` the
 Linux-fixable parts are done (engine half as patch files). The Linux libc++ proxy

@@ -223,6 +223,14 @@ function sourceSize(img) {
 
 // pose_server.py MASK_THRESHOLD: a pixel belongs to the most confident person
 // whose mask passes it.
+//
+// NOT THE DESKTOP MASK since PLAN P-20: pose_server.py now steadies this mask
+// across frames, fills tracked limbs the model dropped and removes specks
+// (its MaskRefiner; `--mask raw` there is this one).  The web worker still
+// builds the raw mask below: the port (per-pixel filter + hysteresis, a
+// capsule rasteriser, a 3x3 close and connected components in JS) has not
+// been written or measured in a browser.  Numbers for what the raw mask
+// costs in quality: docs/native/POSE_INPUT.md, "The mask, measured".
 const MASK_THRESHOLD = 0.5;
 let frameCanvas = null;
 let inCanvas = null;

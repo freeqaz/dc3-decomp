@@ -19,8 +19,10 @@
 #include "hamobj/HamGameData.h"   // TheGameData (player->skeleton binding)
 #include "hamobj/HamPlayerData.h" // GetSkeletonTrackingID
 #include "hamobj/MoveDir.h"       // MoveDir::SongSeconds (DC3_POSE_FILL)
+#include "lazer/game/Game.h"       // TheGame->Paused(): the pause menu is a menu (DC3_POSE_FILL_MENU)
 #include "lazer/game/GamePanel.h"  // TheGamePanel: the stall notice is for a song in play
 #include "PoseFill_Native.h"      // DC3_POSE_FILL
+#include "MenuGesture_Native.h"   // DC3_MENU_ARC_START: the camera's own joint confidences
 #include "PoseIdentity_Native.h"  // DC3_POSE_REACQUIRE_MS: who is who
 #include "NativeNotice.h"         // DC3_POSE_STALL_MS
 #include "meta_ham/HamUI.h"          // TheHamUI -> ShellInput -> SkeletonChooser
@@ -858,8 +860,15 @@ static int FillPersonSlots(const NativeSkeletonProvider::PersonData *persons, in
     int reassigns = AssignSlots(trackIds, hips, numValid, elapsedMs, personForSlot);
     for (int s = 0; s < NUM_SKELETONS; s++) {
         int k = personForSlot[s];
+        // DC3_MENU_ARC_START: what the camera itself said of each joint,
+        // before the estimate below relabels the ones it lost
+        Dc3MenuGesture::NoteSensorConfidence(s, nullptr);
         if (k >= 0) {
             NativeSkeletonProvider::PersonData person = persons[origIdx[k]];
+            int seen[kNumJoints];
+            for (int j = 0; j < kNumJoints; j++)
+                seen[j] = person.confidence[j];
+            Dc3MenuGesture::NoteSensorConfidence(s, seen);
             EstimateReadMode();
             EstimateLog(gEstimate.Apply(s, person, elapsedMs * 0.001f, real), elapsedMs);
             NativeSkeletonProvider::FillSkeletonData(sFrame.mSkeletonDatas[s], person, s);
@@ -975,6 +984,14 @@ bool gFillModeRead = false;
 Dc3PoseFill::Mode gFillModeOverride = Dc3PoseFill::kExtrap;
 bool gFillHaveOverride = false;
 double (*gFillClock)() = nullptr;
+// The song clock, carried on at UI time while it stands still (StallClock,
+// PoseFill_Native.h: the menus).  DC3_POSE_FILL_CLOCK=song is the clock as it
+// was -- the song clock alone -- for an A/B.
+Dc3PoseFill::StallClock gFillStallClock;
+bool gFillSongClockOnly = false;
+// DC3_POSE_FILL_MENU: the fill's mode outside a song (FillSelectMode below).
+Dc3PoseFill::Mode gFillSongMode = Dc3PoseFill::kExtrap;
+Dc3PoseFill::Mode gFillMenuMode = Dc3PoseFill::kMenuDefaultMode;
 
 void FillReadMode() {
     if (gFillModeRead)
@@ -992,15 +1009,58 @@ void FillReadMode() {
                     v);
     }
     gFill.SetMode(mode);
+    gFillSongMode = mode;
+    gFillMenuMode = mode; // a test's override is one mode everywhere
+    if (!gFillHaveOverride) {
+        const char *m = getenv("DC3_POSE_FILL_MENU");
+        if (!m || !*m) {
+            gFillMenuMode = Dc3PoseFill::kMenuDefaultMode;
+        } else if (strcmp(m, "same") != 0) {
+            bool ok = true;
+            gFillMenuMode = Dc3PoseFill::ParseMode(m, &ok);
+            if (!ok) {
+                fprintf(stderr,
+                        "DC3_POSE_FILL_MENU='%s' ignored (want off, interp, hold, extrap, extrapc or same)\n",
+                        m);
+                gFillMenuMode = Dc3PoseFill::kMenuDefaultMode;
+            }
+        }
+    }
     const char *g = gFillHaveOverride ? nullptr : getenv("DC3_POSE_FILL_GAIN");
     bool gainOk = true;
     gFill.SetGain(Dc3PoseFill::ParseGain(g, &gainOk));
     if (!gainOk)
         fprintf(stderr, "DC3_POSE_FILL_GAIN='%s' ignored (want 0 .. 1)\n", g);
+    // DC3_POSE_FILL_RATE: what the camera's rate is read from.  A test's
+    // override takes the default.
+    const char *r = gFillHaveOverride ? nullptr : getenv("DC3_POSE_FILL_RATE");
+    bool rateOk = true;
+    gFill.SetRateSource(Dc3PoseFill::ParseRateSource(r, &rateOk));
+    if (!rateOk)
+        fprintf(stderr, "DC3_POSE_FILL_RATE='%s' ignored (want camera or arrival)\n", r);
+    // DC3_POSE_FILL_DWELL: seconds over the release rate before a release.
+    const char *d = gFillHaveOverride ? nullptr : getenv("DC3_POSE_FILL_DWELL");
+    bool dwellOk = true;
+    gFill.SetReleaseDwell(Dc3PoseFill::ParseReleaseDwell(d, &dwellOk));
+    if (!dwellOk)
+        fprintf(stderr, "DC3_POSE_FILL_DWELL='%s' ignored (want seconds, 0 .. %.0f)\n", d,
+                Dc3PoseFill::kMaxReleaseDwell);
+    const char *c = getenv("DC3_POSE_FILL_CLOCK");
+    gFillSongClockOnly = c && !strcmp(c, "song");
+    if (c && strcmp(c, "song") && strcmp(c, "stall"))
+        fprintf(stderr, "DC3_POSE_FILL_CLOCK='%s' ignored (want song or stall)\n", c);
+    gFillStallClock.Reset();
     gFill.Reset();
 }
 
-double FillClock() { return gFillClock ? gFillClock() : (double)MoveDir::SongSeconds(); }
+double FillClock() {
+    if (gFillClock)
+        return gFillClock();
+    double song = (double)MoveDir::SongSeconds();
+    if (gFillSongClockOnly)
+        return song;
+    return gFillStallClock.Read(song, (double)TheTaskMgr.UISeconds());
+}
 
 // Engagement changes, and delay changes of 20 ms or more, move the scorer's
 // latency; say so once each time.
@@ -1035,6 +1095,7 @@ void NativePoseFillTestSet(int mode, double (*clock)()) {
 }
 
 const Dc3PoseFill::Filler &NativePoseFiller() { return gFill; }
+double NativePoseFillClockCarried() { return gFillSongClockOnly ? 0.0 : gFillStallClock.Carried(); }
 
 // A frame the filler made due: into the slots exactly as a camera frame goes
 // when the fill is off.  Its time base is the camera's (out.ts), so the
@@ -1220,12 +1281,29 @@ static void IdentifyPeople(NativeSkeletonProvider::PersonData *persons, int numP
     }
 }
 
+// DC3_POSE_FILL_MENU (PoseFill_Native.h "Outside a song"): DC3_POSE_FILL is
+// the mode while a song is being played -- the scorer's -- and everything
+// else (the menus, the pause menu, the results) has its own, by default none.
+// A test's override (NativePoseFillTestSet) is one mode everywhere.
+static void FillSelectMode() {
+    if (gFillHaveOverride)
+        return;
+    bool song = NativeSongInPlay() && !(TheGame && TheGame->Paused());
+    Dc3PoseFill::Mode want = song ? gFillSongMode : gFillMenuMode;
+    if (want == gFill.GetMode())
+        return;
+    gFill.SetModeKeepingRate(want);
+    fprintf(stderr, "DC3 POSE FILL: %s for %s\n", Dc3PoseFill::ModeName(want),
+            song ? "the song" : "the menus");
+}
+
 static const SkeletonFrame *BuildSensorFrame() {
     bool providerRunning = false;
     bool newFrame = false;
     bool delivered = false;
 
     FillReadMode();
+    FillSelectMode();
     if (TheSkeletonProvider && TheSkeletonProvider->IsRunning()) {
         providerRunning = true;
         TheSkeletonProvider->Poll();
@@ -1258,6 +1336,13 @@ static const SkeletonFrame *BuildSensorFrame() {
             src.arrival = FillClock();
             src.ts = TheSkeletonProvider->Timestamp();
             src.frameId = frameId;
+            // The camera frames this one stands for: the provider keeps the
+            // newest, so any that arrived since the last poll with it are gone.
+            static uint32_t sExtLastDelivered = 0;
+            uint32_t deliveredNow = TheSkeletonProvider->Delivered();
+            uint32_t since = deliveredNow - sExtLastDelivered; // wraps with the counter
+            sExtLastDelivered = deliveredNow;
+            src.frames = since <= 0xffffu ? (int)since : 1; // the Filler bounds it
             src.numPersons = numPersons;
             for (int i = 0; i < numPersons; i++)
                 src.persons[i] = sPersons[i];

@@ -8,6 +8,7 @@
 #include "platform/LoaderBudget_Native.h"
 #if !defined(__EMSCRIPTEN__)
 #include "platform/FramePacer_Native.h"
+#include "platform/NativeNotice.h" // a display under 50 Hz is said on screen
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 sigjmp_buf gDrawJmpBuf;
@@ -102,6 +103,25 @@ public:
             extern bool Dc3EnvFlag(const char *, bool);
             return DataNode(Dc3EnvFlag("DC3_DEV_OPTIONS", false) ? 1 : 0);
         }
+        // DC3_MENU_SELECT (NativeSettings.h, PLAYTEST.md "Playing"): how a
+        // hand picks a menu row -- swipe, hold or both.
+        if (sym == "menu_select") return DataNode(Symbol(Dc3MenuSelectName(Dc3MenuSelect())));
+        if (sym == "set_menu_select") {
+            int mode = Dc3MenuSelectParse(msg->Str(2));
+            if (mode < 0)
+                return DataNode(0);
+            Dc3SetMenuSelect(mode);
+            return DataNode(1);
+        }
+        if (sym == "cycle_menu_select") {
+            Dc3SetMenuSelect((Dc3MenuSelect() + 1) % kDc3MenuSelectCount);
+            return DataNode(Symbol(Dc3MenuSelectName(Dc3MenuSelect())));
+        }
+        // DC3_MENU_ARC_START (MenuGesture_Native.h): which frames may start a
+        // sweep -- tracked (the image's rule) or inferred.
+        if (sym == "menu_arc_start") return DataNode(Symbol(Dc3MenuArcStartName()));
+        if (sym == "set_menu_arc_start")
+            return DataNode(Dc3SetMenuArcStart(msg->Str(2)) ? 1 : 0);
         if (sym == "get_camera_blend") return DataNode(NativeSettings::Get().cameraBlend ? 1 : 0);
         if (sym == "toggle_camera_blend") {
             NativeSettings::Get().cameraBlend = !NativeSettings::Get().cameraBlend;
@@ -298,16 +318,19 @@ App::App(int argc, char **argv) {
     }
 #endif
 
-    // Splash screens (ESRB + Harmonix logos) — same as Xbox boot.
-    // Disable with DC3_SHOW_SPLASH=0.
+    // Splash screens (ESRB + Harmonix logos) — same as Xbox boot, on a first
+    // launch.  A console that has been played before (its global options are
+    // on disk) does not show them again; DC3_SHOW_SPLASH=1/0 or
+    // DC3_BOOT_INTRO=1/0 decide it whatever the disk says (the boot plan,
+    // native/src/platform/System_Native.cpp).  This is the plan's first read,
+    // before anything in this run can write the global options.
     // On web, the HTML overlay plays the splash video while WASM boots —
     // the engine's synchronous Splash system can't render on Emscripten
     // (no rAF yield), so skip it to avoid wasting boot time.
-    const char *splashEnv = getenv("DC3_SHOW_SPLASH");
+    extern bool Dc3BootShowSplash();
+    bool showSplash = Dc3BootShowSplash();
 #ifdef __EMSCRIPTEN__
-    bool showSplash = false;
-#else
-    bool showSplash = !splashEnv || strcmp(splashEnv, "0") != 0;
+    showSplash = false;
 #endif
     Splash splash;
     // The image's splash setup, verbatim: -fast (or a loose-file run) does not
@@ -1208,10 +1231,23 @@ void App::RunWithoutDebugging() {
                 if (const GLFWvidmode *mode = glfwGetVideoMode(mon))
                     refreshHz = mode->refreshRate;
         }
+        // DC3_DISPLAY_HZ=N: take N as the display's rate (a test's 30 Hz
+        // display; the real display still paces through vsync).
+        if (windowed) {
+            const char *hz = getenv("DC3_DISPLAY_HZ");
+            if (hz && *hz && atof(hz) > 0.0)
+                refreshHz = atof(hz);
+        }
         const Dc3FrameCap cap = Dc3FrameCapDecide(getenv("DC3_FPS_CAP"), windowed, refreshHz);
         framePacer.SetTarget(cap.fps);
         Dc3LoaderBudgetSetFrameTarget(framePacer.TargetFps());  // H-110
         MILO_LOG("DC3 Native: frame cap: %s\n", cap.why);
+        // A display under 50 Hz: say so on screen (FramePacer_Native.h).
+        const std::string slow = Dc3SlowDisplayNotice(windowed, refreshHz);
+        if (!slow.empty())
+            NativeNotice::Post("display_rate", slow, "", 15.0f);
+        // H-128: the rate the engine's thermal governor holds the game to.
+        Dc3ThermalSetTarget(cap.fps, refreshHz);
     }
 
     if (windowed) {
@@ -1258,6 +1294,11 @@ void App::RunWithoutDebugging() {
             Dc3RunPostPollFootPlant();
         }
 #endif
+
+        // DC3_MENU_SELECT: the F1 key steps swipe -> hold -> both.
+        Dc3MenuSelectFramePoll();
+        // H-128: the first time heat softens the picture, say so -- in a menu.
+        Dc3ThermalFramePoll(TheUI && TheUI->IsGameScreenActive());
 
         GameplayTelemetry::Sample(frameCount);
 #ifdef DC3_HTTP_SERVER

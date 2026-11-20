@@ -123,13 +123,108 @@ Notes:
   `sudo xcodebuild -license accept`. Only the full Xcode app needs this; the
   command-line tools do not.
 
+## Frame cost on the M3 Air
+
+Measured 2026-11-19 on the owner's M3 MacBook Air (fanless, macOS 15.7.4, Metal),
+after "it was a bit chuggy". Two engine changes came out of it
+([PLAN](PLAN.md) H-124, H-125) and one setting is still open (H-126).
+
+GPU ms a frame, normalised to the GPU's full clock (1338 MHz), six samples a
+screen. Headless runs at the size given, so a window's present is not in them:
+
+| Screen | Before, 1710x962 | After, 1710x962 | After, 1920x1080 | After, 2560x1440 | After, 3420x1924 |
+|---|---|---|---|---|---|
+| Main menu | 13.08 | 6.70 | 7.84 | 11.90 | 19.81 |
+| Song select | 14.00 | 7.55 | 8.99 | 13.54 | 21.76 |
+| Lobby | 9.03 | 4.32 | | | |
+| Gameplay (YMCA) | 6.72 | 5.37 | 6.54 | 9.92 | 15.82 |
+| Pause | 13.23 | 6.75 | | | |
+
+1710x962 is the default window in points. 1920x1080 is what the engine draws
+for a larger surface on a GPU that is not discrete (the 1080-row cap);
+2560x1440 is `MILO_OUTPUT_MAX_ROWS=1440`; 3420x1924 is the Retina panel with
+the cap off (`MILO_OUTPUT_MAX_ROWS=0`). A 60 Hz frame is 16.7 ms.
+
+- **Why the menus cost twice a gameplay frame.** The standard shader ran the
+  native light model's fetches (nine shadow taps, specular, light loops, gobo,
+  emissive) for every fragment, and the retail look then dropped the result.
+  Menus are full-screen layers of such fragments under 4x MSAA. And song select
+  sent 161 of its 433 draws with alpha exactly 0. Neither shows on a desktop
+  GPU: the same song select frame is under 1 ms of main pass on an RTX 3090.
+- **Why it chugged that day.** At 7% battery on a 15 W charger (5 V, 3 A) the
+  GPU ran at 716-735 MHz, all of its time in the 618 and 796 MHz steps, with
+  thermal pressure nominal (`powermetrics`). At that clock a 13-14 ms menu
+  frame is 24-26 ms, and the new one is 12-14 ms. At 9-10% battery, drawing from the battery, it ran at
+  1290-1320 MHz. One observation; the cause of the low clock was not isolated.
+  A charger that can feed the machine under load takes the question away.
+- **The Retina setting costs about three times the frame.** The app launcher
+  on that Mac exports `MILO_OUTPUT_MAX_ROWS=0`; with the Retina surface edits
+  in that Mac's engine checkout the game draws 3420x1924, which is 41-45 fps in
+  the menus at full clock and about 25 fps at the low one. Leaving the knob
+  unset (1080 rows) keeps every screen under 9 ms; 1440 rows keeps them under
+  14 ms, which is 60 fps at full clock and not at the low one.
+- **On screen, the new build (the owner's game, 2026-11-19 23:25 PST).** One
+  session, read from the `[PERF]` lines of `~/Library/Logs/Dance Central 3/game.log`
+  and one 2 s `powermetrics` sample a screen, at 8-9% battery on AC. The window
+  was 1280x720 points with the cap off, so the game drew 2560x1440. Menus:
+  62 fps, 16.0-16.2 ms a frame; 45 frames a report over 16.67 ms on average,
+  the worst about 1 ms over, and one frame over 25 ms in 4 of 20 reports; GPU
+  92% busy at 758 MHz. Gameplay: 64 fps, 15.5 ms a frame, no frame over
+  16.67 ms in 10 of 13 reports; GPU 95% busy at 1112 MHz. So a 1440-row window
+  holds 60 with little to spare, the clock does rise in a song, and in the menus
+  it stayed low while frames ran a fraction late. Not measured: the old build
+  in the same window, and fullscreen.
+- **On a display at 30 Hz it is 30 frames a second, whatever the GPU does.**
+  The two launches after that session had a 3840x2160 display as the main
+  display, and macOS reported it at 30.00 Hz (`DC3 Native: frame cap: off (the
+  30.00 Hz display ...)`). The game drew 3840x2160 and the one whole session
+  (401 s) read 25.8 to 34.1 fps in all 75 `[PERF]` reports, 31 to 32 ms a frame
+  through the song. That is the display's mode, not the game: choose 60 Hz in
+  System Settings, Displays; a 4K TV may need a 1080p mode, or an HDMI 2.0
+  cable or adapter. Since PLAN H-127 a banner says so at startup. With that
+  display at 60 Hz the Retina setting matters more: by pixel count from the
+  3420x1924 column, 3840x2160 would be about 25 ms on the main menu, 27 ms on
+  song select and 20 ms in gameplay (extrapolated, not measured).
+- **Heat costs frames after about 12 minutes at 1440 rows, and the game now
+  gives up rows for them.** The same evening at 2560x1440 with the GPU 92-95 %
+  busy, macOS went from thermal state 0 to 2 about 12 minutes in and throttled:
+  song select fell from 62 fps to 32-42, a song from 64-69 to 45-51, the pose
+  tracker's inference from 21 ms to 50-80 ms. Since [PLAN](PLAN.md) H-128 the
+  engine reads `NSProcessInfo.thermalState` once a second and, when it is fair
+  or worse AND the game has been under 90 % of its frame rate for 5 s (2 s at
+  serious or critical), lowers the output's row cap one step: 1080, then 900,
+  then 720 rows, never lower, and never above the cap already in force (with
+  the launcher's `MILO_OUTPUT_MAX_ROWS=0` a 1440-row frame goes to 1080 first).
+  It gives a step back after 90 s at nominal, one step per 90 s. Each change
+  prints one line (`GpuDevice: thermal level 2 (serious), frames late: output
+  2560x1440 -> 1920x1080 (thermal row cap 1080)`), the first one in a session
+  also shows a short banner in the next menu, and `MILO_THERMAL_GOVERNOR=0`
+  turns it off. Tested on Linux with the level injected (`MILO_THERMAL_STATE`,
+  `PUT /api/thermal`); **not yet compiled or run on a Mac**: the probe
+  (`ThermalState_Mac.mm`, one line) and what the steps do to the temperature
+  and the frame rate on the Air are both still to be measured there.
+- **The per-pass GPU timers do not separate passes on this GPU.** A tile-based
+  renderer runs a frame's passes interleaved, so each pass's `MILO_GPU_TIMERS`
+  figure is close to the whole frame's span. Read `gpu_span_ms`; use
+  `MILO_GPU_PASS_TRACE=N` for the order of passes and their load/store ops.
+
+How to measure again: `sudo powermetrics --samplers gpu_power -i 1000` gives
+the GPU's active frequency and residency; multiply the game's GPU ms by
+(measured MHz / 1338) to compare runs taken at different clocks.
+
+Not done, in order of expected gain on this GPU: the 4x MSAA main pass is
+opened 8 times in a gameplay frame (four self-shadow passes, two texture
+blends and the point tests interrupt it), each time storing and reloading the
+multisampled colour and depth; the pre-buffer copy is made whether or not a
+material reads it; the overlay pass reopens the frame after the world grade.
+
 ## Not verifiable from Linux (watch for these)
 
 | Risk | Where | Why it is open |
 |---|---|---|
 | Apple clang + `-fms-compatibility` vs the macOS SDK headers | `native/CMakeLists.txt` `DC3_MSVC_COMPAT_FLAGS` (the `-include stdarg.h -D_VA_LIST_T` Darwin pair) | Built in March; the SDK and Xcode have moved since |
 | Apple ld with no relaxing flags | `native/CMakeLists.txt` Apple branch | `-ld_classic`, `-multiply_defined,suppress` and `-undefined,dynamic_lookup` were removed. Linux proves 0 duplicate definitions (LinkHygiene) and 0 undefined symbols under libc++. If the Mac link lists undefined symbols, report them; `-DDC3_MAC_DYNAMIC_LOOKUP=ON` is the stopgap |
-| Metal backend, `MetalSurface.mm`, Retina scale, live resize | engine `src/gfx/` | The March fixes (`contentsScale`, resize, blend state) predate the engine move |
+| Metal backend, `MetalSurface.mm`, Retina scale, live resize | engine `src/gfx/` | The March fixes (`contentsScale`, resize, blend state) predate the engine move. Retina output is being worked on in the Mac's own engine checkout (uncommitted, 2026-11-19); its cost is in [Frame cost on the M3 Air](#frame-cost-on-the-m3-air) |
 | Audio output | engine `AudioDevice.cpp`, miniaudio CoreAudio | miniaudio loads CoreAudio at run time (no framework link); device rate and latency untested |
 | Gamepad | GLFW / IOKit HID | Mapping and any Input Monitoring prompt untested |
 | ThreadCall worker | engine `ThreadCall_Native.cpp` | macOS has no unnamed POSIX semaphores (`sem_init` returns ENOSYS), so the worker never started and every ThreadCall job would wait forever. **Fixed on engine branch `np-macprep2` (`6e946f0`), not landed**: a mutex + condvar semaphore. It runs on Linux in every boot (gate below) |

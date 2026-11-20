@@ -52,6 +52,9 @@ private:
 
     bool HandAtSide(const Skeleton &, float, float, float) const;
     bool IsValidSwipePosition(const Skeleton &) const;
+#ifdef HX_NATIVE
+    friend struct Dc3MenuGestureAccess; // native/src/platform/MenuGesture_Native.cpp
+#endif
 
 protected:
     SkeletonSide mHandSide; // 0x4

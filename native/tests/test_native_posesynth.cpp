@@ -319,6 +319,29 @@ TEST(NativeSkeletonProviderPublishTest, PollLatchesExactlyWhatWasPublished) {
     EXPECT_EQ(provider.FindByTrackId(4), -1);
 }
 
+// np-pose-steady: Poll takes the newest frame only; Delivered() says how many
+// the source published, so the frame fill can tell the camera's rate from the
+// rate the game loop happened to take frames at.
+TEST(NativeSkeletonProviderPublishTest, DeliveredCountsEveryPublishedFrameNotOnlyTheOnesPolled) {
+    NativeSkeletonProvider provider;
+    NativeSkeletonProvider::PersonData person;
+    StandingPose(person);
+    person.valid = true;
+    EXPECT_EQ(provider.Delivered(), 0u);
+    provider.PublishFrame(&person, 1, 11, 1.0);
+    EXPECT_EQ(provider.Delivered(), 0u) << "latched by Poll, like the frame";
+    provider.Poll();
+    EXPECT_EQ(provider.Delivered(), 1u);
+    provider.PublishFrame(&person, 1, 12, 1.033);
+    provider.PublishFrame(&person, 1, 13, 1.067);
+    provider.PublishFrame(&person, 1, 14, 1.1);
+    provider.Poll();
+    EXPECT_EQ(provider.FrameId(), 14u) << "the newest";
+    EXPECT_EQ(provider.Delivered(), 4u) << "12 and 13 were delivered too";
+    provider.Poll();
+    EXPECT_EQ(provider.Delivered(), 4u) << "nothing new";
+}
+
 TEST(NativeSkeletonProviderPublishTest, CountIsClampedToCapacity) {
     NativeSkeletonProvider provider;
     const int kMax = NativeSkeletonProvider::kMaxPersons; // EXPECT_EQ takes a reference

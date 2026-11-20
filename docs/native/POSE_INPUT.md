@@ -3,8 +3,11 @@
 **State (2026-11-13, measured on Linux, no webcam):** the pipeline scores end to
 end. A recorded video fed through MediaPipe is scored; a replay of the song's own
 choreography gets all-perfect ratings; `scripts/pose_scoring_gate.sh` passes.
-**It has never been run against a live webcam**, it has a reproducible crash on a
-motionless skeleton. The player's
+**Since then (corrected 2026-11-20): the owner has played the game on real
+webcams, on the GPD and on the Mac, natively and in the browser, and it worked**
+(GPD sessions 2026-11-14/15; this paragraph used to say it had never been run
+against a live webcam). The crash on a motionless skeleton is fixed (PLAN P-1).
+Not recorded: a measured success rate for menus by gesture. The player's
 silhouette is drawn from the camera picture since `np-player-view`
 ([Player on screen](#player-on-screen-p-4)); photos are not. **Web** has a pose path since `np-web-pose` (see [Web](#web)).
 Work items: [PLAN.md](PLAN.md) track P.
@@ -99,7 +102,13 @@ connected** is relaunched by the reader thread, at most **3** times per
 session, after 1 s, 2 s, 4 s, with one line on stderr and one on-screen
 notice per attempt (*"The pose server crashed (signal 9) - restarting pose
 tracking (1 of 3)."*); once it reconnects the notice clears and
-`Pose server restarted (pid N): pose tracking resumed` is printed. Exits a
+`Pose server restarted (pid N): waiting for its first frame` is printed,
+then `Pose server streaming: first pose frame received` when frames are
+back. A server that is connected and has not yet sent a frame is loading
+its model: until its first frame the stall watchdog
+(`DC3_POSE_SERVER_STALL_MS`, 5 s) allows 30 s. Measured on an M3 MacBook
+Air, two launches: with 5 s the server was killed four times in a row while
+MediaPipe loaded, and there was no tracking. Exits a
 relaunch cannot fix — model missing (5), packages missing (6), video
 unreadable (4), python3 not runnable (127), a clean exit (0) — are not
 retried; after the last attempt the usual "pose tracking is off" notice
@@ -399,6 +408,8 @@ This is a lower bound, not a webcam measurement:
 - Wrist speed reads 10 m/s, because tracking jumps between the two dancers.
 
 It does rank correctly. The next step is a real player on a real webcam (P-2).
+(Since done: the owner has played on a real webcam on the GPD and the Mac, native
+and browser; corrected 2026-11-20.)
 
 **Frame rate.** Same noisy choreography, Better Off Alone Easy:
 
@@ -1568,7 +1579,8 @@ StreamRenderer::DrawToTexture, HX_NATIVE body: compose on the CPU
 - **Protocol v3** (`pose_server.py` docstring): v2 with magic `0x44503303` and,
   after the persons, `[u16 w][u16 h][u8 rgb=1][u8 mask=1][u16 0]`, `w*h*3` RGB888
   bytes, `w*h` mask bytes (0 nobody, *k* = the packet's *k*-th person; the most
-  confident mask over 0.5 wins). Sent only when the game passes `--frames`;
+  confident mask over 0.5 wins; since P-20 the mask is refined before it is
+  sent, see "The mask, measured" below). Sent only when the game passes `--frames`;
   without it the server sends v2 byte for byte as before, and the reader still
   takes v1/v2. A v3 packet does not fit the socket buffer in one write, so the
   server keeps an outbox instead of treating a short write as a disconnect.
@@ -1611,6 +1623,9 @@ StreamRenderer::DrawToTexture, HX_NATIVE body: compose on the CPU
 | at 30 fps | 2.3 MB/s | 9.2 MB/s | 36.9 MB/s |
 | `camera_block` (scale + mask) in `pose_server.py` | 0.44 ms | 0.25 ms | 0.65 ms |
 
+- The `camera_block` row is the raw mask. The refined mask (P-20, the default)
+  adds 0.5 ms per frame for one person and 0.8 ms for two at 320×240; see "The
+  mask, measured".
 - MediaPipe with masks on: median 21.7 ms per frame vs 21.6 ms off (same model).
 - Unix socket: 0.046 ms per 307 KB packet.
 - Web worker camera block: 1–3.5 ms per frame; worker masks vs desktop masks on
@@ -1645,6 +1660,174 @@ StreamRenderer::DrawToTexture, HX_NATIVE body: compose on the CPU
   `composeMsMean`, `frameAgeMsMean` and the last picture sampled on the grid
   (`rrggbbaa`). Works headless (`MILO_NORENDER=1`): `DrawToTexture` runs and the
   CPU copy is what it reports.
+
+### The mask, measured (P-20, `np-player-mask`, 2026-11-20)
+
+Reported from a live session on the M3 Air: the silhouette "feels a bit
+sketchy". This section is the measurement, what was changed, and what was not.
+
+**Method.** `scripts/pose_mask_quality.py` runs the pose server's own MediaPipe
+backend and its own `camera_block` over a clip at the wire size (320×240) and
+scores the mask that would be sent:
+
+- *still flicker*: over pairs of consecutive frames in which no tracked joint
+  (head, elbows, wrists, knees, ankles; visibility 0.5 or more) moved more than
+  1 px, the share of the person's mask that changed. This is edge noise: the
+  body did not move and the outline did.
+- *change*: the same share over every pair. Context for the row above, not a
+  defect (a dancer's mask is supposed to change).
+- *coverage*: tracked joints whose pixel is inside their own person's mask;
+  *±2 px* also counts a joint within 2 px of it.
+- *holes*: enclosed background regions per frame, and the pixels in small ones
+  (30 px or less). A hand on a hip is a real hole and only counts in the first.
+- *fragments*: pieces of a person's mask besides the largest, per frame.
+- *ghost*: mask pixels where this frame's soft mask is under 0.1, as a share of
+  the mask. Whatever a filter or a fill adds that the segmentation does not see.
+- cost of `camera_block` per frame, median and p95.
+
+Conditions: motion (60 s from 60 s into the clip); `--every 2` (15 poses a
+second); `--still` (one frame held for 20 s with seeded sensor noise, sigma 3:
+a person standing motionless, so every changed pixel is flicker); and a
+synthetic dim room (`--gain 0.3 --noise 8`). Clips: the playtest kit's
+`macarena.mp4`, `supersonic.mp4`, `macarena_duo.mp4` (two dancers) and
+`taye01_stand_dance.mp4`. **All of it is lit video or game capture, none of it
+is a webcam in a living room, and the dim room is arithmetic on a bright one.**
+
+**Baseline** (the mask as it was; `--mask raw` today), `pose_landmarker_full`:
+
+| clip, condition | still flicker (p95, pairs) | change | coverage (wrists) | holes / frame | small-hole px / frame | fragments / frame |
+|---|---|---|---|---|---|---|
+| macarena, held frame, noise 3 | 1.40 % (1.84, 285) | 1.41 % | 100 % | 2.000 (both real: arms akimbo) | 0.00 | 0.000 |
+| supersonic, held frame, noise 3 | 1.39 % (1.97, 223) | 1.44 % | 100 % | 0.027 | 0.11 | 0.000 |
+| macarena, held frame, dim | 2.75 % (3.19, 12) | 3.05 % | 99.79 % (83.0 %, of only 53 tracked) | 1.767 | 0.17 | 0.000 |
+| supersonic, motion | 3.40 % (4.91, 49) | 8.23 % | 99.72 % (98.9 %) | 0.489 | 2.00 | 0.134 |
+| macarena, motion | 1 still pair, not a measurement | 10.54 % | 99.58 % (98.6 %) | 0.626 | 2.31 | 0.107 |
+| macarena_duo, motion | 6.76 % (10.44, 282) | 10.24 % | 99.56 % (98.2 %) | 0.526 | 4.69 | 0.054 |
+| macarena, motion, 15 poses/s | no still pairs | 18.44 % | 99.60 % (98.5 %) | 0.630 | 2.27 | 0.108 |
+| macarena, motion, dim | no still pairs | 11.35 % | 98.77 % (95.7 %) | 0.547 | 1.89 | 0.103 |
+| supersonic, motion, dim | 1 still pair | 9.58 % | 98.57 % (95.8 %; elbows 97.9 %) | 0.536 | 2.12 | 0.151 |
+| taye01_stand_dance, 8 s | 2.03 % (3.60, 99) | 6.30 % | 99.95 % (99.8 %) | 1.133 | 2.33 | 0.004 |
+
+What that says: **the defect is the edge, then the arms in poor light.** A
+motionless person's outline changes by 1.4 % of the mask every frame, and by
+3.4 to 6.8 % between frames of a dance in which no joint moved a pixel. In the
+dimmed clips one tracked wrist in 23 is outside the mask. Holes (about two
+small-hole pixels a frame) and fragments (a speck every 7 to 20 frames, 0.02 %
+of the mask) are real and small. The mask also only changes when a pose
+arrives: at 15 poses a second each update moves 18.4 % of it against 10.5 % at
+30; nothing here addresses that.
+
+**What was tried, each alone** (`--variants`):
+
+| | still flicker, supersonic motion (49 pairs) | still flicker, macarena held (285 pairs) | holes / frame, macarena motion | fragments / frame, macarena motion | wrists covered, macarena dim |
+|---|---|---|---|---|---|
+| raw | 3.40 % | 1.40 % | 0.626 | 0.107 | 95.7 % |
+| hysteresis (enter 0.5, stay 0.25) | 1.96 % | 0.10 % | 0.580 | 0.095 | 97.0 % |
+| motion-aware temporal filter | 2.21 % | 0.37 % | 0.797 | 0.168 | 95.5 % |
+| filter + hysteresis | 1.50 % | 0.01 % | 0.842 | 0.172 | 96.5 % |
+| capsule on a limb the mask lost | 3.40 % | 1.40 % | 0.637 | 0.106 | 98.6 % |
+| 3×3 close + pieces under 1 % removed | 3.40 % | 1.39 % | 0.438 | 0.003 | 95.7 % |
+| **all four ("refined", the default)** | **1.52 %** | **0.01 %** | **0.421** | **0.001** | **98.9 %** |
+
+The filter alone makes holes and specks *more* frequent (it holds a pinhole
+open for a few frames); the close and the speck removal take them out again,
+which is why the four ship together and not the two that move the headline.
+
+**Kept: raw → refined.**
+
+| clip, condition | still flicker (p95) | change | coverage (wrists) | ±2 px | holes / frame | fragments / frame | ghost |
+|---|---|---|---|---|---|---|---|
+| macarena, held frame, noise 3 (285 pairs) | 1.40 (1.84) → **0.01 % (0.03)** | 1.41 → 0.01 % | 100 → 100 % | 100 → 100 % | 2.000 → 2.000 | 0 → 0 | 0.01 % |
+| supersonic, held frame, noise 3 (223) | 1.39 (1.97) → **0.02 % (0.08)** | 1.44 → 0.02 % | 100 → 100 % | 100 → 100 % | 0.027 → 0.002 | 0 → 0 | 0.01 % |
+| macarena, held frame, dim (12) | 2.75 (3.19) → 0.18 % (0.32) | 3.05 → 0.26 % | 99.79 → 100 % (83.0 → 100 %, 53 tracked) | 100 → 100 % | 1.767 → 2.002 | 0 → 0 | 0.02 % |
+| supersonic, motion (49) | 3.40 (4.91) → **1.52 % (3.30)** | 8.23 → 6.44 % | 99.72 → 99.91 % (98.9 → 99.7 %) | 99.91 → 100.00 % | 0.489 → 0.309 | 0.134 → 0.000 | 0.04 % |
+| macarena, motion | n = 1 | 10.54 → 8.87 % | 99.58 → 99.85 % (98.6 → 99.5 %) | 99.88 → 100.00 % | 0.626 → 0.421 | 0.107 → 0.001 | 0.07 % |
+| macarena_duo, motion (282) | 6.76 (10.44) → 4.68 % (8.98) | 10.24 → 8.21 % | 99.56 → 99.84 % (98.2 → 99.4 %) | 99.95 → 100.00 % | 0.526 → 0.293 | 0.054 → 0.001 | 0.24 % |
+| macarena, motion, 15 poses/s | n = 0 | 18.44 → 16.28 % | 99.60 → 99.89 % (98.5 → 99.6 %) | 99.86 → 100.00 % | 0.630 → 0.413 | 0.108 → 0.001 | 0.06 % |
+| macarena, motion, dim | n = 0 | 11.35 → 9.33 % | 98.77 → 99.69 % (95.7 → 98.9 %) | 99.56 → 99.99 % | 0.547 → 0.362 | 0.103 → 0.002 | 0.22 % |
+| supersonic, motion, dim | n = 1 | 9.58 → 7.07 % | 98.57 → 99.55 % (95.8 → 98.7 %) | 99.56 → 99.99 % | 0.536 → 0.309 | 0.151 → 0.015 | 0.20 % |
+| taye01_stand_dance, 8 s (99) | 2.03 (3.60) → 0.59 % (2.31) | 6.30 → 4.87 % | 99.95 → 99.95 % | 100 → 100 % | 1.133 → 1.175 | 0.004 → 0.000 | 0.11 % |
+
+Read it with these in mind. The mask is 3 % larger (6,481 → 6,676 px on
+macarena): hysteresis keeps the 0.25 to 0.5 fringe once a pixel is in. On the
+two dancers the still-pair flicker only falls by a third, because their figures
+are a quarter the size (1,626 px each) and the "still" pairs there are mostly
+joints moving under a pixel, not a body at rest. The dim held frame's wrist row
+is 53 samples; it is the hysteresis that recovers them, not the capsule.
+
+How each step works (`MaskRefiner` in `native/scripts/pose_server.py`):
+
+- **Filter.** Per track id, each pixel of the soft mask moves toward the new
+  value by a gain of 0.25 where it changed by under 0.125, rising to 1.0 at a
+  change of 0.5. A still edge is averaged over about four frames; a limb that
+  moved is taken at once, so nothing trails (ghost 0.01 to 0.24 %).
+- **Hysteresis.** A pixel enters at 0.5 and stays until 0.25.
+- **Lost limbs.** For each arm and leg segment whose two landmarks are tracked,
+  five points along it are tested against the mask grown by 2 px. Only if one
+  is outside is a capsule drawn along the segment (width a share of the torso
+  length). A limb the mask already covers is never touched.
+- **Tidy.** 3×3 close; pieces under 1 % of the person removed (the largest
+  always kept).
+
+State is per track id and dropped when the track leaves. Between two people the
+more confident filtered mask still wins.
+
+**Measured and dropped.**
+
+| | why |
+|---|---|
+| a capsule on every tracked limb | coverage 100.0 % everywhere, but ghost 2.5 to 3.6 % of the mask (the capsule is a guess at the limb's width) and the still flicker on supersonic only fell to 2.62 % |
+| the same at half width | ghost 0.20 to 0.45 %, flicker unchanged (1.41 %) |
+| holding a drawn capsule for 6 frames | held-frame p95 0.77 % against 0.85 %; ghost 0.03 → 0.13 % |
+| probes with no 2 px margin | macarena held frame 0.07 % (p95 0.85) against 0.01 % (0.03): the forearm capsule blinked on and off across the gap at the hip |
+| stay 0.35 instead of 0.25 | taye 0.69 % against 0.59 %; 15 poses/s change 16.85 % against 16.33 %, fragments 0.228 a frame |
+
+**Cost** (`camera_block`, 320×240, 30 s of each clip, this box at a load
+average of 15, so read the differences rather than the absolutes):
+
+| | raw median / p95 | refined median / p95 | added |
+|---|---|---|---|
+| macarena (one person) | 0.50 / 0.67 ms | 0.98 / 1.28 ms | 0.48 / 0.61 ms |
+| macarena_duo (two) | 0.48 / 0.56 ms | 1.32 / 1.71 ms | 0.84 / 1.14 ms |
+
+**The switch back** is `DC3_POSE_MASK=raw` (the game passes `--mask raw` to the
+server it starts), or `pose_server.py --mask raw` by hand. The wire format did
+not change: protocol v3, one ordinal byte per pixel.
+
+**Web still builds the raw mask.** `native/web/pose/pose_worker.js` thresholds
+at 0.5 as before; the refiner has not been ported, because it leans on OpenCV
+(resize, close, connected components, line drawing) that the worker does not
+have, and nothing here was measured in a browser. Desktop and web therefore
+differ since P-20, and the worker says so at `MASK_THRESHOLD`.
+
+**In the game** (the same dumped frame served under both masks in one engine
+run: `pose_mask_quality.py --hold frame.npz --variant raw,refined --select
+FILE`, then a headless screenshot of `main_screen` and of a song): on a dimmed
+frame the raw silhouette ends at the elbows and the refined one has both
+forearms, as plain capsules; on a normal frame the raw one has a hand detached
+from an outstretched arm and a speck beside the skirt, and the refined one has
+neither. The player box is about 125×105 px at 720p and the game blurs it, so
+the edge itself looks the same in a still. Flicker does not show in a still at
+all; `--heat DIR` writes a map of how often each pixel changed.
+
+**Tests.** `tests/test_pose_server.py`: `MaskRefinerTest` (9) and
+`MaskSwitchTest` (3). `PoseServerCommandTest` holds `DC3_POSE_MASK`. Sabotage:
+16 mutations of `pose_server.py` (hysteresis off, no filter, a plain average
+for the filter, capsules never drawn, drawn always, no probe margin, tidy
+skipped, speck share 10 %, state keyed by packet position, stale state kept,
+`run()` ignoring `--mask raw`, `run()` never refining, visibility ignored, last
+person wins, close skipped, raw threshold 0.4) and 3 of `ServerCommand` (the
+variable not passed, any value passed, `--mask` without `--frames`): 19 of 19
+turned a test red.
+
+**Left.** Not seen on a live camera, on the Mac, or in a real dim room. The
+cube figure (`DepthBuffer3D`) reads the same mask and was not looked at under
+the refined one. 160×120 and 640×480 were not measured (the 2 px margin scales
+with the width and the speck share is relative, but the close is 3×3 at every
+size). The mask still
+only updates at the pose rate. A soft (alpha) mask on the wire would let the
+game draw a properly feathered edge; that is a protocol change and was not
+made.
 
 ### The cube figure (`DepthBuffer3D`, `np-boxyman`, 2026-11-15)
 
@@ -1886,7 +2069,7 @@ not filed: `BoxymanTest` fails each; the no-camera return removed:
   shipped data, but a debug `ui store_color_buff_at` with a stream live would
   write through it).
 - `pose_flash*` is not a camera mesh; it belongs to the avatar projection.
-- A live webcam session (P-2), desktop and web.
+- ~~A live webcam session (P-2), desktop and web.~~ Done since by the owner (GPD, Mac, native and browser; corrected 2026-11-20).
 
 ## Web
 
@@ -2452,6 +2635,13 @@ default is therefore the mode that recovers the most score at 8–15 Hz.
   means `extrap`; an unknown value is logged and the default used.
 - `interp` is the conservative alternative. It never scores above real
   30 Hz (0.92 at 8 Hz), at the cost of a ~150 ms skeleton delay.
+- **The fill is for songs.** Outside one (the menus, the pause menu, the
+  results) the mode is `DC3_POSE_FILL_MENU`, default `off`: the menu
+  detectors get the camera's own frames. `same` uses `DC3_POSE_FILL`'s mode
+  there too, as before 2026-11-20. The fill's clock carries on at UI time
+  when the song clock stands still (`DC3_POSE_FILL_CLOCK=stall`, the
+  default; `song` is the clock before). Measured in
+  [reference/MENU_GESTURES.md](reference/MENU_GESTURES.md) (PLAN P-19).
 
 Code:
 - `native/src/platform/PoseFill_Native.{h,cpp}`: the math and the schedule.
@@ -2461,17 +2651,29 @@ Code:
 ### What every mode shares
 
 - **Engages only for a slow camera.**
-  - It engages when the trimmed mean of the last 15 camera-frame intervals
-    (shortest and longest fifth dropped), measured in song time, is above
-    1/24 s. It releases below 1/27 s. (The median, until np-web4: a camera
-    between the thresholds delivers a 33/50 ms interval mix, and the median
-    of that jumped across both thresholds on every frame -- 349 changes in
-    one web song. [WEB.md](WEB.md#pose-fill-on-web-l-8-np-web4).)
+  - It engages when the trimmed mean of the last 15 camera periods
+    (shortest and longest fifth dropped) is above 1/24 s. It releases once
+    that mean has stayed below 1/27 s for 10 s (`DC3_POSE_FILL_DWELL`).
+    (The median, until np-web4: a camera between the thresholds delivers a
+    33/50 ms interval mix, and the median of that jumped across both
+    thresholds on every frame -- 349 changes in one web song.
+    [WEB.md](WEB.md#pose-fill-on-web-l-8-np-web4).)
+  - **A camera period is the camera's own**: the difference of two frames'
+    stamps over the frames the camera delivered between them. Until
+    np-pose-steady it was the song time between the frames the game
+    *took*, which is a whole number of game frames whatever the camera
+    does. See [Steady engagement](#steady-engagement-np-pose-steady-2026-11-20).
   - A 30 Hz source never engages it, so at 30 Hz the stream is the camera's
     own (measured below).
-  - A slow *game* (song loading, a box at load 150) also reads as a slow
-    camera, because the rate is measured in song time. That is deliberate:
-    what the scorer sees is frames per song second.
+  - When the stream carries no usable stamps, or the camera's clock and
+    the fill's did not keep pace within a factor 1.5 over the window
+    (`DC3_FAST_TIME` with a camera on the wall clock, a slowed song), the
+    rate is the time between the game's takes, in song time, as before:
+    what the scorer sees there is frames per song second.
+  - A slow *game* with a 30 Hz camera no longer reads as a slow camera.
+    Nothing is lost by that: the fill hands the game at most one frame a
+    game frame and the camera's own frame goes first, so a game that polls
+    less often than the camera delivers could never be given a fill frame.
 - **Is never recorded.** `DC3_POSE_RECORD` writes camera frames as they
   arrive, before the fill. Fill frames are not counted in `pose_fps`.
 - **Does not bridge tracking dropouts.** Nothing is filled after a frame
@@ -2482,6 +2684,93 @@ Code:
   held frames: 8 off, 8 interp, 8 extrap.
 - **One log line** on engage, release, or an interp delay change ≥ 20 ms:
   `DC3 POSE FILL: extrap (gain 1.00) engaged at song 12.34 s (camera 8.4 frames/s, stream delay 0 ms added to the scorer's latency)`.
+
+### Steady engagement (`np-pose-steady`, 2026-11-20)
+
+Owner's report from an M3 MacBook Air: pose detection *"felt jittery"*.
+Two things in that session's logs, both MEASURED, and a third that is the
+fill working:
+
+1. **Engaged for a camera at a steady 30.** 401 s on a 30 Hz display, the
+   game at about 31 fps. The pose server sent 29.9-30.4 poses a second in
+   every 5 s window (79 windows, none under 25.5). The fill engaged 19
+   times, logging `camera 22.5 frames/s` (or 23.3, 23.9).
+2. **Flapping.** 1019 s with the game at 60 fps and the tracker slowing
+   down for stretches: 26 engagements; 19 of the 23 engaged spans lasted
+   under 5 s (median 2.1 s); of the 24 releases followed by another
+   engagement in the same song, 17 were followed within 5 s and 18 within
+   10 s.
+3. The tracker really was slow for stretches (12-19 poses a second,
+   inference 50-80 ms against 21 ms, while the machine was hot). There the
+   fill is meant to engage.
+
+**Cause of 1** (`PoseFill_Native.cpp`, `Filler::Push`): each interval was
+`src.arrival - last.arrival`, the song time at which the *game* took the
+two frames. The game polls the provider once a frame and takes the newest
+camera frame; one that arrived between two polls together with a later one
+is never taken. When the game runs near the camera's rate, a poll that
+finds nothing new is followed by one that finds two. Six such two-frame
+gaps among fifteen takes of a 30 fps game read exactly 22.5 Hz.
+
+**Fix.** The provider counts every frame the source delivers
+(`NativeSkeletonProvider::Delivered`); a camera period is the difference
+of the two frames' stamps over the frames delivered between them
+(`Source::frames`). `DC3_POSE_FILL_RATE=arrival` is the estimate before.
+The median interval (interp's delay, extrap's horizon, the gap limit) is
+still song time between the frames the game took.
+
+Engagements of a 30.0 Hz camera sampled by a game loop, 3 x 120 s a cell,
+before -> now (`PoseFillRateTest`, a model of the delivery, not a
+recording):
+
+| delivery | game 30 fps | 31 | 33 | 45 | 60 |
+|---|---|---|---|---|---|
+| +-4 ms | 13 -> 0 | 3 -> 0 | 0 -> 0 | 0 -> 0 | 0 -> 0 |
+| +-8 ms | 40 -> 0 | 18 -> 0 | 0 -> 0 | 0 -> 0 | 0 -> 0 |
+| 15 % of frames 30 ms late | 58 -> 0 | 71 -> 0 | 40 -> 0 | 109 -> 0 | 19 -> 0 |
+| the same, stamped late too | 58 -> 0 | 71 -> 0 | 40 -> 0 | 109 -> 0 | 19 -> 0 |
+
+A camera at 8, 10, 12, 15 or 20 Hz engages with the same frame as before
+(its fifth interval) and stays engaged, at a 30 and a 60 fps game.
+
+**Fix of 2: the release dwell.** The fill lets go once the rate has read
+over 27 for 10 s of its clock without a break; a reading back under 27
+starts the wait again. Engaging is unchanged, so the fill is engaged
+wherever it was before. `DC3_POSE_FILL_DWELL=0` is the release before.
+Engage/release changes a minute, a camera sampled by a 60 fps game for
+300 s (`PoseFillDwellTest`):
+
+| camera | dwell 0 | 3 s | 5 s | 6 s | 8 s | **10 s** | 15 s |
+|---|---|---|---|---|---|---|---|
+| 18-29 Hz, a 4 s sine | 29.8 | 0.2 | 0.2 | 0.2 | 0.2 | **0.2** | 0.2 |
+| 18-29 Hz, a 9 s sine | 13.6 | 0.2 | 0.2 | 0.2 | 0.2 | **0.2** | 0.2 |
+| 18-29 Hz, a 20 s sine | 6.2 | 6.2 | 6.2 | 0.2 | 0.2 | **0.2** | 0.2 |
+| a level from 18-29 Hz every 2.5 s | 18.4 | 1.2 | 0.2 | 0.2 | 0.2 | **0.2** | 0.2 |
+| 29 Hz with 2 s at 18 every 8 s | 15.2 | 15.0 | 15.0 | 0.2 | 0.2 | **0.2** | 0.2 |
+| the Mac's tracker rates (197 windows of 5 s) | 0.8 | 0.8 | 0.7 | 0.7 | 0.7 | **0.4** | 0.3 |
+
+- 0.2 a minute is the one engagement of the run.
+- 6 s is the shortest dwell that leaves every synthetic camera one
+  engagement. 10 s is the shortest at which the Mac's own rates go from
+  13 changes to 7. That row holds one rate per 5 s window, so it is a
+  steadier camera than the Mac's was (the log has 52 changes).
+- Cost: a camera that was slow and is fast for good stays filled 10 s
+  longer (20.1 -> 30.1 s engaged in the test), with the same two changes.
+
+**Scores, before -> now.** Footage fixtures as below, three songs
+(boyfriend, indaclub, macarena), medium, one run each; before is
+`DC3_POSE_FILL_RATE=arrival DC3_POSE_FILL_DWELL=0` on the same binary.
+
+| camera | score before | score now | ratings, both |
+|---|---|---|---|
+| 8 Hz | 5,537,085 | 5,537,256 (+0.003 %) | 137/43/3/0 |
+| 15 Hz | 5,583,889 | 5,583,841 (-0.001 %) | 136/44/2/1 |
+
+The ratings are the same song by song. The differences are inside the
+scorer's run-to-run spread given below (0.02 %). In all twelve runs the
+fill engaged once and never released: the performer's rate is constant, so
+these runs say a steadily slow camera scores as before. No scored run of a
+camera whose rate wanders was taken, and nothing here was run on the Mac.
 
 ### What `extrap` (the default) does
 
@@ -2750,9 +3039,11 @@ clock.
 - **Not run on web.** The changed sources compile under em++
   (`-fsyntax-only` with dc3-web's flags). The fill has not been run in a
   browser.
-- **Not validated live.** No owner session on the GPD with a real webcam
-  has been taken, and the guarded default has not been replayed on the
-  owner's recorded session.
+- **Not validated live with the fill on.** The owner has played on the GPD
+  with a real webcam (the recorded session below is one), but no session
+  with this default has been taken, and the guarded default has not been
+  replayed on the owner's recorded session. (Reworded 2026-11-20: this said
+  no owner session with a real webcam had been taken at all.)
 - **The scores are from a loaded box** (load 25–84). FAST_TIME makes them
   frame-exact rather than wall-clock dependent, so a quiet-box rerun is
   expected to agree, but none was taken.
@@ -3156,15 +3447,15 @@ native/build/milo-tests --gtest_filter='PoseEstimate*:PoseSensorEstimate*:PoseSe
 
 | # | Gap | Size | Platform |
 |---|---|---|---|
-| P-1 | **Crash on a motionless skeleton.** `RhythmDetector::AnalyzeData` divides by a variance that becomes zero → NaN → `SymbolKeys::SetFrame` segfault (`RhythmBattlePlayer::Poll`). A webcam trips it whenever joints are held (legs out of frame are held all song). | S–M | all |
-| P-2 | Never run against a live webcam. **No-camera part done** (`np-pose-desk`): fast failure + on-screen notice (above); camera request, capture timestamps, HFOV and the lost-camera exit unit-tested against a fake capture (`tests/test_pose_server.py`). Left: a real webcam session. | S | all |
-| P-3 | ~~Gesture menus~~ **Done (`np-gesture-menus`)**, see [Gesture menus](#gesture-menus). Left: a real person on a real webcam has not driven them; the depth image in the player box is P-4. | — | all |
+| P-1 | ~~Crash on a motionless skeleton.~~ **Fixed 2026-11-13 (`np-fix-still`, the sensor noise floor; [PLAN](PLAN.md) P-1).** Was: `RhythmDetector::AnalyzeData` divides by a variance that becomes zero → NaN → `SymbolKeys::SetFrame` segfault (`RhythmBattlePlayer::Poll`). A webcam trips it whenever joints are held (legs out of frame are held all song). | S–M | all |
+| P-2 | ~~Never run against a live webcam.~~ **Run against live webcams by the owner: GPD (sessions 2026-11-14/15), Mac, browser (corrected 2026-11-20).** **No-camera part done** (`np-pose-desk`): fast failure + on-screen notice (above); camera request, capture timestamps, HFOV and the lost-camera exit unit-tested against a fake capture (`tests/test_pose_server.py`). ~~Left: a real webcam session.~~ | S | all |
+| P-3 | ~~Gesture menus~~ **Done (`np-gesture-menus`)**, see [Gesture menus](#gesture-menus). A real person on a real webcam has driven the game since (owner, GPD and Mac; corrected 2026-11-20); what is still missing is a measured success rate for gesture menus on a live webcam. The depth image in the player box is P-4. | — | all |
 | P-4 | Player on screen. **Silhouette done** (`np-player-view`): protocol v3 / `dc3_camera_push` carry the picture and a person mask, a `LiveCameraInput` stand-in feeds the decompiled `StreamRenderer`, and the cursor and gameplay boxes draw the player ([Player on screen](#player-on-screen-p-4)). Photos root-caused (`np-media`): the snapshot's alpha is its TexRenderer's clear, which the engine dropped; fix in engine branch `np-media` (`c810e49`; series also in `~/tmp/np-media-engine.patch`), not landed. Left: that engine change, `DepthBuffer3D`'s draw, the `pose_flash` entries (not camera), a live webcam. | M | all |
 | P-5 | ~~Tests~~ **Done** (`np-pose-desk`): ctests `PoseSocketReaderTest`, `PoseCocoMappingTest`, `PoseSensorSlotTest` (no GPU, no game data); keypoint fixture + `PoseFixture.Python`; the gate runs the whole song and judges means, final scores and per-move distances (above). Open: standing still out-scores a different dance (P-7). | — | all |
 | P-6 | ~~Remove the dead ncnn/YOLO path~~ **Done** (`np-pose-desk`). | — | all |
 | P-7 | Scoring believability. **Answered** (`np-scoring`, [above](#scoring-believability-p-7-np-scoring)): the leniency is the original's. Real Kinect data (UTD-MHAD) scores like our inputs, and the scoring code is 100% matched. Added: the 30 Hz in-process performer + matrix, and the `DC3_POSE_LATENCY_MS` knob. **Video calibration** (`np-video-calib`, [above](#video-calibration-np-video-calib-2026-11-13)): 16 story-mode songs from a stream, replayed at Medium against the original's own results cards, 1162 = 1162 moves. Perfect+awesome 0.91 vs 0.96, but perfect 0.54 vs 0.79; score 74% of the original's (78% with a 10° camera-pitch correction). Still-body jitter ~1.7 mm (VIDEO mode). A causal One Euro filter costs 13–26% of the score, so there is no smoothing. Knob default stays unset: a recording cannot measure a live pipeline, and the score curve is flat over ±50 ms. Left: a live webcam's latency (P-2, L-5; `DC3_POSE_LATENCY_LOG` prints the capture → game part, and the fake-camera grid is in [Latency on the live path](#latency-on-the-live-path-l-4)); camera-pitch auto-levelling (whole-body lean +6.9° ± 1.4° over the reference on this camera); the perfect/awesome gap (arms carry the limb error). | S | all |
 | P-8 | macOS: `/proc/self/exe` → `_NSGetExecutablePath`; camera permission goes to the Python child. See [MACOS.md](MACOS.md). | S–M | mac |
-| P-9 | ~~Web pose~~ **Done in `np-web-pose`** (see [Web](#web)). Left: never run on a real webcam/permission prompt; GPU delegate and the lite model unmeasured on an idle box; no camera preview inside the game (P-4). | — | web |
+| P-9 | ~~Web pose~~ **Done in `np-web-pose`** (see [Web](#web)). Run on a real webcam in the browser by the owner since (corrected 2026-11-20). Left: GPU delegate and the lite model unmeasured on an idle box; no camera preview inside the game (P-4). | — | web |
 | P-12 | ~~Mid-song pause with the dancer in view~~ **Done (`np-tracking`)**: a 1 s dropout hold plus 2 s tracker memory; a re-acquired dancer is bound and scored (W-10). See [Detection dropouts](#detection-dropouts-and-re-acquired-dancers-p-12-w-10-np-tracking). Left: a live webcam. | — | all |
 
 ## Gesture menus
@@ -3217,6 +3508,11 @@ Measured working: hover ≥ 0.6 s, forearm 0.24 m swept 110° in 0.3 s.
   (`ui/gen/cursor.milo`: frame, empty-slot silhouette, edge-of-frame warnings,
   identification ring) now draw; the depth image inside the box is still
   hidden (P-4), so it shows the flat colour the original shows under Xenia.
+- **On a webcam, measured** (PLAN P-19, `np-menu-gestures`): how often a
+  sweep picks the row meant, at 30, 15 and 8 camera frames a second and on
+  two recorded GPD sessions, with the opt-in hold to select
+  (`DC3_MENU_SELECT`) and Inferred sweep start (`DC3_MENU_ARC_START`):
+  [reference/MENU_GESTURES.md](reference/MENU_GESTURES.md).
 - Not covered: a fresh console's tutorial screens (OKAY by gesture works the
   same way; the flow seeds tutorials-seen), scrolling to items below the 5th
   row of a long list.

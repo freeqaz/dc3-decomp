@@ -336,7 +336,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "55101ceee5f314409763e559668700f460626dff"
+set(MILO_ENGINE_PIN "9fecc984a809ca1b561243f3e5c5cbbf468855ca"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -1239,9 +1239,12 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
     src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
+    src/platform/SongSelect_Native.cpp # song select: Recently Played, sort by artist, section jumps (docs/native/SONG_SELECT.md)
+    src/platform/SongSelectState_Native.cpp # song select: play history + sort kept in $DC3_SAVE_DIR/song_select.txt
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/PoseEstimate_Native.cpp # DC3_POSE_ESTIMATE: joints the camera cannot see (np-cutoff)
+    src/platform/MenuGesture_Native.cpp # menu gestures on a webcam: measurement (np-menu-gestures)
     src/platform/NuiImageSurface_Native.cpp
     src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
     src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
@@ -1440,9 +1443,12 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
     src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
+    src/platform/SongSelect_Native.cpp # song select: Recently Played, sort by artist, section jumps (docs/native/SONG_SELECT.md)
+    src/platform/SongSelectState_Native.cpp # song select: play history + sort kept in $DC3_SAVE_DIR/song_select.txt
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/PoseEstimate_Native.cpp # DC3_POSE_ESTIMATE: joints the camera cannot see (np-cutoff)
+    src/platform/MenuGesture_Native.cpp # menu gestures on a webcam: measurement (np-menu-gestures)
     src/platform/NuiImageSurface_Native.cpp
     src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
     src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
@@ -1581,6 +1587,12 @@ target_link_options(dc3-web PRIVATE
     # missing_stubs.js pre-js from milo_engine_apply_web_target_options.
     "SHELL:--pre-js ${CMAKE_CURRENT_SOURCE_DIR}/web/dc3_pre.js"
 )
+# The pre-js is pasted into dc3-web.js at link time, and a path in the link
+# options is not a dependency: without this, an edit to dc3_pre.js alone left
+# the deployed dc3-web.js as it was (measured 2026-11-20: "Built target
+# dc3-web" with no link step, and the old save-store code still served).
+set_property(TARGET dc3-web APPEND PROPERTY LINK_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/web/dc3_pre.js)
 if(MILO_WEB_ASYNC)
     target_link_options(dc3-web PRIVATE
         -sJSPI_EXPORTS=["_main","_dc3MainLoopTick","dc3MainLoopTick"]
@@ -2053,6 +2065,7 @@ if(BUILD_TESTS)
         tests/test_bink_integration.cpp
         tests/test_extract_bik.cpp
         tests/test_input.cpp
+        tests/test_text_input.cpp # the engine's text-editing input queue (platform/TextInput_Native.h): capture vs the pad map, chain, UTF-8, repeat
         tests/test_audio.cpp
         tests/test_mogg_decode.cpp
         tests/test_mogg_v0xe.cpp
@@ -2090,6 +2103,7 @@ if(BUILD_TESTS)
         tests/test_rndcam_projection.cpp
         tests/test_particle_color.cpp
         tests/test_drawrect_color.cpp
+        tests/test_canvas2d.cpp # the engine's batched 2D canvas (gfx/Canvas2D.h): CPU half + rendered proof
         tests/test_flare_point_test.cpp
         tests/test_gpu_timers.cpp
         tests/test_retail_lighting.cpp
@@ -2154,6 +2168,8 @@ if(BUILD_TESTS)
         tests/test_pose_scoring.cpp
         tests/test_pose_level.cpp
         tests/test_pose_fill.cpp
+        tests/test_menu_hold.cpp  # np-menu-gestures: hold to select's timing rule and the swipe/hold/both switch
+        tests/test_menu_arc.cpp   # np-menu-gestures: the arc detector's first node (DC3_MENU_ARC_START)
         tests/test_pose_estimate.cpp
         tests/test_pose_session.cpp
         tests/test_native_twoplayer.cpp
@@ -2178,13 +2194,16 @@ if(BUILD_TESTS)
         tests/test_cache_native.cpp
         tests/test_copy_poll_semantics.cpp
         tests/test_native_options.cpp
+        tests/test_native_song_select.cpp  # song select: Recently Played, sort by artist, section jumps, the classic switch
         tests/test_native_profile.cpp
         tests/test_native_glyph_render.cpp
         tests/test_native_ui_material_terms.cpp
         tests/test_frame_pacer.cpp     # H-29 frame cap + engine CPU-use guards
+        tests/test_thermal_governor.cpp # H-128 the thermal governor's rule and its row cap (engine, pure)
         tests/test_loader_budget.cpp   # H-110 the loader's per-poll budget follows the frame
         tests/test_bind_group_cache.cpp # H-30/H-31 cached bind groups, staged uniform rings
         tests/test_fringe_fade.cpp # np-gfx-sharp item 8: DC3 draws no alpha fringe fade
+        tests/test_invisible_draw_skip.cpp # np-tbdr: a mesh draw that cannot change a pixel is not sent
         tests/test_map_sampler_wrap.cpp # np-gfx-sharp item 8: a material's tex_wrap clamps its maps
         tests/test_headless_frames_in_flight.cpp # H-75 a headless frame loop stays within 2 frames of the GPU
         tests/test_host_path_case.cpp  # H-17/H-23 upper-case host directories

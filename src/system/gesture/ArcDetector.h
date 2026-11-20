@@ -30,6 +30,9 @@ private:
     void SwipeFailed(const Skeleton &);
     void CullPath();
     void DrawPath(std::list<Vector3>, class SkeletonViz &, class Hmx::Color, const Vector3 &) const;
+#ifdef HX_NATIVE
+    friend struct Dc3MenuGestureAccess; // native/src/platform/MenuGesture_Native.cpp
+#endif
 
     SkeletonSide mSide; // 0x4
     SkeletonJoint mPrimaryJoint; // 0x8

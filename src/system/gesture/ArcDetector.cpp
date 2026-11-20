@@ -7,6 +7,9 @@
 #include "rndobj\Utl.h"
 #include "utl\DebugMeter.h"
 #include "utl\Std.h"
+#ifdef HX_NATIVE
+#include "platform/MenuGesture_Native.h"
+#endif
 
 static int sDefaultHoverTimer = 600;
 static float _acceptablePathErrorRatio = 0.89999998f;
@@ -335,6 +338,13 @@ void ArcDetector::TryToStartSwipe(const Vector3 &pos, const Skeleton &skeleton) 
         skeleton.TrackedJoints()[mSecondaryJoint].mJointConf != kConfidenceTracked) {
         tracked = false;
     }
+#ifdef HX_NATIVE
+    // A webcam's Inferred is not a Kinect's (MenuGesture_Native.h, "the arc
+    // detector's first node"); under the default this changes nothing.
+    tracked = Dc3MenuGesture::ArcStartAllowed(
+        skeleton.SkeletonIndex(), mPrimaryJoint, mSecondaryJoint, tracked
+    );
+#endif
     if (tracked) {
         mJointPath.insert(mJointPath.begin(), pos);
         // No `const TrackedJoint *joints` base local -- the image keeps &skeleton

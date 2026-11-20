@@ -122,6 +122,19 @@ public:
     static bool sForceDisengage;
 
     friend class HamScrollBehavior;
+#ifdef HX_NATIVE
+    // native/src/platform/MenuGesture_Native.cpp: reads the list's gesture
+    // state for the menu-gesture measurement (PLAN P-3).
+    friend struct Dc3MenuGestureAccess;
+#endif
+
+#ifdef HX_NATIVE
+    /** What the list's rows show right now, "ROW|SLOT|TEXT" for every label
+     * with text, joined by ";;" (ROW is the provider's row, SLOT the slot's
+     * match name).  For tests: the only other way to read a row is a
+     * screenshot.  native/src/platform/SongSelect_Native.cpp. */
+    String NativeVisibleText() const;
+#endif
 
 private:
     void LinkRibbonDrawState(std::vector<HamListRibbonDrawState> &, UIListWidgetDrawState &);
@@ -151,6 +164,13 @@ private:
     static float sSlideTrendAmount;
 
     DataNode OnMsg(const ButtonDownMsg &);
+
+#ifdef HX_NATIVE
+    /** Left/Right = previous/next section, LB/RB = a screenful, for a
+     * provider that answers nav_jump_row (song select's).  True when the
+     * button was taken.  native/src/platform/SongSelect_Native.cpp. */
+    bool NativeNavJump(JoypadAction);
+#endif
 
 protected:
     virtual void OldResourcePreload(BinStream &);

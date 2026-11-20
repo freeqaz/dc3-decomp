@@ -34,6 +34,50 @@ int Dc3ProfileResolve();  // parses DC3_PROFILE now (warns on an unknown value)
 bool Dc3ProfileIsDev();   // the resolved profile
 void Dc3ProfileApply();
 
+// The boot sequence this launch runs (defined in System_Native.cpp; see
+// docs/debugging/native.md "Boot sequence").  A console that has been played
+// before -- its global options are on disk -- does not sit through the splash
+// screens, the attract movie and the autosave warning again: it goes to the
+// title screen and waits there for the player.  A first launch, and any launch
+// with DC3_BOOT_INTRO=1, runs the original sequence.
+struct Dc3BootPlan {
+    bool returning;  // the global options were on disk when the game started
+    bool showSplash; // App::App shows the ESRB + Harmonix splash screens
+    bool skipIntro;  // attract and the autosave warning are passed in 10 frames
+    bool fastBoot;   // DC3_FAST_BOOT / ?fast_boot=1: title and the save wait too
+    const char *why; // one line for the log: what decided it
+};
+// The decision, a pure function of its inputs (each *Env is getenv()'s result,
+// null when unset; an empty value counts as unset):
+//   fastOn / fastOff = DC3_FAST_BOOT set to a non-zero number / to anything else
+//   intro      = DC3_BOOT_INTRO set ? (value is not 0/false/off/no)
+//                                   : fastOff || !globalOptionsOnDisk
+//   showSplash = DC3_SHOW_SPLASH set ? (value is not 0/false/off/no) : intro
+//   fastBoot   = fastOn || webFastBootParam
+//   skipIntro  = fastBoot || (!intro && !fastOff)
+// So every variable that is set wins over the disk, in both directions, and
+// DC3_FAST_BOOT=0 is what it was before the disk was consulted: the original
+// sequence, with no screen ever passed for the player.
+Dc3BootPlan Dc3BootPlanResolve(bool globalOptionsOnDisk, const char *showSplashEnv,
+                               const char *fastBootEnv, const char *bootIntroEnv,
+                               bool webFastBootParam);
+// This launch's plan, decided on the first call (App::App makes it, before
+// anything can write the global options) and the same for the whole run.
+const Dc3BootPlan &Dc3BootPlanGet();
+bool Dc3BootShowSplash(); // Dc3BootPlanGet().showSplash
+bool Dc3BootFast();       // Dc3BootPlanGet().fastBoot
+bool Dc3BootSkipIntro();  // Dc3BootPlanGet().skipIntro
+// <DC3_CACHE_DIR or ~/.local/share/dc3/cache>/global/global, the file
+// ProfileMgr::SaveGlobalOptions writes through Cache_Stub.cpp.
+std::string Dc3GlobalOptionsPath();
+bool Dc3GlobalOptionsOnDisk(); // read now (the plan reads it once, at startup)
+
+// DC3_CLASSIC_SONG_SELECT=1: song select exactly as in the image -- three
+// sorts, no Recently Played section, Left/Right and LB/RB inert, the sort not
+// remembered.  Default off: docs/native/SONG_SELECT.md has what is added.
+// Read once (defined in SongSelect_Native.cpp).
+bool Dc3ClassicSongSelect();
+
 // Controller-mode policy, DC3_CONTROLLER_MODE=auto (default) | forced |
 // faithful (defined in System_Native.cpp; see docs/debugging/native.md
 // "Controller mode policy").
@@ -49,6 +93,35 @@ bool Dc3ControllerModeLatchAuto(bool providerRunning);
 // DC3_CONTROLLER_MODE_TIMEOUT_MS: faithful-mode override of the helpbar's
 // controller_mode_timeout; -1 when unset.
 int Dc3ControllerModeTimeoutMs();
+
+// Menu select, DC3_MENU_SELECT=swipe (default) | hold | both (defined in
+// MenuGesture_Native.cpp; docs/native/PLAYTEST.md "Playing").  How a hand
+// picks the highlighted row of a menu list: the original's sweep of the
+// forearm across the body, keeping the hand on the row (hold: the list's
+// slide shows the progress, DC3_MENU_HOLD_MS), or either.  Never in
+// controller mode or in a song.  It changes at run time -- the F1 key,
+// {native_settings set_menu_select hold}, {native_settings cycle_menu_select}
+// -- and every change is named in an on-screen notice.
+enum {
+    kDc3MenuSelectSwipe = 0,
+    kDc3MenuSelectHold = 1,
+    kDc3MenuSelectBoth = 2,
+    kDc3MenuSelectCount = 3
+};
+int Dc3MenuSelect();                      // the mode now (the variable, at the first call)
+const char *Dc3MenuSelectName(int mode);  // "swipe" / "hold" / "both"
+int Dc3MenuSelectParse(const char *text); // the mode, or -1
+void Dc3SetMenuSelect(int mode);          // and the notice naming it
+void Dc3MenuSelectFramePoll();            // once a frame (App.cpp): the F1 key
+
+// Sweep start, DC3_MENU_ARC_START=tracked (default) | inferred (defined in
+// MenuGesture_Native.cpp; docs/native/reference/MENU_GESTURES.md).  The
+// original starts a sweep only on a frame whose wrist and elbow are both
+// Tracked; `inferred` also starts one where the camera scored them Inferred.
+// {native_settings set_menu_arc_start inferred} changes it at run time, with
+// a notice.
+const char *Dc3MenuArcStartName();             // "tracked" / "inferred"
+bool Dc3SetMenuArcStart(const char *text);     // false: neither word
 
 // Native-only runtime settings. These are enhancements or toggles that don't
 // exist on Xbox 360 — the original build has no equivalent options.

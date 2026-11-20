@@ -104,10 +104,55 @@ controller mode, and 5 s without a press hands the menus back to your hands.
 | Esc, Backspace | B | | Q / E | LB / RB |
 | X | X | | Z / C | LT / RT |
 | Y | Y (Options) | | **Ctrl+Q** | **quit** |
-| F11, Alt+Enter | fullscreen | | | |
+| F11, Alt+Enter | fullscreen | | **F1** | menu select: swipe / hold / both |
 
 Space opens the pause menu but does not close it; resume with Continue (the
 original's behaviour). The map is printed at startup.
+
+On song select, Left/Right jump to the previous/next section of the list,
+Q/E move a screenful, and Y changes the sort (Skill Level, Title, Artist,
+Source). The songs played last are at the top under Recently Played
+([SONG_SELECT.md](SONG_SELECT.md)).
+
+**Two ways to pick a row, to compare.** The original's is the sweep (`swipe`,
+the default). The other is `hold`: keep your hand on the row and hold still;
+after 0.3 s the row's bar starts to slide in as it does for a sweep, and when
+it is full (1.5 s in all) the row is picked with the usual sound. Moving to
+another row or dropping your arm starts it again, a scrolling list waits until
+it stops, and after a pick nothing is picked again until you move your hand
+(or 2.5 s pass), so one hold cannot carry you through two screens. It works
+for the left arm's Back too, which takes a little longer (2.1 s) because
+there is no row to aim at first. **F1** steps through `swipe`, `hold` and `both`
+(either one picks) at any time, and a banner at the top says which is on;
+`scripts/play.sh --menu-select hold` starts in one. F1 is not a controller
+button: it does not take the menus away from your hands. What to compare:
+how often the row you meant is the row you get, how long a pick takes, and
+whether anything gets picked that you did not mean (with `hold`, a hand left
+resting on a row IS a pick: read the list with your arm down, or keep the
+hand moving). `DC3_MENU_HOLD_MS` (default 1200; `DC3_MENU_HOLD_LEFT_MS`,
+default 1800, for Back) changes how long the bar takes. Measured with the
+synthetic performer reading down a list with the hand up, 0.6 to 1.1 s a row:
+at 1200 a row got picked in 1 of 88 five-second reads of the main menu and 20
+of 88 of the song list, at 1600 in 0 and 1 of 16, at 2000 in none, for a pick
+that takes 2.0, 2.3 and 2.7 s (the sweep: 1.6 s). If rows get picked while you
+read, start with `DC3_MENU_HOLD_MS=1600`.
+
+On a slow camera (the GPD's 7 to 11 frames a second) the menus now get the
+camera's own frames: the in-between frames the game makes for scoring are for
+songs only, because replaying two recorded GPD sessions they lost most of the
+sweeps (2 to 4 picked of the 7 that were picked by gesture when recorded; 7
+without them). `DC3_POSE_FILL_MENU=interp` is the alternative worth a try
+there if sweeps get missed: smoother, about a fifth of a second behind your
+hand. If sweeps are ignored although the highlight follows your hand, try
+`DC3_MENU_ARC_START=inferred` (or, while it runs,
+`{native_settings set_menu_arc_start inferred}` over `/api/dta/eval`): the
+original starts a sweep only on a frame where the camera sees wrist and elbow
+well, and on the GPD's recordings a raised arm was below that on a quarter to
+half of the frames. Off by default: it also lets a sweep start while the arm
+is still coming up. One thing to watch for with the sweep, in the original's
+detector too: on the synthetic performer, lowering the arm after reading a
+list picked the lit row about 2 times in 100. Numbers:
+[reference/MENU_GESTURES.md](reference/MENU_GESTURES.md).
 
 **Quit** with Ctrl+Q or by closing the window. Esc is B, not quit.
 
@@ -117,10 +162,24 @@ shape differs from 16:9. **F11** or **Alt+Enter** toggles fullscreen;
 `--fullscreen` starts that way. On a Wayland desktop the kit opens the window
 through Xwayland (the game would fall back to it anyway: PLAN H-33).
 
+### Back to the original, one switch each
+
+Every addition to the menus has a switch that gives the original back. Set
+it in the environment before starting the game.
+
+| Addition | The original again |
+|---|---|
+| Song select: Recently Played, Artist sort, Left/Right by section, LB/RB by page, the remembered sort | `DC3_CLASSIC_SONG_SELECT=1` |
+| A played console boots to the title screen | `DC3_BOOT_INTRO=1` |
+| No pose fill in the menus, and a fill clock that does not stop | `DC3_POSE_FILL_MENU=same DC3_POSE_FILL_CLOCK=song` |
+| Hold to select | off unless asked for: `DC3_MENU_SELECT=swipe` is the default |
+| A sweep may start on an Inferred arm | off unless asked for: `DC3_MENU_ARC_START=tracked` is the default |
+
 ## Notices on screen
 
-A banner at the top means pose tracking stopped; the game carries on with a
-stand-in skeleton and nothing you do is scored.
+A banner at the top is the game telling you what a console's dashboard would
+have. Most mean pose tracking stopped: the game carries on with a stand-in
+skeleton and nothing you do is scored.
 
 | Notice | Meaning | What to do |
 |---|---|---|
@@ -131,6 +190,7 @@ stand-in skeleton and nothing you do is scored.
 | "Stand in front of the sensor" mid-song | You left the picture (or the tracker lost you) for about 2 s. Shorter losses are held (P-12, fixed). Continue is greyed out until the game sees you again | Step back into view, then Continue. If you were in view the whole time, mention the time |
 | "Raise both hands to change Profile" bubbles | The game's sign-in hint; it lingers with two people (G-18) | Ignore |
 | Kinect Tuner notice | That screen belongs to the 360 dashboard | Ignore |
+| This display runs at 30 Hz (or another number under 50) | The display the game started on refreshes that many times a second, so the game draws that many frames a second however fast the machine is. Seen with a 4K TV on a laptop | Set the display to 60 Hz in the system's display settings; a 4K TV may need a 1080p mode, or an HDMI 2.0 cable or adapter. Then start the game again |
 
 ## Known issues (PLAN open rows, 2026-11-14)
 
