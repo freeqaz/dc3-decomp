@@ -1219,6 +1219,19 @@ set(DC3_ENGINE_SOURCES
 # ============================================================================
 
 # Native platform sources (no entry point — shared by dc3-native and milo-viewer)
+# Song browser data (docs/native/reference/SONG_BROWSER_DATA.md): the catalog,
+# search and arrangements under the natively drawn song browser.  All but the
+# last file are standard C++ with no engine types; the last fills a catalog
+# from the running game.
+set(DC3_SONGBROWSER_SOURCES
+    src/songbrowser/SongText.cpp
+    src/songbrowser/SongCatalog.cpp
+    src/songbrowser/SongSearch.cpp
+    src/songbrowser/SongSections.cpp
+    src/songbrowser/SongCatalogJson.cpp
+    src/songbrowser/SongCatalogSource_Native.cpp
+)
+
 set(DC3_NATIVE_CORE_SOURCES
     src/xdk_shims.cpp
     src/xbox_link_stubs.cpp
@@ -1241,6 +1254,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
     src/platform/SongSelect_Native.cpp # song select: Recently Played, sort by artist, section jumps (docs/native/SONG_SELECT.md)
     src/platform/SongSelectState_Native.cpp # song select: play history + sort kept in $DC3_SAVE_DIR/song_select.txt
+    ${DC3_SONGBROWSER_SOURCES} # song browser data: catalog, search, arrangements, GET /api/songs
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/PoseEstimate_Native.cpp # DC3_POSE_ESTIMATE: joints the camera cannot see (np-cutoff)
@@ -1445,6 +1459,7 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
     src/platform/SongSelect_Native.cpp # song select: Recently Played, sort by artist, section jumps (docs/native/SONG_SELECT.md)
     src/platform/SongSelectState_Native.cpp # song select: play history + sort kept in $DC3_SAVE_DIR/song_select.txt
+    ${DC3_SONGBROWSER_SOURCES} # song browser data: catalog, search, arrangements, GET /api/songs
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/PoseEstimate_Native.cpp # DC3_POSE_ESTIMATE: joints the camera cannot see (np-cutoff)
@@ -2193,6 +2208,7 @@ if(BUILD_TESTS)
         tests/test_copy_poll_semantics.cpp
         tests/test_native_options.cpp
         tests/test_native_song_select.cpp  # song select: Recently Played, sort by artist, section jumps, the classic switch
+        tests/test_song_browser.cpp  # song browser data: search, arrangements, recents; GET /api/songs against song select
         tests/test_native_profile.cpp
         tests/test_native_glyph_render.cpp
         tests/test_native_ui_material_terms.cpp
