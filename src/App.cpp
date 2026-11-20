@@ -1231,6 +1231,13 @@ void App::RunWithoutDebugging() {
                 if (const GLFWvidmode *mode = glfwGetVideoMode(mon))
                     refreshHz = mode->refreshRate;
         }
+        // DC3_DISPLAY_HZ=N: take N as the display's rate (a test's 30 Hz
+        // display; the real display still paces through vsync).
+        if (windowed) {
+            const char *hz = getenv("DC3_DISPLAY_HZ");
+            if (hz && *hz && atof(hz) > 0.0)
+                refreshHz = atof(hz);
+        }
         const Dc3FrameCap cap = Dc3FrameCapDecide(getenv("DC3_FPS_CAP"), windowed, refreshHz);
         framePacer.SetTarget(cap.fps);
         Dc3LoaderBudgetSetFrameTarget(framePacer.TargetFps());  // H-110
