@@ -162,6 +162,19 @@ shape differs from 16:9. **F11** or **Alt+Enter** toggles fullscreen;
 `--fullscreen` starts that way. On a Wayland desktop the kit opens the window
 through Xwayland (the game would fall back to it anyway: PLAN H-33).
 
+### Back to the original, one switch each
+
+Every addition to the menus has a switch that gives the original back. Set
+it in the environment before starting the game.
+
+| Addition | The original again |
+|---|---|
+| Song select: Recently Played, Artist sort, Left/Right by section, LB/RB by page, the remembered sort | `DC3_CLASSIC_SONG_SELECT=1` |
+| A played console boots to the title screen | `DC3_BOOT_INTRO=1` |
+| No pose fill in the menus, and a fill clock that does not stop | `DC3_POSE_FILL_MENU=same DC3_POSE_FILL_CLOCK=song` |
+| Hold to select | off unless asked for: `DC3_MENU_SELECT=swipe` is the default |
+| A sweep may start on an Inferred arm | off unless asked for: `DC3_MENU_ARC_START=tracked` is the default |
+
 ## Notices on screen
 
 A banner at the top means pose tracking stopped; the game carries on with a

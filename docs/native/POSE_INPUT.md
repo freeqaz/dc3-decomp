@@ -2457,6 +2457,13 @@ default is therefore the mode that recovers the most score at 8–15 Hz.
   means `extrap`; an unknown value is logged and the default used.
 - `interp` is the conservative alternative. It never scores above real
   30 Hz (0.92 at 8 Hz), at the cost of a ~150 ms skeleton delay.
+- **The fill is for songs.** Outside one (the menus, the pause menu, the
+  results) the mode is `DC3_POSE_FILL_MENU`, default `off`: the menu
+  detectors get the camera's own frames. `same` uses `DC3_POSE_FILL`'s mode
+  there too, as before 2026-11-20. The fill's clock carries on at UI time
+  when the song clock stands still (`DC3_POSE_FILL_CLOCK=stall`, the
+  default; `song` is the clock before). Measured in
+  [reference/MENU_GESTURES.md](reference/MENU_GESTURES.md) (PLAN P-19).
 
 Code:
 - `native/src/platform/PoseFill_Native.{h,cpp}`: the math and the schedule.
@@ -3224,6 +3231,11 @@ Measured working: hover ≥ 0.6 s, forearm 0.24 m swept 110° in 0.3 s.
   (`ui/gen/cursor.milo`: frame, empty-slot silhouette, edge-of-frame warnings,
   identification ring) now draw; the depth image inside the box is still
   hidden (P-4), so it shows the flat colour the original shows under Xenia.
+- **On a webcam, measured** (PLAN P-19, `np-menu-gestures`): how often a
+  sweep picks the row meant, at 30, 15 and 8 camera frames a second and on
+  two recorded GPD sessions, with the opt-in hold to select
+  (`DC3_MENU_SELECT`) and Inferred sweep start (`DC3_MENU_ARC_START`):
+  [reference/MENU_GESTURES.md](reference/MENU_GESTURES.md).
 - Not covered: a fresh console's tutorial screens (OKAY by gesture works the
   same way; the flow seeds tutorials-seen), scrolling to items below the 5th
   row of a long list.
