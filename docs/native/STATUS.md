@@ -14,11 +14,15 @@ persist. The web build plays a whole song too, and every song reaches gameplay.
 footage of a real dancer, sent through the live `pose_server` path, plays a
 whole song to the results card, with menus driven by gesture and the player's
 silhouette on screen; the web build tracks a fake camera and scores. The
-hold-still crash is fixed. **No real webcam has driven the game yet**, and a
-live player would hit a mid-song "stand in front of the sensor" pause when
-tracking drops for ~0.7 s (PLAN P-12). What stands between here and a live
-playtest is [PLAN track L](PLAN.md#track-l--live-playtest-readiness). macOS is
-prepared from Linux and has not been built on a Mac since March.
+hold-still crash is fixed. **Real webcams have driven the game since (corrected 2026-11-20): the owner
+has played on the GPD and on the Mac, natively and in the browser** (GPD sessions
+2026-11-14/15: PLAN P-17, P-18; Mac: [MACOS.md](MACOS.md)). This line said "no real
+webcam has driven the game yet" until then, which was the 2026-11-13 state. The
+mid-song "stand in front of the sensor" pause on a ~0.7 s tracking drop is fixed
+(PLAN P-12). What stands between here and a live
+playtest is [PLAN track L](PLAN.md#track-l--live-playtest-readiness). macOS builds
+and is played on a Mac, in a window, with the camera ([MACOS.md](MACOS.md),
+2026-11-15; this said "not built on a Mac since March" until 2026-11-20).
 
 ## Linux desktop
 
@@ -324,6 +328,9 @@ Footage: `scripts/video_calib/mqcXJrH5vUo.json`'s source video, cut per song by
 
 ## macOS — see [MACOS.md](MACOS.md)
 
+**Corrected 2026-11-20: builds on a Mac and is played there, in a window, with the
+camera (built 2026-11-13 on an M3 MacBook Air; [MACOS.md](MACOS.md) state line,
+2026-11-15).** The rest of this paragraph is the 2026-11-13 state, kept as history.
 Ran windowed on a real Mac in March 2026. Not built on a Mac since. Seven known
 breakages, five of them fixable from Linux; on branch `np-macprep` the
 Linux-fixable parts are done (engine half as patch files). The Linux libc++ proxy

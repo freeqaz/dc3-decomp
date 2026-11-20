@@ -399,6 +399,8 @@ This is a lower bound, not a webcam measurement:
 - Wrist speed reads 10 m/s, because tracking jumps between the two dancers.
 
 It does rank correctly. The next step is a real player on a real webcam (P-2).
+(Since done: the owner has played on a real webcam on the GPD and the Mac, native
+and browser; corrected 2026-11-20.)
 
 **Frame rate.** Same noisy choreography, Better Off Alone Easy:
 
@@ -2750,9 +2752,11 @@ clock.
 - **Not run on web.** The changed sources compile under em++
   (`-fsyntax-only` with dc3-web's flags). The fill has not been run in a
   browser.
-- **Not validated live.** No owner session on the GPD with a real webcam
-  has been taken, and the guarded default has not been replayed on the
-  owner's recorded session.
+- **Not validated live with the fill on.** The owner has played on the GPD
+  with a real webcam (the recorded session below is one), but no session
+  with this default has been taken, and the guarded default has not been
+  replayed on the owner's recorded session. (Reworded 2026-11-20: this said
+  no owner session with a real webcam had been taken at all.)
 - **The scores are from a loaded box** (load 25–84). FAST_TIME makes them
   frame-exact rather than wall-clock dependent, so a quiet-box rerun is
   expected to agree, but none was taken.
@@ -3157,14 +3161,14 @@ native/build/milo-tests --gtest_filter='PoseEstimate*:PoseSensorEstimate*:PoseSe
 | # | Gap | Size | Platform |
 |---|---|---|---|
 | P-1 | **Crash on a motionless skeleton.** `RhythmDetector::AnalyzeData` divides by a variance that becomes zero → NaN → `SymbolKeys::SetFrame` segfault (`RhythmBattlePlayer::Poll`). A webcam trips it whenever joints are held (legs out of frame are held all song). | S–M | all |
-| P-2 | Never run against a live webcam. **No-camera part done** (`np-pose-desk`): fast failure + on-screen notice (above); camera request, capture timestamps, HFOV and the lost-camera exit unit-tested against a fake capture (`tests/test_pose_server.py`). Left: a real webcam session. | S | all |
-| P-3 | ~~Gesture menus~~ **Done (`np-gesture-menus`)**, see [Gesture menus](#gesture-menus). Left: a real person on a real webcam has not driven them; the depth image in the player box is P-4. | — | all |
+| P-2 | ~~Never run against a live webcam.~~ **Run against live webcams by the owner: GPD (sessions 2026-11-14/15), Mac, browser (corrected 2026-11-20).** **No-camera part done** (`np-pose-desk`): fast failure + on-screen notice (above); camera request, capture timestamps, HFOV and the lost-camera exit unit-tested against a fake capture (`tests/test_pose_server.py`). ~~Left: a real webcam session.~~ | S | all |
+| P-3 | ~~Gesture menus~~ **Done (`np-gesture-menus`)**, see [Gesture menus](#gesture-menus). A real person on a real webcam has driven the game since (owner, GPD and Mac; corrected 2026-11-20); what is still missing is a measured success rate for gesture menus on a live webcam. The depth image in the player box is P-4. | — | all |
 | P-4 | Player on screen. **Silhouette done** (`np-player-view`): protocol v3 / `dc3_camera_push` carry the picture and a person mask, a `LiveCameraInput` stand-in feeds the decompiled `StreamRenderer`, and the cursor and gameplay boxes draw the player ([Player on screen](#player-on-screen-p-4)). Photos root-caused (`np-media`): the snapshot's alpha is its TexRenderer's clear, which the engine dropped; fix in engine branch `np-media` (`c810e49`; series also in `~/tmp/np-media-engine.patch`), not landed. Left: that engine change, `DepthBuffer3D`'s draw, the `pose_flash` entries (not camera), a live webcam. | M | all |
 | P-5 | ~~Tests~~ **Done** (`np-pose-desk`): ctests `PoseSocketReaderTest`, `PoseCocoMappingTest`, `PoseSensorSlotTest` (no GPU, no game data); keypoint fixture + `PoseFixture.Python`; the gate runs the whole song and judges means, final scores and per-move distances (above). Open: standing still out-scores a different dance (P-7). | — | all |
 | P-6 | ~~Remove the dead ncnn/YOLO path~~ **Done** (`np-pose-desk`). | — | all |
 | P-7 | Scoring believability. **Answered** (`np-scoring`, [above](#scoring-believability-p-7-np-scoring)): the leniency is the original's. Real Kinect data (UTD-MHAD) scores like our inputs, and the scoring code is 100% matched. Added: the 30 Hz in-process performer + matrix, and the `DC3_POSE_LATENCY_MS` knob. **Video calibration** (`np-video-calib`, [above](#video-calibration-np-video-calib-2026-11-13)): 16 story-mode songs from a stream, replayed at Medium against the original's own results cards, 1162 = 1162 moves. Perfect+awesome 0.91 vs 0.96, but perfect 0.54 vs 0.79; score 74% of the original's (78% with a 10° camera-pitch correction). Still-body jitter ~1.7 mm (VIDEO mode). A causal One Euro filter costs 13–26% of the score, so there is no smoothing. Knob default stays unset: a recording cannot measure a live pipeline, and the score curve is flat over ±50 ms. Left: a live webcam's latency (P-2, L-5; `DC3_POSE_LATENCY_LOG` prints the capture → game part, and the fake-camera grid is in [Latency on the live path](#latency-on-the-live-path-l-4)); camera-pitch auto-levelling (whole-body lean +6.9° ± 1.4° over the reference on this camera); the perfect/awesome gap (arms carry the limb error). | S | all |
 | P-8 | macOS: `/proc/self/exe` → `_NSGetExecutablePath`; camera permission goes to the Python child. See [MACOS.md](MACOS.md). | S–M | mac |
-| P-9 | ~~Web pose~~ **Done in `np-web-pose`** (see [Web](#web)). Left: never run on a real webcam/permission prompt; GPU delegate and the lite model unmeasured on an idle box; no camera preview inside the game (P-4). | — | web |
+| P-9 | ~~Web pose~~ **Done in `np-web-pose`** (see [Web](#web)). Run on a real webcam in the browser by the owner since (corrected 2026-11-20). Left: GPU delegate and the lite model unmeasured on an idle box; no camera preview inside the game (P-4). | — | web |
 | P-12 | ~~Mid-song pause with the dancer in view~~ **Done (`np-tracking`)**: a 1 s dropout hold plus 2 s tracker memory; a re-acquired dancer is bound and scored (W-10). See [Detection dropouts](#detection-dropouts-and-re-acquired-dancers-p-12-w-10-np-tracking). Left: a live webcam. | — | all |
 
 ## Gesture menus
