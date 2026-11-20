@@ -72,6 +72,12 @@ bool Dc3BootSkipIntro();  // Dc3BootPlanGet().skipIntro
 std::string Dc3GlobalOptionsPath();
 bool Dc3GlobalOptionsOnDisk(); // read now (the plan reads it once, at startup)
 
+// DC3_CLASSIC_SONG_SELECT=1: song select exactly as in the image -- three
+// sorts, no Recently Played section, Left/Right and LB/RB inert, the sort not
+// remembered.  Default off: docs/native/SONG_SELECT.md has what is added.
+// Read once (defined in SongSelect_Native.cpp).
+bool Dc3ClassicSongSelect();
+
 // Controller-mode policy, DC3_CONTROLLER_MODE=auto (default) | forced |
 // faithful (defined in System_Native.cpp; see docs/debugging/native.md
 // "Controller mode policy").

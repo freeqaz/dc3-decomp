@@ -1239,6 +1239,8 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
     src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
+    src/platform/SongSelect_Native.cpp # song select: Recently Played, sort by artist, section jumps (docs/native/SONG_SELECT.md)
+    src/platform/SongSelectState_Native.cpp # song select: play history + sort kept in $DC3_SAVE_DIR/song_select.txt
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/PoseEstimate_Native.cpp # DC3_POSE_ESTIMATE: joints the camera cannot see (np-cutoff)
@@ -1440,6 +1442,8 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/NativeNotice.cpp
     src/platform/GestureMgr_Native.cpp
     src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
+    src/platform/SongSelect_Native.cpp # song select: Recently Played, sort by artist, section jumps (docs/native/SONG_SELECT.md)
+    src/platform/SongSelectState_Native.cpp # song select: play history + sort kept in $DC3_SAVE_DIR/song_select.txt
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/PoseEstimate_Native.cpp # DC3_POSE_ESTIMATE: joints the camera cannot see (np-cutoff)
@@ -2184,6 +2188,7 @@ if(BUILD_TESTS)
         tests/test_cache_native.cpp
         tests/test_copy_poll_semantics.cpp
         tests/test_native_options.cpp
+        tests/test_native_song_select.cpp  # song select: Recently Played, sort by artist, section jumps, the classic switch
         tests/test_native_profile.cpp
         tests/test_native_glyph_render.cpp
         tests/test_native_ui_material_terms.cpp

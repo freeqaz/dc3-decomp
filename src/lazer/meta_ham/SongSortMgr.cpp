@@ -24,11 +24,17 @@
 #include "ui\UIPanel.h"
 #include "utl\Std.h"
 #include "utl\Symbol.h"
+#ifdef HX_NATIVE
+#include "platform/SongSelect_Native.h"
+#endif
 
 // Target: SongSortMgr.obj .bss:0x0 (0x8311AB44), zero.
 SongSortMgr *TheSongSortMgr;
 
 BEGIN_HANDLERS(SongSortMgr)
+#ifdef HX_NATIVE
+    _HANDLE_CHECKED(NativeHandle(_msg))
+#endif
     HANDLE_ACTION(get_setlist_mode, 0)
     HANDLE_ACTION(set_setlist_mode, SetSetlistMode(_msg->Int(2) != 0))
     HANDLE_ACTION(
@@ -54,6 +60,12 @@ SongSortMgr::SongSortMgr(SongPreview &sp) : NavListSortMgr(sp) {
     SetName("song_offer_provider", ObjectDir::Main());
     mSorts.push_back(new SongSortByDiff());
     mSorts.push_back(new SongSortBySong());
+#ifdef HX_NATIVE
+    // The fourth sort the image names but never got (docs/native/SONG_SELECT.md).
+    if (!Dc3ClassicSongSelect()) {
+        mSorts.push_back(NativeSongSelect::NewSongSortByArtist());
+    }
+#endif
     mSorts.push_back(new SongSortByLocation());
     mRankedSongCount = 0;
 }
@@ -303,6 +315,12 @@ void SongSortMgr::SetupQuasiRandomSongs() {
         int val = tempArr[random];
         SongSortNode *sortNode =
             dynamic_cast<SongSortNode *>(mSorts[mCurrentSortIdx]->GetListFromIdx(val));
+#ifdef HX_NATIVE
+        // A Recently Played row is the song's second row: one draw per song.
+        if (NativeSongSelect::IsRecentRow(sortNode)) {
+            sortNode = nullptr;
+        }
+#endif
         if (sortNode) {
             if (!sortNode->IsMedley() && !sortNode->IsFake()
                 && TheProfileMgr.IsContentUnlocked(sortNode->Record()->ShortName())) {

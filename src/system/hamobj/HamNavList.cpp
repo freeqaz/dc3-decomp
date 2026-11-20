@@ -1617,6 +1617,10 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
         }
         return DataNode(0);
     }
+#ifdef HX_NATIVE
+    if (NativeNavJump(msg.GetAction()))
+        return DataNode(0);
+#endif
     return DataNode(kDataUnhandled, 0);
 }
 
