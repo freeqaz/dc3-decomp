@@ -1460,6 +1460,7 @@ set(DC3_NATIVEUI_HOST_SOURCES
     src/nativeui_host/ImageCache.cpp
     src/nativeui_host/InputBridge.cpp
     src/nativeui_host/NativeUiHost.cpp
+    src/platform/SongBrowserPanel_Native.cpp # the song browser in song select (docs/native/SONG_SELECT.md)
 )
 
 # ============================================================================

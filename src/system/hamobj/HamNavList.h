@@ -134,6 +134,10 @@ public:
      * match name).  For tests: the only other way to read a row is a
      * screenshot.  native/src/platform/SongSelect_Native.cpp. */
     String NativeVisibleText() const;
+    /** The list's own menu sound for moving onto (select = false) or
+     * selecting (true) row `index`, for the natively drawn song browser.
+     * native/src/platform/SongSelect_Native.cpp. */
+    void NativePlayRibbonSound(int index, bool select);
 #endif
 
 private:

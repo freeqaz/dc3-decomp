@@ -10,6 +10,7 @@
 #include "platform/MenuGesture_Native.h"
 #include "platform/TextInput_Native.h"
 #include "songbrowser/SongCatalogSource_Native.h" // GET /api/songs
+#include "platform/SongBrowserHooks_Native.h" // GET /api/songbrowser/state
 #include "platform/Rnd_Wgpu.h"
 #include "telemetry/GameplayTelemetry.h"
 #include "gfx/Screenshot.h"
@@ -445,6 +446,7 @@ void HttpServer::ProcessCommands() {
             case kCmdMenuState:    HandleMenuState(*cmd); break;
             case kCmdInputText:    HandleInputText(*cmd); break;
             case kCmdSongs:        HandleSongs(*cmd); break;
+            case kCmdSongBrowserState: HandleSongBrowserState(*cmd); break;
             default: cmd->result.error = "Unknown command type"; break;
         }
         {
@@ -1099,6 +1101,13 @@ void HttpServer::HandleMenuState(Command& cmd) {
     cmd.result.ok = true;
 }
 
+// GET /api/songbrowser/state: the natively drawn song browser in song select
+// (platform/SongBrowserPanel_Native.cpp).  Read-only.
+void HttpServer::HandleSongBrowserState(Command& cmd) {
+    cmd.result.jsonData = NativeSongBrowser::StateJson();
+    cmd.result.ok = true;
+}
+
 // POST /api/input/text: `param1` is UTF-8 text to type, `param2` an edit key
 // name.  Both go into the engine's text queue (platform/TextInput_Native.h)
 // from the main thread, which is the thread that drains it; injected events
@@ -1704,6 +1713,19 @@ void HttpServer::RegisterEndpoints() {
         if (req.has_param("reset") && req.get_param_value("reset") != "0") flags += "reset ";
         if (req.has_param("rows") && req.get_param_value("rows") != "0") flags += "rows";
         auto result = QueueAndWait(kCmdMenuState, since, flags);
+        if (result.ok) {
+            res.set_content(JsonOk(result.jsonData), "application/json");
+        } else {
+            res.status = 500;
+            res.set_content(JsonError(result.error), "application/json");
+        }
+    });
+
+    // GET /api/songbrowser/state — the natively drawn song browser: whether it
+    // is shown and why, the focused part, the selected song, the query, the row
+    // count, the sort, and the last frame's draw numbers.  Read-only.
+    svr->Get("/api/songbrowser/state", [this](const httplib::Request&, httplib::Response& res) {
+        auto result = QueueAndWait(kCmdSongBrowserState);
         if (result.ok) {
             res.set_content(JsonOk(result.jsonData), "application/json");
         } else {

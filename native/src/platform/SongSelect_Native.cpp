@@ -4,6 +4,7 @@
 #include "SongSelect_Native.h"
 
 #include "NativeSettings.h" // dc3's, same directory: Dc3EnvFlag
+#include "SongBrowserHooks_Native.h"
 #include "SongSelectState_Native.h"
 #include "game/GameMode.h"
 #include "hamobj/HamListRibbon.h"
@@ -520,4 +521,58 @@ String HamNavList::NativeVisibleText() const {
         }
     }
     return text;
+}
+
+// ---------------------------------------------------------------------------
+// The natively drawn song browser's seat in song select
+// (SongBrowserHooks_Native.h).  The browser itself is
+// SongBrowserPanel_Native.cpp; a binary that does not list it has no hooks and
+// keeps the classic list.
+// ---------------------------------------------------------------------------
+
+namespace {
+const NativeSongBrowser::Hooks *sBrowserHooks = nullptr;
+}
+
+void NativeSongBrowser::Install(const Hooks *hooks) { sBrowserHooks = hooks; }
+
+void NativeSongBrowser::OnPanelEnter(UIPanel *panel) {
+    if (sBrowserHooks) sBrowserHooks->enter(panel);
+}
+
+void NativeSongBrowser::OnPanelExit(UIPanel *panel) {
+    if (sBrowserHooks) sBrowserHooks->exit(panel);
+}
+
+void NativeSongBrowser::OnPanelPoll(UIPanel *panel) {
+    if (sBrowserHooks) sBrowserHooks->poll(panel);
+}
+
+bool NativeSongBrowser::OnPanelDraw(UIPanel *panel) {
+    return sBrowserHooks && sBrowserHooks->draw(panel);
+}
+
+DataNode NativeSongBrowser::OnPanelHandle(UIPanel *panel, DataArray *msg) {
+    if (sBrowserHooks) return sBrowserHooks->handle(panel, msg);
+    return DATA_UNHANDLED;
+}
+
+bool NativeSongBrowser::HidesGameChrome() {
+    return sBrowserHooks && sBrowserHooks->hidesChrome();
+}
+
+std::string NativeSongBrowser::StateJson() {
+    if (sBrowserHooks) return sBrowserHooks->stateJson();
+    return "{\"available\":false,\"shown\":false,\"why\":\"this binary has no song browser\"}";
+}
+
+// The list's own menu sounds, for the browser: the sound moving onto row
+// `index` plays, or the one selecting it plays.
+void HamNavList::NativePlayRibbonSound(int index, bool select) {
+    if (!mListRibbonResource) return;
+    if (select) {
+        mListRibbonResource->PlaySelectSound(index);
+    } else {
+        mListRibbonResource->PlayHighlightSound(index);
+    }
 }

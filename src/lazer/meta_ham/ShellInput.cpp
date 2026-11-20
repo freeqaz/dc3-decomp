@@ -35,6 +35,9 @@
 #include "ui\UI.h"
 #include "ui\UIPanel.h"
 #include "utl\Symbol.h"
+#ifdef HX_NATIVE
+#include "platform/SongBrowserHooks_Native.h"
+#endif
 
 ShellInput::ShellInput()
     : mVoiceControlEnabled(0), unk_0x34(this), unk_0x48(0, 15, 0), unk_0x9C(0.2),
@@ -128,7 +131,15 @@ void ShellInput::Init() {
 #endif
 }
 
-void ShellInput::Draw() { mCursorPanel->Draw(); }
+void ShellInput::Draw() {
+#ifdef HX_NATIVE
+    // The natively drawn song browser uses the whole screen: the cursor panel
+    // (the skeleton box and the player camera box in the top corners) is not
+    // drawn over it.
+    if (NativeSongBrowser::HidesGameChrome()) return;
+#endif
+    mCursorPanel->Draw();
+}
 
 void ShellInput::Poll() {
     // Lane history (9 lines moved): docs/decomp/notes/lazer/meta_ham/ShellInput.md
