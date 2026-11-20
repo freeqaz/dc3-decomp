@@ -566,6 +566,20 @@ std::string NativeSongBrowser::StateJson() {
     return "{\"available\":false,\"shown\":false,\"why\":\"this binary has no song browser\"}";
 }
 
+void NativeSongBrowser::OnAnyButtonDown(int padNum) {
+    if (sBrowserHooks) sBrowserHooks->anyButtonDown(padNum);
+}
+
+void NativeSongBrowser::NoteInjectedPadPress() {
+    if (sBrowserHooks) sBrowserHooks->injectedPadPress();
+}
+
+bool NativeSongBrowser::RunCommand(const std::string &name, std::string &error) {
+    if (sBrowserHooks) return sBrowserHooks->command(name, error);
+    error = "this binary has no song browser";
+    return false;
+}
+
 // The list's own menu sounds, for the browser: the sound moving onto row
 // `index` plays, or the one selecting it plays.
 void HamNavList::NativePlayRibbonSound(int index, bool select) {

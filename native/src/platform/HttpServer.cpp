@@ -447,6 +447,7 @@ void HttpServer::ProcessCommands() {
             case kCmdInputText:    HandleInputText(*cmd); break;
             case kCmdSongs:        HandleSongs(*cmd); break;
             case kCmdSongBrowserState: HandleSongBrowserState(*cmd); break;
+            case kCmdSongBrowserCommand: HandleSongBrowserCommand(*cmd); break;
             default: cmd->result.error = "Unknown command type"; break;
         }
         {
@@ -499,9 +500,23 @@ static JoypadAction HttpButtonAction(JoypadButton btn, Symbol controllerType) {
     }
 }
 
+// Set by POST /api/input/press with "device":"pad" (under mInputMutex), taken
+// by the frame that sends the press.
+static bool sInjectedPadPress = false;
+
 void HttpServer::DispatchInjectedButtons() {
     int hold[InjectedPadHold::kBits] = {};
     unsigned int pressed = ConsumeHttpButtons(hold);
+    if (pressed) {
+        bool fromPad = false;
+        {
+            std::lock_guard<std::mutex> lk(mInputMutex);
+            fromPad = sInjectedPadPress;
+            sInjectedPadPress = false;
+        }
+        if (fromPad)
+            NativeSongBrowser::NoteInjectedPadPress();
+    }
     if (!pressed && !mInjectedHold.held)
         return;
     JoypadData *pad = JoypadGetPadData(0);
@@ -1108,6 +1123,20 @@ void HttpServer::HandleSongBrowserState(Command& cmd) {
     cmd.result.ok = true;
 }
 
+// POST /api/songbrowser/command: `param1` is the command's name.  Runs the
+// same function the browser's own command rows run (the classic list's
+// Random Song or Playlists row, selected by the game's own select).
+void HttpServer::HandleSongBrowserCommand(Command& cmd) {
+    std::string error;
+    cmd.result.ok = NativeSongBrowser::RunCommand(cmd.param1, error);
+    if (cmd.result.ok) {
+        cmd.result.jsonData = "{\"command\":\"" + JsonEscape(cmd.param1) + "\"}";
+    } else {
+        cmd.result.httpStatus = 409;
+        cmd.result.error = error;
+    }
+}
+
 // POST /api/input/text: `param1` is UTF-8 text to type, `param2` an edit key
 // name.  Both go into the engine's text queue (platform/TextInput_Native.h)
 // from the main thread, which is the thread that drains it; injected events
@@ -1562,9 +1591,16 @@ void HttpServer::RegisterEndpoints() {
             return;
         }
 
+        // "device":"pad" (or ?device=pad): this press stands for a real
+        // pad's.  Without it an injected press is nobody's device (the song
+        // browser's hint bar counts it with the keyboard).
+        bool fromPad = req.body.find("\"device\"") != std::string::npos
+            ? req.body.find("\"pad\"", req.body.find("\"device\"")) != std::string::npos
+            : req.has_param("device") && req.get_param_value("device") == "pad";
         {
             std::lock_guard<std::mutex> lk(mInputMutex);
             mImmediateButtons |= (1u << bit);
+            if (fromPad) sInjectedPadPress = true;
         }
 
         res.set_content(JsonOk("{\"button\":\"" + JsonEscape(btnName) + "\"}"),
@@ -1730,6 +1766,35 @@ void HttpServer::RegisterEndpoints() {
             res.set_content(JsonOk(result.jsonData), "application/json");
         } else {
             res.status = 500;
+            res.set_content(JsonError(result.error), "application/json");
+        }
+    });
+
+    // POST /api/songbrowser/command — run one of the song browser's commands:
+    // body {"name":"random_song"} or {"name":"playlists"} (or ?name=...).  It
+    // calls what the browser's own command rows call.  409 with the reason
+    // when it did not run (the browser is not shown, the classic list has no
+    // such row in this mode).
+    svr->Post("/api/songbrowser/command", [this](const httplib::Request& req, httplib::Response& res) {
+        std::string name;
+        auto pos = req.body.find("\"name\"");
+        if (pos != std::string::npos) {
+            auto colon = req.body.find(':', pos);
+            auto q1 = colon == std::string::npos ? colon : req.body.find('"', colon + 1);
+            auto q2 = q1 == std::string::npos ? q1 : req.body.find('"', q1 + 1);
+            if (q2 != std::string::npos) name = req.body.substr(q1 + 1, q2 - q1 - 1);
+        }
+        if (name.empty() && req.has_param("name")) name = req.get_param_value("name");
+        if (name.empty()) {
+            res.status = 400;
+            res.set_content(JsonError("No name specified"), "application/json");
+            return;
+        }
+        auto result = QueueAndWait(kCmdSongBrowserCommand, name);
+        if (result.ok) {
+            res.set_content(JsonOk(result.jsonData), "application/json");
+        } else {
+            res.status = result.httpStatus;
             res.set_content(JsonError(result.error), "application/json");
         }
     });

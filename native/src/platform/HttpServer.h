@@ -82,6 +82,7 @@ public:
         kCmdInputText,      // Type text / edit keys into the engine's text queue
         kCmdSongs,          // The song browser's catalog, a search or an arrangement (GET /api/songs)
         kCmdSongBrowserState, // The natively drawn song browser: shown or not and why, what it is on
+        kCmdSongBrowserCommand, // Run one of the song browser's commands (random_song, playlists)
     };
 
     struct CommandResult {
@@ -147,6 +148,7 @@ private:
     void HandleInputText(Command& cmd);
     void HandleSongs(Command& cmd);
     void HandleSongBrowserState(Command& cmd);
+    void HandleSongBrowserCommand(Command& cmd);
 
     volatile bool mRunning = false;
     int mPort = 0;

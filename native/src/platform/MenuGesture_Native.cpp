@@ -77,6 +77,16 @@ struct Dc3MenuGestureAccess {
 
     static bool UpdateHold(HamNavList *l, bool handValid, List &s, float lastSelect, int *source);
 
+    static bool HandInListPose(const HamNavList *l, const Skeleton &skeleton) {
+        const DirectionGestureFilter *f = l->mDirectionGestureFilter;
+        if (!f)
+            return false;
+        if (const DirectionGestureFilterSingleUser *single =
+                dynamic_cast<const DirectionGestureFilterSingleUser *>(f))
+            return single->IsValidSwipePosition(skeleton);
+        return f->IsHandValid(skeleton);
+    }
+
     static void Read(HamNavList *l, List &s, bool wantRows) {
         s.hand = (int)l->mNavInputType;
         s.mode = (int)l->mRibbonMode;
@@ -514,6 +524,10 @@ HoldTimer::Result HoldTimer::Tick(const Input &in, const HoldParams &p) {
     }
     mProgress = mHeld <= p.settle ? 0.0f : (mHeld - p.settle) / p.hold;
     return mProgress > 0.0f ? kProgress : kIdle;
+}
+
+bool HandInListPose(const HamNavList *list, const Skeleton &skeleton) {
+    return list && Dc3MenuGestureAccess::HandInListPose(list, skeleton);
 }
 
 } // namespace Dc3MenuGesture

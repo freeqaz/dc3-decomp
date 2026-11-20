@@ -18,18 +18,28 @@
 //               select-by-name (the voice command's path), which runs the
 //               list's select animation and sound and then on_select
 //   back        {song_select_panel on_back}
+//   command     {song_select_panel select_right_list_item ROW} on the classic
+//               list's own Random Song or Playlists row: the game's select of
+//               that row (the voice command's path), so what follows is
+//               SongFunctionNode::OnSelect
+//
+// While the browser is shown the game is kept in controller mode: the hands
+// do not drive the list underneath, and no press is spent on waking the pad.
 //
 // Main thread only.  One browser for the process, made on the first visit that
 // may show it and never destroyed (it owns GPU textures).
 
 #include "SongBrowserHooks_Native.h"
 
+#include "MenuGesture_Native.h" // Dc3MenuGesture::HandInListPose
 #include "NativeSettings.h" // Dc3EnvFlag
 #include "SongSelectState_Native.h"
 #include "SongSelect_Native.h"
 #include "gesture/GestureMgr.h"
 #include "hamobj/HamNavList.h"
 #include "meta_ham/HamUI.h"
+#include "meta/SongPreview.h"
+#include "meta_ham/HelpBarPanel.h"
 #include "meta_ham/ShellInput.h"
 #include "meta_ham/SongSortMgr.h"
 #include "meta_ham/UIEventMgr.h"
@@ -43,6 +53,7 @@
 #include "obj/Dir.h"
 #include "obj/Msg.h"
 #include "os/JoypadMsgs.h"
+#include "platform/TextInput_Native.h"
 #include "songbrowser/SongCatalog.h"
 #include "songbrowser/SongCatalogJson.h"
 #include "songbrowser/SongCatalogSource_Native.h"
@@ -61,6 +72,15 @@
 #include <strings.h>
 #include <variant>
 
+#if !defined(__EMSCRIPTEN__)
+#include <GLFW/glfw3.h>
+extern GLFWwindow *gNativeWindow;
+#endif
+
+extern bool Dc3ControllerModeForced();
+extern int gNativeSongPreviewStarts; // src/system/meta/SongPreview.cpp
+extern bool gNativeSongPreviewHold; // src/system/meta/SongPreview.cpp
+
 namespace {
 
 using songbrowser_ui::Cue;
@@ -74,10 +94,15 @@ enum Mode {
     kAuto
 };
 
-// Seconds (the UI clock's) a body must stay tracked with controller mode off
-// before the browser gives way to the classic list.  The game's own
-// controller-mode timeout (5 s without a press) comes first.
-const double kGestureTakeoverSeconds = 2.0;
+// Seconds (the UI clock's) a hand must stay where the classic list needs it,
+// without a break and without a press, before the browser gives way to the
+// classic list (the auto rule).
+const double kHandTakeoverSeconds = 0.75;
+
+// The preview of the selected song starts once the selection has rested this
+// long (UI seconds).  The classic list asks for a preview on every highlight
+// that does not scroll it, so five quick presses prepared five streams.
+const double kPreviewRestSeconds = 0.3;
 // A pick or a back that started no screen change within this long is given
 // up: the browser takes input again.
 const double kLeaveGiveUpSeconds = 4.0;
@@ -131,6 +156,72 @@ const char *RegionName(Region region) {
     return "list";
 }
 
+// The device last used, for the names in the hint bar.  Process-wide: presses
+// on every screen count (HamUI::OnMsg(ButtonDownMsg) reports each one), so
+// song select opens naming the device the player came with.  A run starts on
+// the keyboard: until a real pad's button arrives there is no pad to name.
+enum Device {
+    kDeviceKeyboard,
+    kDevicePad
+};
+Device sDevice = kDeviceKeyboard;
+bool sNextPressIsInjectedPad = false; // POST /api/input/press "device":"pad"
+unsigned sPadPresses = 0; // presses counted as a real pad's, this run
+
+// Whether a real pad holds a button down right now.  A press made by a key
+// reaches the game as the same ButtonDownMsg (the engine ORs the keyboard's
+// buttons into pad 0's), so the only way to tell them apart from here is to
+// ask the pad itself: a ButtonDownMsg that arrives while the real pad with
+// that number has nothing down was a key's (or a script's, or an injected
+// one).  Headless and on the web there is no pad to ask.
+bool RealPadHasAButtonDown(int padNum) {
+#if !defined(__EMSCRIPTEN__)
+    if (!gNativeWindow || padNum < 0 || padNum > GLFW_JOYSTICK_LAST) {
+        return false;
+    }
+    GLFWgamepadstate state;
+    if (!glfwJoystickIsGamepad(padNum) || !glfwGetGamepadState(padNum, &state)) {
+        return false;
+    }
+    for (int button = 0; button <= GLFW_GAMEPAD_BUTTON_LAST; button++) {
+        if (state.buttons[button]) {
+            return true;
+        }
+    }
+    return state.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER] > 0.0f
+        || state.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER] > 0.0f;
+#else
+    (void)padNum;
+    return false;
+#endif
+}
+
+void NoteButtonDown(int padNum) {
+    const bool pad = sNextPressIsInjectedPad || RealPadHasAButtonDown(padNum);
+    sNextPressIsInjectedPad = false;
+    sDevice = pad ? kDevicePad : kDeviceKeyboard;
+    if (pad) {
+        sPadPresses++;
+    }
+}
+
+songbrowser_ui::HintGlyphs GlyphsFor(Device device) {
+    songbrowser_ui::HintGlyphs glyphs; // the pad's names are the defaults
+    if (device == kDeviceKeyboard) {
+        glyphs.accept = "ENTER";
+        glyphs.back = "ESC";
+        glyphs.sort = "TAB";
+        glyphs.section = "< >";
+        glyphs.type = "ABC";
+    }
+    return glyphs;
+}
+
+// The classic list's row for a command: the function node's token.
+const char *CommandToken(songbrowser_ui::Command command) {
+    return command == songbrowser_ui::Command::RandomSong ? "random_song" : "playlists";
+}
+
 // What the host runs: the screen, behind a gate that drops input while a pick
 // or a back is on its way, and that notices typed text.
 class GatedScreen final : public nativeui_host::HostedScreen {
@@ -175,9 +266,24 @@ public:
         leavingSince_ = -1.0;
         pendingPick_.clear();
         pendingBack_ = false;
+        pendingCommand_ = -1;
         ClearCues();
-        trackedSince_ = -1.0;
-        padInUse_ = TheGestureMgr && TheGestureMgr->InControllerMode();
+        leftList_ = nullptr;
+        if (HelpBarPanel *bar = TheHamUI.GetHelpBarPanel()) {
+            leftList_ =
+                bar->DataDir() ? bar->DataDir()->Find<HamNavList>("left_hand.hnl", false) : nullptr;
+        }
+        handSince_ = -1.0;
+        handArmed_ = false;
+        handNow_ = false;
+        startPressed_ = false;
+        previewSong_.clear();
+        // Arriving, the hands have the menu only when the choice that led
+        // here was made by hand (the game's own record of the last list
+        // select) and the pad has not been touched since.
+        handsSteer_ = mode_ == kAuto && !HamNavList::sLastSelectInControllerMode
+            && !InControllerMode() && TrackedBodies() > 0;
+        handsWhy_ = "song select was reached by hand (the last menu choice was a gesture)";
         eligible_ = DecideEligible(visitWhy_);
         if (!eligible_) {
             return;
@@ -208,6 +314,7 @@ public:
             hasSaved_ = true;
         }
         Hide();
+        SetWakeCapture(false);
         host_.SetScreen(nullptr);
         gate_.screen = nullptr;
         gate_.frozen = false;
@@ -220,6 +327,7 @@ public:
         }
         panel_ = nullptr;
         list_ = nullptr;
+        leftList_ = nullptr;
         eligible_ = false;
         visitWhy_ = "not on song select";
     }
@@ -257,10 +365,14 @@ public:
         }
         ButtonDownMsg press(msg);
         if (press.GetButton() == kPad_Start) {
-            return DATA_UNHANDLED; // the game's: Start hands the menu back to gestures
+            // The game's: Start hands the menu back to the hands
+            // (ShellInput::OnMsg leaves controller mode).  Update() sees
+            // whether it did.
+            startPressed_ = true;
+            return DATA_UNHANDLED;
         }
+        NotePadActivity();
         if (!gate_.frozen) {
-            NotePadActivity();
             nativeui_host::OnButtonDown(host_, press);
             RunPending();
         }
@@ -271,6 +383,20 @@ public:
 
     bool HidesChrome() const { return shown_; }
 
+    // POST /api/songbrowser/command: what the screen's onCommand runs.
+    bool RunCommandNamed(const std::string &name, std::string &error) {
+        songbrowser_ui::Command command;
+        if (name == "random_song") {
+            command = songbrowser_ui::Command::RandomSong;
+        } else if (name == "playlists") {
+            command = songbrowser_ui::Command::Playlists;
+        } else {
+            error = "unknown command '" + name + "' (random_song, playlists)";
+            return false;
+        }
+        return RunCommand(command, error);
+    }
+
     std::string StateJson() const {
         using songbrowser::JsonEscape;
         std::string json = "{\"available\":true";
@@ -279,12 +405,37 @@ public:
         json += std::string(",\"eligible\":") + (eligible_ ? "true" : "false");
         json += std::string(",\"shown\":") + (shown_ ? "true" : "false");
         json += ",\"why\":\"" + JsonEscape(Why()) + "\"";
-        json += std::string(",\"pad_in_use\":") + (padInUse_ ? "true" : "false");
+        json += std::string(",\"hands_steering\":") + (handsSteer_ ? "true" : "false");
+        json += std::string(",\"hand_in_pose\":") + (handNow_ ? "true" : "false");
+        json += ",\"tracked_bodies\":" + std::to_string(TrackedBodies());
+        json += ",\"switches\":" + std::to_string(switches_);
         json += std::string(",\"controller_mode\":")
             + (TheGestureMgr && TheGestureMgr->InControllerMode() ? "true" : "false");
         json += std::string(",\"text_capture\":") + (host_.CapturingText() ? "true" : "false");
         json += std::string(",\"leaving\":") + (gate_.frozen ? "true" : "false");
-        json += std::string(",\"hints\":\"") + (keyboardHints_ ? "keyboard" : "pad") + "\"";
+        json += std::string(",\"engine_text_capture\":") + (TextInputCapture() ? "true" : "false");
+        json += std::string(",\"hints\":\"") + (sDevice == kDeviceKeyboard ? "keyboard" : "pad")
+            + "\"";
+        json += std::string(",\"hint_accept\":\"") + JsonEscape(GlyphsFor(shownDevice_).accept)
+            + "\"";
+        json += ",\"pad_presses\":" + std::to_string(sPadPresses);
+        json += ",\"screen_builds\":" + std::to_string(screenBuilds_);
+        json += ",\"preview_song\":\"" + JsonEscape(previewSong_) + "\"";
+        json += ",\"preview_changes\":" + std::to_string(previewChanges_);
+        json += ",\"preview_starts\":" + std::to_string(gNativeSongPreviewStarts);
+        json += std::string(",\"preview_hold\":") + (gNativeSongPreviewHold ? "true" : "false");
+        json += ",\"commands\":[";
+        if (panel_ && eligible_) {
+            bool first = true;
+            for (songbrowser_ui::Command command :
+                 { songbrowser_ui::Command::RandomSong, songbrowser_ui::Command::Playlists }) {
+                if (CommandRow(command) >= 0) {
+                    json += std::string(first ? "\"" : ",\"") + CommandToken(command) + "\"";
+                    first = false;
+                }
+            }
+        }
+        json += "]";
         json += ",\"songs\":" + std::to_string(catalog_.Size());
         json += ",\"classic_song\":\"" + JsonEscape(syncedSong_) + "\"";
         if (screen_) {
@@ -299,6 +450,7 @@ public:
             json += std::string(",\"sort\":\"") + songbrowser::ArrangementName(state.arrangement)
                 + "\"";
             json += ",\"rows\":" + std::to_string(screen_->List().RowCount());
+            json += ",\"list_index\":" + std::to_string(screen_->List().SelectedIndex());
             json += std::string(",\"recents_shown\":")
                 + (screen_->RecentsShown() ? "true" : "false");
             std::snprintf(
@@ -375,7 +527,8 @@ private:
             return visitWhy_;
         }
         if (shown_) {
-            return mode_ == kAlways ? "DC3_SONG_BROWSER=1" : "pad or keyboard in use";
+            return mode_ == kAlways ? "DC3_SONG_BROWSER=1"
+                                    : "the pad or the keyboard has the menu (no hand is steering)";
         }
         return hiddenWhy_;
     }
@@ -385,10 +538,11 @@ private:
             why = modeWhy_;
             return false;
         }
-        if (!NativeSongSelect::ShowsRecentlyPlayed()) {
-            why = "this visit is not a pick-one-song list (playlist building, campaign)";
-            return false;
-        }
+        // No test of the game mode here: song_select_panel is on one screen,
+        // song_select_screen, and its own enter script has put a playlist
+        // mode back to perform before SongSelectPanel::Enter calls this, so
+        // every visit is a pick-one-song visit (Perform, Rehearse, Dance
+        // Battle).  Playlist building and the campaign are other panels.
         if (!songbrowser::GameCatalogReady()) {
             why = "the song catalog is not ready";
             return false;
@@ -419,6 +573,9 @@ private:
         songbrowser_ui::Delegate delegate;
         delegate.onPick = [this](const std::string &song) { pendingPick_ = song; };
         delegate.onBack = [this] { pendingBack_ = true; };
+        delegate.onCommand = [this](songbrowser_ui::Command command) {
+            pendingCommand_ = (int)command;
+        };
         delegate.onCue = [this](Cue cue) {
             switch (cue) {
             case Cue::Move:
@@ -443,13 +600,9 @@ private:
             );
         };
         songbrowser_ui::Environment environment { fonts_.Fonts(), host_.Clock() };
-        if (keyboardHints_) {
-            environment.glyphs.accept = "ENTER";
-            environment.glyphs.back = "ESC";
-            environment.glyphs.sort = "TAB";
-            environment.glyphs.section = "< >";
-            environment.glyphs.type = "ABC";
-        }
+        shownDevice_ = sDevice;
+        environment.glyphs = GlyphsFor(shownDevice_);
+        screenBuilds_++;
         host_.SetScreen(nullptr);
         gate_.screen = nullptr;
         screen_ = std::make_unique<SongBrowserScreen>(catalog_, delegate, environment, restore);
@@ -458,33 +611,60 @@ private:
     }
 
     // The per-frame step: decides shown or hidden, then runs the shown browser.
+    //
+    // The auto rule.  A body in the camera's view is not intent, and neither
+    // is the game's controller-mode timeout: the browser stays until someone
+    // steers by hand, and comes back on a press or a typed character.
+    //   to the hands   a tracked skeleton's hand is where the song list (or
+    //                  the help bar's left-hand list) needs it, by the list's
+    //                  own test, for kHandTakeoverSeconds without a break --
+    //                  counted only from a moment the hand was NOT there
+    //                  since the last press or typed character; or Start,
+    //                  when the game then leaves controller mode
+    //   to the pad     the game is in controller mode again (a press:
+    //                  ShellInput::OnMsg), or a character was typed
     void Update() {
         const double now = nativeui_host::GameUiSeconds();
-        const bool controllerMode = TheGestureMgr && TheGestureMgr->InControllerMode();
+        const bool controllerMode = InControllerMode();
 
-        // The auto rule's latch.
-        if (controllerMode) {
-            padInUse_ = true;
-            trackedSince_ = -1.0;
-        } else if (TrackedBodies() > 0) {
-            if (trackedSince_ < 0.0) {
-                trackedSince_ = now;
+        if (mode_ == kAuto) {
+            handNow_ = HandInListPose();
+            if (handsSteer_) {
+                if (controllerMode) {
+                    TakeForThePad(); // a press woke the pad
+                } else if (wakeCapture_ && TextInputPending() > 0) {
+                    sDevice = kDeviceKeyboard;
+                    TakeForThePad(); // typed: Show() below, and the text is typed into it
+                }
+            } else if (startPressed_ && !controllerMode && TrackedBodies() > 0) {
+                handsSteer_ = true;
+                handsWhy_ = "Start handed the menu to the hands";
+            } else if (!handNow_) {
+                handArmed_ = true;
+                handSince_ = -1.0;
+            } else if (handArmed_) {
+                if (handSince_ < 0.0) {
+                    handSince_ = now;
+                }
+                if (now - handSince_ >= kHandTakeoverSeconds) {
+                    GiveToTheHands();
+                }
             }
-            if (now - trackedSince_ >= kGestureTakeoverSeconds) {
-                padInUse_ = false;
-            }
-        } else {
-            trackedSince_ = -1.0; // nobody in view: nothing has taken over
         }
+        startPressed_ = false;
 
-        bool want = mode_ == kAlways || padInUse_;
+        bool want = mode_ == kAlways || !handsSteer_;
+        bool forTheHands = !want;
         if (!want) {
-            hiddenWhy_ = "a tracked player is using gestures (controller mode is off)";
+            hiddenWhy_ = handsWhy_;
         }
-        if (want && (!panel_->Showing() || TheHamUI.GetOverlayPanel() != nullptr
-                || (TheUIEventMgr && TheUIEventMgr->HasActiveDialogEvent()))) {
+        if (!panel_->Showing() || TheHamUI.GetOverlayPanel() != nullptr
+            || (TheUIEventMgr && TheUIEventMgr->HasActiveDialogEvent())) {
+            if (want) {
+                hiddenWhy_ = "an overlay or a dialog is up";
+            }
             want = false;
-            hiddenWhy_ = "an overlay or a dialog is up";
+            forTheHands = false;
         }
         if (want != shown_) {
             if (want) {
@@ -493,9 +673,13 @@ private:
                 Hide();
             }
         }
+        // The classic list is up for the hands: a typed character must still
+        // be heard, to bring the browser back.
+        SetWakeCapture(forTheHands);
         if (!shown_) {
             return;
         }
+        KeepControllerMode();
 
         if (TheSongSortMgr && (int)TheSongSortMgr->MapSize() != catalogStamp_) {
             FillCatalog(); // content came or went
@@ -505,12 +689,12 @@ private:
         gate_.typed = false;
         host_.Tick(now); // typed text, held directions, art
         if (gate_.typed) {
+            sDevice = kDeviceKeyboard;
             NotePadActivity();
-            if (!keyboardHints_) {
-                keyboardHints_ = true;
-                const songbrowser_ui::State state = screen_->SaveState();
-                BuildScreen(&state); // the hint bar now names keys
-            }
+        }
+        if (sDevice != shownDevice_) {
+            shownDevice_ = sDevice; // the hint bar names the device last used
+            screen_->SetHintGlyphs(GlyphsFor(shownDevice_));
         }
         RunPending();
 
@@ -519,6 +703,11 @@ private:
                 info->SetShowing(false);
             }
         }
+        if (gNativeSongPreviewHold
+            && (gate_.frozen || now - selectionMovedAt_ >= kPreviewRestSeconds)) {
+            gNativeSongPreviewHold = false; // the selection has rested: play it
+        }
+        NotePreview();
         if (gate_.frozen && leavingSince_ >= 0.0 && !TheUI->InTransition()
             && now - leavingSince_ >= kLeaveGiveUpSeconds) {
             gate_.frozen = false; // the pick went nowhere (a locked or bad song)
@@ -528,6 +717,7 @@ private:
 
     void Show(double now) {
         shown_ = true;
+        switches_++;
         // Coming back from the classic list: stand on the song it was left on.
         const std::string classic = ClassicSong();
         if (!syncedSong_.empty() && !classic.empty() && classic != syncedSong_
@@ -550,6 +740,8 @@ private:
             SyncClassicList(); // the classic list appears on the same song
         }
         shown_ = false;
+        switches_++;
+        gNativeSongPreviewHold = false;
         host_.Exit(); // text capture off, held directions released
         if (UIPanel *info = SongInfoPanel()) {
             info->SetShowing(panel_ && panel_->Showing());
@@ -574,6 +766,16 @@ private:
             Back();
             return;
         }
+        if (pendingCommand_ >= 0) {
+            const songbrowser_ui::Command command = (songbrowser_ui::Command)pendingCommand_;
+            pendingCommand_ = -1;
+            ClearCues();
+            std::string error;
+            if (!RunCommand(command, error)) {
+                TheSynth->RunFlow("invalid_select.flow");
+            }
+            return;
+        }
         if (cueTab_) {
             const songbrowser_ui::State state = screen_->SaveState();
             TheNativeSongSelectState().SetSort(SortFileName(state.arrangement));
@@ -581,6 +783,10 @@ private:
         // The selected song moved: the classic list follows, and plays the
         // list's highlight sound itself.  Any other cue plays here.
         const bool moved = SyncClassicList();
+        if (moved) {
+            selectionMovedAt_ = nativeui_host::GameUiSeconds();
+            gNativeSongPreviewHold = true;
+        }
         if (cueError_) {
             TheSynth->RunFlow("invalid_select.flow");
         } else if (cueTab_) {
@@ -608,6 +814,45 @@ private:
             gate_.frozen = true;
             leavingSince_ = nativeui_host::GameUiSeconds();
         }
+    }
+
+    // The classic list's row for `command`, or -1 when this visit's list has
+    // none (Rehearse has neither; Dance Battle has no Playlists).
+    int CommandRow(songbrowser_ui::Command command) const {
+        if (!TheSongSortMgr) {
+            return -1;
+        }
+        static Symbol first_data_index("first_data_index");
+        const DataNode row = TheSongSortMgr->Handle(
+            Message(first_data_index, Symbol(CommandToken(command))), false
+        );
+        return row.Type() == kDataInt ? row.Int() : -1;
+    }
+
+    // A command: the classic list's own row for it, selected by the game's
+    // own select-a-row (what the "playlists" voice command runs).  What
+    // happens next is that row's: SongFunctionNode::OnSelect.
+    bool RunCommand(songbrowser_ui::Command command, std::string &error) {
+        if (!screen_ || !panel_ || !list_ || !shown_) {
+            error = "the song browser is not shown (" + Why() + ")";
+            return false;
+        }
+        if (gate_.frozen || TheUI->InTransition()) {
+            error = "the song browser is on its way out";
+            return false;
+        }
+        Uncollapse();
+        const int row = CommandRow(command);
+        if (row < 0) {
+            error = std::string("the classic list has no ") + CommandToken(command)
+                + " row in this mode";
+            return false;
+        }
+        gate_.frozen = true;
+        leavingSince_ = nativeui_host::GameUiSeconds();
+        static Symbol select_right_list_item("select_right_list_item");
+        panel_->Handle(Message(select_right_list_item, row), false);
+        return true;
     }
 
     // Puts the classic list's highlight on the browser's song.  True when it
@@ -656,19 +901,102 @@ private:
         return token.Sym().Str();
     }
 
-    // A press or typed text reached the browser: the pad or the keyboard is
-    // in use, whatever the game thought a moment ago.
+    // A press or typed text reached the browser: a hand that happens to be
+    // out does not take the menu from it.
     void NotePadActivity() {
-        padInUse_ = true;
-        trackedSince_ = -1.0;
+        handSince_ = -1.0;
+        handArmed_ = false;
+    }
+
+    void TakeForThePad() {
+        handsSteer_ = false;
+        handSince_ = -1.0;
+        handArmed_ = false;
+    }
+
+    void GiveToTheHands() {
+        handSince_ = -1.0;
+        handArmed_ = false;
+        ShellInput *shell = TheHamUI.GetShellInput();
+        if (!shell || Dc3ControllerModeForced()) {
+            return; // controller mode is pinned: the hands cannot drive a list
+        }
+        if (InControllerMode()) {
+            shell->ExitControllerMode(true); // the lists take the hands now
+        }
+        if (InControllerMode()) {
+            return;
+        }
+        handsSteer_ = true;
+        handsWhy_ = "a hand is steering (held where the list takes it; controller mode is off)";
+    }
+
+    // While the browser is shown the game stays in controller mode, whatever
+    // its idle timeout says: the hands do not drive the list underneath, and
+    // the next press is the browser's, not the one that wakes the pad.
+    void KeepControllerMode() {
         ShellInput *shell = TheHamUI.GetShellInput();
         if (!shell || !TheGestureMgr) {
             return;
         }
         if (!TheGestureMgr->InControllerMode()) {
-            shell->EnterControllerMode(false);
+            shell->EnterControllerMode(true);
         }
         shell->unk_0x68.Restart(); // the controller-mode timeout starts over
+    }
+
+    // Text capture while the browser is hidden for the hands (the host holds
+    // it while the browser is shown).
+    void SetWakeCapture(bool on) {
+        if (on == wakeCapture_) {
+            return;
+        }
+        wakeCapture_ = on;
+        if (on) {
+            TextInputSetCapture(true);
+        } else if (!shown_ && !host_.CapturingText()) {
+            TextInputSetCapture(false); // shown: the host holds it from here
+        }
+    }
+
+    // Whether any tracked skeleton holds a hand where the song list, or the
+    // help bar's left-hand list, takes it.
+    bool HandInListPose() const {
+        if (!TheGestureMgr) {
+            return false;
+        }
+        for (int i = 0; i < 6; i++) {
+            const Skeleton &skeleton = TheGestureMgr->GetSkeleton(i);
+            if (!skeleton.IsTracked()) {
+                continue;
+            }
+            if (Dc3MenuGesture::HandInListPose(list_, skeleton)
+                || Dc3MenuGesture::HandInListPose(leftList_, skeleton)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Counts the songs the preview was started on (for the state endpoint).
+    void NotePreview() {
+        SongPreview *preview = TheSongSortMgr ? TheSongSortMgr->GetSongPreview() : nullptr;
+        if (!preview) {
+            return;
+        }
+        static Symbol get_song("get_song");
+        const DataNode song = preview->Handle(Message(get_song), false);
+        const std::string name = song.Type() == kDataSymbol ? song.Sym().Str() : "";
+        if (name != previewSong_) {
+            previewSong_ = name;
+            if (!name.empty()) {
+                previewChanges_++;
+            }
+        }
+    }
+
+    static bool InControllerMode() {
+        return TheGestureMgr && TheGestureMgr->InControllerMode();
     }
 
     static int TrackedBodies() {
@@ -699,19 +1027,32 @@ private:
 
     UIPanel *panel_ = nullptr; // song_select_panel, while it is entered
     HamNavList *list_ = nullptr; // its right_hand.hnl
+    HamNavList *leftList_ = nullptr; // the help bar's left_hand.hnl
     bool eligible_ = false; // this visit may show the browser
     bool shown_ = false;
-    bool padInUse_ = false; // the auto rule's latch
-    double trackedSince_ = -1.0;
+    // The auto rule.
+    bool handsSteer_ = false; // the latch: the classic list is up for the hands
+    std::string handsWhy_;
+    bool handNow_ = false; // a hand is where a list takes it, this frame
+    bool handArmed_ = false; // the hand was seen away since the last press
+    double handSince_ = -1.0; // when the armed hand got there
+    bool startPressed_ = false;
+    bool wakeCapture_ = false;
+    unsigned switches_ = 0; // times the browser was shown or hidden, this run
     int catalogStamp_ = 0;
 
     songbrowser_ui::State saved_;
     bool hasSaved_ = false;
     std::string syncedSong_; // the song the classic list was last put on
-    bool keyboardHints_ = false;
+    Device shownDevice_ = kDeviceKeyboard; // what the screen's hint bar names
+    unsigned screenBuilds_ = 0;
+    std::string previewSong_;
+    unsigned previewChanges_ = 0;
+    double selectionMovedAt_ = -1.0;
 
     std::string pendingPick_;
     bool pendingBack_ = false;
+    int pendingCommand_ = -1; // a songbrowser_ui::Command, or -1
     bool cueMove_ = false;
     bool cueTab_ = false;
     bool cueBack_ = false;
@@ -750,8 +1091,16 @@ std::string HookStateJson() {
            "\"why\":\"not on song select\"}";
 }
 
+void HookInjectedPadPress() { sNextPressIsInjectedPad = true; }
+bool HookCommand(const std::string &name, std::string &error) {
+    if (sBrowserMade) return TheBrowser().RunCommandNamed(name, error);
+    error = "the song browser is not shown (not on song select)";
+    return false;
+}
+
 const NativeSongBrowser::Hooks kHooks = {
-    HookEnter, HookExit, HookPoll, HookDraw, HookHandle, HookHidesChrome, HookStateJson,
+    HookEnter,       HookExit,      HookPoll,             HookDraw,   HookHandle,
+    HookHidesChrome, HookStateJson, NoteButtonDown, HookInjectedPadPress, HookCommand,
 };
 
 struct Installer {

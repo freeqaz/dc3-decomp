@@ -253,6 +253,12 @@ TEST_F(GestureMenusTest, TitleToSongToResultsToMainWithZeroButtons) {
     EXPECT_EQ(r.exitCode, 0) << where;
     EXPECT_TRUE(r.Entered("game_screen")) << r.report;
     EXPECT_TRUE(r.Entered("perform_final_results_screen")) << r.report;
+    // Song select was reached by hand, so the natively drawn song browser
+    // (auto: there is no input script here) left it to the classic list --
+    // which is the list the route's "ymca" swipe picked from.
+    EXPECT_NE(r.report.find("\"song_browser_mode\": \"auto\""), std::string::npos) << r.report;
+    EXPECT_NE(r.report.find("\"song_browser_shown\": false"), std::string::npos)
+        << "the song browser was shown on a song select reached by gesture:\n" << r.report;
     // Every select on the route is a gesture: title, gameplay, perform, ymca,
     // easy, play, continue, new_song = 8 on the right-hand lists, plus two
     // helpbar backs (left_hand.hnl selects are not HamNavList right-list
