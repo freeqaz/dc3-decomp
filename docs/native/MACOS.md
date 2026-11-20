@@ -163,6 +163,17 @@ the cap off (`MILO_OUTPUT_MAX_ROWS=0`). A 60 Hz frame is 16.7 ms.
   the menus at full clock and about 25 fps at the low one. Leaving the knob
   unset (1080 rows) keeps every screen under 9 ms; 1440 rows keeps them under
   14 ms, which is 60 fps at full clock and not at the low one.
+- **On screen, the new build (the owner's game, 2026-11-19 23:25 PST).** One
+  session, read from the `[PERF]` lines of `~/Library/Logs/Dance Central 3/game.log`
+  and one 2 s `powermetrics` sample a screen, at 8-9% battery on AC. The window
+  was 1280x720 points with the cap off, so the game drew 2560x1440. Menus:
+  62 fps, 16.0-16.2 ms a frame; 45 frames a report over 16.67 ms on average,
+  the worst about 1 ms over, and one frame over 25 ms in 4 of 20 reports; GPU
+  92% busy at 758 MHz. Gameplay: 64 fps, 15.5 ms a frame, no frame over
+  16.67 ms in 10 of 13 reports; GPU 95% busy at 1112 MHz. So a 1440-row window
+  holds 60 with little to spare, the clock does rise in a song, and in the menus
+  it stayed low while frames ran a fraction late. Not measured: the old build
+  in the same window, and fullscreen.
 - **The per-pass GPU timers do not separate passes on this GPU.** A tile-based
   renderer runs a frame's passes interleaved, so each pass's `MILO_GPU_TIMERS`
   figure is close to the whole frame's span. Read `gpu_span_ms`; use
