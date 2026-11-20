@@ -203,7 +203,7 @@ TEST(PoseSessionFileTest, DueIndexIsTheLatestFrameAtOrBeforeTheSongTime) {
 
 TEST(PoseServerCommandTest, CameraByDefaultVideoAndInterpreterWhenAsked) {
     Env v("DC3_POSE_VIDEO", nullptr), py("DC3_POSE_PYTHON", nullptr), h("DC3_POSE_HFOV", nullptr),
-        fr("DC3_CAMERA_FRAMES", nullptr);
+        fr("DC3_CAMERA_FRAMES", nullptr), mk("DC3_POSE_MASK", nullptr);
     using Cmd = std::vector<std::string>;
     // argv[0] is ChoosePosePython's answer (PosePythonChoiceTest covers it).
     const std::string py0 = NativeSkeletonProvider::ChoosePosePython().path;
@@ -223,6 +223,25 @@ TEST(PoseServerCommandTest, CameraByDefaultVideoAndInterpreterWhenAsked) {
         EXPECT_EQ(vid, (Cmd{ "/venv/bin/python3", "/t/pose_server.py", "--socket", "/s.sock",
                              "--model", "/m.task", "--video", "/clips/dance.mp4", "--loop",
                              "--hfov", "70" }));
+    }
+    // PLAN P-20: DC3_POSE_MASK=raw is the switch back to the unrefined person
+    // mask.  Only `raw` reaches the command line (a pre-P-20 server does not
+    // know --mask), and only with --frames: without a picture there is no mask.
+    {
+        Env raw("DC3_POSE_MASK", "raw");
+        Cmd c = NativeSkeletonProvider::ServerCommand("/t/pose_server.py", "/s.sock", "/m.task", 2);
+        EXPECT_EQ(c, (Cmd{ py0, "/t/pose_server.py", "--socket", "/s.sock", "--model", "/m.task",
+                           "--camera", "2", "--frames", "320x240", "--mask", "raw" }));
+        Env off("DC3_CAMERA_FRAMES", "off");
+        Cmd noFrames =
+            NativeSkeletonProvider::ServerCommand("/t/pose_server.py", "/s.sock", "/m.task", 2);
+        EXPECT_EQ(noFrames, (Cmd{ py0, "/t/pose_server.py", "--socket", "/s.sock", "--model",
+                                  "/m.task", "--camera", "2" }));
+    }
+    {
+        Env refined("DC3_POSE_MASK", "refined");
+        Cmd c = NativeSkeletonProvider::ServerCommand("/t/pose_server.py", "/s.sock", "/m.task", 2);
+        EXPECT_EQ(c, cam);
     }
 }
 

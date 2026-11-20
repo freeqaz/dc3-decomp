@@ -524,8 +524,16 @@ std::vector<std::string> NativeSkeletonProvider::ServerCommand(
     // stream; WxH picks the size (default 320x240, the Kinect depth
     // resolution).
     std::string framesArg = CameraFramesArg();
-    if (!framesArg.empty())
+    if (!framesArg.empty()) {
         argv.insert(argv.end(), { "--frames", framesArg });
+        // PLAN P-20: the server steadies and fills the person mask (its
+        // MaskRefiner).  DC3_POSE_MASK=raw is the switch back to MediaPipe's
+        // mask cut at 0.5.  Nothing is passed otherwise, so a server from
+        // before P-20 (DC3_POSE_SERVER) still starts.
+        const char *mask = getenv("DC3_POSE_MASK");
+        if (mask && !strcmp(mask, "raw"))
+            argv.insert(argv.end(), { "--mask", "raw" });
+    }
     return argv;
 }
 
