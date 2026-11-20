@@ -9,6 +9,7 @@
 #include "platform/NativeSettings.h"
 #include "platform/MenuGesture_Native.h"
 #include "platform/TextInput_Native.h"
+#include "songbrowser/SongCatalogSource_Native.h" // GET /api/songs
 #include "platform/Rnd_Wgpu.h"
 #include "telemetry/GameplayTelemetry.h"
 #include "gfx/Screenshot.h"
@@ -444,6 +445,7 @@ void HttpServer::ProcessCommands() {
             case kCmdMenuState:    HandleMenuState(*cmd); break;
             case kCmdNativeUiState: HandleNativeUiState(*cmd); break;
             case kCmdInputText:    HandleInputText(*cmd); break;
+            case kCmdSongs:        HandleSongs(*cmd); break;
             default: cmd->result.error = "Unknown command type"; break;
         }
         {
@@ -1143,6 +1145,13 @@ void HttpServer::HandleInputText(Command& cmd) {
     cmd.result.ok = true;
 }
 
+// GET /api/songs: param1 is the q text, param2 the other parameters as
+// "key=value;..." (songbrowser/SongCatalogSource_Native.h).  Read-only.
+void HttpServer::HandleSongs(Command& cmd) {
+    cmd.result.ok = songbrowser::SongsEndpointJson(
+        cmd.param1, cmd.param2, cmd.result.jsonData, cmd.result.error);
+}
+
 // StreamCompose_Native.cpp.  Read-only.
 std::string Dc3CameraJson(int gridW, int gridH);
 
@@ -1762,6 +1771,29 @@ void HttpServer::RegisterEndpoints() {
             res.set_content(JsonOk(result.jsonData), "application/json");
         } else {
             res.status = result.httpStatus;
+            res.set_content(JsonError(result.error), "application/json");
+        }
+    });
+
+    // GET /api/songs[?q=TEXT][&limit=N][&sort=NAME][&min=N][&recents=N][&locked=1]
+    // — the song browser's data (docs/native/reference/SONG_BROWSER_DATA.md):
+    // the catalog song select lists, with q the ranked search result and the
+    // ranges to highlight, with sort an arrangement's sections and rows.
+    // Answered on the main thread between frames.  Read-only.
+    svr->Get("/api/songs", [this](const httplib::Request& req, httplib::Response& res) {
+        std::string options;
+        if (req.has_param("q")) options += "q=1;";
+        for (const char* key : { "limit", "sort", "min", "recents", "locked" }) {
+            if (!req.has_param(key)) continue;
+            std::string value = req.get_param_value(key);
+            if (value.find(';') != std::string::npos) continue;
+            options += std::string(key) + "=" + value + ";";
+        }
+        auto result = QueueAndWait(kCmdSongs, req.get_param_value("q"), options);
+        if (result.ok) {
+            res.set_content(JsonOk(result.jsonData), "application/json");
+        } else {
+            res.status = 503;
             res.set_content(JsonError(result.error), "application/json");
         }
     });

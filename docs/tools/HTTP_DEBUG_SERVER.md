@@ -417,6 +417,52 @@ first begin to last end (it includes idle gaps between submits).
 `scripts/playtest/gpu_pass_ab.py` drives a song with this endpoint and
 `/api/dta/eval` to A/B one switch.
 
+### Songs
+
+The song browser's data
+([SONG_BROWSER_DATA.md](../native/reference/SONG_BROWSER_DATA.md)): the songs
+song select lists, a search over them, or one arrangement. Built from the game
+on each request; read-only. Answers `503` with `"ok":false` while the game is
+still starting (no unlock table yet) and for an unknown `sort`.
+
+```bash
+# The catalog: every song, the play history, the recents, the section names
+curl -s localhost:9090/api/songs
+# {"ok":true,"data":{"count":45,"songs":[{"id":7035,"shortName":"12step",
+#   "title":"1, 2 Step","artist":"Ciara ft. Missy Elliott","album":"Goodies",
+#   "year":2004,"bpm":113,"lengthMs":142309,"rank":187,"difficultyTier":1,
+#   "origin":"ham3","source":"ham3","onDisc":true,"isCover":false,
+#   "albumArtPath":"songs/12step/12step_keep.png","bestStars":0,"bestScore":0,
+#   "played":false,"locked":false,"recentRank":-1}, ...],
+#   "history":[],"recents":[],
+#   "labels":{"ham3":"Dance Central 3","song_tier_0":"Warmup", ...}}}
+
+# A search (any ?q= at all, an empty one included)
+curl -s 'localhost:9090/api/songs?q=will+i+am'
+# {"ok":true,"data":{"searchMicros":24,"query":"will i am","searching":true,
+#   "words":["will","i","am"],"count":1,"rows":[{"shortName":"omg","title":"OMG",
+#   "artist":"Usher ft. will.i.am","album":"Raymond V. Raymond",
+#   "match":"artist_word","field":"artist",
+#   "ranges":[{"field":"artist","begin":10,"length":9,"text":"will.i.am"}]}]}}
+
+# An arrangement: sections and the rows in order
+curl -s 'localhost:9090/api/songs?sort=artist&min=4'
+# {"ok":true,"data":{"arrangement":"artist","count":45,
+#   "sections":[{"token":"123 - A","title":"123 - A","firstRow":0,"count":5,
+#   "recents":false}, ...],"rows":["iamthebest","indaclub", ...]}}
+```
+
+| Parameter | Meaning |
+|-----------|---------|
+| `q=TEXT` | Search. `searching` is false when the text has nothing to search for. `ranges` are bytes of the UTF-8 string; `text` is that slice. `searchMicros` is the search alone |
+| `limit=N` | At most N search rows |
+| `sort=NAME` | `title`, `artist`, `difficulty`, `source`, `decade`, `bpm` |
+| `min=N` | With `sort=title` or `artist`: join letters until a section has N songs (4 is today's artist sort) |
+| `recents=N` | Rows of Recently Played: the catalog's `recents`, and the first section of an arrangement. Default 6; 0 for none |
+| `locked=1` | Also list songs that are only locked, with `"locked":true` |
+
+`q` wins over `sort`. The examples are a disc-only run (`DC3_DLC=0`, 45 songs).
+
 ## Example Workflows
 
 ### Wait for engine ready, then screenshot
@@ -537,6 +583,7 @@ print(f"Frame {tel['data']['frame']}, beat {tel['data']['beat']}")
 |------|-------------|
 | `native/src/platform/HttpServer.h` | Server class, command queue, input/wait state |
 | `native/src/platform/HttpServer.cpp` | All endpoint handlers (~650 LOC) |
+| `native/src/songbrowser/SongCatalogSource_Native.cpp` | `GET /api/songs`: the catalog from the game, and the endpoint's body |
 | `native/include/httplib.h` | Vendored cpp-httplib (MIT, header-only) |
 
 ## Environment Variables

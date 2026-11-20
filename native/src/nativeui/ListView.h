@@ -58,6 +58,9 @@ namespace nativeui {
         // True if the selection changed. Calls onSelectionChanged.
         bool Select(int index);
         bool SelectFirst();
+        // Puts the list at a saved scroll position without animating. Call it
+        // after SetRowCount and Select; the selection is still kept in view.
+        void SetScrollOffset(float offset) { strip_.SetScroll(offset); }
 
         std::function<void(int index)> onSelectionChanged;
         std::function<void(int index)> onActivated;
@@ -67,6 +70,8 @@ namespace nativeui {
 
         // For tests and tools.
         float ScrollOffset() const { return strip_.Scroll(); }
+        // Where the scroll is going; equal to ScrollOffset() at rest.
+        float ScrollTarget() const { return strip_.ScrollTarget(); }
         int BuiltRowCount() const { return static_cast<int>(rows_.size()); }
         int TotalRowsBuilt() const { return totalRowsBuilt_; }
         // Where the highlight bar is now, in the same space as Bounds().

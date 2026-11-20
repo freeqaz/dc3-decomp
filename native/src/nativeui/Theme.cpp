@@ -45,6 +45,13 @@ namespace nativeui {
         // The empty player box, a flat violet: #68007E at (1740,160).
         c.imagePlaceholder = Color::FromRgb8(0x68007E);
         c.imageTint = Color::FromRgb8(0xFFFFFF);
+        // Not sampled: the game has no scrim. Black, light enough that the streaks
+        // behind it keep moving visibly; two layers (screen, then text column)
+        // leave about a third of the background's brightness under the text.
+        c.scrim = Color::FromRgb8(0x000000, 0.42f);
+        // Not sampled from the capture (no star is on it): the warm gold of the
+        // game's score stars, to be checked against a results screen.
+        c.star = Color::FromRgb8(0xFFC83C);
 
         // One face throughout, all upper case, loosely set. Cap heights in the
         // capture: PERFORM about 40 px, list rows about 28 px, SORT BY about 22 px.
@@ -87,6 +94,18 @@ namespace nativeui {
         k.shelfCardWidth = 150.0f;
         k.shelfCardHeight = 150.0f;
         k.shelfFocusScale = 1.08f;
+        // The song browser's own proportions (logical units). The pane is the
+        // width of the game's PERFORM panel, 240..476 px at 1080p scaled up to
+        // hold album art; the meter cell is the SKILL LEVEL meter's, 56x22 px
+        // at 1080p, at a third of its size for a list row.
+        k.searchFieldWidth = 300.0f;
+        k.sidePaneWidth = 340.0f;
+        k.listSecondaryShare = 0.30f;
+        k.meterCellWidth = 7.0f;
+        k.meterCellHeight = 12.0f;
+        k.meterCellGap = 2.0f;
+        k.starSize = 9.0f;
+        k.starGap = 4.0f;
 
         return theme;
     }

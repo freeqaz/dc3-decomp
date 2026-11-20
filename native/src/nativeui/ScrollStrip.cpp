@@ -87,6 +87,14 @@ namespace nativeui {
         return std::max(0.0f, contentExtent_ - viewport_);
     }
 
+    void ScrollStrip::SetScroll(float offset) {
+        scroll_.Snap(offset);
+        RetargetScroll();
+        if (viewport_ > 0.0f) {
+            scroll_.Snap(scroll_.Target());
+        }
+    }
+
     void ScrollStrip::Advance(float deltaSeconds, const SpringParams &spring) {
         scroll_.Advance(deltaSeconds, spring);
     }

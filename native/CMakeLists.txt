@@ -1219,6 +1219,19 @@ set(DC3_ENGINE_SOURCES
 # ============================================================================
 
 # Native platform sources (no entry point — shared by dc3-native and milo-viewer)
+# Song browser data (docs/native/reference/SONG_BROWSER_DATA.md): the catalog,
+# search and arrangements under the natively drawn song browser.  All but the
+# last file are standard C++ with no engine types; the last fills a catalog
+# from the running game.
+set(DC3_SONGBROWSER_SOURCES
+    src/songbrowser/SongText.cpp
+    src/songbrowser/SongCatalog.cpp
+    src/songbrowser/SongSearch.cpp
+    src/songbrowser/SongSections.cpp
+    src/songbrowser/SongCatalogJson.cpp
+    src/songbrowser/SongCatalogSource_Native.cpp
+)
+
 set(DC3_NATIVE_CORE_SOURCES
     src/xdk_shims.cpp
     src/xbox_link_stubs.cpp
@@ -1241,6 +1254,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
     src/platform/SongSelect_Native.cpp # song select: Recently Played, sort by artist, section jumps (docs/native/SONG_SELECT.md)
     src/platform/SongSelectState_Native.cpp # song select: play history + sort kept in $DC3_SAVE_DIR/song_select.txt
+    ${DC3_SONGBROWSER_SOURCES} # song browser data: catalog, search, arrangements, GET /api/songs
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/PoseEstimate_Native.cpp # DC3_POSE_ESTIMATE: joints the camera cannot see (np-cutoff)
@@ -1416,7 +1430,7 @@ add_library(nativeui STATIC
     src/nativeui/ListView.cpp
     src/nativeui/Panel.cpp
     src/nativeui/Renderer.cpp
-    src/nativeui/SampleBrowser.cpp
+    src/nativeui/SampleBrowser.cpp   # kept only until the DC3_NATIVEUI_DEMO screen and the host tests draw the real song browser
     src/nativeui/Screen.cpp
     src/nativeui/ScrollStrip.cpp
     src/nativeui/Shelf.cpp
@@ -1451,6 +1465,27 @@ set(DC3_NATIVEUI_HOST_SOURCES
     src/nativeui_host/NativeUiDemo.cpp
     src/nativeui_host/NativeUiHost.cpp
 )
+
+# ============================================================================
+# songbrowser_ui -- the natively drawn song browser screen (docs/native/
+# reference/SONG_BROWSER_UI.md): a nativeui composition driven by the song
+# browser's data (DC3_SONGBROWSER_SOURCES above). Pure C++17 like nativeui: no
+# game objects, no GPU. It calls the pure part of src/songbrowser/ (catalog,
+# search, arrangements), which every target that links it already compiles
+# through DC3_SONGBROWSER_SOURCES, so the library itself carries no copy.
+# Linked into dc3-native, dc3-web and milo-tests below.
+# ============================================================================
+add_library(songbrowser_ui STATIC
+    src/songbrowser_ui/BrowserModel.cpp
+    src/songbrowser_ui/Containers.cpp
+    src/songbrowser_ui/DetailPane.cpp
+    src/songbrowser_ui/MatchText.cpp
+    src/songbrowser_ui/SongBrowserScreen.cpp
+    src/songbrowser_ui/SongWidgets.cpp
+)
+target_include_directories(songbrowser_ui PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_compile_options(songbrowser_ui PRIVATE -Wall -Wextra)
+target_link_libraries(songbrowser_ui PUBLIC nativeui)
 
 if(EMSCRIPTEN)
 
@@ -1498,6 +1533,7 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
     src/platform/SongSelect_Native.cpp # song select: Recently Played, sort by artist, section jumps (docs/native/SONG_SELECT.md)
     src/platform/SongSelectState_Native.cpp # song select: play history + sort kept in $DC3_SAVE_DIR/song_select.txt
+    ${DC3_SONGBROWSER_SOURCES} # song browser data: catalog, search, arrangements, GET /api/songs
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/PoseEstimate_Native.cpp # DC3_POSE_ESTIMATE: joints the camera cannot see (np-cutoff)
@@ -1663,7 +1699,9 @@ target_compile_definitions(dc3-web PRIVATE
     MILO_WEB_AUDIO_NS=dc3
 )
 
-target_link_libraries(dc3-web PRIVATE milo-engine imgui nativeui)
+target_link_libraries(dc3-web PRIVATE milo-engine imgui)
+# The natively drawn song browser screen (and nativeui, which it carries).
+target_link_libraries(dc3-web PRIVATE songbrowser_ui)
 
 # Same precompiled/force-included header every native target uses (and the
 # MSVC decomp build's /FI): decomp TUs rely on Object.h + Debug.h arriving
@@ -1814,6 +1852,8 @@ target_link_libraries(dc3-native PRIVATE
     imgui
     nativeui
 )
+# The natively drawn song browser screen (and nativeui, which it carries).
+target_link_libraries(dc3-native PRIVATE songbrowser_ui)
 
 # NOTE: GFX sources include BOTH Dawn/WebGPU headers AND decomp engine headers.
 # The -D__GNUC_STDC_INLINE__ flag (in DC3_MSVC_COMPAT_FLAGS) resolves the GCC 15
@@ -2251,6 +2291,7 @@ if(BUILD_TESTS)
         tests/test_copy_poll_semantics.cpp
         tests/test_native_options.cpp
         tests/test_native_song_select.cpp  # song select: Recently Played, sort by artist, section jumps, the classic switch
+        tests/test_song_browser.cpp  # song browser data: search, arrangements, recents; GET /api/songs against song select
         tests/test_native_profile.cpp
         tests/test_native_glyph_render.cpp
         tests/test_native_ui_material_terms.cpp
@@ -2267,7 +2308,8 @@ if(BUILD_TESTS)
         tests/test_nativeui_core.cpp     # nativeui: UTF-8, text fitting, display list, theme, animation
         tests/test_nativeui_layout.cpp   # nativeui: layout containers, focus and event routing, Screen
         tests/test_nativeui_widgets.cpp  # nativeui: ListView, Shelf, TextField, TabStrip, HintBar, Label, Image, Panel
-        tests/test_nativeui_sample.cpp   # nativeui: the sample song browser, driven by events; display-list goldens
+        tests/test_nativeui_raster.cpp   # nativeui: a display-list golden; the test-only software rasteriser
+        tests/test_song_browser_ui.cpp   # the song browser screen on the real 121-song list: focus, search, sort, state, pictures
         tests/test_nativeui_host.cpp     # nativeui_host: command translation, glyph layout, image cache, input (no GPU, no game data)
         tests/test_nativeui_host_gpu.cpp # nativeui_host: real fonts + canvas into a render target; the demo in a running engine
         ${DC3_NATIVEUI_HOST_SOURCES}  # the natively drawn UI's host (the code under test)
@@ -2346,12 +2388,13 @@ if(BUILD_TESTS)
         ${CMAKE_SOURCE_DIR}/tests/test_nativeui_core.cpp
         ${CMAKE_SOURCE_DIR}/tests/test_nativeui_layout.cpp
         ${CMAKE_SOURCE_DIR}/tests/test_nativeui_widgets.cpp
-        ${CMAKE_SOURCE_DIR}/tests/test_nativeui_sample.cpp
+        ${CMAKE_SOURCE_DIR}/tests/test_nativeui_raster.cpp
+        ${CMAKE_SOURCE_DIR}/tests/test_song_browser_ui.cpp
         TARGET_DIRECTORY milo-tests
         PROPERTIES SKIP_PRECOMPILE_HEADERS ON
                    COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility;-fno-delayed-template-parsing"
     )
-    target_link_libraries(milo-tests PRIVATE nativeui)
+    target_link_libraries(milo-tests PRIVATE nativeui songbrowser_ui)
     if(NOT APPLE)
         find_package(X11 REQUIRED)
         target_link_libraries(milo-tests PRIVATE X11::X11)

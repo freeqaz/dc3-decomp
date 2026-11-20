@@ -81,6 +81,7 @@ public:
         kCmdMenuState,      // What every polled HamNavList is doing + its selects (PLAN P-3)
         kCmdNativeUiState,  // The natively drawn UI's demo: what it shows (DC3_NATIVEUI_DEMO)
         kCmdInputText,      // Type text / edit keys into the engine's text queue
+        kCmdSongs,          // The song browser's catalog, a search or an arrangement (GET /api/songs)
     };
 
     struct CommandResult {
@@ -145,6 +146,7 @@ private:
     void HandleMenuState(Command& cmd);
     void HandleNativeUiState(Command& cmd);
     void HandleInputText(Command& cmd);
+    void HandleSongs(Command& cmd);
 
     volatile bool mRunning = false;
     int mPort = 0;

@@ -1,7 +1,7 @@
 // A small software rasteriser for nativeui display lists, and a PNG writer.
 //
 // TEST TOOL ONLY. It exists so a person can look at a layout without a GPU
-// (see UiCoreSample.TheLayoutCanBeLookedAtAsAPicture). It is not the game's
+// (see SongBrowserUi.Pictures). It is not the game's
 // renderer and nothing outside native/tests may include it.
 //
 // What it does and does not do:
