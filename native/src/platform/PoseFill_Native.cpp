@@ -54,6 +54,21 @@ RateSource ParseRateSource(const char *env, bool *ok) {
     return kRateCamera;
 }
 
+double ParseReleaseDwell(const char *env, bool *ok) {
+    if (ok)
+        *ok = true;
+    if (!env || !*env)
+        return Filler::kReleaseDwell;
+    char *end = nullptr;
+    double s = strtod(env, &end);
+    if (end == env || *end != '\0' || !(s >= 0.0 && s <= kMaxReleaseDwell)) {
+        if (ok)
+            *ok = false;
+        return Filler::kReleaseDwell;
+    }
+    return s;
+}
+
 const char *ModeName(Mode m) {
     switch (m) {
     case kOff:
@@ -247,12 +262,15 @@ void Filler::SetModeKeepingRate(Mode m) {
     mLastShows = 0.0;
     mSigma = -1e30;
     mDelay = 0.0;
-    if (m == kOff)
+    if (m == kOff) {
         mEngaged = false;
+        mFastFor = 0.0;
+    }
 }
 
 void Filler::Reset() {
     mEngaged = false;
+    mFastFor = 0.0;
     mDelay = 0.0;
     mNumIntervals = mIntervalHead = 0;
     mCount = 0;
@@ -262,6 +280,10 @@ void Filler::Reset() {
     mSigma = -1e30;
     mArrivalElapsedMs = 33;
     mFills = mReals = 0;
+}
+
+void Filler::SetReleaseDwell(double seconds) {
+    mReleaseDwell = !(seconds >= 0.0) ? 0.0 : seconds > kMaxReleaseDwell ? kMaxReleaseDwell : seconds;
 }
 
 void Filler::SetGain(float g) {
@@ -330,6 +352,7 @@ int Filler::FindDue(double sigma) const {
 }
 
 bool Filler::Push(const Source &src) {
+    double sinceLast = 0.0; // song seconds this frame adds to the rate window, 0 = none
     if (mCount > 0) {
         const Source &last = mBuf[mCount - 1];
         if (src.arrival < last.arrival - 0.5) {
@@ -350,6 +373,7 @@ bool Filler::Push(const Source &src) {
                     span = src.ts - last.ts;
                     period = span / (src.frames >= 1 && src.frames <= kMaxUntaken ? src.frames : 1);
                 }
+                sinceLast = interval;
                 mIntervals[mIntervalHead] = interval;
                 mStampSpans[mIntervalHead] = span;
                 mPeriods[mIntervalHead] = period;
@@ -370,13 +394,24 @@ bool Filler::Push(const Source &src) {
 
     double med = MedianInterval();
     double rate = RateInterval();
+    // Released only once the camera has read over the release rate for the
+    // dwell without a break: a camera whose rate wanders between the two
+    // thresholds (a tracker on a hot machine: 26 engagements in 1019 s, 19 of
+    // the 23 spans under 5 s, MEASURED) would otherwise change, every few
+    // seconds, how the motion between its frames is made.
+    const bool fast = rate > 0.0 && rate < 1.0 / kReleaseHz;
+    if (mEngaged && fast)
+        mFastFor += sinceLast;
+    else
+        mFastFor = 0.0;
     if (mMode == kOff) {
         mEngaged = false;
     } else if (!mEngaged && rate > 1.0 / kEngageHz) {
         mEngaged = true;
         mDelay = 0.0;
-    } else if (mEngaged && rate > 0.0 && rate < 1.0 / kReleaseHz) {
+    } else if (mEngaged && fast && mFastFor >= mReleaseDwell) {
         mEngaged = false;
+        mFastFor = 0.0;
     }
     if (mEngaged && mMode == kInterp) {
         double d = std::min(std::max(med * kDelayFactor, kStep), kMaxDelay);

@@ -127,6 +127,13 @@ const char *ModeName(Mode m);
 // and *ok is set false.
 enum RateSource { kRateCamera, kRateArrival };
 RateSource ParseRateSource(const char *env, bool *ok = nullptr);
+// DC3_POSE_FILL_DWELL: seconds the camera must have stayed over the release
+// rate before the fill lets go (Filler::kReleaseDwell).  Unset or empty = the
+// default; 0 = release with the first reading over it, as before
+// np-pose-steady.  Anything else, or outside [0, kMaxReleaseDwell], is the
+// default and *ok is set false.
+static const double kMaxReleaseDwell = 60.0;
+double ParseReleaseDwell(const char *env, bool *ok = nullptr);
 
 typedef NativeSkeletonProvider::PersonData Person;
 static const int kMaxPersons = NativeSkeletonProvider::kMaxPersons;
@@ -190,7 +197,8 @@ class Filler {
 public:
     static constexpr double kStep = 1.0 / 30.0;     // the Kinect's frame period
     static constexpr double kEngageHz = 24.0;       // engage below this camera rate
-    static constexpr double kReleaseHz = 27.0;      // release above it
+    static constexpr double kReleaseHz = 27.0;      // release above it ...
+    static constexpr double kReleaseDwell = 10.0;   // ... once it has stayed there this long, seconds
     static constexpr int kWindow = 15;              // camera intervals in the rate estimate
     static constexpr int kMinIntervals = 5;         // before the first decision
     static constexpr double kDelayFactor = 1.2;     // interp delay = this x the median interval
@@ -217,6 +225,10 @@ public:
     float Gain() const { return mGain; }
     void SetRateSource(RateSource s) { mRateSource = s; }
     RateSource GetRateSource() const { return mRateSource; }
+    // Seconds over the release rate before a release; clamped to
+    // [0, kMaxReleaseDwell].  0 = at the first reading over it.
+    void SetReleaseDwell(double seconds);
+    double ReleaseDwell() const { return mReleaseDwell; }
     void Reset();
 
     // A camera frame arrived (src.arrival = song seconds now).  Updates the
@@ -267,6 +279,8 @@ private:
     bool mEngaged = false;
     double mDelay = 0.0;
     RateSource mRateSource = kRateCamera;
+    double mReleaseDwell = kReleaseDwell;
+    double mFastFor = 0.0; // engaged: song seconds the rate has read over kReleaseHz without a break
     // One entry per camera-frame interval, the three in step:
     double mIntervals[kWindow] = {};  // song time between the two takes (the median's)
     double mStampSpans[kWindow] = {}; // the camera's stamps across them, 0 = none

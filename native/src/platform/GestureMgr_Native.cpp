@@ -1038,6 +1038,13 @@ void FillReadMode() {
     gFill.SetRateSource(Dc3PoseFill::ParseRateSource(r, &rateOk));
     if (!rateOk)
         fprintf(stderr, "DC3_POSE_FILL_RATE='%s' ignored (want camera or arrival)\n", r);
+    // DC3_POSE_FILL_DWELL: seconds over the release rate before a release.
+    const char *d = gFillHaveOverride ? nullptr : getenv("DC3_POSE_FILL_DWELL");
+    bool dwellOk = true;
+    gFill.SetReleaseDwell(Dc3PoseFill::ParseReleaseDwell(d, &dwellOk));
+    if (!dwellOk)
+        fprintf(stderr, "DC3_POSE_FILL_DWELL='%s' ignored (want seconds, 0 .. %.0f)\n", d,
+                Dc3PoseFill::kMaxReleaseDwell);
     const char *c = getenv("DC3_POSE_FILL_CLOCK");
     gFillSongClockOnly = c && !strcmp(c, "song");
     if (c && strcmp(c, "song") && strcmp(c, "stall"))

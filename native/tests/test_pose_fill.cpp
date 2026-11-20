@@ -494,12 +494,19 @@ TEST(PoseFillScheduleTest, TheClockGoingBackStartsAgainWithNothingOld) {
 }
 
 TEST(PoseFillScheduleTest, AFasterCameraReleasesTheFill) {
-    Filler f;
-    Drive(f, 0.125, 10.0, 12.0, 12.0, Always);
-    ASSERT_TRUE(f.Engaged());
-    Drive(f, 1.0 / 30.0, 12.1, 14.0, 14.0, Always);
-    EXPECT_FALSE(f.Engaged());
-    EXPECT_EQ(f.Delay(), 0.0);
+    // np-pose-steady: once the camera has stayed fast for the release dwell
+    // (PoseFillDwellTest); with no dwell, within the 1.9 s this test gave it
+    // before there was one.
+    for (double dwell : { Filler::kReleaseDwell, 0.0 }) {
+        Filler f;
+        f.SetReleaseDwell(dwell);
+        Drive(f, 0.125, 10.0, 12.0, 12.0, Always);
+        ASSERT_TRUE(f.Engaged());
+        double until = 14.0 + dwell;
+        Drive(f, 1.0 / 30.0, 12.1, until, until, Always);
+        EXPECT_FALSE(f.Engaged()) << "dwell " << dwell;
+        EXPECT_EQ(f.Delay(), 0.0);
+    }
 }
 
 // A camera delivering at ~23 Hz as a mix of one- and two-frame intervals of a
@@ -859,8 +866,8 @@ struct RateRun {
     double lastHz = 0.0;    // the estimate at the end
 };
 
-// `hzAt(t)`: the camera's rate at its own time t.  `onPush(f, t)` after every
-// frame taken.
+// `hzAt(t)`: the camera's rate at its own time t.  `onPush(source, t)` after
+// every frame taken.
 template <class HzAt, class OnPush>
 RateRun SampleCamera(Filler &f, HzAt hzAt, const CameraModel &cam, double gameFps, double seconds,
                      uint32_t seed, OnPush onPush) {
@@ -909,7 +916,7 @@ RateRun SampleCamera(Filler &f, HzAt hzAt, const CameraModel &cam, double gameFp
                 (now ? r.engages : r.releases)++;
             was = now;
             r.taken++;
-            onPush(f, t);
+            onPush(s, t);
         }
         Output o;
         if (f.Engaged() && f.Poll(100.0 + t, o) && !o.real)
@@ -922,7 +929,7 @@ RateRun SampleCamera(Filler &f, HzAt hzAt, const CameraModel &cam, double gameFp
     return r;
 }
 
-auto NoHook = [](Filler &, double) {};
+auto NoHook = [](const Source &, double) {};
 auto Steady(double hz) {
     return [hz](double) { return hz; };
 }
@@ -948,6 +955,7 @@ TEST(PoseFillRateTest, ASteadyThirtyHertzCameraNeverEngagesWhateverTheGamesFrame
                 Filler old;
                 old.SetMode(kExtrap);
                 old.SetRateSource(kRateArrival);
+                old.SetReleaseDwell(0.0);
                 RateRun b = SampleCamera(old, Steady(30.0), *cam, fps, 120.0, seed, NoHook);
                 before += b.engages;
                 fillsBefore += b.fills;
@@ -1047,6 +1055,19 @@ TEST(PoseFillRateTest, AnUnbelievableFrameCountOrStampIsNotUsed) {
     }
     EXPECT_FALSE(f.RateIsTheCamerasOwn());
     EXPECT_NEAR(1.0 / f.RateInterval(), 8.0, 0.01);
+    // A window holding a frame without a stamp is read by the takes: the two
+    // intervals around that frame have no camera period at all, and counted
+    // as zero they would make an 8 Hz camera read as a fast one.
+    Filler g;
+    t = 10.0;
+    for (int i = 0; i < 30; i++) {
+        t += 0.125;
+        std::vector<Person> people{ MakePerson(5, (float)t) };
+        g.Push(MakeSource(t, i % 3 == 0 ? -1.0 : t, people));
+    }
+    EXPECT_FALSE(g.RateIsTheCamerasOwn());
+    EXPECT_TRUE(g.Engaged()) << "an 8 Hz camera with unstamped frames among its own was not engaged";
+    EXPECT_NEAR(1.0 / g.RateInterval(), 8.0, 0.01);
 }
 
 // By hand: fifteen takes of a 30 Hz camera by a 30 fps game, six of them two
@@ -1092,4 +1113,242 @@ TEST(PoseFillRateTest, TheRateIsTheCamerasOwnStampsOverTheFramesItDelivered) {
         EXPECT_TRUE(feed(f, true, 4.0));
         EXPECT_NEAR(1.0 / f.RateInterval(), 22.5 / 4.0, 0.01);
     }
+}
+
+// ---------------------------------------------------------------------------
+// The release dwell (np-pose-steady, DC3_POSE_FILL_DWELL).
+//
+// MEASURED on the M3 MacBook Air, 1019 s with the tracker slowing down for
+// stretches (12-19 poses a second while the machine was hot): the fill
+// engaged 26 times; 19 of its 23 spans were under 5 s (median 2.1 s), and of
+// the 24 releases followed by another engagement in the same song 17 were
+// followed within 5 s, 18 within 10 s.  Every change is a change of how the
+// motion between two camera frames is made.
+// ---------------------------------------------------------------------------
+namespace {
+
+// Camera frames at `hz` for `seconds`, each taken as it comes; *released is
+// set to the song time of a release.
+void FeedCamera(Filler &f, double &t, double hz, double seconds, double *released = nullptr) {
+    double end = t + seconds;
+    while (t < end - 1e-9) {
+        t += 1.0 / hz;
+        std::vector<Person> people{ MakePerson(5, (float)t) };
+        bool was = f.Engaged();
+        bool now = f.Push(MakeSource(t, t, people));
+        if (was && !now && released)
+            *released = t;
+    }
+}
+
+// Cameras whose rate wanders between 18 and 29 a second (camera time t).
+const double kTwoPi = 6.283185307179586;
+double WanderSine4(double t) { return 23.5 + 5.5 * std::sin(kTwoPi * t / 4.0); }
+double WanderSine9(double t) { return 23.5 + 5.5 * std::sin(kTwoPi * t / 9.0); }
+double WanderSine20(double t) { return 23.5 + 5.5 * std::sin(kTwoPi * t / 20.0); }
+// A new level every 2.5 s, as a tracker on a hot machine: 18 .. 29.
+double WanderSteps(double t) {
+    static const double kLevels[8] = { 18.0, 20.0, 22.0, 25.0, 27.0, 29.0, 29.0, 29.0 };
+    uint32_t k = (uint32_t)(t / 2.5);
+    return kLevels[(k * 2654435761u) >> 29];
+}
+// 29 a second, with 2 s at 18 every 8 s.
+double WanderDips(double t) { return std::fmod(t, 8.0) < 2.0 ? 18.0 : 29.0; }
+// The cost: 20 s at 15, then 30 for good -- one engagement, one release.
+double SlowThenFast(double t) { return t < 20.0 ? 15.0 : 30.0; }
+// The M3 MacBook Air's tracker: poses a second in each 5 s window of the
+// 1019 s session (its POSE_STATS lines, in order).  The rate inside a window
+// is not known, so this camera is steadier than the Mac's was.
+const double kMacTrackerHz[] = {
+    4.2, 2.7, 3.0, 3.2, 3.0, 2.9, 3.7, 1.7, 4.4, 15.5, 30.0, 30.0, 30.0, 30.0,
+    30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 29.8, 26.5, 30.0,
+    30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0,
+    30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0,
+    30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0,
+    30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0,
+    30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 29.9, 30.0, 29.3, 28.9, 29.6, 30.0,
+    30.0, 30.0, 30.0, 30.0, 30.0, 24.4, 24.2, 23.2, 22.8, 24.1, 17.4, 17.3, 17.9, 19.1,
+    18.1, 18.5, 18.4, 18.4, 18.2, 17.9, 19.3, 19.4, 20.2, 19.7, 19.7, 20.2, 20.2, 21.7,
+    27.2, 27.5, 20.1, 20.3, 20.4, 20.5, 20.5, 20.3, 20.2, 20.3, 20.3, 19.3, 28.1, 28.4,
+    26.2, 26.8, 24.4, 25.3, 24.8, 22.3, 13.7, 14.7, 12.8, 12.0, 12.1, 12.8, 15.6, 17.0,
+    15.0, 18.4, 28.4, 22.2, 21.3, 23.3, 20.1, 22.0, 24.1, 24.3, 24.4, 20.7, 26.4, 22.0,
+    28.8, 30.0, 26.9, 30.0, 29.8, 27.0, 28.8, 26.6, 25.6, 29.2, 30.0, 29.3, 29.8, 21.6,
+    29.9, 30.0, 29.9, 21.8, 25.7, 21.5, 19.6, 13.7, 18.3, 19.6, 20.1, 16.0, 18.7, 13.5,
+    16.2,
+};
+const int kMacTrackerWindows = (int)(sizeof(kMacTrackerHz) / sizeof(kMacTrackerHz[0]));
+double MacTracker(double t) {
+    int k = (int)(t / 5.0);
+    return kMacTrackerHz[k < 0 ? 0 : k >= kMacTrackerWindows ? kMacTrackerWindows - 1 : k];
+}
+
+struct Wander {
+    const char *name;
+    double (*hz)(double);
+};
+
+struct DwellRun {
+    double flipsPerMinute;
+    double engagedSeconds;
+    int notEngagedWhereBeforeItWas; // takes at which the fill with no dwell was engaged and this one not
+};
+
+DwellRun RunDwell(const Wander &w, double dwell, double seconds) {
+    Filler f, before;
+    f.SetMode(kExtrap);
+    f.SetReleaseDwell(dwell);
+    before.SetMode(kExtrap);
+    before.SetReleaseDwell(0.0);
+    int worse = 0;
+    RateRun r = SampleCamera(f, w.hz, kQuiet, 60.0, seconds, 5u, [&](const Source &s, double) {
+        bool b = before.Push(s);
+        worse += b && !f.Engaged();
+    });
+    return { (r.engages + r.releases) * 60.0 / seconds, r.engagedSeconds, worse };
+}
+
+} // namespace
+
+TEST(PoseFillDwellTest, TheFillLetsGoOnlyOnceTheCameraHasStayedFastForTheDwell) {
+    EXPECT_EQ(Filler().ReleaseDwell(), Filler::kReleaseDwell);
+    for (Mode m : { kExtrap, kInterp }) {
+        Filler f;
+        f.SetMode(m);
+        double t = 10.0, released = -1.0;
+        FeedCamera(f, t, 8.0, 3.0);
+        ASSERT_TRUE(f.Engaged());
+        double changed = t;
+        FeedCamera(f, t, 30.0, Filler::kReleaseDwell - 0.2, &released);
+        EXPECT_TRUE(f.Engaged()) << ModeName(m) << ": released " << released - changed
+                                 << " s after the camera sped up";
+        FeedCamera(f, t, 30.0, 1.2, &released);
+        EXPECT_FALSE(f.Engaged()) << ModeName(m);
+        // The window reads over the release rate ~0.4 s after the change
+        // (twelve fast frames in); the dwell counts from there.
+        EXPECT_GE(released - changed, Filler::kReleaseDwell) << ModeName(m);
+        EXPECT_LE(released - changed, Filler::kReleaseDwell + 0.6) << ModeName(m);
+    }
+    {
+        // No dwell (DC3_POSE_FILL_DWELL=0): with the first reading over the
+        // release rate, as before.
+        Filler f;
+        f.SetReleaseDwell(0.0);
+        double t = 10.0, released = -1.0;
+        FeedCamera(f, t, 8.0, 3.0);
+        ASSERT_TRUE(f.Engaged());
+        double changed = t;
+        FeedCamera(f, t, 30.0, 1.0, &released);
+        EXPECT_FALSE(f.Engaged());
+        EXPECT_LE(released - changed, 0.5);
+    }
+    {
+        // A break starts the wait again: 3 s at 30, then 1.5 s at 25.5 --
+        // between the two thresholds, neither slow nor fast -- then 30 again.
+        Filler f;
+        double t = 10.0, released = -1.0;
+        FeedCamera(f, t, 8.0, 3.0);
+        FeedCamera(f, t, 30.0, 3.0, &released);
+        FeedCamera(f, t, 25.5, 1.5, &released);
+        ASSERT_TRUE(f.Engaged());
+        double back = t;
+        FeedCamera(f, t, 30.0, Filler::kReleaseDwell - 0.2, &released);
+        EXPECT_TRUE(f.Engaged()) << "released " << released - back << " s after the camera was fast again";
+        FeedCamera(f, t, 30.0, 1.5, &released);
+        EXPECT_FALSE(f.Engaged());
+        EXPECT_GE(released - back, Filler::kReleaseDwell);
+    }
+    {
+        // The dwell is of the camera, not of the mode: off is off at once.
+        Filler f;
+        double t = 10.0;
+        FeedCamera(f, t, 8.0, 3.0);
+        FeedCamera(f, t, 30.0, 2.0);
+        ASSERT_TRUE(f.Engaged());
+        f.SetModeKeepingRate(kOff);
+        EXPECT_FALSE(f.Engaged());
+        f.SetModeKeepingRate(kExtrap);
+        FeedCamera(f, t, 30.0, 1.0);
+        EXPECT_FALSE(f.Engaged()) << "a 30 Hz camera engaged the fill coming back from the menus";
+    }
+}
+
+TEST(PoseFillDwellTest, AWanderingCameraChangesFarLessOftenAndIsFilledWheneverItWasBefore) {
+    const Wander wanders[] = {
+        { "18..29, a 4 s sine", WanderSine4 },   { "18..29, a 9 s sine", WanderSine9 },
+        { "18..29, a 20 s sine", WanderSine20 }, { "18..29, a level every 2.5 s", WanderSteps },
+        { "29 with 2 s at 18 every 8 s", WanderDips },
+    };
+    const double dwells[] = { 0.0, 1.0, 2.0, 3.0, 5.0, 6.0, 8.0, 10.0, 12.0, 15.0 };
+    const double seconds = 300.0;
+    printf("  engage/release changes a minute (300 s, the game at 60 fps), by release dwell in s:\n   ");
+    printf(" %-30s", "camera");
+    for (double d : dwells)
+        printf(" %5.0f", d);
+    printf("   engaged s: dwell 0 -> %.0f\n", Filler::kReleaseDwell);
+    for (const Wander &w : wanders) {
+        printf("    %-30s", w.name);
+        DwellRun none = RunDwell(w, 0.0, seconds), chosen = RunDwell(w, Filler::kReleaseDwell, seconds);
+        for (double d : dwells) {
+            DwellRun r = RunDwell(w, d, seconds);
+            printf(" %5.1f", r.flipsPerMinute);
+            // Engaged wherever the fill without a dwell was: the dwell only
+            // ever keeps the fill, so a slow camera gets no fewer fill frames.
+            EXPECT_EQ(r.notEngagedWhereBeforeItWas, 0) << w.name << ", dwell " << d;
+            EXPECT_GE(r.engagedSeconds, none.engagedSeconds - 1e-6) << w.name << ", dwell " << d;
+        }
+        printf("   %.0f -> %.0f\n", none.engagedSeconds, chosen.engagedSeconds);
+        // The control: these cameras do make the fill without a dwell flap.
+        EXPECT_GE(none.flipsPerMinute, 6.0) << w.name << ": no flapping to cure";
+        EXPECT_LE(chosen.flipsPerMinute, 0.25 * none.flipsPerMinute) << w.name;
+        EXPECT_LE(chosen.flipsPerMinute, 1.0) << w.name;
+    }
+    {
+        // The Mac's own tracker rates, the whole session.
+        const Wander mac = { "the Mac's tracker, 985 s", MacTracker };
+        const double whole = kMacTrackerWindows * 5.0;
+        printf("    %-30s", mac.name);
+        DwellRun none = RunDwell(mac, 0.0, whole), chosen = RunDwell(mac, Filler::kReleaseDwell, whole);
+        for (double d : dwells) {
+            DwellRun r = RunDwell(mac, d, whole);
+            printf(" %5.1f", r.flipsPerMinute);
+            EXPECT_EQ(r.notEngagedWhereBeforeItWas, 0) << mac.name << ", dwell " << d;
+        }
+        printf("   %.0f -> %.0f\n", none.engagedSeconds, chosen.engagedSeconds);
+        printf("    (the Mac's tracker: %.0f changes with no dwell, %.0f with %.0f s)\n",
+               none.flipsPerMinute * whole / 60.0, chosen.flipsPerMinute * whole / 60.0,
+               Filler::kReleaseDwell);
+        EXPECT_LE(chosen.flipsPerMinute, 0.6 * none.flipsPerMinute);
+    }
+    // What it costs: a camera that was slow and is fast for good stays filled
+    // the dwell longer, and changes exactly as often.
+    const Wander recover = { "15, then 30 for good", SlowThenFast };
+    DwellRun none = RunDwell(recover, 0.0, 60.0), chosen = RunDwell(recover, Filler::kReleaseDwell, 60.0);
+    printf("    %-30s %5.1f -> %.1f changes a minute, engaged %.1f -> %.1f s\n", recover.name,
+           none.flipsPerMinute, chosen.flipsPerMinute, none.engagedSeconds, chosen.engagedSeconds);
+    EXPECT_EQ(none.flipsPerMinute, 2.0);
+    EXPECT_EQ(chosen.flipsPerMinute, 2.0);
+    EXPECT_NEAR(chosen.engagedSeconds - none.engagedSeconds, Filler::kReleaseDwell, 0.3);
+}
+
+TEST(PoseFillDwellTest, TheDwellParsesWithinZeroToAMinute) {
+    bool ok = false;
+    EXPECT_EQ(ParseReleaseDwell(nullptr, &ok), Filler::kReleaseDwell);
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(ParseReleaseDwell("", &ok), Filler::kReleaseDwell);
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(ParseReleaseDwell("0", &ok), 0.0);
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(ParseReleaseDwell("2.5", &ok), 2.5);
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(ParseReleaseDwell("60", &ok), 60.0);
+    EXPECT_TRUE(ok);
+    for (const char *bad : { "-1", "61", "soon", "3s", "nan" }) {
+        EXPECT_EQ(ParseReleaseDwell(bad, &ok), Filler::kReleaseDwell) << bad;
+        EXPECT_FALSE(ok) << bad;
+    }
+    Filler f;
+    f.SetReleaseDwell(-4.0);
+    EXPECT_EQ(f.ReleaseDwell(), 0.0);
+    f.SetReleaseDwell(1e9);
+    EXPECT_EQ(f.ReleaseDwell(), kMaxReleaseDwell);
 }
