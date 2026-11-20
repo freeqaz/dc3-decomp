@@ -9,7 +9,11 @@ delivers 8, with centimetres.  This measures what that costs, through the
 real path -- pose socket -> native sensor -> SkeletonUpdate -> HamNavList --
 and what a fix buys.
 
-  NOBODY REAL IS MEASURED HERE.  The performer is a scripted arm
+  THE PERFORMER IS SYNTHETIC.  People have played the game on real webcams,
+  menus included; what nobody has recorded is a success RATE (attempts against
+  selects), and `run` does not supply one for a person either: it measures the
+  detectors on a modelled camera.  `replay` plays real recorded sessions back
+  (see there).  The performer is a scripted arm
   (scripts/synthetic_kinect.py geometry) with a person's habits: it raises the
   arm over ~0.45 s, watches the highlight and nudges the hand until the row it
   wants is lit, hovers, sweeps the forearm across the body (or, in hold mode,
@@ -27,11 +31,12 @@ and what a fix buys.
                                             middle of that table's range
     gpd     x 7.5 y 8 z 18 mm (elbows 10/10/20, wrists and hands 13/15/29),
             wrists Inferred 3.5% and hands 6.7% of frames
-                                            frame-to-frame differences of the
-                                            owner's one real session on the GPD
-                                            webcam at 7.5 frames/s (np-pose-rough,
-                                            2026-11-13).  An upper bound: it
-                                            includes his real movement.
+                                            frame-to-frame differences of a
+                                            real session of the owner's on the
+                                            GPD webcam at 7.5 frames/s
+                                            (np-pose-rough, 2026-11-13).  An
+                                            upper bound: it includes his real
+                                            movement.
 
   Noise is AR(1) with a 0.1 s correlation time (MediaPipe smooths its own
   landmarks), independent per joint and axis.
@@ -64,10 +69,30 @@ Back, left hand).
 Usage:
   scripts/menu_gesture_bench.py run --out DIR [--engine native/build/dc3-native]
       [--lists main,diff,songs,back] [--rates 30,15,8] [--noise none,photo,gpd]
-      [--trials 30] [--select swipe|hold] [--jobs 6] [--env KEY=VALUE]...
-  scripts/menu_gesture_bench.py table DIR [BASELINE_DIR]
+      [--trials 30] [--reads 10] [--scans 0] [--idles 2] [--seed 0]
+      [--select swipe|hold] [--jobs 6] [--env KEY=VALUE]...
+          the matrix: one engine per (list, rate, noise).  --select hold: the
+          performer keeps still on the row instead of sweeping (pass
+          --env DC3_MENU_SELECT=hold with it).  --scans: 5 s of reading down
+          the list row by row (0.6-1.1 s a row), counted like a read.
+          --seed N: another draw of the noise and the performer's habits.
+  scripts/menu_gesture_bench.py table DIR[+DIR2...] [BASELINE_DIR[+...]]
+          DIR1+DIR2: runs of the same cells with different seeds, added up.
+  scripts/menu_gesture_bench.py check --out DIR
+          DC3_MENU_SELECT end to end on one engine: 16 PASS/FAIL lines, exit 1
+          on a FAIL (native/tests/test_native_gesture_menus.cpp runs it).
+  scripts/menu_gesture_bench.py replay --out DIR [--session FILE]...
+      [--window FILE:FROM:TO]... [--screen main_screen] [--env KEY=VALUE]...
+          real recordings (a playtest's pose.dc3session): the footage outside
+          songs of each --session, and/or recorded wall seconds FROM..TO,
+          played by wall time in front of one screen; counts what the lists
+          did.  Nobody in that footage was aiming at THIS screen's rows: a
+          select count here is "how often does this footage set a list off",
+          comparable between builds and modes, not a success rate.
+  scripts/menu_gesture_bench.py replay-table DIR...
 
-Exit: 0 ran; 2 setup error (an engine did not come up, a screen was not reached).
+Exit: 0 ran; 1 (check) a check failed; 2 setup error (an engine did not come
+up, a screen was not reached).
 """
 import argparse
 import http.client
@@ -283,14 +308,22 @@ class Bench:
         self.log.write(msg + "\n")
         self.log.flush()
 
-    def start(self, extra_env):
+    def start(self, extra_env, session=None):
+        """`session`: a dc3-pose-session file the engine replays by wall time
+        (a real recording) instead of the synthetic sensor."""
         os.makedirs(self.workdir, exist_ok=True)
         for d in ("cache", "saves"):
             os.makedirs(os.path.join(self.workdir, d), exist_ok=True)
         seed_all_tutorials_seen(os.path.join(self.workdir, "cache"))
-        sock = os.path.join(self.workdir, "kinect.sock")
-        self.k = BenchKinect(sock)
-        self.k.start()
+        if session is None:
+            sock = os.path.join(self.workdir, "kinect.sock")
+            self.k = BenchKinect(sock)
+            self.k.start()
+            pose_env = SyntheticKinect.engine_env(sock)
+        else:
+            pose_env = {"DC3_POSE": "external", "DC3_POSE_NO_SPAWN": "1",
+                        "DC3_POSE_PERFORM": "session:" + os.path.abspath(session),
+                        "DC3_POSE_SESSION_SYNC": "wall"}
         env = dict(os.environ)
         for v in ("MILO_INPUT_SCRIPT", "DC3_FAST_BOOT", "MILO_RENDER", "DC3_MENU_SELECT"):
             env.pop(v, None)
@@ -301,7 +334,9 @@ class Bench:
             "DC3_CACHE_DIR": os.path.join(self.workdir, "cache"),
             "DC3_SAVE_DIR": os.path.join(self.workdir, "saves"),
         })
-        env.update(SyntheticKinect.engine_env(sock))
+        for v in ("DC3_POSE_SOCKET", "DC3_POSE_PERFORM", "DC3_POSE_SESSION_SYNC", "DC3_POSE_RECORD"):
+            env.pop(v, None)
+        env.update(pose_env)
         env.update(engine_port_env(self.workdir, 0))
         for kv in extra_env:
             key, _, val = kv.partition("=")
@@ -311,6 +346,7 @@ class Bench:
             self.proc = subprocess.Popen([engine], cwd=os.path.dirname(engine), env=env,
                                          stdout=lf, stderr=subprocess.STDOUT,
                                          start_new_session=True)
+        self.t_spawn = time.monotonic()
         try:
             port = wait_for_port(port_file(self.workdir), self.proc, timeout=120)
         except EnginePortError as ex:
@@ -323,7 +359,8 @@ class Bench:
             if time.monotonic() > end:
                 raise FlowError("engine HTTP server never answered")
             time.sleep(0.2)
-        self.k.follow_engine(self.e.base)
+        if self.k is not None:
+            self.k.follow_engine(self.e.base)
 
     def stop(self):
         if self.proc is not None:
@@ -375,7 +412,10 @@ class Bench:
         return ev
 
     def wait(self, seconds):
-        self.k.wait(seconds)
+        if self.k is None:
+            time.sleep(seconds)      # a replay runs at pace 30: UI time is wall time
+        else:
+            self.k.wait(seconds)
 
     def wait_screen(self, names, timeout=60.0, settle=1.0):
         if isinstance(names, str):
@@ -417,6 +457,8 @@ HOLD_WAIT_S = 4.0        # hold mode: keep still this long before giving up
 
 def seed_for(*parts):
     import zlib
+    if parts and parts[-1] == 0 and isinstance(parts[-1], int) and len(parts) > 2:
+        parts = parts[:-1]      # --seed 0: the seeds every published table used
     return zlib.crc32(":".join(str(p) for p in parts).encode())
 
 
@@ -668,7 +710,7 @@ class Performer:
         return res
 
     # -- the arm on a row for 5 s, never swiping
-    def read_trial(self, target, rng, seconds=5.0):
+    def read_trial(self, target, rng, seconds=5.0, scan=False):
         k, hand = self.k, self.hand
         arm = k.arms[hand]
         st, l = self.look(reset=True)
@@ -696,9 +738,25 @@ class Performer:
         spacing = 1.0 / (n - 1)
         end = k.now() + seconds
         next_move = 0.0
+        scan_row = int(round(h / spacing))
+        scan_dir = 1 if rng.random() < 0.5 else -1
+        if scan:
+            next_move = k.now() + rng.uniform(0.3, 0.8)   # the first row was read while aiming
         while not ev and k.now() < end:
             now = k.now()
-            if now >= next_move:
+            if now >= next_move and scan:
+                # reading down (and back up) the list: on to a neighbouring row
+                # in 0.3 s, 0.6 .. 1.1 s on it, the forearm still wandering
+                scan_row += scan_dir
+                if not 0 <= scan_row <= n - 1:
+                    scan_dir = -scan_dir
+                    scan_row += 2 * scan_dir
+                arm.height.go(now, min(1.0, max(0.0, scan_row * spacing)), 0.3)
+                d = 0.3 + rng.uniform(0.6, 1.1)
+                arm.angle.go(now, rng.uniform(-8.0, 14.0), d)
+                arm.tilt.go(now, rng.uniform(-5.0, 5.0), d)
+                next_move = now + d
+            elif now >= next_move:
                 # a slow wander: a quarter of a row up or down, the forearm a
                 # few degrees in or out, over 0.8 .. 1.6 s
                 d = rng.uniform(0.8, 1.6)
@@ -745,7 +803,8 @@ def run_cell(a):
     log = open(os.path.join(a.out, "bench.log"), "w")
     spec = LISTS[a.list]
     result = dict(list=a.list, rate=a.rate, noise=a.noise, select=a.select, env=a.env,
-                  pace_fps=a.pace_fps, trials=[], reads=[], idles=[], error=None)
+                  seed=a.seed, pace_fps=a.pace_fps, trials=[], reads=[], idles=[], scans=[],
+                  error=None)
     b = Bench(a, a.out, log)
 
     def on_term(signum, frame):
@@ -756,7 +815,7 @@ def run_cell(a):
         b.wait_screen("title_screen", timeout=180, settle=1.5)
         p = Performer(b, spec, a.select)
         p.to_screen(force=True)
-        b.k.configure(a.rate, a.noise, seed_for("cam", a.list, a.rate, a.noise))
+        b.k.configure(a.rate, a.noise, seed_for("cam", a.list, a.rate, a.noise, a.seed))
         b.wait(1.5)
         # the camera as the list sees it: filter updates per poll over 3 s
         p.look(reset=True)
@@ -773,7 +832,7 @@ def run_cell(a):
                 p.to_screen(force=True)
         for i in range(a.trials):
             target = spec["targets"][i % len(spec["targets"])]
-            r = p.select_trial(target, random.Random(seed_for("select", a.list, i)))
+            r = p.select_trial(target, random.Random(seed_for("select", a.list, i, a.seed)))
             result["trials"].append(r)
             b.note(f"select {i} {target}: {r['outcome']} tries={r['tries']} "
                    f"t={r['t_select']} sym={r['selected_sym']} amt={r['max_swipe_amt']:.2f} "
@@ -784,7 +843,7 @@ def run_cell(a):
             if a.list == "songs":
                 # reading is done on the rows showing on entry (3..6; 2 is a header)
                 target = p.rows[3 + i % 4]
-            r = p.read_trial(target, random.Random(seed_for("read", a.list, i)))
+            r = p.read_trial(target, random.Random(seed_for("read", a.list, i, a.seed)))
             result["reads"].append(r)
             b.note(f"read {i} {target}: {r['outcome']} moved={r['highlight_moved']} "
                    f"amt={r['max_swipe_amt']:.2f}")
@@ -792,7 +851,16 @@ def run_cell(a):
         fill1 = b.state()["fill"]
         fills, reals = fill1["fills"] - fill0["fills"], fill1["reals"] - fill0["reals"]
         result["fill"] = dict(mode=fill1["mode"], engaged_at_end=fill1["engaged"], fills=fills,
-                              reals=reals)
+                              reals=reals,
+                              clock_carried=fill1.get("clock_carried", 0.0) - fill0.get("clock_carried", 0.0))
+        for i in range(a.scans):
+            target = spec["targets"][i % len(spec["targets"])]
+            if a.list == "songs":
+                target = p.rows[3 + i % 4]
+            r = p.read_trial(target, random.Random(seed_for("scan", a.list, i, a.seed)), scan=True)
+            result["scans"].append(r)
+            b.note(f"scan {i} from {target}: {r['outcome']}")
+            p.to_screen(force=bool(r["events"]))
     except FlowError as ex:
         result["error"] = str(ex)
         b.note(f"FAILED: {ex}")
@@ -836,7 +904,8 @@ def run_matrix(a):
             cmd = [sys.executable, os.path.abspath(__file__), "cell", "--engine", a.engine,
                    "--out", out, "--pace-fps", str(a.pace_fps), "--list", l, "--rate", r,
                    "--noise", n, "--trials", str(a.trials), "--reads", str(a.reads),
-                   "--idles", str(a.idles), "--select", a.select]
+                   "--idles", str(a.idles), "--select", a.select, "--seed", str(a.seed),
+                   "--scans", str(a.scans)]
             for kv in a.env:
                 cmd += ["--env", kv]
             os.makedirs(out, exist_ok=True)
@@ -863,13 +932,459 @@ def run_matrix(a):
     return 2 if failed else 0
 
 
+# ---- the select switch, end to end ------------------------------------------------
+# `check`: one engine, the main menu, and what DC3_MENU_SELECT promises -- the
+# flow test (MenuSelectFlow in native/tests/test_native_gesture_menus.cpp)
+# runs this.  PASS/FAIL per line, exit 1 when any failed.
+def _raise_arm(p, target):
+    k, arm = p.k, p.k.arms[p.hand]
+    st, l = p.look(reset=True)
+    if l is None:
+        raise FlowError("the list under test is not on screen")
+    p.b.take_events(st)
+    if p.rows is None:
+        p.b.wait(0.15)
+        st, l = p.look()
+    kind, h = p.aim(l, p.rows.index(target))
+    now = k.now()
+    arm.height.go(now, h, 0.0)
+    arm.angle.go(now, 0.0, 0.0)
+    arm.tilt.go(now, 0.0, 0.0)
+    arm.out.go(now, 1.0, 0.45)
+    return st["ui_seconds"]
+
+
+def _watch(p, seconds, target=None, stop=True):
+    """The hand where it is for `seconds`: the selects, how far a hold got."""
+    out = dict(events=[], max_progress=0.0, slide=False, lit=False, t=None, controller=0)
+    t0 = None
+    end = p.k.now() + seconds
+    while p.k.now() < end:
+        p.b.wait(0.05)
+        st, l = p.look()
+        if t0 is None:
+            t0 = st["ui_seconds"]
+        out["controller"] = max(out["controller"], st.get("controller_mode", 0))
+        ev = p.b.take_events(st)
+        if l is not None:
+            out["max_progress"] = max(out["max_progress"], l.get("hold_progress", 0.0))
+            if l.get("hold_progress", 0.0) > 0.0 and l["mode"] == 1:
+                out["slide"] = True
+            if target is not None and l["sym"] == target and l["mode"] != 3:
+                out["lit"] = True
+        if ev:
+            out["events"] += ev
+            if out["t"] is None:
+                out["t"] = ev[0]["ui_seconds"]
+            if stop:
+                break
+    return out
+
+
+def _hold_on(p, target, seconds, stop=True):
+    t0 = _raise_arm(p, target)
+    out = _watch(p, seconds, target, stop)
+    if out["t"] is not None:
+        out["t"] -= t0
+    return out
+
+
+def _swipe_on(p, target):
+    """Raise the arm on the row, sweep and drop the arm at once: the hand is
+    off the list about 1.6 s after the arm started up, before a hold begun
+    when the row lit (settle 0.3 + hold 1.2 s, from ~0.4 s) could select."""
+    _raise_arm(p, target)
+    p.b.wait(0.8)
+    arm = p.k.arms[p.hand]
+    arm.angle.go(p.k.now(), 110.0, 0.35)
+    out = _watch(p, 0.35 + sk.SWIPE_HOLD_S, target)
+    p.arms_down(0.0)
+    if not out["events"]:
+        more = _watch(p, 1.5)
+        out["events"] += more["events"]
+        out["max_progress"] = max(out["max_progress"], more["max_progress"])
+    return out
+
+
+def run_check(a):
+    os.makedirs(a.out, exist_ok=True)
+    log = open(os.path.join(a.out, "bench.log"), "w")
+    b = Bench(a, a.out, log)
+    fails = []
+
+    def check(ok, what, detail=""):
+        line = ("PASS  " if ok else "FAIL  ") + what + (f"  [{detail}]" if detail else "")
+        print(line, flush=True)
+        b.note(line)
+        if not ok:
+            fails.append(what)
+
+    def on_term(signum, frame):
+        raise SystemExit(143)
+    signal.signal(signal.SIGTERM, on_term)
+
+    def src(out):
+        return [(e["sym"], e.get("source")) for e in out["events"]]
+
+    try:
+        b.start(a.env)
+        e = b.e
+        b.wait_screen("title_screen", timeout=180, settle=1.5)
+        p = Performer(b, LISTS["main"], "hold")
+        p.to_screen(force=True)
+        b.k.configure(30, "none", 1)
+        b.wait(1.0)
+        mode = lambda: b.state()["menu_select"]
+
+        # 1. the default is the original's swipe, untouched
+        check(mode() == "swipe", "the default is swipe", mode())
+        r = _hold_on(p, "campaign_mode", 3.5)
+        check(r["lit"] and not r["events"] and r["max_progress"] == 0.0,
+              "swipe: a hand held 3.5 s on a row selects nothing and shows no progress",
+              f"lit={r['lit']} events={src(r)} progress={r['max_progress']:.2f}")
+        p.arms_down(0.5)
+        if r["events"]:
+            p.to_screen(force=True)
+        r = _swipe_on(p, "campaign_mode")
+        check(src(r) == [("campaign_mode", "swipe")], "swipe: a swipe selects the row", str(src(r)))
+        p.to_screen(force=True)
+
+        # 2. the runtime switch
+        ans = e.eval("{native_settings set_menu_select hold}")
+        check(ans in (1, "1") and mode() == "hold",
+              "{native_settings set_menu_select hold} switches at run time", f"{ans} {mode()}")
+        check(str(e.eval("{native_settings menu_select}")) == "hold",
+              "{native_settings menu_select} names the mode", str(e.eval("{native_settings menu_select}")))
+        check(e.eval("{native_settings set_menu_select dwell}") in (0, "0") and mode() == "hold",
+              "an unknown mode is refused")
+
+        # 3. hold selects, with the slide as its progress; no second select
+        #    from the hand left where it was
+        r = _hold_on(p, "fitness_mode", 4.0)
+        check(src(r) == [("fitness_mode", "hold")] and r["t"] is not None and 1.2 <= r["t"] <= 2.6,
+              "hold: the hand kept on a row selects it after about 1.5 s",
+              f"{src(r)} t={r['t']}")
+        check(r["slide"] and r["max_progress"] > 0.3,
+              "hold: the list slid as the hold progressed",
+              f"slide={r['slide']} progress={r['max_progress']:.2f}")
+        again = _watch(p, 2.0, stop=False)
+        check(not again["events"], "hold: nothing else is selected in the next 2 s from the "
+              "hand left where it was", str(src(again)))
+        p.arms_down(0.5)
+        p.to_screen(force=True)
+
+        # 4. hold only: a swipe does not select
+        r = _swipe_on(p, "challenges")
+        check(not r["events"], "hold: a swipe selects nothing", str(src(r)))
+        p.to_screen(force=bool(r["events"]))
+
+        # 5. controller mode: no hold
+        b.wait(0.5)
+        e._req("POST", "/input/press", json.dumps({"button": "down"}))
+        b.wait(0.3)
+        r = _hold_on(p, "campaign_mode", 2.5)
+        check(r["controller"] == 1 and not r["events"] and r["max_progress"] == 0.0,
+              "hold: nothing is held or selected in controller mode",
+              f"controller={r['controller']} events={src(r)} progress={r['max_progress']:.2f}")
+        p.arms_down(0.5)
+        end = time.monotonic() + 30
+        while b.state().get("controller_mode") and time.monotonic() < end:
+            b.wait(0.5)
+        p.to_screen(force=True)
+
+        # 6. both: either selects
+        e.eval("{native_settings cycle_menu_select}")
+        check(mode() == "both", "{native_settings cycle_menu_select} steps hold -> both", mode())
+        r = _swipe_on(p, "campaign_mode")
+        check(src(r) == [("campaign_mode", "swipe")], "both: a swipe selects", str(src(r)))
+        p.to_screen(force=True)
+        r = _hold_on(p, "store", 4.0)
+        check(src(r) == [("store", "hold")], "both: a hold selects", str(src(r)))
+        p.arms_down(0.5)
+
+        # 7. the left hand's Back, by hold
+        e.eval("{native_settings set_menu_select hold}")
+        pb = Performer(b, LISTS["back"], "hold")
+        pb.to_screen(force=True)
+        r = _hold_on(pb, "screen_name_mode_select", 4.0)
+        check(len(r["events"]) == 1 and r["events"][0]["hand"] == "left"
+              and r["events"][0].get("source") == "hold",
+              "hold: the left hand's Back is selected by a hold", str(src(r)))
+        pb.arms_down(0.5)
+
+        # 8. back to swipe: a hold selects nothing again
+        e.eval("{native_settings set_menu_select swipe}")
+        p.to_screen(force=True)
+        r = _hold_on(p, "campaign_mode", 3.0)
+        check(not r["events"] and r["max_progress"] == 0.0,
+              "back under swipe a held hand selects nothing", str(src(r)))
+        p.arms_down(0.3)
+    except FlowError as ex:
+        check(False, f"the flow ran to its end ({ex})")
+    finally:
+        b.stop()
+    print("MENU SELECT CHECK: %s" % ("ok" if not fails else "%d FAILED" % len(fails)), flush=True)
+    return 1 if fails else 0
+
+
+# ---- real recordings -------------------------------------------------------------
+# A playtest's pose.dc3session (DC3_POSE_RECORD; docs/native/PLAYTEST.md) holds
+# every camera frame the game accepted, people, joints and confidences as the
+# pose server sent them, with wall times.  `replay` plays the footage that is
+# not inside a song (the menus, the pause menu, the results screens) onto one
+# menu screen by wall time, through the engine's own session replay
+# (DC3_POSE_PERFORM=session:FILE DC3_POSE_SESSION_SYNC=wall), and counts what
+# the lists did.  Nobody in that footage was asked to select anything on THIS
+# screen, so a select here is a measure of how often a person standing at,
+# walking up to or using a pad in front of the camera sets a list off; it is
+# not a success rate.
+REPLAY_LEAD_S = 150.0    # nobody in view while the engine boots and reaches the screen
+REPLAY_GAP_S = 3.0       # nobody in view between two stretches of footage
+REPLAY_PAD_HZ = 8.0
+
+
+def build_replay_cut(paths, out_path, lead=REPLAY_LEAD_S, max_seconds=None, windows=()):
+    """One session file: LEAD seconds of nobody, then every non-song segment of
+    every session in `paths`, then every window (path, wall_from, wall_to) --
+    whatever the game was showing then -- back to back.  Returns the table of
+    what went where (cut_from, cut_to, session, segment, recorded_wall_from,
+    frames, with_person) and the cut's length."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "playtest"))
+    import pose_session as ps
+    lines = [ps.HEADER, "# cut for menu_gesture_bench.py replay"]
+    table = []
+    seq = [0]
+    pad_id = [0x40000000]
+
+    def header(wall, ts, frame_id, rest, npersons):
+        seq[0] += 1
+        # F seq rnd wall song frame_id ts unlevelled level nx ny nz num_persons
+        return "F %d %d %.6f %.6f %d %.17g %s %d" % (seq[0], seq[0], wall, wall, frame_id, ts,
+                                                      rest, npersons)
+
+    def pad(t_from, t_to, ts_base):
+        t = t_from
+        while t < t_to - 1e-9:
+            pad_id[0] += 1
+            lines.append(header(t, ts_base + t, pad_id[0], "1 0 0 1 0", 0))
+            t += 1.0 / REPLAY_PAD_HZ
+
+    t = 0.0
+    pad(0.0, lead, 1000.0)
+    t = lead
+    pieces = []      # (path, label, frames)
+    for path in paths:
+        _, frames = ps.load(path)
+        segs = ps.segments(frames)
+        for row, (a, b) in zip(ps.describe(frames, segs), segs):
+            if row["kind"] != "song":
+                pieces.append((path, row["n"], frames[a:b]))
+    for path, w_from, w_to in windows:
+        _, frames = ps.load(path)
+        fr = [f for f in frames if w_from <= f.wall <= w_to]
+        if fr:
+            pieces.append((path, "%g-%g" % (w_from, w_to), fr))
+    for path, label, fr in pieces:
+        row = dict(n=label)
+        if True:
+            if max_seconds is not None and t - lead >= max_seconds:
+                break
+            w0 = fr[0].wall
+            for f in fr:
+                h = f.lines[0].split()
+                wall = t + (f.wall - w0)
+                ts = float(h[6]) - f.wall + wall
+                lines.append(header(wall, ts, int(h[5]), " ".join(h[7:12]), f.num_persons))
+                lines.extend(f.lines[1:])
+            end = t + (fr[-1].wall - w0)
+            table.append(dict(cut_from=t, cut_to=end, session=path, segment=row["n"],
+                              recorded_wall_from=w0, frames=len(fr),
+                              with_person=sum(1 for f in fr if f.valid)))
+            pad(end + 1.0 / REPLAY_PAD_HZ, end + REPLAY_GAP_S, 1000.0)
+            t = end + REPLAY_GAP_S
+    with open(out_path, "w") as fh:
+        fh.write("\n".join(lines) + "\n")
+    return table, t
+
+
+def run_replay(a):
+    os.makedirs(a.out, exist_ok=True)
+    log = open(os.path.join(a.out, "bench.log"), "w")
+    cut = os.path.join(a.out, "cut.dc3session")
+    windows = []
+    for w in a.window:
+        path, w_from, w_to = w.rsplit(":", 2)
+        windows.append((path, float(w_from), float(w_to)))
+    if not a.session and not windows:
+        print("replay: give --session and/or --window", file=sys.stderr)
+        return 2
+    table, total = build_replay_cut(a.session, cut, max_seconds=a.max_seconds, windows=windows)
+    footage = sum(r["cut_to"] - r["cut_from"] for r in table)
+    result = dict(kind="replay", screen=a.screen, env=a.env, sessions=a.session, segments=table,
+                  footage_s=footage, events=[], lists={}, away_s=0.0, error=None)
+    b = Bench(a, a.out, log)
+
+    def on_term(signum, frame):
+        raise SystemExit(143)
+    signal.signal(signal.SIGTERM, on_term)
+
+    def cut_time():
+        # the replay's clock: it starts with the engine's first frame, a few
+        # seconds after the spawn, so this runs that much ahead
+        return time.monotonic() - b.t_spawn
+
+    def where(tc):
+        for r in table:
+            if r["cut_from"] - 0.5 <= tc <= r["cut_to"] + REPLAY_GAP_S:
+                return r
+        return None
+
+    def to_screen(force):
+        e = b.e
+        end = time.monotonic() + 60
+        time.sleep(0.3)
+        while e.eval("{ui in_transition}") not in (0, False, "0"):
+            if time.monotonic() > end:
+                raise FlowError("a transition never ended")
+            time.sleep(0.1)
+        if e.screen() == a.screen and not force:
+            return
+        if e.screen() == a.screen:
+            via = "main_screen" if a.screen != "main_screen" else "choose_mode_screen"
+            e.eval("{ui goto_screen %s}" % via)
+            b.wait_screen(via, timeout=30, settle=0.5)
+            while e.eval("{ui in_transition}") not in (0, False, "0"):
+                if time.monotonic() > end:
+                    raise FlowError("a transition never ended")
+                time.sleep(0.1)
+        e.eval("{ui goto_screen %s}" % a.screen)
+        b.wait_screen(a.screen, timeout=30, settle=1.0)
+
+    try:
+        b.start(a.env, session=cut)
+        b.wait_screen("title_screen", timeout=180, settle=1.5)
+        to_screen(True)
+        ready = cut_time()
+        b.note(f"on {a.screen} at cut time {ready:.1f} s (footage starts at {REPLAY_LEAD_S:.0f})")
+        if ready > REPLAY_LEAD_S - 2.0:
+            raise FlowError(f"the engine took {ready:.0f} s to reach {a.screen}: raise REPLAY_LEAD_S")
+        st = b.state(reset=True)
+        b.take_events(st)
+        lists = result["lists"]
+        last = time.monotonic()
+        while cut_time() < total + 1.0:
+            time.sleep(0.1)
+            now = time.monotonic()
+            dt, last = now - last, now
+            st = b.state(reset=True)
+            for l in st["lists"]:
+                if not l["enabled"]:
+                    continue
+                key = l["hand"] + ":" + l["name"]
+                d = lists.setdefault(key, dict(engaged_s=0.0, highlight_changes=0, sliding_s=0.0,
+                                               max_swipe_amt=0.0, last=None, rows=l["num_data"]))
+                if l["mode"] != 3:
+                    d["engaged_s"] += dt
+                    if d["last"] is not None and d["last"] != l["selected"]:
+                        d["highlight_changes"] += 1
+                    d["last"] = l["selected"]
+                    if l["mode"] == 1:
+                        d["sliding_s"] += dt
+                else:
+                    d["last"] = None
+                d["max_swipe_amt"] = max(d["max_swipe_amt"], l["max_swipe_amt"])
+            ev = b.take_events(st)
+            if ev:
+                tc = cut_time()
+                r = where(tc)
+                for e in ev:
+                    rec = dict(list=e["list"], hand=e["hand"], sym=e["sym"], source=e.get("source"),
+                               cut_time=tc, session=r and os.path.basename(os.path.dirname(r["session"])),
+                               segment=r and r["segment"],
+                               recorded_wall=r and r["recorded_wall_from"] + tc - r["cut_from"])
+                    result["events"].append(rec)
+                    b.note("select %s" % json.dumps(rec))
+                t0 = time.monotonic()
+                to_screen(True)
+                st = b.state(reset=True)
+                b.take_events(st)
+                for d in lists.values():
+                    d["last"] = None
+                last = time.monotonic()
+                result["away_s"] += last - t0
+        for d in lists.values():
+            d.pop("last", None)
+    except FlowError as ex:
+        result["error"] = str(ex)
+        b.note(f"FAILED: {ex}")
+    finally:
+        b.stop()
+    try:
+        with open(os.path.join(a.out, "engine.log"), errors="replace") as lf:
+            text = lf.read()
+        result["menu_select_log"] = [ln for ln in text.splitlines() if "DC3 MENU SELECT" in ln][:4]
+        result["perform_log"] = [ln for ln in text.splitlines() if "DC3 PERFORM" in ln][:4]
+    except OSError:
+        pass
+    with open(os.path.join(a.out, "result.json"), "w") as f:
+        json.dump(result, f, indent=1)
+    print_replay(a.out)
+    return 2 if result["error"] else 0
+
+
+def print_replay(*dirs):
+    """One line per replay result under each directory."""
+    for d in dirs:
+        paths = [os.path.join(d, "result.json")] if os.path.exists(os.path.join(d, "result.json")) \
+            else sorted(os.path.join(d, n, "result.json") for n in os.listdir(d)
+                        if os.path.exists(os.path.join(d, n, "result.json")))
+        for path in paths:
+            with open(path) as f:
+                r = json.load(f)
+            if r.get("kind") != "replay":
+                continue
+            mins = max(1e-9, (r["footage_s"] - r["away_s"]) / 60.0)
+            by = {}
+            for e in r["events"]:
+                k = "%s %s" % (e["hand"], e.get("source") or "swipe")
+                by[k] = by.get(k, 0) + 1
+            print(f"{os.path.basename(os.path.dirname(path)):28s} {r['screen']:20s} "
+                  f"footage {r['footage_s']:5.0f} s (away {r['away_s']:4.0f} s)  "
+                  f"selects {len(r['events']):3d} = {len(r['events']) / mins:5.2f}/min  {by or ''}"
+                  f"{'  ERROR: ' + r['error'] if r.get('error') else ''}")
+            for key, l in sorted(r["lists"].items()):
+                print(f"    {key:28s} engaged {l['engaged_s']:6.1f} s  highlight changes "
+                      f"{l['highlight_changes']:4d}  sliding {l['sliding_s']:5.1f} s  "
+                      f"max swipe {l['max_swipe_amt']:.2f}")
+    return 0
+
+
 def load_results(d):
+    """DIR, or DIR1+DIR2+... (runs of the same cells with different --seed):
+    their trials, reads and idles added up."""
+    if "+" in d:
+        out = {}
+        for part in d.split("+"):
+            for k, r in load_results(part).items():
+                if k not in out:
+                    out[k] = r
+                    continue
+                o = out[k]
+                for f in ("trials", "reads", "idles", "scans"):
+                    o[f] = o.get(f, []) + r.get(f, [])
+                if o.get("fill") and r.get("fill"):
+                    for f in ("fills", "reals"):
+                        o["fill"][f] += r["fill"][f]
+                o["error"] = o.get("error") or r.get("error")
+        return out
     out = {}
     for name in sorted(os.listdir(d)):
         path = os.path.join(d, name, "result.json")
         if os.path.exists(path):
             with open(path) as f:
                 r = json.load(f)
+            if r.get("kind") == "replay":
+                continue
             out[(r["list"], "%g" % float(r["rate"]), r["noise"])] = r
     return out
 
@@ -889,6 +1404,8 @@ def summarize(r):
                 reads=len(reads),
                 read_false=sum(1 for x in reads if x["outcome"] == "false_select"),
                 read_moved=sum(1 for x in reads if x["highlight_moved"]),
+                scans=len([x for x in r.get("scans", []) if x["outcome"] != "skipped"]),
+                scan_false=sum(1 for x in r.get("scans", []) if x["outcome"] == "false_select"),
                 idles=len(r["idles"]),
                 idle_false=sum(1 for x in r["idles"] if x["outcome"] == "false_select"),
                 upp=r.get("updates_per_poll"), error=r.get("error"),
@@ -903,7 +1420,7 @@ def print_table(d, base):
     norder = {"none": 0, "video": 1, "photo": 2, "gpd": 3}
     keys = sorted(res, key=lambda k: (order.get(k[0], 9), norder.get(k[2], 9), -float(k[1])))
     hdr = ("list   Hz  noise | first try      ok(<=3)    wrong  false  none  aim | "
-           "t med   p90 | read: false moved | idle false | upd/poll fill")
+           "t med   p90 | read: false moved | scan false | idle false | upd/poll fill")
     print(hdr)
     print("-" * len(hdr))
     for k in keys:
@@ -915,7 +1432,9 @@ def print_table(d, base):
             print(f"{k[0]:5s} {k[1]:>3s} {k[2]:6s}| {pct(s['first'])}  {pct(s['ok'])}  "
                   f"{s['wrong']:4d}  {s['false']:4d}  {s['none']:4d} {s['aim']:4d} | "
                   f"{t(s['t_med'])} {t(s['t_p90'])} | {s['read_false']:5d}/{s['reads']:<2d} "
-                  f"{s['read_moved']:3d}/{s['reads']:<2d} | {s['idle_false']:3d}/{s['idles']:<2d}    | "
+                  f"{s['read_moved']:3d}/{s['reads']:<2d} | "
+                  f"{('%3d/%-2d' % (s['scan_false'], s['scans'])) if s['scans'] else '   -  '}     | "
+                  f"{s['idle_false']:3d}/{s['idles']:<2d}    | "
                   f"{'-' if s['upp'] is None else '%.2f' % s['upp']} "
                   f"{'   -' if s['fill'] is None else '%3.0f%%' % (100 * s['fill'])}{tag}"
                   f"{'  ERROR: ' + s['error'] if s['error'] else ''}")
@@ -939,6 +1458,11 @@ def main():
         p.add_argument("--trials", type=int, default=30, help="select trials per cell")
         p.add_argument("--reads", type=int, default=10, help="5 s reads per cell")
         p.add_argument("--idles", type=int, default=2, help="5 s arms-down waits per cell")
+        p.add_argument("--scans", type=int, default=0,
+                       help="5 s of reading down the list row by row (0.6-1.1 s a row) per cell")
+        p.add_argument("--seed", type=int, default=0,
+                       help="another draw of the camera noise and of the performer's habits "
+                            "(0 = the published one); run several and add them up")
         p.add_argument("--select", default="swipe", choices=["swipe", "hold"],
                        help="how the performer selects (hold needs DC3_MENU_SELECT=hold|both)")
 
@@ -957,6 +1481,20 @@ def main():
     p = sub.add_parser("table", help="print the table of a results directory")
     p.add_argument("dir")
     p.add_argument("baseline", nargs="?")
+    p = sub.add_parser("check", help="DC3_MENU_SELECT end to end on one engine (the flow test)")
+    common(p)
+    p = sub.add_parser("replay", help="real recordings: play the non-song footage of "
+                                      "pose.dc3session files onto one menu screen")
+    common(p)
+    p.add_argument("--session", action="append", default=[],
+                   help="a pose.dc3session: all of its footage outside songs")
+    p.add_argument("--window", action="append", default=[], metavar="FILE:FROM:TO",
+                   help="recorded wall seconds FROM..TO of a pose.dc3session, whatever was on "
+                        "screen then (a pause menu inside a song, a results screen)")
+    p.add_argument("--screen", default="main_screen")
+    p.add_argument("--max-seconds", type=float, default=None, help="stop adding segments after this much footage")
+    p = sub.add_parser("replay-table", help="print replay results")
+    p.add_argument("dirs", nargs="+")
     p = sub.add_parser("explore", help="developer aid: run --step actions, print the lists")
     common(p)
     p.add_argument("--step", action="append", default=[],
@@ -964,6 +1502,8 @@ def main():
     a = ap.parse_args()
     if a.cmd == "table":
         return print_table(a.dir, a.baseline)
+    if a.cmd == "replay-table":
+        return print_replay(*a.dirs)
     if not os.path.exists(a.engine):
         print(f"engine not found: {a.engine}", file=sys.stderr)
         return 2
@@ -971,6 +1511,10 @@ def main():
         return explore(a)
     if a.cmd == "cell":
         return run_cell(a)
+    if a.cmd == "replay":
+        return run_replay(a)
+    if a.cmd == "check":
+        return run_check(a)
     return run_matrix(a)
 
 
