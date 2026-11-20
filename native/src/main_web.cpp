@@ -3,7 +3,8 @@
 //
 // Boot sequence (state machine, driven by emscripten_set_main_loop):
 //   BOOT_INIT         → create MEMFS dirs, start bundle download
-//   BOOT_FETCHING     → poll until bundle download complete
+//   BOOT_FETCHING     → poll until bundle download complete and the save
+//                       data is back in MEMFS (dc3_pre.js "Save store", W-36)
 //   BOOT_ENGINE_INIT  → App constructor (shared with native desktop)
 //   BOOT_GPU_WAIT     → wait for async WebGPU adapter/device
 //   BOOT_GPU_READY    → initialize GPU resources (pipelines, buffers)
@@ -28,7 +29,14 @@
 #include "App.h"
 bool Dc3EnvFlag(const char *name, bool defaultOn); // platform/System_Native.cpp
 #include "hamobj/HamNavList.h"
+#include "meta_ham/HamProfile.h"
+#include "meta_ham/HamSongMgr.h"
+#include "meta_ham/ProfileMgr.h"
+#include "meta_ham/SongStatusMgr.h"
+#include "obj/Data.h"
+#include "obj/DataFile.h"
 #include "obj/Msg.h"
+#include "platform/DtaEvalSupport.h"
 #include "platform/FrameTraceCounters.h"
 #include "platform/FramePacer_Native.h"
 #include "platform/LoaderBudget_Native.h"
@@ -363,6 +371,12 @@ static void mainLoop() {
 
     case BOOT_FETCHING: {
         if (!WebAssetsAllDone()) break;
+        // W-36: the save files come back from the browser's store (IndexedDB,
+        // dc3_pre.js "Save store") while the bundle downloads. The App's first
+        // save search must see them, and the load cannot block here (no
+        // ASYNCIFY), so the boot waits on this state. The page answers within
+        // 5 s whatever happens: an unusable store is a fresh console, said once.
+        if (!EM_ASM_INT({ return (!Module.dc3SaveReady || Module.dc3SaveReady()) ? 1 : 0; })) break;
 
         int ok = WebAssetsCompletedCount();
         int fail = WebAssetsFailedCount();
@@ -549,6 +563,59 @@ EMSCRIPTEN_KEEPALIVE
 double dc3_memfs_bytes(const char *dir) {
     int files = 0;
     return WebTreeBytes(dir ? dir : "/data", &files);
+}
+
+// Ask the game a question from a driver (scripts/web/save-persist.mjs): the web
+// build has no HTTP debug server, so a test could watch the console and press
+// keys but not read game state. Same evaluator and the same result JSON as
+// desktop's /api/dta/eval (platform/DtaEvalSupport.h), wrapped as
+// {"ok":true,"result":{...}} or {"ok":false,"error":"..."}. A MILO_FAIL in the
+// script is an error, not a value. It runs inside the caller's JS turn, between
+// frames; call it on a settled screen, not while a load is suspended.
+EMSCRIPTEN_KEEPALIVE
+const char *dc3_dta_eval(const char *script) {
+    static std::string sOut;
+    auto fail = [](const std::string &why) {
+        sOut = "{\"ok\":false,\"error\":\"" + DtaEval::JsonEscape(why) + "\"}";
+        return sOut.c_str();
+    };
+    if (sBootState != BOOT_RUNNING) return fail("the engine is not running yet");
+    if (!script || strlen(script) > DtaEval::kMaxScriptBytes) return fail("no script, or one over the size cap");
+    DataArray *parsed = DataReadString(script);
+    if (!parsed || parsed->Size() == 0) {
+        if (parsed) parsed->Release();
+        return fail("failed to parse DTA expression");
+    }
+    DataNode result(0);
+    std::string failure;
+    bool completed = false;
+    {
+        DtaEval::FailScope failScope;
+        try {
+            completed = failScope.Evaluate(parsed, result, failure);
+        } catch (...) {
+            failure = "exception";
+        }
+    }
+    parsed->Release();
+    if (!completed) return fail("DTA eval failed: " + failure);
+    sOut = "{\"ok\":true,\"result\":" + DtaEval::NodeToJson(result) + "}";
+    return sOut.c_str();
+}
+
+// The high score pad 0's profile holds for a song (short name, e.g. "ymca"),
+// or -1 when there is no profile, no such song, or the song was never played.
+// What song select shows under the song; SongStatusMgr has no DTA handlers.
+EMSCRIPTEN_KEEPALIVE
+int dc3_profile_song_score(const char *song) {
+    if (sBootState != BOOT_RUNNING || !song || !song[0]) return -1;
+    HamProfile *profile = TheProfileMgr.GetProfileFromPad(0);
+    SongStatusMgr *status = profile ? profile->GetSongStatusMgr() : nullptr;
+    if (!status) return -1;
+    int songID = TheHamSongMgr.GetSongIDFromShortName(Symbol(song), false);
+    if (songID == 0 || !status->HasSongStatus(songID)) return -1;
+    bool noFlashcards = false;
+    return status->GetScore(songID, noFlashcards);
 }
 
 } // extern "C"

@@ -24,6 +24,7 @@
 //     every caller polling forever.
 
 #include "Cache_Native.h"
+#include "SaveStore_Web.h"
 #ifndef __EMSCRIPTEN__
 #include "gfx/PipelineDiskCache.h"
 #endif
@@ -412,6 +413,7 @@ bool CacheNative::DeleteSync(const char *cc) {
     char dir[512];
     MakeCacheDirPath(dir, sizeof(dir), mCacheID.Name());
     RemoveEmptyParents(path, dir);
+    Dc3SaveStoreChanged(); // web: drop it from the browser's store too
     mLastResult = kCache_NoError;
     return true;
 }
@@ -547,6 +549,10 @@ bool CacheNative::WriteAsync(const char *cc, void *data, unsigned int size, Hmx:
             MILO_NOTIFY("CacheNative::WriteAsync(): wrote %zu of %u bytes to '%s'\n", written, size, path);
         } else {
             mLastResult = kCache_NoError;
+            // web: the file is in MEMFS; hand it to the browser's store
+            // (W-36). The page keeps the global options cache and leaves
+            // the song cache, which every boot rebuilds, out of it.
+            Dc3SaveStoreChanged();
         }
     }
     // The op ends BEFORE the result is posted, and nothing touches `this`
@@ -580,6 +586,7 @@ bool CacheNative::DeleteAsync(const char *cc, Hmx::Object *) {
         char dir[512];
         MakeCacheDirPath(dir, sizeof(dir), mCacheID.Name());
         RemoveEmptyParents(path, dir);
+        Dc3SaveStoreChanged(); // web: drop it from the browser's store too
         mLastResult = kCache_NoError;
     }
     mOpCur = kOpNone;
@@ -812,6 +819,9 @@ bool CacheMgrNative::DeleteAsync(CacheID *id) {
     if (!ok) {
         MILO_NOTIFY("CacheMgrNative::DeleteAsync(): failed to remove '%s'\n", dir);
     }
+    // web: whatever is gone from the cache is dropped from the browser's store
+    // too (also after a partial removal: the store follows the files).
+    Dc3SaveStoreChanged();
     EndOp(kOpDelete, ok ? kCache_NoError : kCache_ErrorUnknown);
     return true;
 }
