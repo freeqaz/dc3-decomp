@@ -5,12 +5,17 @@
 // DrawMode 8. DC3's RndShader::CheckForceCull (rndobj/Shader.cpp) gives EVERY
 // material D3D cull mode 6 in that mode -- the mode a kCullBackwards material
 // gets in a normal draw -- whatever the material asks. So a two-sided
-// (kCullNone) material shows only its mirrored front faces: at dci the
-// star_wipe / speaker cards behind the floor's gold stars are two-sided, and
-// drawing their far faces too laid a second, paler copy over the reflected
-// stars. Natively the material key used to flip only a non-None cull and keep
-// a two-sided material two-sided; under the DC3 shape it now culls Backwards
-// for every material in the reflection pass, first pass and NextPass alike.
+// (kCullNone) material shows only its mirrored front faces, and a
+// kCullBackwards one keeps mode 6. Natively the material key used to flip only
+// a non-None cull (two-sided stayed two-sided, Backwards became Regular); under
+// the DC3 shape it now culls Backwards for every material in the reflection
+// pass, first pass and NextPass alike.
+//
+// This is a faithfulness change, not the dci "pale reflected stars" fix it was
+// first written as: the dci before/after pins are identical, and that pale
+// cast was a state mismatch (the hardware player had the Golden Boomy
+// unlocked; item 20 (b) README). What it changes per venue is in the
+// item 20 (b) venue sweep.
 //
 // Sabotages: kReflectionForcesReverseCull set false in RndShape_DC3.h (the old
 // flip: None stays None, Backwards becomes Regular); ReflectionCull returning
