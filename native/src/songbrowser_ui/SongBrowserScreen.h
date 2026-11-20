@@ -66,6 +66,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace nativeui {
@@ -140,6 +141,8 @@ namespace songbrowser_ui {
         songbrowser::Arrangement arrangement = songbrowser::kByTitle;
         Region focus = Region::List;
         std::string selectedSong; // short name of the list's selected song
+        // Set when the list's selection is a command row and not a song.
+        std::optional<Command> selectedCommand;
         std::string recentSong; // short name of the shelf's selected card
         std::string query; // what is typed in the search field
         float scroll = 0.0f; // the list's scroll position
@@ -190,6 +193,10 @@ namespace songbrowser_ui {
         // For tests and tools.
         const nativeui::ListView &List() const;
         const nativeui::Shelf &Recents() const;
+        // The command row the list's selection is on, if it is on one.
+        std::optional<Command> SelectedCommand() const;
+        // The command the detail pane describes, if it shows one and not a song.
+        std::optional<Command> DetailCommand() const;
         // Short name of the song the detail pane shows; empty for none.
         const std::string &DetailSong() const;
         // The song the detail pane is fading away from; empty when no fade runs.

@@ -1,5 +1,7 @@
 #include "nativeui/Shelf.h"
 
+#include "nativeui/Decor.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -143,8 +145,7 @@ namespace nativeui {
         const Metrics &metric = theme.metric;
         const float emphasis = Emphasis(index);
         const float focus = focusAmount_.Value();
-        // The selected card grows and glows only while the shelf has focus;
-        // without focus it keeps a quiet ring, so the selection is still shown.
+        // The selected card grows only while the shelf has focus.
         const float lit = emphasis * focus;
         const float scale = 1.0f + (metric.shelfFocusScale - 1.0f) * lit;
         const Rect rect {
@@ -154,26 +155,11 @@ namespace nativeui {
 
         // Scale about the card's own centre.
         painter.PushLayer({ centre * (1.0f - scale), scale, 1.0f });
-        if (lit > 0.0f) {
-            painter.FillRoundRect(
-                rect.Inflated(metric.glowSoftness * 0.5f),
-                theme.radius.medium + metric.glowSoftness * 0.5f,
-                CornerColors::Solid(theme.color.accentGlow.Faded(lit)),
-                metric.glowSoftness
-            );
-        }
+        // A glow and an accent ring while the shelf has focus; a quiet outline
+        // while it only remembers its selection (the selection rule, Decor.h).
+        PaintFocusGlow(painter, theme, rect, theme.radius.medium, lit);
         card.Paint(ctx, painter);
-        if (emphasis > 0.0f) {
-            painter.StrokeRoundRect(
-                rect,
-                theme.radius.medium,
-                CornerColors::Solid(
-                    Mix(theme.color.highlightIdle, theme.color.accent, focus)
-                        .Faded(emphasis)
-                ),
-                metric.focusRingWidth
-            );
-        }
+        PaintSelectionRing(painter, theme, rect, theme.radius.medium, focus, emphasis);
         painter.PopLayer();
     }
 
@@ -212,6 +198,17 @@ namespace nativeui {
         }
 
         painter.PopLayer();
+
+        // Cards fade out toward an edge the shelf goes on past, so a row that
+        // holds more than fits says so.
+        const float reach = ctx.theme.metric.edgeFade;
+        if (reach > 0.0f) {
+            const Rect lane = bounds.Inflated(metric.glowSoftness);
+            PaintEdgeFade(painter, ctx.theme, lane, Edge::Left, scroll / reach);
+            PaintEdgeFade(
+                painter, ctx.theme, lane, Edge::Right, (strip_.MaxScroll() - scroll) / reach
+            );
+        }
         painter.PopClip();
     }
 

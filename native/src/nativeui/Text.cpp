@@ -78,6 +78,55 @@ namespace nativeui {
         return line;
     }
 
+    std::vector<FittedLine> WrapLines(
+        const TextMeasurer &measurer,
+        const TextStyle &style,
+        std::string_view text,
+        float maxWidth,
+        int maxLines,
+        std::string_view ellipsis
+    ) {
+        std::vector<FittedLine> lines;
+        // Case once, up front: casing can change the glyph count, and the pieces
+        // below are measured as they will be drawn.
+        const std::string cased = ApplyCase(style.textCase, text);
+        TextStyle asCased = style;
+        asCased.textCase = TextCase::AsWritten;
+
+        std::size_t at = cased.find_first_not_of(' ');
+        while (at != std::string::npos && static_cast<int>(lines.size()) < maxLines) {
+            const std::string_view rest = std::string_view(cased).substr(at);
+            const bool last = static_cast<int>(lines.size()) + 1 == maxLines;
+            if (last || MeasureWidth(measurer, asCased, rest) <= maxWidth) {
+                lines.push_back(FitLine(measurer, asCased, rest, maxWidth, ellipsis));
+                break;
+            }
+            // The longest run of whole words that fits; at least one word.
+            std::size_t end = rest.find(' ');
+            if (end == std::string_view::npos) {
+                end = rest.size();
+            }
+            for (std::size_t next = end; next < rest.size();) {
+                const std::size_t word = rest.find_first_not_of(' ', next);
+                if (word == std::string_view::npos) {
+                    break;
+                }
+                std::size_t wordEnd = rest.find(' ', word);
+                if (wordEnd == std::string_view::npos) {
+                    wordEnd = rest.size();
+                }
+                if (MeasureWidth(measurer, asCased, rest.substr(0, wordEnd)) > maxWidth) {
+                    break;
+                }
+                end = wordEnd;
+                next = wordEnd;
+            }
+            lines.push_back(FitLine(measurer, asCased, rest.substr(0, end), maxWidth, ellipsis));
+            at = cased.find_first_not_of(' ', at + end);
+        }
+        return lines;
+    }
+
     float AlignOffset(TextAlign align, float available, float lineWidth) {
         switch (align) {
         case TextAlign::Center:

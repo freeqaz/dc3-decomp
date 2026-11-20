@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace nativeui {
 
@@ -89,6 +90,19 @@ namespace nativeui {
         const TextStyle &style,
         std::string_view text,
         float maxWidth,
+        std::string_view ellipsis
+    );
+
+    // Cases `text` and breaks it at spaces into at most `maxLines` lines, none
+    // wider than `maxWidth`. Lines are filled greedily; the last one takes
+    // whatever is left and is cut with the ellipsis like FitLine's, as is a
+    // single word too long for a line of its own. Empty text gives no lines.
+    std::vector<FittedLine> WrapLines(
+        const TextMeasurer &measurer,
+        const TextStyle &style,
+        std::string_view text,
+        float maxWidth,
+        int maxLines,
         std::string_view ellipsis
     );
 

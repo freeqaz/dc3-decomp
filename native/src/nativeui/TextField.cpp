@@ -1,5 +1,6 @@
 #include "nativeui/TextField.h"
 
+#include "nativeui/Decor.h"
 #include "nativeui/Utf8.h"
 
 #include <algorithm>
@@ -69,6 +70,13 @@ namespace nativeui {
     // ---------------------------------------------------------------------------
     // TextField
     // ---------------------------------------------------------------------------
+
+    namespace {
+
+        // The leading icon's side as a share of the text size.
+        constexpr float kLeadingIconShare = 0.72f;
+
+    }
 
     TextField::TextField(std::string placeholder)
         : placeholder_(std::move(placeholder)) {}
@@ -146,17 +154,30 @@ namespace nativeui {
         const Rect &bounds = Bounds();
         const float focus = focusAmount_.Value();
 
+        PaintFocusGlow(painter, theme, bounds, theme.radius.medium, focus);
         painter.FillRoundRect(
             bounds, theme.radius.medium, CornerColors::Solid(theme.color.fieldFill)
         );
         painter.StrokeRoundRect(
             bounds,
             theme.radius.medium,
-            CornerColors::Solid(Mix(theme.color.panelBorder, theme.color.accent, focus)),
+            CornerColors::Solid(Mix(theme.color.fieldBorder, theme.color.accent, focus)),
             theme.metric.borderWidth
         );
 
-        const Rect inner = bounds.Deflated(Insets::Symmetric(theme.space.md, 0.0f));
+        Rect inner = bounds.Deflated(Insets::Symmetric(theme.space.md, 0.0f));
+        if (leadingIcon_) {
+            // The icon is as tall as the text's capitals look, and brightens with focus.
+            const float side = style.size * kLeadingIconShare;
+            painter.DrawImage(
+                { inner.x, bounds.y + (bounds.height - side) * 0.5f, side, side },
+                IconImage(*leadingIcon_),
+                kWholeImage,
+                Mix(theme.color.textDisabled, theme.color.accent, focus),
+                theme.radius.none
+            );
+            inner = inner.Deflated(Insets { side + theme.space.sm, 0.0f, 0.0f, 0.0f });
+        }
         const FontMetrics metrics = ctx.text.Metrics(style.font, style.size);
         const float baseline = CenteredBaseline(metrics, inner.y, inner.height);
 

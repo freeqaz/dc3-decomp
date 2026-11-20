@@ -136,6 +136,9 @@ namespace nativeui {
     // drawn, and keeps clips nested. Pushes and pops must balance; IsBalanced()
     // says whether they did. Nothing is emitted for drawing done while the
     // composed opacity is zero.
+    // The `uv` of an ImageQuad that shows all of its image.
+    inline constexpr Rect kWholeImage { 0.0f, 0.0f, 1.0f, 1.0f };
+
     class Painter {
     public:
         explicit Painter(DisplayList &out);

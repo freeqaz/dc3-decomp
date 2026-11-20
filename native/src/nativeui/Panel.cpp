@@ -56,7 +56,10 @@ namespace nativeui {
             painter.StrokeRoundRect(
                 bounds,
                 radius,
-                CornerColors::Solid(theme.color.*style_.border),
+                CornerColors::Vertical(
+                    theme.color.*style_.border,
+                    theme.color.*(style_.borderEnd ? style_.borderEnd : style_.border)
+                ),
                 theme.metric.borderWidth
             );
         }

@@ -1,5 +1,8 @@
 #include "songbrowser_ui/SongWidgets.h"
 
+#include "nativeui/Icon.h"
+#include "nativeui/IconTile.h"
+
 #include <algorithm>
 
 namespace songbrowser_ui {
@@ -97,24 +100,24 @@ namespace songbrowser_ui {
                               top,
                               size,
                               size };
-            if (i < stars_) {
-                if (gold) {
-                    painter.FillRoundRect(
-                        mark.Inflated(size * 0.5f),
-                        size,
-                        CornerColors::Solid(theme.color.star.Faded(theme.color.accentGlow.a)),
-                        size
-                    );
-                }
-                painter.FillRoundRect(mark, size * 0.5f, CornerColors::Solid(theme.color.star));
-            } else {
-                painter.StrokeRoundRect(
+            const bool earned = i < stars_;
+            if (earned && gold) {
+                // Gold stars shine: a soft pool of the star's colour under each.
+                painter.FillRoundRect(
                     mark,
                     size * 0.5f,
-                    CornerColors::Solid(theme.color.textDisabled),
-                    theme.metric.borderWidth
+                    CornerColors::Solid(theme.color.star.Faded(theme.color.accentGlow.a)),
+                    size
                 );
             }
+            // An earned star is filled; one not earned is its outline.
+            painter.DrawImage(
+                mark,
+                IconImage(earned ? Icon::Star : Icon::StarOutline),
+                kWholeImage,
+                earned ? theme.color.star : theme.color.starEmpty,
+                theme.radius.none
+            );
         }
     }
 
@@ -270,7 +273,7 @@ namespace songbrowser_ui {
 
     void SectionHeading::OnPaint(const Context &ctx, Painter &painter) const {
         const Theme &theme = ctx.theme;
-        const TextStyle &style = theme.type.caption;
+        const TextStyle &style = theme.type.label;
         const Rect inner = Bounds().Deflated(Insets::Symmetric(theme.space.sm, 0.0f));
         const float rule = theme.metric.borderWidth;
         const float baseline = CenteredBaseline(
@@ -299,30 +302,118 @@ namespace songbrowser_ui {
     }
 
     // ---------------------------------------------------------------------------
+    // CommandRow
+    // ---------------------------------------------------------------------------
+
+    CommandRow::CommandRow(
+        nativeui::Icon icon, std::string title, std::string tagline, std::function<bool()> lit
+    )
+        : title_(std::move(title)), tagline_(std::move(tagline)), isLit_(std::move(lit)) {
+        Adopt(std::make_unique<IconTile>(icon, &Radii::small));
+    }
+
+    Size CommandRow::OnMeasure(const Context &ctx, const Constraints &constraints) {
+        return { constraints.Biggest().width, ctx.theme.metric.listRowHeight };
+    }
+
+    void CommandRow::OnArrange(const Context &ctx, const Rect &bounds) {
+        const Theme &theme = ctx.theme;
+        const Spacing &space = theme.space;
+        // The same insets and the same square as a song row's art, so the tile
+        // and the title line up with the songs under them.
+        const Rect inner = bounds.Deflated({ space.sm, space.xs, space.md, space.xs });
+        const float tile = inner.height;
+        Widget &icon = *Children().front();
+        icon.Measure(ctx, Constraints::Tight({ tile, tile }));
+        icon.Arrange(ctx, { inner.x, inner.y, tile, tile });
+
+        const float left = inner.x + tile + space.md;
+        if (fittedWidth_ != bounds.width) {
+            fittedWidth_ = bounds.width;
+            const float room = std::max(0.0f, inner.Right() - left);
+            titleLine_ =
+                FitLine(ctx.text, theme.type.body, title_, room, theme.type.ellipsis);
+            taglineLine_ = FitLine(
+                ctx.text,
+                theme.type.caption,
+                tagline_,
+                std::max(0.0f, room - titleLine_.width - space.lg),
+                theme.type.ellipsis
+            );
+        }
+        textLeft_ = left;
+        textRight_ = inner.Right();
+    }
+
+    void CommandRow::OnAdvance(const Context &ctx, float deltaSeconds) {
+        lit_.SetTarget(isLit_ && isLit_() ? 1.0f : 0.0f);
+        lit_.Advance(deltaSeconds, ctx.theme.motion.fadeSpring);
+    }
+
+    void CommandRow::OnPaint(const Context &ctx, Painter &painter) const {
+        PaintChildren(ctx, painter);
+
+        const Theme &theme = ctx.theme;
+        const Rect &bounds = Bounds();
+        const TextStyle &titleStyle = theme.type.body;
+        painter.DrawText(
+            { textLeft_,
+              CenteredBaseline(
+                  ctx.text.Metrics(titleStyle.font, titleStyle.size), bounds.y, bounds.height
+              ) },
+            titleStyle,
+            theme.color.textPrimary,
+            titleLine_.text
+        );
+        // What the command does, at the row's right end; brighter on the bar.
+        const TextStyle &taglineStyle = theme.type.caption;
+        painter.DrawText(
+            { textRight_ - taglineLine_.width,
+              CenteredBaseline(
+                  ctx.text.Metrics(taglineStyle.font, taglineStyle.size),
+                  bounds.y,
+                  bounds.height
+              ) },
+            taglineStyle,
+            Mix(theme.color.textSecondary, theme.color.textPrimary, lit_.Value()),
+            taglineLine_.text
+        );
+    }
+
+    // ---------------------------------------------------------------------------
     // RecentCard
     // ---------------------------------------------------------------------------
+
+    namespace {
+
+        // A card's caption: up to this many lines of title, then one of artist.
+        constexpr int kCardTitleLines = 2;
+
+    }
 
     RecentCard::RecentCard(std::string title, std::string artist, ArtSource art)
         : title_(std::move(title)), artist_(std::move(artist)) {
         Adopt(std::make_unique<ArtImage>(std::move(art), &Radii::medium));
     }
 
-    Size RecentCard::OnMeasure(const Context &ctx, const Constraints &constraints) {
-        const Size size = constraints.Biggest();
-        Children().front()->Measure(ctx, Constraints::Tight(size));
-        return size;
+    Size RecentCard::OnMeasure(const Context &, const Constraints &constraints) {
+        return constraints.Biggest();
     }
 
     void RecentCard::OnArrange(const Context &ctx, const Rect &bounds) {
-        Children().front()->Arrange(ctx, bounds);
+        // The art is the square across the top; the caption has the rest.
+        const float side = std::min(bounds.width, bounds.height);
+        Widget &art = *Children().front();
+        art.Measure(ctx, Constraints::Tight({ side, side }));
+        art.Arrange(ctx, { bounds.x, bounds.y, side, side });
         if (fittedWidth_ != bounds.width) {
             fittedWidth_ = bounds.width;
             const Theme &theme = ctx.theme;
-            const float room = std::max(0.0f, bounds.width - 2.0f * theme.space.sm);
-            titleLine_ =
-                FitLine(ctx.text, theme.type.caption, title_, room, theme.type.ellipsis);
-            artistLine_ =
-                FitLine(ctx.text, theme.type.caption, artist_, room, theme.type.ellipsis);
+            const float room = std::max(0.0f, bounds.width - 2.0f * theme.space.xs);
+            titleLines_ = WrapLines(
+                ctx.text, theme.type.label, title_, room, kCardTitleLines, theme.type.ellipsis
+            );
+            artistLine_ = FitLine(ctx.text, theme.type.label, artist_, room, theme.type.ellipsis);
         }
     }
 
@@ -330,33 +421,24 @@ namespace songbrowser_ui {
         PaintChildren(ctx, painter);
 
         const Theme &theme = ctx.theme;
-        const TextStyle &style = theme.type.caption;
+        const TextStyle &style = theme.type.label;
         const Rect &bounds = Bounds();
         const FontMetrics metrics = ctx.text.Metrics(style.font, style.size);
-        // A foot that darkens toward the bottom, so the two lines read over any art.
-        const float foot = 2.0f * metrics.lineHeight + 2.0f * theme.space.sm;
-        const Rect shade { bounds.x, bounds.Bottom() - 2.0f * foot, bounds.width, 2.0f * foot };
-        painter.PushClip(bounds);
-        painter.FillRoundRect(
-            shade,
-            theme.radius.medium,
-            CornerColors::Vertical(
-                theme.color.background.WithAlpha(0.0f), theme.color.background
-            )
-        );
-        painter.PopClip();
-
-        const float titleTop = bounds.Bottom() - theme.space.sm - 2.0f * metrics.lineHeight;
+        const float left = bounds.x + theme.space.xs;
+        float top = bounds.y + std::min(bounds.width, bounds.height) + theme.space.sm;
+        for (const FittedLine &line : titleLines_) {
+            painter.DrawText(
+                { left, CenteredBaseline(metrics, top, metrics.lineHeight) },
+                style,
+                theme.color.textPrimary,
+                line.text
+            );
+            top += metrics.lineHeight;
+        }
+        // The artist follows the title directly: a one-line title leaves the
+        // space under the artist, not a hole between the two.
         painter.DrawText(
-            { bounds.x + theme.space.sm,
-              CenteredBaseline(metrics, titleTop, metrics.lineHeight) },
-            style,
-            theme.color.textPrimary,
-            titleLine_.text
-        );
-        painter.DrawText(
-            { bounds.x + theme.space.sm,
-              CenteredBaseline(metrics, titleTop + metrics.lineHeight, metrics.lineHeight) },
+            { left, CenteredBaseline(metrics, top, metrics.lineHeight) },
             style,
             theme.color.textSecondary,
             artistLine_.text

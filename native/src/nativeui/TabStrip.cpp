@@ -1,5 +1,7 @@
 #include "nativeui/TabStrip.h"
 
+#include "nativeui/Decor.h"
+
 #include <algorithm>
 
 namespace nativeui {
@@ -112,24 +114,21 @@ namespace nativeui {
         }
 
         if (TabCount() > 0) {
+            // The underline says which tab is chosen. It is accent and lit while
+            // the strip has focus and the quiet marker colour otherwise (the
+            // selection rule, Decor.h).
             const float focus = focusAmount_.Value();
             const float height = theme.metric.tabIndicatorHeight;
-            const float glow = theme.metric.glowSoftness;
             const Rect bar { bounds.x + indicatorLeft_.Value(),
                              bounds.Bottom() - height,
                              indicatorWidth_.Value(),
                              height };
-            painter.FillRoundRect(
-                bar.Inflated(glow * 0.5f),
-                (height + glow) * 0.5f,
-                CornerColors::Solid(theme.color.accentGlow.Faded(focus)),
-                glow
-            );
+            PaintFocusGlow(painter, theme, bar, height * 0.5f, focus);
             painter.FillRoundRect(
                 bar,
                 height * 0.5f,
                 CornerColors::Solid(
-                    Mix(theme.color.highlightIdle, theme.color.accent, focus)
+                    Mix(theme.color.selectionMarker, theme.color.accent, focus)
                 )
             );
         }

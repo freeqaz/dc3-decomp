@@ -185,7 +185,8 @@ namespace nativeui_host {
         stats_.commands = static_cast<std::uint32_t>(list.commands.size());
 
         const auto replayStart = std::chrono::steady_clock::now();
-        CanvasRenderer renderer(sink, fonts_, imageSource_);
+        icons_.SetNext(imageSource_);
+        CanvasRenderer renderer(sink, fonts_, &icons_);
         renderer.SetDeviceScale(deviceScaleY_);
         nativeui::Replay(list, renderer);
         stats_.replayMicros = MicrosSince(replayStart);

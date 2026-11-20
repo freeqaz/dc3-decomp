@@ -4,6 +4,17 @@
 
 namespace nativeui {
 
+    namespace {
+
+        // UTF-8 code points in `text` (continuation bytes are not counted).
+        int CodePointCount(const std::string &text) {
+            return static_cast<int>(std::count_if(text.begin(), text.end(), [](char c) {
+                return (static_cast<unsigned char>(c) & 0xC0) != 0x80;
+            }));
+        }
+
+    }
+
     HintBar::HintBar(std::vector<Hint> hints) : hints_(std::move(hints)) {}
 
     HintBar::Extents HintBar::ExtentsOf(const Context &ctx, const Hint &hint) const {
@@ -13,10 +24,13 @@ namespace nativeui {
             MeasureWidth(ctx.text, style, ApplyCase(style.textCase, hint.glyph));
         extents.text =
             MeasureWidth(ctx.text, style, ApplyCase(style.textCase, hint.text));
-        // A one-letter label gets a circle; a longer one stretches the pill.
-        extents.pill = std::max(
-            ctx.theme.metric.hintGlyphHeight, extents.glyph + 2.0f * ctx.theme.space.sm
-        );
+        // One character makes a round button; more make a keycap as wide as its label.
+        extents.round = CodePointCount(hint.glyph) <= 1;
+        extents.pill = extents.round
+            ? ctx.theme.metric.hintGlyphHeight
+            : std::max(
+                  ctx.theme.metric.hintGlyphHeight, extents.glyph + 2.0f * ctx.theme.space.sm
+              );
         return extents;
     }
 
@@ -45,16 +59,29 @@ namespace nativeui {
         float x = bounds.x;
         for (const Hint &hint : hints_) {
             const Extents extents = ExtentsOf(ctx, hint);
-            painter.StrokeRoundRect(
-                { x, pillTop, extents.pill, pillHeight },
-                pillHeight * 0.5f,
-                CornerColors::Solid(theme.color.textSecondary),
-                theme.metric.borderWidth
-            );
+            const Rect control { x, pillTop, extents.pill, pillHeight };
+            Color label = theme.color.textPrimary;
+            if (extents.round && hint.tone) {
+                painter.FillRoundRect(
+                    control, pillHeight * 0.5f, CornerColors::Solid(theme.color.*hint.tone)
+                );
+                label = theme.color.buttonText;
+            } else {
+                const float radius = extents.round ? pillHeight * 0.5f : theme.radius.small;
+                painter.FillRoundRect(
+                    control, radius, CornerColors::Solid(theme.color.keycapFill)
+                );
+                painter.StrokeRoundRect(
+                    control,
+                    radius,
+                    CornerColors::Solid(theme.color.keycapBorder),
+                    theme.metric.borderWidth
+                );
+            }
             painter.DrawText(
                 { x + (extents.pill - extents.glyph) * 0.5f, baseline },
                 style,
-                theme.color.textPrimary,
+                label,
                 ApplyCase(style.textCase, hint.glyph)
             );
             x += extents.pill + theme.space.sm;

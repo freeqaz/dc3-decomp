@@ -17,6 +17,7 @@
 #pragma once
 
 #include "nativeui/Animation.h"
+#include "nativeui/Icon.h"
 #include "nativeui/Image.h"
 #include "nativeui/Widget.h"
 #include "songbrowser_ui/MatchText.h"
@@ -76,8 +77,8 @@ namespace songbrowser_ui {
         nativeui::ColorToken unlitColor_;
     };
 
-    // `stars` of kMaxStars marks filled; more than kMaxStars is gold: all of
-    // them, with a glow.
+    // kMaxStars stars in a row: the first `stars` filled, the rest outlines.
+    // More than kMaxStars is gold: all of them, with a glow.
     class StarMarks final : public nativeui::Widget {
     public:
         explicit StarMarks(int stars);
@@ -152,9 +153,48 @@ namespace songbrowser_ui {
         std::string count_;
     };
 
+    // A row of the list that is not a song but something to do ("Random
+    // song"): an icon tile where a song has its art, the command's name, and at
+    // the right end a few words on what it does.
+    class CommandRow final : public nativeui::Widget {
+    public:
+        // `lit`: as SongRow's.
+        CommandRow(
+            nativeui::Icon icon, std::string title, std::string tagline, std::function<bool()> lit
+        );
+
+        const std::string &Title() const { return title_; }
+
+    protected:
+        nativeui::Size OnMeasure(
+            const nativeui::Context &ctx, const nativeui::Constraints &constraints
+        ) override;
+        void OnArrange(const nativeui::Context &ctx, const nativeui::Rect &bounds) override;
+        void OnAdvance(const nativeui::Context &ctx, float deltaSeconds) override;
+        void OnPaint(const nativeui::Context &ctx, nativeui::Painter &painter) const override;
+        bool IsAtRest() const override { return lit_.AtRest(); }
+
+    private:
+        std::string title_;
+        std::string tagline_;
+        std::function<bool()> isLit_;
+        nativeui::Spring lit_; // 0 = an ordinary row, 1 = on the highlight bar
+        float fittedWidth_ = -1.0f;
+        float textLeft_ = 0.0f;
+        float textRight_ = 0.0f;
+        nativeui::FittedLine titleLine_;
+        nativeui::FittedLine taglineLine_;
+    };
+
+    // A card of the Recently Played shelf: the art as a square across the top
+    // and, under it where there is room for whole words, the title on up to
+    // two lines and the artist on one.
     class RecentCard final : public nativeui::Widget {
     public:
         RecentCard(std::string title, std::string artist, ArtSource art);
+
+        // The caption as fitted for the last width arranged.
+        const std::vector<nativeui::FittedLine> &TitleLines() const { return titleLines_; }
 
     protected:
         nativeui::Size OnMeasure(
@@ -167,7 +207,7 @@ namespace songbrowser_ui {
         std::string title_;
         std::string artist_;
         float fittedWidth_ = -1.0f;
-        nativeui::FittedLine titleLine_;
+        std::vector<nativeui::FittedLine> titleLines_;
         nativeui::FittedLine artistLine_;
     };
 

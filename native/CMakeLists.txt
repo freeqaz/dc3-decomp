@@ -1421,9 +1421,13 @@ set_source_files_properties(
 # ============================================================================
 add_library(nativeui STATIC
     src/nativeui/Animation.cpp
+    src/nativeui/Backdrop.cpp
+    src/nativeui/Decor.cpp
     src/nativeui/DisplayList.cpp
     src/nativeui/Focus.cpp
     src/nativeui/HintBar.cpp
+    src/nativeui/Icon.cpp
+    src/nativeui/IconTile.cpp
     src/nativeui/Image.cpp
     src/nativeui/Label.cpp
     src/nativeui/Layout.cpp
@@ -1457,6 +1461,7 @@ set(DC3_NATIVEUI_HOST_SOURCES
     src/nativeui_host/GameBindings.cpp
     src/nativeui_host/GameFonts.cpp
     src/nativeui_host/GameImages.cpp
+    src/nativeui_host/IconTextures.cpp
     src/nativeui_host/ImageCache.cpp
     src/nativeui_host/InputBridge.cpp
     src/nativeui_host/NativeUiHost.cpp

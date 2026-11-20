@@ -11,7 +11,11 @@
 //  - Accept calls onActivated with the selected card.
 //  - The selection scrolls into view on a spring. While the shelf has focus the
 //    selected card grows a little, glows and gets an accent ring, all gliding
-//    to the next card. Without focus it is its ordinary size with a quiet ring.
+//    to the next card. Without focus it is its ordinary size with a quiet
+//    outline (the selection rule, Decor.h).
+//  - Where the row goes on past its left or right edge the cards fade out
+//    over Metrics::edgeFade (into Palette::well: put a shelf on the well), so
+//    a card that only partly fits reads as "more this way".
 //  - Only cards near the viewport exist.
 //
 // Rules:

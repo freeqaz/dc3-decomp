@@ -18,6 +18,10 @@
 //  - The selection scrolls into view on a spring, and a highlight bar glides
 //    from the old row to the new one. The first layout and a Reload jump
 //    instead of animating.
+//  - The highlight is a filled bar only while the list has focus; without
+//    focus it is a quiet outline (the selection rule, Decor.h).
+//  - Where the list goes on past its top or bottom edge, the rows fade out
+//    over Metrics::edgeFade (into Palette::well: put a list on the well).
 //
 // Rules:
 //  - Rows live in the list's content coordinates (y = 0 at the top of row 0),

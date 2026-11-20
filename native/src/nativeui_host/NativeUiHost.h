@@ -51,6 +51,7 @@
 #include "nativeui_host/CanvasRenderer.h"
 #include "nativeui_host/FontSet.h"
 #include "nativeui_host/HostedScreen.h"
+#include "nativeui_host/IconTextures.h"
 #include "nativeui_host/ImageCache.h"
 #include "nativeui_host/InputBridge.h"
 
@@ -157,6 +158,8 @@ namespace nativeui_host {
         const FontSet &fonts_;
         ImageCache *images_;
         ImageSource *imageSource_ = nullptr;
+        // Draws nativeui's icons; every other image goes on to imageSource_.
+        IconTextures icons_;
         PlainScreen plain_;
         HostedScreen *screen_ = nullptr;
         HostClock clock_;

@@ -40,6 +40,11 @@ namespace songbrowser_ui {
         Rebuild();
     }
 
+    void BrowserModel::SetCommandCount(int count) {
+        commandCount_ = count < 0 ? 0 : count;
+        Rebuild();
+    }
+
     void BrowserModel::Rebuild() {
         rows_.clear();
         rowOfSong_.clear();
@@ -74,6 +79,14 @@ namespace songbrowser_ui {
             return;
         }
 
+        if (catalog_->Size() > 0) {
+            for (int c = 0; c < commandCount_; ++c) {
+                BrowserRow row;
+                row.command = c;
+                rows_.push_back(row);
+            }
+        }
+
         ArrangeOptions options;
         options.minSectionSongs = kMinSectionSongs;
         list_ = Arrange(*catalog_, arrangement_, options);
@@ -106,18 +119,45 @@ namespace songbrowser_ui {
         return rowOfSong_[static_cast<std::size_t>(song)];
     }
 
-    int BrowserModel::SectionJump(int row, int direction) const {
+    int BrowserModel::CommandAt(int row) const {
         if (row < 0 || row >= static_cast<int>(rows_.size())) {
             return -1;
         }
-        const int section = rows_[static_cast<std::size_t>(row)].section;
-        if (section < 0) {
+        return rows_[static_cast<std::size_t>(row)].command;
+    }
+
+    int BrowserModel::RowOfCommand(int command) const {
+        for (int i = 0; command >= 0 && i < static_cast<int>(rows_.size()); ++i) {
+            if (rows_[static_cast<std::size_t>(i)].command == command) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    int BrowserModel::FirstSongRow() const {
+        for (int i = 0; i < static_cast<int>(rows_.size()); ++i) {
+            if (rows_[static_cast<std::size_t>(i)].song >= 0) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    int BrowserModel::SectionJump(int row, int direction) const {
+        if (row < 0 || row >= static_cast<int>(rows_.size()) || found_.searching) {
             return -1;
         }
+        const BrowserRow &from = rows_[static_cast<std::size_t>(row)];
+        // The commands stand in for a section before the first one.
+        const int section = from.command >= 0 ? -1 : from.section;
         const int wanted = section + (direction < 0 ? -1 : 1);
+        if (wanted < 0) {
+            return section < 0 ? -1 : RowOfCommand(0);
+        }
         for (int i = 0; i < static_cast<int>(rows_.size()); ++i) {
             const BrowserRow &candidate = rows_[static_cast<std::size_t>(i)];
-            if (!candidate.heading && candidate.section == wanted) {
+            if (candidate.song >= 0 && candidate.section == wanted) {
                 return i;
             }
         }
