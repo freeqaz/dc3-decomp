@@ -304,7 +304,7 @@ public:
             std::snprintf(
                 numbers,
                 sizeof(numbers),
-                ",\"highlight_rect\":{\"x\":%.1f,\"y\":%.1f,\"w\":%.1f,\"h\":%.1f}",
+                ",\"highlight_rect\":[%.1f,%.1f,%.1f,%.1f]",
                 bar.x,
                 bar.y,
                 bar.width,

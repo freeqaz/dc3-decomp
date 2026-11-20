@@ -2287,7 +2287,7 @@ if(BUILD_TESTS)
         tests/test_cache_native.cpp
         tests/test_copy_poll_semantics.cpp
         tests/test_native_options.cpp
-        tests/test_native_song_select.cpp  # song select: Recently Played, sort by artist, section jumps, the classic switch
+        tests/test_native_song_select.cpp  # song select: Recently Played, sort by artist, section jumps, the classic switch, the song browser
         tests/test_song_browser.cpp  # song browser data: search, arrangements, recents; GET /api/songs against song select
         tests/test_native_profile.cpp
         tests/test_native_glyph_render.cpp
@@ -2308,7 +2308,7 @@ if(BUILD_TESTS)
         tests/test_nativeui_raster.cpp   # nativeui: a display-list golden; the test-only software rasteriser
         tests/test_song_browser_ui.cpp   # the song browser screen on the real 121-song list: focus, search, sort, state, pictures
         tests/test_nativeui_host.cpp     # nativeui_host: command translation, glyph layout, image cache, input (no GPU, no game data)
-        tests/test_nativeui_host_gpu.cpp # nativeui_host: real fonts + canvas into a render target; the demo in a running engine
+        tests/test_nativeui_host_gpu.cpp # nativeui_host: real fonts + canvas into a render target; the song browser in a running engine
         ${DC3_NATIVEUI_HOST_SOURCES}  # the natively drawn UI's host (the code under test)
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}

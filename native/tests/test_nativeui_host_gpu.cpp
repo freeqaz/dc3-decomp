@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 #include <zlib.h>
 
+#include "engine_http_port.h"
 #include "nativeui_raster.h"
 #include "test_helpers.h"
 #include "test_tmp.h"
@@ -19,6 +20,7 @@
 #include "obj/Object.h"
 #include "songbrowser/SongCatalog.h"
 #include "songbrowser_ui/SongBrowserScreen.h"
+#include "platform/ExecutablePath.h"
 #include "platform/Rnd_Wgpu.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Rnd.h"
@@ -339,4 +341,235 @@ TEST_F(NativeUiHostGpuTest, SongBrowserThroughTheHostAndCanvas) {
               60)
         << "the corner pixel is the tile's colour: the corner is square (radius "
         << rounded->radius << " at " << cx << "," << cy << ")";
+}
+
+// ---------------------------------------------------------------------------
+// The song browser in a running engine
+// ---------------------------------------------------------------------------
+
+namespace {
+
+    std::string BinaryDir() {
+        char buf[4096];
+        ssize_t len = ReadExecutablePath(buf, sizeof(buf) - 1);
+        if (len <= 0) return ".";
+        buf[len] = '\0';
+        std::string path(buf);
+        size_t slash = path.rfind('/');
+        return slash != std::string::npos ? path.substr(0, slash) : ".";
+    }
+
+    bool Exists(const std::string &path) {
+        struct stat st;
+        return stat(path.c_str(), &st) == 0;
+    }
+
+    unsigned BE32(const unsigned char *p) {
+        return (unsigned)p[0] << 24 | (unsigned)p[1] << 16 | (unsigned)p[2] << 8 | p[3];
+    }
+
+    // The engine's own screenshots: 8-bit RGB or RGBA, not interlaced.
+    bool DecodePng(const std::string &path, Frame &img, std::string &why) {
+        std::ifstream file(path, std::ios::binary);
+        std::vector<unsigned char> d((std::istreambuf_iterator<char>(file)), {});
+        static const unsigned char sig[8] = { 0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a };
+        if (d.size() < 8 || memcmp(d.data(), sig, 8)) {
+            why = "not a PNG (" + std::to_string(d.size()) + " bytes)";
+            return false;
+        }
+        int depth = 0, ctype = -1, interlace = 0;
+        std::vector<unsigned char> z;
+        for (size_t p = 8; p + 12 <= d.size();) {
+            unsigned len = BE32(&d[p]);
+            if (p + 12 + len > d.size()) break;
+            const unsigned char *type = &d[p + 4], *data = &d[p + 8];
+            if (!memcmp(type, "IHDR", 4) && len >= 13) {
+                img.w = (int)BE32(data);
+                img.h = (int)BE32(data + 4);
+                depth = data[8];
+                ctype = data[9];
+                interlace = data[12];
+            } else if (!memcmp(type, "IDAT", 4)) {
+                z.insert(z.end(), data, data + len);
+            }
+            p += 12 + len;
+        }
+        const int bpp = ctype == 6 ? 4 : ctype == 2 ? 3 : 0;
+        if (depth != 8 || !bpp || interlace || img.w <= 0 || img.h <= 0) {
+            why = "unsupported PNG";
+            return false;
+        }
+        const size_t stride = (size_t)img.w * bpp;
+        std::vector<unsigned char> raw((stride + 1) * img.h);
+        uLongf rawLen = raw.size();
+        if (uncompress(raw.data(), &rawLen, z.data(), z.size()) != Z_OK || rawLen != raw.size()) {
+            why = "PNG inflate failed";
+            return false;
+        }
+        std::vector<unsigned char> prev(stride, 0), cur(stride);
+        img.px.assign((size_t)img.w * img.h * 4, 255);
+        for (int y = 0; y < img.h; y++) {
+            const unsigned char *row = &raw[y * (stride + 1)];
+            for (size_t i = 0; i < stride; i++) {
+                int a = i >= (size_t)bpp ? cur[i - bpp] : 0, b = prev[i],
+                    c = i >= (size_t)bpp ? prev[i - bpp] : 0, x = row[1 + i];
+                switch (row[0]) {
+                case 0: break;
+                case 1: x += a; break;
+                case 2: x += b; break;
+                case 3: x += (a + b) / 2; break;
+                case 4: {
+                    int pp = a + b - c, pa = abs(pp - a), pb = abs(pp - b), pc = abs(pp - c);
+                    x += (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
+                    break;
+                }
+                default: why = "bad PNG row filter"; return false;
+                }
+                cur[i] = (unsigned char)x;
+            }
+            for (int x = 0; x < img.w; x++) {
+                memcpy(&img.px[((size_t)y * img.w + x) * 4], &cur[(size_t)x * bpp], 3);
+            }
+            prev = cur;
+        }
+        return true;
+    }
+
+    // The value of "key": in a flat JSON answer: a string without its quotes,
+    // a number or an array as written.  Empty when the key is not there.
+    std::string JsonField(const std::string &json, const std::string &key) {
+        size_t at = json.find("\"" + key + "\":");
+        if (at == std::string::npos) return "";
+        at += key.size() + 3;
+        if (at >= json.size()) return "";
+        if (json[at] == '"') {
+            size_t end = json.find('"', at + 1);
+            return end == std::string::npos ? "" : json.substr(at + 1, end - at - 1);
+        }
+        if (json[at] == '[') {
+            size_t end = json.find(']', at);
+            return end == std::string::npos ? "" : json.substr(at + 1, end - at - 1);
+        }
+        size_t end = json.find_first_of(",}", at);
+        return json.substr(at, end == std::string::npos ? std::string::npos : end - at);
+    }
+
+    nativeui::Rect RectField(const std::string &json, const std::string &key) {
+        nativeui::Rect r;
+        sscanf(JsonField(json, key).c_str(), "%f,%f,%f,%f", &r.x, &r.y, &r.width, &r.height);
+        return r;
+    }
+
+    std::string DriverLine(const std::string &driver, const std::string &tag) {
+        const std::string prefix = "DRIVER: " + tag + " ";
+        size_t at = driver.find(prefix);
+        if (at == std::string::npos) return "";
+        size_t end = driver.find('\n', at);
+        return driver.substr(at + prefix.size(), end - at - prefix.size());
+    }
+
+} // namespace
+
+// dc3-native, headless but rendering, with DC3_SONG_BROWSER=1, driven to song
+// select: the browser is what /api/screenshot shows there (the highlight bar
+// where the screen says it is, the title's ink, the game's real font with no
+// placeholder glyph), Down moves the selection, and text injected over the
+// debug server lands in the search field (asked of the screen, and seen in
+// the pixels).  One boot; the three are separate assertion groups.
+TEST_F(NativeUiHostGpuTest, SongBrowserRunsInTheEngine) {
+    if (IsSkipped()) return;
+    if (!Ready()) GTEST_SKIP() << "no GPU device (MILO_NORENDER or no adapter)";
+    if (!getenv("DC3_DTA_FLOW_TESTS")) {
+        GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable (requires game assets)";
+    }
+    const std::string bin = BinaryDir() + "/dc3-native";
+    const std::string script = BinaryDir() + "/../../scripts/dc3-input-flows/idle-main.txt";
+    ASSERT_TRUE(Exists(bin)) << bin << " (scripts/native_test.sh builds it)";
+    ASSERT_TRUE(Exists(script)) << script;
+    const std::string root = MakeTestTempDir("dc3-songbrowser-gpu");
+    ASSERT_FALSE(root.empty());
+    mkdir((root + "/cache").c_str(), 0755);
+    mkdir((root + "/saves").c_str(), 0755);
+    const std::string log = root + "/engine.log";
+    std::ostringstream sh;
+    sh << "t=$(command -v timeout || command -v gtimeout); cd " << BinaryDir() << " && "
+       << "( MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1 DC3_DLC=0"
+       << EngineHttpPortShellEnv(root) << " MILO_MAX_FRAMES=0 MILO_WIDTH=1280 MILO_HEIGHT=720"
+       << " DC3_CACHE_DIR=" << root << "/cache DC3_SAVE_DIR=" << root << "/saves"
+       << " MILO_INPUT_SCRIPT=" << script << " DC3_SONG_BROWSER=1"
+       << " ${t:+$t 300} ./dc3-native > " << log << " 2>&1 & echo $! > " << log << ".pid ); "
+       << "pid=$(cat " << log << ".pid); " << EngineHttpApiShell(root, "pid", 180)
+       << R"SH(
+scr() { curl -s -m 5 $api/screen | sed -n 's/.*"screen":"\([^"]*\)".*/\1/p'; };
+frame() { curl -s -m 5 $api/frame | sed -n 's/.*"frame":\([0-9]*\).*/\1/p'; };
+settle() { f=$(frame); [ -n "$f" ] && curl -s -m 70 "$api/frame/wait/$((f+$1))" > /dev/null; };
+press() { curl -s -m 10 -X POST --data-binary "{\"button\":\"$1\"}" $api/input/press > /dev/null; settle ${2:-30}; };
+waitfor() { end=$((SECONDS+$1)); shift; while [ $SECONDS -lt $end ] && kill -0 $pid 2>/dev/null; do
+  s=$(scr); for w in "$@"; do [ "$s" = "$w" ] && return 0; done; sleep 0.2; done; return 1; };
+nav() { from=$(scr); n=0; while [ $n -lt 4 ]; do press confirm 60; waitfor ${2:-6} "$1" && return 0;
+  [ "$(scr)" = "$from" ] || break; n=$((n+1)); done; waitfor 90 "$1"; };
+state() { curl -s -m 5 $api/songbrowser/state; };
+waitfor 180 main_screen; settle 120;
+nav choose_mode_screen; settle 90; nav song_select_screen; echo "DRIVER: at $(scr)"; settle 300;
+echo "DRIVER: s0 $(state)"; curl -s -m 30 -o )SH" << root << R"SH(/shot0.png $api/screenshot;
+press down 30; echo "DRIVER: s1 $(state)";
+echo "DRIVER: typed $(curl -s -m 5 -X POST --data-binary '{"text":"zz"}' $api/input/text)"; settle 30;
+echo "DRIVER: s2 $(state)"; curl -s -m 30 -o )SH" << root << R"SH(/shot2.png $api/screenshot;
+echo "DRIVER: bad $(curl -s -m 5 -o /dev/null -w '%{http_code}' -X POST --data-binary '{"key":"f13"}' $api/input/text)";
+curl -s -m 5 -X POST --data-binary '{"key":"backspace"}' $api/input/text > /dev/null; settle 30;
+echo "DRIVER: s3 $(state)";
+kill $pid 2>/dev/null; sleep 1; kill -9 $pid 2>/dev/null; true)SH";
+    std::string out;
+    FILE *pipe = popen(sh.str().c_str(), "r");
+    ASSERT_NE(pipe, nullptr);
+    char buf[8192];
+    while (fgets(buf, sizeof buf, pipe)) out += buf;
+    pclose(pipe);
+    if (getenv("DC3_TEST_SHOW_DRIVER")) fputs(out.c_str(), stderr);
+    ASSERT_EQ(DriverLine(out, "at"), "song_select_screen") << out;
+
+    const std::string s0 = DriverLine(out, "s0"), s1 = DriverLine(out, "s1"),
+                      s2 = DriverLine(out, "s2"), s3 = DriverLine(out, "s3");
+    ASSERT_EQ(JsonField(s0, "shown"), "true") << "state: " << s0 << "\n" << out;
+
+    // 1. The screenshot is the browser: the highlight bar is where the screen
+    // says it is, in the accent colour, and the title's ink is there.
+    Frame shot0, shot2;
+    std::string why;
+    ASSERT_TRUE(DecodePng(root + "/shot0.png", shot0, why)) << why;
+    EXPECT_EQ(shot0.w, 1280);
+    EXPECT_EQ(shot0.h, 720);
+    const nativeui::Rect bar = RectField(s0, "highlight_rect");
+    ASSERT_GT(bar.width, 300.0f) << s0;
+    auto accented = [](int r, int g, int b) { return b > r + 40 && b > 90; };
+    EXPECT_GT(Count(shot0, bar.x + 300, bar.y + 4, 100, bar.height - 8, accented), 2000)
+        << "no highlight bar at " << bar.x << "," << bar.y << " in the screenshot";
+    EXPECT_GT(Count(shot0, 40, 20, 140, 50, Bright), 150) << "no title ink top left";
+    EXPECT_GT(atoi(JsonField(s0, "glyphs").c_str()), 100) << s0;
+    EXPECT_EQ(JsonField(s0, "placeholder_glyphs"), "0") << s0;
+    EXPECT_GT(atoi(JsonField(s0, "draw_calls").c_str()), 0) << s0;
+    // The game's own chrome is not drawn over it: where the classic screen
+    // has the skeleton box (top left) there is the title bar's dark ground.
+    EXPECT_LT(Count(shot0, 60, 90, 120, 40, Bright), 400)
+        << "something bright where the skeleton box would be";
+
+    // 2. Down moves the selection.
+    EXPECT_NE(JsonField(s1, "selected_song"), JsonField(s0, "selected_song"))
+        << "before: " << s0 << "\nafter: " << s1;
+    EXPECT_GT(RectField(s1, "highlight_rect").y, bar.y) << s1;
+
+    // 3. Injected text is in the search field: by the screen's own account,
+    // and in the pixels of the field (white text where the dim prompt was).
+    EXPECT_NE(DriverLine(out, "typed").find("\"typed\":2"), std::string::npos) << out;
+    EXPECT_EQ(JsonField(s0, "query"), "");
+    EXPECT_EQ(JsonField(s2, "query"), "zz") << s2;
+    EXPECT_EQ(JsonField(s2, "focus"), "search") << s2;
+    EXPECT_EQ(JsonField(s3, "query"), "z") << "backspace over the endpoint: " << s3;
+    EXPECT_EQ(DriverLine(out, "bad"), "400") << "an unknown key name must be refused";
+    ASSERT_TRUE(DecodePng(root + "/shot2.png", shot2, why)) << why;
+    // The search field is the top bar's right end (SONG_BROWSER_UI.md).
+    const int before = Count(shot0, 950, 30, 120, 30, Bright);
+    const int after = Count(shot2, 950, 30, 120, 30, Bright);
+    EXPECT_EQ(before, 0) << "the empty field's prompt is dim";
+    EXPECT_GT(after, 40) << "no white text in the search field after typing";
 }
