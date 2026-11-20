@@ -542,6 +542,12 @@ class MediaPipeBackend:
         # array in [0,1] per returned person (None when segmentation is off or
         # MediaPipe gave no mask for that pose).
         self.last_masks = []
+        # process()'s image landmarks, aligned the same way: per returned
+        # person (xy, vis) -- BlazePose's 33 landmarks as normalized image
+        # coordinates (33x2, x right, y down, may leave [0,1]) and their
+        # visibility (33). What the mask is checked and filled against
+        # (pose_server.MaskRefiner, scripts/pose_mask_quality.py; PLAN P-20).
+        self.last_landmarks = []
         # process()'s own stage times in ms, for pose_server.py --profile and
         # scripts/pose_bench/ (PLAN L-3): BGR->RGB, MediaPipe, geometry
         # (root + remap + mask copy), tracker + root-depth filter.
@@ -713,6 +719,7 @@ class MediaPipeBackend:
                                      "geom": 0.0, "track": 0.0}
 
         self.last_masks = []
+        self.last_landmarks = []
         if not res.pose_world_landmarks:
             self._tracker.update([], None, timestamp_ms / 1000.0)
             timing["track"] = (clock() - t2) * 1e3
@@ -740,7 +747,7 @@ class MediaPipeBackend:
                 mask = np.asarray(seg[pi].numpy_view(), dtype=np.float32)
                 if mask.ndim == 3:
                     mask = mask[:, :, 0]
-            people.append((joints, confs, float(root[2]), mask))
+            people.append((joints, confs, float(root[2]), mask, (image_xy, vis)))
             hip_c = (image_xy[L_HIP] + image_xy[R_HIP]) * 0.5
             shoulder_c = (image_xy[L_SHOULDER] + image_xy[R_SHOULDER]) * 0.5
             centroids.append((float(hip_c[0]), float(hip_c[1])))
@@ -752,10 +759,11 @@ class MediaPipeBackend:
         self._frame_count += 1
         t_s = timestamp_ms / 1000.0
         out = []
-        for (joints, confs, root_z, mask), tid in zip(people, ids):
+        for (joints, confs, root_z, mask, landmarks), tid in zip(people, ids):
             if tid is None:
                 continue  # a second report of a body already in `out`
             self.last_masks.append(mask)
+            self.last_landmarks.append(landmarks)
             # Filter the root DEPTH per persistent track and shift the whole
             # skeleton by the correction -- root noise is a rigid z offset, so
             # every joint moves together and the pose shape is untouched.
