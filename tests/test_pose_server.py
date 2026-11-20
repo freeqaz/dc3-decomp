@@ -852,11 +852,13 @@ class CameraLossTest(unittest.TestCase):
         self.assertGreater(HeartbeatClock.heartbeats, 500)
 
 
-def serve_and_read(a, cap, n):
-    """Run the server on `cap` in a thread and return the first `n` headers."""
+def serve_and_read(a, cap, n, backend=None, cv2_for=None, bodies=False):
+    """Run the server on `cap` in a thread and return the first `n` headers
+    (`bodies`: the whole packet bodies instead)."""
     clock = FakeClock()
     cap.clock = clock
-    backend = FakeBackend()
+    backend = backend or FakeBackend()
+    cv2_for = cv2_for or FakeCv2
     a.capture_thread = False   # a fake clock: read by read (see args_for)
     with tempfile.TemporaryDirectory() as d:
         model = os.path.join(d, "m.task")
@@ -866,7 +868,7 @@ def serve_and_read(a, cap, n):
 
         def serve():
             try:
-                ps.run(a, cv2=FakeCv2(cap), make_backend=lambda _a: (backend, 20, 1),
+                ps.run(a, cv2=cv2_for(cap), make_backend=lambda _a: (backend, 20, 1),
                        clock=clock, sleep=clock.sleep,
                        devices=FakeDevices({"/dev/video0": (True, "Fake")}))
             except ps.ServerExit:
@@ -879,7 +881,7 @@ def serve_and_read(a, cap, n):
             time.sleep(0.005)
         c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         c.connect(sock_path)
-        packets = read_packets(c, n)
+        packets = (read_raw_packets if bodies else read_packets)(c, n)
         # Keep reading until the server ends on its own (the capture runs out),
         # so it never waits on accept() for a client that has gone.
         c.settimeout(0.2)
@@ -1135,6 +1137,245 @@ class CameraFramesTest(unittest.TestCase):
                    clock=clock, sleep=clock.sleep)
         except ps.ServerExit:
             pass
+
+
+def _landmarks(np, visible=(), size=(320, 240), **px):
+    """BlazePose image landmarks as MediaPipeBackend.last_landmarks holds them:
+    (33x2 normalized xy, 33 visibilities). `px` places landmark `iNN` at a
+    pixel of `size`; the shoulders and hips default to a 60 px torso (the
+    capsule scale)."""
+    w, h = size
+    xy = np.full((33, 2), 0.5, dtype=float)
+    vis = np.zeros(33, dtype=float)
+    base = {11: (176, 60), 12: (144, 60), 23: (170, 120), 24: (150, 120)}
+    base.update({int(k[1:]): v for k, v in px.items()})
+    for j, (x, y) in base.items():
+        xy[j] = ((x + 0.5) / w, (y + 0.5) / h)
+    for j in visible:
+        vis[j] = 0.9
+    return xy, vis
+
+
+@unittest.skipUnless(_have_cv2_numpy(), "needs cv2 + numpy")
+class MaskRefinerTest(unittest.TestCase):
+    """PLAN P-20: the person mask steadied across frames (pose_server.MaskRefiner).
+    Each part is tested alone (the others off), then the switch back."""
+
+    W, H = 320, 240
+
+    def setUp(self):
+        import cv2
+        import numpy as np
+        self.cv2, self.np = cv2, np
+        self.frame = np.zeros((self.H, self.W, 3), dtype=np.uint8)
+
+    def soft(self, *boxes):
+        """A soft mask: (x0, x1, y0, y1, value) boxes over 0."""
+        m = self.np.zeros((self.H, self.W), self.np.float32)
+        for x0, x1, y0, y1, v in boxes:
+            m[y0:y1, x0:x1] = v
+        return m
+
+    def refiner(self, **on):
+        opts = {"smooth": False, "hysteresis": False, "limbs": False, "tidy": False}
+        opts.update(on)
+        return ps.MaskRefiner(self.cv2, self.np, **opts)
+
+    def raw(self, masks):
+        _, mask, _, _ = ps.camera_block(self.frame, masks, (self.W, self.H), self.cv2, self.np)
+        return self.np.frombuffer(mask, self.np.uint8).reshape(self.H, self.W)
+
+    def test_hysteresis_a_pixel_enters_above_half_and_stays_down_to_the_stay_level(self):
+        r = self.refiner(hysteresis=True)
+        size = (self.W, self.H)
+        first = r.ordinal([self.soft((10, 50, 20, 60, 0.9), (100, 140, 20, 60, 0.45))], size, [7])
+        self.assertEqual((first[40, 30], first[40, 120]), (1, 0))      # 0.45 never entered
+        second = r.ordinal([self.soft((10, 30, 20, 60, 0.45), (30, 50, 20, 60, 0.2),
+                                      (100, 140, 20, 60, 0.45))], size, [7])
+        self.assertEqual(second[40, 20], 1, "0.45 after 0.9: stays (over MASK_STAY)")
+        self.assertEqual(second[40, 40], 0, "0.2 after 0.9: gone (under MASK_STAY)")
+        self.assertEqual(second[40, 120], 0, "0.45 that never entered stays out")
+        self.assertLess(ps.MASK_STAY, ps.MASK_ENTER)
+        # ... and the raw mask drops the 0.45 pixel at once.
+        self.assertEqual(self.raw([self.soft((10, 30, 20, 60, 0.45))])[40, 20], 0)
+
+    def test_smoothing_steadies_a_noisy_edge_and_follows_a_real_change_at_once(self):
+        r = self.refiner(smooth=True)
+        size = (self.W, self.H)
+        body = (100, 160, 40, 200, 0.9)
+        states, raw_states = [], []
+        for i in range(40):
+            edge = (160, 164, 40, 200, 0.56 if i % 2 == 0 else 0.40)   # noise about the cut
+            m = self.soft(body, edge)
+            states.append(int(r.ordinal([m], size, [7])[100, 162]))
+            raw_states.append(int(self.raw([m])[100, 162]))
+        flips = lambda v: sum(a != b for a, b in zip(v[10:], v[11:]))
+        self.assertEqual(flips(raw_states), 29, "the raw mask flickers every frame here")
+        self.assertEqual(flips(states), 0, "the smoothed mask settles")
+        # A limb arriving and leaving is a large change: followed in the same
+        # frame, both ways (no lag, no trail).
+        arrived = r.ordinal([self.soft(body, (200, 240, 90, 110, 0.95))], size, [7])
+        self.assertEqual(arrived[100, 220], 1)
+        left = r.ordinal([self.soft(body)], size, [7])
+        self.assertEqual(left[100, 220], 0)
+
+    def test_limbs_a_tracked_limb_the_mask_lost_is_filled_in(self):
+        size = (self.W, self.H)
+        torso = self.soft((130, 190, 50, 180, 0.9))
+        # left arm out to the side: shoulder (190,72) -> elbow (230,100) -> wrist (270,100)
+        arm = dict(i11=(189, 72), i13=(230, 100), i15=(270, 100))
+        lm = _landmarks(self.np, visible=(11, 13, 15), **arm)
+        got = self.refiner(limbs=True).ordinal([torso], size, [7], [lm])
+        self.assertEqual((got[100, 270], got[100, 250], got[100, 230], got[86, 210]), (1, 1, 1, 1))
+        self.assertEqual(got[60, 250], 0, "only the limb, not the space around it")
+        self.assertEqual(got[100, 300], 0, "nothing past the wrist")
+        width = int(got[:, 250].sum())
+        self.assertTrue(4 <= width <= 12, f"forearm capsule {width} px wide at a 60 px torso")
+        # without the part: no arm
+        self.assertEqual(self.refiner().ordinal([torso], size, [7], [lm])[100, 250], 0)
+        # a wrist the tracker does not see is not drawn to; the upper arm still is
+        unseen = _landmarks(self.np, visible=(11, 13), **arm)
+        got = self.refiner(limbs=True).ordinal([torso], size, [7], [unseen])
+        self.assertEqual((got[100, 255], got[86, 210]), (0, 1))
+        # no landmarks at all (an older backend): the mask, unchanged
+        got = self.refiner(limbs=True).ordinal([torso], size, [7], None)
+        self.assertTrue((got == self.raw([torso])).all())
+
+    def test_limbs_a_limb_the_mask_has_is_left_alone(self):
+        size = (self.W, self.H)
+        # a thin arm the mask DOES have (5 px), landmarks along its middle
+        m = self.soft((130, 190, 50, 180, 0.9), (190, 275, 98, 103, 0.9))
+        lm = _landmarks(self.np, visible=(11, 13, 15), i11=(189, 100), i13=(230, 100), i15=(270, 100))
+        got = self.refiner(limbs=True).ordinal([m], size, [7], [lm])
+        self.assertTrue((got == self.raw([m])).all(), "a covered limb must not be thickened")
+        # a wrist just off the mask's edge (inside MASK_LIMB_MARGIN) is covered too
+        edge = _landmarks(self.np, visible=(11, 13, 15), i11=(189, 100), i13=(230, 100),
+                          i15=(274 + ps.MASK_LIMB_MARGIN, 100))
+        got = self.refiner(limbs=True).ordinal([m], size, [7], [edge])
+        self.assertTrue((got == self.raw([m])).all())
+
+    def test_tidy_drops_specks_and_closes_pinholes_but_keeps_real_pieces_and_real_holes(self):
+        size = (self.W, self.H)
+        m = self.soft((100, 160, 40, 160, 0.9),       # the body, 7200 px
+                      (20, 23, 20, 23, 0.9),          # a 9 px speck
+                      (200, 210, 100, 110, 0.9))      # a detached 100 px piece (over 1%)
+        m[60, 130] = 0.0                              # a pinhole
+        m[100:112, 124:136] = 0.0                     # a 12x12 hole (an arm akimbo)
+        before = self.raw([m])
+        self.assertEqual((before[21, 21], before[60, 130]), (1, 0))
+        got = self.refiner(tidy=True).ordinal([m], size, [7])
+        self.assertEqual(got[21, 21], 0, "the speck goes")
+        self.assertEqual(got[60, 130], 1, "the pinhole closes")
+        self.assertEqual(got[105, 205], 1, "a piece over MASK_SPECK_SHARE stays")
+        self.assertEqual(got[106, 130], 0, "a real hole stays open")
+        self.assertEqual(got[100, 110], 1)
+
+    def test_state_follows_the_track_id_not_the_place_in_the_packet(self):
+        r = self.refiner(hysteresis=True, smooth=True)
+        size = (self.W, self.H)
+        left, right = (20, 100, 40, 200), (200, 300, 40, 200)
+        r.ordinal([self.soft(left + (0.9,)), self.soft(right + (0.9,))], size, [7, 9])
+        # next frame the persons come in the other order, and 7 has faded to 0.4
+        got = r.ordinal([self.soft(right + (0.9,)), self.soft(left + (0.4,))], size, [9, 7])
+        self.assertEqual(got[100, 250], 1)
+        self.assertEqual(got[100, 60], 2, "track 7 keeps its own history as the packet's 2nd person")
+
+    def test_a_track_that_left_leaves_no_state_behind(self):
+        r = self.refiner(hysteresis=True, smooth=True)
+        size = (self.W, self.H)
+        box = (20, 100, 40, 200)
+        self.assertEqual(r.ordinal([self.soft(box + (0.9,))], size, [7])[100, 60], 1)
+        self.assertEqual(int(r.ordinal([], size, []).max()), 0)
+        back = r.ordinal([self.soft(box + (0.4,))], size, [7])
+        self.assertEqual(back[100, 60], 0, "0.4 on a fresh track is under MASK_ENTER")
+
+    def test_the_most_confident_person_still_wins_and_a_missing_mask_is_nobody(self):
+        a = self.soft((0, 160, 0, 240, 0.9))
+        b = self.soft((100, 320, 0, 240, 0.7), (100, 160, 0, 240, 0.95))
+        got = ps.MaskRefiner(self.cv2, self.np).ordinal([a, b], (self.W, self.H), [7, 9])
+        self.assertEqual((got[120, 10], got[120, 130], got[120, 300]), (1, 2, 2))
+        # ... whichever comes first in the packet
+        got = ps.MaskRefiner(self.cv2, self.np).ordinal([b, a], (self.W, self.H), [9, 7])
+        self.assertEqual((got[120, 10], got[120, 130], got[120, 300]), (2, 1, 1))
+        got = ps.MaskRefiner(self.cv2, self.np).ordinal([None, b], (self.W, self.H), [7, 9])
+        self.assertNotIn(1, set(got.ravel().tolist()))
+
+    def test_on_a_clean_mask_the_refined_block_is_the_raw_block(self):
+        m = self.soft((100, 160, 40, 200, 1.0))
+        m[100:120, 120:140] = 0.0
+        refined = ps.camera_block(self.frame, [m], (self.W, self.H), self.cv2, self.np,
+                                  ps.MaskRefiner(self.cv2, self.np), [7], None)
+        raw = ps.camera_block(self.frame, [m], (self.W, self.H), self.cv2, self.np)
+        self.assertEqual(refined, raw)
+
+
+class MaskedBackend(FakeBackend):
+    """One person whose soft mask is a body and a far speck."""
+
+    def __init__(self, np):
+        super().__init__()
+        m = np.zeros((480, 640), np.float32)
+        m[100:400, 250:390] = 0.9
+        m[40:46, 40:46] = 0.9
+        self.last_masks = [m]
+
+
+class PixelCapture(FakeCapture):
+    """FakeCapture whose frames are real arrays (camera_block scales them)."""
+
+    def read(self):
+        ok, frame = super().read()
+        if ok:
+            import numpy as np
+            frame = np.full((self.size[1], self.size[0], 3), 90, dtype=np.uint8)
+        return ok, frame
+
+
+class RealCv2AroundFakeCapture(FakeCv2):
+    """FakeCv2's capture, the real cv2 for everything else (resize, cvtColor...)."""
+
+    def __getattr__(self, name):
+        import cv2
+        return getattr(cv2, name)
+
+
+@unittest.skipUnless(_have_cv2_numpy(), "needs cv2 + numpy")
+class MaskSwitchTest(unittest.TestCase):
+    """--mask picks the mask the server SENDS (PLAN P-20): refined by default,
+    raw = MediaPipe's mask cut at 0.5 as before."""
+
+    def served_mask(self, *argv):
+        import numpy as np
+        a = ps.parse_args(["--frames", "320x240", *argv])
+        a.camera = "/dev/video0"
+        bodies = serve_and_read(a, PixelCapture(FakeClock(), frames=20, real_delay=0.002), 3,
+                                backend=MaskedBackend(np), cv2_for=RealCv2AroundFakeCapture,
+                                bodies=True)
+        self.assertGreaterEqual(len(bodies), 1)
+        _, tids, (w, h, _, mf, _, mask, rest) = split_v3(bodies[0])
+        self.assertEqual((tids, w, h, mf, rest), ([7], 320, 240, ps.WIRE_MASK_ORDINAL, 0))
+        return np.frombuffer(mask, np.uint8).reshape(h, w)
+
+    def test_the_flag_parses_and_refined_is_the_default(self):
+        self.assertEqual(ps.parse_args([]).mask, "refined")
+        self.assertEqual(ps.parse_args(["--mask", "raw"]).mask, "raw")
+        with self.assertRaises(SystemExit):
+            ps.parse_args(["--mask", "soft"])
+
+    def test_by_default_the_server_sends_the_refined_mask(self):
+        m = self.served_mask()
+        self.assertEqual(m[125, 160], 1)
+        self.assertEqual(m[21, 21], 0, "the speck is dropped")
+        self.assertEqual(set(m.ravel().tolist()), {0, 1}, "still an ordinal mask")
+
+    def test_mask_raw_sends_the_mask_as_it_was(self):
+        import cv2
+        import numpy as np
+        m = self.served_mask("--mask", "raw")
+        self.assertEqual((m[125, 160], m[21, 21]), (1, 1))
+        frame = np.full((480, 640, 3), 90, dtype=np.uint8)
+        _, want, _, _ = ps.camera_block(frame, MaskedBackend(np).last_masks, (320, 240), cv2, np)
+        self.assertEqual(m.tobytes(), want)
 
 
 class _RefusingSocket:
