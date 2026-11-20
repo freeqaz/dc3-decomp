@@ -523,8 +523,10 @@ protected:
         d << "nav choose_mode_screen; settle 90; "
           << "C='{{choose_mode_panel find right_hand.hnl} get_selected}'; "
           << "echo \"DRIVER: other0 $(scr) $(ev \"$C\")\"; "
-          << "press right; press rb; press left; press lb; "
-          << "echo \"DRIVER: other1 $(scr) $(ev \"$C\")\"; "
+          << "press right; echo \"DRIVER: other1 $(scr) $(ev \"$C\")\"; "
+          << "press rb; echo \"DRIVER: other2 $(scr) $(ev \"$C\")\"; "
+          << "press left; echo \"DRIVER: other3 $(scr) $(ev \"$C\")\"; "
+          << "press lb; echo \"DRIVER: other4 $(scr) $(ev \"$C\")\"; "
           << "nav song_select_screen; echo \"DRIVER: at=$(scr)\"; settle 240; "
           // Sorted by difficulty, as the image opens it.
           << "st enter; rows d_rows; vis d_vis; "
@@ -851,12 +853,17 @@ void SongSelectFlowTest::ShoulderButtonsMoveAScreenful() {
 }
 
 // A list whose provider is not song select's keeps its highlight and its
-// screen through all four buttons.
+// screen through each of the four buttons.  Read after every press: a list
+// that went down on Right and back up on Left would look untouched at the end.
 void SongSelectFlowTest::OtherListsIgnoreTheButtons() {
-    std::string before = DriverLine(sRun, "other0"), after = DriverLine(sRun, "other1");
+    std::string before = DriverLine(sRun, "other0");
     ASSERT_EQ(before.compare(0, 19, "choose_mode_screen "), 0) << sRun.driver;
     ASSERT_FALSE(JsonValue(before).empty()) << before;
-    EXPECT_EQ(after, before);
+    const char *const tags[] = { "other1", "other2", "other3", "other4" };
+    const char *const buttons[] = { "Right", "RB", "Left", "LB" };
+    for (int i = 0; i < 4; i++) {
+        EXPECT_EQ(DriverLine(sRun, tags[i]), before) << "after " << buttons[i];
+    }
 }
 
 // With nothing played: the image's three lists, the fourth sort in its place
