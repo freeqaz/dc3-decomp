@@ -1399,6 +1399,37 @@ set_source_files_properties(
                COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility"
 )
 
+# ============================================================================
+# nativeui -- the natively drawn menu framework's core (docs/native/reference/
+# NATIVE_UI.md). Pure C++17: no game objects, no GPU, no GLFW, no MSVC compat
+# and no PCH, so it builds the same for every target, the web included. The
+# integration layer binds its Renderer / TextMeasurer / Clock seams.
+# ============================================================================
+add_library(nativeui STATIC
+    src/nativeui/Animation.cpp
+    src/nativeui/DisplayList.cpp
+    src/nativeui/Focus.cpp
+    src/nativeui/HintBar.cpp
+    src/nativeui/Image.cpp
+    src/nativeui/Label.cpp
+    src/nativeui/Layout.cpp
+    src/nativeui/ListView.cpp
+    src/nativeui/Panel.cpp
+    src/nativeui/Renderer.cpp
+    src/nativeui/SampleBrowser.cpp
+    src/nativeui/Screen.cpp
+    src/nativeui/ScrollStrip.cpp
+    src/nativeui/Shelf.cpp
+    src/nativeui/TabStrip.cpp
+    src/nativeui/Text.cpp
+    src/nativeui/TextField.cpp
+    src/nativeui/Theme.cpp
+    src/nativeui/Utf8.cpp
+    src/nativeui/Widget.cpp
+)
+target_include_directories(nativeui PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_compile_options(nativeui PRIVATE -Wall -Wextra)
+
 if(EMSCRIPTEN)
 
 # ============================================================================
@@ -2208,6 +2239,10 @@ if(BUILD_TESTS)
         tests/test_host_path_case.cpp  # H-17/H-23 upper-case host directories
         tests/test_asyncfile_not_found.cpp  # H-107 a not-found open is silent, as in the image
         tests/test_present_scale.cpp  # H-18 fit the frame into the window
+        tests/test_nativeui_core.cpp     # nativeui: UTF-8, text fitting, display list, theme, animation
+        tests/test_nativeui_layout.cpp   # nativeui: layout containers, focus and event routing, Screen
+        tests/test_nativeui_widgets.cpp  # nativeui: ListView, Shelf, TextField, TabStrip, HintBar, Label, Image, Panel
+        tests/test_nativeui_sample.cpp   # nativeui: the sample song browser, driven by events; display-list goldens
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
@@ -2277,6 +2312,18 @@ if(BUILD_TESTS)
         PROPERTIES SKIP_PRECOMPILE_HEADERS ON
                    COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility;-fno-delayed-template-parsing"
     )
+    # nativeui tests: plain C++17 against the nativeui library, no decomp
+    # header, so no PCH and no MSVC compat (as the H-9 exit tests above).
+    set_source_files_properties(
+        ${CMAKE_SOURCE_DIR}/tests/test_nativeui_core.cpp
+        ${CMAKE_SOURCE_DIR}/tests/test_nativeui_layout.cpp
+        ${CMAKE_SOURCE_DIR}/tests/test_nativeui_widgets.cpp
+        ${CMAKE_SOURCE_DIR}/tests/test_nativeui_sample.cpp
+        TARGET_DIRECTORY milo-tests
+        PROPERTIES SKIP_PRECOMPILE_HEADERS ON
+                   COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility;-fno-delayed-template-parsing"
+    )
+    target_link_libraries(milo-tests PRIVATE nativeui)
     if(NOT APPLE)
         find_package(X11 REQUIRED)
         target_link_libraries(milo-tests PRIVATE X11::X11)
