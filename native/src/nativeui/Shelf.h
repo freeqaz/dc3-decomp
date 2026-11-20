@@ -9,8 +9,9 @@
 //  - Left/Right move the selection; Home/End go to the ends. No wrap: Left on
 //    the first card and Right on the last are not consumed.
 //  - Accept calls onActivated with the selected card.
-//  - The selection scrolls into view on a spring. The selected card grows a
-//    little and gets an accent ring; both glide to the next card.
+//  - The selection scrolls into view on a spring. While the shelf has focus the
+//    selected card grows a little, glows and gets an accent ring, all gliding
+//    to the next card. Without focus it is its ordinary size with a quiet ring.
 //  - Only cards near the viewport exist.
 //
 // Rules:
@@ -18,6 +19,9 @@
 //    focus tree.
 //  - The shelf is a little taller than a card, to leave room for the selected
 //    card's growth.
+//  - The shelf draws up to the theme's glow softness outside its bounds, so
+//    that the first and last cards, which sit at its very edges, can grow and
+//    glow. Leave that much room around it.
 #pragma once
 
 #include "nativeui/Animation.h"

@@ -142,7 +142,11 @@ namespace nativeui {
         const Theme &theme = ctx.theme;
         const Metrics &metric = theme.metric;
         const float emphasis = Emphasis(index);
-        const float scale = 1.0f + (metric.shelfFocusScale - 1.0f) * emphasis;
+        const float focus = focusAmount_.Value();
+        // The selected card grows and glows only while the shelf has focus;
+        // without focus it keeps a quiet ring, so the selection is still shown.
+        const float lit = emphasis * focus;
+        const float scale = 1.0f + (metric.shelfFocusScale - 1.0f) * lit;
         const Rect rect {
             strip_.Start(index), 0.0f, metric.shelfCardWidth, metric.shelfCardHeight
         };
@@ -150,15 +154,16 @@ namespace nativeui {
 
         // Scale about the card's own centre.
         painter.PushLayer({ centre * (1.0f - scale), scale, 1.0f });
-        if (emphasis > 0.0f) {
-            const float focus = focusAmount_.Value();
+        if (lit > 0.0f) {
             painter.FillRoundRect(
                 rect.Inflated(metric.glowSoftness * 0.5f),
                 theme.radius.medium + metric.glowSoftness * 0.5f,
-                CornerColors::Solid(theme.color.accentGlow.Faded(emphasis * focus)),
+                CornerColors::Solid(theme.color.accentGlow.Faded(lit)),
                 metric.glowSoftness
             );
-            card.Paint(ctx, painter);
+        }
+        card.Paint(ctx, painter);
+        if (emphasis > 0.0f) {
             painter.StrokeRoundRect(
                 rect,
                 theme.radius.medium,
@@ -168,8 +173,6 @@ namespace nativeui {
                 ),
                 metric.focusRingWidth
             );
-        } else {
-            card.Paint(ctx, painter);
         }
         painter.PopLayer();
     }
@@ -180,13 +183,9 @@ namespace nativeui {
         const float scroll = strip_.Scroll();
         const float headroom = (bounds.height - metric.shelfCardHeight) * 0.5f;
 
-        // Clip sideways only in effect: leave room above and below for the glow.
-        painter.PushClip(
-            { bounds.x,
-              bounds.y - metric.glowSoftness,
-              bounds.width,
-              bounds.height + 2.0f * metric.glowSoftness }
-        );
+        // Clip to the shelf plus the glow's reach on every side: the first and
+        // last cards sit at the very edge and still have to grow and glow.
+        painter.PushClip(bounds.Inflated(metric.glowSoftness));
         painter.PushLayer({ { bounds.x - scroll, bounds.y + headroom }, 1.0f, 1.0f });
 
         // The most emphasised card is painted last so that it overlaps its neighbours.

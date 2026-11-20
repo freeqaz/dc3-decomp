@@ -540,6 +540,23 @@ TEST(UiCoreShelf, TheSelectedCardGrowsAndGetsARing) {
     EXPECT_TRUE(ClipsBalanced(list));
 }
 
+TEST(UiCoreShelf, WithoutFocusTheSelectionIsOnlyAQuietRing) {
+    const Harness h;
+    auto shelf = MakeShelf(5);
+    const DisplayList list = h.Settle(*shelf, { 800.0f, 200.0f });
+    const std::vector<ImageQuad> images = CommandsOf<ImageQuad>(list);
+    ASSERT_EQ(images.size(), 5u);
+    EXPECT_FLOAT_EQ(FindImage(images, 100)->rect.width, h.theme.metric.shelfCardWidth);
+    const std::vector<RoundRectStroke> rings = CommandsOf<RoundRectStroke>(list);
+    ASSERT_EQ(rings.size(), 1u);
+    EXPECT_EQ(rings[0].colors.topLeft, h.theme.color.highlightIdle);
+    EXPECT_EQ(rings[0].rect, FindImage(images, 100)->rect);
+    EXPECT_TRUE(CommandsOf<RoundRectFill>(list).empty()) << "no glow";
+    // The clip leaves the glow's reach around the shelf.
+    const ClipPush clip = CommandsOf<ClipPush>(list).at(0);
+    EXPECT_EQ(clip.rect, (Rect { 0, 0, 800, 200 }).Inflated(h.theme.metric.glowSoftness));
+}
+
 TEST(UiCoreShelf, ScrollsAndBuildsOnlyNearbyCards) {
     const Harness h;
     int built = 0;
