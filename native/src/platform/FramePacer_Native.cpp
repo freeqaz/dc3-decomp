@@ -67,6 +67,18 @@ Dc3FrameCap Dc3FrameCapDecide(const char *env, bool windowed, double refreshHz) 
                      fps, requested, refreshHz)};
 }
 
+std::string Dc3SlowDisplayNotice(bool windowed, double refreshHz) {
+    if (!windowed || !(refreshHz > 0.0) || !std::isfinite(refreshHz) || refreshHz >= kSlowDisplayHz)
+        return "";
+    char buf[256];
+    snprintf(buf, sizeof(buf),
+             "This display runs at %.0f Hz, so the game runs at %.0f frames a second. "
+             "For smooth motion set the display to 60 Hz (a 4K TV may need a 1080p mode, "
+             "or an HDMI 2.0 cable or adapter).",
+             refreshHz, refreshHz);
+    return buf;
+}
+
 void Dc3FramePacer::SetTarget(double fps) {
     mPeriodS = fps > 0.0 ? 1.0 / fps : 0.0;
     mStarted = false;

@@ -8,6 +8,7 @@
 #include "platform/LoaderBudget_Native.h"
 #if !defined(__EMSCRIPTEN__)
 #include "platform/FramePacer_Native.h"
+#include "platform/NativeNotice.h" // a display under 50 Hz is said on screen
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 sigjmp_buf gDrawJmpBuf;
@@ -1234,6 +1235,10 @@ void App::RunWithoutDebugging() {
         framePacer.SetTarget(cap.fps);
         Dc3LoaderBudgetSetFrameTarget(framePacer.TargetFps());  // H-110
         MILO_LOG("DC3 Native: frame cap: %s\n", cap.why);
+        // A display under 50 Hz: say so on screen (FramePacer_Native.h).
+        const std::string slow = Dc3SlowDisplayNotice(windowed, refreshHz);
+        if (!slow.empty())
+            NativeNotice::Post("display_rate", slow, "", 15.0f);
     }
 
     if (windowed) {

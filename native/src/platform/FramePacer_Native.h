@@ -38,6 +38,17 @@ struct Dc3FrameCap {
 // display's refresh rate (<= 0 when unknown or headless).
 Dc3FrameCap Dc3FrameCapDecide(const char *env, bool windowed, double refreshHz);
 
+// A display slower than the image's 60 fps holds the game to its own rate
+// whatever the GPU can do: vsync paces, so a 30 Hz display is 30 frames a
+// second. MEASURED 2026-11-19 on an M3 MacBook Air whose main display was a
+// 3840x2160 one that macOS reported at 30.00 Hz: 31 fps on every screen of two
+// whole sessions, with GPU time to spare, and nothing on screen to say why.
+// Dc3SlowDisplayNotice is the banner for that, or "" when there is nothing to
+// say: headless, rate unknown, or kSlowDisplayHz and above (a 50 Hz display is
+// left alone). `refreshHz` is the number Dc3FrameCapDecide is given.
+constexpr double kSlowDisplayHz = 50.0;
+std::string Dc3SlowDisplayNotice(bool windowed, double refreshHz);
+
 // Sleeps out the rest of each frame period. Call once per frame, after the
 // frame is presented (so the sleep sits between present and the next frame's
 // input poll, where it adds no input latency).

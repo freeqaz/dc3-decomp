@@ -101,6 +101,26 @@ TEST(FrameCap, WindowedOverrides) {
     EXPECT_DOUBLE_EQ(Dc3FrameCapDecide("45", true, 0.0).fps, 45.0);
 }
 
+TEST(FrameCap, ADisplayUnderFiftyHertzIsSaidOnScreen) {
+    // The M3 Air on a 4K display at 30 Hz: vsync held every screen to 31 fps.
+    const std::string at30 = Dc3SlowDisplayNotice(true, 30.0);
+    EXPECT_NE(at30.find("30 Hz"), std::string::npos) << at30;
+    EXPECT_NE(at30.find("30 frames a second"), std::string::npos) << at30;
+    EXPECT_NE(at30.find("60 Hz"), std::string::npos) << at30;
+    EXPECT_NE(Dc3SlowDisplayNotice(true, 24.0).find("24 Hz"), std::string::npos);
+    EXPECT_NE(Dc3SlowDisplayNotice(true, 48.0).find("48 Hz"), std::string::npos);
+    // The text names the display's own rate, not a fixed one.
+    EXPECT_EQ(Dc3SlowDisplayNotice(true, 24.0).find("30 Hz"), std::string::npos);
+    // Fifty and up is a display the game is fine on; nothing is said.
+    for (double hz : {50.0, 59.94, 60.0, 75.0, 120.0, 144.0})
+        EXPECT_EQ(Dc3SlowDisplayNotice(true, hz), "") << hz;
+    // No display to speak of: headless, or a rate nobody could read.
+    EXPECT_EQ(Dc3SlowDisplayNotice(false, 30.0), "");
+    EXPECT_EQ(Dc3SlowDisplayNotice(true, 0.0), "");
+    EXPECT_EQ(Dc3SlowDisplayNotice(true, -1.0), "");
+    EXPECT_EQ(Dc3SlowDisplayNotice(true, std::nan("")), "");
+}
+
 // --- the pacer ---------------------------------------------------------------
 
 TEST(FramePacer, SleepsRatherThanSpins) {
