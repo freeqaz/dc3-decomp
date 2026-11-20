@@ -139,10 +139,21 @@ namespace nativeui_host {
                     CollectSongs();
                 }
                 host_.Tick(GameUiSeconds());
+                // The overlay hook runs once per post-processing flush, and
+                // the game flushes several times a frame (measured: 3 on
+                // main_screen).  Draw on the last one, taking the previous
+                // frame's count as this frame's.
+                overlayCallsLastFrame_ = overlayCallsThisFrame_;
+                overlayCallsThisFrame_ = 0;
             }
 
             void DrawOverlay() {
                 if (!ready_) {
+                    return;
+                }
+                overlayCallsThisFrame_++;
+                if (overlayCallsLastFrame_ > 0
+                    && overlayCallsThisFrame_ != overlayCallsLastFrame_) {
                     return;
                 }
                 SetOutputSize(host_);
@@ -316,6 +327,8 @@ namespace nativeui_host {
             bool ready_ = false;
             bool failed_ = false;
             unsigned frames_ = 0;
+            unsigned overlayCallsThisFrame_ = 0;
+            unsigned overlayCallsLastFrame_ = 0;
             unsigned long long sumBuild_ = 0, sumReplay_ = 0;
         };
 
