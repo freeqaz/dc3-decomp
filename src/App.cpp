@@ -102,6 +102,20 @@ public:
             extern bool Dc3EnvFlag(const char *, bool);
             return DataNode(Dc3EnvFlag("DC3_DEV_OPTIONS", false) ? 1 : 0);
         }
+        // DC3_MENU_SELECT (NativeSettings.h, PLAYTEST.md "Playing"): how a
+        // hand picks a menu row -- swipe, hold or both.
+        if (sym == "menu_select") return DataNode(Symbol(Dc3MenuSelectName(Dc3MenuSelect())));
+        if (sym == "set_menu_select") {
+            int mode = Dc3MenuSelectParse(msg->Str(2));
+            if (mode < 0)
+                return DataNode(0);
+            Dc3SetMenuSelect(mode);
+            return DataNode(1);
+        }
+        if (sym == "cycle_menu_select") {
+            Dc3SetMenuSelect((Dc3MenuSelect() + 1) % kDc3MenuSelectCount);
+            return DataNode(Symbol(Dc3MenuSelectName(Dc3MenuSelect())));
+        }
         if (sym == "get_camera_blend") return DataNode(NativeSettings::Get().cameraBlend ? 1 : 0);
         if (sym == "toggle_camera_blend") {
             NativeSettings::Get().cameraBlend = !NativeSettings::Get().cameraBlend;
@@ -1258,6 +1272,9 @@ void App::RunWithoutDebugging() {
             Dc3RunPostPollFootPlant();
         }
 #endif
+
+        // DC3_MENU_SELECT: the F1 key steps swipe -> hold -> both.
+        Dc3MenuSelectFramePoll();
 
         GameplayTelemetry::Sample(frameCount);
 #ifdef DC3_HTTP_SERVER

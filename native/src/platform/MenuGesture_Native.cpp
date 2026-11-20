@@ -5,21 +5,37 @@
 
 #ifdef HX_NATIVE
 
+#include "NativeNotice.h"
+#include "NativeSettings.h" // the DC3_MENU_SELECT switch is declared there
 #include "gesture/ArcDetector.h"
 #include "gesture/DirectionGestureFilter.h"
 #include "gesture/GestureMgr.h"
 #include "gesture/HandHeightGestureFilter.h"
 #include "hamobj/HamListRibbon.h"
 #include "hamobj/HamNavList.h"
+#include "hamobj/MoveDir.h" // MoveDir::SongSeconds: the pose fill's clock
+#include "lazer/game/Game.h"
+#include "lazer/game/GamePanel.h"
+#include "obj/Msg.h"
 #include "obj/Task.h"
 #include "platform/PoseFill_Native.h"
+#include "ui/UI.h"
 #include "ui/UIListProvider.h"
 
+#include <chrono>
+#include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <string>
+#include <strings.h>
 #include <vector>
+
+#if !defined(__EMSCRIPTEN__)
+#include <GLFW/glfw3.h>
+extern GLFWwindow *gNativeWindow;
+#endif
 
 // The one name the image's classes befriend (HX_NATIVE only): it reads their
 // private state, it never writes it.
@@ -49,7 +65,13 @@ struct Dc3MenuGestureAccess {
         bool rowsValid = false;
         std::vector<std::string> rows;
         std::vector<char> rowFlags; // bit 0 header, bit 1 inactive
+        // hold to select
+        Dc3MenuGesture::HoldTimer hold;
+        float holdShownAt = -1.0e9f; // UI seconds of the last frame the slide was the hold's
+        float holdProgress = 0.0f;
     };
+
+    static bool UpdateHold(HamNavList *l, bool handValid, List &s, float lastSelect, int *source);
 
     static void Read(HamNavList *l, List &s, bool wantRows) {
         s.hand = (int)l->mNavInputType;
@@ -121,6 +143,8 @@ std::vector<List> gLists;
 std::deque<SelectEvent> gEvents;
 unsigned gSelects = 0;
 bool gWantRows = false;
+int gNextSource = -1;               // the source of the select a hold is making now
+float gLastSelect = -1.0e9f;        // UI seconds of the newest select of any list
 const float kStaleSeconds = 0.2f;
 const size_t kMaxEvents = 256;
 
@@ -178,7 +202,8 @@ void NoteSelect(const HamNavList *list, int selected, int firstShowing, const ch
     }
     e.selected = selected;
     e.firstShowing = firstShowing;
-    e.source = byButton ? kSourceButton : kSourceSwipe;
+    e.source = gNextSource >= 0 ? gNextSource : byButton ? kSourceButton : kSourceSwipe;
+    gLastSelect = e.uiSeconds;
     gEvents.push_back(e);
     while (gEvents.size() > kMaxEvents)
         gEvents.pop_front();
@@ -186,7 +211,10 @@ void NoteSelect(const HamNavList *list, int selected, int firstShowing, const ch
 
 void NoteSensorUpdate(const HamNavList *list) { Find(list).sensorUpdates++; }
 
+void ExpireNotice(); // below, with the mode switch's banner
+
 void NotePoll(HamNavList *list) {
+    ExpireNotice();
     List &s = Find(list);
     s.name = list->Name();
     Dc3MenuGestureAccess::Read(list, s, gWantRows);
@@ -204,10 +232,14 @@ std::string StateJson(unsigned since, bool reset, bool rows) {
     std::string out;
     const Dc3PoseFill::Filler &fill = NativePoseFiller();
     snprintf(buf, sizeof(buf),
-             "{\"ui_seconds\":%.4f,\"controller_mode\":%d,\"selects\":%u,"
-             "\"fill\":{\"mode\":\"%s\",\"engaged\":%d,\"fills\":%u,\"reals\":%u},\"lists\":[",
-             now, TheGestureMgr && TheGestureMgr->InControllerMode() ? 1 : 0, gSelects,
-             Dc3PoseFill::ModeName(fill.GetMode()), fill.Engaged() ? 1 : 0, fill.Fills(), fill.Reals());
+             "{\"ui_seconds\":%.4f,\"song_seconds\":%.4f,\"controller_mode\":%d,\"selects\":%u,"
+             "\"menu_select\":\"%s\","
+             "\"fill\":{\"mode\":\"%s\",\"engaged\":%d,\"fills\":%u,\"reals\":%u,"
+             "\"clock_carried\":%.3f},"
+             "\"lists\":[",
+             now, MoveDir::SongSeconds(), TheGestureMgr && TheGestureMgr->InControllerMode() ? 1 : 0,
+             gSelects, Dc3MenuSelectName(Dc3MenuSelect()), Dc3PoseFill::ModeName(fill.GetMode()),
+             fill.Engaged() ? 1 : 0, fill.Fills(), fill.Reals(), NativePoseFillClockCarried());
     out += buf;
     bool first = true;
     for (size_t i = 0; i < gLists.size(); i++) {
@@ -228,13 +260,16 @@ std::string StateJson(unsigned since, bool reset, bool rows) {
                  "\"at_bottom\":%d,\"scroll_dir\":%d,\"enabled\":%d,\"selection_enabled\":%d,"
                  "\"hand_height\":%.4f,\"swipe_amt\":%.4f,\"percent_pulled\":%.4f,"
                  "\"has_direction\":%d,\"locked_in\":%d,\"nodes\":%d,\"hover_ms\":%d,"
-                 "\"max_swipe_amt\":%.4f,\"max_nodes\":%d,\"polls\":%u,\"sensor_updates\":%u",
+                 "\"max_swipe_amt\":%.4f,\"max_nodes\":%d,\"polls\":%u,\"sensor_updates\":%u,"
+                 "\"hold_progress\":%.3f,\"hold_armed\":%d",
                  s.hand == 0 ? "right" : "left", s.mode, s.selected, s.selectedData,
                  s.firstShowing, s.numShowing, s.numData, s.numItems, s.highlightItem,
                  s.scrollable ? 1 : 0, s.isScrolling ? 1 : 0, s.atTop ? 1 : 0, s.atBottom ? 1 : 0,
                  s.scrollDir, s.enabled ? 1 : 0, s.selectionEnabled ? 1 : 0, s.handHeight,
                  s.swipeAmt, s.percentPulled, s.hasDirection ? 1 : 0, s.lockedIn ? 1 : 0, s.nodes,
-                 s.hoverMs, s.maxSwipeAmt, s.maxNodes, s.polls, s.sensorUpdates);
+                 s.hoverMs, s.maxSwipeAmt, s.maxNodes, s.polls, s.sensorUpdates,
+                 now - s.holdShownAt < 0.1f && now >= s.holdShownAt ? s.holdProgress : 0.0f,
+                 s.hold.Armed() ? 1 : 0);
         out += buf;
         if (rows && s.rowsValid) {
             out += ",\"rows\":[";
@@ -275,7 +310,7 @@ std::string StateJson(unsigned since, bool reset, bool rows) {
         AppendEscaped(out, e.sym);
         snprintf(buf, sizeof(buf), ",\"hand\":\"%s\",\"selected\":%d,\"first_showing\":%d,\"source\":\"%s\"}",
                  e.hand == 0 ? "right" : "left", e.selected, e.firstShowing,
-                 e.source == kSourceButton ? "button" : "swipe");
+                 e.source == kSourceButton ? "button" : e.source == kSourceHold ? "hold" : "swipe");
         out += buf;
     }
     out += "]}";
@@ -291,6 +326,323 @@ std::string StateJson(unsigned since, bool reset, bool rows) {
     return out;
 }
 
+// ---- hold to select ---------------------------------------------------------
+
+namespace {
+
+float EnvSeconds(const char *name, float fallback, float lo, float hi) {
+    const char *v = getenv(name);
+    if (!v || !*v)
+        return fallback;
+    char *end = nullptr;
+    double ms = strtod(v, &end);
+    if (end == v || *end != '\0' || !(ms >= lo * 1000.0f) || !(ms <= hi * 1000.0f)) {
+        fprintf(stderr, "%s='%s' ignored (want %.0f .. %.0f ms)\n", name, v, lo * 1000.0f,
+                hi * 1000.0f);
+        return fallback;
+    }
+    return (float)(ms * 0.001);
+}
+
+// A song in play and not paused: no hold there, whatever lists it polls.
+bool InGameplay() {
+    return TheGamePanel && TheGamePanel->GetState() == UIPanel::kUp
+        && (TheGamePanel->InIntroState() || TheGamePanel->IsPlayingState())
+        && !(TheGame && TheGame->Paused());
+}
+
+} // namespace
+
+const HoldParams &Params() {
+    static HoldParams sParams;
+    static bool sRead = false;
+    if (!sRead) {
+        sRead = true;
+        HoldParams d;
+        sParams.hold = EnvSeconds("DC3_MENU_HOLD_MS", d.hold, 0.2f, 10.0f);
+        sParams.holdLeft = EnvSeconds("DC3_MENU_HOLD_LEFT_MS", d.holdLeft, 0.2f, 10.0f);
+        sParams.settle = EnvSeconds("DC3_MENU_HOLD_SETTLE_MS", d.settle, 0.0f, 5.0f);
+        sParams.rearm = EnvSeconds("DC3_MENU_HOLD_REARM_MS", d.rearm, 0.0f, 20.0f);
+    }
+    return sParams;
+}
+
+void HoldTimer::Disarm(float until) {
+    mNeedMove = true;
+    mHaveAnchor = false;
+    mRearmAt = until;
+    mHeld = 0.0f;
+    mPaused = 0.0f;
+    mProgress = 0.0f;
+}
+
+HoldTimer::Result HoldTimer::Tick(const Input &in, const HoldParams &p) {
+    float dt = in.now - mLast;
+    bool fresh = !mTicked || dt > p.gap || dt < 0.0f;
+    mTicked = true;
+    mLast = in.now;
+    if (fresh) {
+        // The list was away (a transition, its select animation, another
+        // screen): nothing held carries over, and a hand that is already on
+        // it has not chosen anything on this screen yet.
+        dt = 0.0f;
+        mHeld = 0.0f;
+        mPaused = 0.0f;
+        mProgress = 0.0f;
+        mDown = 0.0f;
+        mRow = -1;
+        if (in.engaged)
+            Disarm(in.now + p.rearm);
+    }
+    if (in.lastSelect > mSelectSeen) {
+        mSelectSeen = in.lastSelect;
+        Disarm(in.lastSelect + p.rearm);
+    }
+    if (!in.engaged) {
+        // The arm is down (or off the list): dropping it re-arms.
+        mDown += dt;
+        if (mNeedMove && mDown >= p.rearmDown)
+            mNeedMove = false;
+        mHeld = 0.0f;
+        mPaused = 0.0f;
+        mProgress = 0.0f;
+        mRow = -1;
+        return kIdle;
+    }
+    mDown = 0.0f;
+    if (in.row != mRow) {
+        mRow = in.row;
+        mHeld = 0.0f;
+        mPaused = 0.0f;
+    }
+    if (mNeedMove) {
+        if (!mHaveAnchor) {
+            mAnchor = in.handHeight;
+            mHaveAnchor = true;
+        }
+        if (fabsf(in.handHeight - mAnchor) >= p.rearmMove || in.now >= mRearmAt)
+            mNeedMove = false; // the hold itself starts with the next tick
+        mHeld = 0.0f;
+        mPaused = 0.0f;
+        mProgress = 0.0f;
+        return kIdle;
+    }
+    if (in.blocked) {
+        mHeld = 0.0f;
+        mPaused = 0.0f;
+        mProgress = 0.0f;
+        return kIdle;
+    }
+    if (in.swipe) {
+        // The swipe has the ribbon; the hold waits for it, a while.
+        mPaused += dt;
+        if (mPaused >= p.swipePause)
+            mHeld = 0.0f;
+        mProgress = 0.0f;
+        return kIdle;
+    }
+    mPaused = 0.0f;
+    mHeld += dt;
+    if (mHeld >= p.settle + p.hold) {
+        // Disarmed at once: the select this makes is seen through
+        // in.lastSelect only on the next tick.
+        Disarm(in.now + p.rearm);
+        mProgress = 1.0f;
+        return kFire;
+    }
+    mProgress = mHeld <= p.settle ? 0.0f : (mHeld - p.settle) / p.hold;
+    return mProgress > 0.0f ? kProgress : kIdle;
+}
+
 } // namespace Dc3MenuGesture
+
+bool Dc3MenuGestureAccess::UpdateHold(HamNavList *l, bool handValid, List &s, float lastSelect,
+                                      int *source) {
+    using namespace Dc3MenuGesture;
+    int mode = Dc3MenuSelect();
+    DirectionGestureFilter *f = l->mDirectionGestureFilter;
+    if (mode == kDc3MenuSelectSwipe || !f || InGameplay()) {
+        s.hold.Reset();
+        return false;
+    }
+    bool holdOnly = mode == kDc3MenuSelectHold;
+    // hold: a swipe does not select (the image's arm below never sees one).
+    if (holdOnly && f->HasDirection())
+        f->ClearSwipe();
+    const HoldParams &p = Params();
+    HoldTimer::Input in;
+    in.now = TheTaskMgr.UISeconds();
+    in.row = l->mListState.Selected();
+    in.handHeight = l->mHandHeight;
+    in.engaged = handValid && l->mSelectionEnabled && in.handHeight >= -p.span
+        && in.handHeight <= 1.0f + p.span;
+    in.blocked = l->mScrollBehavior.IsScrolling() || l->mScrollBehavior.mScrollDir != 0;
+    in.swipe = !holdOnly && (f->HasDirection() || f->GetPercentPulled() > 0.0f);
+    in.lastSelect = lastSelect;
+    // The left hand's list (Back) holds longer: see HoldParams::holdLeft.
+    HoldParams forList = p;
+    if (l->mNavInputType == HamNavList::kNavInput_LeftHand)
+        forList.hold = p.holdLeft;
+    HoldTimer::Result r = s.hold.Tick(in, forList);
+    if (r == HoldTimer::kFire) {
+        // What the image's swipe arm does (HamNavList::UpdateGestures).
+        f->ClearSwipe();
+        static Message forceLetterboxOff(Symbol("force_letterbox_off"));
+        TheUI->Handle(forceLetterboxOff, false);
+        *source = kSourceHold;
+        l->SetSelecting(false);
+        *source = -1;
+        return true;
+    }
+    if (!handValid)
+        return false; // the image's own arm: clear the swipe, return
+    if (r == HoldTimer::kProgress) {
+        l->SetSliding(s.hold.Progress());
+        s.holdShownAt = in.now;
+        s.holdProgress = s.hold.Progress();
+        return true;
+    }
+    if (holdOnly) {
+        // Never the swipe's slide: the list swells, its highlight follows the hand.
+        l->SetSwelling();
+        return true;
+    }
+    return false;
+}
+
+namespace Dc3MenuGesture {
+
+bool UpdateHold(HamNavList *list, bool handValid) {
+    // Under swipe (the default) a list that never held has nothing to reset.
+    if (Dc3MenuSelect() == kDc3MenuSelectSwipe)
+        return false;
+    return Dc3MenuGestureAccess::UpdateHold(list, handValid, Find(list), gLastSelect, &gNextSource);
+}
+
+bool HoldShowing(const HamNavList *list) {
+    if (Dc3MenuSelect() == kDc3MenuSelectSwipe)
+        return false;
+    float now = Now();
+    for (size_t i = 0; i < gLists.size(); i++) {
+        if (gLists[i].list == list)
+            return gLists[i].holdShownAt == now;
+    }
+    return false;
+}
+
+namespace {
+
+const char *kNoticeKey = "menu-select";
+const float kNoticeSeconds = 4.0f;
+bool gNoticeUp = false;
+std::chrono::steady_clock::time_point gNoticeDown;
+
+void PostNotice(const char *text) {
+    NativeNotice::Post(kNoticeKey, text, "", kNoticeSeconds);
+    // Taken down again by PollKey: a notice left posted hides older ones
+    // (NativeNotice::Current shows the newest only).
+    gNoticeUp = true;
+    gNoticeDown = std::chrono::steady_clock::now()
+        + std::chrono::milliseconds((long long)(kNoticeSeconds * 1000.0f) + 500);
+}
+
+void Announce(int mode) {
+    const HoldParams &p = Params();
+    char text[160];
+    if (mode == kDc3MenuSelectHold)
+        snprintf(text, sizeof(text),
+                 "Menu select: HOLD. Keep your hand on a row for %.1f s (Back: %.1f s). F1 changes it.",
+                 p.settle + p.hold, p.settle + p.holdLeft);
+    else if (mode == kDc3MenuSelectBoth)
+        snprintf(text, sizeof(text),
+                 "Menu select: SWIPE or HOLD (%.1f s on a row). F1 changes it.", p.settle + p.hold);
+    else
+        snprintf(text, sizeof(text),
+                 "Menu select: SWIPE. Sweep your forearm across your body. F1 changes it.");
+    PostNotice(text);
+}
+
+int gMode = -1; // not read yet
+
+} // namespace
+
+// From PollKey (the desktop loop) and from NotePoll (every frame a list is
+// polled, on every platform: the web loop has no PollKey).
+void ExpireNotice() {
+    if (gNoticeUp && std::chrono::steady_clock::now() >= gNoticeDown) {
+        NativeNotice::Clear(kNoticeKey);
+        gNoticeUp = false;
+    }
+}
+
+void PollKey() {
+    ExpireNotice();
+#if !defined(__EMSCRIPTEN__)
+    // F1: free in the keyboard-as-pad map (JoypadKeyMap.h) and in cheats.dta.
+    // Sticky keys are on (Joypad_Native.cpp): a tap reads as pressed once.
+    static bool sWasDown = false;
+    if (!gNativeWindow)
+        return;
+    bool down = glfwGetKey(gNativeWindow, GLFW_KEY_F1) == GLFW_PRESS;
+    if (down && !sWasDown)
+        Dc3SetMenuSelect((Dc3MenuSelect() + 1) % kDc3MenuSelectCount);
+    sWasDown = down;
+#endif
+}
+
+} // namespace Dc3MenuGesture
+
+// ---- the switch (declared in NativeSettings.h) ------------------------------
+
+const char *Dc3MenuSelectName(int mode) {
+    return mode == kDc3MenuSelectHold ? "hold" : mode == kDc3MenuSelectBoth ? "both" : "swipe";
+}
+
+int Dc3MenuSelectParse(const char *text) {
+    if (!text)
+        return -1;
+    for (int m = 0; m < kDc3MenuSelectCount; m++) {
+        if (strcasecmp(text, Dc3MenuSelectName(m)) == 0)
+            return m;
+    }
+    return -1;
+}
+
+int Dc3MenuSelect() {
+    using namespace Dc3MenuGesture;
+    if (gMode < 0) {
+        gMode = kDc3MenuSelectSwipe;
+        const char *v = getenv("DC3_MENU_SELECT");
+        if (v && *v) {
+            int m = Dc3MenuSelectParse(v);
+            if (m < 0)
+                fprintf(stderr, "DC3_MENU_SELECT='%s' ignored (want swipe, hold or both)\n", v);
+            else
+                gMode = m;
+        }
+        const HoldParams &p = Params();
+        fprintf(stderr,
+                "DC3 MENU SELECT: %s (hold %.0f ms, the left hand's list %.0f ms, after %.0f ms on a "
+                "row, re-arm %.0f ms; F1 or {native_settings set_menu_select swipe|hold|both} "
+                "changes it)\n",
+                Dc3MenuSelectName(gMode), p.hold * 1000.0f, p.holdLeft * 1000.0f, p.settle * 1000.0f,
+                p.rearm * 1000.0f);
+        if (gMode != kDc3MenuSelectSwipe)
+            Announce(gMode);
+    }
+    return gMode;
+}
+
+void Dc3SetMenuSelect(int mode) {
+    using namespace Dc3MenuGesture;
+    if (mode < 0 || mode >= kDc3MenuSelectCount)
+        return;
+    Dc3MenuSelect(); // read the variable (and say so) before the first change
+    gMode = mode;
+    fprintf(stderr, "DC3 MENU SELECT: now %s\n", Dc3MenuSelectName(mode));
+    Announce(mode);
+}
+
+void Dc3MenuSelectFramePoll() { Dc3MenuGesture::PollKey(); }
 
 #endif // HX_NATIVE

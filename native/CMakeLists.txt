@@ -2156,6 +2156,7 @@ if(BUILD_TESTS)
         tests/test_pose_scoring.cpp
         tests/test_pose_level.cpp
         tests/test_pose_fill.cpp
+        tests/test_menu_hold.cpp  # np-menu-gestures: hold to select's timing rule and the swipe/hold/both switch
         tests/test_pose_estimate.cpp
         tests/test_pose_session.cpp
         tests/test_native_twoplayer.cpp

@@ -24,6 +24,34 @@
 //                           must not get past the title screen.  If this ever
 //                           passes the route, the first test proves nothing.
 //
+//   MenuSelectFlowTest      hold to select (np-menu-gestures,
+//                           DC3_MENU_SELECT=swipe|hold|both), end to end on the
+//                           real lists: scripts/menu_gesture_bench.py check.
+//                           Under the default (swipe) a hand held on a row
+//                           selects nothing and a swipe selects; switched at
+//                           run time ({native_settings set_menu_select hold})
+//                           the held hand selects the row after ~1.5 s with
+//                           the list's slide as progress, a hand left there
+//                           selects nothing more, a swipe selects nothing,
+//                           controller mode holds nothing; `both` takes
+//                           either; the left hand's Back holds too (after its
+//                           own, longer time); back under
+//                           swipe it is the image again.  Its first check
+//                           is DC3_POSE_FILL_MENU's default: outside a song
+//                           the lists get the camera's own frames.  17
+//                           checks, each printed.  The second test is the
+//                           standing negative control: the same driver
+//                           started under DC3_MENU_SELECT=hold must FAIL (its
+//                           swipe checks do), or the first proves nothing.
+//                           Sabotaged twice more by hand (the driver run
+//                           directly, each exit 1): HamNavList::UpdateGestures
+//                           not calling Dc3MenuGesture::UpdateHold fails the
+//                           five hold checks ("hold: the hand kept on a row
+//                           selects it", "the list slid", "a swipe selects
+//                           nothing", "both: a hold selects", "the left
+//                           hand's Back"); DC3_POSE_FILL_MENU=same fails
+//                           "outside a song the pose fill is off [extrap]".
+//
 // One TEST per fixture (ctest runs each in its own process).  Gated by
 // DC3_DTA_FLOW_TESTS=1.  The driver kills its engine by process group; every
 // wait in it is bounded, and the whole run is bounded by `timeout` here.
@@ -146,6 +174,67 @@ protected:
 
 class GestureMenusTest : public GestureFlowFixture {};
 class GestureMenusForcedTest : public GestureFlowFixture {};
+class MenuSelectFlowTest : public GestureFlowFixture {};
+class MenuSelectFlowSabotageTest : public GestureFlowFixture {};
+
+// scripts/menu_gesture_bench.py check: its exit code and its PASS/FAIL lines.
+struct CheckRun {
+    std::string setupError;
+    int exitCode = -1;
+    std::string output;
+    std::string workdir;
+
+    int Count(const char *prefix) const {
+        int n = 0;
+        std::istringstream in(output);
+        std::string line;
+        while (std::getline(in, line)) {
+            if (line.compare(0, strlen(prefix), prefix) == 0)
+                n++;
+        }
+        return n;
+    }
+    bool Has(const char *text) const { return output.find(text) != std::string::npos; }
+};
+
+CheckRun RunMenuSelectCheck(const char *extraEnv, int timeoutSeconds) {
+    CheckRun r;
+    std::string dir = BinaryDir();
+    std::string bin = dir + "/dc3-native";
+    std::string driver = dir + "/../../scripts/menu_gesture_bench.py";
+    if (!Exists(bin)) {
+        r.setupError = "dc3-native does not exist at " + bin + " (scripts/native_test.sh builds it)";
+        return r;
+    }
+    if (!Exists(driver)) {
+        r.setupError = "missing " + driver;
+        return r;
+    }
+    r.workdir = MakeTestTempDir("dc3-menu-select"); // removed at exit on a pass
+    if (r.workdir.empty()) {
+        r.setupError = "MakeTestTempDir 'dc3-menu-select' failed under " + TestTempBase();
+        return r;
+    }
+    std::ostringstream sh;
+    sh << kShellTimeoutLookup
+       << "cd " << dir << " || exit 2; "
+       << "${t:+$t -k 10 " << timeoutSeconds << "} python3 " << driver
+       << " check --engine " << bin << " --out " << r.workdir;
+    if (extraEnv && *extraEnv)
+        sh << " --env " << extraEnv;
+    sh << " 2>&1";
+    FILE *p = popen(sh.str().c_str(), "r");
+    if (!p) {
+        r.setupError = "popen failed";
+        return r;
+    }
+    char buf[8192];
+    while (fgets(buf, sizeof buf, p))
+        r.output += buf;
+    int status = pclose(p);
+    r.exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    return r;
+}
 
 } // namespace
 
@@ -187,4 +276,31 @@ TEST_F(GestureMenusForcedTest, ForcedPolicyIgnoresTheSamePerformer) {
     EXPECT_EQ(r.Int("selects_by_gesture"), 0) << r.report;
     EXPECT_FALSE(r.Entered("main_screen") && r.Entered("choose_mode_screen"))
         << "got past the title screen with controller mode pinned:\n" << r.report;
+}
+
+TEST_F(MenuSelectFlowTest, SwipeIsTheDefaultAndHoldSelectsWhenSwitchedTo) {
+    CheckRun r = RunMenuSelectCheck("", 600);
+    ASSERT_TRUE(r.setupError.empty()) << r.setupError;
+    std::string where = "\nworkdir " + r.workdir + " (engine.log, bench.log)\n" + r.output;
+    EXPECT_EQ(r.exitCode, 0) << where;
+    EXPECT_TRUE(r.Has("MENU SELECT CHECK: ok")) << where;
+    EXPECT_EQ(r.Count("FAIL  "), 0) << where;
+    // All of them ran: a driver that stopped early prints fewer.
+    EXPECT_EQ(r.Count("PASS  "), 17) << where;
+    EXPECT_TRUE(r.Has("PASS  outside a song the pose fill is off")) << where;
+    EXPECT_TRUE(r.Has("PASS  hold: the hand kept on a row selects it")) << where;
+    EXPECT_TRUE(r.Has("PASS  swipe: a hand held 3.5 s on a row selects nothing")) << where;
+    EXPECT_TRUE(r.Has("PASS  hold: the left hand's Back is selected by a hold, after about 2.1 s"))
+        << where;
+}
+
+TEST_F(MenuSelectFlowSabotageTest, TheSameCheckFailsWhenTheDefaultIsNotSwipe) {
+    CheckRun r = RunMenuSelectCheck("DC3_MENU_SELECT=hold", 600);
+    ASSERT_TRUE(r.setupError.empty()) << r.setupError;
+    EXPECT_EQ(r.exitCode, 1)
+        << "the check passed with hold as the start mode -- it cannot tell the modes apart:\n"
+        << r.output;
+    EXPECT_TRUE(r.Has("FAIL  the default is swipe")) << r.output;
+    EXPECT_TRUE(r.Has("FAIL  swipe: a hand held 3.5 s on a row selects nothing")) << r.output;
+    EXPECT_TRUE(r.Has("FAIL  swipe: a swipe selects the row")) << r.output;
 }

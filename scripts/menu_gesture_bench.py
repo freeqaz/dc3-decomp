@@ -42,12 +42,12 @@ and what a fix buys.
   landmarks), independent per joint and axis.
 
   The engine runs headless at 30 frames a second of wall time (--pace-fps 30),
-  so its UI clock (1/30 s a frame) is real time.  That matters: the pose fill
-  (DC3_POSE_FILL, default extrap) decides whether the camera is slow from the
-  song clock, which in the menus is the shell music's -- wall time.  Paced at
-  120 the same camera reads four times faster than it is and the fill never
-  engages (measured: 0.27 filter updates per poll at 8 Hz, i.e. camera frames
-  only), which is not what a player gets.
+  so its UI clock (1/30 s a frame) is real time.  That matters to anything
+  that asks how fast the camera is: the pose fill (DC3_POSE_FILL_MENU, off
+  by default outside a song; before this branch the song's extrap ran in the
+  menus too) reads the camera's rate off its clock, which in the menus is
+  the shell music's -- wall time.  Paced at 120 the same camera reads four
+  times faster than it is, which is not what a player gets.
 
 What a trial is, and what is counted (every rate is n / trials):
   select   "highlight row k, then select it": first_try (the first swipe
@@ -79,7 +79,7 @@ Usage:
   scripts/menu_gesture_bench.py table DIR[+DIR2...] [BASELINE_DIR[+...]]
           DIR1+DIR2: runs of the same cells with different seeds, added up.
   scripts/menu_gesture_bench.py check --out DIR
-          DC3_MENU_SELECT end to end on one engine: 16 PASS/FAIL lines, exit 1
+          DC3_MENU_SELECT end to end on one engine: 17 PASS/FAIL lines, exit 1
           on a FAIL (native/tests/test_native_gesture_menus.cpp runs it).
   scripts/menu_gesture_bench.py replay --out DIR [--session FILE]...
       [--window FILE:FROM:TO]... [--screen main_screen] [--env KEY=VALUE]...
@@ -385,14 +385,36 @@ class Bench:
             q += "&reset=1"
         if rows:
             q += "&rows=1"
-        for _ in range(3):
+        why = "no answer"
+        t_end = time.time() + 2.0         # three tries and 2 s of patience, then the reason
+        attempt = 0
+        while attempt < 3 or time.time() < t_end:
+            attempt += 1
             try:
                 d = self.e._req("GET", q)
                 if d.get("ok"):
                     return d["data"]
-            except Exception:
-                time.sleep(0.01)
-        raise FlowError("the engine stopped answering /api/menu/state")
+                why = "answered " + json.dumps(d)[:200]
+            except Exception as ex:
+                why = f"{type(ex).__name__}: {ex}"
+                if isinstance(ex, ValueError):
+                    why += " | " + self._raw_state(q)
+            time.sleep(0.05)
+        raise FlowError("the engine stopped answering /api/menu/state (" + why + ")")
+
+    def _raw_state(self, q):
+        """What the engine sent when its answer was not JSON (a nan in it?)."""
+        try:
+            c = http.client.HTTPConnection(self.e.host, self.e.port, timeout=10)
+            try:
+                c.request("GET", self.e.root + q)
+                body = c.getresponse().read().decode("utf-8", "replace")
+            finally:
+                c.close()
+            i = max(body.find("nan"), body.find("inf"))
+            return body[max(0, i - 160):i + 80] if i >= 0 else body[:240]
+        except Exception as ex:
+            return f"(raw read failed: {ex})"
 
     def list_state(self, st, hand, name=None):
         best = None
@@ -741,7 +763,13 @@ class Performer:
         scan_row = int(round(h / spacing))
         scan_dir = 1 if rng.random() < 0.5 else -1
         if scan:
-            next_move = k.now() + rng.uniform(0.3, 0.8)   # the first row was read while aiming
+            # the first row has been lit for about 0.6 s by now (the arm took
+            # 0.45 s to come up, then the 1.0 s wait above): the same 0.6 ..
+            # 1.1 s as every other row.  (With 0.3 .. 0.8 s more here the
+            # first row got up to 1.6 s, and a 1.5 s hold selected it in 3 of
+            # 8 scans -- the trial's fault, not a row-to-row reading's.)
+            next_move = k.now() + rng.uniform(0.0, 0.5)
+        trace = []                      # the last 4 s, kept only with a select
         while not ev and k.now() < end:
             now = k.now()
             if now >= next_move and scan:
@@ -771,9 +799,16 @@ class Performer:
                 res["max_swipe_amt"] = max(res["max_swipe_amt"], l["max_swipe_amt"])
                 if lit and (l["sym"] != target or l["mode"] == 3):
                     res["highlight_moved"] = True
+                trace.append([round(st["ui_seconds"], 2), l["sym"], l["selected"],
+                              l["first_showing"], l["mode"], l["is_scrolling"], l["scroll_dir"],
+                              round(l["hand_height"], 3), l["hold_progress"]])
+                del trace[:-120]
         if ev:
             res["events"] = ev
             res["outcome"] = "false_select"
+            # [ui s, row, selected, first showing, ribbon mode, scrolling, scroll
+            # dir, hand height, hold progress] per look, for the reader
+            res["trace"] = trace
         self.arms_down(0.3)
         return res
 
@@ -848,7 +883,8 @@ def run_cell(a):
             b.note(f"read {i} {target}: {r['outcome']} moved={r['highlight_moved']} "
                    f"amt={r['max_swipe_amt']:.2f}")
             p.to_screen(force=bool(r["events"]))
-        fill1 = b.state()["fill"]
+        st1 = b.state()
+        fill1 = st1["fill"]
         fills, reals = fill1["fills"] - fill0["fills"], fill1["reals"] - fill0["reals"]
         result["fill"] = dict(mode=fill1["mode"], engaged_at_end=fill1["engaged"], fills=fills,
                               reals=reals,
@@ -1036,6 +1072,11 @@ def run_check(a):
         b.wait(1.0)
         mode = lambda: b.state()["menu_select"]
 
+        # 0. outside a song the lists get the camera's own frames
+        #    (DC3_POSE_FILL_MENU, default off; the song's default is extrap)
+        fill = b.state()["fill"]["mode"]
+        check(fill == "off", "outside a song the pose fill is off", fill)
+
         # 1. the default is the original's swipe, untouched
         check(mode() == "swipe", "the default is swipe", mode())
         r = _hold_on(p, "campaign_mode", 3.5)
@@ -1108,8 +1149,9 @@ def run_check(a):
         pb.to_screen(force=True)
         r = _hold_on(pb, "screen_name_mode_select", 4.0)
         check(len(r["events"]) == 1 and r["events"][0]["hand"] == "left"
-              and r["events"][0].get("source") == "hold",
-              "hold: the left hand's Back is selected by a hold", str(src(r)))
+              and r["events"][0].get("source") == "hold" and 1.9 <= r["t"] <= 3.4,
+              "hold: the left hand's Back is selected by a hold, after about 2.1 s",
+              f"{src(r)} t={r['t']}")
         pb.arms_down(0.5)
 
         # 8. back to swipe: a hold selects nothing again
