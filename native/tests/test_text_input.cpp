@@ -9,6 +9,18 @@
 //
 // Each TEST starts from TextInputTerminate() (TextInputTest's SetUp): the
 // state is process-global.
+//
+// Sabotages tried, 2026-11-20, one edit to the engine at a time, each restored
+// (19 edits, every one red, and every test here red under at least one):
+//   TextInput_Native.cpp: characters queued without capture; text keys not
+//     taken from the pad under capture, and taken from it without capture; no
+//     held-over latch; a key held at capture typing; the key chain and the
+//     character chain each dropped; overlong UTF-8 accepted; a full queue
+//     keeping the newest; no clear on a capture change; Backspace not a text
+//     key; edit-key modifiers dropped; Left reported as Right; control
+//     characters queued; key repeat ignored; injection needing capture; a
+//     four-byte sequence decoded as three; a wrong three-byte lead on encode.
+//   Joypad_Native.cpp: the pad map not asking TextInputPadKeyAllowed.
 
 #include "platform/JoypadKeyMap.h"
 #include "platform/TextInput_Native.h"

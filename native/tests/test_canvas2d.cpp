@@ -12,12 +12,22 @@
 // it as a PNG: to $MILO_CANVAS2D_PROOF_PNG when set, else into the test's
 // scratch directory.
 //
-// Sabotages tried (each restored): see the lane report; in short
-//   CornerNdc's y sign, the min-scale for radius, the batch-break condition,
-//   Intersect, the cull test, the texel clamp in the shader, the coverage
-//   channel select, the ring term, the flush in WgpuRnd::DrawRect, the arena
-//   offset, the scissor restore and the pass-end flush each turn a named test
-//   red.
+// Sabotages tried, 2026-11-20, one edit to the engine at a time, each restored
+// (24 edits, every one red, and every test here red under at least one):
+//   Canvas2DBatch.cpp: CornerNdc's y sign; max instead of min scale for the
+//     radius; default softness scaled; batch break ignoring the clip;
+//     Intersect taking min; no cull; clip edges floored instead of rounded;
+//     u1 not carried; ClearPending closing the session; SetTarget ignored
+//     while open; logical scale fixed at 1; PopClip taking the base clip.
+//   Canvas2D.cpp: no texel clamp in the shader (the sub-rect bleeds); each of
+//     the four coverage channels reading its neighbour; no ring term; arena
+//     offset always 0; no scissor restore after a flush; OnPassEnd doing
+//     nothing; Begin() without the in-pass check.
+//   Rnd_Wgpu.cpp: DrawRect not flushing the canvas; no canvas prewarm.
+// Two of the first round were NOT caught and the tests were changed for them:
+// floor-vs-round on a clip edge (ClipRounds... had no edge past .5) and the
+// red coverage mode reading green (the glyph's RGB channels were equal; it now
+// holds one channel per band and all four modes are drawn).
 
 #include "test_helpers.h"
 
@@ -261,6 +271,9 @@ TEST(Canvas2DBatch, ClipRoundsToDevicePixelsAndStaysInsideTheTarget) {
     b.Begin(100.0f, 100.0f, Target(0, 0, 150, 150, 150, 150)); // scale 1.5
     // 10.2 * 1.5 = 15.3 -> 15; (10.2 + 20.5) * 1.5 = 46.05 -> 46.
     EXPECT_EQ(b.ToScissor({10.2f, 10.2f, 20.5f, 20.5f}), (Canvas2DScissor{15, 15, 31, 31}));
+    // To the NEAREST boundary, not the one below: 10.4 * 1.5 = 15.6 -> 16;
+    // (10.4 + 20) * 1.5 = 45.6 -> 46.
+    EXPECT_EQ(b.ToScissor({10.4f, 10.2f, 20.0f, 20.5f}), (Canvas2DScissor{16, 15, 30, 31}));
     // Beyond the target on every side: the target.
     EXPECT_EQ(b.ToScissor({-50, -50, 500, 500}), (Canvas2DScissor{0, 0, 150, 150}));
     // The base clip (the renderer's scissor) bounds every push.
@@ -427,18 +440,15 @@ std::vector<uint8_t> QuadrantTexels() {
     return px;
 }
 
-// An 8x8 "glyph" whose alpha and colour disagree: the left half is alpha 255
-// with black RGB, the right half alpha 0 with white RGB. Coverage from alpha
-// draws the left half; coverage from red (or green, or blue) the right half.
+// An 8x8 "glyph" of four vertical bands, two texels wide, each holding exactly
+// ONE channel at 255 and the other three at 0: alpha, red, green, blue from
+// left to right. A coverage mode draws its own band and no other, so reading
+// the wrong channel moves the lit band.
 std::vector<uint8_t> CoverageTexels() {
-    std::vector<uint8_t> px(8 * 8 * 4);
+    static const int kChannelOfBand[4] = {3, 0, 1, 2}; // A, R, G, B
+    std::vector<uint8_t> px(8 * 8 * 4, 0);
     for (int y = 0; y < 8; y++) {
-        for (int x = 0; x < 8; x++) {
-            uint8_t* p = &px[(y * 8 + x) * 4];
-            const bool left = x < 4;
-            p[0] = p[1] = p[2] = left ? 0 : 255;
-            p[3] = left ? 255 : 0;
-        }
+        for (int x = 0; x < 8; x++) px[(y * 8 + x) * 4 + kChannelOfBand[x / 2]] = 255;
     }
     return px;
 }
@@ -518,8 +528,9 @@ TEST_F(Canvas2DGpuTest, RenderedProof) {
         c->FillRect({870, 180, 160, 120}, {0.94f, 0.94f, 0.94f, 1.0f}, 16.0f);
 
         // Row 3: the whole quadrant texture, its top-right block alone (a UV
-        // sub-rectangle), and the glyph texture as coverage from alpha and
-        // from red.
+        // sub-rectangle), and the four-band glyph texture as coverage from
+        // alpha and from red, as plain colour, and as coverage from green and
+        // from blue.
         Canvas2DQuad whole;
         whole.rect = {40, 340, 128, 128};
         whole.tex = quadrants;
@@ -548,6 +559,14 @@ TEST_F(Canvas2DGpuTest, RenderedProof) {
         plain.texMode = Canvas2DTexMode::kColor;
         plain.SetColor({1, 1, 1, 1});
         c->Quad(plain);
+        Canvas2DQuad covG = covA;
+        covG.rect = {840, 340, 128, 128};
+        covG.texMode = Canvas2DTexMode::kCoverageG;
+        c->Quad(covG);
+        Canvas2DQuad covB = covA;
+        covB.rect = {1000, 340, 128, 128};
+        covB.texMode = Canvas2DTexMode::kCoverageB;
+        c->Quad(covB);
 
         // Row 4: a row of quads taller and longer than its clip.
         c->PushClip({40, 520, 290, 60});
@@ -671,16 +690,32 @@ TEST_F(Canvas2DGpuTest, RenderedProof) {
     EXPECT_TRUE(Near(f, 200, 404, 0, 255, 0)) << "sub-rect left edge bleeds its neighbour";
     EXPECT_TRUE(Near(f, 264, 467, 0, 255, 0)) << "sub-rect bottom edge bleeds its neighbour";
     EXPECT_TRUE(Near(f, 327, 340, 0, 255, 0));
-    // Coverage from alpha: the left half takes the quad's colour, the right
-    // half (alpha 0, white RGB) is untouched.
-    EXPECT_TRUE(Near(f, 380, 404, 255, 0, 255)) << "coverage A, left half";
-    EXPECT_TRUE(Untouched(f, 470, 404)) << "coverage A, right half";
-    // Coverage from red: the other half.
-    EXPECT_TRUE(Untouched(f, 540, 404)) << "coverage R, left half";
-    EXPECT_TRUE(Near(f, 630, 404, 255, 0, 255)) << "coverage R, right half";
-    // Colour mode: texel x colour, so black where the glyph is opaque.
-    EXPECT_TRUE(Near(f, 700, 404, 0, 0, 0)) << "colour mode, left half";
-    EXPECT_TRUE(Untouched(f, 790, 404)) << "colour mode, right half";
+    // The glyph's bands are 32 px wide in a 128 px quad: alpha, red, green,
+    // blue, centred 16, 48, 80 and 112 px from the quad's left edge. Each
+    // coverage mode lights its own band in the quad's colour and leaves the
+    // other three untouched.
+    static const struct {
+        int quadX;
+        int litBand; // 0 A, 1 R, 2 G, 3 B
+        const char* name;
+    } kCoverage[4] = {{360, 0, "coverage A"}, {520, 1, "coverage R"}, {840, 2, "coverage G"},
+                      {1000, 3, "coverage B"}};
+    for (const auto& cv : kCoverage) {
+        for (int band = 0; band < 4; band++) {
+            const int x = cv.quadX + 16 + 32 * band;
+            if (band == cv.litBand) {
+                EXPECT_TRUE(Near(f, x, 404, 255, 0, 255)) << cv.name << ", its own band " << band;
+            } else {
+                EXPECT_TRUE(Untouched(f, x, 404)) << cv.name << " drew band " << band;
+            }
+        }
+    }
+    // Colour mode: texel x colour, so black where the glyph is opaque (the
+    // alpha band) and nothing where its alpha is 0, whatever its RGB.
+    EXPECT_TRUE(Near(f, 696, 404, 0, 0, 0)) << "colour mode, alpha band";
+    EXPECT_TRUE(Untouched(f, 728, 404)) << "colour mode, red band";
+    EXPECT_TRUE(Untouched(f, 760, 404)) << "colour mode, green band";
+    EXPECT_TRUE(Untouched(f, 792, 404)) << "colour mode, blue band";
 
     // --- clip (40,520)-(330,580) ---
     EXPECT_TRUE(Near(f, 90, 550, 255, 128, 0)) << "first quad, inside the clip";
@@ -698,10 +733,10 @@ TEST_F(Canvas2DGpuTest, RenderedProof) {
     // --- batching: what the scene costs ---
     // 23 quads submitted; the two right-most of the clipped row are wholly
     // outside the clip and never reach the GPU.
-    EXPECT_EQ(stats.quads, 21u);
+    EXPECT_EQ(stats.quads, 23u);
     EXPECT_EQ(stats.culled, 2u);
     // Untextured run, quadrant texture, glyph texture, the clipped row, the
-    // unclipped quad after it: 5 draws for 21 quads, in one flush.
+    // unclipped quad after it: 5 draws for 23 quads, in one flush.
     EXPECT_EQ(stats.drawCalls, 5u);
     EXPECT_EQ(stats.flushes, 1u);
 
