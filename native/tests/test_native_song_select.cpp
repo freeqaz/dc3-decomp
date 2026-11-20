@@ -1571,6 +1571,10 @@ namespace {
 //   classicrow TOKEN    the classic list's own way to a row: the highlight
 //                       walked there with the pad, then A
 //   choose TOKEN        cmd in a browser run (browser=1), classicrow otherwise
+//   rowto TOKEN         the browser's list walked up, with the pad, to the
+//                       command row TOKEN
+//   rowchoose TOKEN     in a browser run: rowto, DRIVER: on_TOKEN <state>,
+//                       then A; classicrow otherwise
 //   mode MODE           choose_mode_screen's row script for MODE, to song select
 //   seqn COUNT GAP      COUNT Down presses GAP frames apart, frame exact
 //                       (POST /api/input/sequence)
@@ -1583,6 +1587,11 @@ classicrow() { r=$(ev "{song_offer_provider first_data_index $1}" | val); n=0;
     if [ "$s" -lt "$r" ]; then press down 20; else press up 20; fi; n=$((n+1)); done;
   press confirm 60; };
 choose() { if [ "$browser" = 1 ]; then echo "DRIVER: answer_$1 $(cmd $1)"; else expand; classicrow $1; fi; };
+rowto() { n=0; while [ $n -lt 12 ]; do
+    [ "$(sb | sed -n 's/.*"selected_command":"\([^"]*\)".*/\1/p')" = "$1" ] && return 0;
+    press up 30; n=$((n+1)); done; return 1; };
+rowchoose() { if [ "$browser" = 1 ]; then rowto $1; echo "DRIVER: on_$1 $(sb)"; press confirm 60;
+  else expand; classicrow $1; fi; };
 mode() { ev "{do {gamemode set_mode $1} {song_select_panel set first_time TRUE} {ui goto_screen {gamemode get newsong_screen}}}" > /dev/null;
   settle 60; waitfor 30 song_select_screen; settle 240; };
 seqn() { b="["; for i in $(seq $1); do b="$b{\"button\":\"down\",\"delay\":$2,\"hold\":1},"; done;
@@ -1600,6 +1609,15 @@ std::string Commands(const std::string &state) {
     if (at == std::string::npos) return "";
     size_t end = state.find(']', at);
     return state.substr(at + 11, end == std::string::npos ? std::string::npos : end - at - 10);
+}
+
+// The text of the state's "command_rows" array (the rows the screen was
+// built with), brackets and all.
+std::string CommandRows(const std::string &state) {
+    size_t at = state.find("\"command_rows\":[");
+    if (at == std::string::npos) return "";
+    size_t end = state.find(']', at);
+    return state.substr(at + 15, end == std::string::npos ? std::string::npos : end - at - 14);
 }
 
 // The same drive against the classic list (DC3_SONG_BROWSER=0) and against
@@ -1698,6 +1716,71 @@ TEST_F(SongBrowserSwitchFlowTest, TheCommandsDoWhatTheClassicRowsDo) {
         << browser.driver;
 }
 
+// The same two commands, chosen the way a player chooses them: the browser's
+// own rows above the first section, reached with the pad and picked with A
+// (the screen's Delegate::onCommand).  The classic list's highlight follows
+// onto the row, and each choice ends where the classic row ends.
+TEST_F(SongBrowserSwitchFlowTest, TheCommandRowsAreChosenWithThePad) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
+    std::ostringstream d;
+    d << kToSongSelect << "echo \"DRIVER: state $(sb)\"; "
+      << "rowchoose playlists; settle 240; echo \"DRIVER: p1 $(scr)\"; "
+      << "n=0; while [ \"$(scr)\" != song_select_playlist_screen ] && [ $n -lt 10 ]; do "
+      << "press confirm 120; settle 120; n=$((n+1)); done; "
+      << "echo \"DRIVER: p2 $(scr) confirms=$n mode=" << kSongSelectMode << "\"; "
+      << "press cancel 120; settle 240; echo \"DRIVER: p3 $(scr) mode=" << kSongSelectMode
+      << "\"; echo \"DRIVER: p3sb $(sb)\"; settle 120; "
+      << "rowchoose random_song; settle 240; echo \"DRIVER: r1 $(scr)\"; "
+      << "echo \"DRIVER: r1song " << kPerformerSongValue << "\"; "
+      << "echo \"DRIVER: r1known $(ev \"{song_mgr has_song " << kPerformerSongValue << "}\" | val)\"; "
+      << "echo \"DRIVER: r1sb $(sb)\"; ";
+    std::string error;
+    TwoRuns runs = RunBoth(d.str(), error);
+    RequireRun(true, error, runs.classic);
+    if (IsSkipped() || HasFatalFailure()) return;
+    RequireRun(true, error, runs.browser);
+    if (IsSkipped() || HasFatalFailure()) return;
+    const EngineRun &classic = runs.classic, &browser = runs.browser;
+    const std::string state = DriverLine(browser, "state");
+    ASSERT_EQ(Sb(state, "shown"), "true") << "precondition: the browser is the list\n" << state;
+    EXPECT_EQ(CommandRows(state), "[\"random_song\",\"playlists\"]")
+        << "Perform's list has both rows, so the browser draws both\n" << state;
+    EXPECT_NE(state.find("\"list_command\":\"\""), std::string::npos)
+        << "arrival is on a song, never on a command\n" << state;
+
+    // Playlists: the row is reached, the classic list follows, A runs it.
+    const std::string onPlaylists = DriverLine(browser, "on_playlists");
+    ASSERT_EQ(Sb(onPlaylists, "selected_command"), "playlists")
+        << "Up from the first song did not reach the Playlists row\n" << browser.driver;
+    EXPECT_NE(onPlaylists.find("\"selected_song\":\"\""), std::string::npos)
+        << "no song is selected while the list stands on a command\n" << onPlaylists;
+    EXPECT_EQ(Sb(onPlaylists, "classic_song"), "playlists")
+        << "the classic list's highlight follows onto the command row\n" << onPlaylists;
+    const std::string p1 = DriverLine(classic, "p1"), p2 = DriverLine(classic, "p2");
+    ASSERT_FALSE(p1.empty()) << classic.driver;
+    ASSERT_NE(p1, "song_select_screen") << "the classic row went nowhere\n" << classic.driver;
+    EXPECT_EQ(DriverLine(browser, "p1"), p1) << "the screen after Playlists\n" << browser.driver;
+    EXPECT_EQ(DriverLine(browser, "p2"), p2) << browser.driver;
+    // Back from the playlist screen: the browser, on the row it was left on.
+    EXPECT_EQ(DriverLine(browser, "p3"), DriverLine(classic, "p3")) << browser.driver;
+    const std::string back = DriverLine(browser, "p3sb");
+    EXPECT_EQ(Sb(back, "shown"), "true") << back;
+    EXPECT_EQ(Sb(back, "list_command"), "playlists")
+        << "the browser comes back on the row it was left on\n" << back;
+
+    // Random Song: a song is chosen and the flow goes on as after a pick.
+    const std::string onRandom = DriverLine(browser, "on_random_song");
+    ASSERT_EQ(Sb(onRandom, "selected_command"), "random_song") << browser.driver;
+    EXPECT_EQ(Sb(onRandom, "classic_song"), "random_song") << onRandom;
+    ASSERT_EQ(DriverLine(classic, "r1"), "multiuser_screen") << classic.driver;
+    EXPECT_EQ(DriverLine(browser, "r1"), DriverLine(classic, "r1")) << browser.driver;
+    for (const EngineRun *run : { &classic, &browser }) {
+        EXPECT_FALSE(DriverLine(*run, "r1song").empty()) << "no song was chosen\n" << run->driver;
+        EXPECT_EQ(DriverLine(*run, "r1known"), "1") << "not a song of the library\n" << run->driver;
+    }
+    EXPECT_EQ(Sb(DriverLine(browser, "r1sb"), "shown"), "false") << browser.driver;
+}
+
 // Rehearse and Dance Battle are song_select_panel visits like Perform's: the
 // browser is the list, and a pick goes where the classic pick goes.  The
 // classic list has no function rows in Rehearse and only Random Song in Dance
@@ -1735,6 +1818,9 @@ TEST_F(SongBrowserSwitchFlowTest, RehearseAndDanceBattleAreTheBrowsersToo) {
         EXPECT_EQ(Commands(state).find("\"random_song\"") != std::string::npos,
                   mode == "dance_battle")
             << "Random Song is a row in Dance Battle and not in Rehearse\n" << state;
+        EXPECT_EQ(CommandRows(state), Commands(state))
+            << "the browser draws exactly the command rows this visit's classic list has\n"
+            << state;
         EXPECT_NE(DriverLine(browser, mode + "_playlists").find("\"ok\":false"), std::string::npos)
             << "a command whose classic row does not exist is refused\n" << browser.driver;
         EXPECT_EQ(DriverLine(browser, mode + "_after"), "song_select_screen") << browser.driver;

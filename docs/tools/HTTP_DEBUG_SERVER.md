@@ -355,12 +355,14 @@ curl localhost:9090/api/songbrowser/state
 #  "pad_presses":0,"screen_builds":1,"preview_song":"aint2proud2beg",
 #  "preview_changes":2,"preview_starts":2,"preview_hold":false,
 #  "commands":["random_song","playlists"],
+#  "command_rows":["random_song","playlists"],
 #  "songs":45,"classic_song":"aint2proud2beg","focus":"list",
 #  "selected_song":"aint2proud2beg","list_song":"aint2proud2beg",
+#  "list_command":"","selected_command":"",
 #  "recent_song":"boomboompow","query":"","sort":"title","rows":53,"list_index":2,
 #  "recents_shown":false,"highlight_rect":[56.0,187.0,804.0,51.0],"frames":642,
 #  "drew":true,"glyphs":436,"placeholder_glyphs":0,"quads":516,"draw_calls":52,
-#  "images_missing":0}}
+#  "images_missing":0,"build_us":36,"replay_us":38}}
 # Before song select has been entered in this run:
 # {"ok":true,"data":{"available":true,"on_song_select":false,"eligible":false,
 #  "shown":false,"why":"not on song select"}}
@@ -397,20 +399,23 @@ queue's length afterwards; the text reaches a screen on its next frame.
 | `controller_mode` | the game's controller mode; the browser keeps it on while it is shown |
 | `text_capture`, `engine_text_capture` | the browser holds the engine's text capture; the engine's capture is on at all (it stays on under the classic list in `auto`, so a typed character can bring the browser back) |
 | `leaving` | a pick, a Back or a command is in flight; input is dropped until the screen changes |
-| `hints`, `hint_accept` | `pad` or `keyboard`: the device last used; the name the hint bar was last given for Accept (`A` or `ENTER`) |
+| `hints`, `hint_accept` | `pad` or `keyboard`: the device last used; the name the hint bar shows for Accept (`A` or `ENTER`), read back from the screen (`HintGlyphsShown()`) |
 | `pad_presses` | presses counted as a real pad's in this run |
 | `screen_builds` | times the screen was built in this run (the hint names change without one) |
 | `preview_song`, `preview_changes` | the song the game's preview was last asked for; how many times that changed while the browser was shown |
 | `preview_starts`, `preview_hold` | preview streams prepared in this run (a start, as opposed to a request); the preview is waiting for the selection to rest |
 | `commands` | the commands this visit's classic list has a row for: `random_song`, `playlists` |
+| `command_rows` | the command rows the screen was built with; the same list as `commands` except for the one frame in which the classic list changed |
 | `songs` | songs in the browser's catalog |
 | `classic_song` | the song the classic list's highlight was last put on |
 | `focus` | `search`, `tabs`, `recents` or `list` |
-| `selected_song` | the song the detail pane shows: what Accept would pick |
+| `selected_song` | the song the detail pane shows: what Accept would pick. Empty while the pane shows a command or the search help |
 | `list_song`, `recent_song` | the list's selected song and the shelf's selected card |
+| `list_command`, `selected_command` | the command row the list stands on, and the command the detail pane shows (`random_song`, `playlists`, or empty): what Accept would run |
 | `query`, `sort`, `rows`, `list_index`, `recents_shown` | the search text; the arrangement (`title`, `artist`, `difficulty`, `source`, `decade`); rows in the list, headings included; the selected row's index among them; whether the shelf is unfolded |
 | `highlight_rect` | the list's selection bar, `x,y,width,height` in the UI's 1280x720 logical units (multiply by output rows / 720 for screenshot pixels) |
 | `frames`, `drew`, `glyphs`, `placeholder_glyphs`, `quads`, `draw_calls`, `images_missing` | frames drawn so far and the last frame's numbers; `placeholder_glyphs` counts characters drawn as the missing-glyph box |
+| `build_us`, `replay_us` | the last frame's cost in microseconds: building the display list, and replaying it into the canvas. Both 0 in a run that does not render |
 
 The fields from `focus` to `highlight_rect` are present only while a visit has
 a screen. In a run that does not render (`MILO_NORENDER=1`) `drew` is false

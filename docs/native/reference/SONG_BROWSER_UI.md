@@ -258,34 +258,48 @@ shows two boxes) and their album art is made-up gradients.
 
 ## Seen in the running game
 
-1280x720, 1920x1080 and 2560x1440, the 45 disc songs, a five-song history
-(the pictures are not kept in the repo):
+1280x720, 1920x1080 and 2560x1440, the 45 disc songs, a five-song history,
+after the 2026-11-20 look pass (the pictures are not kept in the repo):
 
 - The menu font draws every label; no missing-glyph box (the state
   endpoint's `placeholder_glyphs` is 0, asserted by
   `NativeUiHostGpuTest.SongBrowserRunsInTheEngine`). Text is sharp at all
-  three sizes; the smallest (the row's artist, the card's second line, the
-  hint labels) is readable at 720 rows.
-- The shelf shows four cards with a five-song history; the fifth, which
-  would partly fit left of the detail pane, is not drawn, and nothing says
-  there is more to the right. Card titles longer than about 11 characters
-  are cut ("BOOM BOOM P…"), as are artists ("DEV FT. THE CA…").
-- The detail pane's last line (the source game) sits on the pane's bottom
-  edge with no margin under it.
-- A played song's stars are five small outline circles (`o o o o o`), filled
-  or not; they read as placeholders.
-- The selection bar is purple while focus is elsewhere and blue with a glow
-  while the list is focused; on the purple bar the matched part of a search
-  result stays accent blue and is legible.
-- In a search the hint bar names keys (`ENTER`, `ESC`); otherwise pad buttons
-  until something has been typed.
+  three sizes; the smallest capital at 720 rows is 10.3 px
+  (`UiCoreTheme.NoStyleHasCapitalsUnderTenPixelsAt720Rows`).
+- The shelf shows five cards and part of a sixth, cut by a fade, so it is
+  clear that more lie to the right. A card has its title on up to two lines
+  and the artist under the art.
+- The detail pane ends above the lower frame line with a margin; a long
+  title wraps to a second line.
+- Stars are star icons, outlines where not earned. Earned (filled) stars
+  were seen only in the test rasteriser's pictures: the profile in the
+  running game had no scores.
+- Only the focused part has a filled highlight. A part that only remembers
+  its selection shows a thin outline; in a search the matched part of a
+  result is accent blue.
+- The hint bar shows pad buttons as coloured discs and keys as keycaps. In a
+  search it names keys (`ENTER`, `ESC`); otherwise it names the device last
+  used.
+- Random Song and Playlists are rows with an icon tile above the first
+  section; the detail pane shows the icon and a short description.
 
 ## Not done
 
-- Stars are round marks: the display list has no polygon primitive.
-- The detail pane's title is one line; a long title is cut rather than wrapped.
+- A list row cuts a long title ("BEWARE OF THE BOYS (MU…") while the artist
+  column beside it has room: the columns have fixed widths.
+- When a search matches a song by its album, the row shows the album in the
+  artist column.
+- The detail pane's crossfade shows the old and the new text over each other
+  for about 90 ms.
+- At arrival a sliver of the next row's art shows under the list's bottom
+  fade.
 - Section headings scroll with the list; they do not stick to the top.
 - `SongEntry::isCover` ("as made famous by") is not shown.
 - BPM has no tab (see above); the data layer can arrange by it.
-- The classic list's Playlists and Random Song rows have no counterpart.
-- No sign on the shelf that more cards lie to the right.
+- Each icon is its own texture, so text and icons alternate draw calls; one
+  icon atlas would lower the count. The first frame after the screen opens
+  costs 3 to 4 ms of replay (the icon textures are made then); whether that
+  shows as a hitch was not looked at.
+- Motion in the running game was judged from the unit tests and the test
+  rasteriser's frames; no picture was taken mid-move.
+- Sizes below 720 rows were not pictured.

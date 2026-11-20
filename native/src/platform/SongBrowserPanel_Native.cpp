@@ -68,9 +68,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <string>
 #include <strings.h>
 #include <variant>
+#include <vector>
 
 #if !defined(__EMSCRIPTEN__)
 #include <GLFW/glfw3.h>
@@ -416,7 +418,11 @@ public:
         json += std::string(",\"engine_text_capture\":") + (TextInputCapture() ? "true" : "false");
         json += std::string(",\"hints\":\"") + (sDevice == kDeviceKeyboard ? "keyboard" : "pad")
             + "\"";
-        json += std::string(",\"hint_accept\":\"") + JsonEscape(GlyphsFor(shownDevice_).accept)
+        // What the hint bar shows, read back from the screen when there is one.
+        json += std::string(",\"hint_accept\":\"")
+            + JsonEscape(
+                screen_ ? screen_->HintGlyphsShown().accept : GlyphsFor(shownDevice_).accept
+            )
             + "\"";
         json += ",\"pad_presses\":" + std::to_string(sPadPresses);
         json += ",\"screen_builds\":" + std::to_string(screenBuilds_);
@@ -427,13 +433,16 @@ public:
         json += ",\"commands\":[";
         if (panel_ && eligible_) {
             bool first = true;
-            for (songbrowser_ui::Command command :
-                 { songbrowser_ui::Command::RandomSong, songbrowser_ui::Command::Playlists }) {
-                if (CommandRow(command) >= 0) {
-                    json += std::string(first ? "\"" : ",\"") + CommandToken(command) + "\"";
-                    first = false;
-                }
+            for (songbrowser_ui::Command command : VisitCommands()) {
+                json += std::string(first ? "\"" : ",\"") + CommandToken(command) + "\"";
+                first = false;
             }
+        }
+        json += "]";
+        // The command rows the screen was built with (the ones drawn).
+        json += ",\"command_rows\":[";
+        for (size_t i = 0; i < shownCommands_.size(); i++) {
+            json += std::string(i ? ",\"" : "\"") + CommandToken(shownCommands_[i]) + "\"";
         }
         json += "]";
         json += ",\"songs\":" + std::to_string(catalog_.Size());
@@ -445,6 +454,12 @@ public:
             json += std::string(",\"focus\":\"") + RegionName(state.focus) + "\"";
             json += ",\"selected_song\":\"" + JsonEscape(screen_->DetailSong()) + "\"";
             json += ",\"list_song\":\"" + JsonEscape(state.selectedSong) + "\"";
+            // The command row the list stands on, and the one the pane shows.
+            json += std::string(",\"list_command\":\"")
+                + (state.selectedCommand ? CommandToken(*state.selectedCommand) : "") + "\"";
+            const std::optional<songbrowser_ui::Command> shownCommand = screen_->DetailCommand();
+            json += std::string(",\"selected_command\":\"")
+                + (shownCommand ? CommandToken(*shownCommand) : "") + "\"";
             json += ",\"recent_song\":\"" + JsonEscape(state.recentSong) + "\"";
             json += ",\"query\":\"" + JsonEscape(state.query) + "\"";
             json += std::string(",\"sort\":\"") + songbrowser::ArrangementName(state.arrangement)
@@ -472,6 +487,8 @@ public:
         json += ",\"quads\":" + std::to_string(stats.quads);
         json += ",\"draw_calls\":" + std::to_string(stats.drawCalls);
         json += ",\"images_missing\":" + std::to_string(stats.imagesMissing);
+        json += ",\"build_us\":" + std::to_string(stats.buildMicros);
+        json += ",\"replay_us\":" + std::to_string(stats.replayMicros);
         json += "}";
         return json;
     }
@@ -602,6 +619,8 @@ private:
         songbrowser_ui::Environment environment { fonts_.Fonts(), host_.Clock() };
         shownDevice_ = sDevice;
         environment.glyphs = GlyphsFor(shownDevice_);
+        shownCommands_ = VisitCommands(); // only the rows the classic list has
+        environment.commands = shownCommands_;
         screenBuilds_++;
         host_.SetScreen(nullptr);
         gate_.screen = nullptr;
@@ -684,6 +703,12 @@ private:
         if (TheSongSortMgr && (int)TheSongSortMgr->MapSize() != catalogStamp_) {
             FillCatalog(); // content came or went
             screen_->SetCatalog(catalog_);
+        }
+        if (VisitCommands() != shownCommands_) {
+            // The classic list gained or lost a command row: the same place,
+            // with the rows it has now.
+            const songbrowser_ui::State state = screen_->SaveState();
+            BuildScreen(&state);
         }
 
         gate_.typed = false;
@@ -829,6 +854,18 @@ private:
         return row.Type() == kDataInt ? row.Int() : -1;
     }
 
+    // The commands this visit's classic list has, in the order drawn.
+    std::vector<songbrowser_ui::Command> VisitCommands() const {
+        std::vector<songbrowser_ui::Command> commands;
+        for (songbrowser_ui::Command command :
+             { songbrowser_ui::Command::RandomSong, songbrowser_ui::Command::Playlists }) {
+            if (CommandRow(command) >= 0) {
+                commands.push_back(command);
+            }
+        }
+        return commands;
+    }
+
     // A command: the classic list's own row for it, selected by the game's
     // own select-a-row (what the "playlists" voice command runs).  What
     // happens next is that row's: SongFunctionNode::OnSelect.
@@ -855,13 +892,20 @@ private:
         return true;
     }
 
-    // Puts the classic list's highlight on the browser's song.  True when it
-    // moved (the list then played its highlight sound).
+    // Puts the classic list's highlight on the browser's song, or on the
+    // command row the browser stands on (the classic list names both rows
+    // the same way).  True when it moved (the list then played its
+    // highlight sound).
     bool SyncClassicList() {
         if (!screen_ || !panel_ || !list_) {
             return false;
         }
-        const std::string &song = screen_->DetailSong();
+        std::string song = screen_->DetailSong();
+        if (song.empty()) {
+            if (const std::optional<songbrowser_ui::Command> command = screen_->DetailCommand()) {
+                song = CommandToken(*command);
+            }
+        }
         if (song.empty() || song == syncedSong_) {
             return false;
         }
@@ -1053,6 +1097,7 @@ private:
     std::string pendingPick_;
     bool pendingBack_ = false;
     int pendingCommand_ = -1; // a songbrowser_ui::Command, or -1
+    std::vector<songbrowser_ui::Command> shownCommands_; // the rows the screen was built with
     bool cueMove_ = false;
     bool cueTab_ = false;
     bool cueBack_ = false;

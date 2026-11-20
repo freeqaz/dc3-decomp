@@ -118,7 +118,10 @@ While the browser is shown:
 **The same song both ways.** Whenever the browser's detail song changes, the
 classic list's highlight is put on that song's own row
 (`{song_select_panel highlight_right_list_item ROW}`, the list uncollapsed
-first). That is also what keeps the game's preview and song info following
+first). A command row is followed the same way: with the browser on Random
+Song or Playlists the classic highlight is on that row, so the game does
+there what it does on the classic row (no preview plays), and a hand that
+takes the menu finds the classic list on the same row. That is also what keeps the game's preview and song info following
 the browser: the classic highlight settles, the panel's own
 `show_full_song_details` runs, `SongPreview` retargets. Left alone, that
 prepares a preview stream on every arrow press (measured: five presses four
@@ -146,7 +149,9 @@ the classic list's own row: `{song_select_panel select_right_list_item ROW}`,
 the handler the voice commands use, with ROW from
 `{song_offer_provider first_data_index random_song|playlists}`. What follows is
 `SongFunctionNode::OnSelect`, the same as an A press on that row
-(`TheCommandsDoWhatTheClassicRowsDo` compares the two engines):
+(`TheCommandsDoWhatTheClassicRowsDo` compares the two engines through the
+HTTP route; `TheCommandRowsAreChosenWithThePad` does it with Up and A on the
+browser's own rows):
 
 - Playlists goes to the playlist tutorial check and then
   `song_select_playlist_screen`, in `song_select_playlist` mode, with
@@ -156,10 +161,18 @@ the handler the voice commands use, with ROW from
 - Random Song picks `TheHamSongMgr.GetRandomSong()` and goes on as after any
   pick (`multiuser_screen`, then the game).
 
+The browser draws the two as rows above the first section, in every sort
+and never during a search. Arrival never lands on one; Up from the first
+song reaches them. Leaving through Playlists and coming back returns to the
+Playlists row.
+
 The classic list has both rows in Perform, only Random Song in Dance Battle
-and neither in Rehearse. A command whose row this visit does not have is
-refused with the error cue; the state endpoint lists the ones that exist
-(`commands`). `POST /api/songbrowser/command` runs the same function.
+and neither in Rehearse, and the browser draws exactly the ones this visit's
+classic list has (`songbrowser_ui::Environment::commands`, asked of the
+classic list when the screen is built and checked again every frame). A
+command whose row this visit does not have is refused with the error cue; the
+state endpoint lists the ones that exist (`commands`) and the ones drawn
+(`command_rows`). `POST /api/songbrowser/command` runs the same function.
 
 **Sounds** are the list's own (`right_hand.hnl`'s ribbon resource): a move
 that changes the song plays the highlight sound through the highlight itself;
@@ -195,12 +208,9 @@ buttons the keyboard map and the gamepad each contributed to the last poll).
 
 ### Not done
 
-- Under the browser the background is close to black: `background_panel`
-  alone is faint streaks. The bright ribbons of the classic picture are not
-  drawn while the browser is.
-- The browser does not yet draw rows for Random Song and Playlists; the
-  commands exist (`onCommand`, the HTTP endpoint) and the screen has to know
-  which of the two this visit has.
+- The bright ribbons of the classic picture are not drawn while the browser
+  is: it draws its own backdrop (the game's indigo, drifting slowly) over
+  `background_panel`.
 - With `DC3_SONG_BROWSER=1` a hand never gets the classic list.
 - The overlay and dialog cases (the browser standing aside) have no test.
 
