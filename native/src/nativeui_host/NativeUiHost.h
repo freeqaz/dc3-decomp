@@ -120,6 +120,8 @@ namespace nativeui_host {
         void Tick(double gameSeconds);
         void Draw();
         // The same frame into any sink (tests; no canvas session is opened).
+        // Icons have no texture here and count as missing images: making one
+        // needs the renderer, which only Draw() can rely on.
         void DrawTo(QuadSink &sink);
 
         bool OnButtonDown(int padButton, int padAction);
@@ -139,6 +141,9 @@ namespace nativeui_host {
         };
 
         void AdvanceClock(double gameSeconds);
+        // Builds the screen's frame and replays it into `sink`, resolving
+        // image handles through `images` (may be null).
+        void DrawFrame(QuadSink &sink, ImageSource *images);
         void UpdateCapture();
         void SetCapture(bool on);
 
@@ -158,7 +163,8 @@ namespace nativeui_host {
         const FontSet &fonts_;
         ImageCache *images_;
         ImageSource *imageSource_ = nullptr;
-        // Draws nativeui's icons; every other image goes on to imageSource_.
+        // Draw()'s image source: nativeui's icons, then imageSource_ for the
+        // rest.
         IconTextures icons_;
         PlainScreen plain_;
         HostedScreen *screen_ = nullptr;
