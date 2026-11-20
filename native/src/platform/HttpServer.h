@@ -79,6 +79,7 @@ public:
         kCmdPoseTarget,     // What each player is asked to perform (synthetic sensor)
         kCmdCamera,         // Camera stream state + the player-view textures (PLAN P-4)
         kCmdMenuState,      // What every polled HamNavList is doing + its selects (PLAN P-3)
+        kCmdSongs,          // The song browser's catalog, a search or an arrangement (GET /api/songs)
     };
 
     struct CommandResult {
@@ -141,6 +142,7 @@ private:
     void HandlePoseTarget(Command& cmd);
     void HandleCamera(Command& cmd);
     void HandleMenuState(Command& cmd);
+    void HandleSongs(Command& cmd);
 
     volatile bool mRunning = false;
     int mPort = 0;

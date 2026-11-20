@@ -17,6 +17,7 @@ in `../milo-native-engine` (rendering, audio, input, file I/O).
 | [SAVE_PERSISTENCE_PLAN.md](SAVE_PERSISTENCE_PLAN.md) | Save/cache backend and its on-disk contract |
 | [DLC.md](DLC.md) | Downloadable content: importing a package, `DC3_DLC_DIR`, how it mounts |
 | [SONG_SELECT.md](SONG_SELECT.md) | Song select additions: Recently Played, sort by artist, Left/Right by section, the remembered sort, `DC3_CLASSIC_SONG_SELECT` |
+| [reference/SONG_BROWSER_DATA.md](reference/SONG_BROWSER_DATA.md) | Song browser data: the song catalog and where each field comes from, search rules, arrangements, `GET /api/songs` |
 | [reference/](reference/) | Rendering, audio/video, animation, loading and boot, porting, viewer, live-state probing, code style, [menu gestures measured](reference/MENU_GESTURES.md), [the native UI framework](reference/NATIVE_UI.md) |
 | [../debugging/native.md](../debugging/native.md) | Debugging, and the master env-var table |
 

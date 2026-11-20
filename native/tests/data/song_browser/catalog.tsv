@@ -1,0 +1,127 @@
+# The song browser's catalog as GET /api/songs answered it on a dc3-native built from
+# np-song-catalog (2026-11-20), headless, fresh profile, DC3_DLC=1: the 45 songs of the
+# game itself (ham3), the 44 of the Dance Central 2 export pack (ham2) and the 32 of the
+# Dance Central 2 DLC pack (ham2_dlc).  One song per line, tab separated, in the order
+# the game's song manager listed them.  test_song_browser.cpp searches and arranges it.
+# shortName	id	title	artist	album	year	bpm	lengthMs	rank	tier	origin	onDisc	isCover
+reallove	6001	Real Love	Mary J. Blige	What's the 411?	1992	95	168079	56	0	ham2	0	0
+thisishowwedoit	6002	This Is How We Do It	Montell Jordan	This Is How We Do It	1995	104	135468	170	1	ham2	0	0
+reach	6003	Reach	Atlantic Connection and Armanni Reign	Off The Grid EP	2011	99	167384	50	0	ham2	0	0
+dragosteadintei	6004	Mai Ai Hee (Dragostea Din Tei)	O-Zone	DiscO-Zone	2004	130	139848	37	0	ham2	0	0
+sandstorm	6005	Sandstorm	Darude	Before the Storm	1999	136	131854	18	0	ham2	0	0
+clubcanthandleme	6006	Club Can't Handle Me	Flo Rida ft. David Guetta	Only One Flo (Part 1)	2010	128	149062	262	2	ham2	0	0
+hotstuff	6007	Hot Stuff	Donna Summer	Bad Girls	1979	120	145598	207	2	ham2	0	0
+youreajerk	6008	You're A Jerk	New Boyz	Skinny Jeanz and A Mic	2009	98	134566	220	2	ham2	0	0
+massiveattack	6009	Massive Attack	Nicki Minaj ft. Sean Garrett	Massive Attack (Single)	2010	85	142464	310	3	ham2	0	0
+run	6010	Run (I'm A Natural Disaster)	Gnarls Barkley	The Odd Couple	2008	149	158002	525	5	ham2	0	0
+rightthurr	6011	Right Thurr	Chingy	Jackpot	2003	92	159130	234	2	ham2	0	0
+yeah	6012	Yeah!	Usher ft. Lil' Jon & Ludacris	Confessions	2004	104	134288	450	4	ham2	0	0
+whipmyhair	6013	Whip My Hair	Willow	Whip My Hair (Single)	2010	81	144283	417	4	ham2	0	0
+sexychick	6014	Sexy Chick	David Guetta ft. Akon	One Love	2009	130	160615	692	6	ham2	0	0
+thehumptydance	6015	The Humpty Dance	Digital Underground	Sex Packets	1990	103	163478	151	1	ham2	0	0
+whatislove	6016	What Is Love	Haddaway	Haddaway	1993	124	153000	429	4	ham2	0	0
+oopsohmy	6017	Oops (Oh My)	Tweet ft. Missy Elliott	Southern Hummingbird	2002	79	140404	225	2	ham2	0	0
+geturfreakon	6018	Get Ur Freak On	Missy Elliott	Miss E... So Addictive	2001	89	158573	667	6	ham2	0	0
+turnmeon	6019	Turn Me On	Kevin Lyttle	Kevin Lyttle	2004	106	148000	147	1	ham2	0	0
+badromance	6020	Bad Romance	Lady Gaga	The Fame Monster	2009	119	165378	457	4	ham2	0	0
+iwishforyou	6021	I Wish For You	EXILE	Negai No Tou	2011	119	154789	355	3	ham2	0	0
+goodies	6022	Goodies	Ciara ft. Petey Pablo	Goodies	2004	101	134124	390	3	ham2	0	0
+fireburning	6023	Fire Burning	Sean Kingston	Tomorrow	2009	123	147300	217	2	ham2	0	0
+somebodytolove	6024	Somebody To Love	Justin Bieber	My World 2.0	2010	130	148000	589	5	ham2	0	0
+babygotback	6025	Baby Got Back (Mix Mix)	Sir Mix-A-Lot	Baby Got Back (Mix Mix) (Single)	1992	129	148645	530	5	ham2	0	0
+djgotusfallininlove	6026	DJ Got Us Fallin' In Love	Usher ft. Pitbull	Versus	2010	120	139575	485	4	ham2	0	0
+satellite	6027	Satellite	Lena	My Cassette Player	2010	95	164210	647	6	ham2	0	0
+bornthiswaydc	6028	Born This Way	Lady Gaga	Born This Way	2011	124	161573	417	4	ham2	0	0
+ilikeit	6030	I Like It	Enrique Iglesias ft. Pitbull	Euphoria	2010	129	152558	265	2	ham2	0	0
+toxic	6031	Toxic	Britney Spears		2004	143	151048	689	6	ham2	0	1
+venus	6051	Venus	Bananarama	True Confessions	1986	126	157592	117	1	ham2	0	0
+conceited	6052	Conceited (There's Something About Remy)	Remy Ma	There's Something About Remy: Based on a True Story	2006	99	155567	426	4	ham2	0	0
+thebreaks	6053	The Breaks	Kurtis Blow	Kurtis Blow	1980	112	160815	190	1	ham2	0	0
+myprerogative	6054	My Prerogative	Bobby Brown	Don't Be Cruel	1988	110	158522	322	3	ham2	0	0
+lastnight	6055	Last Night	Diddy ft. Keyshia Cole	Press Play	2006	121	140334	151	1	ham2	0	0
+meddle	6056	Meddle	Little Boots	Hands	2008	85	140614	380	3	ham2	0	0
+technologic	6057	Technologic	Daft Punk	Human After All	2005	128	147369	540	5	ham2	0	0
+impacto	6058	Impacto (remix)	Daddy Yankee ft. Fergie	El Cartel: The Big Boss	2007	100	150454	165	1	ham2	0	0
+bulletproof	6059	Bulletproof	La Roux	La Roux	2009	123	121957	119	1	ham2	0	0
+rudeboy	6060	Rude Boy	Rihanna	Rated R	2009	87	135862	237	2	ham2	0	0
+likeag6	6061	Like A G6	Far East Movement	Free Wired	2010	125	159350	435	4	ham2	0	0
+nothinonyou	6062	Nothin' On You	B.o.B ft. Bruno Mars	B.o.B Presents: The Adventures of Bobby Ray	2010	104	177115	240	2	ham2	0	0
+bodytobody	6063	Body To Body	Electric Valentine	The Fuse	2009	113	131684	213	2	ham2	0	0
+grenade	6064	Grenade	Bruno Mars	Doo-Wops & Hooligans	2010	110	139636	332	3	ham2	0	0
+calabria	7005	Calabria 2008	Enur ft. Natasja	Raggatronic	2008	126	157254	421	4	ham3	1	0
+dabutt	7006	Da' Butt	E.U.	School Daze Soundtrack	1988	97	170406	299	2	ham3	1	0
+electricboogie	7007	Electric Boogie	Marcia Griffiths	Carousel	1990	108	163115	338	3	ham3	1	0
+getlow	7008	Get Low	Lil Jon & The East Side Boyz ft. Ying Yang Twins	Kings of Crunk	2002	101	188910	400	4	ham3	1	0
+takeovercontrol	7009	Take Over Control	Afrojack ft. Eva Simons	Take Over Control (Single)	2010	130	160165	450	4	ham3	1	0
+ymca	7011	Y.M.C.A.	Village People	Cruisin'	1978	126	151804	13	0	ham3	1	0
+stereolove	7013	Stereo Love	Edward Maya & Vika Jigulina	Stereo Love (Single)	2009	127	151490	307	3	ham3	1	0
+bassdownlow	7014	Bass Down Low	Dev ft. The Cataracs	The Night the Sun Came Up	2011	113	149734	441	4	ham3	1	0
+nowthatwefoundlove	7015	Now That We Found Love	Heavy D & The Boyz	Peaceful Journey	1991	120	140610	505	5	ham3	1	0
+mrsaxobeat	7016	Mr. Saxobeat	Alexandra Stan	Saxobeats	2011	127	175275	382	3	ham3	1	0
+betteroffalone	7017	Better Off Alone	Alice Deejay	Who Needs Guitars Anyway?	2000	137	161163	58	0	ham3	1	0
+aroundtheworld	7018	Around the World	Daft Punk	Homework	1997	121	155327	539	5	ham3	1	0
+thehustle	7019	The Hustle	Van McCoy	The Hustle and The Best of Van McCoy	1975	110	156127	95	0	ham3	1	0
+supersonic	7020	Supersonic	J. J. Fad	Supersonic	1988	132	163540	540	5	ham3	1	0
+sambadejaneiro	7021	Samba De Janeiro	Bellini	Samba De Janeiro	1997	132	153391	402	4	ham3	1	0
+discoinferno	7022	Disco Inferno	The Trammps	Disco Inferno	1976	130	141551	205	2	ham3	1	0
+chingaling	7023	Ching-A-Ling	Missy Elliott	Ching-A-Ling (Single)	2008	102	175847	476	4	ham3	1	0
+indaclub	7029	In Da Club	50 Cent	Get Rich or Die Tryin'	2003	90	162637	149	1	ham3	1	0
+teachmehowtodougie	7031	Teach Me How to Dougie	Cali Swag District	The Kickback	2011	85	151768	404	4	ham3	1	0
+cupidshuffle	7032	Cupid Shuffle	Cupid	Time for a Change	2007	144	152090	214	2	ham3	1	0
+yougotittherightstuff	7033	You Got It (The Right Stuff)	New Kids On The Block	Hangin' Tough	1988	111	175475	241	2	ham3	1	0
+youmakemefeeldc	7034	You Make Me Feel...	Cobra Starship ft. Sabi	Night Shades	2011	131	156385	658	6	ham3	1	0
+12step	7035	1, 2 Step	Ciara ft. Missy Elliott	Goodies	2004	113	142309	187	1	ham3	1	0
+letthemusicplay	7036	Let The Music Play	Shannon	Let The Music Play	1984	115	180000	335	3	ham3	1	0
+whatdoesntkillyou	7037	Stronger (What Doesn't Kill You)	Kelly Clarkson	Stronger	2011	115	199141	659	6	ham3	1	0
+turnthebeataround	7038	Turn The Beat Around	Vicki Sue Robinson	Never Gonna Let You Go	1976	131	166302	213	2	ham3	1	0
+macarena	7039	Macarena (Bayside Boys Mix)	Los Del Rio	Fiesta Macarena	1996	103	155275	146	1	ham3	1	0
+iwillsurvive	7040	I Will Survive	Gloria Gaynor	I Will Survive: The Anthology	1978	116	159066	215	2	ham3	1	0
+everybody	7041	Everybody (Backstreet's Back)	Backstreet Boys	Backstreet's Back	1997	108	169885	390	3	ham3	1	0
+iceicebaby	7042	Ice Ice Baby	Vanilla Ice	To the Extreme	1990	115	153998	230	2	ham3	1	0
+aint2proud2beg	7043	Ain't 2 Proud 2 Beg	TLC	Ooooooohhh... On the TLC Tip	1992	105	182542	385	3	ham3	1	0
+hello	7044	Hello	Martin Solveig ft. Dragonette	Smash	2011	128	170661	453	4	ham3	1	0
+scream	7050	Scream	Usher	Looking 4 Myself	2012	128	157499	469	4	ham3	1	0
+sexyandiknowit	7051	Sexy And I Know It	LMFAO	Sorry for Party Rocking	2011	130	161075	585	5	ham3	1	0
+giveituptome	7052	(When You Gonna) Give It Up to Me	Sean Paul ft. Keyshia Cole	The Trinity	2005	96	156227	149	1	ham3	1	0
+wildones	7053	Wild Ones	Flo Rida ft. Sia	Wild Ones	2012	127	173854	443	4	ham3	1	0
+moveslikejagger	7054	Moves Like Jagger	Maroon 5 ft. Christina Aguilera	Hands All Over	2010	127	188466	580	5	ham3	1	0
+bewareoftheboys	7055	Beware Of The Boys (Mundian To Bach Ke)	Panjabi MC	Beware	2003	98	155393	453	4	ham3	1	0
+firework	7061	Firework	Katy Perry	Teenage Dream	2010	124	167902	217	2	ham3	1	0
+omg	7062	OMG	Usher ft. will.i.am	Raymond V. Raymond	2010	130	175384	694	6	ham3	1	0
+boyfriend	7063	Boyfriend	Justin Bieber	Believe	2012	97	173823	211	2	ham3	1	0
+onthefloor	7065	On The Floor	Jennifer Lopez ft. Pitbull	Love?	2011	130	166153	480	4	ham3	1	0
+starships	7066	Starships	Nicki Minaj	Pink Friday: Roman Reloaded	2012	125	167032	100	1	ham3	1	0
+boomboompow	7071	Boom Boom Pow	Black Eyed Peas	The E.N.D	2009	130	154613	262	2	ham3	1	0
+iamthebest	7072	I Am The Best	2NE1	2NE1 2nd Mini Album	2011	128	150937	458	4	ham3	1	0
+sayhey	10001002	Say Hey (I Love You)	Michael Franti & Spearhead	All Rebel Rockers	2008	93	159374	110	1	ham2_dlc	0	0
+escapade	10001004	Escapade	Janet Jackson	Janet Jackson's Rhythm Nation 1814	1989	115	161373	134	1	ham2_dlc	0	0
+closer	10001005	Closer	Ne-Yo	Year of the Gentleman	2008	126	138097	261	2	ham2_dlc	0	0
+donttouchme	10001006	Don't Touch Me (Throw da Water on 'Em)	Busta Rhymes	Don't Touch Me (Single)	2008	113	158427	333	3	ham2_dlc	0	0
+nasty	10001008	Nasty	Janet Jackson	Control	1986	104	163305	407	4	ham2_dlc	0	0
+lalaland	10001009	La La Land	Demi Lovato	Don't Forget	2008	85	143972	118	1	ham2_dlc	0	0
+commander	10001010	Commander	Kelly Rowland ft. David Guetta	Here I Am	2010	125	128402	518	5	ham2_dlc	0	0
+forgetyou	10001011	Forget You	Cee Lo Green	The Lady Killer	2010	128	165000	132	1	ham2_dlc	0	0
+wenospeakamericano	10001012	We No Speak Americano	Yolanda Be Cool & DCUP	We No Speak Americano (Single)	2010	125	137648	567	5	ham2_dlc	0	0
+marrythenight	10001013	Marry the Night	Lady Gaga	Born This Way	2011	131	162169	236	2	ham2_dlc	0	0
+letitrock	10001014	Let It Rock	Kevin Rudolf ft. Lil' Wayne	In the City	2008	113	160206	326	3	ham2_dlc	0	0
+whatsmyname	10001015	What's My Name?	Rihanna ft. Drake	Loud	2010	100	151800	385	3	ham2_dlc	0	0
+theedgeofglory	10001016	The Edge of Glory	Lady Gaga	Born This Way	2011	128	161250	120	1	ham2_dlc	0	0
+spiceupyourlife	10001018	Spice Up Your Life (Stent Radio Mix)	Spice Girls	Spice Up Your Life (Single)	1997	124	163542	163	1	ham2_dlc	0	0
+opp	10001019	O.P.P.	Naughty By Nature	Naughty By Nature	1991	98	172040	603	6	ham2_dlc	0	0
+promiscuous	10001020	Promiscuous	Nelly Furtado ft. Timbaland	Loose	2006	114	159566	416	4	ham2_dlc	0	0
+sandm	10001022	S & M	Rihanna	Loud	2010	128	158906	305	3	ham2_dlc	0	0
+onlygirlintheworld	10001023	Only Girl (in the World)	Rihanna	Loud	2010	126	163809	655	6	ham2_dlc	0	0
+yeah3x	10001024	Yeah 3X	Chris Brown	F.A.M.E.	2011	130	158768	418	4	ham2_dlc	0	0
+givemeeverything	10001025	Give Me Everything	Pitbull ft. Ne-Yo, Afrojack & Nayer	Planet Pit	2011	129	161394	386	3	ham2_dlc	0	0
+hellogoodmorning	10001026	Hello Good Morning	Diddy-Dirty Money ft. T.I.	Last Train to Paris	2010	104	171593	440	4	ham2_dlc	0	0
+downonme	10001027	Down On Me	Jeremih ft. 50 Cent	All About You	2010	80	162000	213	2	ham2_dlc	0	0
+gonnamakeyousweat	10001028	Gonna Make You Sweat (Everybody Dance Now)	C+C Music Factory	Gonna Make You Sweat	1990	114	161802	507	5	ham2_dlc	0	0
+milkshake	10001029	Milkshake	Kelis	Tasty	2004	112	161981	387	3	ham2_dlc	0	0
+replay	10001030	Replay	Iyaz	Replay	2010	91	163516	420	4	ham2_dlc	0	0
+roundandround	10001031	Round & Round	Selena Gomez & The Scene	A Year Without Rain	2010	128	165000	447	4	ham2_dlc	0	0
+whineup	10001035	Whine Up	Kat DeLuna ft. Elephant Man	9 Lives	2007	125	172799	454	4	ham2_dlc	0	0
+scenario	10001036	Scenario	A Tribe Called Quest	The Low End Theory	1992	101	254747	402	4	ham2_dlc	0	0
+low	10001037	Low	Flo Rida	Mail On Sunday	2007	128	165000	211	2	ham2_dlc	0	0
+hotinherre	10001038	Hot In Herre	Nelly	Nellyville	2002	106	150868	424	4	ham2_dlc	0	0
+partyrockanthem	10001039	Party Rock Anthem	LMFAO ft. Lauren Bennett & GoonRock	Sorry for Party Rocking	2011	130	159692	527	5	ham2_dlc	0	0
+neversaynever	10001040	Never Say Never	Justin Bieber ft. Jaden Smith	Never Say Never - The Remixes	2010	97	152164	341	3	ham2_dlc	0	0
