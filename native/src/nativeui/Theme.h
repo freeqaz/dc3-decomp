@@ -39,6 +39,7 @@ namespace nativeui {
         // The dark a column of text sits in. Lists and shelves fade into it at
         // their edges, so it must be what is actually behind them.
         Color well;
+        Color wellBorder; // the faint line around it
         Color panelTop; // glassy panel fill, top of its gradient
         Color panelBottom; // and the bottom
         Color panelBorder; // panel outline, at its top

@@ -60,7 +60,7 @@ namespace songbrowser_ui {
                   kDifficultyTiers,
                   model.difficultyTier + 1,
                   &Palette::accent,
-                  &Palette::fieldFill
+                  &Palette::fieldBorder
               ),
               stars(model.stars) {
             if (model.icon) {

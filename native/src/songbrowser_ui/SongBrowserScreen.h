@@ -11,16 +11,23 @@
 //                   nativeui::Replay(browser.BuildFrame(), renderer);
 //     on leaving:   saved = browser.SaveState();
 //
-// What is on it, top to bottom, in a 1280x720 logical view drawn over the
-// game's moving background (nothing here fills the screen opaquely):
-//   top bar     SONGS, the sort tabs (title, artist, difficulty, source,
-//               decade), the search field
+// What is on it, top to bottom, in a 1280x720 logical view. Behind everything
+// is the screen's own backdrop (nativeui::Backdrop), translucent over whatever
+// the game draws; the page hangs on the two hairlines of the game's frame:
+//   top bar     above the upper line: SONGS, the sort tabs (title, artist,
+//               difficulty, source, decade), the search field
 //   left        Recently Played, a shelf of album-art cards, newest first
 //               (only with a play history, never during a search, and folded
-//               away while the list is being browsed); under it the list,
-//               sectioned by the sort, or the ranked results of a search
-//   right       the detail pane for the selected song
-//   bottom      hints for what the controls do right now
+//               away while the list is being browsed); under it the list:
+//               the command rows (Environment::commands: things to do that
+//               are not songs, such as Random Song), then the songs sectioned
+//               by the sort; or the ranked results of a search, which has no
+//               command rows
+//   right       the detail pane for the selected song or command
+//   bottom      below the lower line: hints for what the controls do right now
+//
+// Only the region that has focus shows a filled highlight; a region that
+// merely remembers its selection shows an outline (nativeui/Decor.h).
 //
 // Input (every action is a nativeui::Action; the host maps buttons and keys):
 //   Up / Down       move in the list; at the top of the list go up to the
@@ -28,7 +35,8 @@
 //                   during a search); from the shelf, Up to the tabs and Down
 //                   to the list; from the tabs or the field, Down to the shelf
 //                   or the list
-//   Left / Right    in the list: jump to the previous / next section
+//   Left / Right    in the list: jump to the previous / next section (the
+//                   command rows count as a section before the first)
 //                   on the shelf: previous / next card
 //                   on the tabs: previous / next sort; Right from the last
 //                   tab goes to the search field, Left from the start of the
@@ -37,7 +45,8 @@
 //   NextTab/PrevTab change the sort from anywhere, wrapping
 //   PageUp/PageDown page the list (list focused)
 //   Home / End      first / last row or card (cursor, in the field)
-//   Accept          list or shelf: pick the song (onPick)
+//   Accept          list or shelf: pick the song (onPick); on a command
+//                   row: run the command (onCommand), and no song is picked
 //                   search field: go down into the results
 //   Back            a query is typed: clear it, and return to the song that
 //                   was selected before the search; otherwise leave (onBack)
@@ -46,7 +55,9 @@
 //                   query is typed
 //
 // Focus on arrival: the saved State if one is given; else the first Recently
-// Played card when there is history; else the first row of the list.
+// Played card when there is history; else the first SONG of the list. The
+// selection never starts on a command row: those are reached by Up from the
+// first song.
 //
 // Rules:
 //  - The catalog is borrowed and must outlive the screen. After ANY change to
@@ -68,6 +79,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace nativeui {
     class ListView;
@@ -133,6 +145,9 @@ namespace songbrowser_ui {
         nativeui::Theme theme = nativeui::Dc3Theme();
         HintGlyphs glyphs;
         int maxRecents = 24; // cards on the Recently Played shelf
+        // The command rows this visit has, in the order shown at the top of
+        // the list. Empty: no command rows at all.
+        std::vector<Command> commands { Command::RandomSong, Command::Playlists };
     };
 
     // Where the player was. Save it on the way out and hand it back to return
@@ -181,6 +196,9 @@ namespace songbrowser_ui {
         // The device in use changed (pad to keyboard or back): what the hint
         // pills say from the next frame on.
         void SetHintGlyphs(const HintGlyphs &glyphs);
+        // What the hint bar's labels are now: the value last given to
+        // SetHintGlyphs, or the environment's.
+        const HintGlyphs &HintGlyphsShown() const;
 
         // Whether the host should capture the keyboard for text. Always true:
         // typing anywhere on this screen searches.

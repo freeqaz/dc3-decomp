@@ -22,18 +22,20 @@ namespace nativeui {
         // light. The wash is the ribbons' violet at night-sky depth, thinning to
         // near black at the foot where the hints are; it is translucent so the
         // game's background still moves under it.
-        c.backdropTop = Color::FromRgb8(0x1A0F3C, 0.78f);
-        c.backdropBottom = Color::FromRgb8(0x04040E, 0.86f);
+        c.backdropTop = Color::FromRgb8(0x23145C, 0.80f);
+        c.backdropBottom = Color::FromRgb8(0x070618, 0.88f);
         // The bands are the ribbon colours: blue-violet #694FD5 at (1750,365), the
         // SORT BY streak's blue #2274BC at (60,60) and magenta #780885 at (500,60),
         // each brightened one step because a band is drawn soft and thin.
         c.bandViolet = Color::FromRgb8(0x7A5BEA);
         c.bandBlue = Color::FromRgb8(0x2F8FE0);
         c.bandMagenta = Color::FromRgb8(0xA01CB0);
-        // Chosen: near-black with a trace of the wash's violet. At this opacity the
-        // brightest band behind a list keeps secondary text above 7:1 (measured in
-        // the running game; SONG_BROWSER_UI.md has the figures).
-        c.well = Color::FromRgb8(0x05040F, 0.66f);
+        // Chosen: the wash's own indigo at about the depth the wash has behind a
+        // list, so the well reads as dark glass and not as a black box, and a row
+        // fading into this colour at the well's edge fades into what is there.
+        // SONG_BROWSER_UI.md has the contrast measured in the running game.
+        c.well = Color::FromRgb8(0x0D0A2C, 0.62f);
+        c.wellBorder = Color::FromRgb8(0x8A76F0, 0.22f); // the panel border's violet, faint
         // Chosen. The game's PERFORM panel is glassy grey (#9594A0 to #3B3843); as a
         // large pane beside album art that reads as a flat grey card, so the pane
         // keeps the glass and takes the ribbons' indigo.

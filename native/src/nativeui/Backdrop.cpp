@@ -41,6 +41,9 @@ namespace nativeui {
         // how much of its light comes and goes.
         constexpr float kDriftShare = 0.035f;
         constexpr float kBreathShare = 0.22f;
+        // The two pools, as shares of kBackdropPeakOpacity.
+        constexpr float kVioletPool = 0.80f;
+        constexpr float kBluePool = 0.60f;
         // A band's fine core, in units of the theme's border width.
         constexpr float kCoreThickness = 1.0f;
 
@@ -78,7 +81,7 @@ namespace nativeui {
               bounds.width * 0.34f,
               bounds.height * 0.34f },
             pool,
-            CornerColors::Solid(color.bandViolet.Faded(kBackdropPeakOpacity * 0.55f)),
+            CornerColors::Solid(color.bandViolet.Faded(kBackdropPeakOpacity * kVioletPool)),
             pool
         );
         painter.FillRoundRect(
@@ -87,7 +90,7 @@ namespace nativeui {
               bounds.width * 0.34f,
               bounds.height * 0.3f },
             pool,
-            CornerColors::Solid(color.bandBlue.Faded(kBackdropPeakOpacity * 0.40f)),
+            CornerColors::Solid(color.bandBlue.Faded(kBackdropPeakOpacity * kBluePool)),
             pool
         );
 
