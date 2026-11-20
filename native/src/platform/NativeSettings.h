@@ -11,6 +11,12 @@ bool Dc3EnvFlag(const char *name, bool defaultOn);
 // The DLC roots this boot mounts, ':'-separated, empty for none: DC3_DLC and
 // DC3_DLC_DIR (ContentMgr_Native.cpp has the table).  Desktop only.
 std::string NativeDlcRoots();
+// A root the files of the downloaded package `contentName` resolve under
+// whether or not the game has the package mounted: "dlcrootN:/<package
+// directory>" (ContentMgr_Native.cpp, kDlcRootDriveFormat).  "" when there is
+// no such package.  For readers that show many packages' files at once, which
+// the game's own one-package-at-a-time mounting cannot serve.
+std::string NativeContentCoverRoot(const char *contentName);
 
 // DC3_PROFILE=dev (default) | release -- the native build's defaults, defined
 // in one table in System_Native.cpp (docs/debugging/native.md "Profiles").

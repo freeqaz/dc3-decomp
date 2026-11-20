@@ -19,6 +19,11 @@ public:
     virtual void Poll();
     virtual bool IsLoaded() const;
     virtual void FinishLoad();
+#ifdef HX_NATIVE
+    // The natively drawn song browser draws here in place of the list while
+    // it is shown (native/src/platform/SongBrowserHooks_Native.h).
+    virtual void Draw();
+#endif
 
     NEW_OBJ(SongSelectPanel)
 

@@ -236,7 +236,20 @@ void SongPreview::PrepareFaders(const SongInfo *info) {
     }
 }
 
+#ifdef HX_NATIVE
+// How many times a preview stream was prepared (the debug server's song
+// browser state reports it: a preview START, as opposed to a request).
+int gNativeSongPreviewStarts = 0;
+// Set while the natively drawn song browser's selection is still moving: the
+// next preview waits in kIdle until it rests, the way the image's own list
+// sends its highlight-settled message only once it has stopped scrolling.
+bool gNativeSongPreviewHold = false;
+#endif
+
 void SongPreview::PrepareSong(Symbol song) {
+#ifdef HX_NATIVE
+    gNativeSongPreviewStarts++;
+#endif
     mState = kPreparingSong;
     RELEASE(mStream);
     DataArraySongInfo songInfo(mSongMgr.SongAudioData(song));
@@ -290,6 +303,10 @@ void SongPreview::PrepareSong(Symbol song) {
 void SongPreview::Poll() {
     switch (mState) {
     case kIdle: {
+#ifdef HX_NATIVE
+        if (gNativeSongPreviewHold && !mSong.Null() && mRestart)
+            break;
+#endif
         if (!mSong.Null() && mRestart) {
             const char *name = mSongMgr.ContentName(mSong);
             if (name) {

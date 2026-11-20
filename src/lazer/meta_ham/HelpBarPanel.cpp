@@ -18,6 +18,9 @@
 #include "ui\UILabel.h"
 #include "ui\UIPanel.h"
 #include "utl\Symbol.h"
+#ifdef HX_NATIVE
+#include "platform/SongBrowserHooks_Native.h"
+#endif
 
 HelpBarPanel *HelpBarPanel::sInstance;
 
@@ -51,6 +54,9 @@ END_PROPSYNCS
 void HelpBarPanel::Draw() {
 #ifdef HX_NATIVE
     // Controller mode policy: see NativeHelpbarInControllerMode (HelpBarPanel.h).
+    // The natively drawn song browser has its own hint bar, and no use for
+    // the hand cursor this panel also draws.
+    if (NativeSongBrowser::HidesGameChrome()) return;
     bool show = (!ShouldHideHelpbar() && !mDisabled) || NativeHelpbarInControllerMode();
     static int sLastShow = -1;
     if ((int)show != sLastShow) {
