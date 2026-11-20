@@ -180,7 +180,8 @@ private:
 // socket, and on accept either SIGKILLs itself (DC3_STUB_MODE=die always,
 // die-once on its first run only) or streams empty v1 frames whose ids carry
 // the run number (run * 1000 + n); stall-once SIGSTOPs itself after five
-// frames of its first run, staying connected.
+// frames of its first run, staying connected; slow-start is silent for 1.5 s
+// after it is connected (a model loading), then streams.
 const char *kStubPy = R"PY(
 import os, signal, socket, struct, sys, time
 d = os.environ["DC3_STUB_DIR"]
@@ -200,6 +201,8 @@ c, _ = srv.accept()
 if mode == "die" or (mode == "die-once" and run == 1):
     time.sleep(0.2)
     os.kill(os.getpid(), signal.SIGKILL)
+if mode == "slow-start":
+    time.sleep(1.5)
 n = 0
 while True:
     n += 1
@@ -445,6 +448,43 @@ TEST_F(PoseSpawnerTest, AStalledServerIsReplacedAndTrackingResumes) {
     pid_t second = provider.ServerPid();
     provider.Stop();
     EXPECT_TRUE(WaitUntil([&] { return ProcessGone(second); }, 3000)) << "Stop() left the server";
+}
+
+// A server that is connected and has not yet sent its first frame is loading
+// its model, not hung (np-pose-steady; MEASURED on an M3 MacBook Air: the 5 s
+// watchdog killed the server four times in a row while MediaPipe loaded, so
+// there was no tracking at all).  Here: silent for 1.5 s under a 0.6 s stall
+// time.  Until the first frame the limit is kServerFirstFrameMs.  Sabotaged:
+// the reader using the stall time before the first frame too -> killed at
+// 0.6 s, caught; and the first packet never counting as the first frame ->
+// AStalledServerIsReplacedAndTrackingResumes waits 30 s for its stall, caught.
+TEST_F(PoseSpawnerTest, AServerSilentWhileItLoadsIsNotReplaced) {
+    std::string py = RealPython();
+    if (py.empty())
+        GTEST_SKIP() << "no python3 to run the stub server";
+    ASSERT_TRUE(NativeSpawner::Init());
+    StubDir stub(PythonStub(py));
+    ASSERT_TRUE(stub.ok() && WriteStubPy(stub));
+    ScopedEnv mode("DC3_STUB_MODE", "slow-start");
+    ScopedEnv noSpawn("DC3_POSE_NO_SPAWN", nullptr);
+
+    NativeSkeletonProvider provider;
+    provider.SetRestartPolicy(3, 200);
+    provider.SetServerStallMs(600);
+    ASSERT_TRUE(provider.Start(stub.sock(), "unused.task", 0));
+    pid_t first = provider.ServerPid();
+    ASSERT_GT(first, 0);
+    EXPECT_TRUE(WaitUntil([&] {
+        provider.Poll();
+        return provider.FrameId() > 1000;
+    }, 8000)) << "frame id " << provider.FrameId();
+    EXPECT_EQ(provider.FrameId() / 1000, 1u) << "the frames are a relaunched server's";
+    EXPECT_EQ(provider.ServerStalls(), 0) << "killed while it was starting";
+    EXPECT_EQ(provider.Restarts(), 0);
+    EXPECT_EQ(stub.Runs(), 1);
+    EXPECT_EQ(provider.ServerPid(), first);
+    provider.Stop();
+    EXPECT_TRUE(WaitUntil([&] { return ProcessGone(first); }, 3000)) << "Stop() left the server";
 }
 
 // A server that keeps dying is relaunched exactly maxRestarts times, then the

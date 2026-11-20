@@ -718,7 +718,10 @@ def _default_backend(args):
     try:
         from pose_mediapipe import MediaPipeBackend, NUM_DC3_JOINTS
         print(f"Loading MediaPipe model: {args.model}", file=sys.stderr)
+        started = time.monotonic()
         backend = MediaPipeBackend(args.model, **backend_kwargs(args))
+        print(f"MediaPipe model ready after {time.monotonic() - started:.2f} s",
+              file=sys.stderr, flush=True)
     except ImportError as e:
         raise ServerExit(EXIT_NO_DEPS, f"mediapipe not importable: {e}")
     return backend, NUM_DC3_JOINTS, 1
@@ -981,8 +984,41 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
             cv2.destroyAllWindows()
 
 
+PRIO_DARWIN_PROCESS = 4  # <sys/resource.h> on macOS
+
+
+def clear_background_scheduling():
+    """A live Mac sensor must not inherit the launcher's background policy.
+
+    A game started from a background job hands its policy to the server it
+    launches. MEASURED on an M3 MacBook Air: the server's first inferences
+    then took 237-580 ms, against 22 ms afterwards.
+
+    setpriority(PRIO_DARWIN_PROCESS, 0, 0) takes this process out of the
+    background state, without root privileges; inference/capture workers
+    created later inherit the normal policy. It succeeds whether or not the
+    process was in that state, so the line printed says what was done, not
+    what was found.
+    """
+    if sys.platform != "darwin":
+        return False
+    # os.PRIO_DARWIN_PROCESS is in the os module from Python 3.12 only; the
+    # value is <sys/resource.h>'s, and MediaPipe's wheels run on older Pythons.
+    which = getattr(os, "PRIO_DARWIN_PROCESS", PRIO_DARWIN_PROCESS)
+    try:
+        os.setpriority(which, 0, 0)
+    except (AttributeError, OSError) as error:
+        print(f"Pose scheduling: could not clear macOS background policy: {error}",
+              file=sys.stderr, flush=True)
+        return False
+    print("Pose scheduling: macOS background policy cleared for this process",
+          file=sys.stderr, flush=True)
+    return True
+
+
 def main(argv=None):
     args = parse_args(argv)
+    clear_background_scheduling()
     try:
         run(args)
     except ServerExit as e:

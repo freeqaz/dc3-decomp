@@ -53,14 +53,41 @@
 // without the fill.
 //
 // Engaged only while the camera is slow: when the trimmed mean of the last
-// kWindow camera-frame intervals (song time; RateInterval) is over
-// 1/kEngageHz, released when it falls under 1/kReleaseHz.  A 30 Hz source
+// kWindow camera periods (RateInterval) is over 1/kEngageHz; released once it
+// has stayed under 1/kReleaseHz for kReleaseDwell seconds.  A 30 Hz source
 // never engages it, so at 30 Hz every mode is the same stream as `off`.  Not
 // the median: a camera between the two thresholds delivers a mix of one- and
 // two-frame intervals of a 30 Hz grab (33 / 50 ms), and the median of such a
 // window jumps from one to the other as each frame enters it, across both
 // thresholds -- 349 engage/release changes in one web song (MEASURED,
 // np-web4).  The median still sets the interp delay and the gap limit.
+//
+// The rate is the camera's own (np-pose-steady).  A camera period is the
+// difference of two frames' stamps (Source::ts) over the frames the camera
+// delivered between them (Source::frames) -- not the song time between the
+// frames the game took (Source::arrival), which it was.  The game polls once
+// a frame and takes the newest camera frame, so its takes are whole game
+// frames apart whatever the camera does, and a game running near the
+// camera's rate read as a slow camera.  MEASURED on an M3 MacBook Air on a
+// 30 Hz display (the game at about 31 fps): the pose server sent 29.9-30.4
+// poses a second in every 5 s window and the fill engaged 19 times in 401 s,
+// each time at "camera 22.5 frames/s" -- six two-game-frame gaps among
+// fifteen takes.  The stamps are used while every interval of the window has
+// them and the camera's clock and the fill's kept pace (RateIsTheCamerasOwn);
+// otherwise the takes decide, as before.  DC3_POSE_FILL_RATE=arrival: the
+// takes always.
+//
+// The release dwell (np-pose-steady).  A tracker whose rate wanders about
+// the thresholds changed the fill every few seconds.  MEASURED on the same
+// Mac, 1019 s with the tracker slowing for stretches: 26 engagements, 19 of
+// the 23 spans under 5 s.  Each change is a change of how the motion between
+// two camera frames is made.  The fill lets go only after kReleaseDwell
+// seconds over the release rate without a break; engaging is unchanged, so
+// it is engaged wherever it was before.  Modelled cameras wandering between
+// 18 and 29 Hz: 6-30 changes a minute with no dwell, one engagement in five
+// minutes with 6 s or more; the Mac's recorded tracker rates: 13 changes
+// with none, 7 with 10 s (PoseFillDwellTest prints the table).
+// DC3_POSE_FILL_DWELL=0: no dwell.
 //
 // Fill frames are never recorded (DC3_POSE_RECORD writes camera frames as
 // they arrive) and are not counted as pose_fps.
@@ -120,6 +147,20 @@ static const float kDefaultGain = 1.0f;
 static const Mode kMenuDefaultMode = kOff;
 float ParseGain(const char *env, bool *ok = nullptr);
 const char *ModeName(Mode m);
+// DC3_POSE_FILL_RATE: what the camera's rate is read from (Filler::
+// RateInterval).  Unset, empty or "camera" = kRateCamera, the camera's own
+// stamps; "arrival" = kRateArrival, the time between the frames the game
+// took, as before np-pose-steady (for an A/B).  Anything else is the default
+// and *ok is set false.
+enum RateSource { kRateCamera, kRateArrival };
+RateSource ParseRateSource(const char *env, bool *ok = nullptr);
+// DC3_POSE_FILL_DWELL: seconds the camera must have stayed over the release
+// rate before the fill lets go (Filler::kReleaseDwell).  Unset or empty = the
+// default; 0 = release with the first reading over it, as before
+// np-pose-steady.  Anything else, or outside [0, kMaxReleaseDwell], is the
+// default and *ok is set false.
+static const double kMaxReleaseDwell = 60.0;
+double ParseReleaseDwell(const char *env, bool *ok = nullptr);
 
 typedef NativeSkeletonProvider::PersonData Person;
 static const int kMaxPersons = NativeSkeletonProvider::kMaxPersons;
@@ -129,6 +170,11 @@ struct Source {
     double arrival = 0.0; // song seconds when the game took it
     double ts = -1.0;     // the camera's own stamp, seconds (-1 = none)
     uint32_t frameId = 0;
+    // Camera frames the source delivered since the frame before this one, this
+    // one counted (NativeSkeletonProvider::Delivered).  More than 1: frames
+    // that reached the game between two of its polls, of which it took only
+    // the newest.
+    int frames = 1;
     int numPersons = 0;
     Person persons[kMaxPersons];
     Vector3 floorNormal;   // the normal it was levelled by when it arrived
@@ -178,7 +224,8 @@ class Filler {
 public:
     static constexpr double kStep = 1.0 / 30.0;     // the Kinect's frame period
     static constexpr double kEngageHz = 24.0;       // engage below this camera rate
-    static constexpr double kReleaseHz = 27.0;      // release above it
+    static constexpr double kReleaseHz = 27.0;      // release above it ...
+    static constexpr double kReleaseDwell = 10.0;   // ... once it has stayed there this long, seconds
     static constexpr int kWindow = 15;              // camera intervals in the rate estimate
     static constexpr int kMinIntervals = 5;         // before the first decision
     static constexpr double kDelayFactor = 1.2;     // interp delay = this x the median interval
@@ -188,6 +235,9 @@ public:
     static constexpr double kMaxGap = 0.5;          //   this x the median, or this, seconds
     static constexpr double kHoldCap = 0.5;         // hold/extrap: no fill this long after a camera frame
     static constexpr int kBuffer = 8;
+    // The rate from the camera's stamps (RateInterval):
+    static constexpr int kMaxUntaken = 64;          // Source::frames beyond this is not believed (taken as 1)
+    static constexpr double kPace = 1.5;            // the two clocks keep pace within this factor
 
     void SetMode(Mode m);
     // The same, keeping what is known of the camera: its rate window and --
@@ -200,6 +250,12 @@ public:
     Mode GetMode() const { return mMode; }
     void SetGain(float g); // clamped to [0, 1]
     float Gain() const { return mGain; }
+    void SetRateSource(RateSource s) { mRateSource = s; }
+    RateSource GetRateSource() const { return mRateSource; }
+    // Seconds over the release rate before a release; clamped to
+    // [0, kMaxReleaseDwell].  0 = at the first reading over it.
+    void SetReleaseDwell(double seconds);
+    double ReleaseDwell() const { return mReleaseDwell; }
     void Reset();
 
     // A camera frame arrived (src.arrival = song seconds now).  Updates the
@@ -217,9 +273,23 @@ public:
     double Delay() const { return mEngaged && mMode == kInterp ? mDelay : 0.0; }
     double MedianInterval() const; // s, 0 before kMinIntervals
     // The camera's rate for engage/release: the mean of the window's
-    // intervals without its shortest and longest fifth, s; 0 before
-    // kMinIntervals. Not the median: see the class comment.
+    // camera periods without its shortest and longest fifth, s; 0 before
+    // kMinIntervals.  Not the median: see the file comment.
+    //
+    // A camera period is the camera's own: the difference of two frames'
+    // stamps over the frames the camera delivered between them
+    // (Source::frames) -- not the time between the game's takes, which is a
+    // whole number of game frames whatever the camera does.  That holds while
+    // RateIsTheCamerasOwn(); otherwise it is the time between the takes, as
+    // it was before np-pose-steady.
     double RateInterval() const;
+    // Whether RateInterval() is read from the camera's stamps: kRateCamera,
+    // every interval in the window has advancing stamps under a second apart,
+    // and over the window the camera's clock and the fill's ran at the same
+    // pace (within kPace).  They do not under DC3_FAST_TIME with a camera on
+    // the wall clock, or on a slowed song; what the scorer gets is frames a
+    // song second, so there the takes decide.
+    bool RateIsTheCamerasOwn() const;
     unsigned Fills() const { return mFills; }
     unsigned Reals() const { return mReals; }
     // The elapsed sensor time of the newest camera frame, ms (the camera's
@@ -235,7 +305,13 @@ private:
     float mGain = kDefaultGain;
     bool mEngaged = false;
     double mDelay = 0.0;
-    double mIntervals[kWindow] = {};
+    RateSource mRateSource = kRateCamera;
+    double mReleaseDwell = kReleaseDwell;
+    double mFastFor = 0.0; // engaged: song seconds the rate has read over kReleaseHz without a break
+    // One entry per camera-frame interval, the three in step:
+    double mIntervals[kWindow] = {};  // song time between the two takes (the median's)
+    double mStampSpans[kWindow] = {}; // the camera's stamps across them, 0 = none
+    double mPeriods[kWindow] = {};    // ... over the frames the camera delivered
     int mNumIntervals = 0, mIntervalHead = 0;
     Source mBuf[kBuffer];
     int mCount = 0;

@@ -102,7 +102,13 @@ connected** is relaunched by the reader thread, at most **3** times per
 session, after 1 s, 2 s, 4 s, with one line on stderr and one on-screen
 notice per attempt (*"The pose server crashed (signal 9) - restarting pose
 tracking (1 of 3)."*); once it reconnects the notice clears and
-`Pose server restarted (pid N): pose tracking resumed` is printed. Exits a
+`Pose server restarted (pid N): waiting for its first frame` is printed,
+then `Pose server streaming: first pose frame received` when frames are
+back. A server that is connected and has not yet sent a frame is loading
+its model: until its first frame the stall watchdog
+(`DC3_POSE_SERVER_STALL_MS`, 5 s) allows 30 s. Measured on an M3 MacBook
+Air, two launches: with 5 s the server was killed four times in a row while
+MediaPipe loaded, and there was no tracking. Exits a
 relaunch cannot fix — model missing (5), packages missing (6), video
 unreadable (4), python3 not runnable (127), a clean exit (0) — are not
 retried; after the last attempt the usual "pose tracking is off" notice
@@ -2473,17 +2479,29 @@ Code:
 ### What every mode shares
 
 - **Engages only for a slow camera.**
-  - It engages when the trimmed mean of the last 15 camera-frame intervals
-    (shortest and longest fifth dropped), measured in song time, is above
-    1/24 s. It releases below 1/27 s. (The median, until np-web4: a camera
-    between the thresholds delivers a 33/50 ms interval mix, and the median
-    of that jumped across both thresholds on every frame -- 349 changes in
-    one web song. [WEB.md](WEB.md#pose-fill-on-web-l-8-np-web4).)
+  - It engages when the trimmed mean of the last 15 camera periods
+    (shortest and longest fifth dropped) is above 1/24 s. It releases once
+    that mean has stayed below 1/27 s for 10 s (`DC3_POSE_FILL_DWELL`).
+    (The median, until np-web4: a camera between the thresholds delivers a
+    33/50 ms interval mix, and the median of that jumped across both
+    thresholds on every frame -- 349 changes in one web song.
+    [WEB.md](WEB.md#pose-fill-on-web-l-8-np-web4).)
+  - **A camera period is the camera's own**: the difference of two frames'
+    stamps over the frames the camera delivered between them. Until
+    np-pose-steady it was the song time between the frames the game
+    *took*, which is a whole number of game frames whatever the camera
+    does. See [Steady engagement](#steady-engagement-np-pose-steady-2026-11-20).
   - A 30 Hz source never engages it, so at 30 Hz the stream is the camera's
     own (measured below).
-  - A slow *game* (song loading, a box at load 150) also reads as a slow
-    camera, because the rate is measured in song time. That is deliberate:
-    what the scorer sees is frames per song second.
+  - When the stream carries no usable stamps, or the camera's clock and
+    the fill's did not keep pace within a factor 1.5 over the window
+    (`DC3_FAST_TIME` with a camera on the wall clock, a slowed song), the
+    rate is the time between the game's takes, in song time, as before:
+    what the scorer sees there is frames per song second.
+  - A slow *game* with a 30 Hz camera no longer reads as a slow camera.
+    Nothing is lost by that: the fill hands the game at most one frame a
+    game frame and the camera's own frame goes first, so a game that polls
+    less often than the camera delivers could never be given a fill frame.
 - **Is never recorded.** `DC3_POSE_RECORD` writes camera frames as they
   arrive, before the fill. Fill frames are not counted in `pose_fps`.
 - **Does not bridge tracking dropouts.** Nothing is filled after a frame
@@ -2494,6 +2512,93 @@ Code:
   held frames: 8 off, 8 interp, 8 extrap.
 - **One log line** on engage, release, or an interp delay change ≥ 20 ms:
   `DC3 POSE FILL: extrap (gain 1.00) engaged at song 12.34 s (camera 8.4 frames/s, stream delay 0 ms added to the scorer's latency)`.
+
+### Steady engagement (`np-pose-steady`, 2026-11-20)
+
+Owner's report from an M3 MacBook Air: pose detection *"felt jittery"*.
+Two things in that session's logs, both MEASURED, and a third that is the
+fill working:
+
+1. **Engaged for a camera at a steady 30.** 401 s on a 30 Hz display, the
+   game at about 31 fps. The pose server sent 29.9-30.4 poses a second in
+   every 5 s window (79 windows, none under 25.5). The fill engaged 19
+   times, logging `camera 22.5 frames/s` (or 23.3, 23.9).
+2. **Flapping.** 1019 s with the game at 60 fps and the tracker slowing
+   down for stretches: 26 engagements; 19 of the 23 engaged spans lasted
+   under 5 s (median 2.1 s); of the 24 releases followed by another
+   engagement in the same song, 17 were followed within 5 s and 18 within
+   10 s.
+3. The tracker really was slow for stretches (12-19 poses a second,
+   inference 50-80 ms against 21 ms, while the machine was hot). There the
+   fill is meant to engage.
+
+**Cause of 1** (`PoseFill_Native.cpp`, `Filler::Push`): each interval was
+`src.arrival - last.arrival`, the song time at which the *game* took the
+two frames. The game polls the provider once a frame and takes the newest
+camera frame; one that arrived between two polls together with a later one
+is never taken. When the game runs near the camera's rate, a poll that
+finds nothing new is followed by one that finds two. Six such two-frame
+gaps among fifteen takes of a 30 fps game read exactly 22.5 Hz.
+
+**Fix.** The provider counts every frame the source delivers
+(`NativeSkeletonProvider::Delivered`); a camera period is the difference
+of the two frames' stamps over the frames delivered between them
+(`Source::frames`). `DC3_POSE_FILL_RATE=arrival` is the estimate before.
+The median interval (interp's delay, extrap's horizon, the gap limit) is
+still song time between the frames the game took.
+
+Engagements of a 30.0 Hz camera sampled by a game loop, 3 x 120 s a cell,
+before -> now (`PoseFillRateTest`, a model of the delivery, not a
+recording):
+
+| delivery | game 30 fps | 31 | 33 | 45 | 60 |
+|---|---|---|---|---|---|
+| +-4 ms | 13 -> 0 | 3 -> 0 | 0 -> 0 | 0 -> 0 | 0 -> 0 |
+| +-8 ms | 40 -> 0 | 18 -> 0 | 0 -> 0 | 0 -> 0 | 0 -> 0 |
+| 15 % of frames 30 ms late | 58 -> 0 | 71 -> 0 | 40 -> 0 | 109 -> 0 | 19 -> 0 |
+| the same, stamped late too | 58 -> 0 | 71 -> 0 | 40 -> 0 | 109 -> 0 | 19 -> 0 |
+
+A camera at 8, 10, 12, 15 or 20 Hz engages with the same frame as before
+(its fifth interval) and stays engaged, at a 30 and a 60 fps game.
+
+**Fix of 2: the release dwell.** The fill lets go once the rate has read
+over 27 for 10 s of its clock without a break; a reading back under 27
+starts the wait again. Engaging is unchanged, so the fill is engaged
+wherever it was before. `DC3_POSE_FILL_DWELL=0` is the release before.
+Engage/release changes a minute, a camera sampled by a 60 fps game for
+300 s (`PoseFillDwellTest`):
+
+| camera | dwell 0 | 3 s | 5 s | 6 s | 8 s | **10 s** | 15 s |
+|---|---|---|---|---|---|---|---|
+| 18-29 Hz, a 4 s sine | 29.8 | 0.2 | 0.2 | 0.2 | 0.2 | **0.2** | 0.2 |
+| 18-29 Hz, a 9 s sine | 13.6 | 0.2 | 0.2 | 0.2 | 0.2 | **0.2** | 0.2 |
+| 18-29 Hz, a 20 s sine | 6.2 | 6.2 | 6.2 | 0.2 | 0.2 | **0.2** | 0.2 |
+| a level from 18-29 Hz every 2.5 s | 18.4 | 1.2 | 0.2 | 0.2 | 0.2 | **0.2** | 0.2 |
+| 29 Hz with 2 s at 18 every 8 s | 15.2 | 15.0 | 15.0 | 0.2 | 0.2 | **0.2** | 0.2 |
+| the Mac's tracker rates (197 windows of 5 s) | 0.8 | 0.8 | 0.7 | 0.7 | 0.7 | **0.4** | 0.3 |
+
+- 0.2 a minute is the one engagement of the run.
+- 6 s is the shortest dwell that leaves every synthetic camera one
+  engagement. 10 s is the shortest at which the Mac's own rates go from
+  13 changes to 7. That row holds one rate per 5 s window, so it is a
+  steadier camera than the Mac's was (the log has 52 changes).
+- Cost: a camera that was slow and is fast for good stays filled 10 s
+  longer (20.1 -> 30.1 s engaged in the test), with the same two changes.
+
+**Scores, before -> now.** Footage fixtures as below, three songs
+(boyfriend, indaclub, macarena), medium, one run each; before is
+`DC3_POSE_FILL_RATE=arrival DC3_POSE_FILL_DWELL=0` on the same binary.
+
+| camera | score before | score now | ratings, both |
+|---|---|---|---|
+| 8 Hz | 5,537,085 | 5,537,256 (+0.003 %) | 137/43/3/0 |
+| 15 Hz | 5,583,889 | 5,583,841 (-0.001 %) | 136/44/2/1 |
+
+The ratings are the same song by song. The differences are inside the
+scorer's run-to-run spread given below (0.02 %). In all twelve runs the
+fill engaged once and never released: the performer's rate is constant, so
+these runs say a steadily slow camera scores as before. No scored run of a
+camera whose rate wanders was taken, and nothing here was run on the Mac.
 
 ### What `extrap` (the default) does
 

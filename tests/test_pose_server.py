@@ -47,6 +47,52 @@ sys.path.insert(0, os.path.join(REPO, "native", "scripts"))
 import pose_server as ps  # noqa: E402  (imports nothing heavy at module level)
 
 
+class MacSchedulingTest(unittest.TestCase):
+    def test_other_platforms_keep_their_scheduling(self):
+        from unittest import mock
+        with mock.patch.object(ps.sys, "platform", "linux"), \
+                mock.patch.object(ps.os, "setpriority", create=True) as setter:
+            self.assertFalse(ps.clear_background_scheduling())
+            setter.assert_not_called()
+
+    def test_mac_sensor_clears_only_its_own_background_policy(self):
+        from unittest import mock
+        with mock.patch.object(ps.sys, "platform", "darwin"), \
+                mock.patch.object(ps.os, "PRIO_DARWIN_PROCESS", 4, create=True), \
+                mock.patch.object(ps.os, "setpriority", create=True) as setter:
+            self.assertTrue(ps.clear_background_scheduling())
+            setter.assert_called_once_with(4, 0, 0)
+
+    def test_a_python_without_the_constant_still_clears_it(self):
+        # os.PRIO_DARWIN_PROCESS arrived in Python 3.12; before that the patch
+        # this came from raised AttributeError and left the server throttled.
+        import types
+        from unittest import mock
+        calls = []
+        bare_os = types.SimpleNamespace(setpriority=lambda *a: calls.append(a))
+        with mock.patch.object(ps.sys, "platform", "darwin"), mock.patch.object(ps, "os", bare_os):
+            self.assertTrue(ps.clear_background_scheduling())
+        self.assertEqual(calls, [(4, 0, 0)])
+
+    def test_the_server_clears_it_before_it_runs(self):
+        from unittest import mock
+        order = []
+        with mock.patch.object(ps, "parse_args", return_value=object()), \
+                mock.patch.object(ps, "clear_background_scheduling",
+                                  side_effect=lambda: order.append("clear")), \
+                mock.patch.object(ps, "run", side_effect=lambda args: order.append("run")):
+            ps.main([])
+        self.assertEqual(order, ["clear", "run"])
+
+    def test_an_unavailable_policy_does_not_disable_tracking(self):
+        from unittest import mock
+        with mock.patch.object(ps.sys, "platform", "darwin"), \
+                mock.patch.object(ps.os, "PRIO_DARWIN_PROCESS", 4, create=True), \
+                mock.patch.object(ps.os, "setpriority", side_effect=PermissionError("denied"),
+                                  create=True):
+            self.assertFalse(ps.clear_background_scheduling())
+
+
 class FakeClock:
     def __init__(self, t=1000.0):
         self.t = t

@@ -1031,6 +1031,20 @@ void FillReadMode() {
     gFill.SetGain(Dc3PoseFill::ParseGain(g, &gainOk));
     if (!gainOk)
         fprintf(stderr, "DC3_POSE_FILL_GAIN='%s' ignored (want 0 .. 1)\n", g);
+    // DC3_POSE_FILL_RATE: what the camera's rate is read from.  A test's
+    // override takes the default.
+    const char *r = gFillHaveOverride ? nullptr : getenv("DC3_POSE_FILL_RATE");
+    bool rateOk = true;
+    gFill.SetRateSource(Dc3PoseFill::ParseRateSource(r, &rateOk));
+    if (!rateOk)
+        fprintf(stderr, "DC3_POSE_FILL_RATE='%s' ignored (want camera or arrival)\n", r);
+    // DC3_POSE_FILL_DWELL: seconds over the release rate before a release.
+    const char *d = gFillHaveOverride ? nullptr : getenv("DC3_POSE_FILL_DWELL");
+    bool dwellOk = true;
+    gFill.SetReleaseDwell(Dc3PoseFill::ParseReleaseDwell(d, &dwellOk));
+    if (!dwellOk)
+        fprintf(stderr, "DC3_POSE_FILL_DWELL='%s' ignored (want seconds, 0 .. %.0f)\n", d,
+                Dc3PoseFill::kMaxReleaseDwell);
     const char *c = getenv("DC3_POSE_FILL_CLOCK");
     gFillSongClockOnly = c && !strcmp(c, "song");
     if (c && strcmp(c, "song") && strcmp(c, "stall"))
@@ -1322,6 +1336,13 @@ static const SkeletonFrame *BuildSensorFrame() {
             src.arrival = FillClock();
             src.ts = TheSkeletonProvider->Timestamp();
             src.frameId = frameId;
+            // The camera frames this one stands for: the provider keeps the
+            // newest, so any that arrived since the last poll with it are gone.
+            static uint32_t sExtLastDelivered = 0;
+            uint32_t deliveredNow = TheSkeletonProvider->Delivered();
+            uint32_t since = deliveredNow - sExtLastDelivered; // wraps with the counter
+            sExtLastDelivered = deliveredNow;
+            src.frames = since <= 0xffffu ? (int)since : 1; // the Filler bounds it
             src.numPersons = numPersons;
             for (int i = 0; i < numPersons; i++)
                 src.persons[i] = sPersons[i];

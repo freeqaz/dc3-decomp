@@ -31,6 +31,11 @@
 //                          same-people guard (hold 8 -> 32 frames), extrap
 //                          filling after a frame with nobody (8 -> 32),
 //                          recording fill frames (49 -> 220 frames).
+//                          np-pose-steady: a 30 Hz camera under a 30 fps game
+//                          is not a slow camera (sabotaged: the sensor not
+//                          passing the frames delivered, the provider not
+//                          counting them), and DC3_POSE_FILL_RATE / _DWELL
+//                          reach the filler (sabotaged: either not passed).
 //
 // Each case was sabotage-checked against the code it pins (see the commit).
 
@@ -1764,6 +1769,73 @@ TEST_F(PoseFillSensorTest, AThirtyHertzCameraIsTheSameStreamFillOnOrOff) {
     }
 }
 
+
+// np-pose-steady: a camera sending 30 frames a second under a 30 fps game.
+// Two polls in seven find no new frame and the poll after each finds two, of
+// which the sensor takes the newer -- so it takes 21.4 a second, two takes in
+// five two game frames after the one before: the "camera 22.5 frames/s" the
+// fill engaged at on the Mac (MEASURED, 19 times in 401 s at a steady 30 a
+// second from the pose server).  The camera's rate is its own stamps over
+// the frames it delivered (NativeSkeletonProvider::Delivered).
+TEST_F(PoseFillSensorTest, AThirtyHertzCameraUnderAThirtyFpsGameIsNotASlowCamera) {
+    auto run = [&](bool stamps) {
+        NativePoseFillTestSet(Dc3PoseFill::kExtrap, &Clock);
+        double camera = 700.0; // the camera's own clock
+        int engagedPolls = 0;
+        for (int i = 0; i < 140; i++) {
+            sClock += 1.0 / 30.0;
+            int k = i % 7;
+            int n = (k == 1 || k == 4) ? 0 : (k == 2 || k == 5) ? 2 : 1;
+            for (int j = 0; j < n; j++) {
+                camera += 1.0 / 30.0;
+                uint32_t id = ++sFrameId;
+                std::vector<WirePerson> wire{ Dc3Person(95, (float)(0.1 * sClock)) };
+                EXPECT_TRUE(mServer.Send(
+                    PacketV2(id, stamps ? camera : 700.0, 640, 480, kNumJoints, 1, wire)));
+                EXPECT_TRUE(WaitForFrame(mProvider, id));
+            }
+            mSensor->PollNewFrame();
+            engagedPolls += NativePoseFiller().Engaged();
+        }
+        return engagedPolls;
+    };
+    EXPECT_EQ(run(true), 0) << "engaged for a camera delivering 30 frames a second";
+    EXPECT_TRUE(NativePoseFiller().RateIsTheCamerasOwn());
+    EXPECT_NEAR(1.0 / NativePoseFiller().RateInterval(), 30.0, 0.1);
+    EXPECT_EQ(NativePoseFiller().Fills(), 0u);
+    // The control: the same takes of a stream whose stamp never advances are
+    // read by the time between them, as every stream was before.
+    EXPECT_GT(run(false), 100) << "the control never engaged: this test cannot tell the two apart";
+    EXPECT_FALSE(NativePoseFiller().RateIsTheCamerasOwn());
+    EXPECT_NEAR(1.0 / NativePoseFiller().RateInterval(), 22.5, 0.2);
+}
+
+// The two switches back (np-pose-steady) reach the sensor's filler.
+TEST_F(PoseFillSensorTest, TheRateAndDwellSwitchesReachTheFiller) {
+    {
+        ScopedEnv mode("DC3_POSE_FILL", nullptr);
+        ScopedEnv rate("DC3_POSE_FILL_RATE", "arrival");
+        ScopedEnv dwell("DC3_POSE_FILL_DWELL", "0");
+        NativePoseFillTestSet(-1, &Clock); // -1: the environment decides
+        EXPECT_EQ(NativePoseFiller().GetRateSource(), Dc3PoseFill::kRateArrival);
+        EXPECT_EQ(NativePoseFiller().ReleaseDwell(), 0.0);
+    }
+    {
+        ScopedEnv rate("DC3_POSE_FILL_RATE", nullptr);
+        ScopedEnv dwell("DC3_POSE_FILL_DWELL", "2.5");
+        NativePoseFillTestSet(-1, &Clock);
+        EXPECT_EQ(NativePoseFiller().GetRateSource(), Dc3PoseFill::kRateCamera);
+        EXPECT_EQ(NativePoseFiller().ReleaseDwell(), 2.5);
+    }
+    {
+        // Unset, and a value that does not parse: the defaults.
+        ScopedEnv rate("DC3_POSE_FILL_RATE", "quick");
+        ScopedEnv dwell("DC3_POSE_FILL_DWELL", nullptr);
+        NativePoseFillTestSet(-1, &Clock);
+        EXPECT_EQ(NativePoseFiller().GetRateSource(), Dc3PoseFill::kRateCamera);
+        EXPECT_EQ(NativePoseFiller().ReleaseDwell(), Dc3PoseFill::Filler::kReleaseDwell);
+    }
+}
 
 TEST(PoseServerExitTest, EachServerExitCodeHasItsOwnMessage) {
     using P = NativeSkeletonProvider;

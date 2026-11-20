@@ -157,6 +157,18 @@ public:
     // killed and relaunched under the same policy.  0 = never.  Default
     // DC3_POSE_SERVER_STALL_MS, else kDefaultServerStallMs.  Before Start().
     static const int kDefaultServerStallMs = 5000;
+    // Until a server's first frame the limit is kServerFirstFrameMs (or the
+    // stall time, if that is longer): pose_server.py binds its socket BEFORE
+    // it loads the model, so a server that is still loading is connected and
+    // silent, exactly as a hung one is.  MEASURED on an M3 MacBook Air, two
+    // launches: the 5 s watchdog killed the server four times in a row while
+    // MediaPipe was loading, so there was no tracking at all.  Each
+    // (re)launched server gets the allowance again; 0 still means never.
+    static const int kServerFirstFrameMs = 30000;
+    static int ServerSilenceLimitMs(int stallMs, bool receivedFrame) {
+        if (stallMs <= 0 || receivedFrame) return stallMs;
+        return stallMs < kServerFirstFrameMs ? kServerFirstFrameMs : stallMs;
+    }
     void SetServerStallMs(int ms) { mServerStallMs = ms; }
     int ServerStalls() const { return mServerStalls; }
     // pid of the pose_server.py this provider launched, or -1.
@@ -204,6 +216,13 @@ public:
     // so FrameId() alone cannot tell "nothing yet" from "frame 0"; the stall
     // watchdog (DC3_POSE_STALL_MS) watches only a source that has spoken.
     bool HasPublished() const { return mPublishedFront; }
+    // Frames the source has delivered so far (every transport ends in
+    // PublishFrame), as of the last Poll().  Poll() takes the newest only, so
+    // a step of more than one between two frames the game took is frames that
+    // arrived between two of its polls and were never seen: what the frame
+    // fill needs to tell a slow camera from a game loop near the camera's
+    // rate (PoseFill_Native.h, Source::frames).  Wraps; take differences.
+    uint32_t Delivered() const { return mDeliveredFront; }
 
     // Sensor capture timestamp (seconds) of that packet, as the server stamped
     // it -- the v1/v2 header's f64 ts.  Xbox takes a skeleton frame's elapsed
@@ -298,6 +317,8 @@ private:
     uint32_t mFrameIdBack = 0;
     uint32_t mFrameIdFront = 0;
     bool mPublishedBack = false;
+    uint32_t mDeliveredBack = 0;  // PublishFrame calls (under mSwapMutex)
+    uint32_t mDeliveredFront = 0;
     bool mPublishedFront = false;
     double mTimestampBack = 0.0;
     double mTimestampFront = 0.0;

@@ -33,6 +33,23 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+TEST(PoseServerWatchdog, ColdModelStartupCanExceedTheLiveStreamDeadline) {
+    const int startup = NativeSkeletonProvider::ServerSilenceLimitMs(5000, false);
+    EXPECT_GT(startup, 8000) << "a slow first frame must not trigger the five-second restart loop";
+    EXPECT_LE(startup, 60000) << "a genuinely hung startup must still time out";
+}
+
+TEST(PoseServerWatchdog, StreamingKeepsTheConfiguredStallDeadline) {
+    EXPECT_EQ(NativeSkeletonProvider::ServerSilenceLimitMs(5000, true), 5000);
+    EXPECT_EQ(NativeSkeletonProvider::ServerSilenceLimitMs(600, true), 600);
+}
+
+TEST(PoseServerWatchdog, DisabledAndLongerWatchdogsAreRespected) {
+    EXPECT_EQ(NativeSkeletonProvider::ServerSilenceLimitMs(0, false), 0);
+    EXPECT_EQ(NativeSkeletonProvider::ServerSilenceLimitMs(0, true), 0);
+    EXPECT_EQ(NativeSkeletonProvider::ServerSilenceLimitMs(45000, false), 45000);
+}
+
 namespace {
 
 class Env {

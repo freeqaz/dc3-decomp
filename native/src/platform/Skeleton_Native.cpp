@@ -812,7 +812,9 @@ bool NativeSkeletonProvider::ServerGone() {
 
         switch (WaitForServer(kServerTimeoutMs, &status)) {
         case kConnected:
-            printf("Pose server restarted (pid %d): pose tracking resumed\n", (int)mServerPid);
+            // Connected is not tracking: the model loads after the socket is
+            // bound.  "Pose server streaming" below says when frames are back.
+            printf("Pose server restarted (pid %d): waiting for its first frame\n", (int)mServerPid);
             {
                 std::lock_guard<std::mutex> lock(mSwapMutex);
                 mProblem = Problem();
@@ -887,6 +889,7 @@ void NativeSkeletonProvider::ReaderThread() {
             stallMs = kDefaultServerStallMs;
     }
     auto lastPacket = std::chrono::steady_clock::now();
+    bool receivedFrame = false;
     while (mRunning && !mStopRequested) {
         // Poll for data with timeout
         struct pollfd pfd;
@@ -898,15 +901,17 @@ void NativeSkeletonProvider::ReaderThread() {
             // replace it (ServerGone reaps it and relaunches per the policy).
             double silentMs = std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - lastPacket).count();
-            if (stallMs > 0 && mSpawned && mServerPid > 0 && silentMs >= stallMs) {
-                fprintf(stderr, "Pose server stalled: no frame for %.1f s - replacing it\n",
-                        silentMs / 1000.0);
+            const int limitMs = ServerSilenceLimitMs(stallMs, receivedFrame);
+            if (limitMs > 0 && mSpawned && mServerPid > 0 && silentMs >= limitMs) {
+                fprintf(stderr, "Pose server stalled: %s for %.1f s - replacing it\n",
+                        receivedFrame ? "no frame" : "waiting for the first frame", silentMs / 1000.0);
                 mServerStalls = mServerStalls + 1;
                 mServerStalled = true;
                 // SIGKILL: a stopped process does not act on SIGTERM.
                 NativeSpawner::Kill(mServerPid, SIGKILL);
                 bool back = ServerGone();
                 lastPacket = std::chrono::steady_clock::now();
+                receivedFrame = false;
                 if (back)
                     continue;
                 mRunning = false;
@@ -920,8 +925,11 @@ void NativeSkeletonProvider::ReaderThread() {
         uint32_t packetLen;
         if (!readExact(mSocketFd, &packetLen, 4)) {
             fprintf(stderr, "Pose server disconnected\n");
-            if (ServerGone())
+            if (ServerGone()) {
+                lastPacket = std::chrono::steady_clock::now();
+                receivedFrame = false;
                 continue; // a relaunched server is connected again
+            }
             mRunning = false;
             break;
         }
@@ -930,8 +938,11 @@ void NativeSkeletonProvider::ReaderThread() {
         std::vector<uint8_t> packet(packetLen);
         if (!readExact(mSocketFd, packet.data(), packetLen)) {
             fprintf(stderr, "Pose server read error\n");
-            if (ServerGone())
+            if (ServerGone()) {
+                lastPacket = std::chrono::steady_clock::now();
+                receivedFrame = false;
                 continue;
+            }
             mRunning = false;
             break;
         }
@@ -954,6 +965,10 @@ void NativeSkeletonProvider::ReaderThread() {
         static const uint32_t kProtocolMagic = 0x44503302u;
         static const uint32_t kProtocolMagicV3 = 0x44503303u;
         if (packetLen < 16) continue;
+        if (!receivedFrame) {
+            receivedFrame = true;
+            printf("Pose server streaming: first pose frame received\n");
+        }
         const uint8_t *p = packet.data();
         const uint8_t *end = packet.data() + packetLen;
 
@@ -1088,6 +1103,7 @@ void NativeSkeletonProvider::PublishFrame(
     mNumPersonsBack = numPersons;
     mFrameIdBack = frameId;
     mPublishedBack = true;
+    mDeliveredBack++;
     mTimestampBack = timestamp;
     mUnlevelledBack = unlevelled;
     mDeclaredLatencyMsBack = declaredLatencyMs;
@@ -1106,6 +1122,7 @@ void NativeSkeletonProvider::Poll() {
         mNumPersons = mNumPersonsBack;
         mFrameIdFront = mFrameIdBack;
         mPublishedFront = mPublishedBack;
+        mDeliveredFront = mDeliveredBack;
         mTimestampFront = mTimestampBack;
         mUnlevelledFront = mUnlevelledBack;
         declaredLatencyMs = mDeclaredLatencyMsBack;
