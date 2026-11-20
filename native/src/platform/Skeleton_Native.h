@@ -157,6 +157,18 @@ public:
     // killed and relaunched under the same policy.  0 = never.  Default
     // DC3_POSE_SERVER_STALL_MS, else kDefaultServerStallMs.  Before Start().
     static const int kDefaultServerStallMs = 5000;
+    // Until a server's first frame the limit is kServerFirstFrameMs (or the
+    // stall time, if that is longer): pose_server.py binds its socket BEFORE
+    // it loads the model, so a server that is still loading is connected and
+    // silent, exactly as a hung one is.  MEASURED on an M3 MacBook Air, two
+    // launches: the 5 s watchdog killed the server four times in a row while
+    // MediaPipe was loading, so there was no tracking at all.  Each
+    // (re)launched server gets the allowance again; 0 still means never.
+    static const int kServerFirstFrameMs = 30000;
+    static int ServerSilenceLimitMs(int stallMs, bool receivedFrame) {
+        if (stallMs <= 0 || receivedFrame) return stallMs;
+        return stallMs < kServerFirstFrameMs ? kServerFirstFrameMs : stallMs;
+    }
     void SetServerStallMs(int ms) { mServerStallMs = ms; }
     int ServerStalls() const { return mServerStalls; }
     // pid of the pose_server.py this provider launched, or -1.
