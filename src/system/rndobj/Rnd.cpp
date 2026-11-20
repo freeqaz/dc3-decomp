@@ -186,7 +186,8 @@ Rnd::Rnd()
 // be graded both ways; post_retail|post_enhanced switch only the post chain's
 // fields (the rest of the profile, e.g. alpha-cut coverage, untouched);
 // post_precision|post_bloom_filter|post_dof_filter turn on that one post field
-// alone (the per-item cost A/B);
+// alone (the per-item cost A/B); specular_aa_on|specular_aa_off switch
+// specular antialiasing alone (item 18 c's shimmer and cost A/B);
 // {rnd native_look} alone reports it. Returns the profile now in force.
 static Symbol NativeLook(const DataArray *msg) {
     if (msg->Size() > 2) {
@@ -198,8 +199,11 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "post_precision") milo::SetLookPostFieldsForInspection(true, false, false);
         else if (s == "post_bloom_filter") milo::SetLookPostFieldsForInspection(false, true, false);
         else if (s == "post_dof_filter") milo::SetLookPostFieldsForInspection(false, false, true);
+        else if (s == "specular_aa_on") milo::SetLookSpecularAAForInspection(true);
+        else if (s == "specular_aa_off") milo::SetLookSpecularAAForInspection(false);
         else MILO_NOTIFY("native_look: %s is not retail, enhanced, post_retail, post_enhanced, "
-                         "post_precision, post_bloom_filter or post_dof_filter", s.Str());
+                         "post_precision, post_bloom_filter, post_dof_filter, specular_aa_on or "
+                         "specular_aa_off", s.Str());
     }
     return milo::LookProfileName(milo::Look().profile);
 }
