@@ -116,6 +116,11 @@ public:
             Dc3SetMenuSelect((Dc3MenuSelect() + 1) % kDc3MenuSelectCount);
             return DataNode(Symbol(Dc3MenuSelectName(Dc3MenuSelect())));
         }
+        // DC3_MENU_ARC_START (MenuGesture_Native.h): which frames may start a
+        // sweep -- tracked (the image's rule) or inferred.
+        if (sym == "menu_arc_start") return DataNode(Symbol(Dc3MenuArcStartName()));
+        if (sym == "set_menu_arc_start")
+            return DataNode(Dc3SetMenuArcStart(msg->Str(2)) ? 1 : 0);
         if (sym == "get_camera_blend") return DataNode(NativeSettings::Get().cameraBlend ? 1 : 0);
         if (sym == "toggle_camera_blend") {
             NativeSettings::Get().cameraBlend = !NativeSettings::Get().cameraBlend;

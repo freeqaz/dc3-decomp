@@ -37,6 +37,14 @@ and what a fix buys.
                                             (np-pose-rough, 2026-11-13).  An
                                             upper bound: it includes his real
                                             movement.
+    gpdvis  gpd, and each wrist under the Tracked score for stretches of
+            0.40 s on average with 0.23 s Tracked between; 23% of the low
+            stretches are under the NotTracked score
+                                            how a raised arm's wrist scores in
+                                            the worse of two recorded GPD
+                                            sessions (MENU_GESTURES.md, "The
+                                            Tracked gate"): the worst case,
+                                            for DC3_MENU_ARC_START.
 
   Noise is AR(1) with a 0.1 s correlation time (MediaPipe smooths its own
   landmarks), independent per joint and axis.
@@ -129,11 +137,15 @@ NOISE = {
                   hand=(0.0038, 0.0042, 0.017), wrist_inferred=0.0, hand_inferred=0.0),
     "gpd": dict(body=(0.0075, 0.008, 0.018), elbow=(0.010, 0.010, 0.020),
                 hand=(0.013, 0.015, 0.029), wrist_inferred=0.035, hand_inferred=0.067),
+    "gpdvis": dict(body=(0.0075, 0.008, 0.018), elbow=(0.010, 0.010, 0.020),
+                   hand=(0.013, 0.015, 0.029), wrist_inferred=0.035, hand_inferred=0.067,
+                   arm_low=(0.40, 0.23, 0.23)),
 }
 NOISE_TAU_S = 0.1
 HAND_JOINTS = (sk.WRIST_L, sk.HAND_L, sk.WRIST_R, sk.HAND_R)
 ELBOW_JOINTS = (sk.ELBOW_L, sk.ELBOW_R)
 INFERRED_SCORE = 0.45    # Skeleton_Native.cpp ConfidenceFromScore: 0.3 .. 0.6 is Inferred
+NOT_TRACKED_SCORE = 0.2  # under 0.3
 
 
 def min_jerk(u):
@@ -184,6 +196,8 @@ class BenchKinect(SyntheticKinect):
         self.arms = {"right": Arm(), "left": Arm()}
         self.noise_state = [[0.0, 0.0, 0.0] for _ in range(sk.NUM_JOINTS)]
         self.noise_t = None
+        self.vis_rng = random.Random(2)
+        self.vis = {}            # arm -> [score of its wrist now, engine time it changes at]
         self.packets = 0
         self.absent = False
 
@@ -194,6 +208,9 @@ class BenchKinect(SyntheticKinect):
             self.rng = random.Random(seed)
             self.noise_state = [[0.0, 0.0, 0.0] for _ in range(sk.NUM_JOINTS)]
             self.noise_t = None
+            # its own stream, so gpd and gpdvis of one seed have the same joints
+            self.vis_rng = random.Random(seed ^ 0x5EED)
+            self.vis = {}
 
     # -- geometry
     def _clean(self, t):
@@ -240,6 +257,25 @@ class BenchKinect(SyntheticKinect):
             if j in (sk.HAND_L, sk.HAND_R) and self.rng.random() < n["hand_inferred"]:
                 c = INFERRED_SCORE
             out.append((x + st[0], y + st[1], z + st[2], c))
+        low = n.get("arm_low")
+        if low:
+            # stretches of an arm's wrist under the Tracked score: mean `low[0]`
+            # s of it, mean `low[1]` s Tracked between; a share `low[2]` of the
+            # stretches is under the NotTracked score instead
+            for arm, wrist in (("left", sk.WRIST_L), ("right", sk.WRIST_R)):
+                v = self.vis.get(arm)
+                if v is None:
+                    v = self.vis[arm] = [1.0, t + self.vis_rng.expovariate(1.0 / low[1])]
+                while t >= v[1]:
+                    if v[0] >= 1.0:
+                        v[0] = NOT_TRACKED_SCORE if self.vis_rng.random() < low[2] else INFERRED_SCORE
+                        v[1] += self.vis_rng.expovariate(1.0 / low[0])
+                    else:
+                        v[0] = 1.0
+                        v[1] += self.vis_rng.expovariate(1.0 / low[1])
+                if v[0] < 1.0:
+                    x, y, z, c = out[wrist]
+                    out[wrist] = (x, y, z, min(c, v[0]))
         return out
 
     # -- the camera's frame clock: one packet every 1/rate s of engine time
@@ -872,6 +908,7 @@ def run_cell(a):
         result["updates_per_poll"] = (l["sensor_updates"] / float(l["polls"])
                                       if l and l["polls"] else None)
         fill0 = st["fill"]
+        arc0 = st.get("arc_start")
         for i in range(a.idles):
             r = p.idle_trial()
             result["idles"].append(r)
@@ -898,6 +935,11 @@ def run_cell(a):
             p.to_screen(force=bool(r["events"]))
         st1 = b.state()
         fill1 = st1["fill"]
+        if arc0 and st1.get("arc_start"):
+            # per arm: frames the arc detector had no path on, those the image's
+            # gate (wrist and elbow Tracked) refused, those started anyway
+            result["arc_start"] = {k: [x - y for x, y in zip(st1["arc_start"][k], arc0[k])]
+                                   for k in ("left", "right")}
         fills, reals = fill1["fills"] - fill0["fills"], fill1["reals"] - fill0["reals"]
         result["fill"] = dict(mode=fill1["mode"], engaged_at_end=fill1["engaged"], fills=fills,
                               reals=reals,
@@ -1326,6 +1368,7 @@ def run_replay(a):
             raise FlowError(f"the engine took {ready:.0f} s to reach {a.screen}: raise REPLAY_LEAD_S")
         st = b.state(reset=True)
         b.take_events(st)
+        arc0 = st.get("arc_start")
         lists = result["lists"]
         last = time.monotonic()
         trace = open(os.path.join(a.out, "trace.jsonl"), "w") if a.trace else None
@@ -1380,6 +1423,10 @@ def run_replay(a):
                 result["away_s"] += last - t0
         for d in lists.values():
             d.pop("last", None)
+        arc1 = b.state().get("arc_start")
+        if arc0 and arc1:
+            result["arc_start"] = {k: [x - y for x, y in zip(arc1[k], arc0[k])]
+                                   for k in ("left", "right")}
     except FlowError as ex:
         result["error"] = str(ex)
         b.note(f"FAILED: {ex}")

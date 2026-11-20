@@ -232,6 +232,59 @@ void NotePoll(HamNavList *list) {
         s.maxNodes = s.nodes;
 }
 
+// [arm][0 asked, 1 the image's gate refused, 2 of those started anyway], since
+// the engine started (`reset` leaves them)
+static unsigned gArcStart[2][3];
+
+static int sArcStartsOnInferred = -1;
+
+bool ArcStartsOnInferred() {
+    if (sArcStartsOnInferred < 0) {
+        const char *v = getenv("DC3_MENU_ARC_START");
+        sArcStartsOnInferred = v && !strcasecmp(v, "inferred") ? 1 : 0;
+        if (v && *v && !sArcStartsOnInferred && strcasecmp(v, "tracked"))
+            fprintf(stderr, "DC3_MENU_ARC_START='%s' ignored (want tracked or inferred)\n", v);
+        if (sArcStartsOnInferred)
+            fprintf(stderr, "DC3 MENU ARC START: inferred (a sweep may start on a frame whose "
+                            "wrist or elbow is Inferred)\n");
+    }
+    return sArcStartsOnInferred == 1;
+}
+
+// [slot][joint]: the camera's own confidence this sensor frame
+static unsigned char gSensorConf[NUM_SKELETONS][kNumJoints];
+
+void NoteSensorConfidence(int slot, const int *conf) {
+    if (slot < 0 || slot >= NUM_SKELETONS)
+        return;
+    for (int j = 0; j < kNumJoints; j++)
+        gSensorConf[slot][j] = conf ? (unsigned char)conf[j] : (unsigned char)kConfidenceNotTracked;
+}
+
+bool ArcStartAllowedFor(bool onInferred, bool tracked, int wristSeen, int elbowSeen) {
+    if (tracked)
+        return true;
+    return onInferred && wristSeen >= kConfidenceInferred && elbowSeen >= kConfidenceInferred;
+}
+
+bool ArcStartAllowed(int slot, int wristJoint, int elbowJoint, bool tracked) {
+    unsigned *n = gArcStart[wristJoint == kJointWristLeft ? 0 : 1];
+    n[0]++;
+    if (tracked)
+        return true;
+    n[1]++;
+    if (slot < 0 || slot >= NUM_SKELETONS || wristJoint < 0 || wristJoint >= kNumJoints
+        || elbowJoint < 0 || elbowJoint >= kNumJoints)
+        return false;
+    if (!ArcStartAllowedFor(
+            ArcStartsOnInferred(), false, gSensorConf[slot][wristJoint],
+            gSensorConf[slot][elbowJoint]
+        ))
+        return false;
+    n[2]++;
+    return true;
+}
+
 std::string StateJson(unsigned since, bool reset, bool rows) {
     char buf[768];
     float now = Now();
@@ -242,10 +295,12 @@ std::string StateJson(unsigned since, bool reset, bool rows) {
              "\"menu_select\":\"%s\","
              "\"fill\":{\"mode\":\"%s\",\"engaged\":%d,\"fills\":%u,\"reals\":%u,"
              "\"clock_carried\":%.3f},"
-             "\"lists\":[",
+             "\"arc_start\":{\"left\":[%u,%u,%u],\"right\":[%u,%u,%u]},\"lists\":[",
              now, MoveDir::SongSeconds(), TheGestureMgr && TheGestureMgr->InControllerMode() ? 1 : 0,
              gSelects, Dc3MenuSelectName(Dc3MenuSelect()), Dc3PoseFill::ModeName(fill.GetMode()),
-             fill.Engaged() ? 1 : 0, fill.Fills(), fill.Reals(), NativePoseFillClockCarried());
+             fill.Engaged() ? 1 : 0, fill.Fills(), fill.Reals(), NativePoseFillClockCarried(),
+             gArcStart[0][0], gArcStart[0][1], gArcStart[0][2], gArcStart[1][0], gArcStart[1][1],
+             gArcStart[1][2]);
     out += buf;
     bool first = true;
     for (size_t i = 0; i < gLists.size(); i++) {
@@ -573,6 +628,13 @@ int gMode = -1; // not read yet
 
 } // namespace
 
+void SetArcStartsOnInferred(bool on, bool notice) {
+    sArcStartsOnInferred = on ? 1 : 0;
+    if (notice)
+        PostNotice(on ? "Sweep start: also on an arm the camera half sees (inferred)."
+                      : "Sweep start: only on an arm the camera sees well (tracked).");
+}
+
 // From PollKey (the desktop loop) and from NotePoll (every frame a list is
 // polled, on every platform: the web loop has no PollKey).
 void ExpireNotice() {
@@ -651,5 +713,21 @@ void Dc3SetMenuSelect(int mode) {
 }
 
 void Dc3MenuSelectFramePoll() { Dc3MenuGesture::PollKey(); }
+
+// ---- the sweep's start (declared in NativeSettings.h) -----------------------
+
+const char *Dc3MenuArcStartName() {
+    return Dc3MenuGesture::ArcStartsOnInferred() ? "inferred" : "tracked";
+}
+
+bool Dc3SetMenuArcStart(const char *text) {
+    bool inferred = text && strcasecmp(text, "inferred") == 0;
+    if (!inferred && (!text || strcasecmp(text, "tracked") != 0))
+        return false;
+    Dc3MenuGesture::ArcStartsOnInferred(); // read the variable (and say so) first
+    Dc3MenuGesture::SetArcStartsOnInferred(inferred, true);
+    fprintf(stderr, "DC3 MENU ARC START: now %s\n", Dc3MenuArcStartName());
+    return true;
+}
 
 #endif // HX_NATIVE

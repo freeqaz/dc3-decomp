@@ -41,6 +41,7 @@
 #include "platform/Skeleton_Native.h"
 #include "platform/PoseLevel_Native.h"
 #include "platform/PoseEstimate_Native.h" // NativePoseEstimateTestSet
+#include "platform/MenuGesture_Native.h" // DC3_MENU_ARC_START: the camera's own confidences
 #include "platform/PoseFill_Native.h"
 #include "platform/PoseSession_Native.h"
 #include "gesture/CameraInput.h"
@@ -1145,6 +1146,76 @@ TEST_F(PoseSensorEstimateTest, OffFreezesTheKneeWhereItWasLastSeen) {
     float off = KneeOffsetAfterAStep(92, &conf);
     // Frozen at x = -0.12 while the hips went to +0.5.
     EXPECT_NEAR(off, -0.62f, 0.05f) << "the control: the old frozen knee";
+}
+
+// ===========================================================================
+// PoseSensorArcStartTest -- DC3_MENU_ARC_START=inferred at the sensor
+// (MenuGesture_Native.h, "the arc detector's first node"): the pose estimate
+// hands the detectors a wrist the camera lost as Inferred, exactly like one
+// the camera half saw; only the second may start a sweep.  What tells them
+// apart is the camera's own score, noted before the estimate runs.
+// Sabotaged: the note taken after gEstimate.Apply (so it reads the relabelled
+// confidences) fails this test and no other; five more defects in the rule
+// are listed in test_menu_arc.cpp.
+// ===========================================================================
+class PoseSensorArcStartTest : public PoseSensorEstimateTest {
+protected:
+    void SetUp() override {
+        PoseSensorEstimateTest::SetUp();
+        mWas = Dc3MenuGesture::ArcStartsOnInferred();
+        Dc3MenuGesture::SetArcStartsOnInferred(true);
+        NativePoseEstimateTestSet(Dc3PoseEstimate::kKinematic, 1.0f);
+    }
+    void TearDown() override {
+        Dc3MenuGesture::SetArcStartsOnInferred(mWas);
+        PoseSensorEstimateTest::TearDown();
+    }
+    // One frame of one person whose right wrist the camera scored `score`.
+    const SkeletonFrame *Wrist(int trackId, float score) {
+        WirePerson p = Dc3Person(trackId, 0.0f);
+        p.values[kJointWristRight * 4 + 3] = score;
+        uint32_t id = ++sFrameId;
+        if (!mServer.Send(PacketV2(id, id / 30.0, 640, 480, kNumJoints, 1, { p })))
+            return nullptr;
+        if (!WaitForFrame(mProvider, id))
+            return nullptr;
+        return mSensor->PollNewFrame();
+    }
+    bool mWas = false;
+};
+
+TEST_F(PoseSensorArcStartTest, AWristTheCameraLostReachesTheDetectorsInferredButStartsNoSweep) {
+    const int id = 95;
+    const SkeletonFrame *f = nullptr;
+    for (int i = 0; i < 10; i++)
+        f = Wrist(id, 0.9f);
+    ASSERT_NE(f, nullptr);
+    int s = SlotOf(f, id);
+    ASSERT_GE(s, 0);
+    EXPECT_EQ(f->mSkeletonDatas[s].mJointTrackingState[kJointWristRight], kConfidenceTracked);
+
+    // the camera loses the wrist (score under 0.3): the estimate places it
+    f = Wrist(id, 0.1f);
+    ASSERT_NE(f, nullptr);
+    ASSERT_EQ(SlotOf(f, id), s);
+    EXPECT_EQ(f->mSkeletonDatas[s].mJointTrackingState[kJointWristRight], kConfidenceInferred)
+        << "the estimate hands a lost joint over as Inferred";
+    EXPECT_FALSE(Dc3MenuGesture::ArcStartAllowed(s, kJointWristRight, kJointElbowRight, false))
+        << "a wrist the camera did not see must not start a sweep";
+
+    // the camera half sees it (0.3 .. 0.6): Inferred to the detectors again,
+    // and this one may start a sweep
+    f = Wrist(id, 0.45f);
+    ASSERT_NE(f, nullptr);
+    ASSERT_EQ(SlotOf(f, id), s);
+    EXPECT_EQ(f->mSkeletonDatas[s].mJointTrackingState[kJointWristRight], kConfidenceInferred);
+    EXPECT_TRUE(Dc3MenuGesture::ArcStartAllowed(s, kJointWristRight, kJointElbowRight, false));
+
+    // ... but not under the image's rule
+    Dc3MenuGesture::SetArcStartsOnInferred(false);
+    EXPECT_FALSE(Dc3MenuGesture::ArcStartAllowed(s, kJointWristRight, kJointElbowRight, false));
+    // and the left arm, fully seen, was never refused by the image at all
+    EXPECT_TRUE(Dc3MenuGesture::ArcStartAllowed(s, kJointWristLeft, kJointElbowLeft, true));
 }
 
 // ===========================================================================

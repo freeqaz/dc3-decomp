@@ -54,6 +54,37 @@ void NotePoll(HamNavList *list);
 // poll (so ask, wait a frame, ask again).  Main thread only.
 std::string StateJson(unsigned since, bool reset, bool rows);
 
+// ---- the arc detector's first node ------------------------------------------
+//
+// ArcDetector::TryToStartSwipe puts the first node of a path down only on a
+// frame whose wrist AND elbow are both Tracked (every later node is taken
+// whatever its confidence).  On a Kinect an Inferred arm joint is a guess
+// behind an occlusion.  Natively Tracked means MediaPipe's visibility score is
+// 0.6 or more (Skeleton_Native.cpp), and an arm held out at a webcam is under
+// that for much of the time.
+//
+// ArcStartAllowed: whether the path may start on this frame.  `tracked` is the
+// image's answer; under DC3_MENU_ARC_START=inferred a frame whose wrist and
+// elbow the CAMERA scored at least Inferred starts one too.  The camera's own
+// score, not the skeleton's: the pose estimate (DC3_POSE_ESTIMATE) hands the
+// detectors every joint the camera lost as Inferred at a place it made up, and
+// a path must not start there (it did, on a recording: MENU_GESTURES.md).
+// Counts what it was asked (GET /api/menu/state "arc_start").
+bool ArcStartAllowed(int slot, int wristJoint, int elbowJoint, bool tracked);
+// The rule alone (native/tests/test_menu_arc.cpp): `wristSeen` / `elbowSeen`
+// are the camera's own confidences.
+bool ArcStartAllowedFor(bool onInferred, bool tracked, int wristSeen, int elbowSeen);
+// What the camera said of the joints in skeleton slot `slot` on this sensor
+// frame, before the pose estimate relabels them (GestureMgr_Native.cpp, once
+// a slot a frame).  `conf` = kNumJoints confidences, or null: nobody the
+// camera sees there (an empty slot, or a body held through a dropout).
+void NoteSensorConfidence(int slot, const int *conf);
+// DC3_MENU_ARC_START, read at the first use.  Set also shows a notice
+// ({native_settings set_menu_arc_start tracked|inferred}); the tests pass
+// `notice` false.
+bool ArcStartsOnInferred();
+void SetArcStartsOnInferred(bool on, bool notice = false);
+
 // ---- hold to select ---------------------------------------------------------
 
 // Seconds, except where said.

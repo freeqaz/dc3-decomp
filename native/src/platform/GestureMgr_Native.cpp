@@ -22,6 +22,7 @@
 #include "lazer/game/Game.h"       // TheGame->Paused(): the pause menu is a menu (DC3_POSE_FILL_MENU)
 #include "lazer/game/GamePanel.h"  // TheGamePanel: the stall notice is for a song in play
 #include "PoseFill_Native.h"      // DC3_POSE_FILL
+#include "MenuGesture_Native.h"   // DC3_MENU_ARC_START: the camera's own joint confidences
 #include "PoseIdentity_Native.h"  // DC3_POSE_REACQUIRE_MS: who is who
 #include "NativeNotice.h"         // DC3_POSE_STALL_MS
 #include "meta_ham/HamUI.h"          // TheHamUI -> ShellInput -> SkeletonChooser
@@ -859,8 +860,15 @@ static int FillPersonSlots(const NativeSkeletonProvider::PersonData *persons, in
     int reassigns = AssignSlots(trackIds, hips, numValid, elapsedMs, personForSlot);
     for (int s = 0; s < NUM_SKELETONS; s++) {
         int k = personForSlot[s];
+        // DC3_MENU_ARC_START: what the camera itself said of each joint,
+        // before the estimate below relabels the ones it lost
+        Dc3MenuGesture::NoteSensorConfidence(s, nullptr);
         if (k >= 0) {
             NativeSkeletonProvider::PersonData person = persons[origIdx[k]];
+            int seen[kNumJoints];
+            for (int j = 0; j < kNumJoints; j++)
+                seen[j] = person.confidence[j];
+            Dc3MenuGesture::NoteSensorConfidence(s, seen);
             EstimateReadMode();
             EstimateLog(gEstimate.Apply(s, person, elapsedMs * 0.001f, real), elapsedMs);
             NativeSkeletonProvider::FillSkeletonData(sFrame.mSkeletonDatas[s], person, s);
