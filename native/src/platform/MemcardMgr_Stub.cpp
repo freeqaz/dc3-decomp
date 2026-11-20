@@ -26,6 +26,7 @@
 #include "obj/Dir.h"
 #include "os/Debug.h"
 #include "os/PlatformMgr.h"
+#include "SaveStore_Web.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -67,6 +68,13 @@ static bool EnsureSaveDir() {
 
     struct stat st;
     return (stat(dir, &st) == 0 && S_ISDIR(st.st_mode));
+}
+
+// The save directory, created: for the native-only files that live beside the
+// profile saves (song_select.txt, SongSelectState_Native.cpp).
+const char *NativeSaveDir() {
+    EnsureSaveDir();
+    return GetSaveDir();
 }
 
 // Get full path for a save file
@@ -216,7 +224,9 @@ MCResult MemcardMgr::ThreadCall_CheckForSaveContainer() {
 MCResult MemcardMgr::ThreadCall_DeleteSaves() {
     char path[512];
     GetSavePath(path, sizeof(path), mPadNum);
-    return (remove(path) == 0) ? kMCNoError : kMCFileNotFound;
+    if (remove(path) != 0) return kMCFileNotFound;
+    Dc3SaveStoreChanged(); // web: drop it from the browser's store too
+    return kMCNoError;
 }
 
 MCResult MemcardMgr::ThreadCall_SaveGame() {
@@ -244,6 +254,9 @@ MCResult MemcardMgr::ThreadCall_SaveGame() {
         return kMCReadWriteFailed;
     }
     printf("DC3 Native: saved %d bytes to %s\n", mSaveDataLength, path);
+    // web: the file is in MEMFS; hand it to the browser's store (W-36). Only a
+    // complete write is handed over, so the store keeps the last good save.
+    Dc3SaveStoreChanged();
     return kMCNoError;
 }
 

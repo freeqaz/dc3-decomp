@@ -34,6 +34,50 @@ int Dc3ProfileResolve();  // parses DC3_PROFILE now (warns on an unknown value)
 bool Dc3ProfileIsDev();   // the resolved profile
 void Dc3ProfileApply();
 
+// The boot sequence this launch runs (defined in System_Native.cpp; see
+// docs/debugging/native.md "Boot sequence").  A console that has been played
+// before -- its global options are on disk -- does not sit through the splash
+// screens, the attract movie and the autosave warning again: it goes to the
+// title screen and waits there for the player.  A first launch, and any launch
+// with DC3_BOOT_INTRO=1, runs the original sequence.
+struct Dc3BootPlan {
+    bool returning;  // the global options were on disk when the game started
+    bool showSplash; // App::App shows the ESRB + Harmonix splash screens
+    bool skipIntro;  // attract and the autosave warning are passed in 10 frames
+    bool fastBoot;   // DC3_FAST_BOOT / ?fast_boot=1: title and the save wait too
+    const char *why; // one line for the log: what decided it
+};
+// The decision, a pure function of its inputs (each *Env is getenv()'s result,
+// null when unset; an empty value counts as unset):
+//   fastOn / fastOff = DC3_FAST_BOOT set to a non-zero number / to anything else
+//   intro      = DC3_BOOT_INTRO set ? (value is not 0/false/off/no)
+//                                   : fastOff || !globalOptionsOnDisk
+//   showSplash = DC3_SHOW_SPLASH set ? (value is not 0/false/off/no) : intro
+//   fastBoot   = fastOn || webFastBootParam
+//   skipIntro  = fastBoot || (!intro && !fastOff)
+// So every variable that is set wins over the disk, in both directions, and
+// DC3_FAST_BOOT=0 is what it was before the disk was consulted: the original
+// sequence, with no screen ever passed for the player.
+Dc3BootPlan Dc3BootPlanResolve(bool globalOptionsOnDisk, const char *showSplashEnv,
+                               const char *fastBootEnv, const char *bootIntroEnv,
+                               bool webFastBootParam);
+// This launch's plan, decided on the first call (App::App makes it, before
+// anything can write the global options) and the same for the whole run.
+const Dc3BootPlan &Dc3BootPlanGet();
+bool Dc3BootShowSplash(); // Dc3BootPlanGet().showSplash
+bool Dc3BootFast();       // Dc3BootPlanGet().fastBoot
+bool Dc3BootSkipIntro();  // Dc3BootPlanGet().skipIntro
+// <DC3_CACHE_DIR or ~/.local/share/dc3/cache>/global/global, the file
+// ProfileMgr::SaveGlobalOptions writes through Cache_Stub.cpp.
+std::string Dc3GlobalOptionsPath();
+bool Dc3GlobalOptionsOnDisk(); // read now (the plan reads it once, at startup)
+
+// DC3_CLASSIC_SONG_SELECT=1: song select exactly as in the image -- three
+// sorts, no Recently Played section, Left/Right and LB/RB inert, the sort not
+// remembered.  Default off: docs/native/SONG_SELECT.md has what is added.
+// Read once (defined in SongSelect_Native.cpp).
+bool Dc3ClassicSongSelect();
+
 // Controller-mode policy, DC3_CONTROLLER_MODE=auto (default) | forced |
 // faithful (defined in System_Native.cpp; see docs/debugging/native.md
 // "Controller mode policy").

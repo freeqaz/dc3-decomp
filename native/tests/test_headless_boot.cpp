@@ -80,12 +80,15 @@ static RunResult RunHeadless(
     int timeoutSeconds = 30,
     std::vector<EnvVar> extraEnv = {},
     const char *cwd = nullptr,
-    const std::string &binaryPath = std::string()
+    const std::string &binaryPath = std::string(),
+    // A persistence root to run on instead of a new empty one: the same
+    // console, launched again (the boot sequence tests).
+    const std::string &persistRoot = std::string()
 ) {
     std::string binary = binaryPath.empty() ? GetDc3NativePath() : binaryPath;
 
     // Build command with env vars piped through
-    std::string persist = MakePersistenceRoot();
+    std::string persist = persistRoot.empty() ? MakePersistenceRoot() : persistRoot;
     std::ostringstream cmd;
     cmd << kShellTimeoutLookup;
     if (cwd)
@@ -796,4 +799,166 @@ TEST_F(HeadlessBootTest, TheHeadlessDefaultIs720pAtOneX) {
             EXPECT_EQ(t.h, 720);
         }
     EXPECT_TRUE(sawFrame) << "no HeadlessTarget in the census";
+}
+
+// ---------------------------------------------------------------------------
+// The boot sequence (PLAN H-123; System_Native.cpp "The boot sequence",
+// docs/debugging/native.md "Boot sequence").  A first launch on a console is
+// the original's sequence.  A console that has been played before -- its
+// global options are on disk -- passes attract and the autosave warning and
+// waits on the title screen for the player.  The decision table is
+// Dc3BootPlanTest (test_native_profile.cpp); these run a real dc3-native on a
+// console made the way a player makes one: one first launch, A on the attract
+// movie, A on the title screen.
+// ---------------------------------------------------------------------------
+static std::string WriteFlowScript(const std::string &text) {
+    static int sCount = 0;
+    std::string path = TestTempFile("dc3_boot_flow_" + std::to_string(sCount++), ".txt");
+    std::ofstream f(path);
+    f << text;
+    return path;
+}
+
+static int Count(const std::string &out, const std::string &needle) {
+    int n = 0;
+    for (size_t at = out.find(needle); at != std::string::npos; at = out.find(needle, at + 1)) n++;
+    return n;
+}
+
+static bool Entered(const std::string &out, const char *screen) {
+    return out.find(std::string("DC3 UI: Screen '") + screen + "' Enter (from") != std::string::npos;
+}
+
+// The three boot variables blanked (= unset: RunHeadless can only add
+// variables, and it sets DC3_SHOW_SPLASH=0 itself), then the test's own.
+static std::vector<EnvVar> BootEnv(std::vector<EnvVar> more = {}) {
+    std::vector<EnvVar> env = {{"DC3_FAST_BOOT", ""}, {"DC3_SHOW_SPLASH", ""}, {"DC3_BOOT_INTRO", ""}};
+    env.insert(env.end(), more.begin(), more.end());
+    return env;
+}
+
+static const char *kPlayerFirstLaunch = "wait_screen attract_screen\n"
+                                        "+28 wake\n"
+                                        "+30 confirm\n"
+                                        "wait_screen title_screen\n"
+                                        "+43 wake\n"
+                                        "+45 confirm\n"
+                                        "wait_screen main_screen\n";
+static const char *kPlayerLaterLaunch = "wait_screen title_screen\n"
+                                        "+43 wake\n"
+                                        "+45 confirm\n"
+                                        "wait_screen main_screen\n";
+static const int kBootFlowFrames = 3000;
+
+struct FirstLaunch {
+    std::string root, globalOptions;
+    RunResult run;
+};
+
+// One first launch for the whole suite; the tests after it launch the same
+// console again.
+static const FirstLaunch &TheFirstLaunch() {
+    static FirstLaunch sFirst = [] {
+        FirstLaunch f;
+        f.root = MakePersistenceRoot();
+        f.globalOptions = f.root + "/cache/global/global";
+        f.run = RunHeadless(kBootFlowFrames, WriteFlowScript(kPlayerFirstLaunch).c_str(), 180,
+                            BootEnv(), nullptr, std::string(), f.root);
+        return f;
+    }();
+    return sFirst;
+}
+
+static long FileSize(const std::string &path) {
+    struct stat st;
+    return stat(path.c_str(), &st) == 0 ? (long)st.st_size : -1;
+}
+
+TEST_F(HeadlessBootTest, AFirstLaunchIsTheOriginalSequence) {
+    const FirstLaunch &first = TheFirstLaunch();
+    const std::string &out = first.run.output;
+    ASSERT_EQ(first.run.signal, 0) << CrashSummary(first.run);
+    EXPECT_NE(out.find("DC3 Boot: the original sequence (first launch on this console); "
+                       "splash screens on"),
+              std::string::npos)
+        << "an empty console must get the original sequence";
+    EXPECT_EQ(Count(out, "DC3 UI: Boot advance"), 0)
+        << "a boot screen was passed for the player on a first launch";
+    for (const char *screen : {"attract_screen", "autosave_warning_screen", "title_screen",
+                               "main_screen"})
+        EXPECT_TRUE(Entered(out, screen)) << screen << " was not entered";
+    // What makes the next launch a returning one: the game's own save of the
+    // global options, on the way from the title screen to the main menu.
+    EXPECT_EQ(FileSize(first.globalOptions), 0x39)
+        << "the first launch did not leave the global options at " << first.globalOptions;
+    if (HasFailure()) PrintOutputTail(out, 4000);
+}
+
+TEST_F(HeadlessBootTest, AReturningConsoleGoesStraightToTheTitleScreen) {
+    const FirstLaunch &first = TheFirstLaunch();
+    ASSERT_EQ(FileSize(first.globalOptions), 0x39) << "no played console to launch again";
+    auto result = RunHeadless(kBootFlowFrames, WriteFlowScript(kPlayerLaterLaunch).c_str(), 180,
+                              BootEnv(), nullptr, std::string(), first.root);
+    const std::string &out = result.output;
+    ASSERT_EQ(result.signal, 0) << CrashSummary(result);
+    EXPECT_NE(out.find("DC3 Boot: straight to the title screen (this console has been played "
+                       "before); splash screens off"),
+              std::string::npos);
+    EXPECT_NE(out.find("DC3 UI: Boot advance 'attract_screen' -> 'autosave_warning_screen' "
+                       "(after 10 frames)"),
+              std::string::npos);
+    EXPECT_NE(out.find("DC3 UI: Boot advance 'autosave_warning_screen' -> 'title_screen' "
+                       "(after 10 frames)"),
+              std::string::npos);
+    EXPECT_EQ(Count(out, "DC3 UI: Boot advance"), 2)
+        << "only attract and the autosave warning are passed; the title is the player's";
+    EXPECT_EQ(out.find("DC3 UI: Fast boot enabled"), std::string::npos)
+        << "a returning boot is not DC3_FAST_BOOT";
+    // The one press left (A on the title screen) reaches the main menu, so
+    // the panels the warning screen preloads were still loaded.
+    EXPECT_TRUE(Entered(out, "main_screen")) << "one confirm on the title did not reach the menu";
+    EXPECT_TRUE(FindFatal(out).empty()) << FindFatal(out);
+    if (HasFailure()) PrintOutputTail(out, 4000);
+}
+
+TEST_F(HeadlessBootTest, AReturningConsoleWaitsOnTheTitleScreen) {
+    const FirstLaunch &first = TheFirstLaunch();
+    ASSERT_EQ(FileSize(first.globalOptions), 0x39) << "no played console to launch again";
+    // No input at all: 1500 frames is 25 times the 60 frames DC3_FAST_BOOT
+    // gives the title screen.
+    auto result = RunHeadless(1500, nullptr, 180, BootEnv(), nullptr, std::string(), first.root);
+    const std::string &out = result.output;
+    ASSERT_EQ(result.signal, 0) << CrashSummary(result);
+    ASSERT_TRUE(HasCompletionMarker(out)) << CrashSummary(result);
+    EXPECT_TRUE(Entered(out, "title_screen"));
+    EXPECT_EQ(out.find("DC3 UI: Screen 'title_screen' Exit"), std::string::npos)
+        << "the title screen was left without the player";
+    EXPECT_EQ(Count(out, "DC3 UI: Boot advance"), 2);
+    if (HasFailure()) PrintOutputTail(out, 4000);
+}
+
+// The original sequence is one switch away, and DC3_FAST_BOOT=0 still means
+// no screen is passed for the player.
+TEST_F(HeadlessBootTest, BootIntroAndFastBootOffShowTheOriginalSequenceAgain) {
+    const FirstLaunch &first = TheFirstLaunch();
+    ASSERT_EQ(FileSize(first.globalOptions), 0x39) << "no played console to launch again";
+    struct Case { EnvVar var; const char *plan; };
+    const Case cases[] = {
+        {{"DC3_BOOT_INTRO", "1"}, "DC3 Boot: the original sequence (DC3_BOOT_INTRO=1); splash screens on"},
+        {{"DC3_FAST_BOOT", "0"}, "DC3 Boot: the original sequence (DC3_FAST_BOOT=0); splash screens on"},
+    };
+    for (const Case &c : cases) {
+        SCOPED_TRACE(c.var.key + "=" + c.var.value);
+        auto result = RunHeadless(600, nullptr, 180, BootEnv({c.var}), nullptr, std::string(),
+                                  first.root);
+        const std::string &out = result.output;
+        ASSERT_EQ(result.signal, 0) << CrashSummary(result);
+        ASSERT_TRUE(HasCompletionMarker(out)) << CrashSummary(result);
+        EXPECT_NE(out.find(c.plan), std::string::npos);
+        EXPECT_EQ(Count(out, "DC3 UI: Boot advance"), 0);
+        EXPECT_TRUE(Entered(out, "attract_screen"));
+        EXPECT_FALSE(Entered(out, "autosave_warning_screen"))
+            << "the attract movie was passed for the player";
+        if (HasFailure()) PrintOutputTail(out, 4000);
+    }
 }

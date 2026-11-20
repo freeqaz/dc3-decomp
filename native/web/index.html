@@ -557,6 +557,10 @@
                 setTimeout(function() { v.remove(); }, 500);
             }
             splashVid.addEventListener('ended', dismissSplash);
+            // The engine takes the video down itself when its boot plan shows
+            // no splash (a browser that has played before lands on the title
+            // screen; main_web.cpp WebScreenBundleHook, PLAN H-123).
+            window.dc3DismissSplash = dismissSplash;
             // Unmute on first interaction (autoplay requires muted)
             function splashUnmute() {
                 if (splashVid) splashVid.muted = false;

@@ -27,6 +27,7 @@ To add a new overlay file:
 | Overlay File | What It Does |
 |---|---|
 | `native/dta/ui/options/options_gameplay.dta` | With `DC3_DEV_OPTIONS=1` only (`{native_settings dev_options}`; a player build shows the retail rows), adds two checkboxes to the Gameplay Settings menu: "Camera Blend" (`option_camera_blend` → `{native_settings get_camera_blend}` / `toggle_camera_blend`) and the debug panel (`option_debug_panel` → `{native_settings get_debug_panel}` / `toggle_debug_panel`; answers 0 and does nothing in builds without `HX_IMGUI`) |
+| `native/dta/ui/song_select/song_select.dta` | Song select ([SONG_SELECT.md](../SONG_SELECT.md)): `enter` starts in the remembered sort, takes the help bar's sort names from `{song_offer_provider sort_labels}` and puts the highlight back by name (`restore_focus`); `update_sort_label` uses `sort_labels` and `save_sort`; `exit` calls `save_focus`; `uncollapse_headers` loses its `by_artist` branch. Every handler it calls is in `SongSortMgr::NativeHandle`, and under `DC3_CLASSIC_SONG_SELECT=1` they answer as the image's script did |
 
 ## Adding a Settings Toggle (Walkthrough)
 

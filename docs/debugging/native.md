@@ -320,7 +320,7 @@ original in a way that invalidates testing it, or cost real time
 
 | Variable | Why it stays opt-in |
 |---|---|
-| `DC3_FAST_BOOT` | Not a dev default: it advances past `title_screen` without the confirm that sets the initial profiles and `$post_load_dest_screen`, and skips the voice-control first-run tutorial (`src/system/ui/UI.cpp`, the `sBoot` table; read from the code, 2026-11-14), so a playtester would never see the profile setup and first-run prompts |
+| `DC3_FAST_BOOT` | Not a dev default: it advances past `title_screen` without the confirm that sets the initial profiles and `$post_load_dest_screen`, and skips the voice-control first-run tutorial (`src/system/ui/UI.cpp`, the `sBoot` table; read from the code, 2026-11-14), so a playtester would never see the profile setup and first-run prompts. The default boot of a played console ([Boot sequence](#boot-sequence)) is not this switch and not a profile row: it passes attract and the autosave warning only and waits on `title_screen`, so that confirm is still the player's |
 | `DC3_FAST_TIME`, `DC3_POSE_SELFTEST`, `DC3_POSE_PERFORM`, `DC3_DUMMY_PLAYERS` | Change timing or fake a player |
 | `DC3_POSE_LATENCY_MS` and the pose knobs | Owned by the tracking lane |
 | `MILO_FATAL_FAILS`, `MILO_MAX_FRAMES` | Change how a run ends |
@@ -363,14 +363,123 @@ it, so a test that asserts a player-facing default pins `DC3_PROFILE=release`.
 | `DC3_WEB_DLC_KEEP` | unset | Web only: `1` keeps a played DLC song's files in MEMFS. By default they are unlinked when song select or the main menu is entered again (W-27), so a session that plays through the DLC list does not keep every song's 6–27 MB | `native/src/main_web.cpp` (`WebDlcDropSongFiles`) |
 | `DC3_CACHE_DIR` | `$HOME/.local/share/dc3/cache` | Native cache backend root (song cache etc.) | `native/src/platform/Cache_Stub.cpp` |
 | `DC3_SAVE_DIR` | `$HOME/.local/share/dc3/saves` | Memory-card / save directory | `native/src/platform/MemcardMgr_Stub.cpp` |
-| `DC3_FAST_BOOT` | `0` | Non-zero: the boot screens (attract → autosave warning → title → main) are force-advanced after 10 frames each. Off: no forced advance; the screens progress as the image's flow drives them. Web: `?fast_boot=1` | `src/system/ui/UI.cpp` |
-| `DC3_SHOW_SPLASH` | shown | `0` skips the splash. Never shown on web | `src/App.cpp` |
+| `DC3_FAST_BOOT` | unset | Non-zero: the boot screens (attract → autosave warning → title → main) are force-advanced after 10 frames each (title after 60), to `main_screen`; the test suites' boot. `0`: the original sequence, with no screen ever passed for the player. Unset: the console's state decides, see [Boot sequence](#boot-sequence). Web: `?fast_boot=1` | `native/src/platform/System_Native.cpp` (`Dc3BootPlanResolve`), `src/system/ui/UI.cpp` |
+| `DC3_SHOW_SPLASH` | first launch: shown; played console: not | `1` shows the ESRB + Harmonix splash screens, `0` (also `false`/`off`/`no`) skips them, whatever the console's state; unset follows the [boot sequence](#boot-sequence). The engine's splash is never shown on web (the page plays a video over the canvas while the wasm boots, and takes it down at the title screen on a browser that has played before) | `native/src/platform/System_Native.cpp`, `src/App.cpp` |
+| `DC3_BOOT_INTRO` | unset | `1`: the original boot sequence on every launch (splash screens, attract movie, autosave warning). `0`: never, even on a first launch. Unset: shown until the console has been played once. See [Boot sequence](#boot-sequence). Web: `?env=DC3_BOOT_INTRO=1` | `native/src/platform/System_Native.cpp` (`Dc3BootPlanResolve`) |
+| `DC3_CLASSIC_SONG_SELECT` | off | `1`: song select exactly as in the image -- three sorts, no Recently Played section, Left/Right and LB/RB inert, the sort not remembered. Off: the native song select ([SONG_SELECT.md](../native/SONG_SELECT.md)). The play history in `$DC3_SAVE_DIR/song_select.txt` is still recorded under it, only not shown | `native/src/platform/SongSelect_Native.cpp` (`Dc3ClassicSongSelect`) |
 | `DC3_PROFILE` | `dev` | `dev` or `release`: the defaults of the rows in [Profiles](#profiles-dc3_profile) | `native/src/platform/System_Native.cpp` |
 | `DC3_DEV_OPTIONS` | dev profile `1`, release off | `Dc3EnvFlag`. Shows the native overlay's developer rows (Camera Blend, the debug panel) in Options → Gameplay; off, the page has the retail rows only (`{native_settings dev_options}`, PLAN G-20) | `src/App.cpp`, `native/dta/ui/options/options_gameplay.dta` |
 | `DC3_TUTORIALS_SEEN` | off | `Dc3EnvFlag`. Dev/test switch: every first-run tutorial reads as seen (`ProfileMgr::HasSeenTutorial`, `HX_NATIVE`), so a scripted flow on a fresh profile (`omg.txt`, any flow that starts a song) goes from `multiuser_screen` straight to loading instead of waiting on `tutorial_perform_it_screen_0`. Nothing is marked or saved. Not a profile row: it skips screens. The flow tests seed a profile instead (`SeedGlobalOptions`) | `src/lazer/meta_ham/ProfileMgr.cpp` |
 | `DC3_FAST_TIME` | unset | Presence. Song time advances per frame instead of on the wall clock (see [Fast Time Mode](#fast-time-mode)) | `src/lazer/game/LiveInput.cpp` |
 | `DC3_HEARTBEAT_S` | `60` | Seconds between `DC3_HEARTBEAT: uptime_s=… rss_kb=…` lines on stderr; `0` disables | `native/src/main_native.cpp` |
 | `DC3_TAG_MODALS` | desktop: dev profile `dev`, release `0`; **web `1`** | Every `MILO_WARN`/`MILO_NOTIFY` (desktop also `MILO_FAIL`) printed as one `MILO_<KIND>: <msg>` line. Desktop `1` (the harvest mode, `scripts/native_assert_harvest.py`): stderr, every line, plus a backtrace for each new message. Desktop `dev`: stderr, each distinct message's first 5 then every power of ten with `[repeat N]`, no backtraces. Web: the browser devtools console only (`console.warn`, not the page's console), each distinct message's first 5 repeats then every power of ten (W-9); `?env=DC3_TAG_MODALS=0` turns it off. Without it a notify at `notify_level` 1 goes to `cheat_display` and is never printed | `src/system/os/Debug.cpp` |
+
+### Boot sequence
+
+The original runs the same sequence on every launch: the ESRB and Harmonix
+splash screens, the attract movie (`videos/intro.bik`, 83 s unless a button
+skips it), a 4 s autosave warning that takes no input, then the title screen.
+Native does that **once per console**. What it reads is the disk: the global
+options file the game writes on its way from the title screen to the main menu
+(`<DC3_CACHE_DIR>/global/global`, 0x39 bytes), looked at once in `App::App`,
+before this run can write it.
+
+| The console | Boot | Log line |
+|---|---|---|
+| no global options on disk (a first launch; every test, each on its own empty `DC3_CACHE_DIR`) | the original sequence | `DC3 Boot: the original sequence (first launch on this console); splash screens on; …` |
+| global options on disk | no splash screens; attract and the autosave warning are each left after 10 frames; the game then waits on `title_screen` | `DC3 Boot: straight to the title screen (this console has been played before); splash screens off; …` |
+
+Each of three variables wins over the disk when it is set (an empty value
+counts as unset):
+
+| Variable | Effect |
+|---|---|
+| `DC3_BOOT_INTRO=1` | the original sequence on every launch: **the one switch back** (`0`: never, even on a first launch) |
+| `DC3_SHOW_SPLASH=1` / `0` | the splash screens only |
+| `DC3_FAST_BOOT=1` | the test suites' boot: attract, the warning, the title confirm and the save wait all pass by themselves, to `main_screen` |
+| `DC3_FAST_BOOT=0` | what it always gave: the original sequence, and no screen ever passed for the player |
+
+The decision is `Dc3BootPlanResolve` (`native/src/platform/System_Native.cpp`),
+a pure function; `UIManager::Poll` (`src/system/ui/UI.cpp`, the `sBoot` table)
+and the splash block in `App::App` only ask it.
+
+What a played console's boot keeps from the original:
+
+- **The title confirm.** It sets the initial profiles and
+  `$post_load_dest_screen`; only `DC3_FAST_BOOT` makes it for the player, and
+  that stays opt-in under every profile. The skip ends at the first screen that
+  is not attract or the warning, so nothing later in a session is passed.
+- **The autosave warning screen's work.** Its `enter` starts loading sixteen
+  panels the shell needs and its panel's `unload` finishes them
+  (`ui/title/autosave_warning.dta`), so the screen is still entered and left
+  through the game's own transition; only its 4 s message is gone.
+- **Every tutorial.** Nothing is marked seen. A tutorial is shown until the
+  game itself records it, and that record is now kept (desktop: on disk; web:
+  the [save store](../native/WEB.md#save-data-w-36)).
+
+It is not a `DC3_PROFILE` row: it follows the console's state, not who is
+playing, and applies under `dev` and `release` alike.
+
+Measured 2026-11-20 with `scripts/native_boot_time.py` (windowed in a private
+Xvfb, muted, a key press as soon as each screen takes one; this box's Xvfb
+window ran at 32 to 41 fps, not 60), seconds from starting the process:
+
+| | title screen | main menu | key presses |
+|---|---|---|---|
+| played console, before (`DC3_BOOT_INTRO=1` gives the same today: 9.9, 9.9) | 7.7, 8.1, 7.8 | 10.1, 10.6, 10.3 | 2 |
+| played console, now | 3.5, 3.5, 3.3 | 5.8, 5.8, 5.6 | 1 |
+| first launch, before / now | 8.0, 7.9 / 7.9, 7.7 | 10.3, 10.4 / 9.9, 9.8 | 2 |
+
+Of the 4.5 s saved, 3.2 s is the autosave warning (4.3 s to 1.1 s) and 0.8 s
+the attract screen (1.3 s with the skip press to 0.5 s). The 1.1 s that is left
+of the warning is the screen's load and its sixteen panels (read from its DTA,
+not timed apart), which the 4 s message used to cover. The splash screens are
+not in it: a
+loose-file run does not wait for them (`splash.SetWaitForSplash(false)` when
+`!UsingCD()`), attract is entered about 2 s after the process starts either
+way, and `DC3_SHOW_SPLASH=0` on the old build measured 11.5, 11.8, 10.3 s, the
+same within noise. A player who does not press on the attract movie waits out
+all 83 s of it before; now there is nothing to wait out.
+
+Web, the same day with `scripts/web/boot-time.mjs` (Chromium headless shell,
+localhost, warm HTTP cache, seconds from the navigation; the two "now" rows of
+a played browser are one run that alternates the two URLs, so the box's load
+is the same for both):
+
+| | title screen | main menu | key presses |
+|---|---|---|---|
+| played browser, before (the build with the save store only) | 9.9, 10.0, 11.0 | 12.0, 12.1, 13.5 | 4 |
+| played browser, now, `&env=DC3_BOOT_INTRO=1` | 10.6, 10.6, 10.2, 10.4 | 12.7, 12.8, 12.2, 12.5 | 4 |
+| played browser, now | 6.1, 6.0, 6.4, 6.5 | 8.2, 8.1, 8.5, 8.6 | 2 |
+| played browser, now, nothing pressed | 6.2, 6.4, 6.0 | stays on the title screen | 0 |
+| first launch (`&reset_save=1`), before / now | 10.4, 9.9 / 10.5, 10.0, 12.2 | 12.4, 12.0 / 12.6, 12.1, 14.3 | 4 |
+
+About 4.6 s of every web row is the page itself (download from localhost,
+wasm compile, engine boot) before the first screen. With nothing pressed the
+page's splash video is gone half a second after the title screen comes up
+(its fade; `main_web.cpp`, `WebScreenBundleHook`). Under the original sequence
+with nothing pressed it stays to its end, 9.8 s after the navigation (measured
+with `&env=DC3_BOOT_INTRO=1`), which would cover the title screen for three
+and a half seconds. The driver presses on the attract movie only when the
+engine says it is showing the original sequence: a press that lands in a
+played browser's half-second attract screen makes that screen last 1.3 s
+instead of 0.5 (measured, 4 of 4 loads, which reached the main menu at 9.8 to
+10.6 s).
+
+What is left on a played console is two screen loads: attract and the autosave
+warning are still entered and left (1.4 s on web, 1.6 s on desktop, both
+dwells included). Not entering attract at all would save about half a second
+of that and was not tried.
+
+Tests: `Dc3BootPlanTest.*` (the decision table, in-process) and
+`HeadlessBootTest.{AFirstLaunchIsTheOriginalSequence,
+AReturningConsoleGoesStraightToTheTitleScreen,
+AReturningConsoleWaitsOnTheTitleScreen,
+BootIntroAndFastBootOffShowTheOriginalSequenceAgain}` (a real `dc3-native`: one
+first launch driven like a player, then the same console launched again).
+Five sabotages, each caught by both a unit and an engine test where both
+apply: the title passed too, `DC3_BOOT_INTRO` ignored, a played console not
+recognised, `DC3_FAST_BOOT=0` not winning, every console counted as played.
 
 ### Stopping the engine (H-9)
 

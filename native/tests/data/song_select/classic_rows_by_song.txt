@@ -1,0 +1,60 @@
+# The image's song select list, Perform, sorted by_song: one row per line, KIND TOKEN.
+# Dumped from a dc3-native built at da357dbf3 (before the native song select work),
+# disc songs only (DC3_DLC=0), fresh profile.  test_native_song_select.cpp compares
+# the list under DC3_CLASSIC_SONG_SELECT=1 with it row for row.
+function playlists
+function random_song
+header ( - A
+song 12step
+song aint2proud2beg
+song aroundtheworld
+song giveituptome
+header B
+song bassdownlow
+song betteroffalone
+song bewareoftheboys
+song boomboompow
+song boyfriend
+header C - D
+song calabria
+song chingaling
+song cupidshuffle
+song dabutt
+song discoinferno
+header E - G
+song electricboogie
+song everybody
+song firework
+song getlow
+header H - I
+song hello
+song iamthebest
+song iwillsurvive
+song iceicebaby
+song indaclub
+header L - M
+song letthemusicplay
+song macarena
+song moveslikejagger
+song mrsaxobeat
+header N - S
+song nowthatwefoundlove
+song omg
+song onthefloor
+song sambadejaneiro
+song scream
+song sexyandiknowit
+song starships
+song stereolove
+song whatdoesntkillyou
+song supersonic
+header T
+song takeovercontrol
+song teachmehowtodougie
+song thehustle
+song turnthebeataround
+header W - Y
+song wildones
+song ymca
+song yougotittherightstuff
+song youmakemefeeldc

@@ -78,6 +78,10 @@ void SongSort::BuildTree() {
         }
     }
 
+#ifdef HX_NATIVE
+    AddRecentlyPlayedSection();
+#endif
+
     FOREACH (it, mShortcutNodes) {
         (*it)->FinishSort(this);
     }

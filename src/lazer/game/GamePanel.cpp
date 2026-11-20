@@ -62,6 +62,7 @@
 #include "world\Dir.h"
 #ifdef HX_NATIVE
 #include <cstdio>
+#include "platform/SongSelect_Native.h"
 #endif
 GamePanel *TheGamePanel = nullptr;
 LoopVizCallback gLoopVizCallback;
@@ -368,6 +369,9 @@ void GamePanel::Enter() {
     if (TheMetaMusic) {
         TheMetaMusic->TraceState("GamePanel::Enter");
     }
+    // The song has reached gameplay, in whatever mode: the newest entry of
+    // song select's Recently Played (docs/native/SONG_SELECT.md).
+    NativeSongSelect::NotePlayed(TheGameData->GetSong());
 #endif
     UIPanel::Enter();
     mPerformanceProfiler.Stop();

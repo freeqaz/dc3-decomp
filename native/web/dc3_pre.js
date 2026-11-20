@@ -26,8 +26,303 @@ Module.dc3PoseStop = function () {
     if (Module['_dc3_pose_stop']) Module['_dc3_pose_stop']();
 };
 
-Module.preRun = Module.preRun || [];
-Module.preRun.push(function () {
+// ---------------------------------------------------------------------------
+// Save store (PLAN W-36): the player's save data survives a page reload.
+//
+// The game writes its saves with plain file I/O (MemcardMgr_Stub.cpp: the
+// profile, <DC3_SAVE_DIR>/profile_<pad>_save.dat; Cache_Stub.cpp: the global
+// options, <DC3_CACHE_DIR>/global/global), and on web those files are in MEMFS,
+// which is gone on reload. So every reload was a new console: no scores, no
+// unlocks, default options, and every first-run tutorial again.
+//
+// This keeps exactly those files in IndexedDB (database "dc3-save", one record
+// a file):
+//   boot    the records are written back into MEMFS. The boot state machine
+//           (main_web.cpp, BOOT_FETCHING) waits for dc3SaveReady() before it
+//           creates the App, so the game's first save search sees them. The
+//           load runs beside the asset bundle download and adds no boot time.
+//   save    the two backends call Dc3SaveStoreChanged() after every write and
+//           delete (platform/SaveStore_Web.h -> Module.dc3SaveChanged); 50 ms
+//           later the files that differ from what the store holds are written
+//           in one transaction. Also when the page is hidden or unloaded.
+//   reset   ?reset_save=1 empties the store before the game boots (a fresh
+//           console) and takes the parameter out of the address bar, so the
+//           next reload keeps what is saved after it.
+//   off     ?save=off neither reads nor writes the store for this page load.
+//
+// Why not emscripten's IDBFS: its sync is whole-tree and timestamp-driven: it
+// writes every file whose mtime differs from the stored one and deletes every
+// stored file it does not have. A second tab that booted before the first one
+// saved would, on its own next save (or on being hidden), put its older
+// profile back and delete files it never saw. Here a file is written only when
+// its bytes differ from what THIS page last loaded or stored, and deleted only
+// when this page deleted it. It also keeps the song cache
+// (<DC3_CACHE_DIR>/songcache/songcache, 95 KB, built at every boot from the
+// song lists) out of the store, and needs no extra emscripten library.
+//
+// Not stored if IndexedDB is missing, refuses, or does not answer in 5 s
+// (some private windows): the game then runs as before, on a fresh console,
+// and the console says so once. window.dc3SaveState reports all of it.
+// ---------------------------------------------------------------------------
+var dc3SaveStoreStart = (function () {
+    var DB_NAME = 'dc3-save', STORE = 'files';
+    var LOAD_TIMEOUT_MS = 5000, STORE_DELAY_MS = 50;
+    var g = (typeof window !== 'undefined') ? window : globalThis;
+    var state = g.dc3SaveState = {
+        mode: 'starting',   // starting | on | off (?save=off) | unavailable (not stored this session)
+        ready: false,       // the boot may go on to the game's first save search
+        reset: false,       // ?reset_save=1 emptied the store on this load
+        loaded: [],         // [key, bytes] restored into MEMFS at boot
+        stores: 0,          // write transactions completed
+        lastStore: null,    // { why, keys, deleted, bytes, ms }
+        pending: false,     // a change waits to be stored, or a transaction is in flight
+        error: null,
+    };
+    var db = null, roots = null, synced = {}, timer = 0, inflight = null, again = null;
+
+    function say(msg) { console.log('[dc3-save] ' + msg); }
+
+    // Where the two backends write. The page sets both variables (unless
+    // ?env= already did: the preRun below applies it first), so this file and
+    // the C++ agree by construction.
+    function resolveRoots() {
+        var base = (ENV['HOME'] || '/home/web_user') + '/.local/share/dc3';
+        if (!ENV['DC3_SAVE_DIR']) ENV['DC3_SAVE_DIR'] = base + '/saves';
+        if (!ENV['DC3_CACHE_DIR']) ENV['DC3_CACHE_DIR'] = base + '/cache';
+        roots = [
+            { key: 'saves', dir: ENV['DC3_SAVE_DIR'] },
+            { key: 'global', dir: ENV['DC3_CACHE_DIR'] + '/global' },
+        ];
+    }
+    function pathOf(key) {
+        for (var i = 0; i < roots.length; i++) {
+            if (key.indexOf(roots[i].key + '/') === 0) return roots[i].dir + key.slice(roots[i].key.length);
+        }
+        return null;
+    }
+    function walk(dir, rel, out) {
+        var names;
+        try { names = FS.readdir(dir); } catch (e) { return; }  // not created yet
+        for (var i = 0; i < names.length; i++) {
+            var n = names[i];
+            if (n === '.' || n === '..') continue;
+            var st;
+            try { st = FS.stat(dir + '/' + n); } catch (e) { continue; }
+            if (FS.isDir(st.mode)) walk(dir + '/' + n, rel + n + '/', out);
+            else if (FS.isFile(st.mode)) out[rel + n] = dir + '/' + n;
+        }
+    }
+    function localFiles() {
+        var out = {};
+        for (var i = 0; i < roots.length; i++) walk(roots[i].dir, roots[i].key + '/', out);
+        return out;
+    }
+    function same(a, b) {
+        if (!a || !b || a.length !== b.length) return false;
+        for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+        return true;
+    }
+
+    function unavailable(why) {
+        if (state.ready) return;
+        state.mode = 'unavailable';
+        state.error = why;
+        state.ready = true;
+        console.warn('[dc3-save] save data will NOT be kept across reloads this session: ' + why);
+    }
+
+    function openDb() {
+        return new Promise(function (resolve, reject) {
+            var req = indexedDB.open(DB_NAME, 1);
+            req.onupgradeneeded = function () {
+                if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
+            };
+            req.onsuccess = function () { resolve(req.result); };
+            req.onerror = function () { reject(req.error || new Error('open failed')); };
+            req.onblocked = function () { reject(new Error('open blocked by another tab')); };
+        });
+    }
+    // Every record as [key, value]; with `wipe`, the store is emptied instead.
+    function readAll(d, wipe) {
+        return new Promise(function (resolve, reject) {
+            var out = [];
+            var tx = d.transaction(STORE, wipe ? 'readwrite' : 'readonly');
+            var st = tx.objectStore(STORE);
+            if (wipe) st.clear();
+            else st.openCursor().onsuccess = function (ev) {
+                var c = ev.target.result;
+                if (!c) return;
+                out.push([String(c.key), c.value]);
+                c.continue();
+            };
+            tx.oncomplete = function () { resolve(out); };
+            tx.onerror = tx.onabort = function () { reject(tx.error || new Error('read failed')); };
+        });
+    }
+    function dropUrlParam(name) {
+        try {
+            var kept = location.search.replace(/^\?/, '').split('&').filter(function (p) {
+                return p && p.split('=')[0] !== name;
+            });
+            history.replaceState(null, '', location.pathname + (kept.length ? '?' + kept.join('&') : '') + location.hash);
+        } catch (e) {}
+    }
+
+    function start() {
+        resolveRoots();
+        var params = new URLSearchParams(location.search);
+        var off = /^(off|0|false|no)$/i.test(params.get('save') || '');
+        var reset = /^(1|true|yes|on)$/i.test(params.get('reset_save') || '');
+        if (off) {
+            state.mode = 'off';
+            state.ready = true;
+            say('off (?save=off): this page load starts on a fresh console and stores nothing');
+            return;
+        }
+        if (typeof indexedDB === 'undefined' || !indexedDB) { unavailable('this browser has no IndexedDB here'); return; }
+        var t0 = performance.now();
+        var deadline = setTimeout(function () { unavailable('IndexedDB did not answer in ' + LOAD_TIMEOUT_MS + ' ms'); }, LOAD_TIMEOUT_MS);
+        openDb().then(function (d) {
+            return readAll(d, reset).then(function (records) { return [d, records]; });
+        }).then(function (r) {
+            clearTimeout(deadline);
+            // Too late: the game already booted on a fresh console. Storing now
+            // would replace the save that was not loaded, so stay unavailable.
+            if (state.ready) { try { r[0].close(); } catch (e) {} return; }
+            var bytes = 0;
+            for (var i = 0; i < r[1].length; i++) {
+                var key = r[1][i][0], rec = r[1][i][1], path = pathOf(key);
+                if (!path || !rec || !rec.data) continue;
+                var data = new Uint8Array(rec.data);
+                FS.mkdirTree(path.slice(0, path.lastIndexOf('/')));
+                FS.writeFile(path, data);
+                synced[key] = data;
+                state.loaded.push([key, data.length]);
+                bytes += data.length;
+            }
+            db = r[0];
+            db.onversionchange = function () { try { db.close(); } catch (e) {} db = null; };
+            state.reset = reset;
+            state.mode = 'on';
+            state.ready = true;
+            var ms = (performance.now() - t0).toFixed(0);
+            if (reset) {
+                say('reset (?reset_save=1): the stored save data was deleted; this is a fresh console');
+                dropUrlParam('reset_save');
+            } else if (state.loaded.length) {
+                say('restored ' + state.loaded.length + ' file(s), ' + bytes + ' bytes, in ' + ms + ' ms: ' +
+                    state.loaded.map(function (e) { return e[0]; }).join(', '));
+            } else {
+                say('nothing stored yet: a fresh console (' + ms + ' ms)');
+            }
+        }).catch(function (e) {
+            clearTimeout(deadline);
+            unavailable(String((e && e.message) || e));
+        });
+    }
+
+    // Write what differs from the store. Resolves true when a transaction
+    // committed, false when there was nothing to write or it failed.
+    function flush(why) {
+        if (state.mode !== 'on' || !db) return Promise.resolve(false);
+        if (inflight) { again = why; return inflight; }
+        var files = localFiles(), puts = [], dels = [], key;
+        for (key in files) {
+            var data;
+            try { data = FS.readFile(files[key]); } catch (e) { continue; }
+            if (!same(data, synced[key])) puts.push([key, data]);
+        }
+        for (key in synced) if (!(key in files)) dels.push(key);
+        if (!puts.length && !dels.length) { state.pending = false; return Promise.resolve(false); }
+        state.pending = true;
+        var t0 = performance.now();
+        inflight = new Promise(function (resolve) {
+            function done(err) {
+                inflight = null;
+                if (err) {
+                    state.error = String((err && err.message) || err);
+                    console.warn('[dc3-save] could not store save data (' + why + '): ' + state.error);
+                } else {
+                    var bytes = 0;
+                    puts.forEach(function (p) { synced[p[0]] = p[1]; bytes += p[1].length; });
+                    dels.forEach(function (k) { delete synced[k]; });
+                    state.stores++;
+                    state.error = null;
+                    state.lastStore = {
+                        why: why, keys: puts.map(function (p) { return p[0]; }), deleted: dels,
+                        bytes: bytes, ms: +(performance.now() - t0).toFixed(1),
+                    };
+                    say('stored (' + why + '): ' +
+                        puts.map(function (p) { return p[0] + ' ' + p[1].length + ' bytes'; })
+                            .concat(dels.map(function (k) { return k + ' deleted'; })).join(', ') +
+                        ' in ' + state.lastStore.ms + ' ms');
+                }
+                if (again) { var w = again; again = null; schedule(w); }
+                else if (!err) state.pending = false;
+                resolve(!err);
+            }
+            var tx;
+            try {
+                tx = db.transaction(STORE, 'readwrite');
+                var st = tx.objectStore(STORE);
+                puts.forEach(function (p) { st.put({ data: p[1], time: Date.now() }, p[0]); });
+                dels.forEach(function (k) { st.delete(k); });
+            } catch (e) { done(e); return; }
+            tx.oncomplete = function () { done(null); };
+            tx.onerror = tx.onabort = function () { done(tx.error || new Error('transaction aborted')); };
+            // Do not wait for the request callbacks before committing: on
+            // pagehide there may be no later task to run them in.
+            if (tx.commit) { try { tx.commit(); } catch (e) {} }
+        });
+        return inflight;
+    }
+    function schedule(why) {
+        state.pending = true;
+        if (timer) return;
+        timer = setTimeout(function () { timer = 0; flush(why); }, STORE_DELAY_MS);
+    }
+    function flushNow(why) {
+        if (timer) { clearTimeout(timer); timer = 0; }
+        return flush(why);
+    }
+
+    // C++ -> here, after each save write/delete (platform/SaveStore_Web.h).
+    Module.dc3SaveChanged = function () { if (state.mode === 'on') schedule('save'); };
+    // The boot gate (main_web.cpp BOOT_FETCHING).
+    Module.dc3SaveReady = function () { return state.ready ? 1 : 0; };
+    // For tests and the console: store now; resolves when it is in IndexedDB.
+    g.dc3SaveFlush = function () { return flushNow('manual'); };
+    // For tests and the console: every file the game has under its save and
+    // cache directories, as { path, bytes, stored }. `stored` is whether the
+    // store keeps that file; nothing is kept while the store is off or
+    // unavailable.
+    g.dc3SaveFiles = function () {
+        if (!roots) return [];
+        var all = {}, kept = {}, files = state.mode === 'on' ? localFiles() : {}, key, out = [];
+        for (key in files) kept[files[key]] = true;
+        walk(ENV['DC3_SAVE_DIR'], 's/', all);
+        walk(ENV['DC3_CACHE_DIR'], 'c/', all);
+        for (key in all) {
+            var bytes = -1;
+            try { bytes = FS.stat(all[key]).size; } catch (e) {}
+            out.push({ path: all[key], bytes: bytes, stored: !!kept[all[key]] });
+        }
+        return out;
+    };
+
+    if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'hidden') flushNow('page hidden');
+        });
+        g.addEventListener('pagehide', function () { flushNow('page unload'); });
+    }
+
+    return function () {
+        try { start(); } catch (e) { unavailable(String((e && e.message) || e)); }
+    };
+})();
+
+function dc3ApplyUrlEnv() {
     try {
         // dc3 registers no WebMusicStem; off-main mode breaks the adaptive-latency heartbeat (engine Bug-4) — default off until dc3 ports the stem bridge.
         if (ENV['RB3_WEB_OFFMAIN_MIX'] === undefined) ENV['RB3_WEB_OFFMAIN_MIX'] = '0';
@@ -56,4 +351,12 @@ Module.preRun.push(function () {
     } catch (e) {
         console.warn('[dc3-env] bridge failed:', e);
     }
+}
+
+// One preRun, in this order: the save store reads DC3_SAVE_DIR / DC3_CACHE_DIR,
+// which ?env= may set. (ENV is final once the runtime starts.)
+Module.preRun = Module.preRun || [];
+Module.preRun.push(function () {
+    dc3ApplyUrlEnv();
+    dc3SaveStoreStart();
 });
