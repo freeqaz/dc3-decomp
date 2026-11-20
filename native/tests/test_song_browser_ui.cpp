@@ -1156,7 +1156,7 @@ TEST(SongBrowserUi, NothingFillsTheScreenOpaquely) {
     EXPECT_LT(scrim.colors.topLeft.a, 0.5f) << "a scrim, not a backdrop";
     for (const RoundRectFill &fill : CommandsOf<RoundRectFill>(frame)) {
         const bool big = fill.rect.width * fill.rect.height > 0.5f * 1280.0f * 720.0f;
-        EXPECT_FALSE(big && fill.colors.topLeft.a > 0.9f) << Describe(Command { fill });
+        EXPECT_FALSE(big && fill.colors.topLeft.a > 0.9f) << Describe(nativeui::Command { fill });
     }
     // Every part is there, inside the margins.
     for (const char *expected : { "SONGS", "TITLE", "ARTIST", "DIFFICULTY", "SOURCE", "DECADE",
