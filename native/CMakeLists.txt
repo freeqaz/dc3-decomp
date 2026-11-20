@@ -2065,6 +2065,7 @@ if(BUILD_TESTS)
         tests/test_bink_integration.cpp
         tests/test_extract_bik.cpp
         tests/test_input.cpp
+        tests/test_text_input.cpp # the engine's text-editing input queue (platform/TextInput_Native.h): capture vs the pad map, chain, UTF-8, repeat
         tests/test_audio.cpp
         tests/test_mogg_decode.cpp
         tests/test_mogg_v0xe.cpp
