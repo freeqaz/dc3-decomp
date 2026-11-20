@@ -5,7 +5,8 @@
 // them in IndexedDB (native/web/dc3_pre.js, "Save store"); this is how the two
 // file backends tell it that a file was written or removed. The page then
 // compares what is on disk with what it stored and writes the difference, so a
-// call that changed nothing costs a directory listing and stores nothing.
+// call that changed nothing costs one read and compare of the save files
+// (1.15 MB) and stores nothing.
 //
 // Desktop: a no-op (the files are real files).
 #pragma once

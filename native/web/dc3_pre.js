@@ -57,8 +57,8 @@ Module.dc3PoseStop = function () {
 // profile back and delete files it never saw. Here a file is written only when
 // its bytes differ from what THIS page last loaded or stored, and deleted only
 // when this page deleted it. It also keeps the song cache
-// (<DC3_CACHE_DIR>/songcache, rebuilt at every boot from the server's song
-// lists) out of the store, and needs no extra emscripten library.
+// (<DC3_CACHE_DIR>/songcache/songcache, 95 KB, built at every boot from the
+// song lists) out of the store, and needs no extra emscripten library.
 //
 // Not stored if IndexedDB is missing, refuses, or does not answer in 5 s
 // (some private windows): the game then runs as before, on a fresh console,
@@ -292,6 +292,23 @@ var dc3SaveStoreStart = (function () {
     Module.dc3SaveReady = function () { return state.ready ? 1 : 0; };
     // For tests and the console: store now; resolves when it is in IndexedDB.
     g.dc3SaveFlush = function () { return flushNow('manual'); };
+    // For tests and the console: every file the game has under its save and
+    // cache directories, as { path, bytes, stored }. `stored` is whether the
+    // store keeps that file; nothing is kept while the store is off or
+    // unavailable.
+    g.dc3SaveFiles = function () {
+        if (!roots) return [];
+        var all = {}, kept = {}, files = state.mode === 'on' ? localFiles() : {}, key, out = [];
+        for (key in files) kept[files[key]] = true;
+        walk(ENV['DC3_SAVE_DIR'], 's/', all);
+        walk(ENV['DC3_CACHE_DIR'], 'c/', all);
+        for (key in all) {
+            var bytes = -1;
+            try { bytes = FS.stat(all[key]).size; } catch (e) {}
+            out.push({ path: all[key], bytes: bytes, stored: !!kept[all[key]] });
+        }
+        return out;
+    };
 
     if (typeof document !== 'undefined') {
         document.addEventListener('visibilitychange', function () {
