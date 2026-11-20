@@ -20,7 +20,7 @@
 //    while a screen is not at rest gets a still backdrop, which is fine.
 //  - It is drawn under text, so it stays dark: no band is brighter than
 //    kBackdropPeakOpacity of its colour, and a column of text adds
-//    Palette::well on top. NativeUiWidgets.BackdropStaysDarkUnderText holds
+//    Palette::well on top. UiCoreBackdrop.DriftsWithTheClockStaysDimAndNeverKeepsAScreenAwake and SongBrowserUi.TextKeepsItsContrastOverTheBackdrop holds
 //    the worst case to a contrast ratio.
 #pragma once
 

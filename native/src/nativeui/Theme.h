@@ -16,7 +16,7 @@
 // face are 0.55 of it and of the heavy face 0.625. No style may have capitals
 // under 10 output pixels at the smallest output the port supports (720 rows,
 // where one unit is one pixel): Theme.cpp states each style's cap height and
-// NativeUiTheme.NoStyleHasCapitalsUnderTenPixels holds them to it.
+// UiCoreTheme.NoStyleHasCapitalsUnderTenPixelsAt720Rows holds them to it.
 #pragma once
 
 #include "nativeui/Animation.h"

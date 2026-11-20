@@ -87,7 +87,7 @@ namespace nativeui {
         // Chosen from those: A's hue at full strength, and B a step brighter than
         // sampled, because the dark letter on #BC0019 is only 2.9:1 (here 4.3:1).
         c.buttonAccept = Color::FromRgb8(0x7FB844);
-        c.buttonBack = Color::FromRgb8(0xE0393E);
+        c.buttonBack = Color::FromRgb8(0xE5484D); // 5:1 under the dark letter
         c.buttonText = Color::FromRgb8(0x0C0C16);
         // Chosen: a key cap is a lit glass chip, so a key name never looks like a
         // pad button.

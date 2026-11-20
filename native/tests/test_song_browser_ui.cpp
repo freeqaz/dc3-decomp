@@ -16,6 +16,7 @@
 #include "nativeui_test_support.h"
 
 #include "nativeui/Clock.h"
+#include "nativeui/Icon.h"
 #include "nativeui/ListView.h"
 #include "nativeui/Shelf.h"
 #include "platform/ExecutablePath.h"
@@ -30,7 +31,10 @@
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
+#include <optional>
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <iostream>
 #include <map>
@@ -145,6 +149,18 @@ namespace {
     const std::vector<std::string> kHistory = { "omg", "ymca", "thehustle", "starships",
                                                 "macarena", "scream", "whipmyhair" };
 
+    // The screen's commands; nativeui::Command, a display list's, is also in scope.
+    using BrowserCommand = songbrowser_ui::Command;
+
+    // The game's theme with the backdrop standing still, so that two frames of
+    // a screen at rest can be compared whole. The drift has its own test
+    // (UiCoreBackdrop).
+    Theme StillTheme() {
+        Theme theme = Dc3Theme();
+        theme.motion.ambientPeriod = 0.0f;
+        return theme;
+    }
+
     ImageHandle ArtOf(const SongEntry &song) {
         return ImageHandle { 100000u + static_cast<std::uint32_t>(song.id) };
     }
@@ -155,8 +171,9 @@ namespace {
         FixedAdvanceMeasurer text;
         ManualClock clock;
         SongCatalog catalog;
-        Theme theme = Dc3Theme();
+        Theme theme = StillTheme();
         std::vector<std::string> picks;
+        std::vector<BrowserCommand> commandsFired;
         std::vector<Cue> cues;
         int backs = 0;
         bool artReady = true;
@@ -166,21 +183,26 @@ namespace {
         explicit Rig(
             SongCatalog songs,
             const std::vector<std::string> &history = {},
-            const State *restore = nullptr
+            const State *restore = nullptr,
+            const std::function<void(Environment &)> &tweak = {}
         )
             : catalog(std::move(songs)) {
             catalog.SetRecents(history);
             Delegate delegate;
             delegate.onPick = [this](const std::string &name) { picks.push_back(name); };
             delegate.onBack = [this] { ++backs; };
+            delegate.onCommand = [this](BrowserCommand command) { commandsFired.push_back(command); };
             delegate.onCue = [this](Cue cue) { cues.push_back(cue); };
             delegate.artFor = [this](const SongEntry &song) {
                 ++artCalls;
                 return artReady ? ArtOf(song) : ImageHandle {};
             };
-            browser = std::make_unique<SongBrowserScreen>(
-                catalog, delegate, Environment { text, clock }, restore
-            );
+            Environment environment { text, clock };
+            environment.theme = theme;
+            if (tweak) {
+                tweak(environment);
+            }
+            browser = std::make_unique<SongBrowserScreen>(catalog, delegate, environment, restore);
         }
 
         DisplayList Frame(double seconds = 1.0 / 60.0) {
@@ -217,11 +239,13 @@ namespace {
             return static_cast<int>(std::count(cues.begin(), cues.end(), cue));
         }
 
-        // Where the detail pane is: the right-hand column, between the top bar
-        // (the search field is above it) and the hints.
+        // Where the detail pane is: the right-hand column, between the two
+        // hairlines of the game's frame with the theme's padding off each.
         Rect PaneRect() const {
             const float left = 1280.0f - theme.space.xl - theme.metric.sidePaneWidth;
-            return { left, 80.0f, theme.metric.sidePaneWidth, 580.0f };
+            const float top = theme.metric.frameTop + theme.space.md;
+            const float bottom = theme.metric.frameBottom - theme.space.md;
+            return { left, top, theme.metric.sidePaneWidth, bottom - top };
         }
     };
 
@@ -268,6 +292,42 @@ namespace {
 
     std::string Upper(const std::string &text) { return utf8::ToUpper(text); }
 
+    // The pictures in a frame that are song art: icons are images too.
+    std::vector<ImageQuad> ArtQuads(const DisplayList &frame) {
+        std::vector<ImageQuad> out;
+        for (const ImageQuad &quad : CommandsOf<ImageQuad>(frame)) {
+            if (!IconOf(quad.image)) {
+                out.push_back(quad);
+            }
+        }
+        return out;
+    }
+
+    // How many of `icon` are drawn inside `area`.
+    int IconsIn(const DisplayList &frame, const Rect &area, Icon icon) {
+        int count = 0;
+        for (const ImageQuad &quad : CommandsOf<ImageQuad>(frame)) {
+            count += quad.image == IconImage(icon) && area.Contains({ quad.rect.x, quad.rect.y });
+        }
+        return count;
+    }
+
+    // The real catalog, the song the screen opens on given a best score, so
+    // that the pane shows every line it can.
+    SongCatalog PlainCatalogWithScores() {
+        SongCatalog catalog = RealCatalog();
+        for (int i = 0; i < catalog.Size(); i += 2) {
+            const std::string name = catalog.At(i).shortName;
+            SetScore(catalog, name, 1 + i % 5, 100000 + i * 777);
+        }
+        SetScore(catalog, "omg", 5, 1234567);
+        return catalog;
+    }
+
+    const std::vector<BrowserCommand> kBothCommands = { BrowserCommand::RandomSong, BrowserCommand::Playlists };
+    // Rows above the first song: the command rows, then the first heading.
+    const int kFirstSongRow = 3;
+
     const Rect kView { 0.0f, 0.0f, 1280.0f, 720.0f };
 
 }
@@ -299,7 +359,8 @@ TEST(SongBrowserUi, ArrivesOnTheFirstListRowWithoutHistory) {
     // By title, the first row under the first heading.
     const SongList byTitle = Arrange(rig.catalog, kByTitle);
     EXPECT_EQ(rig.Selected(), rig.catalog.At(byTitle.rows[0]).shortName);
-    EXPECT_EQ(rig.browser->List().SelectedIndex(), 1);
+    EXPECT_EQ(rig.browser->List().SelectedIndex(), kFirstSongRow) << "never a command row";
+    EXPECT_FALSE(rig.browser->SelectedCommand().has_value());
     EXPECT_EQ(rig.browser->DetailSong(), rig.Selected());
 
     // With no shelf the list starts right under the top bar: the layout closes up.
@@ -309,7 +370,7 @@ TEST(SongBrowserUi, ArrivesOnTheFirstListRowWithoutHistory) {
         rig.browser->List().Bounds().Top() + 100.0f,
         withHistory.browser->List().Bounds().Top()
     );
-    EXPECT_GT(rig.browser->List().Bounds().height, 500.0f);
+    EXPECT_GT(rig.browser->List().Bounds().height, 450.0f);
 }
 
 TEST(SongBrowserUi, ArrivesWhereASavedStateSays) {
@@ -364,9 +425,13 @@ TEST(SongBrowserUi, ShelfThenListAndTheDetailPaneFollows) {
     frame = rig.Settle();
     EXPECT_TRUE(HasRun(frame, rig.PaneRect(), Upper(rig.catalog.Find(rig.Selected())->title)));
 
-    // Up from the top row goes back to the shelf, which unfolds again.
+    // Up from the top row goes back to the shelf, which unfolds again. The
+    // top rows are the two commands, above the first song.
     rig.Press(Action::Up);
     EXPECT_EQ(rig.Selected(), first);
+    rig.Press(Action::Up, 2);
+    EXPECT_EQ(rig.browser->SelectedCommand(), std::optional<BrowserCommand>(BrowserCommand::RandomSong));
+    EXPECT_EQ(rig.Focus(), Region::List);
     rig.Press(Action::Up);
     EXPECT_EQ(rig.Focus(), Region::Recents);
     EXPECT_TRUE(rig.browser->RecentsShown());
@@ -406,8 +471,15 @@ TEST(SongBrowserUi, LeftAndRightJumpBetweenSections) {
     EXPECT_EQ(rig.Selected(), firstOf(2));
     rig.Press(Action::Left);
     EXPECT_EQ(rig.Selected(), firstOf(1));
+    rig.Press(Action::Left);
+    EXPECT_EQ(rig.Selected(), firstOf(0));
+    // The command rows count as one more section above the first.
     rig.Press(Action::Left, 5);
-    EXPECT_EQ(rig.Selected(), firstOf(0)) << "stops at the first section";
+    EXPECT_EQ(rig.browser->SelectedCommand(), std::optional<BrowserCommand>(BrowserCommand::RandomSong))
+        << "stops at the top";
+    EXPECT_EQ(rig.Selected(), "");
+    rig.Press(Action::Right);
+    EXPECT_EQ(rig.Selected(), firstOf(0)) << "and on from a command row: the first song";
     rig.Press(Action::Right, 100);
     EXPECT_EQ(rig.Selected(), firstOf(byTitle.sections.size() - 1)) << "and at the last";
     EXPECT_EQ(rig.Focus(), Region::List);
@@ -420,6 +492,8 @@ TEST(SongBrowserUi, LeftAndRightJumpBetweenSections) {
 
     // End and Home, PageDown.
     rig.Press(Action::Home);
+    EXPECT_EQ(rig.browser->List().SelectedIndex(), 0) << "the very top: the first command row";
+    rig.Press(Action::Down, 2);
     EXPECT_EQ(rig.Selected(), firstOf(0));
     rig.Press(Action::PageDown);
     EXPECT_GT(rig.browser->List().SelectedIndex(), 6);
@@ -920,7 +994,7 @@ TEST(SongBrowserUi, StateSavesAndRestores) {
     odd.selectedSong = "not_a_song";
     back.browser->RestoreState(odd);
     EXPECT_EQ(back.Saved().arrangement, kByTitle);
-    EXPECT_EQ(back.browser->List().SelectedIndex(), 1);
+    EXPECT_EQ(back.browser->List().SelectedIndex(), kFirstSongRow);
 }
 
 TEST(SongBrowserUi, ACatalogChangeKeepsThePlaceAndShowsTheNewHistory) {
@@ -951,15 +1025,16 @@ TEST(SongBrowserUi, ACatalogChangeKeepsThePlaceAndShowsTheNewHistory) {
     EXPECT_TRUE(HasRun(frame, rig.PaneRect(), "6:18") || HasRun(frame, rig.PaneRect(), "3:18")
                 || !RunsIn(frame, rig.PaneRect()).empty());
 
-    // Four gold marks and one empty ring in the pane.
-    int filled = 0;
-    for (const RoundRectFill &fill : CommandsOf<RoundRectFill>(frame)) {
-        if (rig.PaneRect().Contains({ fill.rect.x, fill.rect.y })
-            && SameRgb(fill.colors.topLeft, rig.theme.color.star)) {
-            ++filled;
+    // Four gold stars and one outline in the pane: real stars, as icons.
+    EXPECT_EQ(IconsIn(frame, rig.PaneRect(), Icon::Star), 4);
+    EXPECT_EQ(IconsIn(frame, rig.PaneRect(), Icon::StarOutline), 1);
+    for (const ImageQuad &quad : CommandsOf<ImageQuad>(frame)) {
+        if (quad.image == IconImage(Icon::Star)) {
+            EXPECT_TRUE(SameRgb(quad.tint, rig.theme.color.star));
+        } else if (quad.image == IconImage(Icon::StarOutline)) {
+            EXPECT_TRUE(SameRgb(quad.tint, rig.theme.color.starEmpty));
         }
     }
-    EXPECT_EQ(filled, 4);
 
     // History that names songs that are not installed: only the installed show.
     Rig sparse(RealCatalog("ham3"), kHistory);
@@ -1011,6 +1086,9 @@ TEST(SongBrowserUi, EverythingSettlesAndARestingFrameRepeats) {
                                         Action::Up,      Action::PrevTab, Action::Down };
     for (std::size_t i = 0; i < moves.size(); ++i) {
         rig.Press(moves[i]);
+        // One frame of no time: the tab strip learns where its indicator is
+        // going when it is next laid out.
+        rig.Frame(0.0);
         EXPECT_FALSE(rig.browser->IsSettled()) << "something should be moving after move " << i;
         rig.Settle();
     }
@@ -1125,7 +1203,7 @@ TEST(SongBrowserUi, ArtThatArrivesLateFadesIn) {
     rig.artReady = false;
     rig.browser->SetCatalog(rig.catalog); // rebuild everything with no art
     DisplayList frame = rig.Settle();
-    EXPECT_TRUE(CommandsOf<ImageQuad>(frame).empty()) << "placeholders only";
+    EXPECT_TRUE(ArtQuads(frame).empty()) << "placeholders only";
     const int callsBefore = rig.artCalls;
     rig.Frame();
     EXPECT_GT(rig.artCalls, callsBefore) << "art is asked for every frame";
@@ -1134,11 +1212,11 @@ TEST(SongBrowserUi, ArtThatArrivesLateFadesIn) {
     rig.artReady = true;
     frame = rig.Frame();
     frame = rig.Frame(rig.theme.motion.normal * 0.5);
-    ASSERT_FALSE(CommandsOf<ImageQuad>(frame).empty());
-    EXPECT_LT(Nth<ImageQuad>(frame, 0).tint.a, 1.0f) << "fading in";
+    ASSERT_FALSE(ArtQuads(frame).empty());
+    EXPECT_LT(ArtQuads(frame)[0].tint.a, 1.0f) << "fading in";
     EXPECT_FALSE(rig.browser->IsSettled());
     frame = rig.Settle();
-    for (const ImageQuad &quad : CommandsOf<ImageQuad>(frame)) {
+    for (const ImageQuad &quad : ArtQuads(frame)) {
         EXPECT_FLOAT_EQ(quad.tint.a, 1.0f);
     }
 }
@@ -1150,10 +1228,13 @@ TEST(SongBrowserUi, ArtThatArrivesLateFadesIn) {
 TEST(SongBrowserUi, NothingFillsTheScreenOpaquely) {
     Rig rig(RealCatalog(), kHistory);
     const DisplayList frame = rig.Settle();
-    const RoundRectFill scrim = Nth<RoundRectFill>(frame, 0);
-    EXPECT_EQ(scrim.rect, kView);
-    EXPECT_EQ(scrim.colors.topLeft, rig.theme.color.scrim);
-    EXPECT_LT(scrim.colors.topLeft.a, 0.5f) << "a scrim, not a backdrop";
+    // First the backdrop's wash: the whole view, and translucent, so the
+    // game's background still moves under it.
+    const RoundRectFill wash = Nth<RoundRectFill>(frame, 0);
+    EXPECT_EQ(wash.rect, kView);
+    EXPECT_EQ(wash.colors.topLeft, rig.theme.color.backdropTop);
+    EXPECT_EQ(wash.colors.bottomLeft, rig.theme.color.backdropBottom);
+    EXPECT_LT(wash.colors.bottomLeft.a, 0.9f);
     for (const RoundRectFill &fill : CommandsOf<RoundRectFill>(frame)) {
         const bool big = fill.rect.width * fill.rect.height > 0.5f * 1280.0f * 720.0f;
         EXPECT_FALSE(big && fill.colors.topLeft.a > 0.9f) << Describe(nativeui::Command { fill });
@@ -1240,34 +1321,83 @@ TEST(SongBrowserUi, LongTitlesAndArtistsAreCutAndNeverOverlap) {
         }
     }
 
-    // The pane's title steps down from the title size to the body size before
-    // it is cut. With the fake measurer (half an em a glyph) the pane holds 17
-    // glyphs at the title size and 22 at the body size.
+    // The pane's title: one line at the title size when it fits, else up to
+    // two lines at the body size; only a title too long for two lines is cut.
     const TextStyle &titleStyle = rig.theme.type.title;
-    int shortSeen = 0;
-    int mediumSeen = 0;
-    int longSeen = 0;
+    int oneLine = 0;
+    int twoLines = 0;
     for (int i = 0; i < rig.catalog.Size(); ++i) {
         const SongEntry &song = rig.catalog.At(i);
-        const std::size_t glyphs = utf8::Count(song.title);
-        int &seen = glyphs <= 17 ? shortSeen : (glyphs <= 22 ? mediumSeen : longSeen);
-        if (seen++ >= 3) {
-            continue; // three of each kind is plenty
-        }
         State at;
         at.selectedSong = song.shortName;
         Rig pane(RealCatalog(), {}, &at);
         const DisplayList frame = pane.Settle();
+        const Rect paneRect = pane.PaneRect();
         const std::string title = Upper(song.title);
-        if (glyphs <= 17) {
-            EXPECT_FLOAT_EQ(RunWith(frame, pane.PaneRect(), title).size, titleStyle.size) << title;
-        } else if (glyphs <= 22) {
-            EXPECT_FLOAT_EQ(RunWith(frame, pane.PaneRect(), title).size, bodySize) << title;
-        } else {
-            EXPECT_FALSE(HasRun(frame, pane.PaneRect(), title)) << title << " is cut";
+        if (HasRun(frame, paneRect, title)) {
+            const float size = RunWith(frame, paneRect, title).size;
+            EXPECT_TRUE(size == titleStyle.size || size == bodySize) << title;
+            ++oneLine;
+            continue;
+        }
+        // Two runs, one under the other, that together are the title.
+        const TextRun *first = nullptr;
+        const TextRun *second = nullptr;
+        const std::vector<TextRun> runs = RunsIn(frame, paneRect);
+        for (const TextRun &run : runs) {
+            if (run.size == bodySize && run.text.size() < title.size()
+                && title.compare(0, run.text.size(), run.text) == 0) {
+                first = &run;
+            }
+        }
+        ASSERT_NE(first, nullptr) << title << ": no first line";
+        for (const TextRun &run : runs) {
+            if (run.size == bodySize && run.origin.y > first->origin.y
+                && run.origin.x == first->origin.x
+                && (first->text + " " + run.text == title
+                    || (run.text.size() > 3
+                        && run.text.compare(run.text.size() - 3, 3, "...") == 0))) {
+                second = second ? second : &run;
+            }
+        }
+        ASSERT_NE(second, nullptr) << title << ": no second line";
+        EXPECT_NEAR(second->origin.y - first->origin.y, bodySize * 1.2f, 0.5f) << title;
+        ++twoLines;
+    }
+    EXPECT_GT(oneLine, 60);
+    EXPECT_GT(twoLines, 5) << "the real catalog has titles that need two lines";
+}
+
+// The pane is hung between the frame's two hairlines: it ends above the lower
+// one with the theme's padding, and nothing in it is drawn below its own edge.
+TEST(SongBrowserUi, TheDetailPaneEndsAboveTheLowerFrameLine) {
+    for (const bool withShelf : { true, false }) {
+        Rig rig(PlainCatalogWithScores(), withShelf ? kHistory : std::vector<std::string> {});
+        const DisplayList frame = rig.Settle();
+        const Rect pane = rig.PaneRect();
+        EXPECT_LE(pane.Bottom(), rig.theme.metric.frameBottom - rig.theme.space.md + 0.01f);
+        bool panelFound = false;
+        for (const RoundRectFill &fill : CommandsOf<RoundRectFill>(frame)) {
+            panelFound = panelFound
+                || (std::abs(fill.rect.x - pane.x) < 0.01f && std::abs(fill.rect.y - pane.y) < 0.01f
+                    && std::abs(fill.rect.width - pane.width) < 0.01f
+                    && std::abs(fill.rect.height - pane.height) < 0.01f);
+        }
+        EXPECT_TRUE(panelFound) << "the panel is where the frame lines put it";
+        // Everything written in the right-hand column, down to the lower line.
+        const Rect column { pane.x, pane.y, 1280.0f - pane.x, rig.theme.metric.frameBottom - pane.y };
+        const std::vector<TextRun> runs = RunsIn(frame, column);
+        ASSERT_GE(runs.size(), 6u);
+        for (const TextRun &run : runs) {
+            EXPECT_LE(run.origin.y, pane.Bottom() - rig.theme.space.md + 0.01f) << run.text;
+            EXPECT_GE(run.origin.y - run.size * 0.8f, pane.y + rig.theme.space.md - 0.01f) << run.text;
+        }
+        for (const ImageQuad &quad : CommandsOf<ImageQuad>(frame)) {
+            if (column.Contains({ quad.rect.x, quad.rect.y })) {
+                EXPECT_LE(quad.rect.Bottom(), pane.Bottom() - rig.theme.space.md + 0.01f);
+            }
         }
     }
-    EXPECT_EQ(shortSeen > 0 && mediumSeen > 0 && longSeen > 0, true);
 }
 
 TEST(SongBrowserUi, TheDetailPaneShowsEverythingAboutTheSong) {
@@ -1300,14 +1430,16 @@ TEST(SongBrowserUi, TheDetailPaneShowsEverythingAboutTheSong) {
         if (pane.Contains({ fill.rect.x, fill.rect.y })
             && fill.rect.height == rig.theme.metric.meterCellHeight) {
             lit += SameRgb(fill.colors.topLeft, rig.theme.color.accent) ? 1 : 0;
-            unlit += SameRgb(fill.colors.topLeft, rig.theme.color.fieldFill) ? 1 : 0;
+            unlit += SameRgb(fill.colors.topLeft, rig.theme.color.fieldBorder) ? 1 : 0;
         }
     }
     EXPECT_EQ(lit, ymca.difficultyTier + 1);
     EXPECT_EQ(lit + unlit, kDifficultyTiers);
     // The art is the pane's largest thing.
-    const ImageQuad art = Last<ImageQuad>(frame);
+    ASSERT_FALSE(ArtQuads(frame).empty());
+    const ImageQuad art = ArtQuads(frame).back();
     EXPECT_EQ(art.image, ArtOf(ymca));
+    EXPECT_EQ(IconsIn(frame, pane, Icon::Star), 5) << "five stars earned";
     EXPECT_GT(art.rect.width, 200.0f);
     EXPECT_FLOAT_EQ(art.rect.width, art.rect.height);
 
@@ -1341,7 +1473,7 @@ TEST(SongBrowserUi, WorksWithNoSongsOneSongAndTheDiscAlone) {
     single.Add(*RealCatalog().Find("ymca"));
     Rig one(single);
     frame = one.Settle();
-    EXPECT_EQ(one.browser->List().RowCount(), 2);
+    EXPECT_EQ(one.browser->List().RowCount(), 4) << "two commands, a heading, a row";
     EXPECT_EQ(one.Selected(), "ymca");
     one.Press(Action::Down);
     one.Press(Action::Right);
@@ -1355,10 +1487,10 @@ TEST(SongBrowserUi, WorksWithNoSongsOneSongAndTheDiscAlone) {
     disc.Settle();
     EXPECT_EQ(disc.catalog.Size(), 45);
     disc.Press(Action::NextTab, 3); // by source
-    EXPECT_EQ(disc.browser->List().RowCount(), 46) << "one heading, 45 songs";
+    EXPECT_EQ(disc.browser->List().RowCount(), 48) << "two commands, one heading, 45 songs";
     disc.Press(Action::End);
     disc.Settle();
-    EXPECT_EQ(disc.browser->List().SelectedIndex(), 45);
+    EXPECT_EQ(disc.browser->List().SelectedIndex(), 47);
 }
 
 // One row, every command: where each column sits.
@@ -1374,22 +1506,262 @@ TEST(SongBrowserUi, ARowGolden) {
     SongRow row(model, [] { return ImageHandle { 7 }; }, [] { return false; });
     const std::string expected =
         "image id=7 8,4 43x43 uv=0,0 1x1 r=6 tint=#FFFFFFFF\n"
-        "fill 474,19.5 7x12 r=0 soft=0 #FFFFFFFF\n"
-        "fill 483,19.5 7x12 r=0 soft=0 #FFFFFFFF\n"
-        "fill 492,19.5 7x12 r=0 soft=0 #FFFFFF66\n"
-        "fill 501,19.5 7x12 r=0 soft=0 #FFFFFF66\n"
-        "fill 510,19.5 7x12 r=0 soft=0 #FFFFFF66\n"
-        "fill 519,19.5 7x12 r=0 soft=0 #FFFFFF66\n"
-        "fill 528,19.5 7x12 r=0 soft=0 #FFFFFF66\n"
-        "fill 551,21 9x9 r=4.5 soft=0 #FFC83CFF\n"
-        "fill 564,21 9x9 r=4.5 soft=0 #FFC83CFF\n"
-        "stroke 577,21 9x9 r=4.5 t=1.5 soft=0 #FFFFFF66\n"
-        "stroke 590,21 9x9 r=4.5 t=1.5 soft=0 #FFFFFF66\n"
-        "stroke 603,21 9x9 r=4.5 t=1.5 soft=0 #FFFFFF66\n"
+        "fill 457,19.5 7x12 r=0 soft=0 #FFFFFFFF\n"
+        "fill 466,19.5 7x12 r=0 soft=0 #FFFFFFFF\n"
+        "fill 475,19.5 7x12 r=0 soft=0 #FFFFFF80\n"
+        "fill 484,19.5 7x12 r=0 soft=0 #FFFFFF80\n"
+        "fill 493,19.5 7x12 r=0 soft=0 #FFFFFF80\n"
+        "fill 502,19.5 7x12 r=0 soft=0 #FFFFFF80\n"
+        "fill 511,19.5 7x12 r=0 soft=0 #FFFFFF80\n"
+        // Two stars earned, three outlines: icons, tinted.
+        "image id=4294901760 534,18.5 14x14 uv=0,0 1x1 r=0 tint=#FFC83CFF\n"
+        "image id=4294901760 550,18.5 14x14 uv=0,0 1x1 r=0 tint=#FFC83CFF\n"
+        "image id=4294901761 566,18.5 14x14 uv=0,0 1x1 r=0 tint=#FFFFFF57\n"
+        "image id=4294901761 582,18.5 14x14 uv=0,0 1x1 r=0 tint=#FFFFFF57\n"
+        "image id=4294901761 598,18.5 14x14 uv=0,0 1x1 r=0 tint=#FFFFFF57\n"
         "text 67,33.3 font=1 size=26 ls=0.78 #37A7E3FF \"SCR\"\n"
         "text 108.34,33.3 font=1 size=26 ls=0.78 #FFFFFFFF \"EAM\"\n"
-        "text 269.6,30.9 font=1 size=18 ls=1.08 #FFFFFFB8 \"USHER\"\n";
+        "text 252.6,31.5 font=1 size=20 ls=1 #FFFFFFC2 \"USHER\"\n";
     EXPECT_EQ(Describe(harness.Frame(row, { 628.0f, 51.0f })), expected);
+}
+
+// ---------------------------------------------------------------------------
+// Command rows
+// ---------------------------------------------------------------------------
+
+namespace {
+    std::function<void(Environment &)> WithCommands(std::vector<BrowserCommand> commands) {
+        return [commands](Environment &environment) { environment.commands = commands; };
+    }
+    std::optional<BrowserCommand> Is(BrowserCommand command) { return command; }
+}
+
+TEST(SongBrowserUi, CommandRowsSitAboveTheFirstSectionInEverySort) {
+    Rig rig(RealCatalog());
+    const DisplayList frame = rig.Settle();
+    EXPECT_TRUE(HasText(frame, "RANDOM SONG"));
+    EXPECT_TRUE(HasText(frame, "PLAYLISTS"));
+    EXPECT_EQ(rig.browser->List().SelectedIndex(), kFirstSongRow) << "arrival: a song";
+    for (int tab = 0; tab < 5; ++tab) {
+        rig.Press(Action::Home);
+        EXPECT_EQ(rig.browser->List().SelectedIndex(), 0) << tab;
+        EXPECT_EQ(rig.browser->SelectedCommand(), Is(BrowserCommand::RandomSong)) << tab;
+        EXPECT_EQ(rig.Selected(), "") << "no song is selected on a command row";
+        rig.Press(Action::Down);
+        EXPECT_EQ(rig.browser->SelectedCommand(), Is(BrowserCommand::Playlists)) << tab;
+        rig.Press(Action::Down);
+        EXPECT_FALSE(rig.browser->SelectedCommand().has_value()) << tab;
+        EXPECT_EQ(rig.browser->List().SelectedIndex(), kFirstSongRow) << "past the heading";
+        EXPECT_FALSE(rig.Selected().empty());
+        rig.Press(Action::Up);
+        EXPECT_EQ(rig.browser->SelectedCommand(), Is(BrowserCommand::Playlists)) << "and back up into them";
+        rig.Press(Action::Down);
+        rig.Press(Action::NextTab);
+    }
+}
+
+TEST(SongBrowserUi, AcceptOnACommandRowRunsTheCommandAndPicksNoSong) {
+    Rig rig(RealCatalog());
+    rig.Settle();
+    rig.Press(Action::Up);
+    ASSERT_EQ(rig.browser->SelectedCommand(), Is(BrowserCommand::Playlists));
+    rig.Press(Action::Accept);
+    EXPECT_EQ(rig.commandsFired, (std::vector<BrowserCommand> { BrowserCommand::Playlists }));
+    EXPECT_TRUE(rig.picks.empty()) << "a command is not a pick";
+    rig.Press(Action::Up);
+    rig.Press(Action::Accept);
+    EXPECT_EQ(rig.commandsFired, (std::vector<BrowserCommand> { BrowserCommand::Playlists, BrowserCommand::RandomSong }));
+    EXPECT_TRUE(rig.picks.empty());
+
+    // The pane describes the command and shows its icon, not a song.
+    const DisplayList frame = rig.Settle();
+    EXPECT_EQ(rig.browser->DetailSong(), "");
+    EXPECT_EQ(rig.browser->DetailCommand(), Is(BrowserCommand::RandomSong));
+    EXPECT_TRUE(HasRun(frame, rig.PaneRect(), "RANDOM SONG"));
+    EXPECT_EQ(IconsIn(frame, rig.PaneRect(), Icon::Shuffle), 1);
+    EXPECT_TRUE(ArtQuads(frame).size() < CommandsOf<ImageQuad>(frame).size());
+    bool described = false;
+    for (const TextRun &run : RunsIn(frame, rig.PaneRect())) {
+        described = described || run.text.find("NOT SURE WHAT TO DANCE") == 0;
+    }
+    EXPECT_TRUE(described) << "a short description of what the command does";
+
+    // A song row still picks, and fires no command.
+    rig.Press(Action::Down, 2);
+    rig.Press(Action::Accept);
+    EXPECT_EQ(rig.picks.size(), 1u);
+    EXPECT_EQ(rig.commandsFired.size(), 2u);
+}
+
+TEST(SongBrowserUi, ASearchHasNoCommandRows) {
+    Rig rig(RealCatalog());
+    rig.Settle();
+    rig.Press(Action::Up, 2);
+    ASSERT_EQ(rig.browser->SelectedCommand(), Is(BrowserCommand::RandomSong));
+    const int browsing = rig.browser->List().RowCount();
+
+    rig.TypeText("usher");
+    DisplayList frame = rig.Settle();
+    EXPECT_FALSE(HasText(frame, "RANDOM SONG"));
+    EXPECT_FALSE(HasText(frame, "PLAYLISTS"));
+    EXPECT_FALSE(rig.browser->SelectedCommand().has_value());
+    EXPECT_FALSE(rig.Selected().empty()) << "the best match is selected";
+    EXPECT_LT(rig.browser->List().RowCount(), browsing);
+    rig.Press(Action::Down);
+    rig.Press(Action::Home);
+    EXPECT_LE(rig.browser->List().SelectedIndex(), 1) << "the top of the results";
+    EXPECT_FALSE(rig.browser->SelectedCommand().has_value()) << "which is a song";
+    EXPECT_FALSE(rig.Selected().empty());
+    rig.Press(Action::Accept);
+    EXPECT_TRUE(rig.commandsFired.empty());
+    EXPECT_EQ(rig.picks.size(), 1u);
+
+    // Leaving the search returns to the command row it started from.
+    rig.Press(Action::Back);
+    EXPECT_EQ(rig.browser->SelectedCommand(), Is(BrowserCommand::RandomSong));
+    EXPECT_TRUE(HasText(rig.Settle(), "RANDOM SONG"));
+    EXPECT_EQ(rig.browser->List().RowCount(), browsing);
+}
+
+TEST(SongBrowserUi, ASavedCommandRowComesBackWhenTheVisitHasIt) {
+    Rig rig(RealCatalog(), kHistory);
+    rig.Settle();
+    rig.Press(Action::Down); // into the list, on its first song
+    rig.Press(Action::Up);
+    const State saved = rig.Saved();
+    EXPECT_EQ(saved.selectedCommand, Is(BrowserCommand::Playlists));
+    EXPECT_EQ(saved.selectedSong, "");
+    EXPECT_EQ(saved.focus, Region::List);
+
+    Rig back(RealCatalog(), kHistory, &saved);
+    back.Settle();
+    EXPECT_EQ(back.Focus(), Region::List);
+    EXPECT_EQ(back.browser->SelectedCommand(), Is(BrowserCommand::Playlists));
+    EXPECT_EQ(back.browser->DetailCommand(), Is(BrowserCommand::Playlists));
+    back.Press(Action::NextTab);
+    EXPECT_EQ(back.browser->SelectedCommand(), Is(BrowserCommand::Playlists)) << "a new sort keeps it";
+
+    // A visit without that row opens on the first song instead.
+    Rig without(RealCatalog(), kHistory, &saved, WithCommands({ BrowserCommand::RandomSong }));
+    without.Settle();
+    EXPECT_FALSE(without.browser->SelectedCommand().has_value());
+    EXPECT_FALSE(without.Selected().empty());
+    EXPECT_EQ(without.browser->List().SelectedIndex(), 2) << "one command, the heading, the song";
+    EXPECT_EQ(without.browser->DetailSong(), without.Selected());
+}
+
+// Perform has both rows, Dance Battle only Random Song, Rehearse none.
+TEST(SongBrowserUi, TheVisitNamesItsCommandRows) {
+    Rig rehearse(RealCatalog(), {}, nullptr, WithCommands({}));
+    DisplayList frame = rehearse.Settle();
+    const int songsAndHeadings = rehearse.browser->List().RowCount();
+    EXPECT_FALSE(HasText(frame, "RANDOM SONG"));
+    EXPECT_FALSE(HasText(frame, "PLAYLISTS"));
+    EXPECT_EQ(rehearse.browser->List().SelectedIndex(), 1) << "the heading, then the first song";
+    rehearse.Press(Action::Home);
+    EXPECT_FALSE(rehearse.browser->SelectedCommand().has_value());
+    rehearse.Press(Action::Left, 3);
+    EXPECT_FALSE(rehearse.browser->SelectedCommand().has_value());
+    EXPECT_EQ(rehearse.browser->List().SelectedIndex(), 1);
+    rehearse.Press(Action::Accept);
+    EXPECT_TRUE(rehearse.commandsFired.empty());
+    EXPECT_EQ(rehearse.picks.size(), 1u);
+
+    Rig battle(RealCatalog(), {}, nullptr, WithCommands({ BrowserCommand::RandomSong }));
+    frame = battle.Settle();
+    EXPECT_EQ(battle.browser->List().RowCount(), songsAndHeadings + 1);
+    EXPECT_TRUE(HasText(frame, "RANDOM SONG"));
+    EXPECT_FALSE(HasText(frame, "PLAYLISTS"));
+    battle.Press(Action::Home);
+    EXPECT_EQ(battle.browser->SelectedCommand(), Is(BrowserCommand::RandomSong));
+    battle.Press(Action::Accept);
+    EXPECT_EQ(battle.commandsFired, (std::vector<BrowserCommand> { BrowserCommand::RandomSong }));
+    battle.Press(Action::Down);
+    EXPECT_FALSE(battle.browser->SelectedCommand().has_value()) << "one command row, then songs";
+
+    Rig perform(RealCatalog());
+    frame = perform.Settle();
+    EXPECT_EQ(perform.browser->List().RowCount(), songsAndHeadings + 2);
+    EXPECT_TRUE(HasText(frame, "RANDOM SONG"));
+    EXPECT_TRUE(HasText(frame, "PLAYLISTS"));
+
+    // In the order given, and a command named twice is shown once.
+    Rig swapped(RealCatalog(), {}, nullptr, WithCommands({ BrowserCommand::Playlists, BrowserCommand::RandomSong }));
+    swapped.Press(Action::Home);
+    EXPECT_EQ(swapped.browser->SelectedCommand(), Is(BrowserCommand::Playlists));
+    swapped.Press(Action::Down);
+    EXPECT_EQ(swapped.browser->SelectedCommand(), Is(BrowserCommand::RandomSong));
+    Rig twice(RealCatalog(), {}, nullptr, WithCommands({ BrowserCommand::RandomSong, BrowserCommand::RandomSong }));
+    EXPECT_EQ(twice.browser->List().RowCount(), songsAndHeadings + 1);
+}
+
+TEST(SongBrowserUi, HintGlyphsShownIsWhatTheBarShows) {
+    Rig rig(RealCatalog());
+    EXPECT_EQ(rig.browser->HintGlyphsShown().accept, "A");
+    EXPECT_EQ(rig.browser->HintGlyphsShown().back, "B");
+    HintGlyphs keys;
+    keys.accept = "ENTER";
+    keys.back = "ESC";
+    rig.browser->SetHintGlyphs(keys);
+    EXPECT_EQ(rig.browser->HintGlyphsShown().accept, "ENTER");
+    EXPECT_EQ(rig.browser->HintGlyphsShown().back, "ESC");
+    const DisplayList frame = rig.Settle();
+    EXPECT_TRUE(HasText(frame, "ENTER"));
+    EXPECT_TRUE(HasText(frame, "ESC"));
+
+    // Nothing set: the environment's.
+    Rig pad(RealCatalog(), {}, nullptr, [](Environment &environment) {
+        environment.glyphs.accept = "X";
+    });
+    EXPECT_EQ(pad.browser->HintGlyphsShown().accept, "X");
+    EXPECT_TRUE(HasText(pad.Settle(), "X"));
+}
+
+// The selection rule on the whole screen: one filled highlight, in the region
+// that has focus; a region that only remembers its selection outlines it.
+TEST(SongBrowserUi, OnlyTheFocusedRegionFillsItsHighlight) {
+    Rig rig(RealCatalog(), kHistory);
+    const Palette &color = rig.theme.color;
+    const auto bars = [&](const DisplayList &frame) {
+        int count = 0;
+        for (const RoundRectFill &fill : CommandsOf<RoundRectFill>(frame)) {
+            count += fill.softness == 0.0f && fill.colors.topLeft == color.highlightStart
+                && fill.colors.topRight == color.highlightEnd;
+        }
+        return count;
+    };
+    const auto markers = [&](const DisplayList &frame) {
+        int count = 0;
+        for (const RoundRectStroke &stroke : CommandsOf<RoundRectStroke>(frame)) {
+            count += stroke.colors.topLeft == color.selectionMarker;
+        }
+        return count;
+    };
+    const auto rings = [&](const DisplayList &frame) {
+        int count = 0;
+        for (const RoundRectStroke &stroke : CommandsOf<RoundRectStroke>(frame)) {
+            count += SameRgb(stroke.colors.topLeft, color.accent)
+                && stroke.colors.topLeft.a > 0.5f
+                && stroke.thickness > rig.theme.metric.borderWidth;
+        }
+        return count;
+    };
+
+    DisplayList frame = rig.Settle(); // on the shelf
+    EXPECT_EQ(bars(frame), 0) << "the list does not fill its bar";
+    EXPECT_EQ(markers(frame), 1) << "it outlines the row it remembers";
+    EXPECT_EQ(rings(frame), 1) << "the shelf's card has the ring";
+
+    rig.Press(Action::Down); // into the list
+    frame = rig.Settle();
+    EXPECT_EQ(bars(frame), 1);
+    EXPECT_EQ(markers(frame), 0);
+    EXPECT_EQ(rings(frame), 0);
+
+    rig.TypeText("su"); // into the search field
+    frame = rig.Settle();
+    EXPECT_EQ(bars(frame), 0);
+    EXPECT_EQ(markers(frame), 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -1532,7 +1904,138 @@ namespace {
 
 }
 
+namespace {
+
+    float LinearOf(float channel) {
+        return channel <= 0.04045f ? channel / 12.92f : std::pow((channel + 0.055f) / 1.055f, 2.4f);
+    }
+    // WCAG relative luminance of an opaque colour.
+    float LuminanceOf(const Color &c) {
+        return 0.2126f * LinearOf(c.r) + 0.7152f * LinearOf(c.g) + 0.0722f * LinearOf(c.b);
+    }
+    float ContrastOf(float a, float b) {
+        return (std::max(a, b) + 0.05f) / (std::min(a, b) + 0.05f);
+    }
+
+    struct WorstContrast {
+        float ratio = 1e9f;
+        std::string text;
+    };
+
+    // Every text run of `frame` against the brightest pixel that lies behind
+    // it: the frame is drawn without its text over the stand-in for the game's
+    // streaks, and each run's box is searched. `where` picks the runs: those
+    // lying on the list's filled highlight, the dark letters on the hint
+    // bar's button discs, or all the others (text over the backdrop).
+    enum class Where { Backdrop, Bar, Discs };
+    WorstContrast WorstTextContrast(const Rig &rig, const DisplayList &frame, Where where) {
+        DisplayList under;
+        for (const auto &command : frame.commands) {
+            if (!std::holds_alternative<TextRun>(command)) {
+                under.commands.push_back(command);
+            }
+        }
+        Raster raster(1280, 720);
+        DrawBackdrop(raster, rig.theme);
+        Replay(under, raster);
+        Rect bar {};
+        for (const RoundRectFill &fill : CommandsOf<RoundRectFill>(frame)) {
+            if (fill.softness == 0.0f && fill.colors.topLeft == rig.theme.color.highlightStart) {
+                bar = fill.rect;
+            }
+        }
+        WorstContrast worst;
+        for (const TextRun &run : CommandsOf<TextRun>(frame)) {
+            if (run.color.a < 0.5f || run.text.empty()) {
+                continue; // placeholder text is meant to recede
+            }
+            const Where at = SameRgb(run.color, rig.theme.color.buttonText)
+                ? Where::Discs
+                : (bar.Contains(run.origin) ? Where::Bar : Where::Backdrop);
+            if (at != where) {
+                continue;
+            }
+            const int left = std::max(0, static_cast<int>(run.origin.x));
+            const int right = std::min(1279, static_cast<int>(run.origin.x + WidthOf(run)));
+            const int top = std::max(0, static_cast<int>(run.origin.y - run.size * 0.8f));
+            const int bottom = std::min(719, static_cast<int>(run.origin.y + run.size * 0.2f));
+            float brightest = 0.0f;
+            for (int y = top; y <= bottom; ++y) {
+                for (int x = left; x <= right; ++x) {
+                    brightest = std::max(brightest, LuminanceOf(raster.At(x, y)));
+                }
+            }
+            // The text's own colour over that pixel: white at its alpha.
+            const float text = run.color.a * LuminanceOf(run.color) + (1.0f - run.color.a) * brightest;
+            const float ratio = ContrastOf(text, brightest);
+            if (ratio < worst.ratio) {
+                worst = { ratio, run.text };
+            }
+        }
+        return worst;
+    }
+
+}
+
+// Readability over the backdrop, measured: the screen's own backdrop at four
+// moments of its drift, over the stand-in for the game's streaks.
+TEST(SongBrowserUi, TextKeepsItsContrastOverTheBackdrop) {
+    WorstContrast offBar;
+    WorstContrast onBar;
+    WorstContrast onDisc;
+    const auto drifting = [](Environment &environment) {
+        environment.theme.motion.ambientPeriod = Dc3Theme().motion.ambientPeriod;
+    };
+    for (const bool inList : { false, true }) {
+        Rig rig(PlayedCatalog(), kHistory, nullptr, drifting);
+        rig.Settle();
+        if (inList) {
+            rig.Press(Action::Down, 9);
+        }
+        for (int moment = 0; moment < 4; ++moment) {
+            rig.Frame(Dc3Theme().motion.ambientPeriod / 4.0);
+            const DisplayList frame = rig.browser->BuildFrame();
+            const WorstContrast plain = WorstTextContrast(rig, frame, Where::Backdrop);
+            offBar = plain.ratio < offBar.ratio ? plain : offBar;
+            const WorstContrast bar = WorstTextContrast(rig, frame, Where::Bar);
+            onBar = bar.ratio < onBar.ratio ? bar : onBar;
+            const WorstContrast disc = WorstTextContrast(rig, frame, Where::Discs);
+            onDisc = disc.ratio < onDisc.ratio ? disc : onDisc;
+        }
+    }
+    std::cout << "[ measured ] worst text contrast over the backdrop: " << offBar.ratio << ":1 (\""
+              << offBar.text << "\"); on the focused highlight bar: " << onBar.ratio << ":1 (\""
+              << onBar.text << "\"); a letter on a button disc: " << onDisc.ratio << ":1 (\""
+              << onDisc.text << "\")\n";
+    EXPECT_GE(offBar.ratio, 4.5f) << offBar.text; // WCAG AA for body text
+    EXPECT_GE(onDisc.ratio, 4.5f) << onDisc.text;
+    EXPECT_GE(onBar.ratio, 3.0f) << onBar.text << " (large text on the bar)";
+}
+
 TEST(SongBrowserUi, Pictures) {
+    {
+        // A thousand made-up songs, a third of them with scores, mid-list.
+        SongCatalog thousand = SyntheticCatalog(1000);
+        for (int i = 0; i < 1000; i += 3) {
+            SetScore(thousand, thousand.At(i).shortName, 1 + i % 5, 90000 + i * 911);
+        }
+        std::vector<std::string> history;
+        for (int i = 0; i < 12; ++i) {
+            history.push_back("song" + std::to_string(i * 37));
+        }
+        Rig rig(thousand, history);
+        Picture(rig.Settle(), rig.theme, "browser_1000_recents.png");
+        rig.Press(Action::Down);
+        rig.Press(Action::Down, 417);
+        Picture(rig.Settle(), rig.theme, "browser_1000_list.png");
+    }
+    {
+        Rig rig(PlayedCatalog(), kHistory);
+        rig.Settle();
+        rig.Press(Action::Down);
+        rig.Press(Action::Up, 2);
+        Picture(rig.Settle(), rig.theme, "browser_command.png");
+    }
     {
         Rig rig(PlayedCatalog(), kHistory);
         Picture(rig.Settle(), rig.theme, "browser_recents_focus.png");
