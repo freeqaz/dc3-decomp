@@ -1,5 +1,5 @@
 // test_reflection_cull.cpp -- the culling of a WorldReflection's mirrored redraw
-// (item 20 (b); engine doc dc3-retail-lighting.md section 49).
+// (item 20 (b); engine doc dc3-backend-for-rb3-wii.md section 49).
 //
 // WorldReflection::DrawShowing mirrors the camera and draws its list in
 // DrawMode 8. DC3's RndShader::CheckForceCull (rndobj/Shader.cpp) gives EVERY
