@@ -29,6 +29,9 @@ SongBrowserHandsTest): this script only drives and records.  The sequence:
     typed_hold   the arm still out 3 s later
     rearm        the arm dropped, then out and held again
     press_hold   one Down with the arm still out, then 2 s more of it
+    start        Start, arm down, 10 frames later
+    start_hold   2 s later
+    start_press  one Down, 6 frames later
 
 Poses are held in ENGINE time (SyntheticKinect.follow_engine), so a hold of
 0.75 s is 0.75 s of the game's own UI clock whatever the machine is doing.
@@ -193,7 +196,18 @@ def sequence(r):
     r.frames(6)
     k.wait(2.0)
     r.obs("press_hold")
+
+    # Start is the image's own "the hands have the menu" button.
     k.set_pose(0, "stand")
+    k.wait(0.6)
+    r.press("start")
+    r.frames(10)
+    r.obs("start")
+    k.wait(2.0)
+    r.obs("start_hold")
+    r.press("down")
+    r.frames(6)
+    r.obs("start_press")
 
 
 def run(a):

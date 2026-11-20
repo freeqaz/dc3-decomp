@@ -1913,6 +1913,7 @@ HandsRun RunHands(const char *extraArgs) {
 //   - a typed character with the arm still out: the browser at once, the
 //     character in the search box, and it stays although the arm is out
 //   - the arm away and out again: the classic list again
+//   - Start: the classic list (the image's own "hands" button), until a press
 // `switches` counts every show and hide, so each step is exact.
 TEST(SongBrowserHandsTest, ATrackedBodyIsNotIntentAHeldHandIs) {
     if (!getenv("DC3_DTA_FLOW_TESTS")) GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable";
@@ -1967,4 +1968,8 @@ TEST(SongBrowserHandsTest, ATrackedBodyIsNotIntentAHeldHandIs) {
     expect("rearm", false, 5, "the arm away and out again");
     const std::string hold = expect("press_hold", true, 6, "a press with the arm out, and it stays");
     EXPECT_EQ(Sb(hold, "hand_in_pose"), "true") << "precondition: the arm is still out\n" << hold;
+    // Start is the image's own way to hand the menu to the hands.
+    expect("start", false, 7, "Start hands the menu to the hands");
+    expect("start_hold", false, 7, "and they keep it");
+    expect("start_press", true, 8, "until a press");
 }
