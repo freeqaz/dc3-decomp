@@ -42,6 +42,18 @@ float ParseGain(const char *env, bool *ok) {
     return (float)g;
 }
 
+RateSource ParseRateSource(const char *env, bool *ok) {
+    if (ok)
+        *ok = true;
+    if (!env || !*env || !strcmp(env, "camera"))
+        return kRateCamera;
+    if (!strcmp(env, "arrival"))
+        return kRateArrival;
+    if (ok)
+        *ok = false;
+    return kRateCamera;
+}
+
 const char *ModeName(Mode m) {
     switch (m) {
     case kOff:
@@ -266,12 +278,27 @@ double Filler::MedianInterval() const {
     return v[mNumIntervals / 2];
 }
 
+bool Filler::RateIsTheCamerasOwn() const {
+    if (mRateSource != kRateCamera || mNumIntervals < kMinIntervals)
+        return false;
+    double song = 0.0, camera = 0.0;
+    for (int i = 0; i < mNumIntervals; i++) {
+        if (mStampSpans[i] <= 0.0)
+            return false; // a frame without a stamp, or stamps that did not advance
+        song += mIntervals[i];
+        camera += mStampSpans[i];
+    }
+    double pace = song / camera;
+    return pace >= 1.0 / kPace && pace <= kPace;
+}
+
 double Filler::RateInterval() const {
     if (mNumIntervals < kMinIntervals)
         return 0.0;
+    const double *from = RateIsTheCamerasOwn() ? mPeriods : mIntervals;
     double v[kWindow];
     for (int i = 0; i < mNumIntervals; i++)
-        v[i] = mIntervals[i];
+        v[i] = from[i];
     std::sort(v, v + mNumIntervals);
     const int trim = mNumIntervals / 5;
     double sum = 0.0;
@@ -315,7 +342,17 @@ bool Filler::Push(const Source &src) {
         } else {
             double interval = src.arrival - last.arrival;
             if (interval > 0.0 && interval < 1.0) {
+                // The camera's side of the same interval: its stamps, and how
+                // many frames it delivered across them.  The game took the
+                // newest of those; the rest it never saw (Source::frames).
+                double span = 0.0, period = 0.0;
+                if (src.ts >= 0.0 && last.ts >= 0.0 && src.ts - last.ts > 0.0 && src.ts - last.ts < 1.0) {
+                    span = src.ts - last.ts;
+                    period = span / (src.frames >= 1 && src.frames <= kMaxUntaken ? src.frames : 1);
+                }
                 mIntervals[mIntervalHead] = interval;
+                mStampSpans[mIntervalHead] = span;
+                mPeriods[mIntervalHead] = period;
                 mIntervalHead = (mIntervalHead + 1) % kWindow;
                 if (mNumIntervals < kWindow)
                     mNumIntervals++;

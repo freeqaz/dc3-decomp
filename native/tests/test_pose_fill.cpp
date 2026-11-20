@@ -52,7 +52,9 @@
 #include "platform/Skeleton_Native.h" // Dc3SensorLatencySeconds, Dc3DeclareSourceLatencyMs
 #include "hamobj/MoveDir.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <vector>
 
 using namespace Dc3PoseFill;
@@ -800,4 +802,294 @@ TEST(PoseFillScheduleTest, AModeChangeKeepsTheCameraRate) {
     EXPECT_GT(f.Delay(), 0.0) << "interp runs behind the camera";
     f.SetModeKeepingRate(kInterp); // no change: nothing dropped
     EXPECT_GT(f.Delay(), 0.0);
+}
+
+// ---------------------------------------------------------------------------
+// The camera's rate under a game loop (np-pose-steady).
+//
+// The game polls the sensor once a frame and takes the newest camera frame;
+// one that arrived between two polls together with a later one is never
+// taken.  So the times at which the game took its frames are whole game
+// frames apart, whatever the camera does.  SampleCamera is that: a camera
+// with its own stamps and an uneven delivery, a game loop with its own frame
+// time, and the Filler fed as GestureMgr_Native.cpp's BuildSensorFrame feeds
+// it.
+// ---------------------------------------------------------------------------
+namespace {
+
+// Deterministic uniform [0, 1).
+struct Lcg {
+    uint32_t x;
+    double Next() {
+        x = x * 1664525u + 1013904223u;
+        return (double)(x >> 8) / 16777216.0;
+    }
+};
+
+struct CameraModel {
+    const char *name;
+    double latency;     // stamp -> at the game's socket (inference), seconds
+    double jitter;      // +- on that, seconds
+    double late;        // fraction of frames delivered 30 ms late: they land with the next
+    bool lateStamped;   // ... and stamped 25 ms late too (the camera handed it over late)
+    double stampJitter; // +- on the stamp (pose_server.py's "read clock"), seconds
+    double loopJitter;  // +- fraction of the game's frame time
+    bool stamps;        // false: the stream carries no stamps (ts = -1)
+};
+
+// What the Mac's log shows of a pose server at a steady 30 a second
+// (infer_ms_mean 21.7, p95 25.5, stamps from its read clock), and three
+// rougher deliveries.
+const CameraModel kQuiet = { "quiet: delivery +-4 ms, stamps +-1 ms, game frame +-10 %",
+                             0.021, 0.004, 0.0, false, 0.001, 0.10, true };
+const CameraModel kUneven = { "uneven: delivery +-8 ms, stamps +-3 ms, game frame +-10 %",
+                              0.021, 0.008, 0.0, false, 0.003, 0.10, true };
+const CameraModel kLate = { "late: 15 % of frames delivered 30 ms late, game frame +-5 %",
+                            0.021, 0.004, 0.15, false, 0.001, 0.05, true };
+const CameraModel kLateStamped = { "late and stamped late: 15 % of frames, game frame +-5 %",
+                                   0.021, 0.004, 0.15, true, 0.001, 0.05, true };
+
+struct RateRun {
+    int taken = 0;          // camera frames the game took
+    int made = 0;           // camera frames the camera made
+    int engages = 0, releases = 0;
+    int firstEngaged = -1;  // index (0-based) of the first taken frame the fill was engaged for
+    unsigned fills = 0;     // frames the fill made
+    double engagedSeconds = 0.0;
+    double lastHz = 0.0;    // the estimate at the end
+};
+
+// `hzAt(t)`: the camera's rate at its own time t.  `onPush(f, t)` after every
+// frame taken.
+template <class HzAt, class OnPush>
+RateRun SampleCamera(Filler &f, HzAt hzAt, const CameraModel &cam, double gameFps, double seconds,
+                     uint32_t seed, OnPush onPush) {
+    RateRun r;
+    Lcg rng{ seed };
+    double grab = 0.0;                 // when the camera makes its next frame
+    double stamp = 0.0;                // ... the stamp it gets (strictly increasing)
+    double due = cam.latency;          // ... and when it is at the game
+    double lastDue = -1.0;
+    uint32_t id = 0;
+    bool was = f.Engaged();
+    double t = 0.0, prevT = 0.0;
+    while (t < seconds) {
+        // Everything the camera delivered up to now; the game sees the newest.
+        int delivered = 0;
+        double newestStamp = -1.0;
+        while (due <= t) {
+            delivered++;
+            id++;
+            r.made++;
+            newestStamp = stamp;
+            lastDue = due;
+            grab += 1.0 / hzAt(grab);
+            double next = grab + (rng.Next() * 2.0 - 1.0) * cam.stampJitter;
+            due = grab + cam.latency + (rng.Next() * 2.0 - 1.0) * cam.jitter;
+            if (cam.late > 0.0 && rng.Next() < cam.late) {
+                due += 0.030;
+                if (cam.lateStamped)
+                    next += 0.025;
+            }
+            stamp = next > stamp + 1e-4 ? next : stamp + 1e-4;
+            if (due <= lastDue)
+                due = lastDue + 1e-4; // a stream socket keeps the order
+        }
+        if (f.Engaged())
+            r.engagedSeconds += t - prevT;
+        if (delivered > 0) {
+            std::vector<Person> people{ MakePerson(5, (float)newestStamp) };
+            Source s = MakeSource(100.0 + t, cam.stamps ? 5000.0 + newestStamp : -1.0, people);
+            s.frameId = id;
+            s.frames = delivered;
+            bool now = f.Push(s);
+            if (now && r.firstEngaged < 0)
+                r.firstEngaged = r.taken;
+            if (now != was)
+                (now ? r.engages : r.releases)++;
+            was = now;
+            r.taken++;
+            onPush(f, t);
+        }
+        Output o;
+        if (f.Engaged() && f.Poll(100.0 + t, o) && !o.real)
+            r.fills++;
+        prevT = t;
+        t += (1.0 / gameFps) * (1.0 + (rng.Next() * 2.0 - 1.0) * cam.loopJitter);
+    }
+    double iv = f.RateInterval();
+    r.lastHz = iv > 0.0 ? 1.0 / iv : 0.0;
+    return r;
+}
+
+auto NoHook = [](Filler &, double) {};
+auto Steady(double hz) {
+    return [hz](double) { return hz; };
+}
+
+} // namespace
+
+// The defect (MEASURED, an M3 MacBook Air on a 30 Hz display, 401 s): the pose
+// server sent 29.9-30.4 poses a second in every 5 s window and the fill
+// engaged 19 times, each time reading "camera 22.5 frames/s" (or 23.3, 23.9)
+// -- six two-game-frame gaps among fifteen takes.  The rate was the time
+// between the GAME's takes.
+TEST(PoseFillRateTest, ASteadyThirtyHertzCameraNeverEngagesWhateverTheGamesFrameRate) {
+    int beforeAtThirty = 0;
+    for (const CameraModel *cam : { &kQuiet, &kUneven, &kLate, &kLateStamped }) {
+        printf("  a steady 30.0 Hz camera, %s; 3 x 120 s a row\n", cam->name);
+        for (double fps : { 30.0, 31.0, 33.0, 45.0, 60.0 }) {
+            // before: the time between the game's takes (DC3_POSE_FILL_RATE=
+            // arrival, the estimate until np-pose-steady).  now: the default.
+            int before = 0, now = 0;
+            unsigned fillsBefore = 0;
+            double engagedBefore = 0.0, lowest = 1e9, taken = 0.0;
+            for (uint32_t seed : { 1u, 2u, 3u }) {
+                Filler old;
+                old.SetMode(kExtrap);
+                old.SetRateSource(kRateArrival);
+                RateRun b = SampleCamera(old, Steady(30.0), *cam, fps, 120.0, seed, NoHook);
+                before += b.engages;
+                fillsBefore += b.fills;
+                engagedBefore += b.engagedSeconds;
+
+                Filler f;
+                f.SetMode(kExtrap);
+                RateRun r = SampleCamera(f, Steady(30.0), *cam, fps, 120.0, seed, NoHook);
+                now += r.engages;
+                taken += r.taken / 120.0 / 3.0;
+                lowest = std::min(lowest, r.lastHz);
+                EXPECT_TRUE(f.RateIsTheCamerasOwn());
+                EXPECT_NEAR(r.made / 120.0, 30.0, 0.1);
+                EXPECT_EQ(r.fills, 0u);
+            }
+            printf("    game %2.0f fps (it took %.1f frames/s): engaged %3d times before (%5.1f s, "
+                   "%2u fill frames), %d now\n",
+                   fps, taken, before, engagedBefore, fillsBefore, now);
+            EXPECT_EQ(now, 0) << cam->name << ", game " << fps << " fps";
+            EXPECT_GT(lowest, Filler::kReleaseHz) << cam->name << ", game " << fps << " fps";
+            if (fps == 30.0)
+                beforeAtThirty += before;
+        }
+    }
+    // The control: these deliveries do make the takes read as a slow camera.
+    EXPECT_GT(beforeAtThirty, 50) << "the test's cameras no longer provoke the defect it is for";
+}
+
+TEST(PoseFillRateTest, TheRateSourceParses) {
+    bool ok = false;
+    EXPECT_EQ(ParseRateSource(nullptr, &ok), kRateCamera);
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(ParseRateSource("", &ok), kRateCamera);
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(ParseRateSource("camera", &ok), kRateCamera);
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(ParseRateSource("arrival", &ok), kRateArrival);
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(ParseRateSource("fast", &ok), kRateCamera);
+    EXPECT_FALSE(ok);
+    EXPECT_EQ(Filler().GetRateSource(), kRateCamera);
+}
+
+// The other half: a camera that IS slow engages, with the same camera frame
+// as before (the kMinIntervals-th interval), and stays engaged.
+TEST(PoseFillRateTest, ASlowCameraEngagesWithTheSameFrameAsBeforeAndStays) {
+    const CameraModel still = { "still", 0.021, 0.002, 0.0, false, 0.001, 0.02, true };
+    for (double hz : { 8.0, 10.0, 12.0, 15.0, 20.0 }) {
+        for (double fps : { 30.0, 60.0 }) {
+            Filler f;
+            f.SetMode(kExtrap);
+            RateRun r = SampleCamera(f, Steady(hz), still, fps, 60.0, 7u, NoHook);
+            EXPECT_EQ(r.firstEngaged, Filler::kMinIntervals) << hz << " Hz, game " << fps << " fps";
+            EXPECT_EQ(r.engages, 1) << hz << " Hz, game " << fps << " fps";
+            EXPECT_EQ(r.releases, 0) << hz << " Hz, game " << fps << " fps";
+            EXPECT_NEAR(r.lastHz, hz, hz * 0.06) << "game " << fps << " fps";
+            EXPECT_GT(r.fills, 0u);
+        }
+    }
+    // A stream with no stamps is read by the takes, as before: a slow camera
+    // engages with the same frame.
+    const CameraModel bare = { "no stamps", 0.021, 0.002, 0.0, false, 0.0, 0.02, false };
+    for (double hz : { 8.0, 15.0, 20.0 }) {
+        Filler f;
+        f.SetMode(kExtrap);
+        RateRun r = SampleCamera(f, Steady(hz), bare, 60.0, 30.0, 7u, NoHook);
+        EXPECT_FALSE(f.RateIsTheCamerasOwn());
+        EXPECT_EQ(r.firstEngaged, Filler::kMinIntervals) << hz << " Hz";
+        EXPECT_EQ(r.releases, 0) << hz << " Hz";
+    }
+}
+
+// A frame count that cannot be (a restarted source's counter, a wrapped one)
+// is one frame, and a stamp that jumps is no stamp.
+TEST(PoseFillRateTest, AnUnbelievableFrameCountOrStampIsNotUsed) {
+    for (int frames : { 0, -3, Filler::kMaxUntaken + 1, 1 << 20 }) {
+        Filler f;
+        double t = 10.0;
+        for (int i = 0; i < 20; i++) {
+            t += 0.125;
+            std::vector<Person> people{ MakePerson(5, (float)t) };
+            Source s = MakeSource(t, t, people);
+            s.frames = frames;
+            f.Push(s);
+        }
+        EXPECT_TRUE(f.Engaged()) << frames << " frames: an 8 Hz camera was not engaged";
+        EXPECT_NEAR(1.0 / f.RateInterval(), 8.0, 0.01) << frames;
+    }
+    // Stamps that step 5 s a frame (another clock): the takes decide.
+    Filler f;
+    double t = 10.0, ts = 0.0;
+    for (int i = 0; i < 20; i++) {
+        t += 0.125;
+        ts += 5.0;
+        std::vector<Person> people{ MakePerson(5, (float)t) };
+        f.Push(MakeSource(t, ts, people));
+    }
+    EXPECT_FALSE(f.RateIsTheCamerasOwn());
+    EXPECT_NEAR(1.0 / f.RateInterval(), 8.0, 0.01);
+}
+
+// By hand: fifteen takes of a 30 Hz camera by a 30 fps game, six of them two
+// game frames after the one before -- the log's "22.5 frames/s".
+TEST(PoseFillRateTest, TheRateIsTheCamerasOwnStampsOverTheFramesItDelivered) {
+    auto feed = [](Filler &f, bool stamps, double clockPace) {
+        double arrival = 50.0, ts = 9000.0;
+        bool engaged = false;
+        for (int i = 0; i < 60; i++) {
+            // Two takes in five come two game frames after the one before
+            // (a poll found no new frame) and find two camera frames waiting.
+            int k = i % 5;
+            bool twoGameFrames = (k == 1 || k == 3);
+            int delivered = twoGameFrames ? 2 : 1;
+            arrival += (twoGameFrames ? 2.0 : 1.0) / 30.0 * clockPace;
+            ts += delivered / 30.0;
+            std::vector<Person> people{ MakePerson(5, (float)ts) };
+            Source s = MakeSource(arrival, stamps ? ts : -1.0, people);
+            s.frames = delivered;
+            engaged = f.Push(s) || engaged;
+        }
+        return engaged;
+    };
+    {
+        Filler f;
+        EXPECT_FALSE(feed(f, true, 1.0)) << "a 30 Hz camera engaged the fill";
+        EXPECT_NEAR(1.0 / f.RateInterval(), 30.0, 0.01);
+        // The median is still the game's: the delay, the horizon and the gap
+        // limit are song time between the frames the game took.
+        EXPECT_NEAR(f.MedianInterval(), 1.0 / 30.0, 1e-9);
+    }
+    {
+        // No stamps: the time between the game's takes, as before.
+        Filler f;
+        EXPECT_TRUE(feed(f, false, 1.0));
+        EXPECT_NEAR(1.0 / f.RateInterval(), 22.5, 0.01);
+    }
+    {
+        // Stamps on another clock's pace (DC3_FAST_TIME with a camera on the
+        // wall clock: here 4 song seconds a camera second).  What the scorer
+        // gets is frames a SONG second, so the game's takes decide, as before.
+        Filler f;
+        EXPECT_TRUE(feed(f, true, 4.0));
+        EXPECT_NEAR(1.0 / f.RateInterval(), 22.5 / 4.0, 0.01);
+    }
 }

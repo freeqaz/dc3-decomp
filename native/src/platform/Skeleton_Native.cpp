@@ -1088,6 +1088,7 @@ void NativeSkeletonProvider::PublishFrame(
     mNumPersonsBack = numPersons;
     mFrameIdBack = frameId;
     mPublishedBack = true;
+    mDeliveredBack++;
     mTimestampBack = timestamp;
     mUnlevelledBack = unlevelled;
     mDeclaredLatencyMsBack = declaredLatencyMs;
@@ -1106,6 +1107,7 @@ void NativeSkeletonProvider::Poll() {
         mNumPersons = mNumPersonsBack;
         mFrameIdFront = mFrameIdBack;
         mPublishedFront = mPublishedBack;
+        mDeliveredFront = mDeliveredBack;
         mTimestampFront = mTimestampBack;
         mUnlevelledFront = mUnlevelledBack;
         declaredLatencyMs = mDeclaredLatencyMsBack;

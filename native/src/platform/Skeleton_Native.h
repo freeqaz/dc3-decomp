@@ -204,6 +204,13 @@ public:
     // so FrameId() alone cannot tell "nothing yet" from "frame 0"; the stall
     // watchdog (DC3_POSE_STALL_MS) watches only a source that has spoken.
     bool HasPublished() const { return mPublishedFront; }
+    // Frames the source has delivered so far (every transport ends in
+    // PublishFrame), as of the last Poll().  Poll() takes the newest only, so
+    // a step of more than one between two frames the game took is frames that
+    // arrived between two of its polls and were never seen: what the frame
+    // fill needs to tell a slow camera from a game loop near the camera's
+    // rate (PoseFill_Native.h, Source::frames).  Wraps; take differences.
+    uint32_t Delivered() const { return mDeliveredFront; }
 
     // Sensor capture timestamp (seconds) of that packet, as the server stamped
     // it -- the v1/v2 header's f64 ts.  Xbox takes a skeleton frame's elapsed
@@ -298,6 +305,8 @@ private:
     uint32_t mFrameIdBack = 0;
     uint32_t mFrameIdFront = 0;
     bool mPublishedBack = false;
+    uint32_t mDeliveredBack = 0;  // PublishFrame calls (under mSwapMutex)
+    uint32_t mDeliveredFront = 0;
     bool mPublishedFront = false;
     double mTimestampBack = 0.0;
     double mTimestampFront = 0.0;
