@@ -703,6 +703,8 @@ TEST(SongBrowserUi, NoMatchSaysSoAndOffersNothingToPick) {
         << "centred in the list's area";
     EXPECT_TRUE(HasRun(frame, list, "NOTHING FOUND FOR ZZQQXX"));
     EXPECT_TRUE(RunsIn(frame, rig.PaneRect()).empty()) << "the detail pane is gone";
+    EXPECT_FALSE(HasText(frame, "RESULTS")) << "no results to offer";
+    EXPECT_TRUE(HasText(frame, "CLEAR SEARCH"));
 
     // Nothing to go down into, nothing to pick.
     rig.Press(Action::Down);
@@ -1495,7 +1497,7 @@ namespace {
                 RoundRectFill { { -40.0f, streak.y, 1360.0f, streak.thickness },
                                 streak.thickness * 0.5f,
                                 CornerColors::Horizontal(
-                                    streak.left.WithAlpha(streak.alpha * 0.35f),
+                                    streak.left.WithAlpha(streak.alpha * 0.6f),
                                     streak.right.WithAlpha(streak.alpha)
                                 ),
                                 streak.thickness * 1.5f }
@@ -1538,6 +1540,7 @@ TEST(SongBrowserUi, Pictures) {
         rig.Press(Action::Down, 58);
         Picture(rig.Settle(), rig.theme, "browser_list.png");
         rig.Press(Action::NextTab, 2);
+        rig.Press(Action::Right); // the next tier's first song, under its heading
         Picture(rig.Settle(), rig.theme, "browser_difficulty.png");
     }
     {
@@ -1547,6 +1550,15 @@ TEST(SongBrowserUi, Pictures) {
         Picture(rig.Settle(), rig.theme, "browser_search.png");
         rig.TypeText("zz");
         Picture(rig.Settle(), rig.theme, "browser_no_match.png");
+    }
+    {
+        // Several results, focus in them: the selected row's match turns white
+        // on the accent bar.
+        Rig rig(PlayedCatalog(), kHistory);
+        rig.Settle();
+        rig.TypeText("will");
+        rig.Press(Action::Down, 2);
+        Picture(rig.Settle(), rig.theme, "browser_search_results.png");
     }
     {
         Rig rig(RealCatalog());

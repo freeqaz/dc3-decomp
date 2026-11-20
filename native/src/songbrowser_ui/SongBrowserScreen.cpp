@@ -695,7 +695,9 @@ namespace songbrowser_ui {
                 break;
             case Region::Search:
                 if (typed) {
-                    hints.push_back({ glyphs_.accept, "Results" });
+                    if (list_->SelectedIndex() >= 0) { // nothing to go to when nothing matched
+                        hints.push_back({ glyphs_.accept, "Results" });
+                    }
                 } else {
                     hints.push_back({ glyphs_.type, "Type to search" });
                 }
