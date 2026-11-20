@@ -74,6 +74,16 @@ class MacSchedulingTest(unittest.TestCase):
             self.assertTrue(ps.clear_background_scheduling())
         self.assertEqual(calls, [(4, 0, 0)])
 
+    def test_the_server_clears_it_before_it_runs(self):
+        from unittest import mock
+        order = []
+        with mock.patch.object(ps, "parse_args", return_value=object()), \
+                mock.patch.object(ps, "clear_background_scheduling",
+                                  side_effect=lambda: order.append("clear")), \
+                mock.patch.object(ps, "run", side_effect=lambda args: order.append("run")):
+            ps.main([])
+        self.assertEqual(order, ["clear", "run"])
+
     def test_an_unavailable_policy_does_not_disable_tracking(self):
         from unittest import mock
         with mock.patch.object(ps.sys, "platform", "darwin"), \

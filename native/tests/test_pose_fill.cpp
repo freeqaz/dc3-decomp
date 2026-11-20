@@ -28,6 +28,27 @@
 //                         keeps the buffered frames (a frame laid out for
 //                         extrap comes out of interp); it leaves `off`
 //                         engaged.
+//   PoseFillRateTest      np-pose-steady: the camera's rate is its own stamps
+//                         over the frames it delivered, so a 30 Hz camera
+//                         under a game loop at 30-60 fps never engages
+//                         (prints engagements before -> now); a slow camera
+//                         engages with the same frame as before; a stream
+//                         without stamps, or on another clock's pace, is read
+//                         by the game's takes.  Sabotaged (each caught): the
+//                         rate read from the takes; the stamp span not
+//                         divided by the frames delivered; no pace check; an
+//                         unbelievable frame count believed; a window with an
+//                         unstamped frame still using the stamps (that one
+//                         SURVIVED the first set of cases and got its own).
+//   PoseFillDwellTest     the release dwell: the fill lets go only after
+//                         kReleaseDwell over the release rate, a break starts
+//                         the wait again, `off` is immediate, a wandering
+//                         camera changes far less often and is engaged
+//                         wherever it was before (prints the table the value
+//                         was picked from).  Sabotaged (each caught): no
+//                         dwell; a break not starting the wait again; the
+//                         dwell holding the fill through the change to off;
+//                         counting takes instead of seconds.
 //   PoseFillLatencyTest  the delay reaches the scorer's latency, on top of
 //                         whichever sensor latency is in force.
 //   PoseFillStallClockTest  StallClock (np-menu-gestures): the fill's clock
