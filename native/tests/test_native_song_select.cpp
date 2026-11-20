@@ -1165,7 +1165,7 @@ protected:
         d << kToSongSelect << "st enter; rows rows0; "
           << "press right; st k1; press left; st k2; press rb; st k3; press lb; st k4; "
           << "press down; st k5; "
-          << "press y 150; st s1; expand; rows rows1; "
+          << "press y 150; st s1; file file_s1; expand; rows rows1; "
           << "press y 150; st s2; expand; rows rows2; "
           << "press y 150; st s3; file file_end; ";
         sRun = RunEngine(root, "run", d.str(), " DC3_CLASSIC_SONG_SELECT=1");
@@ -1208,6 +1208,9 @@ void SongSelectClassicFlowTest::HistoryAndRememberedSortAreIgnored() {
     EXPECT_EQ(sRun.driver.find("recently_played"), std::string::npos) << sRun.driver;
     std::string file = kSavedFile;
     std::replace(file.begin(), file.end(), '\n', '|');
+    // After the first press as well as the last: the third press is back at
+    // the sort the run started in.
+    EXPECT_EQ(DriverLine(sRun, "file_s1"), file);
     EXPECT_EQ(DriverLine(sRun, "file_end"), file);
 }
 
