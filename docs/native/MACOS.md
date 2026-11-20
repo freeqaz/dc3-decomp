@@ -132,17 +132,18 @@ after "it was a bit chuggy". Two engine changes came out of it
 GPU ms a frame, normalised to the GPU's full clock (1338 MHz), six samples a
 screen. Headless runs at the size given, so a window's present is not in them:
 
-| Screen | Before, 1710x962 | After, 1710x962 | After, 1920x1080 | After, 3420x1924 |
-|---|---|---|---|---|
-| Main menu | 13.08 | 6.70 | 7.84 | 19.81 |
-| Song select | 14.00 | 7.55 | 8.99 | 21.76 |
-| Lobby | 9.03 | 4.32 | | |
-| Gameplay (YMCA) | 6.72 | 5.37 | 6.54 | 15.82 |
-| Pause | 13.23 | 6.75 | | |
+| Screen | Before, 1710x962 | After, 1710x962 | After, 1920x1080 | After, 2560x1440 | After, 3420x1924 |
+|---|---|---|---|---|---|
+| Main menu | 13.08 | 6.70 | 7.84 | 11.90 | 19.81 |
+| Song select | 14.00 | 7.55 | 8.99 | 13.54 | 21.76 |
+| Lobby | 9.03 | 4.32 | | | |
+| Gameplay (YMCA) | 6.72 | 5.37 | 6.54 | 9.92 | 15.82 |
+| Pause | 13.23 | 6.75 | | | |
 
 1710x962 is the default window in points. 1920x1080 is what the engine draws
 for a larger surface on a GPU that is not discrete (the 1080-row cap);
-3420x1924 is the Retina panel with the cap off.
+2560x1440 is `MILO_OUTPUT_MAX_ROWS=1440`; 3420x1924 is the Retina panel with
+the cap off (`MILO_OUTPUT_MAX_ROWS=0`). A 60 Hz frame is 16.7 ms.
 
 - **Why the menus cost twice a gameplay frame.** The standard shader ran the
   native light model's fetches (nine shadow taps, specular, light loops, gobo,
@@ -160,7 +161,8 @@ for a larger surface on a GPU that is not discrete (the 1080-row cap);
   on that Mac exports `MILO_OUTPUT_MAX_ROWS=0`; with the Retina surface edits
   in that Mac's engine checkout the game draws 3420x1924, which is 41-45 fps in
   the menus at full clock and about 25 fps at the low one. Leaving the knob
-  unset (1080 rows) keeps every screen under 9 ms.
+  unset (1080 rows) keeps every screen under 9 ms; 1440 rows keeps them under
+  14 ms, which is 60 fps at full clock and not at the low one.
 - **The per-pass GPU timers do not separate passes on this GPU.** A tile-based
   renderer runs a frame's passes interleaved, so each pass's `MILO_GPU_TIMERS`
   figure is close to the whole frame's span. Read `gpu_span_ms`; use
