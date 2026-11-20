@@ -180,3 +180,4 @@ HamRenderHookAutoRegister gHamRenderHookAutoRegister;
 void RegisterHamRenderHook() {
     SetGameRenderHook(&gHamHook);
 }
+

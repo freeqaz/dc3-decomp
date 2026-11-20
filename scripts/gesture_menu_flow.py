@@ -337,6 +337,16 @@ def run(a):
         f.shot("main")
         f.pick("gameplay", expect_screen="choose_mode_screen")
         f.pick("perform", expect_screen="song_select_screen")
+        # Song select was reached by hand: the natively drawn song browser
+        # must leave it to the classic list (docs/native/SONG_SELECT.md).
+        try:
+            sb = eng._req("GET", "/songbrowser/state").get("data", {})
+        except Exception:
+            sb = {}
+        report["song_browser_mode"] = sb.get("mode")
+        report["song_browser_shown"] = sb.get("shown")
+        report["song_browser_why"] = sb.get("why")
+        f.note(f"song browser: mode={sb.get('mode')} shown={sb.get('shown')} ({sb.get('why')})")
         f.pick("ymca", expect_screen="multiuser_screen")
         lst = f.focus_list()
         f.pick("easy", list_name=lst)

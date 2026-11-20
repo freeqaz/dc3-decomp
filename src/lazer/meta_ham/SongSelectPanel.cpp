@@ -14,6 +14,9 @@
 #include "ui\UIPanel.h"
 #include "utl\MakeString.h"
 #include "utl\Symbol.h"
+#ifdef HX_NATIVE
+#include "platform/SongBrowserHooks_Native.h"
+#endif
 
 void BlacklightPanel::Exit() {
     if (TheHamUI.GetLetterboxPanel()) {
@@ -25,7 +28,20 @@ void BlacklightPanel::Exit() {
 
 SongSelectPanel::SongSelectPanel() {}
 
-void SongSelectPanel::Poll() { HamPanel::Poll(); }
+void SongSelectPanel::Poll() {
+    HamPanel::Poll();
+#ifdef HX_NATIVE
+    NativeSongBrowser::OnPanelPoll(this);
+#endif
+}
+
+#ifdef HX_NATIVE
+void SongSelectPanel::Draw() {
+    if (!NativeSongBrowser::OnPanelDraw(this)) {
+        HamPanel::Draw();
+    }
+}
+#endif
 
 void SongSelectPanel::Load() {
     UIPanel::Load();
@@ -41,9 +57,15 @@ void SongSelectPanel::Enter() {
         TheHamUI.GetLetterboxPanel()->AddSink(this, "exit_blacklight_mode");
     }
     HamPanel::Enter();
+#ifdef HX_NATIVE
+    NativeSongBrowser::OnPanelEnter(this);
+#endif
 }
 
 void SongSelectPanel::Exit() {
+#ifdef HX_NATIVE
+    NativeSongBrowser::OnPanelExit(this);
+#endif
     if (TheHamUI.GetLetterboxPanel()) {
         TheHamUI.GetLetterboxPanel()->RemoveSink(this, "enter_blacklight_mode");
         TheHamUI.GetLetterboxPanel()->RemoveSink(this, "exit_blacklight_mode");
@@ -91,6 +113,9 @@ RndTex *SongSelectPanel::GetTexForCharacter(Symbol s) {
 }
 
 BEGIN_HANDLERS(SongSelectPanel)
+#ifdef HX_NATIVE
+    _HANDLE_CHECKED(NativeSongBrowser::OnPanelHandle(this, _msg))
+#endif
     HANDLE_EXPR(
         is_valid_song, TheHamSongMgr.GetSongIDFromShortName(_msg->Sym(2), false) != false
     )

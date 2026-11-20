@@ -8,6 +8,9 @@
 #include "platform/DtaEvalSupport.h"
 #include "platform/NativeSettings.h"
 #include "platform/MenuGesture_Native.h"
+#include "platform/TextInput_Native.h"
+#include "songbrowser/SongCatalogSource_Native.h" // GET /api/songs
+#include "platform/SongBrowserHooks_Native.h" // GET /api/songbrowser/state
 #include "platform/Rnd_Wgpu.h"
 #include "telemetry/GameplayTelemetry.h"
 #include "gfx/Screenshot.h"
@@ -442,6 +445,10 @@ void HttpServer::ProcessCommands() {
             case kCmdPoseTarget:   HandlePoseTarget(*cmd); break;
             case kCmdCamera:       HandleCamera(*cmd); break;
             case kCmdMenuState:    HandleMenuState(*cmd); break;
+            case kCmdInputText:    HandleInputText(*cmd); break;
+            case kCmdSongs:        HandleSongs(*cmd); break;
+            case kCmdSongBrowserState: HandleSongBrowserState(*cmd); break;
+            case kCmdSongBrowserCommand: HandleSongBrowserCommand(*cmd); break;
             default: cmd->result.error = "Unknown command type"; break;
         }
         {
@@ -494,9 +501,23 @@ static JoypadAction HttpButtonAction(JoypadButton btn, Symbol controllerType) {
     }
 }
 
+// Set by POST /api/input/press with "device":"pad" (under mInputMutex), taken
+// by the frame that sends the press.
+static bool sInjectedPadPress = false;
+
 void HttpServer::DispatchInjectedButtons() {
     int hold[InjectedPadHold::kBits] = {};
     unsigned int pressed = ConsumeHttpButtons(hold);
+    if (pressed) {
+        bool fromPad = false;
+        {
+            std::lock_guard<std::mutex> lk(mInputMutex);
+            fromPad = sInjectedPadPress;
+            sInjectedPadPress = false;
+        }
+        if (fromPad)
+            NativeSongBrowser::NoteInjectedPadPress();
+    }
     if (!pressed && !mInjectedHold.held)
         return;
     JoypadData *pad = JoypadGetPadData(0);
@@ -1118,6 +1139,71 @@ void HttpServer::HandleMenuState(Command& cmd) {
     cmd.result.ok = true;
 }
 
+// GET /api/songbrowser/state: the natively drawn song browser in song select
+// (platform/SongBrowserPanel_Native.cpp).  Read-only.
+void HttpServer::HandleSongBrowserState(Command& cmd) {
+    cmd.result.jsonData = NativeSongBrowser::StateJson();
+    cmd.result.ok = true;
+}
+
+// POST /api/songbrowser/command: `param1` is the command's name.  Runs the
+// same function the browser's own command rows run (the classic list's
+// Random Song or Playlists row, selected by the game's own select).
+void HttpServer::HandleSongBrowserCommand(Command& cmd) {
+    std::string error;
+    cmd.result.ok = NativeSongBrowser::RunCommand(cmd.param1, error);
+    if (cmd.result.ok) {
+        cmd.result.jsonData = "{\"command\":\"" + JsonEscape(cmd.param1) + "\"}";
+    } else {
+        cmd.result.httpStatus = 409;
+        cmd.result.error = error;
+    }
+}
+
+// POST /api/input/text: `param1` is UTF-8 text to type, `param2` an edit key
+// name.  Both go into the engine's text queue (platform/TextInput_Native.h)
+// from the main thread, which is the thread that drains it; injected events
+// are queued whether or not text capture is on.
+void HttpServer::HandleInputText(Command& cmd) {
+    int typed = 0;
+    if (!cmd.param1.empty())
+        typed = TextInputInjectUtf8(cmd.param1.c_str());
+    bool keyOk = true;
+    if (!cmd.param2.empty()) {
+        static const struct { const char* name; TextInputEventType key; } kKeys[] = {
+            {"backspace", kTextInputBackspace}, {"delete", kTextInputDelete},
+            {"left", kTextInputLeft},           {"right", kTextInputRight},
+            {"home", kTextInputHome},           {"end", kTextInputEnd},
+        };
+        keyOk = false;
+        for (const auto& k : kKeys) {
+            if (cmd.param2 == k.name) {
+                TextInputInjectKey(k.key);
+                keyOk = true;
+                break;
+            }
+        }
+    }
+    if (!keyOk) {
+        cmd.result.ok = false;
+        cmd.result.httpStatus = 400;
+        cmd.result.error = "Unknown key: " + cmd.param2
+            + " (backspace, delete, left, right, home, end)";
+        return;
+    }
+    char buf[96];
+    snprintf(buf, sizeof(buf), "{\"typed\":%d,\"pending\":%d}", typed, TextInputPending());
+    cmd.result.jsonData = buf;
+    cmd.result.ok = true;
+}
+
+// GET /api/songs: param1 is the q text, param2 the other parameters as
+// "key=value;..." (songbrowser/SongCatalogSource_Native.h).  Read-only.
+void HttpServer::HandleSongs(Command& cmd) {
+    cmd.result.ok = songbrowser::SongsEndpointJson(
+        cmd.param1, cmd.param2, cmd.result.jsonData, cmd.result.error);
+}
+
 // StreamCompose_Native.cpp.  Read-only.
 std::string Dc3CameraJson(int gridW, int gridH);
 
@@ -1565,9 +1651,16 @@ void HttpServer::RegisterEndpoints() {
             return;
         }
 
+        // "device":"pad" (or ?device=pad): this press stands for a real
+        // pad's.  Without it an injected press is nobody's device (the song
+        // browser's hint bar counts it with the keyboard).
+        bool fromPad = req.body.find("\"device\"") != std::string::npos
+            ? req.body.find("\"pad\"", req.body.find("\"device\"")) != std::string::npos
+            : req.has_param("device") && req.get_param_value("device") == "pad";
         {
             std::lock_guard<std::mutex> lk(mInputMutex);
             mImmediateButtons |= (1u << bit);
+            if (fromPad) sInjectedPadPress = true;
         }
 
         res.set_content(JsonOk("{\"button\":\"" + JsonEscape(btnName) + "\"}"),
@@ -1720,6 +1813,112 @@ void HttpServer::RegisterEndpoints() {
             res.set_content(JsonOk(result.jsonData), "application/json");
         } else {
             res.status = 500;
+            res.set_content(JsonError(result.error), "application/json");
+        }
+    });
+
+    // GET /api/songbrowser/state — the natively drawn song browser: whether it
+    // is shown and why, the focused part, the selected song, the query, the row
+    // count, the sort, and the last frame's draw numbers.  Read-only.
+    svr->Get("/api/songbrowser/state", [this](const httplib::Request&, httplib::Response& res) {
+        auto result = QueueAndWait(kCmdSongBrowserState);
+        if (result.ok) {
+            res.set_content(JsonOk(result.jsonData), "application/json");
+        } else {
+            res.status = 500;
+            res.set_content(JsonError(result.error), "application/json");
+        }
+    });
+
+    // POST /api/songbrowser/command — run one of the song browser's commands:
+    // body {"name":"random_song"} or {"name":"playlists"} (or ?name=...).  It
+    // calls what the browser's own command rows call.  409 with the reason
+    // when it did not run (the browser is not shown, the classic list has no
+    // such row in this mode).
+    svr->Post("/api/songbrowser/command", [this](const httplib::Request& req, httplib::Response& res) {
+        std::string name;
+        auto pos = req.body.find("\"name\"");
+        if (pos != std::string::npos) {
+            auto colon = req.body.find(':', pos);
+            auto q1 = colon == std::string::npos ? colon : req.body.find('"', colon + 1);
+            auto q2 = q1 == std::string::npos ? q1 : req.body.find('"', q1 + 1);
+            if (q2 != std::string::npos) name = req.body.substr(q1 + 1, q2 - q1 - 1);
+        }
+        if (name.empty() && req.has_param("name")) name = req.get_param_value("name");
+        if (name.empty()) {
+            res.status = 400;
+            res.set_content(JsonError("No name specified"), "application/json");
+            return;
+        }
+        auto result = QueueAndWait(kCmdSongBrowserCommand, name);
+        if (result.ok) {
+            res.set_content(JsonOk(result.jsonData), "application/json");
+        } else {
+            res.status = result.httpStatus;
+            res.set_content(JsonError(result.error), "application/json");
+        }
+    });
+
+    // POST /api/input/text — type into the engine's text queue.  Body
+    // {"text":"queen"} types those characters (UTF-8; \" and \\ are the only
+    // escapes read), {"key":"backspace"} sends an edit key (backspace, delete,
+    // left, right, home, end); both may be given (text first).  Also accepted
+    // as query parameters ?text=...&key=....
+    svr->Post("/api/input/text", [this](const httplib::Request& req, httplib::Response& res) {
+        auto field = [&req](const char* name) {
+            std::string value;
+            const std::string quoted = std::string("\"") + name + "\"";
+            auto pos = req.body.find(quoted);
+            if (pos != std::string::npos) {
+                auto colon = req.body.find(':', pos + quoted.size());
+                auto q1 = colon == std::string::npos ? colon : req.body.find('"', colon + 1);
+                if (q1 != std::string::npos) {
+                    for (size_t i = q1 + 1; i < req.body.size() && req.body[i] != '"'; i++) {
+                        if (req.body[i] == '\\' && i + 1 < req.body.size()) i++;
+                        value += req.body[i];
+                    }
+                }
+            }
+            if (value.empty() && req.has_param(name)) value = req.get_param_value(name);
+            return value;
+        };
+        std::string text = field("text"), key = field("key");
+        for (char& c : key) {
+            if (c >= 'A' && c <= 'Z') c += 32;
+        }
+        if (text.empty() && key.empty()) {
+            res.status = 400;
+            res.set_content(JsonError("No text or key specified"), "application/json");
+            return;
+        }
+        auto result = QueueAndWait(kCmdInputText, text, key);
+        if (result.ok) {
+            res.set_content(JsonOk(result.jsonData), "application/json");
+        } else {
+            res.status = result.httpStatus;
+            res.set_content(JsonError(result.error), "application/json");
+        }
+    });
+
+    // GET /api/songs[?q=TEXT][&limit=N][&sort=NAME][&min=N][&recents=N][&locked=1]
+    // — the song browser's data (docs/native/reference/SONG_BROWSER_DATA.md):
+    // the catalog song select lists, with q the ranked search result and the
+    // ranges to highlight, with sort an arrangement's sections and rows.
+    // Answered on the main thread between frames.  Read-only.
+    svr->Get("/api/songs", [this](const httplib::Request& req, httplib::Response& res) {
+        std::string options;
+        if (req.has_param("q")) options += "q=1;";
+        for (const char* key : { "limit", "sort", "min", "recents", "locked" }) {
+            if (!req.has_param(key)) continue;
+            std::string value = req.get_param_value(key);
+            if (value.find(';') != std::string::npos) continue;
+            options += std::string(key) + "=" + value + ";";
+        }
+        auto result = QueueAndWait(kCmdSongs, req.get_param_value("q"), options);
+        if (result.ok) {
+            res.set_content(JsonOk(result.jsonData), "application/json");
+        } else {
+            res.status = 503;
             res.set_content(JsonError(result.error), "application/json");
         }
     });
