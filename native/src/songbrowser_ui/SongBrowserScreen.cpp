@@ -164,6 +164,11 @@ namespace songbrowser_ui {
             Focus(usable ? state.focus : ArrivalRegion(), true);
         }
 
+        void SetGlyphs(const HintGlyphs &glyphs) {
+            glyphs_ = glyphs;
+            UpdateHints();
+        }
+
         const ListView &List() const { return *list_; }
         const Shelf &Recents() const { return *shelf_; }
         const DetailPane &Detail() const { return *detail_; }
@@ -757,6 +762,10 @@ namespace songbrowser_ui {
     State SongBrowserScreen::SaveState() const { return impl_->Save(); }
 
     void SongBrowserScreen::RestoreState(const State &state) { impl_->Restore(state); }
+
+    void SongBrowserScreen::SetHintGlyphs(const HintGlyphs &glyphs) {
+        impl_->SetGlyphs(glyphs);
+    }
 
     bool SongBrowserScreen::IsSettled() const { return impl_->IsSettled(); }
 

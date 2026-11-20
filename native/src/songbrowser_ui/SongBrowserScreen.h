@@ -84,6 +84,12 @@ namespace songbrowser_ui {
         Error // Accept with nothing to pick
     };
 
+    // The entries of the classic list that are not songs.
+    enum class Command {
+        RandomSong, // let the game pick a song
+        Playlists // go to the playlists
+    };
+
     // The parts of the screen focus can be on.
     enum class Region {
         Search,
@@ -97,6 +103,8 @@ namespace songbrowser_ui {
         std::function<void(const std::string &shortName)> onPick;
         // Back with no query typed: the player wants to leave.
         std::function<void()> onBack;
+        // A command was chosen (Accept on it, or its own button).
+        std::function<void(Command)> onCommand;
         std::function<void(Cue)> onCue;
         // The album art of a song, or the null handle while it is not loaded.
         // Asked every frame for every song whose art is on screen (a few
@@ -166,6 +174,10 @@ namespace songbrowser_ui {
         State SaveState() const;
         // Songs and regions that no longer exist fall back by the arrival rule.
         void RestoreState(const State &state);
+
+        // The device in use changed (pad to keyboard or back): what the hint
+        // pills say from the next frame on.
+        void SetHintGlyphs(const HintGlyphs &glyphs);
 
         // Whether the host should capture the keyboard for text. Always true:
         // typing anywhere on this screen searches.
