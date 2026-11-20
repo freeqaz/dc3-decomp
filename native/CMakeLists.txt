@@ -1399,6 +1399,59 @@ set_source_files_properties(
                COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility"
 )
 
+# ============================================================================
+# nativeui -- the natively drawn menu framework's core (docs/native/reference/
+# NATIVE_UI.md). Pure C++17: no game objects, no GPU, no GLFW, no MSVC compat
+# and no PCH, so it builds the same for every target, the web included. The
+# integration layer binds its Renderer / TextMeasurer / Clock seams.
+# ============================================================================
+add_library(nativeui STATIC
+    src/nativeui/Animation.cpp
+    src/nativeui/DisplayList.cpp
+    src/nativeui/Focus.cpp
+    src/nativeui/HintBar.cpp
+    src/nativeui/Image.cpp
+    src/nativeui/Label.cpp
+    src/nativeui/Layout.cpp
+    src/nativeui/ListView.cpp
+    src/nativeui/Panel.cpp
+    src/nativeui/Renderer.cpp
+    src/nativeui/SampleBrowser.cpp
+    src/nativeui/Screen.cpp
+    src/nativeui/ScrollStrip.cpp
+    src/nativeui/Shelf.cpp
+    src/nativeui/TabStrip.cpp
+    src/nativeui/Text.cpp
+    src/nativeui/TextField.cpp
+    src/nativeui/Theme.cpp
+    src/nativeui/Utf8.cpp
+    src/nativeui/Widget.cpp
+)
+target_include_directories(nativeui PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_compile_options(nativeui PRIVATE -Wall -Wextra)
+
+# nativeui_host -- the binding between nativeui and the running game
+# (docs/native/reference/NATIVE_UI.md, "Host"): the renderer on the engine's
+# Canvas2D, the game's bitmap fonts as glyph sources, the image cache on the
+# game's loader, pad/text input, NativeUiHost and the DC3_NATIVEUI_DEMO screen.
+# These are game TUs (decomp headers, the PCH, MSVC compat), so they are listed
+# on each target that runs the UI rather than built as a library: dc3-native,
+# dc3-web and milo-tests. main_native.cpp / main_web.cpp call DemoInstall(), and
+# HttpServer.cpp (dc3-native) calls DemoStateJson(), so a target that compiles
+# either needs this list.
+set(DC3_NATIVEUI_HOST_SOURCES
+    src/nativeui_host/BitmapGlyphSource.cpp
+    src/nativeui_host/CanvasRenderer.cpp
+    src/nativeui_host/FontSet.cpp
+    src/nativeui_host/GameBindings.cpp
+    src/nativeui_host/GameFonts.cpp
+    src/nativeui_host/GameImages.cpp
+    src/nativeui_host/ImageCache.cpp
+    src/nativeui_host/InputBridge.cpp
+    src/nativeui_host/NativeUiDemo.cpp
+    src/nativeui_host/NativeUiHost.cpp
+)
+
 if(EMSCRIPTEN)
 
 # ============================================================================
@@ -1516,6 +1569,7 @@ add_executable(dc3-web
     src/platform/WebSvcMgr_Stub.cpp
     src/platform/DebugPanel.cpp
     src/dc3_render_hook.cpp       # HamRenderHook (registers with milo-engine's WgpuRnd)
+    ${DC3_NATIVEUI_HOST_SOURCES}  # the natively drawn UI's host + DC3_NATIVEUI_DEMO
     ${DC3_WEB_LIFTED_ENGINE_SOURCES}
     ${DC3_WEB_ENGINE_SOURCES}
     ${DC3_WEB_CORE_SOURCES}
@@ -1609,7 +1663,7 @@ target_compile_definitions(dc3-web PRIVATE
     MILO_WEB_AUDIO_NS=dc3
 )
 
-target_link_libraries(dc3-web PRIVATE milo-engine imgui)
+target_link_libraries(dc3-web PRIVATE milo-engine imgui nativeui)
 
 # Same precompiled/force-included header every native target uses (and the
 # MSVC decomp build's /FI): decomp TUs rely on Object.h + Debug.h arriving
@@ -1704,6 +1758,7 @@ add_executable(dc3-native
     ${DC3_NATIVE_CORE_SOURCES_ENGINE}
     src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
     src/platform/DebugPanel.cpp   # deferred glue (pairs with HttpServer/DC3_HTTP_SERVER)
+    ${DC3_NATIVEUI_HOST_SOURCES}  # the natively drawn UI's host + DC3_NATIVEUI_DEMO
     # gfx set + ImGuiBackend.cpp now provided by milo-engine
 )
 # WindowLoss_X11.cpp includes Xlib (via glfw3native.h) and no decomp header:
@@ -1757,6 +1812,7 @@ target_link_libraries(dc3-native PRIVATE
     ${DC3_PLATFORM_LIBS}
     ${FFMPEG_LIBRARIES}
     imgui
+    nativeui
 )
 
 # NOTE: GFX sources include BOTH Dawn/WebGPU headers AND decomp engine headers.
@@ -2065,6 +2121,7 @@ if(BUILD_TESTS)
         tests/test_bink_integration.cpp
         tests/test_extract_bik.cpp
         tests/test_input.cpp
+        tests/test_text_input.cpp # the engine's text-editing input queue (platform/TextInput_Native.h): capture vs the pad map, chain, UTF-8, repeat
         tests/test_audio.cpp
         tests/test_mogg_decode.cpp
         tests/test_mogg_v0xe.cpp
@@ -2102,6 +2159,7 @@ if(BUILD_TESTS)
         tests/test_rndcam_projection.cpp
         tests/test_particle_color.cpp
         tests/test_drawrect_color.cpp
+        tests/test_canvas2d.cpp # the engine's batched 2D canvas (gfx/Canvas2D.h): CPU half + rendered proof
         tests/test_flare_point_test.cpp
         tests/test_gpu_timers.cpp
         tests/test_retail_lighting.cpp
@@ -2206,6 +2264,13 @@ if(BUILD_TESTS)
         tests/test_host_path_case.cpp  # H-17/H-23 upper-case host directories
         tests/test_asyncfile_not_found.cpp  # H-107 a not-found open is silent, as in the image
         tests/test_present_scale.cpp  # H-18 fit the frame into the window
+        tests/test_nativeui_core.cpp     # nativeui: UTF-8, text fitting, display list, theme, animation
+        tests/test_nativeui_layout.cpp   # nativeui: layout containers, focus and event routing, Screen
+        tests/test_nativeui_widgets.cpp  # nativeui: ListView, Shelf, TextField, TabStrip, HintBar, Label, Image, Panel
+        tests/test_nativeui_sample.cpp   # nativeui: the sample song browser, driven by events; display-list goldens
+        tests/test_nativeui_host.cpp     # nativeui_host: command translation, glyph layout, image cache, input (no GPU, no game data)
+        tests/test_nativeui_host_gpu.cpp # nativeui_host: real fonts + canvas into a render target; the demo in a running engine
+        ${DC3_NATIVEUI_HOST_SOURCES}  # the natively drawn UI's host (the code under test)
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
@@ -2275,6 +2340,18 @@ if(BUILD_TESTS)
         PROPERTIES SKIP_PRECOMPILE_HEADERS ON
                    COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility;-fno-delayed-template-parsing"
     )
+    # nativeui tests: plain C++17 against the nativeui library, no decomp
+    # header, so no PCH and no MSVC compat (as the H-9 exit tests above).
+    set_source_files_properties(
+        ${CMAKE_SOURCE_DIR}/tests/test_nativeui_core.cpp
+        ${CMAKE_SOURCE_DIR}/tests/test_nativeui_layout.cpp
+        ${CMAKE_SOURCE_DIR}/tests/test_nativeui_widgets.cpp
+        ${CMAKE_SOURCE_DIR}/tests/test_nativeui_sample.cpp
+        TARGET_DIRECTORY milo-tests
+        PROPERTIES SKIP_PRECOMPILE_HEADERS ON
+                   COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility;-fno-delayed-template-parsing"
+    )
+    target_link_libraries(milo-tests PRIVATE nativeui)
     if(NOT APPLE)
         find_package(X11 REQUIRED)
         target_link_libraries(milo-tests PRIVATE X11::X11)

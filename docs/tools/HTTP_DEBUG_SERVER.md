@@ -324,6 +324,42 @@ Button names: `confirm`/`a`, `cancel`/`b`, `start`, `select`/`back`/`option`, `u
 
 Works in both windowed and headless modes. HTTP-injected buttons are OR'd with keyboard/gamepad/script input.
 
+### Text input and the natively drawn UI
+
+```bash
+# Type text: every character is queued on the engine's text queue
+# (platform/TextInput_Native.h), as if typed. Queued whether or not anything
+# is capturing the keyboard; never presses a pad button.
+curl -X POST localhost:9090/api/input/text -d '{"text":"crystal"}'
+# {"ok":true,"data":{"typed":7,"pending":7}}
+
+# An edit key: backspace, delete, left, right, home, end
+curl -X POST localhost:9090/api/input/text -d '{"key":"backspace"}'
+# Both in one request (text first), or as query parameters:
+curl -X POST 'localhost:9090/api/input/text?text=ab&key=home'
+# An unknown key name is refused: HTTP 400
+
+# The natively drawn UI demo (DC3_NATIVEUI_DEMO=1); {"active":false} without it
+curl localhost:9090/api/nativeui/state
+# {"ok":true,"data":{"active":true,"search":"cr","cursor":2,"focus":"list",
+#  "selected_row":1,"rows":130,"tab":0,"capture":false,"at_rest":true,
+#  "detail_title":"Crystal Dance","search_rect":[920,24,320,44],
+#  "list_rect":[40,296,836,358],"highlight_rect":[40,332,836,51],
+#  "stats":{"frames":715,"commands":77,"quads":384,"draw_calls":49,"glyphs":357,
+#           "placeholder_glyphs":0,"images_missing":0,"build_us":13,"replay_us":20,
+#           "mean_build_us":18.4,"mean_replay_us":25.5},
+#  "images":{"ready":8,"loading":0,"queued":0,"evictions":0,"failures":1},
+#  "songs":62,"missing_glyphs":"","missing_glyphs_upper":""}}
+```
+
+`typed` is the number of characters queued by this request and `pending` the
+queue's length afterwards; the text reaches a screen on its next frame.
+Rectangles are `x,y,width,height` in the UI's 1280x720 logical units (multiply
+by output rows / 720 for screenshot pixels). `focus` is `search`, `list`,
+`recent`, `tabs`, `other` or `none`. `missing_glyphs` lists the characters of
+the disc songs' titles and artists that the menu font has no glyph for.
+Tested by `NativeUiHostGpuTest.DemoRunsInTheEngine`.
+
 ### Screen + Frame (Phase 4)
 
 ```bash

@@ -37,6 +37,7 @@ bool Dc3EnvFlag(const char *name, bool defaultOn); // platform/System_Native.cpp
 #include "obj/DataFile.h"
 #include "obj/Msg.h"
 #include "platform/DtaEvalSupport.h"
+#include "nativeui_host/NativeUiDemo.h"
 #include "platform/FrameTraceCounters.h"
 #include "platform/FramePacer_Native.h"
 #include "platform/LoaderBudget_Native.h"
@@ -67,6 +68,7 @@ enum BootState {
 
 static BootState sBootState = BOOT_INIT;
 static App *sApp = nullptr;
+extern void (*gDc3NativeFrameHook)(); // src/App.cpp
 static int sFrameCount = 0;
 static int sGpuWaitFrames = 0;
 static const int kGpuWaitTimeout = 300; // ~5 seconds at 60fps
@@ -418,6 +420,7 @@ static void mainLoop() {
         printf("DC3 Web: initializing engine via App...\n");
         NativeSetDataDir("/data");
         sApp = new App(0, nullptr);
+        nativeui_host::DemoInstall(); // DC3_NATIVEUI_DEMO=1
         sBootState = BOOT_GPU_WAIT;
         printf("DC3 Web: waiting for GPU...\n");
         break;
@@ -461,6 +464,8 @@ static void mainLoop() {
             gFrameTraceActive = true;
         const double t0 = trace ? emscripten_get_now() : 0.0;
         sApp->RunOneFrame();
+        if (gDc3NativeFrameHook) // src/App.cpp: native glue's per-frame call
+            gDc3NativeFrameHook();
         if (trace)
             FrameTraceRecord(sFrameCount, t0, emscripten_get_now());
         WebScreenBundleHook();

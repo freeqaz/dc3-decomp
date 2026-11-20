@@ -5,6 +5,10 @@
 #include <unistd.h>
 #include "telemetry\GameplayTelemetry.h"
 #include "NativeQuit.h"
+// Called once a frame from the native main loop (below; the web's loop in
+// native/src/main_web.cpp), outside any render pass. Native glue installs it
+// (native/src/nativeui_host/NativeUiDemo.cpp); null = nothing.
+void (*gDc3NativeFrameHook)() = nullptr;
 #include "platform/LoaderBudget_Native.h"
 #if !defined(__EMSCRIPTEN__)
 #include "platform/FramePacer_Native.h"
@@ -1295,6 +1299,11 @@ void App::RunWithoutDebugging() {
 
         // DC3_MENU_SELECT: the F1 key steps swipe -> hold -> both.
         Dc3MenuSelectFramePoll();
+
+        // Native glue that wants a call every frame outside any render pass
+        // (the natively drawn UI's demo, DC3_NATIVEUI_DEMO). Null = nothing.
+        if (gDc3NativeFrameHook)
+            gDc3NativeFrameHook();
 
         GameplayTelemetry::Sample(frameCount);
 #ifdef DC3_HTTP_SERVER

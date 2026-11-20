@@ -79,6 +79,8 @@ public:
         kCmdPoseTarget,     // What each player is asked to perform (synthetic sensor)
         kCmdCamera,         // Camera stream state + the player-view textures (PLAN P-4)
         kCmdMenuState,      // What every polled HamNavList is doing + its selects (PLAN P-3)
+        kCmdNativeUiState,  // The natively drawn UI's demo: what it shows (DC3_NATIVEUI_DEMO)
+        kCmdInputText,      // Type text / edit keys into the engine's text queue
     };
 
     struct CommandResult {
@@ -141,6 +143,8 @@ private:
     void HandlePoseTarget(Command& cmd);
     void HandleCamera(Command& cmd);
     void HandleMenuState(Command& cmd);
+    void HandleNativeUiState(Command& cmd);
+    void HandleInputText(Command& cmd);
 
     volatile bool mRunning = false;
     int mPort = 0;
