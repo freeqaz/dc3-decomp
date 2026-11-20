@@ -1,12 +1,19 @@
 // HintBar: the row of control hints along the bottom of a screen
-// ("(A) SELECT   (B) BACK").
+// ("(A) SELECT   [ESC] BACK").
 //
-// Each hint is a glyph label and a text. The glyph label is drawn inside an
-// outlined pill; the integration layer chooses what it says ("A", "ENTER", or
-// a character the game's glyph font turns into a button). Hints are laid out
-// left to right and never take focus.
+// Each hint is a control's label and what the control does. The integration
+// layer chooses the label; how it is drawn follows from its length, the way
+// the game draws its own prompts:
+//   one character   a round BUTTON: a filled disc in the hint's tone with the
+//                   letter cut dark into it (a pad's A, B, X, Y)
+//   longer          a KEYCAP: a rounded key, neutral, with the label on it
+//                   (a keyboard's ENTER, ESC, TAB)
+// A hint with no tone gets a neutral disc. Every hint's text is the same
+// colour: a hint that is listed is a hint that works. Hints are laid out left
+// to right and never take focus.
 #pragma once
 
+#include "nativeui/Theme.h"
 #include "nativeui/Widget.h"
 
 #include <string>
@@ -15,8 +22,11 @@
 namespace nativeui {
 
     struct Hint {
-        std::string glyph; // what goes in the pill
+        std::string glyph; // the control's label
         std::string text; // what the control does
+        // The colour of the control when it is a round button (null: neutral).
+        // A keycap ignores it.
+        ColorToken tone = nullptr;
     };
 
     class HintBar final : public Widget {
@@ -32,8 +42,9 @@ namespace nativeui {
 
     private:
         struct Extents {
-            float pill = 0.0f; // width of the pill
-            float glyph = 0.0f; // width of the label inside it
+            float pill = 0.0f; // width of the button or keycap
+            float glyph = 0.0f; // width of the label on it
+            bool round = false; // a one-character label: a round button
             float text = 0.0f;
         };
         Extents ExtentsOf(const Context &ctx, const Hint &hint) const;

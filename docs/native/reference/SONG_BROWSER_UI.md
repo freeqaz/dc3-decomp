@@ -20,22 +20,30 @@ pictures from the running game are made with
 
 ## Layout
 
-A 1280x720 logical view, drawn over the game's moving streak background. The
-screen never fills the view opaquely: it lays one scrim (`Palette::scrim`,
-black at 42%) over the whole view and one more under the list, so the
-background stays visible and the text stays readable.
-In the running game what is underneath is `background_panel` alone, which is
-faint streaks on black, so the screen reads as light text on near-black
-(seen at 1280x720, 1920x1080 and 2560x1440). The same layout is drawn at
-every output size: the canvas scales the 1280x720 view.
+A 1280x720 logical view, drawn over the game's moving streak background and
+hung on the two hairlines of the game's own frame (`Metrics::frameTop` 83.5,
+`Metrics::frameBottom` 637): the top bar sits above the upper line, the hint
+bar below the lower one, and the list and the detail pane between them with
+`Spacing::md` of padding off each line. The pane therefore always ends above
+the hint bar's divider.
+
+The screen never fills the view opaquely. It draws its own backdrop first
+(`nativeui::Backdrop`): a translucent indigo wash (`Palette::backdropTop` to
+`backdropBottom`), two soft pools of light and seven thin bands in the game's
+blue, violet and magenta that drift with the clock over
+`Motion::ambientPeriod` (48 s; 0 stops them). No pool or band is ever stronger
+than half its colour. The list then sits in a well of indigo glass
+(`Palette::well`, with the faint `wellBorder`), which is what the row text is
+read against. The same layout is drawn at every output size: the canvas
+scales the 1280x720 view.
 
 | Part | What it holds |
 |---|---|
 | Top bar | `SONGS`; the sort tabs Title, Artist, Difficulty, Source, Decade; the search field, whose placeholder `TYPE TO SEARCH` tells a keyboard user they can just type |
 | Recently Played | A shelf of album-art cards, newest first. Shown only with a play history and never during a search. It folds away while the list is being browsed, so the list gets the room, and unfolds when focus returns to it, the tabs or the field |
-| List | Virtualised, sectioned by the sort. A row is art, title, artist, a seven-cell difficulty meter, and five star marks once the song has been played. During a search it is one flat ranked list under a `N SONGS MATCH` heading |
-| Detail pane | For the selected song: large art, title, artist, album and year, length `m:ss`, BPM, the difficulty tier's name and meter, best stars and score (or `NOT PLAYED YET`), source game. It crossfades between songs |
-| Hint bar | What the controls do right now; it changes with the focused part and with whether a query is typed |
+| List | Virtualised, sectioned by the sort. Above the first section sit the visit's command rows (see below). A song row is art, title, artist, a seven-cell difficulty meter, and five stars once the song has been played (filled for earned, outlined for not). During a search it is one flat ranked list under a `N SONGS MATCH` heading, with no command rows. Rows fade into the well at an edge that has more rows beyond it |
+| Detail pane | A glass panel. For the selected song: large art with the source game on it, the title (one line, or two when it is long), artist, album and year, the difficulty tier's name and meter, best stars and score (or `NOT PLAYED YET`), length `m:ss`, BPM. For a command row: its icon on a tile, its name and a short description. While a search matches nothing: how to search. It crossfades between them |
+| Hint bar | What the controls do right now; it changes with the focused part and with whether a query is typed. A one-letter glyph is a round button in the pad's colour (`buttonAccept`, `buttonBack`), a longer one a keycap; all text is in one colour and the heavy face |
 
 **Why Decade has a tab and BPM does not.** The catalog spans five decades and
 "something from the 80s" is a way people pick a song. BPM in ten-beat bands
@@ -50,8 +58,50 @@ this library holds no second list of them.
 
 **Long text.** Each row has fixed columns measured from the right (stars,
 meter, the artist column at `Metrics::listSecondaryShare` of the row); the
-title gets the rest and is cut with an ellipsis. In the detail pane the title
-steps down from the title size to the body size before it is cut.
+title gets the rest and is cut with an ellipsis. In the detail pane a title that fits is one line at the title size; a longer
+one is wrapped onto two lines at the body size (`nativeui::WrapLines`), and
+only a title too long for two lines is cut. A recent card's title wraps onto
+two lines under its art in the same way.
+
+## Command rows
+
+`Environment::commands` names the command rows this visit has, in the order
+shown: Perform has `RandomSong` and `Playlists`, Dance Battle only
+`RandomSong`, Rehearse none (an empty vector: no command rows at all). They
+are rows of the list above the first section in every sort, and are absent
+during a search and when no song is installed. Each has an icon tile where a
+song has its art and a tagline where a song has its artist; the detail pane
+shows its description.
+
+- Accept on one calls `Delegate::onCommand(command)` and picks no song.
+- Arrival never lands on one: with no saved place the list opens on the first
+  song. A saved `State` with `selectedCommand` set returns to that row if the
+  visit has it and to the first song otherwise.
+- Left and Right treat them as one more section above the first; Home goes to
+  the first of them; Up from the first leaves the list as before.
+- A search started from a command row returns to it when the search is cleared.
+
+## The selection rule
+
+Only the region that has focus fills its highlight (`nativeui/Decor.h`). The
+list's bar is filled blue to violet with a glow while the list has focus;
+while focus is on the shelf, the tabs or the search field the list only
+outlines the row it remembers (`Palette::selectionMarker`). The shelf's card
+has an accent ring and glow with focus and a quiet outline without; the tabs'
+underline and the field's border follow the same rule.
+
+## Readability
+
+- No text style has capitals under 10 px at 720 rows: label 16.5 and hint 17
+  in the heavy face (capitals 0.625 of the size: 10.3 and 10.6 px), caption 20
+  in the menu face (0.55: 11 px), body 26 (14.3 px). At 1080 rows multiply by
+  1.5, at 1440 by 2. `UiCoreTheme.NoStyleHasCapitalsUnderTenPixelsAt720Rows`.
+- Contrast, measured by `SongBrowserUi.TextKeepsItsContrastOverTheBackdrop`
+  (every text run against the brightest pixel behind it, four moments of the
+  backdrop's drift, over a stand-in for the game's streaks): worst text off
+  the highlight 5.2:1 (a shelf caption, 76% white), worst on the focused bar
+  4.8:1, the dark letter on a button disc 5.0:1. The test holds 4.5:1, 3:1
+  and 4.5:1.
 
 ## Input
 
@@ -167,8 +217,8 @@ The catalog is borrowed and must outlive the screen. Callbacks run inside
 | `MatchText.{h,cpp}` | Fitting and painting a line with highlighted byte ranges |
 | `Containers.{h,cpp}` | `EventScope` (events its child did not use), `Reveal` (folds its child away), `Notice` (a centred message) |
 
-Sizes and colours come from the theme. This screen added `Palette::scrim`
-and `Palette::star`, and to `Metrics`: `searchFieldWidth`, `sidePaneWidth`,
+Sizes and colours come from the theme. This screen added `Palette::star`,
+and to `Metrics`: `searchFieldWidth`, `sidePaneWidth`,
 `listSecondaryShare`, `meterCellWidth/Height/Gap`, `starSize`, `starGap`.
 
 ## Cost
@@ -178,9 +228,13 @@ best of five batches of 200 frames:
 
 | Catalog | Frame at rest | Frame while scrolling | Draw commands | Rows alive at most |
 |---|---|---|---|---|
-| 45 songs (the disc) | 4.0 µs | 4.1 µs | 149 | 23 |
-| 121 songs (the real list) | 4.2 µs | 4.2 µs | 156 | 23 |
-| 1,000 songs (synthetic) | 4.2 µs | 4.5 µs | 163 | 22 |
+| 45 songs (the disc) | 4.3 µs | 4.5 µs | 171 | 22 |
+| 121 songs (the real list) | 4.3 µs | 4.4 µs | 171 | 22 |
+| 1,000 songs (synthetic) | 4.3 µs | 5.4 µs | 178 | 21 |
+
+Before the 2026-11-20 look pass (backdrop, command rows, icons, edge fades)
+the same test read 4.0 / 4.2 / 4.2 µs at rest, 4.1 / 4.2 / 4.5 µs scrolling
+and 149 / 156 / 163 commands.
 
 Rows exist only for the part of the list on or near the screen, whatever the
 catalog's size; a row's text is fitted once per width, not once per frame. The

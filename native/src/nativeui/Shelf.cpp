@@ -1,5 +1,7 @@
 #include "nativeui/Shelf.h"
 
+#include "nativeui/Decor.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -143,8 +145,7 @@ namespace nativeui {
         const Metrics &metric = theme.metric;
         const float emphasis = Emphasis(index);
         const float focus = focusAmount_.Value();
-        // The selected card grows and glows only while the shelf has focus;
-        // without focus it keeps a quiet ring, so the selection is still shown.
+        // The selected card grows only while the shelf has focus.
         const float lit = emphasis * focus;
         const float scale = 1.0f + (metric.shelfFocusScale - 1.0f) * lit;
         const Rect rect {
@@ -154,27 +155,17 @@ namespace nativeui {
 
         // Scale about the card's own centre.
         painter.PushLayer({ centre * (1.0f - scale), scale, 1.0f });
-        if (lit > 0.0f) {
-            painter.FillRoundRect(
-                rect.Inflated(metric.glowSoftness * 0.5f),
-                theme.radius.medium + metric.glowSoftness * 0.5f,
-                CornerColors::Solid(theme.color.accentGlow.Faded(lit)),
-                metric.glowSoftness
-            );
-        }
+        // A glow and an accent ring while the shelf has focus; a quiet outline
+        // while it only remembers its selection (the selection rule, Decor.h).
+        PaintFocusGlow(painter, theme, rect, theme.radius.medium, lit);
         card.Paint(ctx, painter);
-        if (emphasis > 0.0f) {
-            painter.StrokeRoundRect(
-                rect,
-                theme.radius.medium,
-                CornerColors::Solid(
-                    Mix(theme.color.highlightIdle, theme.color.accent, focus)
-                        .Faded(emphasis)
-                ),
-                metric.focusRingWidth
-            );
-        }
+        PaintSelectionRing(painter, theme, rect, theme.radius.medium, focus, emphasis);
         painter.PopLayer();
+    }
+
+    namespace {
+        // Less than this much of the row beyond an edge counts as none.
+        constexpr float kScrolledOff = 0.5f;
     }
 
     void Shelf::OnPaint(const Context &ctx, Painter &painter) const {
@@ -183,9 +174,19 @@ namespace nativeui {
         const float scroll = strip_.Scroll();
         const float headroom = (bounds.height - metric.shelfCardHeight) * 0.5f;
 
-        // Clip to the shelf plus the glow's reach on every side: the first and
-        // last cards sit at the very edge and still have to grow and glow.
-        painter.PushClip(bounds.Inflated(metric.glowSoftness));
+        // Clip to the shelf plus the glow's reach above and below, and to the
+        // sides only at an end of the row: there the first or last card sits at
+        // the very edge and still has to grow and glow. Where the row goes on,
+        // cards stop at the shelf's own edge, under the fade, and never reach
+        // into whatever frames the shelf.
+        const float glow = metric.glowSoftness;
+        const float bleedLeft = scroll > kScrolledOff ? 0.0f : glow;
+        const float bleedRight = strip_.MaxScroll() - scroll > kScrolledOff ? 0.0f : glow;
+        const Rect lane { bounds.x - bleedLeft,
+                          bounds.y - glow,
+                          bounds.width + bleedLeft + bleedRight,
+                          bounds.height + 2.0f * glow };
+        painter.PushClip(lane);
         painter.PushLayer({ { bounds.x - scroll, bounds.y + headroom }, 1.0f, 1.0f });
 
         // The most emphasised card is painted last so that it overlaps its neighbours.
@@ -212,6 +213,16 @@ namespace nativeui {
         }
 
         painter.PopLayer();
+
+        // Cards fade out toward an edge the shelf goes on past, so a row that
+        // holds more than fits says so.
+        const float reach = ctx.theme.metric.edgeFade;
+        if (reach > 0.0f) {
+            PaintEdgeFade(painter, ctx.theme, lane, Edge::Left, scroll / reach);
+            PaintEdgeFade(
+                painter, ctx.theme, lane, Edge::Right, (strip_.MaxScroll() - scroll) / reach
+            );
+        }
         painter.PopClip();
     }
 

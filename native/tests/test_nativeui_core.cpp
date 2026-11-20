@@ -377,19 +377,70 @@ TEST(UiCoreTheme, Dc3ThemeHasTheGamesLook) {
     EXPECT_EQ(theme.color.accent, Color::FromRgb8(0x37A7E3));
     EXPECT_EQ(theme.color.textPrimary, Color::FromRgb8(0xFFFFFF));
     EXPECT_GT(theme.color.panelTop.r, theme.color.panelBottom.r); // light to dark
-    // Every menu style is upper case, in the one menu face, with a real size.
+    // Every style is upper case with a real size. Reading sizes are in the
+    // menu face; the two small styles are in the heavy face, whose capitals
+    // are taller for the same size.
     for (const TextStyleToken token : { &Typography::display,
                                         &Typography::title,
                                         &Typography::body,
                                         &Typography::caption,
+                                        &Typography::label,
                                         &Typography::hint }) {
         const TextStyle &style = theme.type.*token;
         EXPECT_EQ(style.textCase, TextCase::Upper);
-        EXPECT_EQ(style.font, kDc3MenuFont);
+        const bool small = token == &Typography::label || token == &Typography::hint;
+        EXPECT_EQ(style.font, small ? kDc3HeavyFont : kDc3MenuFont);
         EXPECT_GT(style.size, 0.0f);
     }
     EXPECT_GT(theme.type.display.size, theme.type.body.size);
     EXPECT_EQ(theme.type.ellipsis, "...");
+}
+
+// The readability floor: at 720 rows of output one logical unit is one pixel,
+// and no style's capitals may be under 10 of them. (Bigger outputs scale up.)
+TEST(UiCoreTheme, NoStyleHasCapitalsUnderTenPixelsAt720Rows) {
+    const Theme theme = Dc3Theme();
+    float smallest = 1e9f;
+    for (const TextStyleToken token : { &Typography::display,
+                                        &Typography::title,
+                                        &Typography::body,
+                                        &Typography::caption,
+                                        &Typography::label,
+                                        &Typography::hint }) {
+        const TextStyle &style = theme.type.*token;
+        const float capRatio = style.font == kDc3HeavyFont ? kDc3HeavyCapRatio : kDc3MenuCapRatio;
+        EXPECT_GE(style.size * capRatio, 10.0f) << "size " << style.size;
+        smallest = std::min(smallest, style.size * capRatio);
+    }
+    std::cout << "[ measured ] smallest capital height at 720 rows: " << smallest << " px\n";
+}
+
+// Motion is short and eases out: tweens of 120 to 320 ms, and every spring
+// within 1% of its target in 120 to 220 ms without ever passing it.
+TEST(UiCoreTheme, MotionIsShortAndEasesOut) {
+    const Motion motion = Dc3Theme().motion;
+    EXPECT_GE(motion.fast, 0.12f);
+    EXPECT_LE(motion.normal, 0.22f);
+    EXPECT_LE(motion.slow, 0.35f);
+    for (const SpringParams *params :
+         { &motion.scrollSpring, &motion.focusSpring, &motion.fadeSpring }) {
+        Spring spring(0.0f);
+        spring.SetTarget(1.0f);
+        const float step = 1.0f / 480.0f;
+        float seconds = 0.0f;
+        float previous = 0.0f;
+        while (spring.Value() < 0.99f && seconds < 1.0f) {
+            spring.Advance(step, *params);
+            seconds += step;
+            EXPECT_GE(spring.Value(), previous) << "ease-out: it only ever approaches";
+            EXPECT_LE(spring.Value(), 1.0f) << "no overshoot";
+            previous = spring.Value();
+        }
+        EXPECT_GE(seconds, 0.12f) << "omega " << params->angularFrequency;
+        EXPECT_LE(seconds, 0.22f) << "omega " << params->angularFrequency;
+        std::cout << "[ measured ] spring omega " << params->angularFrequency << ": within 1% after "
+                  << seconds * 1000.0f << " ms\n";
+    }
 }
 
 TEST(UiCoreTheme, ScalesAscendAndAThemeIsAValue) {

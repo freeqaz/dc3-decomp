@@ -172,7 +172,9 @@ namespace nativeui_host {
         }
     }
 
-    void NativeUiHost::DrawTo(QuadSink &sink) {
+    void NativeUiHost::DrawTo(QuadSink &sink) { DrawFrame(sink, imageSource_); }
+
+    void NativeUiHost::DrawFrame(QuadSink &sink, ImageSource *images) {
         stats_ = FrameStats();
         stats_.eventsHandled = eventsSinceDraw_;
         eventsSinceDraw_ = 0;
@@ -185,7 +187,7 @@ namespace nativeui_host {
         stats_.commands = static_cast<std::uint32_t>(list.commands.size());
 
         const auto replayStart = std::chrono::steady_clock::now();
-        CanvasRenderer renderer(sink, fonts_, imageSource_);
+        CanvasRenderer renderer(sink, fonts_, images);
         renderer.SetDeviceScale(deviceScaleY_);
         nativeui::Replay(list, renderer);
         stats_.replayMicros = MicrosSince(replayStart);
@@ -208,7 +210,10 @@ namespace nativeui_host {
         const Canvas2D::FrameStats before = canvas->Stats();
         Canvas2DSink sink(*canvas);
         const auto start = std::chrono::steady_clock::now();
-        DrawTo(sink);
+        // Only here is there a renderer to make an icon's texture with:
+        // DrawTo() takes any sink, from a test with no renderer at all.
+        icons_.SetNext(imageSource_);
+        DrawFrame(sink, &icons_);
         const std::uint32_t build = stats_.buildMicros;
         canvas->End(); // flushes: the draw calls are recorded here
         stats_.replayMicros = MicrosSince(start) - build;

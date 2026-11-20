@@ -37,15 +37,17 @@ TEST(UiCoreGolden, DisplayListGoldenForASmallCard) {
     );
 
     const std::string expected =
-        "fill 0,0 200x100 r=18 soft=0 #9594A0EB #9594A0EB #3B3843EB #3B3843EB\n"
-        "stroke 0,0 200x100 r=18 t=1.5 soft=0 #423F5CFF\n"
-        // The label: 10 in, baseline centred in its 21.6 line (10 + 1.8 + 14.4).
-        "text 10,26.2 font=1 size=18 ls=1.08 #FFFFFFFF \"HI\"\n"
-        // The hint bar, 4 below the label: a 26 pill, its glyph centred in it
-        // (10 + 8, baseline 35.6 + 3 + 16), then the text 8 after the pill.
-        "stroke 10,35.6 26x26 r=13 t=1.5 soft=0 #FFFFFFB8\n"
-        "text 18,54.6 font=1 size=20 ls=0.8 #FFFFFFFF \"A\"\n"
-        "text 44,54.6 font=1 size=20 ls=0.8 #FFFFFFB8 \"OK\"\n";
+        "fill 0,0 200x100 r=18 soft=0 #2C2466CC #2C2466CC #0D0A22E0 #0D0A22E0\n"
+        "stroke 0,0 200x100 r=18 t=1.5 soft=0 #8A76F0D9\n"
+        // The label: 10 in, baseline centred in its 24 line (10 + 2 + 16).
+        "text 10,28 font=1 size=20 ls=1 #FFFFFFFF \"HI\"\n"
+        // The hint bar, 4 below the label: a 26 disc (a neutral one: this hint
+        // has no tone), its letter centred in it in the heavy face, then the
+        // text 8 after the disc.
+        "fill 10,38 26x26 r=13 soft=0 #FFFFFF1A\n"
+        "stroke 10,38 26x26 r=13 t=1.5 soft=0 #FFFFFF8C\n"
+        "text 18.75,56.1 font=2 size=17 ls=1.02 #FFFFFFFF \"A\"\n"
+        "text 44,56.1 font=2 size=17 ls=1.02 #FFFFFFC2 \"OK\"\n";
     EXPECT_EQ(Describe(screen.BuildFrame()), expected);
 }
 

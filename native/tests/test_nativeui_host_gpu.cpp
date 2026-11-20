@@ -275,6 +275,23 @@ TEST_F(NativeUiHostGpuTest, SongBrowserThroughTheHostAndCanvas) {
     EXPECT_GT(stats.quads, 200u);
     EXPECT_GT(stats.drawCalls, 0u);
     EXPECT_LT(stats.drawCalls, 120u);
+
+    // The first frame also pays for what is made once (the icons' textures,
+    // the canvas's first use of each texture). The same frame again is what
+    // every later frame costs, and it draws the same things.
+    Frame again;
+    NativeUiHost::FrameStats repeat;
+    ASSERT_TRUE(Render(1280, 720, again, [&] {
+        host.Draw();
+        repeat = host.Stats();
+    }));
+    printf(
+        "HOST FRAME AGAIN %u commands, %u quads, %u draw calls, build %u us, replay %u us\n",
+        repeat.commands, repeat.quads, repeat.drawCalls, repeat.buildMicros, repeat.replayMicros
+    );
+    EXPECT_EQ(repeat.quads, stats.quads);
+    EXPECT_EQ(repeat.drawCalls, stats.drawCalls);
+    EXPECT_EQ(repeat.imagesMissing, stats.imagesMissing);
     EXPECT_EQ(stats.placeholderGlyphs, 0u) << "the menu font has every character of these songs";
 
     // The highlight bar: the accent colour (blue) on the selected row, and

@@ -7,7 +7,9 @@
 // With a child, the panel is the child's size. Without one, it fills the space
 // it is given, which makes it useful as a background.
 //
-// Every part of its look is a theme token; a null border token means no outline.
+// Every part of its look is a theme token; a null border token means no
+// outline, and a second border token makes the outline a gradient from the
+// first at the top to the second at the bottom.
 #pragma once
 
 #include "nativeui/Widget.h"
@@ -26,6 +28,7 @@ namespace nativeui {
         ColorToken fillTop = &Palette::panelTop;
         ColorToken fillBottom = &Palette::panelBottom;
         ColorToken border = nullptr;
+        ColorToken borderEnd = nullptr; // null: the outline is `border` all the way down
         RadiusToken radius = &Radii::large;
         Halo halo = Halo::None;
     };

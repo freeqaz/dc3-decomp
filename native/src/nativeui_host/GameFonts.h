@@ -44,7 +44,7 @@ class RndFont;
 
 namespace nativeui_host {
 
-    inline constexpr nativeui::FontId kDc3HeavyFont { 2 };
+    inline constexpr nativeui::FontId kDc3HeavyFont = nativeui::kDc3HeavyFont;
     inline constexpr nativeui::FontId kDc3IconFont { 3 };
 
     // What was found in a font resource, for the docs table and the tests.

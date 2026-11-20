@@ -1,5 +1,7 @@
 #include "nativeui/ListView.h"
 
+#include "nativeui/Decor.h"
+
 #include <algorithm>
 
 namespace nativeui {
@@ -156,24 +158,13 @@ namespace nativeui {
         painter.PushLayer({ { bounds.x, bounds.y - scroll }, 1.0f, 1.0f });
 
         if (strip_.Selected() >= 0) {
-            const float focus = focusAmount_.Value();
-            const Rect bar {
-                0.0f, highlightTop_.Value(), bounds.width, highlightHeight_.Value()
-            };
-            const float glow = theme.metric.glowSoftness;
-            painter.FillRoundRect(
-                bar.Inflated(glow * 0.5f),
-                theme.radius.small + glow * 0.5f,
-                CornerColors::Solid(theme.color.accentGlow.Faded(focus)),
-                glow
-            );
-            painter.FillRoundRect(
-                bar,
+            // Filled only while this list has focus; an outline otherwise (Decor.h).
+            PaintSelectionBar(
+                painter,
+                theme,
+                { 0.0f, highlightTop_.Value(), bounds.width, highlightHeight_.Value() },
                 theme.radius.small,
-                CornerColors::Horizontal(
-                    Mix(theme.color.highlightIdle, theme.color.accent, focus),
-                    Mix(theme.color.highlightIdle, theme.color.accentDim, focus)
-                )
+                focusAmount_.Value()
             );
         }
 
@@ -187,6 +178,16 @@ namespace nativeui {
         }
 
         painter.PopLayer();
+
+        // Rows fade out toward an edge the list goes on past, by as much as it
+        // goes on: nothing at the very top or the very end.
+        const float reach = theme.metric.edgeFade;
+        if (reach > 0.0f) {
+            PaintEdgeFade(painter, theme, bounds, Edge::Top, scroll / reach);
+            PaintEdgeFade(
+                painter, theme, bounds, Edge::Bottom, (strip_.MaxScroll() - scroll) / reach
+            );
+        }
         painter.PopClip();
     }
 

@@ -983,6 +983,9 @@ TEST(NativeUiHostHostedScreen, TheSongBrowserRunsUnderTheHost) {
     }
     EXPECT_TRUE(host.Stats().drew);
     EXPECT_GT(host.Stats().glyphs, 40u);
+    // No renderer here: the browser's icons (and its art) are missing images
+    // under DrawTo(), never a texture made without a device.
+    EXPECT_GT(host.Stats().imagesMissing, 0u);
     EXPECT_EQ(browser.DetailSong(), "song7");
 
     // Back clears the query first, then asks to leave.

@@ -22,10 +22,12 @@
 #pragma once
 
 #include "nativeui/Animation.h"
+#include "nativeui/Icon.h"
 #include "nativeui/Widget.h"
 
 #include <cstddef>
 #include <functional>
+#include <optional>
 #include <string>
 
 namespace nativeui {
@@ -52,6 +54,9 @@ namespace nativeui {
         std::size_t Cursor() const { return edit_.cursor; }
         // Replaces the text and puts the cursor at its end. Does not call onChanged.
         void SetText(std::string text);
+        // A small icon at the field's left edge, before the text (a magnifying
+        // glass on a search field). It brightens when the field has focus.
+        void SetLeadingIcon(Icon icon) { leadingIcon_ = icon; }
 
         std::function<void(const std::string &text)> onChanged;
 
@@ -70,6 +75,7 @@ namespace nativeui {
 
         TextEdit edit_;
         std::string placeholder_;
+        std::optional<Icon> leadingIcon_;
         Spring focusAmount_; // 0 = not focused, 1 = focused
     };
 

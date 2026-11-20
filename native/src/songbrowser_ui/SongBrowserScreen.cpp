@@ -1,6 +1,8 @@
 #include "songbrowser_ui/SongBrowserScreen.h"
 
+#include "nativeui/Backdrop.h"
 #include "nativeui/HintBar.h"
+#include "nativeui/Icon.h"
 #include "nativeui/Label.h"
 #include "nativeui/Layout.h"
 #include "nativeui/ListView.h"
@@ -79,11 +81,54 @@ namespace songbrowser_ui {
             return spans;
         }
 
-        PanelStyle ScrimStyle(RadiusToken radius) {
+        // The rows that open the list and are not songs, in the order shown.
+        struct CommandInfo {
+            Command command;
+            Icon icon;
+            const char *key; // what the detail pane knows it by; never a song's name
+            const char *title;
+            const char *tagline; // on the row
+            const char *description; // on the detail pane
+        };
+        // A song's short name is a word; a key that starts with '#' cannot be one.
+        constexpr char kCommandKeyMark = '#';
+        // The pane's key for the search help: marked like a command's, so it
+        // is never taken for a song's short name.
+        constexpr const char *kSearchHelpKey = "#search";
+        constexpr CommandInfo kCommands[] = {
+            { Command::RandomSong,
+              Icon::Shuffle,
+              "#random",
+              "Random song",
+              "Let the game choose",
+              "Not sure what to dance? Let the game pick a song from your whole library." },
+            { Command::Playlists,
+              Icon::Playlist,
+              "#playlists",
+              "Playlists",
+              "Songs back to back",
+              "Dance several songs in a row: pick one of the game's playlists or one of your own." }
+        };
+        // What is known about `command`; null for one this screen cannot show.
+        const CommandInfo *InfoOf(Command command) {
+            for (const CommandInfo &info : kCommands) {
+                if (info.command == command) {
+                    return &info;
+                }
+            }
+            return nullptr;
+        }
+
+        const std::string kNoSong;
+
+        // The dark glass the list and the shelf sit on: it takes the backdrop's
+        // light down so that row text reads the same wherever a band passes.
+        PanelStyle WellStyle() {
             PanelStyle style;
-            style.fillTop = &Palette::scrim;
-            style.fillBottom = &Palette::scrim;
-            style.radius = radius;
+            style.fillTop = &Palette::well;
+            style.fillBottom = &Palette::well;
+            style.border = &Palette::wellBorder;
+            style.radius = &Radii::large;
             return style;
         }
 
@@ -105,6 +150,15 @@ namespace songbrowser_ui {
             screen_.SetRoot(BuildTree());
             Wire();
             catalog_ = &catalog;
+            // This visit's command rows, in the order asked for; one asked for
+            // twice is shown once.
+            for (const Command command : environment.commands) {
+                const CommandInfo *info = InfoOf(command);
+                if (info && std::find(commands_.begin(), commands_.end(), info) == commands_.end()) {
+                    commands_.push_back(info);
+                }
+            }
+            model_.SetCommandCount(static_cast<int>(commands_.size()));
             model_.SetCatalog(catalog, maxRecents_);
             if (restore) {
                 Restore(*restore);
@@ -125,11 +179,12 @@ namespace songbrowser_ui {
             // catalog may already be gone, or changed under the same address.
             const std::string listSong = listSongName_;
             const std::string recentSong = recentSongName_;
+            const int command = listCommand_;
             const Region region = FocusedRegion();
             catalog_ = &catalog;
             model_.SetCatalog(catalog, maxRecents_);
             ReloadShelf(recentSong);
-            ReloadList(catalog.IndexOf(listSong));
+            ReloadList(catalog.IndexOf(listSong), command);
             Focus(region == Region::Recents && !ShelfAvailable() ? Region::List : region, true);
         }
 
@@ -138,6 +193,9 @@ namespace songbrowser_ui {
             state.arrangement = model_.GetArrangement();
             state.focus = FocusedRegion();
             state.selectedSong = listSongName_;
+            if (listCommand_ >= 0) {
+                state.selectedCommand = commands_[static_cast<std::size_t>(listCommand_)]->command;
+            }
             state.recentSong = recentSongName_;
             state.query = search_->Text();
             state.songBeforeSearch = songBeforeSearch_;
@@ -157,16 +215,35 @@ namespace songbrowser_ui {
             songBeforeSearch_ = state.songBeforeSearch;
             scrollBeforeSearch_ = state.scrollBeforeSearch;
             regionBeforeSearch_ = Region::List;
+            commandBeforeSearch_ = -1;
             ReloadShelf(state.recentSong);
-            ReloadList(catalog_->IndexOf(state.selectedSong));
+            ReloadList(
+                catalog_->IndexOf(state.selectedSong), PositionOf(state.selectedCommand)
+            );
             list_->SetScrollOffset(state.scroll);
             const bool usable = state.focus != Region::Recents || ShelfAvailable();
             Focus(usable ? state.focus : ArrivalRegion(), true);
         }
 
+        const HintGlyphs &Glyphs() const { return glyphs_; }
+
         void SetGlyphs(const HintGlyphs &glyphs) {
             glyphs_ = glyphs;
             UpdateHints();
+        }
+
+        std::optional<Command> SelectedCommand() const {
+            return listCommand_ >= 0
+                ? std::optional<Command>(commands_[static_cast<std::size_t>(listCommand_)]->command)
+                : std::nullopt;
+        }
+        std::optional<Command> DetailCommand() const {
+            for (const CommandInfo *info : commands_) {
+                if (detail_->ShownKey() == info->key) {
+                    return info->command;
+                }
+            }
+            return std::nullopt;
         }
 
         const ListView &List() const { return *list_; }
@@ -179,9 +256,14 @@ namespace songbrowser_ui {
         // The tree
         // -----------------------------------------------------------------------
 
+        // The page is hung on the game's frame: the two hairlines its menus draw
+        // across the screen (Metrics::frameTop / frameBottom). The title bar sits
+        // above the upper one, the hints below the lower one, and the body
+        // between them, clear of both by a padding.
         std::unique_ptr<Widget> BuildTree() {
             const Theme &theme = screen_.GetTheme();
             const Spacing &space = theme.space;
+            const Metrics &metric = theme.metric;
 
             // Top bar: title, sort tabs, search field.
             auto topBar = std::make_unique<Row>(space.lg, CrossAlign::Center);
@@ -192,10 +274,11 @@ namespace songbrowser_ui {
             }
             tabs_ = &topBar->Add(std::make_unique<TabStrip>(std::move(labels)), 1.0f);
             auto search = std::make_unique<TextField>("Type to search");
+            search->SetLeadingIcon(Icon::Search);
             search_ = search.get();
             topBar->Add(
                 std::make_unique<SizedBox>(
-                    theme.metric.searchFieldWidth, std::nullopt, std::move(search)
+                    metric.searchFieldWidth, std::nullopt, std::move(search)
                 )
             );
 
@@ -203,7 +286,7 @@ namespace songbrowser_ui {
             auto recents = std::make_unique<Column>(space.sm, CrossAlign::Stretch);
             recents->Add(
                 std::make_unique<Label>(
-                    "Recently played", &Typography::caption, &Palette::textSecondary
+                    "Recently played", &Typography::label, &Palette::textSecondary
                 )
             );
             shelf_ = &recents->Add(
@@ -229,25 +312,36 @@ namespace songbrowser_ui {
             left->Add(std::move(reveal));
             left->Add(std::move(listArea), 1.0f);
             auto well = std::make_unique<Stack>();
-            well->Add(std::make_unique<Panel>(ScrimStyle(&Radii::large)));
+            well->Add(std::make_unique<Panel>(WellStyle()));
             well->Add(std::make_unique<Padding>(Insets::All(space.md), std::move(left)));
 
             auto body = std::make_unique<Row>(space.lg, CrossAlign::Stretch);
             body->Add(std::move(well), 1.0f);
             detail_ = &body->Add(std::make_unique<DetailPane>());
 
-            auto page = std::make_unique<Column>(space.md, CrossAlign::Stretch);
-            page->Add(std::move(topBar));
-            page->Add(std::move(body), 1.0f);
-            hints_ = &page->Add(std::make_unique<HintBar>(std::vector<Hint> {}));
+            auto hints = std::make_unique<HintBar>(std::vector<Hint> {});
+            hints_ = hints.get();
 
-            // No opaque backdrop: the game's background shows through the scrim.
-            auto root = std::make_unique<Stack>();
-            root->Add(std::make_unique<Panel>(ScrimStyle(&Radii::none)));
-            root->Add(
-                std::make_unique<Padding>(
-                    Insets::Symmetric(space.xl, space.lg), std::move(page)
+            auto page = std::make_unique<Column>(0.0f, CrossAlign::Stretch);
+            page->Add(std::make_unique<SizedBox>(std::nullopt, metric.frameTop, std::move(topBar)));
+            page->Add(
+                std::make_unique<Padding>(Insets::Symmetric(0.0f, space.md), std::move(body)),
+                1.0f
+            );
+            page->Add(
+                std::make_unique<SizedBox>(
+                    std::nullopt,
+                    screen_.Viewport().height - metric.frameBottom,
+                    std::make_unique<Align>(Alignment { 0.0f, 0.5f }, std::move(hints))
                 )
+            );
+
+            // The screen's own backdrop goes over whatever the game draws behind
+            // it and under everything else.
+            auto root = std::make_unique<Stack>();
+            root->Add(std::make_unique<Backdrop>());
+            root->Add(
+                std::make_unique<Padding>(Insets::Symmetric(space.xl, 0.0f), std::move(page))
             );
             auto scope = std::make_unique<EventScope>(std::move(root));
             scope->onEvent = [this](const Event &event) { return OnUnconsumed(event); };
@@ -263,7 +357,7 @@ namespace songbrowser_ui {
             };
             list_->onSelectionChanged = [this](int) { OnSelectionMoved(); };
             shelf_->onSelectionChanged = [this](int) { OnSelectionMoved(); };
-            list_->onActivated = [this](int row) { Pick(model_.SongAt(row)); };
+            list_->onActivated = [this](int row) { Activate(row); };
             shelf_->onActivated = [this](int card) { Pick(RecentAt(card)); };
         }
 
@@ -278,6 +372,14 @@ namespace songbrowser_ui {
                 return std::make_unique<SectionHeading>(
                     model_.HeadingTitle(row), model_.HeadingCount(row)
                 );
+            }
+            const auto lit = [this, row] {
+                return list_->HasFocus() && list_->SelectedIndex() == row;
+            };
+            const int command = model_.CommandAt(row);
+            if (command >= 0) {
+                const CommandInfo &info = *commands_[static_cast<std::size_t>(command)];
+                return std::make_unique<CommandRow>(info.icon, info.title, info.tagline, lit);
             }
             const int song = model_.SongAt(row);
             const SongEntry *entry = EntryAt(song);
@@ -303,9 +405,7 @@ namespace songbrowser_ui {
                 }
             }
             return std::make_unique<SongRow>(
-                std::move(model),
-                [this, song] { return ArtFor(song); },
-                [this, row] { return list_->HasFocus() && list_->SelectedIndex() == row; }
+                std::move(model), [this, song] { return ArtFor(song); }, lit
             );
         }
 
@@ -345,6 +445,16 @@ namespace songbrowser_ui {
             return entry ? entry->shortName : std::string();
         }
 
+        // Where `command` is among this visit's command rows; -1 for none.
+        int PositionOf(const std::optional<Command> &command) const {
+            for (int i = 0; command && i < static_cast<int>(commands_.size()); ++i) {
+                if (commands_[static_cast<std::size_t>(i)]->command == *command) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
         // The song the detail pane should show: the focused region's selection.
         int CurrentSong() const {
             if (FocusedRegion() == Region::Recents) {
@@ -376,6 +486,40 @@ namespace songbrowser_ui {
             model.source = model_.SourceName(entry.source);
             model.art = [this, song] { return ArtFor(song); };
             return model;
+        }
+
+        DetailModel DetailFor(const CommandInfo &info) const {
+            DetailModel model;
+            model.key = info.key;
+            model.title = info.title;
+            model.icon = info.icon;
+            model.description = info.description;
+            return model;
+        }
+
+        // What the pane says while a search matches nothing: how to search,
+        // so the page keeps its right-hand column and the player a way on.
+        DetailModel SearchHelp() const {
+            DetailModel model;
+            model.key = kSearchHelpKey;
+            model.title = "Search";
+            model.icon = Icon::Search;
+            model.description =
+                "Type part of a title or an artist's name. Fewer letters find more songs.";
+            return model;
+        }
+
+        // Accept on a row of the list: a command is run, a song is picked.
+        void Activate(int row) {
+            const int command = model_.CommandAt(row);
+            if (command < 0) {
+                Pick(model_.SongAt(row));
+                return;
+            }
+            Play(Cue::Select);
+            if (delegate_.onCommand) {
+                delegate_.onCommand(commands_[static_cast<std::size_t>(command)]->command);
+            }
         }
 
         void Pick(int song) {
@@ -576,6 +720,7 @@ namespace songbrowser_ui {
             if (model_.Query().empty() && !text.empty()) {
                 // A search is starting: remember where to come back to.
                 songBeforeSearch_ = listSongName_;
+                commandBeforeSearch_ = listCommand_;
                 scrollBeforeSearch_ = list_->ScrollTarget();
                 regionBeforeSearch_ = FocusedRegion();
             }
@@ -585,7 +730,7 @@ namespace songbrowser_ui {
                 ReloadList(-1); // the best match is selected
             } else if (wasSearching) {
                 // The list comes back where it was, not merely with the song in view.
-                ReloadList(catalog_->IndexOf(songBeforeSearch_));
+                ReloadList(catalog_->IndexOf(songBeforeSearch_), commandBeforeSearch_);
                 list_->SetScrollOffset(scrollBeforeSearch_);
             }
             UpdateShelf();
@@ -601,9 +746,11 @@ namespace songbrowser_ui {
 
         void OnSortChanged(int tab) {
             const int song = model_.Searching() ? -1 : model_.SongAt(list_->SelectedIndex());
+            const int command = listCommand_;
             model_.SetArrangement(kTabs[tab].arrangement);
             if (!model_.Searching()) {
-                ReloadList(song); // the same song stays selected, and in view
+                // The same song (or command) stays selected, and in view.
+                ReloadList(song, command);
             }
             Play(Cue::Tab);
         }
@@ -612,11 +759,19 @@ namespace songbrowser_ui {
         // Keeping the widgets in step with the model
         // -----------------------------------------------------------------------
 
-        // `selectSong`: the song to select; the first row when the list lacks it.
-        void ReloadList(int selectSong) {
+        // Selects `selectCommand` if the list shows it, else `selectSong`, else
+        // the first song: a reload never lands on a command nobody chose, so
+        // arriving on the screen puts the selection on a song.
+        void ReloadList(int selectSong, int selectCommand = -1) {
             ++quiet_;
             list_->SetRowCount(static_cast<int>(model_.Rows().size()));
-            const int row = model_.RowOfSong(selectSong);
+            int row = model_.RowOfCommand(selectCommand);
+            if (row < 0) {
+                row = model_.RowOfSong(selectSong);
+            }
+            if (row < 0) {
+                row = model_.FirstSongRow();
+            }
             if (row >= 0) {
                 list_->Select(row);
             } else {
@@ -661,10 +816,15 @@ namespace songbrowser_ui {
 
         void UpdateDetail() {
             listSongName_ = NameOf(model_.SongAt(list_->SelectedIndex()));
+            listCommand_ = model_.CommandAt(list_->SelectedIndex());
             recentSongName_ = NameOf(RecentAt(shelf_->SelectedIndex()));
             const int song = CurrentSong();
             if (EntryAt(song)) {
                 detail_->Show(DetailFor(song));
+            } else if (listCommand_ >= 0 && FocusedRegion() != Region::Recents) {
+                detail_->Show(DetailFor(*commands_[static_cast<std::size_t>(listCommand_)]));
+            } else if (model_.Searching()) {
+                detail_->Show(SearchHelp());
             } else {
                 detail_->Clear();
             }
@@ -673,12 +833,16 @@ namespace songbrowser_ui {
         void UpdateHints() {
             const Region region = FocusedRegion();
             const bool typed = !search_->Text().empty();
-            const Hint back { glyphs_.back, typed ? "Clear search" : "Back" };
+            // A pad's accept and back buttons have the colours the game gives them.
+            const auto accept = [this](const char *text) {
+                return Hint { glyphs_.accept, text, &Palette::buttonAccept };
+            };
+            const Hint back { glyphs_.back, typed ? "Clear search" : "Back", &Palette::buttonBack };
             std::vector<Hint> hints;
             switch (region) {
             case Region::List:
                 if (list_->SelectedIndex() >= 0) {
-                    hints.push_back({ glyphs_.accept, "Select" });
+                    hints.push_back(accept("Select"));
                 }
                 hints.push_back(back);
                 if (!model_.Searching()) {
@@ -688,7 +852,7 @@ namespace songbrowser_ui {
                 }
                 break;
             case Region::Recents:
-                hints.push_back({ glyphs_.accept, "Select" });
+                hints.push_back(accept("Select"));
                 hints.push_back(back);
                 hints.push_back({ glyphs_.sort, "Sort" });
                 hints.push_back({ glyphs_.type, "Search" });
@@ -701,7 +865,7 @@ namespace songbrowser_ui {
             case Region::Search:
                 if (typed) {
                     if (list_->SelectedIndex() >= 0) { // nothing to go to when nothing matched
-                        hints.push_back({ glyphs_.accept, "Results" });
+                        hints.push_back(accept("Results"));
                     }
                 } else {
                     hints.push_back({ glyphs_.type, "Type to search" });
@@ -713,6 +877,7 @@ namespace songbrowser_ui {
         }
 
         Delegate delegate_;
+        std::vector<const CommandInfo *> commands_; // this visit's command rows, in order
         HintGlyphs glyphs_;
         int maxRecents_;
         Screen screen_;
@@ -720,11 +885,14 @@ namespace songbrowser_ui {
         BrowserModel model_;
         int quiet_ = 0; // above zero while the screen itself moves selections: no cues
 
-        // What is selected, by short name, noted whenever it changes.
+        // What is selected, by short name, noted whenever it changes. A list
+        // whose selection is a command has no song name and a command index.
         std::string listSongName_;
         std::string recentSongName_;
+        int listCommand_ = -1;
         // Where clearing the query returns to.
         std::string songBeforeSearch_;
+        int commandBeforeSearch_ = -1;
         float scrollBeforeSearch_ = 0.0f;
         Region regionBeforeSearch_ = Region::List;
 
@@ -767,18 +935,37 @@ namespace songbrowser_ui {
         impl_->SetGlyphs(glyphs);
     }
 
+    const HintGlyphs &SongBrowserScreen::HintGlyphsShown() const { return impl_->Glyphs(); }
+
     bool SongBrowserScreen::IsSettled() const { return impl_->IsSettled(); }
 
     const ListView &SongBrowserScreen::List() const { return impl_->List(); }
 
     const Shelf &SongBrowserScreen::Recents() const { return impl_->Recents(); }
 
+    namespace {
+
+        // The detail pane's key as a song's short name: none for a command.
+        const std::string &SongOfKey(const std::string &key) {
+            return !key.empty() && key.front() == kCommandKeyMark ? kNoSong : key;
+        }
+
+    }
+
     const std::string &SongBrowserScreen::DetailSong() const {
-        return impl_->Detail().ShownKey();
+        return SongOfKey(impl_->Detail().ShownKey());
     }
 
     const std::string &SongBrowserScreen::DetailFadingSong() const {
-        return impl_->Detail().FadingKey();
+        return SongOfKey(impl_->Detail().FadingKey());
+    }
+
+    std::optional<Command> SongBrowserScreen::SelectedCommand() const {
+        return impl_->SelectedCommand();
+    }
+
+    std::optional<Command> SongBrowserScreen::DetailCommand() const {
+        return impl_->DetailCommand();
     }
 
     bool SongBrowserScreen::RecentsShown() const { return impl_->RecentsShown(); }

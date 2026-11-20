@@ -83,7 +83,7 @@ command per line; that text is the golden format the tests use.
 | `FixedAdvanceMeasurer.h` | The fake measurer the tests use |
 | `DisplayList.h` | The commands, `Describe`, `Layer`, `Painter` |
 | `Renderer.h` | The `Renderer` seam, `Replay`, `RecordingRenderer` |
-| `Theme.h` | `Palette` (with `scrim`, the wash a screen lays over the game's background, and `star`), `Typography`, `Spacing`, `Radii`, `Motion`, `Metrics` (with the browsing sizes: `searchFieldWidth`, `sidePaneWidth`, `listSecondaryShare`, the difficulty meter cell and the star mark), tokens, `Dc3Theme()` |
+| `Theme.h` | `Palette` (with the backdrop's wash and band colours, `well`, the highlight and `selectionMarker` colours, the hint bar's button colours, and `star`), `Typography`, `Spacing`, `Radii`, `Motion`, `Metrics` (with the browsing sizes: `searchFieldWidth`, `sidePaneWidth`, `listSecondaryShare`, the difficulty meter cell and the star mark), tokens, `Dc3Theme()` |
 | `Animation.h`, `Clock.h` | `Tween`, `Spring`, easing; the clock seam |
 | `Input.h` | The event types |
 | `Widget.h` | `Context`, `Constraints`, the `Widget` base class |
@@ -91,10 +91,13 @@ command per line; that text is the golden format the tests use.
 | `Focus.h` | `FocusManager`, spatial neighbour search |
 | `ScrollStrip.h` | The selection and scrolling rules `ListView` and `Shelf` share |
 | `Label.h`, `Image.h`, `Panel.h` | Text line; image with placeholder and fade-in; card |
-| `ListView.h` | Virtualised vertical list with sections and a gliding highlight; `SetScrollOffset` / `ScrollTarget` restore and save a scroll position |
+| `Backdrop.h` | A screen's own backdrop: a translucent wash, pools and thin bands in theme colours that drift with the clock. Ambient: it is always at rest, so it never keeps a screen from settling; `Motion::ambientPeriod` of 0 stops it |
+| `Decor.h` | The selection rule in one place: `PaintSelectionBar`, `PaintSelectionRing`, `PaintFocusGlow` (filled only with focus, a quiet `selectionMarker` outline without), and `PaintEdgeFade` |
+| `Icon.h`, `IconTile.h` | Icons as images: each icon has a fixed `ImageHandle` (`IconImage`), its shape is outlines in a unit square and `IconCoverage` rasterises it at any size; whoever resolves images recognises the handle with `IconOf`. `IconTile` is an icon on a gradient tile, where a row would have a picture |
+| `ListView.h` | Virtualised vertical list with sections, a gliding highlight and edge fades (rows fade into the well only at an edge with more rows beyond it); `SetScrollOffset` / `ScrollTarget` restore and save a scroll position |
 | `Shelf.h` | Horizontal row of cards |
 | `TextField.h` | Single-line editing (`TextEdit` is the logic alone) |
-| `TabStrip.h`, `HintBar.h` | Tabs with a gliding indicator; button hints |
+| `TabStrip.h`, `HintBar.h` | Tabs with a gliding indicator; button hints (a one-letter glyph is a round button, in `Hint::tone` when given; a longer glyph is a keycap) |
 | `Screen.h` | One screen: tree, focus, events, the frame |
 
 The worked example of a whole screen is the song browser,
@@ -143,7 +146,7 @@ protected:
         const TextStyle &style = theme.type.caption;
         const Rect &bounds = Bounds();
         painter.FillRoundRect(
-            bounds, bounds.height * 0.5f, CornerColors::Solid(theme.color.accentDim)
+            bounds, bounds.height * 0.5f, CornerColors::Solid(theme.color.keycapFill)
         );
         const FittedLine line = FitLine(
             ctx.text, style, text_, bounds.width - 2.0f * theme.space.sm, theme.type.ellipsis
@@ -244,6 +247,22 @@ Things the sample shows that a real screen will want:
   that arrives later (`SetImage`) fades in over its placeholder.
 - **A shelf** draws up to the theme's glow softness outside its bounds, so
   its first and last cards can grow and glow. Leave that much room around it.
+
+## The look, and the rules that hold it
+
+- **One filled highlight.** A widget fills its selection only while it has
+  focus and outlines it otherwise; use `Decor.h` and do not paint a highlight
+  by hand.
+- **Readable sizes.** `Typography` has six styles. The two small ones
+  (`label`, `hint`) are in the heavy face because its capitals are taller for
+  the same size; no style may have capitals under 10 px at 720 rows
+  (`kDc3MenuCapRatio`, `kDc3HeavyCapRatio`).
+- **Short motion that eases out.** Tweens are `Motion::fast` 120 ms, `normal`
+  180 ms and `slow` 320 ms; the springs are critically damped and within 1% of
+  their target in 125 to 160 ms (`UiCoreTheme.MotionIsShortAndEasesOut`).
+  Everything is driven by the clock, never by a frame count.
+- **Nothing opaque over the game.** A screen's backdrop is a translucent wash;
+  text is read against `Palette::well` or a `Panel`.
 
 ## Tests
 
@@ -403,6 +422,12 @@ once per arrival. A failed path draws the fallback
 (`ui/image/dc_logo_keep.png`) and is not retried. `AlbumArtPath(song)` is
 `HamSongMgr::GetAlbumArtPath`. An `ImageQuad` whose handle has no texture
 yet draws nothing (the widget's placeholder shows through its fade).
+
+Icons are images too. `IconTextures` (`nativeui_host/IconTextures.{h,cpp}`)
+sits in front of the host's image source: a handle `nativeui::IconOf`
+recognises gets a white texture whose alpha is `IconCoverage` at
+`IconTexelSize`, made on first use and kept; every other handle goes on to the
+`ImageCache`. The draw tints it, so one texture serves every colour.
 
 ### Keys and buttons
 

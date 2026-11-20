@@ -8,6 +8,7 @@
 #include "nativeui/HintBar.h"
 #include "nativeui/Image.h"
 #include "nativeui/Label.h"
+#include "nativeui/Backdrop.h"
 #include "nativeui/Layout.h"
 #include "nativeui/ListView.h"
 #include "nativeui/Panel.h"
@@ -317,6 +318,8 @@ TEST(UiCoreListView, TheSelectionScrollsIntoViewOnASpring) {
 TEST(UiCoreListView, TheHighlightBarGlidesBetweenRows) {
     const Harness h;
     TestList t(50);
+    FocusManager focus;
+    focus.SetFocus(&t.list); // only a focused list fills its bar
     h.Settle(t.list, kListViewport);
     const Rect before = t.list.HighlightRect();
     EXPECT_EQ(before, (Rect { 0, 0, 300, 40 }));
@@ -331,7 +334,7 @@ TEST(UiCoreListView, TheHighlightBarGlidesBetweenRows) {
     EXPECT_EQ(t.list.HighlightRect(), (Rect { 0, 40, 300, 40 }));
     // The bar is drawn under the rows: a soft glow, then the bar, then text.
     const std::vector<RoundRectFill> fills = CommandsOf<RoundRectFill>(settled);
-    ASSERT_EQ(fills.size(), 2u);
+    ASSERT_GE(fills.size(), 2u);
     EXPECT_GT(fills[0].softness, 0.0f);
     EXPECT_EQ(fills[1].rect, (Rect { 0, 40, 300, 40 }));
     EXPECT_FLOAT_EQ(fills[1].radius, h.theme.radius.small);
@@ -340,17 +343,121 @@ TEST(UiCoreListView, TheHighlightBarGlidesBetweenRows) {
     EXPECT_TRUE(ClipsBalanced(settled));
 }
 
-TEST(UiCoreListView, TheHighlightShowsWhetherTheListHasFocus) {
+// The selection rule (nativeui/Decor.h): a list fills its highlight only while
+// it has focus; a list that merely remembers its selection outlines it.
+TEST(UiCoreListView, OnlyAFocusedListFillsItsHighlight) {
     const Harness h;
     TestList t(10);
+    const auto onBar = [&](const DisplayList &list) {
+        int fills = 0;
+        for (const RoundRectFill &fill : CommandsOf<RoundRectFill>(list)) {
+            fills += fill.rect == t.list.HighlightRect() ? 1 : 0;
+        }
+        return fills;
+    };
     const DisplayList idle = h.Settle(t.list, kListViewport);
-    EXPECT_EQ(Nth<RoundRectFill>(idle, 1).colors.topLeft, h.theme.color.highlightIdle);
+    EXPECT_EQ(onBar(idle), 0) << "no fill without focus";
+    const std::vector<RoundRectStroke> marker = CommandsOf<RoundRectStroke>(idle);
+    ASSERT_EQ(marker.size(), 1u);
+    EXPECT_EQ(marker[0].rect, t.list.HighlightRect());
+    EXPECT_EQ(marker[0].colors.topLeft, h.theme.color.selectionMarker);
 
     FocusManager focus;
     focus.SetFocus(&t.list);
     const DisplayList focused = h.Settle(t.list, kListViewport);
-    EXPECT_EQ(Nth<RoundRectFill>(focused, 1).colors.topLeft, h.theme.color.accent);
-    EXPECT_EQ(Nth<RoundRectFill>(focused, 1).colors.topRight, h.theme.color.accentDim);
+    // A glow, then the bar; and one stroke, the rim, not the marker.
+    ASSERT_EQ(onBar(focused), 2);
+    const RoundRectFill glow = Nth<RoundRectFill>(focused, 0);
+    const RoundRectFill bar = Nth<RoundRectFill>(focused, 1);
+    EXPECT_FLOAT_EQ(glow.softness, 2.0f * h.theme.metric.glowSoftness)
+        << "a ramp centred on the bar's edge: no flat plateau beside the bar";
+    EXPECT_EQ(glow.rect, bar.rect);
+    EXPECT_FLOAT_EQ(bar.softness, 0.0f);
+    EXPECT_EQ(bar.colors.topLeft, h.theme.color.highlightStart);
+    EXPECT_EQ(bar.colors.topRight, h.theme.color.highlightEnd);
+    const std::vector<RoundRectStroke> rim = CommandsOf<RoundRectStroke>(focused);
+    ASSERT_EQ(rim.size(), 1u);
+    EXPECT_EQ(rim[0].colors.topLeft, h.theme.color.highlightRim);
+}
+
+// Rows do not stop dead at the list's edge: they fade into the well's colour,
+// and only at an edge that has more rows beyond it.
+TEST(UiCoreListView, RowsFadeOutOnlyAtAnEdgeWithMoreRowsBeyondIt) {
+    const Harness h;
+    const auto fades = [&](const DisplayList &list) {
+        std::vector<RoundRectFill> out;
+        for (const RoundRectFill &fill : CommandsOf<RoundRectFill>(list)) {
+            if (fill.rect.height == h.theme.metric.edgeFade) {
+                out.push_back(fill);
+            }
+        }
+        return out;
+    };
+    TestList t(50);
+    const std::vector<RoundRectFill> atTop = fades(h.Settle(t.list, kListViewport));
+    ASSERT_EQ(atTop.size(), 1u) << "more rows below only";
+    EXPECT_FLOAT_EQ(atTop[0].rect.Bottom(), kListViewport.height);
+    EXPECT_FLOAT_EQ(atTop[0].colors.topLeft.a, 0.0f) << "clear towards the rows";
+    EXPECT_GT(atTop[0].colors.bottomLeft.a, 0.5f) << "the well's colour at the edge";
+
+    for (int i = 0; i < 3; ++i) {
+        t.list.HandleEvent(Act(Action::PageDown));
+    }
+    EXPECT_EQ(fades(h.Settle(t.list, kListViewport)).size(), 2u) << "rows both ways";
+
+    t.list.HandleEvent(Act(Action::End));
+    const std::vector<RoundRectFill> atEnd = fades(h.Settle(t.list, kListViewport));
+    ASSERT_EQ(atEnd.size(), 1u) << "more rows above only";
+    EXPECT_FLOAT_EQ(atEnd[0].rect.y, 0.0f);
+    EXPECT_FLOAT_EQ(atEnd[0].colors.bottomLeft.a, 0.0f);
+
+    TestList fits(3);
+    EXPECT_TRUE(fades(h.Settle(fits.list, kListViewport)).empty()) << "nothing beyond either edge";
+}
+
+// The backdrop is ambient: it moves with the clock, never keeps a screen from
+// settling, never reaches full strength, and a period of zero stops it.
+TEST(UiCoreBackdrop, DriftsWithTheClockStaysDimAndNeverKeepsAScreenAwake) {
+    const Harness h;
+    const Size view { 1280.0f, 720.0f };
+    Backdrop backdrop;
+    const DisplayList first = h.Frame(backdrop, view);
+    EXPECT_TRUE(backdrop.AtRest());
+    const std::vector<RoundRectFill> fills = CommandsOf<RoundRectFill>(first);
+    ASSERT_GT(fills.size(), 3u);
+    EXPECT_EQ(fills[0].rect, (Rect { 0, 0, 1280, 720 })) << "the wash";
+    EXPECT_LT(fills[0].colors.bottomLeft.a, 0.9f) << "translucent: the game moves under it";
+    for (std::size_t i = 1; i < fills.size(); ++i) {
+        const CornerColors &c = fills[i].colors;
+        const float strongest =
+            std::max(std::max(c.topLeft.a, c.topRight.a), std::max(c.bottomLeft.a, c.bottomRight.a));
+        EXPECT_LE(strongest, 0.5f + 1e-4f) << "pool or band " << i << " at more than half strength";
+    }
+
+    const DisplayList later = h.Frame(backdrop, view, 3.0f);
+    EXPECT_NE(Describe(first), Describe(later)) << "it drifts";
+    EXPECT_TRUE(backdrop.AtRest());
+
+    // Time, not frames: three seconds in 180 steps end where one step does.
+    Backdrop stepped;
+    DisplayList last = h.Frame(stepped, view);
+    for (int i = 0; i < 180; ++i) {
+        last = h.Frame(stepped, view, 3.0f / 180.0f);
+    }
+    EXPECT_NEAR(Nth<RoundRectFill>(last, 1).rect.x, Nth<RoundRectFill>(later, 1).rect.x, 0.05f);
+    EXPECT_NE(Nth<RoundRectFill>(later, 1).rect.x, Nth<RoundRectFill>(first, 1).rect.x);
+
+    // One whole period later it is back where it began.
+    Backdrop whole;
+    h.Frame(whole, view);
+    const DisplayList around = h.Frame(whole, view, h.theme.motion.ambientPeriod);
+    EXPECT_NEAR(Nth<RoundRectFill>(around, 1).rect.x, Nth<RoundRectFill>(first, 1).rect.x, 0.05f);
+
+    // A period of zero: it stands still.
+    Harness still;
+    still.theme.motion.ambientPeriod = 0.0f;
+    Backdrop frozen;
+    EXPECT_EQ(Describe(still.Frame(frozen, view)), Describe(still.Frame(frozen, view, 5.0f)));
 }
 
 TEST(UiCoreListView, SectionHeadersAreRowsTheSelectionSkips) {
@@ -549,7 +656,7 @@ TEST(UiCoreShelf, WithoutFocusTheSelectionIsOnlyAQuietRing) {
     EXPECT_FLOAT_EQ(FindImage(images, 100)->rect.width, h.theme.metric.shelfCardWidth);
     const std::vector<RoundRectStroke> rings = CommandsOf<RoundRectStroke>(list);
     ASSERT_EQ(rings.size(), 1u);
-    EXPECT_EQ(rings[0].colors.topLeft, h.theme.color.highlightIdle);
+    EXPECT_EQ(rings[0].colors.topLeft, h.theme.color.selectionMarker);
     EXPECT_EQ(rings[0].rect, FindImage(images, 100)->rect);
     EXPECT_TRUE(CommandsOf<RoundRectFill>(list).empty()) << "no glow";
     // The clip leaves the glow's reach around the shelf.
@@ -680,7 +787,7 @@ TEST(UiCoreTextField, PaintsPlaceholderTextAndCursor) {
     EXPECT_EQ(texts[0].text, "SEARCH");
     EXPECT_EQ(texts[0].color, theme.color.textDisabled);
     EXPECT_EQ(CommandsOf<RoundRectFill>(list).size(), 1u) << "the field, no cursor";
-    EXPECT_EQ(Nth<RoundRectStroke>(list, 0).colors.topLeft, theme.color.panelBorder);
+    EXPECT_EQ(Nth<RoundRectStroke>(list, 0).colors.topLeft, theme.color.fieldBorder);
     EXPECT_TRUE(ClipsBalanced(list));
 
     // Focused, with text: shown in the theme's case, cursor after it.
@@ -696,8 +803,9 @@ TEST(UiCoreTextField, PaintsPlaceholderTextAndCursor) {
     EXPECT_EQ(field.Text(), "s\xC3\xA9") << "what was typed is what is stored";
     EXPECT_EQ(Nth<RoundRectStroke>(list, 0).colors.topLeft, theme.color.accent);
     const std::vector<RoundRectFill> fills = CommandsOf<RoundRectFill>(list);
-    ASSERT_EQ(fills.size(), 2u);
-    const RoundRectFill &cursor = fills[1];
+    ASSERT_EQ(fills.size(), 3u) << "the focus glow, the field, the cursor";
+    EXPECT_GT(fills[0].softness, 0.0f);
+    const RoundRectFill &cursor = fills[2];
     const TextStyle &style = theme.type.body;
     const float twoGlyphs = MeasureWidth(h.text, style, "S\xC3\x89");
     EXPECT_FLOAT_EQ(cursor.rect.x, theme.space.md + twoGlyphs);
@@ -708,7 +816,7 @@ TEST(UiCoreTextField, PaintsPlaceholderTextAndCursor) {
     field.HandleEvent(Key(Edit::CursorLeft));
     list = h.Settle(field, viewport);
     EXPECT_FLOAT_EQ(
-        Nth<RoundRectFill>(list, 1).rect.x,
+        Last<RoundRectFill>(list).rect.x,
         theme.space.md + MeasureWidth(h.text, style, "S")
     );
 
@@ -718,7 +826,7 @@ TEST(UiCoreTextField, PaintsPlaceholderTextAndCursor) {
     }
     field.HandleEvent(Key(Edit::CursorEnd));
     list = h.Settle(field, viewport);
-    const RoundRectFill scrolledCursor = Nth<RoundRectFill>(list, 1);
+    const RoundRectFill scrolledCursor = Last<RoundRectFill>(list);
     const ClipPush clip = Nth<ClipPush>(list, 0);
     EXPECT_LE(scrolledCursor.rect.Right(), clip.rect.Right() + 0.01f);
     EXPECT_GE(scrolledCursor.rect.Left(), clip.rect.Left());
