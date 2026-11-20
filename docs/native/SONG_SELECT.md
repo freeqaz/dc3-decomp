@@ -33,7 +33,7 @@ Played shelf, the list sectioned by the sort, type-to-search, a detail pane.
 
 | `DC3_SONG_BROWSER` | |
 |---|---|
-| `auto` | Shown while a pad or the keyboard is in use, the classic list while a tracked player drives the menus by gesture (the rule is below) |
+| `auto` | Shown unless somebody is steering the menus by hand; a tracked body alone is not that (the rule is below) |
 | `1` (any other true value) | Always, on the visits that qualify |
 | `0` | Never |
 | unset | Desktop: `auto`. Web: `0`. **With `MILO_INPUT_SCRIPT` set: `0`** — a scripted run drives the classic list unless it asks for the browser |
@@ -41,36 +41,62 @@ Played shelf, the list sectioned by the sort, type-to-search, a detail pane.
 `DC3_CLASSIC_SONG_SELECT=1` means never, whatever `DC3_SONG_BROWSER` says.
 The decision is logged once: `DC3 SongBrowser: mode=auto|on|off (...)`.
 
-**Which visits qualify.** The ones that show Recently Played
-(`NativeSongSelect::ShowsRecentlyPlayed()`, `song_select_mode` =
-`song_select_quickplay`): Perform, Rehearse, Dance Battle. Playlist building
-runs on another panel (`song_select_playlist_panel`) and never reaches the
-browser's hooks.
+**Which visits qualify.** Every visit of `song_select_panel`. The panel sits
+on one screen, `song_select_screen`, and that screen's script resets the mode
+to `perform` (leaving `playlist_perform`) before the panel enters, so the
+panel is only ever entered to pick one song: Perform, Rehearse, Dance Battle.
+Playlist building runs on another panel (`song_select_playlist_panel`) and
+never reaches the browser's hooks. (The browser used to check
+`NativeSongSelect::ShowsRecentlyPlayed()` as well; nothing could make it false
+there, and the check is gone. That function is still what keeps the Recently
+Played section out of the classic list while a playlist is being built.)
 
-**The `auto` rule**, evaluated once a frame while the panel is up:
+**The `auto` rule.** A tracked body is not intent: a person in view who
+presses nothing keeps the browser for as long as they like. The classic list
+takes over only on evidence that somebody is steering by hand, and the
+keyboard or the pad takes the browser back at once.
 
-1. On entering the panel, "pad in use" is the game's controller mode
-   (`TheGestureMgr->InControllerMode()`).
-2. Controller mode on: pad in use.
-3. Controller mode off **and** a body tracked for 2.0 seconds of UI time
-   without a break: gestures in use. The browser gives way to the classic
-   list.
-4. Controller mode off and nobody tracked: no change. Nobody could use the
-   classic list, so the browser stays.
-5. A press on the browser re-enters controller mode and restarts the game's
-   idle timer, so the browser cannot be taken away under a player who is
-   pressing buttons.
+The classic list takes over when one of these happens:
 
-What that amounts to: with no camera (`DC3_CONTROLLER_MODE` resolves to
-`forced`) controller mode never ends and the browser is always the list. With
-a camera (`faithful`) the browser stays until the game's own controller-mode
-timeout (5 s without a press) and then 2 s more with a body in view; a press
-while the classic list is up re-enters controller mode as on a 360 (that
-press is swallowed by `ShellInput` unless it is B) and the browser is back on
-the next frame. Typing counts as a press.
+1. **A hand is held where the list takes it**, for 0.75 s of UI time. The
+   test is the image's own: `DirectionGestureFilterSingleUser::IsValidSwipePosition`
+   on the song list (`right_hand.hnl`) or the help bar's list
+   (`left_hand.hnl`), for any tracked skeleton -- the list's hand outside the
+   torso ellipse, which is what makes the list start reading a swipe. It is a
+   pure function of the skeleton, so it can be asked while the game is in
+   controller mode. The hold only counts once the hand has been seen away
+   since the last press or typed character, so an arm that is already out
+   when a key is pressed does not take the list back.
+2. **Start**, when the game then leaves controller mode with a body in view
+   (the image's own "hands have the menu" button).
+3. **Song select was reached by hand**: the last menu choice was a gesture
+   (`HamNavList::sLastSelectInControllerMode` is false), the game is not in
+   controller mode and a body is tracked.
 
-The browser also stands aside, without changing "pad in use", while the panel
-itself is not showing, an overlay panel is up, or a dialog is up.
+Why the hand's pose and not the image's controller-mode flag: that flag turns
+off on a timer whenever a body is in view (5 s without a press), which is
+exactly the "tracked body" the rule must not act on. The hand-valid flag the
+list keeps for itself (`IsHandValid`) adds an arc-detector hysteresis and is
+only updated out of controller mode, so it was not used either.
+
+The browser comes back when:
+
+- **a pad or key press arrives** (the game enters controller mode; under the
+  image's rules that press only wakes the pad, as on a 360), or
+- **a character is typed**. The engine's text capture stays on while the
+  classic list is up for the hands, for exactly this; the character is typed
+  into the search box.
+
+While the browser is shown the game is **kept in controller mode** (entered,
+and its idle timer restarted, every frame). So the hidden classic list never
+answers to a hand, and no press is ever taken just to wake the pad: the first
+Down after any idle moves one row.
+
+With no camera (`DC3_CONTROLLER_MODE` resolves to `forced`) there are no
+hands, controller mode cannot be left, and the browser is always the list.
+
+The browser also stands aside, without changing who has the menu, while the
+panel itself is not showing, an overlay panel is up, or a dialog is up.
 
 ### What it does to the classic panel
 
@@ -94,10 +120,13 @@ classic list's highlight is put on that song's own row
 (`{song_select_panel highlight_right_list_item ROW}`, the list uncollapsed
 first). That is also what keeps the game's preview and song info following
 the browser: the classic highlight settles, the panel's own
-`show_full_song_details` runs, `SongPreview` retargets. `SongPreview::Start`
-is a fade-out / mount / prepare / play state machine, so arrows held down do
-not restart audible playback per row (read from the code; not measured by
-ear). When the browser comes back after the classic list was used, it selects
+`show_full_song_details` runs, `SongPreview` retargets. Left alone, that
+prepares a preview stream on every arrow press (measured: five presses four
+frames apart, five streams), because the classic list sends its
+highlight-settled message at once whenever the move does not scroll it. So
+`SongPreview::Poll` waits in `kIdle` while the browser's selection moved less
+than 0.3 s of UI time ago (`gNativeSongPreviewHold`, `HX_NATIVE`): five quick
+presses start one preview, the last song's. When the browser comes back after the classic list was used, it selects
 the song the classic highlight is on (a highlight on Playlists, Random Song
 or a header leaves the browser where it was).
 
@@ -111,6 +140,26 @@ shelf, the list and a search result.
 **Back** with no query typed runs the panel's `on_back` (after uncollapsing,
 so it leaves instead of opening the list): `move_back_quickplay`, to
 `choose_mode_screen`. With a query typed, Back clears the query first.
+
+**Random Song and Playlists** (`songbrowser_ui::Delegate::onCommand`) select
+the classic list's own row: `{song_select_panel select_right_list_item ROW}`,
+the handler the voice commands use, with ROW from
+`{song_offer_provider first_data_index random_song|playlists}`. What follows is
+`SongFunctionNode::OnSelect`, the same as an A press on that row
+(`TheCommandsDoWhatTheClassicRowsDo` compares the two engines):
+
+- Playlists goes to the playlist tutorial check and then
+  `song_select_playlist_screen`, in `song_select_playlist` mode, with
+  `back_screen` set to `song_select_screen`. **Back from the playlist screen
+  returns to song select, picking one song again, and the browser is the
+  list again.**
+- Random Song picks `TheHamSongMgr.GetRandomSong()` and goes on as after any
+  pick (`multiuser_screen`, then the game).
+
+The classic list has both rows in Perform, only Random Song in Dance Battle
+and neither in Rehearse. A command whose row this visit does not have is
+refused with the error cue; the state endpoint lists the ones that exist
+(`commands`). `POST /api/songbrowser/command` runs the same function.
 
 **Sounds** are the list's own (`right_hand.hnl`'s ribbon resource): a move
 that changes the song plays the highlight sound through the highlight itself;
@@ -131,22 +180,29 @@ run: sort, focused part, selected song and card, query, scroll. The catalog
 is refilled from the game on every enter and when the song list's size
 changes while shown.
 
-**Hints** name pad buttons (A, B, LB RB). Once text has been typed in a run
-they name keys (ENTER, ESC, TAB); the engine has no "last device used" to
-ask, so they do not switch back.
+**Hints** name the device last used: the keyboard's names (ENTER, ESC, TAB)
+when the last input came from the keyboard or no real pad has been used in
+this run, the pad's (A, B, LB RB) once a real pad button arrives. They change
+in place (`SongBrowserScreen::SetHintGlyphs`). The engine merges keyboard-made
+buttons into pad 0's and a `ButtonDownMsg` does not say where it came from, so
+the browser asks GLFW, when a press arrives, whether the real gamepad has a
+button down (`HamUI::OnMsg`'s `HX_NATIVE` hook); typed text is always the
+keyboard. A press injected over HTTP counts as the keyboard's unless it says
+`"device":"pad"`. Limits: a key pressed while a pad button is held reads as
+the pad; the web has no GLFW and always reads as the keyboard. The engine
+query that would make this exact is in the handoff notes (per pad, which
+buttons the keyboard map and the gamepad each contributed to the last poll).
 
 ### Not done
 
-- The classic list's function rows, **Playlists** and **Random Song**, have
-  no counterpart in the browser. A pad player reaches them only with
-  `DC3_SONG_BROWSER=0`.
 - Under the browser the background is close to black: `background_panel`
   alone is faint streaks. The bright ribbons of the classic picture are not
   drawn while the browser is.
-- In `auto`, during the 2 s before the browser gives way a gesture acts on
-  the hidden classic list; with `DC3_SONG_BROWSER=1` it always can.
-- A pad player who stands in the camera's view and presses nothing for 7 s
-  gets the classic list until the next press.
+- The browser does not yet draw rows for Random Song and Playlists; the
+  commands exist (`onCommand`, the HTTP endpoint) and the screen has to know
+  which of the two this visit has.
+- With `DC3_SONG_BROWSER=1` a hand never gets the classic list.
+- The overlay and dialog cases (the browser standing aside) have no test.
 
 ## Keys
 
@@ -329,10 +385,18 @@ three names, and `save_sort`, `save_focus` and `restore_focus` do nothing.
   HTTP debug server, headless, disc songs only, each on its own save
   directory. They need `DC3_DTA_FLOW_TESTS` (on by default where the assets
   are).
-- `SongBrowserInSongSelectTest` (3), `SongBrowserSwitchFlowTest` (5): the
+- `SongBrowserInSongSelectTest` (3), `SongBrowserSwitchFlowTest` (9): the
   song browser in the same kind of run. The first asks for it
-  (`DC3_SONG_BROWSER=1`); the second covers the switches, playlist building
-  and the `auto` rule under `DC3_CONTROLLER_MODE=faithful`.
+  (`DC3_SONG_BROWSER=1`); the second covers the switches, playlist building,
+  the two commands against a second engine on the classic list, Rehearse and
+  Dance Battle, the hint names, the preview count, and a stand-in body that
+  presses nothing for 60 s of game time under `DC3_CONTROLLER_MODE=faithful`.
+- `SongBrowserHandsTest` (1): the whole `auto` rule against a synthetic person
+  (`scripts/song_browser_hands.py` on `scripts/synthetic_kinect.py`, no input
+  script): standing idle, an arm passing through, an arm held, dropped, a
+  press, a typed character with the arm still out, Start.
+- `GestureMenusTest` (`native/tests/test_native_gesture_menus.cpp`) asserts
+  the browser was hidden on a song select reached by gesture.
 - `NativeUiHostGpuTest.SongBrowserRunsInTheEngine`
   (`native/tests/test_nativeui_host_gpu.cpp`): a rendering run at 1280x720;
   reads the frame's pixels where the state endpoint says the highlight and the

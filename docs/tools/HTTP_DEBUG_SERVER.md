@@ -302,6 +302,11 @@ nothing: the only drain was the engine's `JoypadPoll`, which
 # Press a button this frame
 curl -X POST localhost:9090/api/input/press -d '{"button":"confirm"}'
 
+# The same, standing for a REAL pad's button. Without "device":"pad" an
+# injected press is nobody's device, and the song browser's hint bar counts it
+# with the keyboard (?device=pad works too)
+curl -X POST localhost:9090/api/input/press -d '{"button":"down","device":"pad"}'
+
 # Queue a button sequence (delays are cumulative frames between events)
 curl -X POST localhost:9090/api/input/sequence -d '[
   {"button":"dpad_down","delay":15},
@@ -342,17 +347,34 @@ curl -X POST 'localhost:9090/api/input/text?text=ab&key=home'
 # The natively drawn song browser on song select (DC3_SONG_BROWSER)
 curl localhost:9090/api/songbrowser/state
 # {"ok":true,"data":{"available":true,"mode":"on","on_song_select":true,
-#  "eligible":true,"shown":true,"why":"DC3_SONG_BROWSER=1","pad_in_use":true,
-#  "controller_mode":true,"text_capture":true,"leaving":false,"hints":"pad",
+#  "eligible":true,"shown":true,"why":"DC3_SONG_BROWSER=1",
+#  "hands_steering":false,"hand_in_pose":false,"tracked_bodies":0,"switches":1,
+#  "controller_mode":true,"text_capture":true,"leaving":false,
+#  "engine_text_capture":true,"hints":"keyboard","hint_accept":"ENTER",
+#  "pad_presses":0,"screen_builds":1,"preview_song":"aint2proud2beg",
+#  "preview_changes":2,"preview_starts":2,"preview_hold":false,
+#  "commands":["random_song","playlists"],
 #  "songs":45,"classic_song":"aint2proud2beg","focus":"list",
 #  "selected_song":"aint2proud2beg","list_song":"aint2proud2beg",
-#  "recent_song":"boomboompow","query":"","sort":"title","rows":53,
+#  "recent_song":"boomboompow","query":"","sort":"title","rows":53,"list_index":2,
 #  "recents_shown":false,"highlight_rect":[56.0,187.0,804.0,51.0],"frames":642,
 #  "drew":true,"glyphs":436,"placeholder_glyphs":0,"quads":516,"draw_calls":52,
 #  "images_missing":0}}
 # Before song select has been entered in this run:
 # {"ok":true,"data":{"available":true,"on_song_select":false,"eligible":false,
 #  "shown":false,"why":"not on song select"}}
+
+# The song browser's two commands: Random Song and Playlists. Runs what the
+# screen's own command rows run (songbrowser_ui::Delegate::onCommand): the
+# classic list's row of that name is selected, so the result is the classic
+# row's. ?name= works too
+curl -X POST localhost:9090/api/songbrowser/command -d '{"name":"random_song"}'
+curl -X POST localhost:9090/api/songbrowser/command -d '{"name":"playlists"}'
+# {"ok":true,"data":{"command":"playlists"}}
+# HTTP 409 with the reason when it cannot run: the browser is not shown, a
+# pick or a Back is in flight, or this visit's classic list has no such row
+# (Rehearse has neither, Dance Battle only random_song):
+# {"ok":false,"error":"the classic list has no playlists row in this mode"}
 ```
 
 `typed` is the number of characters queued by this request and `pending` the
@@ -367,25 +389,33 @@ queue's length afterwards; the text reaches a screen on its next frame.
 | `on_song_select` | `song_select_panel` is entered |
 | `eligible` | this visit can show the browser (the mode is not `off`, it is a pick-one-song visit, the catalog and the font are there) |
 | `shown` | the browser is what is drawn and what takes the pad right now |
-| `why` | the reason for `shown`, in words: `pad or keyboard in use`, `DC3_SONG_BROWSER=1`, `DC3_SONG_BROWSER=0`, `DC3_CLASSIC_SONG_SELECT=1`, `MILO_INPUT_SCRIPT is set ...`, `a tracked player is using gestures (controller mode is off)`, `an overlay or a dialog is up`, `this visit is not a pick-one-song list ...`, `not on song select` |
-| `pad_in_use`, `controller_mode` | the `auto` rule's latch, and the game's controller mode it follows |
-| `text_capture` | the browser holds the engine's text capture |
-| `leaving` | a pick or a Back is in flight; input is dropped until the screen changes |
-| `hints` | `pad` or `keyboard`: which names the hint bar shows |
+| `why` | the reason for `shown`, in words: `the pad or the keyboard has the menu (no hand is steering)`, `DC3_SONG_BROWSER=1`, `DC3_SONG_BROWSER=0`, `DC3_CLASSIC_SONG_SELECT=1`, `MILO_INPUT_SCRIPT is set ...`, `a hand is steering (held where the list takes it; controller mode is off)`, `Start handed the menu to the hands`, `song select was reached by hand ...`, `an overlay or a dialog is up`, `not on song select` |
+| `hands_steering` | the `auto` rule's latch: the classic list is up for somebody's hands |
+| `hand_in_pose`, `tracked_bodies` | right now: a tracked skeleton's hand is where the song list or the help bar's list takes it (the image's `IsValidSwipePosition`); how many skeletons are tracked |
+| `switches` | times the browser was shown or hidden in this run (a flapping rule shows here) |
+| `controller_mode` | the game's controller mode; the browser keeps it on while it is shown |
+| `text_capture`, `engine_text_capture` | the browser holds the engine's text capture; the engine's capture is on at all (it stays on under the classic list in `auto`, so a typed character can bring the browser back) |
+| `leaving` | a pick, a Back or a command is in flight; input is dropped until the screen changes |
+| `hints`, `hint_accept` | `pad` or `keyboard`: the device last used; the name the hint bar was last given for Accept (`A` or `ENTER`) |
+| `pad_presses` | presses counted as a real pad's in this run |
+| `screen_builds` | times the screen was built in this run (the hint names change without one) |
+| `preview_song`, `preview_changes` | the song the game's preview was last asked for; how many times that changed while the browser was shown |
+| `preview_starts`, `preview_hold` | preview streams prepared in this run (a start, as opposed to a request); the preview is waiting for the selection to rest |
+| `commands` | the commands this visit's classic list has a row for: `random_song`, `playlists` |
 | `songs` | songs in the browser's catalog |
 | `classic_song` | the song the classic list's highlight was last put on |
 | `focus` | `search`, `tabs`, `recents` or `list` |
 | `selected_song` | the song the detail pane shows: what Accept would pick |
 | `list_song`, `recent_song` | the list's selected song and the shelf's selected card |
-| `query`, `sort`, `rows`, `recents_shown` | the search text; the arrangement (`title`, `artist`, `difficulty`, `source`, `decade`); rows in the list, headings included; whether the shelf is unfolded |
+| `query`, `sort`, `rows`, `list_index`, `recents_shown` | the search text; the arrangement (`title`, `artist`, `difficulty`, `source`, `decade`); rows in the list, headings included; the selected row's index among them; whether the shelf is unfolded |
 | `highlight_rect` | the list's selection bar, `x,y,width,height` in the UI's 1280x720 logical units (multiply by output rows / 720 for screenshot pixels) |
 | `frames`, `drew`, `glyphs`, `placeholder_glyphs`, `quads`, `draw_calls`, `images_missing` | frames drawn so far and the last frame's numbers; `placeholder_glyphs` counts characters drawn as the missing-glyph box |
 
 The fields from `focus` to `highlight_rect` are present only while a visit has
 a screen. In a run that does not render (`MILO_NORENDER=1`) `drew` is false
 and `highlight_rect` and the frame's numbers are 0: nothing is laid out, but
-focus, the selected song, the query and the sort are all live. Tested by `SongBrowserInSongSelectTest`, `SongBrowserSwitchFlowTest`
-and `NativeUiHostGpuTest.SongBrowserRunsInTheEngine`.
+focus, the selected song, the query and the sort are all live. Tested by `SongBrowserInSongSelectTest`, `SongBrowserSwitchFlowTest`,
+`SongBrowserHandsTest` and `NativeUiHostGpuTest.SongBrowserRunsInTheEngine`.
 
 ### Screen + Frame (Phase 4)
 
@@ -611,7 +641,7 @@ print(f"Frame {tel['data']['frame']}, beat {tel['data']['beat']}")
 | `native/src/platform/HttpServer.h` | Server class, command queue, input/wait state |
 | `native/src/platform/HttpServer.cpp` | All endpoint handlers (~650 LOC) |
 | `native/src/songbrowser/SongCatalogSource_Native.cpp` | `GET /api/songs`: the catalog from the game, and the endpoint's body |
-| `native/src/platform/SongBrowserPanel_Native.cpp` | `GET /api/songbrowser/state`: the body (`StateJson`) |
+| `native/src/platform/SongBrowserPanel_Native.cpp` | `GET /api/songbrowser/state`: the body (`StateJson`); `POST /api/songbrowser/command`: `RunCommandNamed` |
 | `native/include/httplib.h` | Vendored cpp-httplib (MIT, header-only) |
 
 ## Environment Variables
