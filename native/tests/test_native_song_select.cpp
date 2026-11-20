@@ -536,6 +536,11 @@ protected:
           << "press left; st j4; press left; st j5; press left; st j6; "
           << Times(14, "press right 30") << "st j7; press right; st j8; "
           << "press lb; st p1; press rb; st p2; press rb; st p3; press rb; st p4; "
+          // The list switched off, as the panel switches it off under one of
+          // its overlays; then on again.
+          << "ev \"{$L disable_navigation}\" > /dev/null; "
+          << "press left; st off1; press lb; st off2; press up; st off3; "
+          << "ev \"{$L enable_navigation}\" > /dev/null; press left; st on1; "
           // The sort button: by title.  It leaves the list collapsed.
           << "press y 150; st s1; expand; rows s_rows; vis s_vis; "
           // By artist: collapsed first, then opened.
@@ -562,6 +567,7 @@ protected:
     static void LeftRightMoveBySectionInACollapsedList();
     static void LeftRightMoveBySectionUnderTheArtistSort();
     static void ShoulderButtonsMoveAScreenful();
+    static void ASwitchedOffListIgnoresTheButtons();
     static void OtherListsIgnoreTheButtons();
 
     void SetUp() override { RequireRun(sRan, sError, sRun); }
@@ -852,6 +858,26 @@ void SongSelectFlowTest::ShoulderButtonsMoveAScreenful() {
     }
 }
 
+// The buttons come after the list's own conditions for taking a button at
+// all: switched off (disable_navigation, which song select does while one of
+// its overlays is up) it takes none of them, like Up.  Switched on again, Left
+// moves.
+void SongSelectFlowTest::ASwitchedOffListIgnoresTheButtons() {
+    std::vector<int> starts = SectionStarts(Rows(sRun, "d_rows"));
+    ListState p4 = St("p4");
+    ASSERT_TRUE(p4.ok) << sRun.driver;
+    const char *const tags[] = { "off1", "off2", "off3" };
+    const char *const buttons[] = { "Left", "LB", "Up" };
+    for (int i = 0; i < 3; i++) {
+        ASSERT_TRUE(St(tags[i]).ok) << tags[i] << "\n" << sRun.driver;
+        EXPECT_EQ(St(tags[i]).selected, p4.selected) << buttons[i] << " on a switched-off list";
+        EXPECT_EQ(St(tags[i]).top, p4.top) << buttons[i] << " on a switched-off list";
+    }
+    EXPECT_EQ(St("on1").selected, LeftOf(starts, p4.selected))
+        << "the control: switched on again, Left moves";
+    EXPECT_LT(St("on1").selected, p4.selected);
+}
+
 // A list whose provider is not song select's keeps its highlight and its
 // screen through each of the four buttons.  Read after every press: a list
 // that went down on Right and back up on Left would look untouched at the end.
@@ -883,6 +909,7 @@ TEST_F(SongSelectFlowTest, SectionAndPageButtons) {
     LeftRightMoveBySectionInACollapsedList();
     LeftRightMoveBySectionUnderTheArtistSort();
     ShoulderButtonsMoveAScreenful();
+    ASwitchedOffListIgnoresTheButtons();
     OtherListsIgnoreTheButtons();
 }
 
