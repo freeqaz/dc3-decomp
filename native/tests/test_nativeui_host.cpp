@@ -524,6 +524,27 @@ TEST(NativeUiHostImages, AFailedLoadShowsTheFallbackAndCountsAsAFailure) {
     EXPECT_EQ(loader.begun.size(), begun);
 }
 
+TEST(NativeUiHostImages, TheStateOfAPathIsReadWithoutAskingForIt) {
+    FakeLoader loader;
+    ImageCache cache(loader, SmallCache(8));
+    EXPECT_EQ(cache.StateOfPath("songs/a/a_keep.png"), ImageCache::kUnknown);
+    cache.Poll();
+    EXPECT_TRUE(loader.begun.empty()) << "asking about a path does not request it";
+    EXPECT_EQ(cache.GetStats().queued, 0);
+
+    cache.Request("songs/a/a_keep.png");
+    cache.Request("songs/gone/gone_keep.png");
+    EXPECT_EQ(cache.StateOfPath("songs/a/a_keep.png"), ImageCache::kQueued);
+    cache.Poll();
+    EXPECT_EQ(cache.StateOfPath("songs/a/a_keep.png"), ImageCache::kLoading);
+    loader.Complete("songs/a/a_keep.png");
+    loader.Complete("songs/gone/gone_keep.png", ImageLoader::kFailed);
+    cache.Poll();
+    EXPECT_EQ(cache.StateOfPath("songs/a/a_keep.png"), ImageCache::kReady);
+    EXPECT_EQ(cache.StateOfPath("songs/gone/gone_keep.png"), ImageCache::kFailed);
+    EXPECT_EQ(cache.StateOfPath("songs/b/b_keep.png"), ImageCache::kUnknown);
+}
+
 TEST(NativeUiHostImages, LoadsInFlightAndTexturesMadePerPollAreBounded) {
     FakeLoader loader;
     ImageCache::Config config;
