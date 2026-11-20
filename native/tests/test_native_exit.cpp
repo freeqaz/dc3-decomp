@@ -1037,6 +1037,36 @@ TEST_F(NativeWindowTest, MiloFullscreenStartsFullscreen) {
     ExpectNoCrash(out);
 }
 
+// A display under 50 Hz holds the game to its own rate; the game says so at
+// startup (PLAN H-127). The rate is the test's (DC3_DISPLAY_HZ): Xvfb has no
+// 30 Hz mode to offer. Sabotage: the NativeNotice::Post in
+// App::RunWithoutDebugging removed -- red.
+TEST_F(NativeWindowTest, ADisplayUnderFiftyHertzIsSaidAtStartup) {
+    Engine e;
+    RunWindowed(mRunDir, [](Display *dpy, Window w) { SendWmDeleteWindow(dpy, w); }, e,
+                {"DC3_DISPLAY_HZ=30"});
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_TRUE(Contains(out, "frame cap: off (the 30.00 Hz display")) << Tail(out);
+    EXPECT_TRUE(Contains(out, "DC3 NOTICE [display_rate]: This display runs at 30 Hz, so the game "
+                              "runs at 30 frames a second."))
+        << Tail(out);
+    ExpectNoCrash(out);
+}
+
+// ... and says nothing on a 60 Hz one. Sabotage: Dc3SlowDisplayNotice's
+// threshold raised above 60 -- red.
+TEST_F(NativeWindowTest, ASixtyHertzDisplayGetsNoDisplayNotice) {
+    Engine e;
+    RunWindowed(mRunDir, [](Display *dpy, Window w) { SendWmDeleteWindow(dpy, w); }, e,
+                {"DC3_DISPLAY_HZ=60"});
+    if (IsSkipped() || HasFatalFailure()) return;
+    std::string out = e.Output();
+    EXPECT_TRUE(Contains(out, "frame cap: off (the 60.00 Hz display")) << Tail(out);
+    EXPECT_FALSE(Contains(out, "DC3 NOTICE [display_rate]")) << Tail(out);
+    ExpectNoCrash(out);
+}
+
 // HiDPI on X11: at a content scale of 2 (Xft.dpi 192) the window opens at
 // twice the size in pixels, and the frame fills it at exactly 2x.
 TEST_F(NativeWindowTest, AnX11ContentScaleSizesTheWindow) {

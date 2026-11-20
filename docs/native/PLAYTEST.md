@@ -177,8 +177,9 @@ it in the environment before starting the game.
 
 ## Notices on screen
 
-A banner at the top means pose tracking stopped; the game carries on with a
-stand-in skeleton and nothing you do is scored.
+A banner at the top is the game telling you what a console's dashboard would
+have. Most mean pose tracking stopped: the game carries on with a stand-in
+skeleton and nothing you do is scored.
 
 | Notice | Meaning | What to do |
 |---|---|---|
@@ -189,6 +190,7 @@ stand-in skeleton and nothing you do is scored.
 | "Stand in front of the sensor" mid-song | You left the picture (or the tracker lost you) for about 2 s. Shorter losses are held (P-12, fixed). Continue is greyed out until the game sees you again | Step back into view, then Continue. If you were in view the whole time, mention the time |
 | "Raise both hands to change Profile" bubbles | The game's sign-in hint; it lingers with two people (G-18) | Ignore |
 | Kinect Tuner notice | That screen belongs to the 360 dashboard | Ignore |
+| This display runs at 30 Hz (or another number under 50) | The display the game started on refreshes that many times a second, so the game draws that many frames a second however fast the machine is. Seen with a 4K TV on a laptop | Set the display to 60 Hz in the system's display settings; a 4K TV may need a 1080p mode, or an HDMI 2.0 cable or adapter. Then start the game again |
 
 ## Known issues (PLAN open rows, 2026-11-14)
 
