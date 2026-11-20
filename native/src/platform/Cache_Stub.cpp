@@ -24,6 +24,7 @@
 //     every caller polling forever.
 
 #include "Cache_Native.h"
+#include "NativeSettings.h"
 #include "SaveStore_Web.h"
 #ifndef __EMSCRIPTEN__
 #include "gfx/PipelineDiskCache.h"
@@ -41,6 +42,7 @@
 #include <cstring>
 #include <ctime>
 #include <dirent.h>
+#include <string>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/types.h>
@@ -93,6 +95,17 @@ static void MakeCacheDirPath(char *buf, size_t bufSize, const char *name) {
     char root[512];
     CacheRootDir(root, sizeof(root));
     snprintf(buf, bufSize, "%s/%s", root, name);
+}
+
+// The global options file: cache "global", file "global" (SaveLoadManager.cpp
+// kStrGlobalCacheName; 0x39 bytes, ProfileMgr::SaveGlobalOptions).  Its
+// presence at startup is what "this console has been played before" means to
+// the boot plan (System_Native.cpp Dc3BootPlanGet).  Declared in
+// NativeSettings.h; defined here so the root is spelt once.
+std::string Dc3GlobalOptionsPath() {
+    char dir[600];
+    MakeCacheDirPath(dir, sizeof(dir), "global");
+    return std::string(dir) + "/global";
 }
 
 // Normalise an in-cache path to a relative POSIX path ("a\b" -> "a/b",

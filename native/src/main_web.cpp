@@ -40,6 +40,7 @@ bool Dc3EnvFlag(const char *name, bool defaultOn); // platform/System_Native.cpp
 #include "platform/FrameTraceCounters.h"
 #include "platform/FramePacer_Native.h"
 #include "platform/LoaderBudget_Native.h"
+#include "platform/NativeSettings.h"
 #include "platform/WebAssets.h"
 #include "platform/Rnd_Wgpu.h"
 #include "ui/UI.h"
@@ -177,6 +178,26 @@ static void WebScreenBundleHook() {
     if (sLastScreen == name)
         return; // no transition this frame
     sLastScreen = name;
+
+    // The page's splash video (index.html) stands in for the engine's splash
+    // screens.  When the boot plan shows none (a browser that has played
+    // before, PLAN H-123), take it down at the first screen the player is
+    // meant to see, so the title screen is not hidden behind the rest of a
+    // 9 s video.  The two intro screens a returning boot passes do not count.
+    static bool sSplashHandled = false;
+    if (!sSplashHandled) {
+        const Dc3BootPlan &plan = Dc3BootPlanGet();
+        const bool passed = plan.skipIntro
+            && (!strcmp(name, "attract_screen") || !strcmp(name, "autosave_warning_screen"));
+        if (plan.showSplash) {
+            sSplashHandled = true;
+        } else if (!passed) {
+            sSplashHandled = true;
+            EM_ASM({
+                if (window.dc3DismissSplash) window.dc3DismissSplash();
+            });
+        }
+    }
 
     if (!strcmp(name, "song_select_screen") || !strcmp(name, "main_screen"))
         WebDlcDropSongFiles(name);

@@ -203,6 +203,9 @@ TEST(Dc3ProfileTest, NoRowChangesTheGameOrCostsTime) {
         "DC3_REFRING_AUDIT",       "DC3_POISON_FREED_OBJECTS", "DC3_STUB_TRACE",
         "DC3_DRAW_CRASH_GUARD",    "MILO_INPUT_SCRIPT",   "DC3_POSE",
         "MILO_NORENDER",           "MILO_HEADLESS",       "DC3_NO_AUDIO",
+        // The boot sequence follows the console's state, not the profile
+        // (System_Native.cpp "The boot sequence").
+        "DC3_BOOT_INTRO",
     };
     for (const Dc3ProfileDefault &row : Rows())
         EXPECT_EQ(forbidden.count(row.name), 0u)
@@ -323,4 +326,147 @@ TEST(Dc3ProfileTest, AFailIsStillPrintedUnderTheDefault) {
     EXPECT_NE(err.find("\nFAIL: np-notifyband: a FAIL under the default overlay mode\n"),
               std::string::npos)
         << "a FAIL is no longer printed when the debug notices are not drawn:" << err;
+}
+
+// ---------------------------------------------------------------------------
+// The boot sequence (PLAN H-123; System_Native.cpp "The boot sequence",
+// docs/debugging/native.md "Boot sequence").  A first launch on a console is
+// the original's sequence; a console whose global options are on disk passes
+// the splash screens, attract and the autosave warning and waits on the title
+// screen.  Every variable that is set wins over the disk, in both directions.
+// This is the decision table; what a real dc3-native does with each plan is
+// HeadlessBootTest.{AFirstLaunch..., AReturningConsole..., ...} in
+// test_headless_boot.cpp.
+// ---------------------------------------------------------------------------
+namespace {
+const bool kPlayed = true, kFresh = false;
+Dc3BootPlan Plan(bool onDisk, const char *splash = nullptr, const char *fast = nullptr,
+                 const char *intro = nullptr, bool webFast = false) {
+    return Dc3BootPlanResolve(onDisk, splash, fast, intro, webFast);
+}
+} // namespace
+
+TEST(Dc3BootPlanTest, AFirstLaunchIsTheOriginalSequence) {
+    const Dc3BootPlan p = Plan(kFresh);
+    EXPECT_FALSE(p.returning);
+    EXPECT_TRUE(p.showSplash) << "a first launch must show the splash screens";
+    EXPECT_FALSE(p.skipIntro) << "a first launch must show attract and the autosave warning";
+    EXPECT_FALSE(p.fastBoot);
+}
+
+TEST(Dc3BootPlanTest, AReturningConsoleSkipsTheIntroButNotTheTitle) {
+    const Dc3BootPlan p = Plan(kPlayed);
+    EXPECT_TRUE(p.returning);
+    EXPECT_FALSE(p.showSplash);
+    EXPECT_TRUE(p.skipIntro);
+    EXPECT_FALSE(p.fastBoot) << "the title confirm sets the initial profiles and "
+                                "$post_load_dest_screen: it stays the player's";
+}
+
+TEST(Dc3BootPlanTest, BootIntroIsTheOneSwitchBackAndForth) {
+    const Dc3BootPlan again = Plan(kPlayed, nullptr, nullptr, "1");
+    EXPECT_TRUE(again.showSplash);
+    EXPECT_FALSE(again.skipIntro);
+    EXPECT_FALSE(again.fastBoot);
+    const Dc3BootPlan never = Plan(kFresh, nullptr, nullptr, "0");
+    EXPECT_FALSE(never.showSplash);
+    EXPECT_TRUE(never.skipIntro);
+    EXPECT_FALSE(never.fastBoot);
+    for (const char *off : {"false", "OFF", "no"})
+        EXPECT_TRUE(Plan(kFresh, nullptr, nullptr, off).skipIntro) << off;
+}
+
+TEST(Dc3BootPlanTest, AnExplicitSplashWinsBothWays) {
+    EXPECT_TRUE(Plan(kPlayed, "1").showSplash);
+    EXPECT_TRUE(Plan(kPlayed, "1").skipIntro) << "DC3_SHOW_SPLASH is the splash only";
+    EXPECT_FALSE(Plan(kFresh, "0").showSplash);
+    EXPECT_FALSE(Plan(kFresh, "0").skipIntro) << "DC3_SHOW_SPLASH is the splash only";
+    EXPECT_FALSE(Plan(kPlayed, "0", nullptr, "1").showSplash) << "it wins over DC3_BOOT_INTRO too";
+    EXPECT_TRUE(Plan(kFresh, "1", nullptr, "0").showSplash);
+}
+
+TEST(Dc3BootPlanTest, AnExplicitFastBootWinsBothWays) {
+    // On: every boot screen passes, whatever the disk or DC3_BOOT_INTRO says
+    // (the test suites' boot).  It never decided the splash and still does not.
+    for (bool onDisk : {kFresh, kPlayed}) {
+        const Dc3BootPlan on = Plan(onDisk, nullptr, "1");
+        EXPECT_TRUE(on.fastBoot);
+        EXPECT_TRUE(on.skipIntro);
+        EXPECT_EQ(on.showSplash, !onDisk);
+        EXPECT_TRUE(Plan(onDisk, nullptr, "1", "1").fastBoot);
+    }
+    // Off: what it always gave, even on a played console -- the original
+    // sequence, splash included, and no screen passed for the player.
+    const Dc3BootPlan off = Plan(kPlayed, nullptr, "0");
+    EXPECT_FALSE(off.fastBoot);
+    EXPECT_FALSE(off.skipIntro) << "DC3_FAST_BOOT=0 must leave every boot screen to the player";
+    EXPECT_TRUE(off.showSplash);
+    EXPECT_FALSE(Plan(kPlayed, "0", "0").showSplash) << "DC3_SHOW_SPLASH still decides the splash";
+    EXPECT_FALSE(Plan(kPlayed, nullptr, "0", "0").skipIntro)
+        << "DC3_FAST_BOOT=0 wins over DC3_BOOT_INTRO=0 on passing screens";
+    // The web page's ?fast_boot=1 is the same switch.
+    EXPECT_TRUE(Plan(kFresh, nullptr, nullptr, nullptr, true).fastBoot);
+    EXPECT_TRUE(Plan(kPlayed, nullptr, "0", nullptr, true).fastBoot);
+}
+
+// RunHeadless and the flow tests blank a variable to mean "unset" (they can
+// only add variables), so an empty value must decide nothing.
+TEST(Dc3BootPlanTest, AnEmptyVariableDecidesNothing) {
+    for (bool onDisk : {kFresh, kPlayed}) {
+        const Dc3BootPlan unset = Plan(onDisk), empty = Plan(onDisk, "", "", "");
+        EXPECT_EQ(empty.showSplash, unset.showSplash);
+        EXPECT_EQ(empty.skipIntro, unset.skipIntro);
+        EXPECT_EQ(empty.fastBoot, unset.fastBoot);
+    }
+}
+
+// "Played before" is the global options file the game itself writes
+// (<cache root>/global/global, Cache_Stub.cpp): present, regular, not empty.
+TEST(Dc3BootPlanTest, PlayedBeforeIsTheGlobalOptionsFile) {
+    const char *names[] = {"DC3_CACHE_DIR", "HOME"};
+    std::string saved[2];
+    bool had[2];
+    for (int i = 0; i < 2; i++) {
+        const char *v = getenv(names[i]);
+        had[i] = v != nullptr;
+        if (v) saved[i] = v;
+    }
+    char tmpl[] = "/tmp/dc3-bootplan-XXXXXX";
+    ASSERT_NE(mkdtemp(tmpl), nullptr);
+    const std::string root = tmpl;
+
+    setenv("DC3_CACHE_DIR", (root + "/cache").c_str(), 1);
+    EXPECT_EQ(Dc3GlobalOptionsPath(), root + "/cache/global/global");
+    unsetenv("DC3_CACHE_DIR");
+    setenv("HOME", root.c_str(), 1);
+    EXPECT_EQ(Dc3GlobalOptionsPath(), root + "/.local/share/dc3/cache/global/global");
+
+    setenv("DC3_CACHE_DIR", (root + "/cache").c_str(), 1);
+    const std::string file = root + "/cache/global/global";
+    EXPECT_FALSE(Dc3GlobalOptionsOnDisk()) << "an empty cache root is a first launch";
+    mkdir((root + "/cache").c_str(), 0755);
+    mkdir((root + "/cache/global").c_str(), 0755);
+    EXPECT_FALSE(Dc3GlobalOptionsOnDisk()) << "the cache directory alone is not the file";
+    mkdir(file.c_str(), 0755);
+    EXPECT_FALSE(Dc3GlobalOptionsOnDisk()) << "a directory of that name is not the file";
+    rmdir(file.c_str());
+    FILE *f = fopen(file.c_str(), "wb");
+    ASSERT_NE(f, nullptr);
+    fclose(f);
+    EXPECT_FALSE(Dc3GlobalOptionsOnDisk()) << "an empty file is a failed write, not a played console";
+    f = fopen(file.c_str(), "wb");
+    ASSERT_NE(f, nullptr);
+    const char bytes[0x39] = {0};
+    fwrite(bytes, 1, sizeof(bytes), f);
+    fclose(f);
+    EXPECT_TRUE(Dc3GlobalOptionsOnDisk());
+
+    unlink(file.c_str());
+    rmdir((root + "/cache/global").c_str());
+    rmdir((root + "/cache").c_str());
+    rmdir(root.c_str());
+    for (int i = 0; i < 2; i++) {
+        if (had[i]) setenv(names[i], saved[i].c_str(), 1);
+        else unsetenv(names[i]);
+    }
 }

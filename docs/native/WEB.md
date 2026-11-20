@@ -999,6 +999,27 @@ Both controls fail, on the reload (measured 2026-11-20, the same driver):
 Exit 0 pass, 1 a check failed, 2 the run could not be judged (no boot, the
 song did not finish).
 
+### A browser that has played before boots to the title screen (H-123)
+
+With the global options back from the store, the engine's boot plan is the
+played console's: `DC3 Boot: straight to the title screen (this console has
+been played before)`. The attract movie and the 4 s autosave warning are each
+left after 10 frames, the page's splash video is taken down when the title
+screen comes up, and the game waits there for the player. A first visit, and
+`?reset_save=1`, show the original sequence; `?env=DC3_BOOT_INTRO=1` shows it
+on every load. Measured 2026-11-20 with `scripts/web/boot-time.mjs`
+(localhost, warm HTTP cache): the title screen at 6.0 to 6.5 s with nothing
+pressed, where it was 9.9 to 11.0 s after a key press on the movie; the main
+menu at 8.1 to 8.6 s, was 12.0 to 13.5 s. The table, the desktop numbers and
+the switches are in
+[debugging/native.md "Boot sequence"](../debugging/native.md#boot-sequence).
+
+```sh
+node scripts/web/boot-time.mjs --port 8420 --runs 4 --versus "&env=DC3_BOOT_INTRO=1"
+node scripts/web/boot-time.mjs --port 8420 --presses none --stop-at title_screen
+node scripts/web/boot-time.mjs --port 8420 --console first
+```
+
 ## Page (W-8)
 
 The default page is for players: the game canvas fills the window at 16:9 on
@@ -1301,7 +1322,9 @@ refusal, sound), `mobile-gpu.mjs` (W-29: one song under `?gpu_profile=`),
 `--song-index` selects), `attract-movie.mjs` (W-11: the intro movie's pixels
 are on the canvas), `gesture-menus.mjs --skip-attract` (a gesture skips the
 intro movie), `save-persist.mjs` (W-36: save data survives a reload and a
-browser restart, and `?reset_save=1` wipes it). `pose-gameplay.mjs --unmute` runs the audio on the real output
+browser restart, and `?reset_save=1` wipes it), `boot-time.mjs` (seconds from
+opening the page to the title screen and the main menu, on a first or a
+returning browser). `pose-gameplay.mjs --unmute` runs the audio on the real output
 device and checks the song clock (W-12, below). Menus advance with Enter (not Space).
 
 Song-select index → song (sorted by skill level; a category header repeats the

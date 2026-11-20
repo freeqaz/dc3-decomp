@@ -62,13 +62,17 @@ For the same chain annotated with each DTA handler, see [convergence/02 §8](../
 
 ### How native differs today
 
-- **Boot auto-advance only happens with `DC3_FAST_BOOT=1`** (the web equivalent is the `?fast_boot=1` URL parameter).
-  - The `HX_NATIVE` block in `UIManager::Poll` (`src/system/ui/UI.cpp`, the `sBoot[]` table) advances these screens, and it runs only when fast boot is on:
+- **A console that has been played before skips the intro** (PLAN H-123; [debugging/native.md "Boot sequence"](../../debugging/native.md#boot-sequence)).
+  - "Played before" is the global options file on disk at startup (`<DC3_CACHE_DIR>/global/global`; on web it comes back from the save store, [WEB.md "Save data"](../WEB.md#save-data-w-36)).
+  - Such a boot shows no splash screens and leaves `attract_screen` and `autosave_warning_screen` after 10 frames each, then waits on `title_screen` for the player's confirm.
+  - A first launch runs the original sequence, and `DC3_BOOT_INTRO=1` runs it on every launch.
+- **The full boot auto-advance, to `main_screen`, only happens with `DC3_FAST_BOOT=1`** (the web equivalent is the `?fast_boot=1` URL parameter).
+  - The `HX_NATIVE` block in `UIManager::Poll` (`src/system/ui/UI.cpp`, the `sBoot[]` table) advances these screens. All of it runs when fast boot is on; on a played console only its first two rows run, and they stop at the first screen that is not one of them:
     - `attract_screen` → `autosave_warning_screen` → `title_screen` → `wait_main_after_saveload_screen` → `main_screen`;
     - the Kinect tutorial screens → `main_screen`.
   - Each step waits at most 10 frames. `title_screen` keeps its full delay so a scripted confirm can still land.
   - When it skips `title_screen`, it sets `$post_load_dest_screen` to `main_screen`, standing in for the title screen's own NAV_SELECT.
-  - Without fast boot the advance loop does not run, and the screens advance through their own DTA.
+  - On a first launch without fast boot (and under `DC3_BOOT_INTRO=1` or `DC3_FAST_BOOT=0`) the advance loop does not run, and the screens advance through their own DTA.
   - From `main_screen` on, the flow is driven by DTA and input on both platforms.
 - **The legacy native panel-flow activation is off by default.**
   - `PanelDir::Enter` (`src/system/ui/PanelDir.cpp`) keeps a native-only synthetic flow activation, but the default filter mode is `none`, so `ShouldActivateNativeFlow` rejects everything.
