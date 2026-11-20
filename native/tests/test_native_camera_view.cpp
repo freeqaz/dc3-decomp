@@ -382,13 +382,20 @@ TEST_F(ConcurrentFlowTest, TwoCopiesOfAFlowRunAtOnce) {
         size_t exitAt = r.output.find("DC3_EXIT: ");
         long pid = exitAt == std::string::npos ? -1 : IntAfter(r.output.substr(exitAt), " pid=");
         ASSERT_GT(pid, 0) << "copy " << i << ": no DC3_EXIT line with a pid; " << where;
-        std::string own = "\"pid\":" + std::to_string(pid) + "}";
+        // The whole pid field, wherever it sits in the object: "pid":N and
+        // then the next field or the object's end, so 123 is not found in
+        // 1234.  (It was the last field until /api/health gained the output
+        // size and the thermal state after it.)
+        std::string own = "\"pid\":" + std::to_string(pid);
         int answers = 0, mine = 0;
         std::istringstream in(r.health);
         std::string line;
         while (std::getline(in, line)) {
             answers++;
-            mine += line.find(own) != std::string::npos;
+            size_t at = line.find(own);
+            size_t end = at == std::string::npos ? at : at + own.size();
+            mine += end != std::string::npos && end < line.size()
+                && (line[end] == ',' || line[end] == '}');
         }
         EXPECT_EQ(answers, 6) << where;
         EXPECT_EQ(mine, answers) << "copy " << i << ": /api/health answered by another engine "
