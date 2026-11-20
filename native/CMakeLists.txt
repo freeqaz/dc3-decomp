@@ -2065,6 +2065,7 @@ if(BUILD_TESTS)
         tests/test_bink_integration.cpp
         tests/test_extract_bik.cpp
         tests/test_input.cpp
+        tests/test_text_input.cpp # the engine's text-editing input queue (platform/TextInput_Native.h): capture vs the pad map, chain, UTF-8, repeat
         tests/test_audio.cpp
         tests/test_mogg_decode.cpp
         tests/test_mogg_v0xe.cpp
@@ -2102,6 +2103,7 @@ if(BUILD_TESTS)
         tests/test_rndcam_projection.cpp
         tests/test_particle_color.cpp
         tests/test_drawrect_color.cpp
+        tests/test_canvas2d.cpp # the engine's batched 2D canvas (gfx/Canvas2D.h): CPU half + rendered proof
         tests/test_flare_point_test.cpp
         tests/test_gpu_timers.cpp
         tests/test_retail_lighting.cpp
