@@ -330,7 +330,9 @@ Footage: `scripts/video_calib/mqcXJrH5vUo.json`'s source video, cut per song by
 
 **Corrected 2026-11-20: builds on a Mac and is played there, in a window, with the
 camera (built 2026-11-13 on an M3 MacBook Air; [MACOS.md](MACOS.md) state line,
-2026-11-15).** The rest of this paragraph is the 2026-11-13 state, kept as history.
+2026-11-15).** Frame cost on that machine was measured 2026-11-19 and the menus
+halved (main menu 13.08 → 6.70 GPU ms at 1710x962; [MACOS.md](MACOS.md#frame-cost-on-the-m3-air),
+PLAN H-124, H-125). The rest of this paragraph is the 2026-11-13 state, kept as history.
 Ran windowed on a real Mac in March 2026. Not built on a Mac since. Seven known
 breakages, five of them fixable from Linux; on branch `np-macprep` the
 Linux-fixable parts are done (engine half as patch files). The Linux libc++ proxy

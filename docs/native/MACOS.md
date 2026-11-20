@@ -153,13 +153,13 @@ for a larger surface on a GPU that is not discrete (the 1080-row cap);
 - **Why it chugged that day.** At 7% battery on a 15 W charger (5 V, 3 A) the
   GPU ran at 716-735 MHz, all of its time in the 618 and 796 MHz steps, with
   thermal pressure nominal (`powermetrics`). At that clock a 13-14 ms menu
-  frame is 24-26 ms. At 9-10% battery, drawing from the battery, it ran at
+  frame is 24-26 ms, and the new one is 12-14 ms. At 9-10% battery, drawing from the battery, it ran at
   1290-1320 MHz. One observation; the cause of the low clock was not isolated.
   A charger that can feed the machine under load takes the question away.
 - **The Retina setting costs about three times the frame.** The app launcher
   on that Mac exports `MILO_OUTPUT_MAX_ROWS=0`; with the Retina surface edits
   in that Mac's engine checkout the game draws 3420x1924, which is 41-45 fps in
-  the menus at full clock and about half that at the low one. Leaving the knob
+  the menus at full clock and about 25 fps at the low one. Leaving the knob
   unset (1080 rows) keeps every screen under 9 ms.
 - **The per-pass GPU timers do not separate passes on this GPU.** A tile-based
   renderer runs a frame's passes interleaved, so each pass's `MILO_GPU_TIMERS`
