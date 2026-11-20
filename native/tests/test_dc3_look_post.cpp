@@ -28,6 +28,7 @@
 #include "platform/Rnd_Wgpu.h"
 #include "platform/rndshape/RndShape.h"
 #include "obj/DataFile.h"
+#include "rndobj/Cam.h"
 #include "rndobj/DOFProc.h"
 #include "rndobj/PostProc.h"
 #include "rndobj/Rnd.h"
@@ -197,6 +198,41 @@ void WindowedCentroid(const std::vector<float> &g, int w, int h, double wx, doub
     oy = s > 0 ? sy / s : 0;
 }
 
+// The curvature of `g`'s halo tail on set0's lattice (w/4: texel j covers
+// pixels 4j..4j+3), added into acc[j mod 16]. The rows within 8 px of the
+// dot are summed into one profile; each lattice value is the mean of the two
+// pixels about the texel's centre; |second difference| is taken where the
+// dot is 40 to 200 px away on either side, past set0's own reach. A set
+// upsampled bilinearly is piecewise linear between its texel centres, so its
+// curvature lands only at those: set1's (16 px, x = 16k + 8) between lattice
+// j = 4k + 1 and 4k + 2, one adjacent pair of phases of 4. A C2 upsample
+// spreads it over all four.
+void TailCurvature(const std::vector<float> &g, int w, int h, double cx, double cy, double acc[16]) {
+    std::vector<double> prof((size_t)w, 0.0);
+    for (int y = std::max(0, (int)cy - 8); y <= std::min(h - 1, (int)cy + 8); y++)
+        for (int x = 0; x < w; x++) prof[x] += g[(size_t)y * w + x];
+    const int n = w / 4;
+    std::vector<double> c((size_t)n);
+    for (int j = 0; j < n; j++) c[j] = 0.5 * (prof[4 * j + 1] + prof[4 * j + 2]);
+    for (int j = 1; j + 1 < n; j++) {
+        const double d = std::fabs(4.0 * j + 2.0 - cx);
+        if (d < 40.0 || d > 200.0) continue;
+        acc[j % 16] += std::fabs(c[j - 1] - 2.0 * c[j] + c[j + 1]);
+    }
+}
+// The largest share of acc's curvature on one adjacent pair of the 4 phases
+// of set1's texel (0.5 = spread evenly; 1 = all at set1's texel centres).
+double CreasePairShare(const double acc[16]) {
+    double ph[4] = {}, total = 0;
+    for (int i = 0; i < 16; i++) {
+        ph[i % 4] += acc[i];
+        total += acc[i];
+    }
+    double best = 0;
+    for (int i = 0; i < 4; i++) best = std::max(best, ph[i] + ph[(i + 1) % 4]);
+    return total > 0 ? best / total : 0;
+}
+
 // A 2x2 white dot centred at (cx, cy), area-weighted in colour so it moves by
 // sub-pixel steps, on black, mask 1 everywhere. The mask is uniform on
 // purpose: retail's bloom.ps multiplies the bilinear-filtered colour by the
@@ -340,6 +376,7 @@ TEST_F(DC3LookPostTest, EnhancedBloomKeepsEnergyAndExtentAndStopsWobbling) {
         std::vector<Moments> m[2];
         std::vector<double> wcx[2], wcy[2];   // the windowed centroid, relative to the dot
         std::vector<double> px, py;
+        double tailCurv[2][16] = {};
         for (int k = 0; k < kPhases; k++) {
             const double cx = 640.25 + 2.0 * (k % 8), cy = 360.25 + 2.0 * (k / 8);
             px.push_back(cx);
@@ -362,6 +399,7 @@ TEST_F(DC3LookPostTest, EnhancedBloomKeepsEnergyAndExtentAndStopsWobbling) {
                 WindowedCentroid(fine, W, H, cx, cy, 120.0, 240.0, ox, oy);
                 wcx[e].push_back(ox);
                 wcy[e].push_back(oy);
+                TailCurvature(fine, W, H, cx, cy, tailCurv[e]);
             }
         }
         double energy[2], cv[2], sx[2], sy[2], wobble[2], peak[2];
@@ -438,11 +476,26 @@ TEST_F(DC3LookPostTest, EnhancedBloomKeepsEnergyAndExtentAndStopsWobbling) {
             // its bilinear pairs' weights flattened (0.25 each) reads 0.046
             // px (15% of retail) / CV 0.0017-0.0021 under both roundings.
             // (Coarse sets upsampled bilinearly in the combine read 0.005
-            // px: bilinear also moves a centroid linearly, and their creases
-            // are lost under set0's; the old whole-frame bound "caught" that
-            // only through the tails' rounding, 0.037 px on the 3090.)
+            // px: bilinear also moves a centroid linearly; the old
+            // whole-frame bound "caught" that only through the tails'
+            // rounding, 0.037 px on the 3090. The tail curvature below is
+            // what catches it.)
             EXPECT_LT(wobble[1], 0.1 * wobble[0]) << "the tent and the B-spline keep the plain bloom on the dot";
             EXPECT_LT(cv[1], 0.001) << "and its energy steady";
+            // The combine's own shape, which neither the centroid nor the
+            // rounding sees: the coarse sets upsampled with a B-spline have
+            // no creases at set1's texel centres; bilinearly they do.
+            const double crease[2] = {CreasePairShare(tailCurv[0]), CreasePairShare(tailCurv[1])};
+            printf("DC3LookPost plain arm: halo-tail curvature on set1's texel centres (share on one pair "
+                   "of 4 phases; 0.5 = none) %.3f -> %.3f\n",
+                   crease[0], crease[1]);
+            // Measured on an RTX 3090: retail 0.683, enhanced 0.515, the
+            // combine made bilinear (fs_comb_bspline calling bloom_set with
+            // bspline false) 0.656. The extent sees that sabotage too, but
+            // by 0.5% (sx 45.03 -> 44.81 px), and the wobble not at all
+            // (0.0047 -> 0.0050 px).
+            EXPECT_GT(crease[0], 0.62) << "retail's bilinear sets crease (non-vacuous)";
+            EXPECT_LT(crease[1], 0.58) << "the B-spline combine does not";
         }
     }
     chain.Terminate();
@@ -766,7 +819,15 @@ DofProfileStats MeasureDofBar(GpuDevice &gpu, double s) {
     UIManager *savedUI = TheUI;
     TheUI = &ui;
     ui.SetCurrent(game);
-    TheDOFProc->Set(nullptr, 2.0f, 0.5f, 1.0f, 0.0f);
+    // minBlur 1: the composite's blur factor is clamp(min(max(|t|, minBlur),
+    // maxBlur)) = 1 whatever the depth constants, so the output is the blur
+    // alone. With minBlur 0 the factor at the far plane is 1 - 2 focal / far
+    // of whichever camera is current (DofPass::Run reads RndCam::Current()):
+    // 0.998 with none (the defaults, far 1000), 0.9996 under Rnd's
+    // [default cam] (far 5000) that DC3RetailPost* leaves selected -- a
+    // sliver of the sharp bar whose two edges sit on one phase of 4 at 3x,
+    // which the crease share read, so the result depended on test order.
+    TheDOFProc->Set(nullptr, 2.0f, 0.5f, 1.0f, 1.0f);
     EXPECT_TRUE(TheDOFProc->Enabled());
 
     wgpu::TextureDescriptor zd{};
@@ -858,6 +919,10 @@ DofProfileStats MeasureDofBar(GpuDevice &gpu, double s) {
 // profile's second difference piles up on one phase of 4 -- are gone.
 TEST_F(DC3LookPostTest, EnhancedDofKeepsTheRadiusWithoutCreases) {
     ASSERT_TRUE(TheDOFProc);
+    // No camera current here, whatever an earlier test left (restored at the
+    // end); a second measurement under a camera follows.
+    RndCam *prev = RndCam::Current();
+    RndCam::ClearCurrent();
     const DofProfileStats st = MeasureDofBar(Gpu(), 1);
     printf("DC3LookPost depth of field: energy %.0f -> %.0f (x%.3f), blur radius %.2f -> %.2f px, "
            "creases (share of the profile's curvature on one phase of 4; 0.25 = none) %.3f -> %.3f\n",
@@ -869,6 +934,26 @@ TEST_F(DC3LookPostTest, EnhancedDofKeepsTheRadiusWithoutCreases) {
     EXPECT_NEAR(st.spread[1] / st.spread[0], 1.0, 0.02) << "the blur radius is retail's";
     EXPECT_GT(st.crease[0], 0.45) << "retail's bilinear read creases (non-vacuous)";
     EXPECT_LT(st.crease[1], 0.38) << "the B-spline read does not";
+
+    // The measurement is the blur alone, so it does not depend on which
+    // camera an earlier test left current: the same under a camera with
+    // Rnd's [default cam] planes (near 1, far 5000) as under none.
+    // Sabotage: MeasureDofBar's minBlur back to 0 -- energy, radius and
+    // creases all move with the far plane (this test fails in any order).
+    RndCam *cam = Hmx::Object::New<RndCam>();
+    cam->SetFrustum(1.0f, 5000.0f, 0.6024178f, 1.0f);
+    cam->Select();
+    const DofProfileStats other = MeasureDofBar(Gpu(), 1);
+    if (prev)
+        prev->Select();
+    else
+        RndCam::ClearCurrent();
+    delete cam;
+    for (int e = 0; e < 2; e++) {
+        EXPECT_EQ(other.energy[e], st.energy[e]) << (e ? "enhanced" : "retail") << ": energy depends on the camera";
+        EXPECT_EQ(other.spread[e], st.spread[e]) << (e ? "enhanced" : "retail") << ": radius depends on the camera";
+        EXPECT_EQ(other.crease[e], st.crease[e]) << (e ? "enhanced" : "retail") << ": creases depend on the camera";
+    }
 }
 
 // The same at render scale 2 (np-gfx's SceneBlurOffsets: the taps keep the
@@ -926,7 +1011,12 @@ TEST_F(DC3LookPostTest, FollowingOutputDofKeepsTheEnhancedRadius) {
         EXPECT_NEAR(st.energy[1] / st.energy[0], 1.0, 0.03) << s << "x";
         EXPECT_NEAR(st.spread[1] / st.spread[0], 1.0, 0.015) << s << "x: the blur radius is retail's";
         EXPECT_GT(st.spread[0], 3.0) << "the blur reached the profile (non-vacuous)";
-        EXPECT_LT(st.crease[1], st.crease[0]) << s << "x: the B-spline read creases less";
+        EXPECT_LT(st.crease[1], 0.38) << s << "x: the B-spline read does not crease";
+        // At 1.5x retail's bilinear read creases (0.49); at 3x it barely
+        // does (0.31 against the B-spline's 0.31), so only the 1.5x case
+        // can show the bound is not vacuous. A relative check at 3x passed
+        // or failed on the third decimal, by test order.
+        if (!asked) EXPECT_GT(st.crease[0], 0.45) << "retail's bilinear read creases at 1.5x (non-vacuous)";
         d.Shutdown();
     }
 }

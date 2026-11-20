@@ -139,6 +139,7 @@ fn char_test_main() {
     px.specSample = charTestIn.specSample;
     px.rimSample = vec4f(1.0);
     px.ao = vec4f(1.0, 1.0, 1.0, 0.0);
+    px.normalVar = charTestIn.normal.w;
     var proj: Dc3Proj;
     proj.mult = charTestIn.projMult.rgb;
     proj.add = vec3f(0.0);
@@ -174,6 +175,9 @@ protected:
         return Shade(retailLighting, kCases, sizeof(kCases) / sizeof(kCases[0]), kNoShadow);
     }
     static constexpr float kNoShadow[3] = {1.0f, 1.0f, 1.0f};
+    // RetailPixel.normalVar for every case (specular antialiasing; 0 = off,
+    // as retailShade leaves it under the retail look).
+    float mNormalVar = 0.0f;
 
     // `projMult` is the projected light's factor (Dc3Proj.mult) for every case.
     std::vector<float> Shade(float retailLighting, const CharCase *cases, size_t n,
@@ -308,7 +312,7 @@ protected:
             for (int f = 0; f < 6; f++) Copy4(o.boxLight[f], c.box[f]);
             float in[10][4] = {};
             Copy3(in[0], c.P, 1.0f);
-            Copy3(in[1], c.n, 0.0f);
+            Copy3(in[1], c.n, mNormalVar);
             Copy3(in[2], c.t, 0.0f);
             Copy3(in[3], c.b, 0.0f);
             Copy4(in[4], c.normalTex);
@@ -508,6 +512,83 @@ TEST_F(RetailCharShadingTest, SelfShadowNeedsItsCamera) {
     // A case changes only where its normal faces the shadow camera, a tap is
     // in shadow and a point light reaches the pixel: 13 of the 60 (RTX 3090).
     EXPECT_GE(shadowed, total / 6) << "the map's taps do not reach the shading";
+}
+
+// Specular antialiasing (LookSettings::specularAA, item 18 (c); retailShade
+// fills RetailPixel.normalVar from the normal's screen derivatives under the
+// enhanced look, specularAAPower widens the exponent). At normalVar 0 every
+// case above is still the shipped microcode (PixelShadingIsTheShippedMicrocode
+// runs with it zeroed). Here: one point light in front of a surface facing -y
+// (z up, so hair's strand direction is x), the view swept over the
+// hemisphere, the texel black so only the specular is left. A pixel whose
+// normals spread over it (normalVar 0.05: a sphere about 6 px across) gets a
+// wider, lower highlight that reflects the same light -- steadier, not dimmer.
+TEST_F(RetailCharShadingTest, SpecularAAWidensTheLobeAndKeepsItsLight) {
+    struct Kind {
+        int kind;
+        const char *name;
+    };
+    const Kind kinds[] = {{4, "plain"}, {1, "skin"}, {2, "hair"}};
+    for (const Kind &kd : kinds) {
+        std::vector<CharCase> cases;
+        std::vector<double> weight;
+        CharCase c{};
+        c.kind = kd.kind;
+        const float n[3] = {0.0f, -1.0f, 0.0f}, t[3] = {1.0f, 0.0f, 0.0f}, b[3] = {0.0f, 0.0f, 1.0f};
+        memcpy(c.n, n, sizeof n);
+        memcpy(c.t, t, sizeof t);
+        memcpy(c.b, b, sizeof b);
+        const float neutral[4] = {0.5f, 0.5f, 1.0f, 1.0f}, white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+        Copy4(c.normalTex, neutral);
+        Copy4(c.detailTex, neutral);
+        Copy4(c.specTex, white);
+        for (int a = 0; a < 4; a++) {
+            c.c0[a] = 1.0f;
+            c.c2[a] = 1.0f;
+            c.c19[a] = 0.5f;
+        }
+        c.c2[3] = 64.0f;   // the specular power
+        c.k = 1.0f;        // no de_normal
+        // 40 degrees off the normal, so the reflected lobe sits where skin's
+        // Fresnel factor is not zero (it is at normal incidence).
+        c.lightPos[0][1] = -10.0f * std::cos(0.6981317f);
+        c.lightPos[0][2] = 10.0f * std::sin(0.6981317f);
+        c.lightCol[0][0] = c.lightCol[0][1] = c.lightCol[0][2] = c.lightCol[0][3] = 1.0f;
+        constexpr double kPi = 3.14159265358979;
+        const double dTh = 1.5 * kPi / 180.0, dPh = 5.0 * kPi / 180.0;
+        for (double th = 0.5 * dTh; th < 0.5 * kPi; th += dTh)
+            for (double ph = 0.5 * dPh; ph < 2.0 * kPi; ph += dPh) {
+                c.V[0] = (float)(std::sin(th) * std::cos(ph));
+                c.V[1] = (float)-std::cos(th);
+                c.V[2] = (float)(std::sin(th) * std::sin(ph));
+                cases.push_back(c);
+                weight.push_back(std::sin(th) * dTh * dPh);
+            }
+        double energy[2] = {}, peak[2] = {};
+        for (int on = 0; on < 2; on++) {
+            mNormalVar = on ? 0.05f : 0.0f;
+            const std::vector<float> got = Shade(2.0f, cases.data(), cases.size(), kNoShadow);
+            mNormalVar = 0.0f;
+            ASSERT_EQ(got.size(), 3 * cases.size());
+            for (size_t i = 0; i < cases.size(); i++) {
+                const double l = (got[3 * i] + got[3 * i + 1] + got[3 * i + 2]) / 3.0;
+                energy[on] += weight[i] * l;
+                peak[on] = std::max(peak[on], l);
+            }
+        }
+        printf("[ retail char ] specular AA, %-5s p 64, normalVar 0.05: light %.4f -> %.4f (x%.3f), "
+               "peak %.3f -> %.3f (x%.3f)\n",
+               kd.name, energy[0], energy[1], energy[1] / energy[0], peak[0], peak[1],
+               peak[1] / peak[0]);
+        EXPECT_GT(energy[0], 0.01) << kd.name << ": the sweep reaches the highlight (non-vacuous)";
+        // Measured on an RTX 3090: light x1.030 / x1.052 / x0.989 (plain,
+        // skin, hair), peak x0.35 / x0.36 / x0.60. Sabotages: the exponent
+        // left as it was (every peak stays); hair's band lobe not kept
+        // (bandLobe = lobe: hair's light x0.60).
+        EXPECT_GT(energy[1] / energy[0], 0.95) << kd.name << ": the highlight keeps its light";
+        EXPECT_LT(energy[1] / energy[0], 1.1) << kd.name << ": and adds none";
+        EXPECT_LT(peak[1], 0.75 * peak[0]) << kd.name << ": and spreads it";
+    }
 }
 
 } // namespace
