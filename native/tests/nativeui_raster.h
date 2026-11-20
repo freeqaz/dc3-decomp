@@ -8,7 +8,8 @@
 //  - Rounded rectangles are a signed distance test per pixel, with the list's
 //    softness as a linear alpha ramp centred on the edge.
 //  - Images are not loaded: a handle is drawn as a two-tone gradient made from
-//    its id, so different "album art" looks different.
+//    its id, so different "album art" looks different. An icon (nativeui/Icon.h)
+//    is drawn from its own coverage, in its tint.
 //  - Text is a 5x7 dot font, capitals, digits and a little punctuation, spaced
 //    the way FixedAdvanceMeasurer measures (half the size per glyph). Accented
 //    capitals are drawn as their base letter with a mark above.
@@ -17,6 +18,7 @@
 
 #include "nativeui/DisplayList.h"
 #include "nativeui/FixedAdvanceMeasurer.h"
+#include "nativeui/Icon.h"
 #include "nativeui/Renderer.h"
 #include "nativeui/Utf8.h"
 
@@ -24,6 +26,7 @@
 #include <cmath>
 #include <cstdint>
 #include <fstream>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -64,6 +67,10 @@ namespace nativeui_test {
         }
 
         void Draw(const ImageQuad &image) override {
+            if (const std::optional<Icon> icon = IconOf(image.image)) {
+                DrawIcon(*icon, image);
+                return;
+            }
             // Two colours from the id; the picture is a diagonal blend of them.
             const float hue =
                 std::fmod(static_cast<float>(image.image.id) * 0.61803f, 1.0f);
@@ -146,6 +153,23 @@ namespace nativeui_test {
         }
 
     private:
+        // An icon is its coverage in the quad's tint, the way the host draws
+        // it (nearest texel; the host's texture is filtered).
+        void DrawIcon(Icon icon, const ImageQuad &image) {
+            const int size = IconTexelSize(icon);
+            const std::vector<std::uint8_t> coverage = IconCoverage(icon, size);
+            const auto texel = [size](float unit) {
+                return std::min(size - 1, std::max(0, static_cast<int>(unit * size)));
+            };
+            ForEachPixel(image.rect, [&](int x, int y, Vec2 p) {
+                const int column = texel((p.x - image.rect.x) / std::max(image.rect.width, 1.0f));
+                const int row = texel((p.y - image.rect.y) / std::max(image.rect.height, 1.0f));
+                const std::uint8_t alpha =
+                    coverage[static_cast<std::size_t>(row) * size + column];
+                Blend(x, y, image.tint, alpha / 255.0f);
+            });
+        }
+
         std::size_t Index(int x, int y) const {
             return static_cast<std::size_t>(y) * width_ + x;
         }
