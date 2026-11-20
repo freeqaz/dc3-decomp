@@ -36,6 +36,14 @@ and what a fix buys.
   Noise is AR(1) with a 0.1 s correlation time (MediaPipe smooths its own
   landmarks), independent per joint and axis.
 
+  The engine runs headless at 30 frames a second of wall time (--pace-fps 30),
+  so its UI clock (1/30 s a frame) is real time.  That matters: the pose fill
+  (DC3_POSE_FILL, default extrap) decides whether the camera is slow from the
+  song clock, which in the menus is the shell music's -- wall time.  Paced at
+  120 the same camera reads four times faster than it is and the fill never
+  engages (measured: 0.27 filter updates per poll at 8 Hz, i.e. camera frames
+  only), which is not what a player gets.
+
 What a trial is, and what is counted (every rate is n / trials):
   select   "highlight row k, then select it": first_try (the first swipe
            selected the wanted row), ok (within 3 tries), wrong_row (a select
@@ -539,7 +547,7 @@ class Performer:
             seen = []
             lit_since = None
             nudge = 0.0
-            last_move = now
+            last_move = now + 0.45      # when the hand last came to rest
             aim_end = now + AIM_TIMEOUT_S
             scroll_end = now + SCROLL_TIMEOUT_S
             fired = None
@@ -563,7 +571,7 @@ class Performer:
                     # hold the hand in the scroll zone until the row shows
                     if abs(arm.height.v1 - h) > 1e-6:
                         arm.height.go(now, h, 0.25)
-                        last_move = now
+                        last_move = now + 0.25
                     lit_since = None
                     nudge = 0.0
                     aim_end = now + AIM_TIMEOUT_S
@@ -574,7 +582,7 @@ class Performer:
                 goal = h + aim_err + nudge
                 if abs(arm.height.v1 - goal) > 1e-6:
                     arm.height.go(now, goal, 0.25)
-                    last_move = now
+                    last_move = now + 0.25
                 if (old["sym"] == target and old["mode"] != 3 and not old["is_scrolling"]
                         and old["scroll_dir"] == 0):
                     if lit_since is None:
@@ -584,7 +592,8 @@ class Performer:
                 else:
                     lit_since = None
                     if now - last_move > 0.6 and old["mode"] != 3:
-                        # lit, but the wrong row: move half a row towards it
+                        # the hand has rested 0.6 s and the wrong row is lit:
+                        # move half a row towards the wanted one
                         n = max(2, old["num_items"])
                         step = 0.5 / (n - 1)
                         nudge += step if old["selected"] < want else -step
@@ -736,8 +745,12 @@ def run_cell(a):
     log = open(os.path.join(a.out, "bench.log"), "w")
     spec = LISTS[a.list]
     result = dict(list=a.list, rate=a.rate, noise=a.noise, select=a.select, env=a.env,
-                  trials=[], reads=[], idles=[], error=None)
+                  pace_fps=a.pace_fps, trials=[], reads=[], idles=[], error=None)
     b = Bench(a, a.out, log)
+
+    def on_term(signum, frame):
+        raise SystemExit(143)
+    signal.signal(signal.SIGTERM, on_term)
     try:
         b.start(a.env)
         b.wait_screen("title_screen", timeout=180, settle=1.5)
@@ -751,6 +764,7 @@ def run_cell(a):
         st, l = p.look()
         result["updates_per_poll"] = (l["sensor_updates"] / float(l["polls"])
                                       if l and l["polls"] else None)
+        fill0 = st["fill"]
         for i in range(a.idles):
             r = p.idle_trial()
             result["idles"].append(r)
@@ -775,6 +789,10 @@ def run_cell(a):
             b.note(f"read {i} {target}: {r['outcome']} moved={r['highlight_moved']} "
                    f"amt={r['max_swipe_amt']:.2f}")
             p.to_screen(force=bool(r["events"]))
+        fill1 = b.state()["fill"]
+        fills, reals = fill1["fills"] - fill0["fills"], fill1["reals"] - fill0["reals"]
+        result["fill"] = dict(mode=fill1["mode"], engaged_at_end=fill1["engaged"], fills=fills,
+                              reals=reals)
     except FlowError as ex:
         result["error"] = str(ex)
         b.note(f"FAILED: {ex}")
@@ -804,6 +822,13 @@ def run_matrix(a):
     running = []
     failed = 0
     t0 = time.monotonic()
+
+    def on_term(signum, frame):
+        for proc, _, _ in running:
+            proc.terminate()
+        raise SystemExit(143)
+    signal.signal(signal.SIGTERM, on_term)
+    signal.signal(signal.SIGINT, on_term)
     while pending or running:
         while pending and len(running) < a.jobs:
             l, r, n = pending.pop(0)
@@ -823,7 +848,11 @@ def run_matrix(a):
             proc, cell, started = item
             rc = proc.poll()
             if rc is None and time.monotonic() - started > a.cell_timeout:
-                proc.kill()
+                proc.terminate()        # the cell stops its engine
+                try:
+                    proc.wait(20)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
                 rc = -9
             if rc is not None:
                 running.remove(item)
@@ -862,7 +891,9 @@ def summarize(r):
                 read_moved=sum(1 for x in reads if x["highlight_moved"]),
                 idles=len(r["idles"]),
                 idle_false=sum(1 for x in r["idles"] if x["outcome"] == "false_select"),
-                upp=r.get("updates_per_poll"), error=r.get("error"))
+                upp=r.get("updates_per_poll"), error=r.get("error"),
+                fill=(lambda f: None if not f or not (f["fills"] + f["reals"])
+                      else f["fills"] / float(f["fills"] + f["reals"]))(r.get("fill")))
 
 
 def print_table(d, base):
@@ -872,7 +903,7 @@ def print_table(d, base):
     norder = {"none": 0, "video": 1, "photo": 2, "gpd": 3}
     keys = sorted(res, key=lambda k: (order.get(k[0], 9), norder.get(k[2], 9), -float(k[1])))
     hdr = ("list   Hz  noise | first try      ok(<=3)    wrong  false  none  aim | "
-           "t med   p90 | read: false moved | idle false | upd/poll")
+           "t med   p90 | read: false moved | idle false | upd/poll fill")
     print(hdr)
     print("-" * len(hdr))
     for k in keys:
@@ -885,7 +916,8 @@ def print_table(d, base):
                   f"{s['wrong']:4d}  {s['false']:4d}  {s['none']:4d} {s['aim']:4d} | "
                   f"{t(s['t_med'])} {t(s['t_p90'])} | {s['read_false']:5d}/{s['reads']:<2d} "
                   f"{s['read_moved']:3d}/{s['reads']:<2d} | {s['idle_false']:3d}/{s['idles']:<2d}    | "
-                  f"{s['upp'] if s['upp'] is None else round(s['upp'], 2)}{tag}"
+                  f"{'-' if s['upp'] is None else '%.2f' % s['upp']} "
+                  f"{'   -' if s['fill'] is None else '%3.0f%%' % (100 * s['fill'])}{tag}"
                   f"{'  ERROR: ' + s['error'] if s['error'] else ''}")
     return 0
 
@@ -899,8 +931,10 @@ def main():
     def common(p):
         p.add_argument("--engine", default=default_engine)
         p.add_argument("--out", required=True, help="results directory")
-        p.add_argument("--pace-fps", type=float, default=120.0,
-                       help="engine frames per wall second (DC3_HTTP_PACE_FPS)")
+        p.add_argument("--pace-fps", type=float, default=30.0,
+                       help="engine frames per wall second (DC3_HTTP_PACE_FPS); 30 = real "
+                            "time, the only pace at which the pose fill sees the camera's "
+                            "true rate in the menus (see the docstring)")
         p.add_argument("--env", action="append", default=[], help="extra KEY=VALUE for the engine")
         p.add_argument("--trials", type=int, default=30, help="select trials per cell")
         p.add_argument("--reads", type=int, default=10, help="5 s reads per cell")
@@ -945,6 +979,10 @@ def explore(a):
     os.makedirs(a.out, exist_ok=True)
     log = open(os.path.join(a.out, "bench.log"), "w")
     b = Bench(a, a.out, log)
+
+    def on_term(signum, frame):
+        raise SystemExit(143)
+    signal.signal(signal.SIGTERM, on_term)
     try:
         b.start(a.env)
         b.wait_screen("title_screen", timeout=180, settle=1.5)

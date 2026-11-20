@@ -12,6 +12,7 @@
 #include "hamobj/HamListRibbon.h"
 #include "hamobj/HamNavList.h"
 #include "obj/Task.h"
+#include "platform/PoseFill_Native.h"
 #include "ui/UIListProvider.h"
 
 #include <cstdio>
@@ -201,8 +202,12 @@ std::string StateJson(unsigned since, bool reset, bool rows) {
     char buf[768];
     float now = Now();
     std::string out;
-    snprintf(buf, sizeof(buf), "{\"ui_seconds\":%.4f,\"controller_mode\":%d,\"selects\":%u,\"lists\":[",
-             now, TheGestureMgr && TheGestureMgr->InControllerMode() ? 1 : 0, gSelects);
+    const Dc3PoseFill::Filler &fill = NativePoseFiller();
+    snprintf(buf, sizeof(buf),
+             "{\"ui_seconds\":%.4f,\"controller_mode\":%d,\"selects\":%u,"
+             "\"fill\":{\"mode\":\"%s\",\"engaged\":%d,\"fills\":%u,\"reals\":%u},\"lists\":[",
+             now, TheGestureMgr && TheGestureMgr->InControllerMode() ? 1 : 0, gSelects,
+             Dc3PoseFill::ModeName(fill.GetMode()), fill.Engaged() ? 1 : 0, fill.Fills(), fill.Reals());
     out += buf;
     bool first = true;
     for (size_t i = 0; i < gLists.size(); i++) {

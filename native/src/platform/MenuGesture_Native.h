@@ -35,8 +35,10 @@ void NoteSensorUpdate(const HamNavList *list);
 // The end of HamNavList::Poll, once per frame per polled list.
 void NotePoll(HamNavList *list);
 
-// {"ui_seconds":..,"controller_mode":..,"selects":N,"lists":[..],"events":[..]}
-// -- the lists polled within the last 0.2 UI seconds and every select with
+// {"ui_seconds":..,"controller_mode":..,"selects":N,"fill":{..},"lists":[..],
+// "events":[..]} -- the pose fill's state (DC3_POSE_FILL: its mode, whether it
+// is engaged, how many fill and camera frames it has delivered while engaged),
+// the lists polled within the last 0.2 UI seconds and every select with
 // seq > `since` (the last 256 are kept).  `reset` clears each list's running
 // maxima and counters after reading them.  `rows`: also each list's data
 // symbols, captured on its next poll (so ask, wait a frame, ask again).
