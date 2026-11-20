@@ -58,11 +58,12 @@ take it before dc3-native binds, seconds later. Use `DC3_HTTP_PORT=0` with
 
 ```bash
 curl localhost:9090/api/health
-# {"ok":true,"data":{"status":"ok","frame":1234,"uptime_s":5.2,"pid":4321}}
+# {"ok":true,"data":{"status":"ok","frame":1234,"uptime_s":5.2,"pid":4321,"output_w":1920,"output_h":1080,"thermal_level":-1,"thermal_row_cap":0}}
 ```
 
 Poll this to know when the engine is ready. `uptime_s` is wall-clock seconds since the server started (`steady_clock`; it used to read `TaskMgr kRealTime`, which the game sets to song time). `pid` is the engine's process id,
 so a driver can check that the engine answering is the one it launched. Scripts can wait for a successful response before interacting.
+`output_w`/`output_h` are the size the frame leaves the renderer at (a screenshot's size); `thermal_level` (-1 unknown, 0 nominal .. 3 critical) and `thermal_row_cap` (0 = none) are the thermal governor's, see [Thermal governor](#thermal-governor).
 
 ### Telemetry
 
@@ -451,6 +452,35 @@ unpaced.
 curl localhost:9090/api/pace                    # {"ok":true,"data":{"fps":120.000}}
 curl -X PUT 'localhost:9090/api/pace?fps=0'     # unpaced (e.g. for a song nobody gestures in)
 ```
+
+### Thermal governor
+
+The engine lowers the output's row cap in steps (1080, 900, 720 rows) when the
+machine reports thermal pressure and the game is under its frame rate, and
+raises it again once it has cooled (PLAN H-128; the rule and its constants are
+in the engine's `src/gfx/ThermalGovernor.h`, the knobs in
+`docs/debugging/native.md`). Only macOS reports a level, so anywhere else a
+test injects one:
+
+```bash
+curl localhost:9090/api/thermal
+# {"ok":true,"data":{"enabled":true,"level":2,"level_name":"serious","injected":true,
+#   "target_fps":60.00,"window_fps":20.00,"late_windows":0,"row_cap":900,"base_rows":1080,
+#   "output_w":1600,"output_h":900,"steps_down":1,"steps_up":0,"cool_s":0.0}}
+curl -X PUT 'localhost:9090/api/thermal?level=2'   # inject: 0 nominal, 1 fair, 2 serious, 3 critical
+curl -X PUT 'localhost:9090/api/thermal?level=os'  # withdraw it: the OS's own level again
+```
+
+`enabled` is `MILO_THERMAL_GOVERNOR`; `target_fps` the rate the game is meant
+to hold (its frame cap, else 60, never above the display's); `window_fps` the
+last judged one-second window and `late_windows` how many in a row were late;
+`row_cap` the governor's cap (0 = none) over an output of `base_rows` without
+it; `cool_s` how long the level has been nominal. Until a level has been seen
+the governor has not run, and `base_rows`/`window_fps` read 0. A step down
+needs late frames as well as a level: hold the frame rate under the target
+with `PUT /api/pace?fps=20` (a headless run is otherwise far above 60). That
+is what `NativeExitTest.ThermalPressureWithLateFramesLowersTheOutputAndCoolingRestoresIt`
+does.
 
 ### GPU time per render pass
 

@@ -185,6 +185,24 @@ the cap off (`MILO_OUTPUT_MAX_ROWS=0`). A 60 Hz frame is 16.7 ms.
   display at 60 Hz the Retina setting matters more: by pixel count from the
   3420x1924 column, 3840x2160 would be about 25 ms on the main menu, 27 ms on
   song select and 20 ms in gameplay (extrapolated, not measured).
+- **Heat costs frames after about 12 minutes at 1440 rows, and the game now
+  gives up rows for them.** The same evening at 2560x1440 with the GPU 92-95 %
+  busy, macOS went from thermal state 0 to 2 about 12 minutes in and throttled:
+  song select fell from 62 fps to 32-42, a song from 64-69 to 45-51, the pose
+  tracker's inference from 21 ms to 50-80 ms. Since [PLAN](PLAN.md) H-128 the
+  engine reads `NSProcessInfo.thermalState` once a second and, when it is fair
+  or worse AND the game has been under 90 % of its frame rate for 5 s (2 s at
+  serious or critical), lowers the output's row cap one step: 1080, then 900,
+  then 720 rows, never lower, and never above the cap already in force (with
+  the launcher's `MILO_OUTPUT_MAX_ROWS=0` a 1440-row frame goes to 1080 first).
+  It gives a step back after 90 s at nominal, one step per 90 s. Each change
+  prints one line (`GpuDevice: thermal level 2 (serious), frames late: output
+  2560x1440 -> 1920x1080 (thermal row cap 1080)`), the first one in a session
+  also shows a short banner in the next menu, and `MILO_THERMAL_GOVERNOR=0`
+  turns it off. Tested on Linux with the level injected (`MILO_THERMAL_STATE`,
+  `PUT /api/thermal`); **not yet compiled or run on a Mac**: the probe
+  (`ThermalState_Mac.mm`, one line) and what the steps do to the temperature
+  and the frame rate on the Air are both still to be measured there.
 - **The per-pass GPU timers do not separate passes on this GPU.** A tile-based
   renderer runs a frame's passes interleaved, so each pass's `MILO_GPU_TIMERS`
   figure is close to the whole frame's span. Read `gpu_span_ms`; use

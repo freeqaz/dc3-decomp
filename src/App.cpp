@@ -1246,6 +1246,8 @@ void App::RunWithoutDebugging() {
         const std::string slow = Dc3SlowDisplayNotice(windowed, refreshHz);
         if (!slow.empty())
             NativeNotice::Post("display_rate", slow, "", 15.0f);
+        // H-128: the rate the engine's thermal governor holds the game to.
+        Dc3ThermalSetTarget(cap.fps, refreshHz);
     }
 
     if (windowed) {
@@ -1295,6 +1297,8 @@ void App::RunWithoutDebugging() {
 
         // DC3_MENU_SELECT: the F1 key steps swipe -> hold -> both.
         Dc3MenuSelectFramePoll();
+        // H-128: the first time heat softens the picture, say so -- in a menu.
+        Dc3ThermalFramePoll(TheUI && TheUI->IsGameScreenActive());
 
         GameplayTelemetry::Sample(frameCount);
 #ifdef DC3_HTTP_SERVER
