@@ -1706,13 +1706,19 @@ TEST_F(DC3LookPostTest, DofNearFieldSoftensANearObjectsEdgeAndLeavesTheFarField)
     run(false, false, false, false, nearOut[0]);
     run(true, true, false, false, nearOut[1]);
     EXPECT_FALSE(dof.LastRunNearField());
+    // Without the near field the pre-pass writes the one-channel target it
+    // wrote before the near field existed: an adapter the rule leaves off
+    // (LookDofNearField) runs the depth of field's old passes, not a wider one.
+    EXPECT_EQ(dof.FactorTargetFormat(), wgpu::TextureFormat::R16Float);
     run(true, true, true, false, nearOut[2]);
     EXPECT_TRUE(dof.LastRunNearField());
+    EXPECT_EQ(dof.FactorTargetFormat(), wgpu::TextureFormat::RG16Float) << "the near field's channel";
     run(true, true, true, true, nearOut[3]);
     run(true, false, true, true, tmp);
     EXPECT_FALSE(dof.LastRunNearField()) << "the near field rides on the depth weight only";
     drawDepth(zFocus, 1.0f);   // mirrored: the dark half behind the focus
     run(true, true, false, false, farOut[1]);
+    EXPECT_EQ(dof.FactorTargetFormat(), wgpu::TextureFormat::R16Float) << "switched back: one channel again";
     run(true, true, true, false, farOut[2]);
     run(true, true, true, true, farOut[3]);
     EXPECT_EQ(GpuPipelineCreateCount(), pipesWarm) << "Prewarm(.., nearField) warms every near-field pipeline; "
@@ -1799,38 +1805,54 @@ TEST(DC3LookDofNear, FollowsTheLookAndItsSwitch) {
     }
 }
 
-// The spread is decided by adapter class, as supersampling is
-// (milo::LookDofNearSpread): the composite pays one more texture read at every
-// full-size pixel for it. Enhanced: on for a discrete GPU, off for anything
-// else until a handheld's timing says it fits (the second expectation below is
-// that default; it moves with LookProfile.cpp when the timing is in). The field
-// is on for every adapter. The on and off tokens force the spread on any GPU;
-// the rule token returns each class to the profile's. Sabotages:
-// LookDofNearSpread ignoring the class -- red (a non-discrete adapter
-// spreads); the on token writing the discrete value only -- red (forced on
-// reads off on a non-discrete adapter).
-TEST(DC3LookDofNear, TheSpreadFollowsTheAdapterClass) {
+// The near field and its spread are decided by adapter class, as
+// supersampling is (milo::LookDofNearField / LookDofNearSpread): the field
+// adds a second quarter target and 8 reads per quarter texel to each blur, the
+// spread one more read at every full-size pixel of the composite. Enhanced: on
+// for a discrete GPU, off for anything else until a handheld's timing says
+// each fits (the "anything else" expectations below are that default; they
+// move with LookProfile.cpp when the timing is in). The on and off tokens
+// force each on any GPU; the rule token returns each class to the profile's.
+// Sabotages: a helper ignoring the class -- red (a non-discrete adapter gets
+// it); an on token writing the discrete value only -- red (forced on reads off
+// on a non-discrete adapter).
+TEST(DC3LookDofNear, TheNearFieldFollowsTheAdapterClass) {
     {
         milo::ScopedLookOverride o(milo::LookProfile::Enhanced);
         const milo::LookSettings rule = milo::Look();
-        EXPECT_TRUE(rule.postDofNearField) << "the field is on for every adapter";
+        EXPECT_TRUE(milo::LookDofNearField(rule, true)) << "a discrete GPU has the near field";
+        EXPECT_FALSE(milo::LookDofNearField(rule, false)) << "anything else does not, until it is timed";
         EXPECT_TRUE(milo::LookDofNearSpread(rule, true)) << "a discrete GPU spreads";
         EXPECT_FALSE(milo::LookDofNearSpread(rule, false)) << "anything else does not, until it is timed";
-        EXPECT_TRUE(milo::SetLookDofNearForInspection(1, true));
-        EXPECT_TRUE(milo::LookDofNearSpread(milo::Look(), true));
-        EXPECT_TRUE(milo::LookDofNearSpread(milo::Look(), false)) << "the on token forces it on any GPU";
-        EXPECT_TRUE(milo::SetLookDofNearForInspection(0, true));
-        EXPECT_FALSE(milo::LookDofNearSpread(milo::Look(), true)) << "the off token forces it off on any GPU";
-        EXPECT_FALSE(milo::LookDofNearSpread(milo::Look(), false));
-        EXPECT_TRUE(milo::SetLookDofNearForInspection(-1, true));
-        EXPECT_TRUE(milo::LookDofNearSpread(milo::Look(), true)) << "the rule token returns each class to the profile's";
-        EXPECT_FALSE(milo::LookDofNearSpread(milo::Look(), false));
-        EXPECT_TRUE(milo::Look().postDofNearField) << "the spread tokens leave the field";
+        for (bool spread : {false, true}) {
+            auto get = [&](bool discrete) {
+                return spread ? milo::LookDofNearSpread(milo::Look(), discrete)
+                              : milo::LookDofNearField(milo::Look(), discrete);
+            };
+            auto other = [&](bool discrete) {
+                return spread ? milo::LookDofNearField(milo::Look(), discrete)
+                              : milo::LookDofNearSpread(milo::Look(), discrete);
+            };
+            const bool otherDiscrete = other(true), otherElse = other(false);
+            EXPECT_TRUE(milo::SetLookDofNearForInspection(1, spread));
+            EXPECT_TRUE(get(true)) << "spread " << spread;
+            EXPECT_TRUE(get(false)) << "the on token forces it on any GPU; spread " << spread;
+            EXPECT_TRUE(milo::SetLookDofNearForInspection(0, spread));
+            EXPECT_FALSE(get(true)) << "the off token forces it off on any GPU; spread " << spread;
+            EXPECT_FALSE(get(false)) << "spread " << spread;
+            EXPECT_TRUE(milo::SetLookDofNearForInspection(-1, spread));
+            EXPECT_TRUE(get(true)) << "the rule token returns each class to the profile's; spread " << spread;
+            EXPECT_FALSE(get(false)) << "spread " << spread;
+            EXPECT_EQ(other(true), otherDiscrete) << "one's tokens leave the other; spread " << spread;
+            EXPECT_EQ(other(false), otherElse) << "spread " << spread;
+        }
     }
     for (milo::LookProfile p : {milo::LookProfile::Retail, milo::LookProfile::Native}) {
         milo::ScopedLookOverride o(p);
-        EXPECT_FALSE(milo::LookDofNearSpread(milo::Look(), true)) << "only the enhanced look spreads";
-        EXPECT_FALSE(milo::LookDofNearSpread(milo::Look(), false));
+        for (bool discrete : {false, true}) {
+            EXPECT_FALSE(milo::LookDofNearField(milo::Look(), discrete)) << "only the enhanced look has it";
+            EXPECT_FALSE(milo::LookDofNearSpread(milo::Look(), discrete));
+        }
     }
 }
 
