@@ -49,6 +49,7 @@
 // {rnd native_look retail} in a run started enhanced, world textures (and
 // retail's text and HUD samplers) read retail's two levels.
 #include "test_helpers.h"
+#include "gfx/DisplayRamp.h"
 
 #include "gfx/GpuDevice.h"
 #include "gfx/PipelineManager.h"
@@ -627,11 +628,21 @@ CutoutFrames DrawCutoutFrames() {
 
 // A resolved coverage c of white over black, as the read-back frame shows it
 // relative to white: the headless frame is read after DC3's display gamma
-// ramp (rndshape::DisplayGamma, DisplayRamp.h: byte i -> (i / 256)^g), so c
-// reads c^g (0.25 -> 0.308 and 0.5 -> 0.555 at g = 0.85).
+// ramp (rndshape::DisplayGamma, DisplayRamp.h), so c reads c^g under display
+// type sRGB (0.25 -> 0.308 and 0.5 -> 0.555 at g = 0.85) and the console's
+// TV-corrected code under the default type TV (DisplayRamp::HardwareTable,
+// interpolated between bytes: 0.25 -> 0.248, 0.5 -> 0.509).
 double Shown(double c) {
     const float g = rndshape::DisplayGamma(false);
-    return g > 0.0f ? std::pow(c, (double)g) : c;
+    if (g <= 0.0f) return c;
+    const int type = rndshape::DisplayGammaType();
+    if (type == DisplayRamp::kDisplaySRGB) return std::pow(c, (double)g);
+    uint16_t hw[256];
+    DisplayRamp::HardwareTable(g, type, DisplayRamp::kDefaultPower, hw);
+    const double x = std::min(std::max(c, 0.0), 1.0) * 255.0;
+    const int i0 = (int)x, i1 = std::min(i0 + 1, 255);
+    const double f = x - i0;
+    return (hw[i0] * (1.0 - f) + hw[i1] * f) / hw[255];
 }
 
 bool FrameIsTheLayoutsSize() {
