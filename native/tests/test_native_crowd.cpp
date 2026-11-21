@@ -30,6 +30,7 @@
 #include <gtest/gtest.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <set>
 #include <sstream>
@@ -79,6 +80,7 @@ struct Sample {
     int draws3d = 0;
     int impostors = 0;
     double pose = 0;
+    int shadows = -1; // contact shadows asked for (np-look32); -1 not printed
 };
 
 struct CrowdRun {
@@ -140,8 +142,12 @@ CrowdRun RunYmca() {
                 &s.impostors,
                 &s.pose
             )
-            == 4)
+            == 4) {
+            const char *sh = strstr(line.c_str(), " shadows=");
+            if (sh)
+                sscanf(sh, " shadows=%d", &s.shadows);
             r.samples.push_back(s);
+        }
     }
     return r;
 }
@@ -191,6 +197,29 @@ TEST_F(CrowdTest, TheVenueCrowdIsDrawnIn3DEveryFrameAndAnimates) {
     // crowd objects, never all of them.
     EXPECT_EQ(frames3d, n) << "sampled frames without a single 3D crowd draw. log: " << logPath;
     EXPECT_GE(r.samples.front().draws3d, 20) << "log: " << logPath;
+    // np-look32: under the enhanced look (the default; this run sets no
+    // DC3_LOOK) every 3D crowd draw asks for one contact shadow; under retail
+    // none. Counted in Crowd.cpp whether or not a renderer draws them, so this
+    // no-GPU run sees the request. Sabotage: the NativeCrowdContactShadow call
+    // removed from Draw3DChars -> shadows=0 against draws3d > 0.
+    {
+        const char *look = getenv("DC3_LOOK");
+        const bool retail = look && !strcmp(look, "retail");
+        int bad = 0;
+        std::string first;
+        for (const Sample &s : r.samples) {
+            const int want = retail ? 0 : s.draws3d;
+            if (s.shadows != want) {
+                if (!bad)
+                    first = "frame " + std::to_string(s.frame) + ": draws3d="
+                        + std::to_string(s.draws3d) + " shadows=" + std::to_string(s.shadows);
+                bad++;
+            }
+        }
+        EXPECT_EQ(bad, 0) << bad << " sampled frames where the crowd's contact shadows ("
+                          << (retail ? "retail: none" : "enhanced: one per 3D draw")
+                          << ") do not match; first " << first << ". log: " << logPath;
+    }
     EXPECT_EQ(impostorFrames, 0)
         << "a crowd member was rendered as an impostor; every rollerrink crowd loads force=1, "
            "so the image draws them all in 3D. log: "

@@ -216,6 +216,9 @@ Rnd::Rnd()
 // TV (the console's D3D::GammaRampCorrected, the default), the ramp alone (a
 // VGA-cabled console), no ramp (the front buffer), or DC3_DISPLAY_GAMMA's /
 // the default; one 256-entry table upload, nothing compiles after the first;
+// crowd_shadow_on|crowd_shadow_off|crowd_shadow_rule switch the soft contact
+// shadows under the 3D crowd (np-look32, LookSettings::crowdContactShadow;
+// enhanced's rule on, retail's off; nothing compiles after the first);
 // {rnd native_look} alone reports it. Returns the profile
 // now in force.
 static Symbol NativeLook(const DataArray *msg) {
@@ -258,6 +261,9 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "display_srgb") rndshape::SetDisplayTypeForInspection(DisplayRamp::kDisplaySRGB);
         else if (s == "display_off") rndshape::SetDisplayTypeForInspection(0);
         else if (s == "display_rule") rndshape::SetDisplayTypeForInspection(-1);
+        else if (s == "crowd_shadow_on") milo::SetLookCrowdShadowForInspection(1);
+        else if (s == "crowd_shadow_off") milo::SetLookCrowdShadowForInspection(0);
+        else if (s == "crowd_shadow_rule") milo::SetLookCrowdShadowForInspection(-1);
         else MILO_NOTIFY("native_look: %s is not retail, enhanced, post_retail, post_enhanced, "
                          "post_precision, post_bloom_filter, post_dof_filter, specular_aa_on, "
                          "specular_aa_off, lod_bias_0, lod_bias_m05, lod_bias_m1, "
@@ -267,7 +273,8 @@ static Symbol NativeLook(const DataArray *msg) {
                          "dof_depth_weight_off, dof_depth_weight_rule, hair_edge_on, "
                          "hair_edge_off, hair_edge_rule, hair_edge_b, hair_edge_c, "
                          "hair_edge_e, hair_edge_centre, display_tv, display_srgb, "
-                         "display_off or display_rule", s.Str());
+                         "display_off, display_rule, crowd_shadow_on, crowd_shadow_off "
+                         "or crowd_shadow_rule", s.Str());
     }
     return milo::LookProfileName(milo::Look().profile);
 }
