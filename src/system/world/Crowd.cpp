@@ -29,6 +29,8 @@ inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include "platform/ContactShadowHook.h"
+#include "platform/LookProfile.h"
 #else
 #include "xdk\LIBCMT\ppcintrinsics.h"
 #endif
@@ -42,20 +44,23 @@ static WorldCrowd *gParent = nullptr;
 #ifdef HX_NATIVE
 // Native-only crowd draw counters (PLAN H-6), off unless DC3_CROWD_STATS is
 // set. Value N > 0 prints one line every N render frames:
-//   DC3_CROWD: frame=F draws3d=D impostors=I pose=P ms=T
+//   DC3_CROWD: frame=F draws3d=D impostors=I pose=P ms=T shadows=S
 // draws3d counts Draw3DChars' curChar->Draw() calls (one per 3D crowd member),
 // impostors counts DrawShowing's renders of a character into gImpostorTex, and
 // pose is a checksum of the local transforms of every transformable inside
 // each Character drawn that frame, so it moves when the crowd animates; ms is
 // the wall time spent inside WorldCrowd::DrawShowing that frame (CPU-side
-// recording of the crowd's draws, less the checksum walk). Read by
-// native/tests/test_native_crowd.cpp; draws nothing and changes nothing.
+// recording of the crowd's draws, less the checksum walk); shadows counts the
+// contact shadows the look asked for (np-look32, NativeCrowdContactShadow;
+// counted whether or not a renderer draws them, so a no-GPU run sees them).
+// Read by native/tests/test_native_crowd.cpp; draws nothing and changes nothing.
 namespace {
     struct NativeCrowdStats {
         int every = -1; // -1 unread, 0 off
         unsigned int frame = 0;
         int draws3d = 0;
         int impostors = 0;
+        int shadows = 0; // contact shadows asked for (np-look32)
         double pose = 0;
         double ms = 0;
         bool any = false;
@@ -75,15 +80,17 @@ namespace {
                 if (frame % (unsigned int)every == 0) {
                     fprintf(
                         stderr,
-                        "DC3_CROWD: frame=%u draws3d=%d impostors=%d pose=%.6f ms=%.3f\n",
+                        "DC3_CROWD: frame=%u draws3d=%d impostors=%d pose=%.6f ms=%.3f "
+                        "shadows=%d\n",
                         frame,
                         draws3d,
                         impostors,
                         pose,
-                        ms
+                        ms,
+                        shadows
                     );
                 }
-                draws3d = impostors = 0;
+                draws3d = impostors = shadows = 0;
                 pose = ms = 0;
             }
             frame = now;
@@ -115,6 +122,12 @@ namespace {
             draws3d++;
             AddPose(c);
         }
+        void OnShadow() {
+            if (!On())
+                return;
+            Roll();
+            shadows++;
+        }
         void OnImpostor(Character *c) {
             if (!On())
                 return;
@@ -123,6 +136,49 @@ namespace {
             AddPose(c);
         }
     } sNativeCrowdStats;
+
+    // Crowd contact shadows (np-look32, LookSettings::crowdContactShadow, the
+    // DC3 enhanced look; engine platform/ContactShadowHook.h). The original
+    // draws no shadow of any kind under the crowd: Draw3DChars below turns self
+    // and floor shadow off in game and the crowd models carry none, so on pale
+    // ground the crowd floats. This hands the renderer one soft ellipse on the
+    // ground at the member's feet (its Character's origin once Apply3DCharXfm
+    // has placed it: the instance sits at half the member's height), as wide
+    // as about a shoulder (0.2 x mHeight half extent side to side, 0.13 x front
+    // to back), lifted 0.005 x mHeight off its ground plane so the floor's own
+    // depth does not hide it. Normal draws only: not the occlusion-depth pass,
+    // and the renderer itself refuses anything but the main frame pass (no
+    // reflection, impostor or shadow-map render).
+    const float kShadowHalfSide = 0.2f;
+    const float kShadowHalfDepth = 0.13f;
+    const float kShadowLift = 0.005f;
+
+    void NativeCrowdContactShadow(Character *c, float height) {
+        if (TheRnd.DrawMode() != Rnd::kDrawNormal || !milo::Look().crowdContactShadow)
+            return;
+        sNativeCrowdStats.OnShadow();
+        NativeContactShadowRenderer *r = GetNativeContactShadowRenderer();
+        if (!r || !r->WantsContactShadows())
+            return;
+        const Transform &x = c->WorldXfm();
+        Vector3 side = x.m.x, fwd = x.m.y, up = x.m.z;
+        Normalize(side, side);
+        Normalize(fwd, fwd);
+        Normalize(up, up);
+        NativeContactShadow s;
+        const float lift = kShadowLift * height;
+        s.centre[0] = x.v.x + up.x * lift;
+        s.centre[1] = x.v.y + up.y * lift;
+        s.centre[2] = x.v.z + up.z * lift;
+        const float a = kShadowHalfSide * height, b = kShadowHalfDepth * height;
+        s.axisA[0] = side.x * a;
+        s.axisA[1] = side.y * a;
+        s.axisA[2] = side.z * a;
+        s.axisB[0] = fwd.x * b;
+        s.axisB[1] = fwd.y * b;
+        s.axisB[2] = fwd.z * b;
+        r->QueueContactShadow(s);
+    }
 
     // Times one WorldCrowd::DrawShowing into sNativeCrowdStats.ms.
     struct NativeCrowdDrawTimer {
@@ -775,6 +831,7 @@ void WorldCrowd::Draw3DChars() {
                     curChar->Draw();
 #ifdef HX_NATIVE
                     sNativeCrowdStats.On3DDraw(curChar);
+                    NativeCrowdContactShadow(curChar, it->mDef.mHeight);
 #endif
                     if (mCharForceLod != kLODPerFrame) {
                         curChar->SetLodType(kLODPerFrame);
