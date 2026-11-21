@@ -202,9 +202,6 @@ Rnd::Rnd()
 // output-row re-tiling (np-look23 a; enhanced's rule on, retail's off);
 // dof_depth_weight_on|dof_depth_weight_off|dof_depth_weight_rule switch the
 // enhanced depth of field's depth-weighted blur (np-look23 c);
-// dof_depth_weight_loads_16|dof_depth_weight_loads_4|dof_depth_weight_loads_1|
-// dof_depth_weight_half_factor pick how its downsample gathers the weight
-// (np-look23 c2, inspection only, for timing; 16 is the default);
 // {rnd native_look} alone reports it. Returns the profile
 // now in force.
 static Symbol NativeLook(const DataArray *msg) {
@@ -236,19 +233,13 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "dof_depth_weight_on") milo::SetLookDofDepthWeightForInspection(1);
         else if (s == "dof_depth_weight_off") milo::SetLookDofDepthWeightForInspection(0);
         else if (s == "dof_depth_weight_rule") milo::SetLookDofDepthWeightForInspection(-1);
-        else if (s == "dof_depth_weight_loads_16") milo::SetLookDofDepthWeightLoadsForInspection(16);
-        else if (s == "dof_depth_weight_loads_4") milo::SetLookDofDepthWeightLoadsForInspection(4);
-        else if (s == "dof_depth_weight_loads_1") milo::SetLookDofDepthWeightLoadsForInspection(1);
-        else if (s == "dof_depth_weight_half_factor") milo::SetLookDofDepthWeightLoadsForInspection(0);
         else MILO_NOTIFY("native_look: %s is not retail, enhanced, post_retail, post_enhanced, "
                          "post_precision, post_bloom_filter, post_dof_filter, specular_aa_on, "
                          "specular_aa_off, lod_bias_0, lod_bias_m05, lod_bias_m1, "
                          "lod_bias_rule, aniso_1, aniso_4, aniso_16, aniso_rule, "
                          "refl_cull_force, refl_cull_flip, refl_cull_rule, noise_rows_on, "
                          "noise_rows_off, noise_rows_rule, dof_depth_weight_on, "
-                         "dof_depth_weight_off, dof_depth_weight_rule, dof_depth_weight_loads_16, "
-                         "dof_depth_weight_loads_4, dof_depth_weight_loads_1 or "
-                         "dof_depth_weight_half_factor", s.Str());
+                         "dof_depth_weight_off or dof_depth_weight_rule", s.Str());
     }
     return milo::LookProfileName(milo::Look().profile);
 }
