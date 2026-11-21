@@ -513,6 +513,7 @@ Tests: `NativeExitTest.*` and `NativeWindowTest.*` (run their own Xvfb; no windo
 | `MILO_INPUT_LOG` | dev profile `1`, release unset | Non-zero: one `Joypad: down pad=0 button=7 (X) action=14` / `Joypad: up ...` line per button message, any source (keyboard, gamepad, script, HTTP) | `../milo-native-engine/src/platform/Joypad_Native.cpp` |
 | `DC3_CONTROLLER_MODE` | `auto` | `auto`, `forced` or `faithful` (see [Controller Mode Policy](#controller-mode-policy)) | `native/src/platform/System_Native.cpp` |
 | `DC3_CONTROLLER_MODE_TIMEOUT_MS` | helpbar value | faithful policy only: overrides the helpbar's `controller_mode_timeout` | `native/src/platform/System_Native.cpp` |
+| `DC3_CONTROLLER_HOLD_MS` | `300000`, or `DC3_CONTROLLER_MODE_TIMEOUT_MS` when that is set | faithful policy only: how long a keyboard/pad press keeps the menus without another one; both hands raised end it at once. `0` = off (the image's 5 s idle exit). See [Controller Mode Policy](#controller-mode-policy) | `native/src/platform/System_Native.cpp` |
 | `DC3_HTTP_PACE_FPS` | unset (unpaced) | Cap the frame rate of a debug-server run, so a client answering every frame (the synthetic performer on `/api/frame/wait`) keeps up; `PUT /api/pace?fps=N` changes it at run time | `native/src/platform/HttpServer.cpp` |
 | `DC3_MESHFILTER_LOG` / `DC3_MESHFILTER_ALLOW` | unset | Log each mesh `MeshFilter` refuses (once, with its rule) / draw what the named rules (or `all`) would refuse | `native/src/platform/MeshFilter.cpp` |
 | `DC3_PLAYER_BOX` | `auto` | The cursor panel's two player boxes (top corners of the menus, under each score in a song). `auto`: drawn only while a camera stream is live; `on`: always, as before 2026-11-21; `off`: never. Changes at run time with `{native_settings set_player_box auto\|on\|off}`; `GET /api/camera`'s `playerBox` member says what the draws did (PLAN H-147) | `native/src/platform/PlayerBox_Native.h` |
@@ -767,8 +768,35 @@ logged as `DC3 Native: controller mode policy = ...`):
 | `faithful` | The image's logic: boot out of controller mode; `ShellInput::Enter/ExitControllerMode` run their image bodies (helpbar flows, `controller_mode_entered/exited`, `in_controller_mode`, RockCentral counters, active player); the idle timeout and the gameplay-panel exit in `ShellInput::Poll` fire. Each enter/exit logs `DC3 ControllerMode: enter/exit (...)` with the idle time and timeout. `DC3_CONTROLLER_MODE_TIMEOUT_MS` overrides the timeout (the tests use 750). |
 
 With a camera, the keyboard and pad still work as on a 360: the first press
-wakes controller mode (and is swallowed unless it is B), the rest navigate,
-and 5 s without a press hands the UI back to the hands. A button-driven tool
+wakes controller mode (and is swallowed unless it is B) and the rest
+navigate. What differs from the 360 is how the hands get the UI back, **the
+press hold** (`System_Native.cpp`, PLAN H-157). The image hands it back 5 s
+after the last press; a webcam at a desk sees the arm of the person at the
+keyboard cut by the edge of the picture, and that arm then moved the
+highlight and selected rows. So under `faithful`:
+
+- an idle exit that follows a press waits `DC3_CONTROLLER_HOLD_MS` (default
+  300000) instead of the helpbar's 5000. The exit line logs the timeout in
+  force (`timeout_ms=300000`). The handover when a camera comes up with no
+  key touched is still the helpbar's 5 s; a key touched within the hold while
+  the policy was still `forced` keeps the menus through it
+  (`Dc3ControllerHoldNoteHandover`);
+- raising both hands (the image's `HandsUpGestureFilter`, 1.2 s, at least
+  1.5 s after the last press) leaves controller mode at once, logged as
+  `DC3 ControllerMode: both hands raised, the hands take the menus`. That
+  raise does not also open the correct-identity overlay; the next one does,
+  as in the image;
+- a notice names the way back the first three times a press takes the menus,
+  and one confirms the hands have them again;
+- Start, a song starting and the scripts' own exits (loading, the results)
+  are the image's, unchanged.
+
+`DC3_CONTROLLER_HOLD_MS=0` turns all of it off (the image's 5 s, and hands up
+does what it does in the image). A run that sets
+`DC3_CONTROLLER_MODE_TIMEOUT_MS` and not the hold gets that value for both, so
+its timing is what it was. `scripts/controller_hold_check.py` checks it end
+to end with a synthetic player (`ControllerHoldTest`, and
+`ControllerHoldSabotageTest` with the hold off). A button-driven tool
 that runs with a synthetic camera and has no `wake` directives pins
 `DC3_CONTROLLER_MODE=forced` (`scripts/pose_scoring_gate.sh`,
 `scripts/native_assert_harvest.py`).

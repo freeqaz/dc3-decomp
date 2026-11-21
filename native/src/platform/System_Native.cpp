@@ -8,10 +8,12 @@
 #include "os/System.h"
 #include "platform/ExecutablePath.h"
 #include "NativeSettings.h"
+#include "NativeNotice.h"
 #include "utl/Loader.h"
 #include "utl/MakeString.h"
 #include "utl/Symbol.h"
 
+#include <chrono>
 #include <climits>
 #include <cstdio>
 #include <cstdlib>
@@ -430,6 +432,145 @@ int Dc3ControllerModeTimeoutMs() {
     }
     return sTimeoutMs;
 }
+
+// The press hold (PLAN H-157): under the faithful policy, how long a keyboard
+// or pad press keeps the menus before the hand cursor takes them back.
+//
+// The image gives them back after controller_mode_timeout, 5 s without a
+// press.  That suits a Kinect, which sees an arm at the side as an arm at the
+// side.  A webcam at a desk sees the arm of the person at the keyboard cut by
+// the edge of the picture, in and out of it from frame to frame, and five
+// seconds after the last key that arm was moving the highlight and selecting
+// rows (playtest 2026-11-21: "super unusable").  So a press now keeps the
+// menus for Dc3ControllerHoldMs() without another one, and raising both hands
+// -- the image's own HandsUpGestureFilter, 1.2 s -- gives them to the hands at
+// once.  Start still leaves controller mode, a song still takes the menus out
+// of it, and the scripts' own exits (loading, the results) are untouched.
+//
+// Only the idle exit that follows a PRESS is held: the auto policy's handover
+// when a camera comes up with no key touched is still the helpbar's 5 s.
+//
+//   DC3_CONTROLLER_HOLD_MS   the hold in ms; 0 = off (the image's idle exit
+//                            alone, and hands up does what it does in the
+//                            image).  Unset: DC3_CONTROLLER_MODE_TIMEOUT_MS
+//                            when that is set (a run that sets the idle
+//                            timeout keeps its timing), else 300000.
+int Dc3ControllerHoldMs() {
+    static int sHoldMs = -1;
+    if (sHoldMs < 0) {
+        sHoldMs = Dc3ControllerModeTimeoutMs() > 0 ? Dc3ControllerModeTimeoutMs() : 300000;
+        const char *v = getenv("DC3_CONTROLLER_HOLD_MS");
+        if (v && *v) {
+            char *end = nullptr;
+            long ms = strtol(v, &end, 10);
+            if (end && *end == '\0' && ms >= 0 && ms < 0x7fffffff)
+                sHoldMs = (int)ms;
+            else
+                fprintf(stderr,
+                        "DC3 Native: DC3_CONTROLLER_HOLD_MS='%s' is not a whole number "
+                        "of ms (0 = off); ignored\n", v);
+        }
+        fprintf(stderr, "DC3 Native: controller press hold = %d ms%s\n", sHoldMs,
+                sHoldMs == 0 ? " (off)" : "");
+    }
+    return sHoldMs;
+}
+
+namespace {
+// A press restarted ShellInput's idle timer since the hands last had the menus.
+bool sHoldPressed = false;
+std::chrono::steady_clock::time_point sHoldPressedAt;
+// This raise of the hands already gave them the menus (until the hands drop).
+bool sHoldHandsUpSpent = false;
+// A raise takes the menus only this long after the last press: the person at
+// the keyboard is still on it.
+const float kHoldHandsUpAfterPressMs = 1500.0f;
+const char *kHoldNoticeKey = "controller-hold";
+const float kHoldNoticeSeconds = 5.0f;
+bool sHoldNoticeUp = false;
+std::chrono::steady_clock::time_point sHoldNoticeDown;
+// The takeover notice is shown this many times a run; the way back is the
+// same every time.
+int sHoldTakenNoticesLeft = 3;
+
+void HoldPostNotice(const char *text) {
+    NativeNotice::Post(kHoldNoticeKey, text, "", kHoldNoticeSeconds);
+    // Taken down again by Dc3ControllerHoldPoll: a notice left posted hides
+    // older ones (NativeNotice::Current shows the newest only).
+    sHoldNoticeUp = true;
+    sHoldNoticeDown = std::chrono::steady_clock::now()
+        + std::chrono::milliseconds((long long)(kHoldNoticeSeconds * 1000.0f) + 500);
+}
+
+bool HoldOn() { return !Dc3ControllerModeForced() && Dc3ControllerHoldMs() > 0; }
+} // namespace
+
+// Every pad/keyboard press of the run (HamUI::OnMsg(ButtonDownMsg), which also
+// restarts ShellInput's idle timer).
+void Dc3ControllerHoldNotePress() {
+    sHoldPressed = true;
+    sHoldPressedAt = std::chrono::steady_clock::now();
+}
+
+// The auto policy just went forced -> faithful (a camera came up) and restarted
+// the idle timer (NativeControllerModePolicyTick).  Forced counts presses too:
+// a key touched within the hold keeps the menus through the handover, with the
+// notice; one older than the hold does not, and the handover is the image's 5 s.
+void Dc3ControllerHoldNoteHandover() {
+    if (!sHoldPressed || !HoldOn())
+        return;
+    auto idle = std::chrono::steady_clock::now() - sHoldPressedAt;
+    if (idle >= std::chrono::milliseconds(Dc3ControllerHoldMs())) {
+        sHoldPressed = false;
+        return;
+    }
+    Dc3ControllerHoldNoteTaken();
+}
+
+// ShellInput's idle exit: the timeout to use now, given the helpbar's.
+int Dc3ControllerIdleTimeoutMs(int imageMs) {
+    if (!HoldOn() || !sHoldPressed)
+        return imageMs;
+    return Dc3ControllerHoldMs() > imageMs ? Dc3ControllerHoldMs() : imageMs;
+}
+
+// A press outside controller mode just took the menus
+// (ShellInput::OnMsg(ButtonDownMsg)): say how the hands get them back.
+void Dc3ControllerHoldNoteTaken() {
+    Dc3ControllerHoldNotePress();
+    if (!HoldOn() || sHoldTakenNoticesLeft <= 0)
+        return;
+    sHoldTakenNoticesLeft--;
+    HoldPostNotice("Keyboard or controller has the menus. Raise both hands to go back to gestures.");
+}
+
+// Once per ShellInput::Poll.  `handsUp` is the image's HandsUpGestureFilter
+// (both hands above the shoulders for 1.2 s), `idleMs` ShellInput's idle
+// timer.  True: the hands take the menus this frame -- the caller leaves
+// controller mode.
+bool Dc3ControllerHoldPoll(bool inControllerMode, bool handsUp, float idleMs) {
+    if (sHoldNoticeUp && std::chrono::steady_clock::now() >= sHoldNoticeDown) {
+        NativeNotice::Clear(kHoldNoticeKey);
+        sHoldNoticeUp = false;
+    }
+    if (!handsUp)
+        sHoldHandsUpSpent = false;
+    if (!inControllerMode)
+        sHoldPressed = false;
+    if (!HoldOn() || !inControllerMode || !handsUp || sHoldHandsUpSpent
+        || idleMs < kHoldHandsUpAfterPressMs)
+        return false;
+    sHoldHandsUpSpent = true;
+    sHoldPressed = false;
+    fprintf(stderr, "DC3 ControllerMode: both hands raised, the hands take the menus "
+                    "(idle_ms=%d)\n", (int)idleMs);
+    HoldPostNotice("Gestures have the menus again.");
+    return true;
+}
+
+// The raise that just took the menus back does not also open the image's
+// correct-identity overlay (ShellInput::Poll's hands-up arm); the next one does.
+bool Dc3ControllerHoldHandsUpSpent() { return sHoldHandsUpSpent; }
 
 namespace {
     DiscErrorCallbackFunc *gCallback;

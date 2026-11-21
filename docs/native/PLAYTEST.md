@@ -102,7 +102,10 @@ Menus work with your hands, as on a Kinect: hold an arm out to the side to
 grab that side's list, raise or lower the hand to move the highlight, sweep
 the forearm across your body to pick. The left arm works the help bar (its
 lower item is Back). Or use the keyboard; the first key press switches to
-controller mode, and 5 s without a press hands the menus back to your hands.
+controller mode and the keyboard keeps the menus. Raise both hands above
+your shoulders for about a second to hand them back to your hands (Start
+does it too, and so do 5 minutes without a key press; a song always ends
+controller mode).
 
 | Key | Button | | Key | Button |
 |---|---|---|---|---|

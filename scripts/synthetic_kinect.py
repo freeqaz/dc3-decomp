@@ -508,6 +508,10 @@ class SyntheticKinect:
             pts.update(RAISE_RIGHT)
         elif pose == "raise_left":
             pts.update(RAISE_LEFT)
+        elif pose == "hands_up":
+            # both: HandsUpGestureFilter (the shell's hands-up, 1.2 s)
+            pts.update(RAISE_RIGHT)
+            pts.update(RAISE_LEFT)
         elif pose == "high_five":
             # the hand nearer the other person, reaching to the midpoint
             # (x = 0) at head height; elbow below it, both inboard.
