@@ -1472,9 +1472,10 @@ TEST_F(DC3LookPostTest, DepthWeightedDofKeepsTheFigureOutOfTheBackgroundBlur) {
     wgpu::Texture depth = gpu.Device().CreateTexture(&zd);
     wgpu::TextureView depthView = depth.CreateView();
     DofPass dof;
-    auto run = [&](bool weighted, std::vector<uint8_t> &out) {
+    auto run = [&](bool weighted, std::vector<uint8_t> &out, int loads = DofPass::kDepthWeightLoads16) {
         wgpu::CommandEncoder enc = gpu.Device().CreateCommandEncoder();
-        const bool ran = dof.Run(enc, sv, wgpu::TextureFormat::RGBA8Unorm, depthView, 4, W, H, gpu, true, weighted);
+        const bool ran = dof.Run(enc, sv, wgpu::TextureFormat::RGBA8Unorm, depthView, 4, W, H, gpu, true, weighted,
+                                 loads);
         EXPECT_TRUE(ran);
         wgpu::CommandBuffer cmd = enc.Finish();
         gpu.Queue().Submit(1, &cmd);
@@ -1534,6 +1535,16 @@ TEST_F(DC3LookPostTest, DepthWeightedDofKeepsTheFigureOutOfTheBackgroundBlur) {
     EXPECT_FALSE(dof.LastRunDepthWeighted());
     run(true, out[1]);
     EXPECT_TRUE(dof.LastRunDepthWeighted());
+    EXPECT_EQ(dof.LastRunDepthWeightLoads(), DofPass::kDepthWeightLoads16);
+    // np-look23 (c2), round 1: the inspection gathers, each measured the same
+    // way and reported (not asserted until one is chosen).
+    const int kVariants[3] = {DofPass::kDepthWeightLoads4, DofPass::kDepthWeightLoads1,
+                              DofPass::kDepthWeightHalfFactor};
+    std::vector<uint8_t> outV[3];
+    for (int v = 0; v < 3; v++) {
+        run(true, outV[v], kVariants[v]);
+        EXPECT_EQ(dof.LastRunDepthWeightLoads(), kVariants[v]);
+    }
     dof.Terminate();
     TheDOFProc->UnSet();
     if (prev) prev->Select(); else RndCam::ClearCurrent();
@@ -1555,6 +1566,16 @@ TEST_F(DC3LookPostTest, DepthWeightedDofKeepsTheFigureOutOfTheBackgroundBlur) {
     printf("DC3LookPost depth-weighted DOF: background lift 2-12 px beside the figure %.2f -> %.2f levels; "
            "far background %.2f -> %.2f; figure %.2f -> %.2f\n",
            fringe[0], fringe[1], far[0], far[1], fig[0], fig[1]);
+    for (int v = 0; v < 3; v++) {
+        std::vector<double> col(W, 0.0);
+        for (int y = 200; y < 520; y++)
+            for (int x = 0; x < W; x++) col[x] += outV[v][((size_t)y * W + x) * 4 + 1] / 320.0;
+        auto mean = [&](int a, int b) { double s = 0; for (int x = a; x < b; x++) s += col[x]; return s / (b - a); };
+        printf("DC3LookPost depth-weighted DOF, gather %d (%s): background lift 2-12 px beside the figure %.2f "
+               "levels; far background %.2f; figure %.2f\n", kVariants[v],
+               kVariants[v] ? "depth loads per quarter texel" : "the half-size factor",
+               mean(kEdge + 2, kEdge + 12) - kBg, mean(kEdge + 120, kEdge + 200), mean(kEdge - 60, kEdge - 4));
+    }
     EXPECT_GT(fringe[0], 15.0) << "retail's depth-blind blur lifts the background beside the figure (non-vacuous)";
     // Neither lifted nor darkened: the background beside the figure is the
     // background's own blur (the weighted colour divided back out).
@@ -1583,5 +1604,14 @@ TEST(DC3LookDofDepthWeight, FollowsTheLookAndItsSwitch) {
         EXPECT_FALSE(milo::Look().postDofDepthWeight);
         EXPECT_TRUE(milo::SetLookDofDepthWeightForInspection(-1));
         EXPECT_TRUE(milo::Look().postDofDepthWeight);
+        // np-look23 (c2): the gather's inspection switch, default 16.
+        EXPECT_EQ(milo::Look().postDofDepthWeightLoads, 16);
+        EXPECT_TRUE(milo::SetLookDofDepthWeightLoadsForInspection(4));
+        EXPECT_EQ(milo::Look().postDofDepthWeightLoads, 4);
+        EXPECT_TRUE(milo::SetLookDofDepthWeightLoadsForInspection(0));
+        EXPECT_EQ(milo::Look().postDofDepthWeightLoads, 0);
+        EXPECT_FALSE(milo::SetLookDofDepthWeightLoadsForInspection(8));
+        EXPECT_EQ(milo::Look().postDofDepthWeightLoads, 0);
+        EXPECT_TRUE(milo::SetLookDofDepthWeightLoadsForInspection(16));
     }
 }
