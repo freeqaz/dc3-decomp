@@ -181,6 +181,8 @@ Rnd::Rnd()
 
 #ifdef HX_NATIVE
 #include "platform/LookProfile.h"
+#include "platform/rndshape/RndShape.h"
+#include "gfx/DisplayRamp.h"
 #include "gfx/PostProcPass.h"
 // Native inspection (np-gfx-post round 10): {rnd native_look retail|enhanced}
 // switches the engine's DC3_LOOK profile at run time, so one frozen frame can
@@ -209,6 +211,11 @@ Rnd::Rnd()
 // (np-look26 g: measured, not adopted, PLAN H-155);
 // hair_edge_b|hair_edge_c|hair_edge_e|hair_edge_centre pick one
 // CutoutSampleMode (np-look26 e; inspection only, centre a diagnostic);
+// display_tv|display_srgb|display_off|display_rule pick the scan-out curve
+// (item 31, rndshape::SetDisplayTypeForInspection): the ramp corrected for a
+// TV (the console's D3D::GammaRampCorrected, the default), the ramp alone (a
+// VGA-cabled console), no ramp (the front buffer), or DC3_DISPLAY_GAMMA's /
+// the default; one 256-entry table upload, nothing compiles after the first;
 // {rnd native_look} alone reports it. Returns the profile
 // now in force.
 static Symbol NativeLook(const DataArray *msg) {
@@ -247,6 +254,10 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "hair_edge_c") milo::SetLookCutoutModeForInspection(milo::kCutoutModeC);
         else if (s == "hair_edge_e") milo::SetLookCutoutModeForInspection(milo::kCutoutModeE);
         else if (s == "hair_edge_centre") milo::SetLookCutoutModeForInspection(milo::kCutoutModeCentre);
+        else if (s == "display_tv") rndshape::SetDisplayTypeForInspection(DisplayRamp::kDisplayTV);
+        else if (s == "display_srgb") rndshape::SetDisplayTypeForInspection(DisplayRamp::kDisplaySRGB);
+        else if (s == "display_off") rndshape::SetDisplayTypeForInspection(0);
+        else if (s == "display_rule") rndshape::SetDisplayTypeForInspection(-1);
         else MILO_NOTIFY("native_look: %s is not retail, enhanced, post_retail, post_enhanced, "
                          "post_precision, post_bloom_filter, post_dof_filter, specular_aa_on, "
                          "specular_aa_off, lod_bias_0, lod_bias_m05, lod_bias_m1, "
@@ -255,7 +266,8 @@ static Symbol NativeLook(const DataArray *msg) {
                          "noise_rows_off, noise_rows_rule, dof_depth_weight_on, "
                          "dof_depth_weight_off, dof_depth_weight_rule, hair_edge_on, "
                          "hair_edge_off, hair_edge_rule, hair_edge_b, hair_edge_c, "
-                         "hair_edge_e or hair_edge_centre", s.Str());
+                         "hair_edge_e, hair_edge_centre, display_tv, display_srgb, "
+                         "display_off or display_rule", s.Str());
     }
     return milo::LookProfileName(milo::Look().profile);
 }
