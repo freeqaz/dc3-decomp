@@ -33,7 +33,19 @@
 // geometry is minified past retail's level 1 (lod 2: the strand, the superset
 // and the lod-2 fringe), and E must equal B below it (the lod-0 quad whose
 // centre passes while two samples fail: C draws it solid, B and E at 2 of 4).
-// C is read through its own token. LookSwitchLevelsTest (end of file): after
+// C is read through its own token.
+//
+// np-look26 g: measured and not adopted. No look turns the test on; the
+// enhanced look keeps the landed sharpened coverage. A retail launch (two mip
+// levels uploaded) shows hair more broken than the landed coverage, not less:
+// the "retail strands stay whole" reading above came from the retail token in
+// an enhanced run, which sampled whole chains. Against the landed coverage E
+// fills strand tips but draws retail's aliased dots solid, a trade, not a gain
+// (docs/native/PLAN.md H-155). The modes stay behind the hair_edge tokens
+// (hair_edge_on = E), and these tests keep them honest; "the default" in the
+// test names below means the mode hair_edge_on selects.
+//
+// LookSwitchLevelsTest (end of file): after
 // {rnd native_look retail} in a run started enhanced, world textures (and
 // retail's text and HUD samplers) read retail's two levels.
 #include "test_helpers.h"
@@ -354,17 +366,21 @@ const char *const kSamplePos[4] = {"(6,2)", "(14,6)", "(2,10)", "(10,14)"};
 
 } // namespace
 
-// The look contract: on in Enhanced, off in Retail and Native, and the scene
-// value follows the bool. Sabotage: SettingsFor not setting it, or setting it
-// under retail (S5), or CutoutSampleTestFor ignoring the bool -- red.
-TEST_F(LookCutoutMipTest, OnlyTheEnhancedLookTestsEachSample) {
+// The look contract: off in every look (np-look26 g: measured, not adopted --
+// the enhanced look keeps the landed sharpened coverage), and the scene value
+// follows the bool; hair_edge_on turns it on with mode E. Sabotage:
+// SettingsFor setting it under enhanced or retail (S4), or CutoutSampleTestFor
+// ignoring the bool -- red.
+TEST_F(LookCutoutMipTest, NoLookTestsEachSampleUnlessSwitchedOn) {
     if (IsSkipped()) return;
-    static_assert(milo::kCutoutModeDefault == milo::kCutoutModeE, "np-look26 f: the default is E");
+    static_assert(milo::kCutoutModeDefault == milo::kCutoutModeE, "hair_edge_on selects E");
     {
         ScopedLookOverride enhanced(LookProfile::Enhanced);
-        EXPECT_TRUE(Look().cutoutSampleTest);
+        EXPECT_FALSE(Look().cutoutSampleTest) << "enhanced: the landed sharpened coverage";
+        EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), 0.0f);
+        ASSERT_TRUE(milo::SetLookCutoutSampleTestForInspection(1));
         EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), (float)milo::kCutoutModeE)
-            << "the enhanced look carries the default mode, E";
+            << "hair_edge_on: mode E";
     }
     {
         ScopedLookOverride retail(LookProfile::Retail);
@@ -407,13 +423,15 @@ TEST_F(LookCutoutMipTest, TheInspectionSwitchAlternatesAndRestores) {
         EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), 0.0f) << "hair_edge_off after a mode";
         ASSERT_TRUE(milo::SetLookCutoutModeForInspection(milo::kCutoutModeC));
         ASSERT_TRUE(milo::SetLookCutoutSampleTestForInspection(-1));
-        EXPECT_TRUE(Look().cutoutSampleTest) << "hair_edge_rule: enhanced's own value";
-        EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), (float)milo::kCutoutModeDefault)
-            << "hair_edge_rule: enhanced's own mode";
+        EXPECT_FALSE(Look().cutoutSampleTest) << "hair_edge_rule: enhanced's own value, off";
+        EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), 0.0f) << "hair_edge_rule: no mode survives";
         ASSERT_TRUE(milo::SetLookCutoutModeForInspection(milo::kCutoutModeB));
         ASSERT_TRUE(milo::SetLookProfileForInspection(LookProfile::Enhanced));
+        EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), 0.0f)
+            << "{rnd native_look enhanced}: the profile's own value, off";
+        ASSERT_TRUE(milo::SetLookCutoutSampleTestForInspection(1));
         EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), (float)milo::kCutoutModeDefault)
-            << "{rnd native_look enhanced}: the profile's own mode";
+            << "hair_edge_on after a profile switch: mode E, not the mode token before it";
     }
     {
         ScopedLookOverride retail(LookProfile::Retail);
@@ -443,6 +461,9 @@ TEST_F(LookCutoutMipTest, TheSceneBlockCarriesTheSwitch) {
     TheRnd.BeginDrawing();
     cam->Select();
     gWgpuRnd->EnsureSceneUniformsCurrent();
+    const float first = gWgpuRnd->LastSceneCutoutSampleTest();
+    milo::SetLookCutoutSampleTestForInspection(1);
+    gWgpuRnd->EnsureSceneUniformsCurrent();   // same camera: the switch alone moved
     const float on = gWgpuRnd->LastSceneCutoutSampleTest();
     milo::SetLookCutoutSampleTestForInspection(0);
     gWgpuRnd->EnsureSceneUniformsCurrent();   // same camera: the switch alone moved
@@ -459,11 +480,12 @@ TEST_F(LookCutoutMipTest, TheSceneBlockCarriesTheSwitch) {
     if (prev) prev->Select(); else RndCam::ClearCurrent();
     TheRnd.EndDrawing();
     delete cam;
-    EXPECT_FLOAT_EQ(on, (float)milo::kCutoutModeE) << "enhanced world pass: the default mode, E";
+    EXPECT_FLOAT_EQ(first, 0.0f) << "enhanced world pass: off unless switched on";
+    EXPECT_FLOAT_EQ(on, (float)milo::kCutoutModeE) << "hair_edge_on reached the block as mode E";
     EXPECT_FLOAT_EQ(off, 0.0f) << "hair_edge_off reached the block";
     for (int m = milo::kCutoutModeB; m <= milo::kCutoutModeCentre; m++)
         EXPECT_FLOAT_EQ(modes[m], (float)m) << "mode " << m << " reached the block";
-    EXPECT_FLOAT_EQ(rule, (float)milo::kCutoutModeE) << "hair_edge_rule reached the block";
+    EXPECT_FLOAT_EQ(rule, 0.0f) << "hair_edge_rule reached the block: enhanced's own value, off";
 }
 
 // The cutout pipelines that read it build: a world cutout (4 samples, LOD

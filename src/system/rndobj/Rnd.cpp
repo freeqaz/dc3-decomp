@@ -203,12 +203,12 @@ Rnd::Rnd()
 // dof_depth_weight_on|dof_depth_weight_off|dof_depth_weight_rule switch the
 // enhanced depth of field's depth-weighted blur (np-look23 c);
 // hair_edge_on|hair_edge_off|hair_edge_rule switch the enhanced cutout's
-// alpha test per MSAA sample (np-look26 d: hair strands that dotted out; off =
-// the landed sharpened coverage; LookSettings::cutoutSampleTest; a uniform,
-// nothing compiles; on = the default mode, E since np-look26 f);
-// hair_edge_b|hair_edge_c|
-// hair_edge_e|hair_edge_centre pick one CutoutSampleMode (np-look26 e;
-// inspection only, centre a diagnostic);
+// alpha test per MSAA sample (np-look26 d; LookSettings::cutoutSampleTest; a
+// uniform, nothing compiles): on = mode E, off = the landed sharpened
+// coverage, rule = the look's own value, which is off in every look
+// (np-look26 g: measured, not adopted, PLAN H-155);
+// hair_edge_b|hair_edge_c|hair_edge_e|hair_edge_centre pick one
+// CutoutSampleMode (np-look26 e; inspection only, centre a diagnostic);
 // {rnd native_look} alone reports it. Returns the profile
 // now in force.
 static Symbol NativeLook(const DataArray *msg) {
