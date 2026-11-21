@@ -202,11 +202,10 @@ Rnd::Rnd()
 // output-row re-tiling (np-look23 a; enhanced's rule on, retail's off);
 // dof_depth_weight_on|dof_depth_weight_off|dof_depth_weight_rule switch the
 // enhanced depth of field's depth-weighted blur (np-look23 c);
-// hair_edge_on|hair_edge_off|hair_edge_rule switch the enhanced cutout
-// coverage across mip levels (np-look26: hair strands that dotted out a mip or
-// two below the base; LookSettings::cutoutMipCoverage), and
-// hair_edge_s0125|hair_edge_s025|hair_edge_s05|hair_edge_s_rule set its scale
-// per mip level (tuning; a uniform, nothing compiles);
+// hair_edge_on|hair_edge_off|hair_edge_rule switch the enhanced cutout's
+// alpha test per MSAA sample (np-look26 d: hair strands that dotted out; off =
+// the landed sharpened coverage; LookSettings::cutoutSampleTest; a uniform,
+// nothing compiles);
 // {rnd native_look} alone reports it. Returns the profile
 // now in force.
 static Symbol NativeLook(const DataArray *msg) {
@@ -238,13 +237,9 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "dof_depth_weight_on") milo::SetLookDofDepthWeightForInspection(1);
         else if (s == "dof_depth_weight_off") milo::SetLookDofDepthWeightForInspection(0);
         else if (s == "dof_depth_weight_rule") milo::SetLookDofDepthWeightForInspection(-1);
-        else if (s == "hair_edge_on") milo::SetLookCutoutMipCoverageForInspection(1);
-        else if (s == "hair_edge_off") milo::SetLookCutoutMipCoverageForInspection(0);
-        else if (s == "hair_edge_rule") milo::SetLookCutoutMipCoverageForInspection(-1);
-        else if (s == "hair_edge_s0125") milo::SetLookCutoutMipScaleForInspection(false, 0.125f);
-        else if (s == "hair_edge_s025") milo::SetLookCutoutMipScaleForInspection(false, 0.25f);
-        else if (s == "hair_edge_s05") milo::SetLookCutoutMipScaleForInspection(false, 0.5f);
-        else if (s == "hair_edge_s_rule") milo::SetLookCutoutMipScaleForInspection(true, 0.0f);
+        else if (s == "hair_edge_on") milo::SetLookCutoutSampleTestForInspection(1);
+        else if (s == "hair_edge_off") milo::SetLookCutoutSampleTestForInspection(0);
+        else if (s == "hair_edge_rule") milo::SetLookCutoutSampleTestForInspection(-1);
         else MILO_NOTIFY("native_look: %s is not retail, enhanced, post_retail, post_enhanced, "
                          "post_precision, post_bloom_filter, post_dof_filter, specular_aa_on, "
                          "specular_aa_off, lod_bias_0, lod_bias_m05, lod_bias_m1, "
@@ -252,8 +247,7 @@ static Symbol NativeLook(const DataArray *msg) {
                          "refl_cull_force, refl_cull_flip, refl_cull_rule, noise_rows_on, "
                          "noise_rows_off, noise_rows_rule, dof_depth_weight_on, "
                          "dof_depth_weight_off, dof_depth_weight_rule, hair_edge_on, "
-                         "hair_edge_off, hair_edge_rule, hair_edge_s0125, hair_edge_s025, "
-                         "hair_edge_s05 or hair_edge_s_rule", s.Str());
+                         "hair_edge_off or hair_edge_rule", s.Str());
     }
     return milo::LookProfileName(milo::Look().profile);
 }
