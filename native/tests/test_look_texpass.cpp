@@ -281,6 +281,8 @@ int Side1024(int rows) {
 
 // np-look49: SetLookTexPassSizeForInspection moves the two numbers of step 2's
 // rule (rtt_cap_* / rtt_rows_*): > 0 sets, 0 leaves alone, < 0 the profile's.
+// Sabotage: the setter ignoring maxSide -> red; 0 returning a value to the
+// profile's in place of leaving it -> red (both seen, reverted).
 TEST(LookTexPass, TheSizeSetterMovesTheCapAndTheRows) {
     milo::ScopedLookOverride look(milo::LookProfile::Enhanced);  // restores both numbers
     ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(1536, 0));
@@ -317,6 +319,7 @@ TEST(LookTexPass, TheSizeSetterMovesTheCapAndTheRows) {
 }
 
 // Under the Native profile (rb3, rb3-xenon) the setter refuses and nothing moves.
+// Sabotage: the setter not refusing under Native -> red (seen, reverted).
 TEST(LookTexPass, NativeRefusesTheSizeSetter) {
     milo::ScopedLookOverride look(milo::LookProfile::Native);
     EXPECT_FALSE(milo::SetLookTexPassSizeForInspection(1536, 480));
@@ -330,6 +333,8 @@ TEST(LookTexPass, NativeRefusesTheSizeSetter) {
 
 // The tokens, through Rnd's handler as the HTTP eval reaches it; rtt_rule
 // returns both numbers as well as both steps.
+// Sabotage: rtt_rule not returning the two numbers -> red; the setter
+// ignoring maxSide -> red (both seen, reverted).
 class LookTexPassTokens : public EngineTestFixture {
 protected:
     static void Token(const char *t) {
@@ -718,6 +723,9 @@ TEST_F(TexPassScaleTest, ACpuWriteHoldsTheTargetAtItsOwnSize) {
 // GPU size at its next clearing pass, not at a sampling call or a resumed
 // pass. 540 rows: base rows 360 -> x1.5 (96), cap 80 -> 80, rows 480 ->
 // x1.125 (72). The fixture's look scope restores both numbers.
+// Sabotage: GetGpuTexView re-sizing at the sampling call -> red; a scaled
+// target never re-sized to another scaled size (only to or from its own)
+// -> red; the setter ignoring maxSide -> red (all seen, reverted).
 TEST_F(TexPassScaleTest, TheSizeSetterTakesEffectAtTheNextClearingPass) {
     Draw();
     ASSERT_EQ(GpuWidth(), 96u);
