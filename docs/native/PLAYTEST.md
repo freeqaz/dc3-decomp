@@ -91,6 +91,13 @@ scripts/play.sh --camera /dev/v4l/by-id/usb-...   # one particular camera (ls /d
 scripts/play.sh --no-pose        # keyboard only, nothing scored
 ```
 
+With more than one camera plugged in, switch in the game: Options → Gameplay
+Settings → **Camera**. Each select moves to the next camera, a notice names
+it, tracking resumes on it a few seconds later, and the choice is remembered
+for the next launch (`--camera` on the command line still wins for that run).
+`python3 native/scripts/pose_server.py --list-cameras` prints what it will
+cycle through.
+
 Menus work with your hands, as on a Kinect: hold an arm out to the side to
 grab that side's list, raise or lower the hand to move the highlight, sweep
 the forearm across your body to pick. The left arm works the help bar (its

@@ -48,6 +48,7 @@ bool gDrawJmpBufSet = false;
 #include "platform\Rnd_Wgpu.h"
 #include "platform\NativeSettings.h"
 #include "platform\PlayerBox_Native.h"
+#include "platform\PoseCamera_Native.h"
 #include "platform\PersistentFileCache.h"
 #include "utl\Locale.h"
 
@@ -134,6 +135,42 @@ public:
                 return DataNode(0);
             NativePlayerBox::SetMode(mode);
             return DataNode(1);
+        }
+        // The camera the pose server reads (platform/PoseCamera_Native.h):
+        // the "Camera" row of Options > Gameplay Settings.  The choice is
+        // saved in $DC3_SAVE_DIR/pose_camera.txt.
+        if (sym == "pose_camera_available")
+            return DataNode(Dc3PoseCamera::Available() ? 1 : 0);
+        if (sym == "get_pose_camera") return DataNode(Dc3PoseCamera::Current().c_str());
+        if (sym == "pose_camera_name") return DataNode(Dc3PoseCamera::CurrentName().c_str());
+        if (sym == "pose_camera_description")
+            return DataNode(Dc3PoseCamera::Description().c_str());
+        if (sym == "list_pose_cameras") {
+            // ((spec name identity) ...), in the server's order.
+            const std::vector<Dc3PoseCamera::Camera> &cameras = Dc3PoseCamera::List();
+            DataArray *list = new DataArray((int)cameras.size());
+            for (int i = 0; i < (int)cameras.size(); i++) {
+                DataArray *row = new DataArray(3);
+                row->Node(0) = DataNode(cameras[i].spec.c_str());
+                row->Node(1) = DataNode(cameras[i].name.c_str());
+                row->Node(2) = DataNode(cameras[i].id.c_str());
+                list->Node(i) = DataNode(row, kDataArray);
+                row->Release();
+            }
+            DataNode ret(list, kDataArray);
+            list->Release();
+            return ret;
+        }
+        if (sym == "cycle_pose_camera") {
+            Dc3PoseCamera::Cycle();
+            return DataNode(Dc3PoseCamera::Current().c_str());
+        }
+        if (sym == "set_pose_camera") {
+            // A spec ("id:..."), a name ("MX Brio"), auto, or an index.
+            const DataNode &what = msg->Evaluate(2);
+            std::string text = what.Type() == kDataInt ? std::to_string(what.Int())
+                                                       : std::string(what.Str());
+            return DataNode(Dc3PoseCamera::Set(text) ? 1 : 0);
         }
         if (sym == "get_camera_blend") return DataNode(NativeSettings::Get().cameraBlend ? 1 : 0);
         if (sym == "toggle_camera_blend") {
@@ -572,7 +609,7 @@ App::App(int argc, char **argv) {
     // Inject native-only locale strings via MagnuStrings (checked first by
     // Locale::Localize, English-only, normally unused on native).
     {
-        DataArray *nativeLocale = new DataArray(4);
+        DataArray *nativeLocale = new DataArray(5);
 
         DataArray *label = new DataArray(2);
         label->Node(0) = DataNode(Symbol("option_camera_blend"));
@@ -597,6 +634,15 @@ App::App(int argc, char **argv) {
         dbgDesc->Node(1) = DataNode("Show camera debug overlay with real-time sliders. Toggle with ~ key.");
         nativeLocale->Node(3) = DataNode(dbgDesc, kDataArray);
         dbgDesc->Release();
+
+        // The camera row (platform/PoseCamera_Native.h).  Its description
+        // line is not a token: it names the camera in use
+        // ({native_settings pose_camera_description}).
+        DataArray *camLabel = new DataArray(2);
+        camLabel->Node(0) = DataNode(Symbol("option_pose_camera"));
+        camLabel->Node(1) = DataNode("<altb>Camera</alt>");
+        nativeLocale->Node(4) = DataNode(camLabel, kDataArray);
+        camLabel->Release();
 
         TheLocale.SetMagnuStrings(nativeLocale);
     }
@@ -1310,6 +1356,7 @@ void App::RunWithoutDebugging() {
 
         // DC3_MENU_SELECT: the F1 key steps swipe -> hold -> both.
         Dc3MenuSelectFramePoll();
+        Dc3PoseCamera::FramePoll(); // the camera setting's notice comes down
         // H-128: the first time heat softens the picture, say so -- in a menu.
         Dc3ThermalFramePoll(TheUI && TheUI->IsGameScreenActive());
 

@@ -28,6 +28,8 @@ Plain unittest (no pytest needed); registered with ctest as PoseServer.Python.
 Run: python3 tests/test_pose_server.py
 """
 
+import json
+import contextlib
 import os
 import queue
 import re
@@ -163,6 +165,9 @@ class FakeDevices:
         if path.startswith(self.by_id_dir + "/"):
             return os.path.basename(path) in self._by_id
         return path in self._nodes
+
+    def by_id_names(self):
+        return dict(self._by_id)
 
 
 GPD_BEFORE = {"/dev/video0": (True, "Integrated Camera"), "/dev/video1": (False, "Integrated Camera")}
@@ -746,6 +751,143 @@ class ResolveCameraTest(unittest.TestCase):
         if not nodes:
             with self.assertRaises(ps.ServerExit):
                 ps.resolve_camera("auto", devs, log=lambda _m: None)
+
+
+# `system_profiler SPCameraDataType -json` as the playtest Mac printed it
+# (2026-11-21) with an MX Brio plugged in beside the built-in camera. MEASURED
+# there with frames, OpenCV 5.0.0: index 0 = MX Brio, index 1 = FaceTime HD.
+MAC_PROFILER_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data",
+                                 "pose_cameras", "mac-system_profiler-SPCameraDataType.json")
+BRIO_ID = "0x220000046d0944"
+FACETIME_ID = "3642F2CD-E322-42E7-9360-19815B003AA6"
+TWO_USB = {"/dev/video0": (True, "Integrated Camera"), "/dev/video1": (False, "Integrated Camera"),
+           "/dev/video2": (True, "MX Brio"), "/dev/video3": (False, "MX Brio")}
+TWO_USB_BY_ID = {BY_ID: "/dev/video0",
+                 BY_ID.replace("index0", "index1"): "/dev/video1",
+                 "usb-Logitech_MX_Brio_2332AP04KR28-video-index0": "/dev/video2",
+                 "usb-Logitech_MX_Brio_2332AP04KR28-video-index1": "/dev/video3"}
+BRIO_BY_ID = "usb-Logitech_MX_Brio_2332AP04KR28-video-index0"
+
+
+class CameraListTest(unittest.TestCase):
+    """--list-cameras and the identities --camera takes (the game's camera
+    setting). No test here reads this box's devices."""
+
+    def mac(self):
+        with open(MAC_PROFILER_JSON) as f:
+            return ps.parse_system_profiler_cameras(f.read())
+
+    def test_mac_cameras_are_numbered_by_unique_id_as_opencv_numbers_them(self):
+        cams = self.mac()
+        self.assertEqual([(c["index"], c["name"], c["id"]) for c in cams],
+                         [(0, "MX Brio", BRIO_ID), (1, "FaceTime HD Camera", FACETIME_ID)])
+        self.assertEqual([c["spec"] for c in cams], ["id:" + BRIO_ID, "id:" + FACETIME_ID])
+        # The order is the ids', not the file's.
+        with open(MAC_PROFILER_JSON) as f:
+            data = json.load(f)
+        data["SPCameraDataType"].reverse()
+        again = ps.parse_system_profiler_cameras(json.dumps(data))
+        self.assertEqual([c["id"] for c in again], [BRIO_ID, FACETIME_ID])
+
+    def test_unplugging_the_first_mac_camera_renumbers_the_other_and_its_identity_follows(self):
+        with open(MAC_PROFILER_JSON) as f:
+            data = json.load(f)
+        data["SPCameraDataType"] = [c for c in data["SPCameraDataType"]
+                                    if c["spcamera_unique-id"] != BRIO_ID]
+        alone = ps.parse_system_profiler_cameras(json.dumps(data))
+        devs = FakeDevices(available=False)
+        both = self.mac()
+        for cams, want in ((both, 1), (alone, 0)):
+            src, desc = ps.resolve_camera("id:" + FACETIME_ID, devs, lister=lambda c=cams: c)
+            self.assertEqual(src, want)
+            self.assertIn("FaceTime HD Camera", desc)
+        # By name too, any case; a camera that is not there is EXIT_NO_CAMERA.
+        self.assertEqual(ps.resolve_camera("mx brio", devs, lister=lambda: both)[0], 0)
+        with self.assertRaises(ps.ServerExit) as cm:
+            ps.resolve_camera("id:" + BRIO_ID, devs, lister=lambda: alone)
+        self.assertEqual(cm.exception.code, ps.EXIT_NO_CAMERA)
+        self.assertIn("FaceTime HD Camera", str(cm.exception))   # says what IS there
+
+    def test_mac_auto_and_an_index_never_run_the_lister(self):
+        def boom():
+            raise AssertionError("listed")
+        devs = FakeDevices(available=False)
+        self.assertEqual(ps.resolve_camera("auto", devs, lister=boom)[0], 0)
+        self.assertEqual(ps.resolve_camera("1", devs, lister=boom)[0], 1)
+        self.assertEqual(ps.resolve_camera("/tmp/clip.mp4", devs, lister=boom)[0], "/tmp/clip.mp4")
+
+    def test_a_mac_that_cannot_be_asked_is_no_camera_not_a_crash(self):
+        def broken():
+            raise OSError("system_profiler exited 1")
+        with self.assertRaises(ps.ServerExit) as cm:
+            ps.resolve_camera("id:" + BRIO_ID, FakeDevices(available=False), lister=broken)
+        self.assertEqual(cm.exception.code, ps.EXIT_NO_CAMERA)
+        for junk in ("", "not json", "[1, 2]"):
+            try:
+                self.assertEqual(ps.parse_system_profiler_cameras(junk), [])
+            except ValueError:
+                pass
+
+    def test_linux_lists_capture_devices_with_their_by_id_identity(self):
+        cams = ps.linux_camera_list(FakeDevices(TWO_USB, TWO_USB_BY_ID))
+        self.assertEqual([(c["node"], c["name"], c["id"]) for c in cams],
+                         [("/dev/video0", "Integrated Camera", BY_ID),
+                          ("/dev/video2", "MX Brio", BRIO_BY_ID)])
+        self.assertEqual(cams[1]["spec"], "id:" + BRIO_BY_ID)
+        # No by-id link (a platform camera): the node is all there is.
+        bare = ps.linux_camera_list(FakeDevices(GPD_BEFORE))
+        self.assertEqual([(c["id"], c["spec"]) for c in bare], [("/dev/video0", "/dev/video0")])
+        self.assertEqual(ps.linux_camera_list(FakeDevices({})), [])
+
+    def test_a_linux_identity_follows_the_device_to_its_new_node(self):
+        devs = FakeDevices(TWO_USB, TWO_USB_BY_ID)
+        self.assertEqual(ps.resolve_camera("id:" + BRIO_BY_ID, devs)[0], "/dev/video2")
+        self.assertEqual(ps.resolve_camera("MX Brio", devs)[0], "/dev/video2")   # by name
+        devs.replace({"/dev/video4": (True, "MX Brio"), "/dev/video5": (False, "MX Brio")},
+                     {BRIO_BY_ID: "/dev/video4"})
+        self.assertEqual(ps.resolve_camera("id:" + BRIO_BY_ID, devs)[0], "/dev/video4")
+        with self.assertRaises(ps.ServerExit) as cm:
+            ps.resolve_camera("id:" + BY_ID, devs, log=lambda _m: None)
+        self.assertEqual(cm.exception.code, ps.EXIT_NO_CAMERA)
+
+    def test_two_cameras_of_one_model_get_different_names(self):
+        same = {"/dev/video0": (True, "HD Webcam"), "/dev/video2": (True, "HD Webcam")}
+        self.assertEqual([c["name"] for c in ps.linux_camera_list(FakeDevices(same))],
+                         ["HD Webcam", "HD Webcam (2)"])
+
+    def test_the_list_the_game_reads_is_one_line_per_camera(self):
+        text = ps.format_camera_list(self.mac(), "tsv")
+        self.assertEqual(text.splitlines(), [
+            ps.CAMERA_LIST_HEADER,
+            f"camera\tid:{BRIO_ID}\t{BRIO_ID}\tMX Brio",
+            f"camera\tid:{FACETIME_ID}\t{FACETIME_ID}\tFaceTime HD Camera"])
+        odd = [{"id": "a\tb", "name": "Two\nLines", "spec": "id:a\tb", "index": 0}]
+        self.assertEqual(ps.format_camera_list(odd, "tsv").splitlines()[1],
+                         "camera\tid:a b\ta b\tTwo Lines")
+        listed = json.loads(ps.format_camera_list(self.mac(), "json", platform="darwin"))
+        self.assertEqual(listed["platform"], "darwin")
+        self.assertEqual([c["name"] for c in listed["cameras"]], ["MX Brio", "FaceTime HD Camera"])
+
+    def test_list_cameras_opens_no_camera_and_imports_nothing_heavy(self):
+        code = ("import sys; sys.argv=['pose_server.py','--list-cameras','tsv']; "
+                "import pose_server as ps; ps.main(); "
+                "heavy=[m for m in ('cv2','mediapipe','numpy') if m in sys.modules]; "
+                "sys.exit(9 if heavy else 0)")
+        done = subprocess.run([sys.executable, "-B", "-c", code], capture_output=True, text=True,
+                              cwd=os.path.dirname(os.path.abspath(ps.__file__)), timeout=60)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.splitlines()[0], ps.CAMERA_LIST_HEADER)
+
+    def test_a_box_that_cannot_be_listed_prints_no_cameras_and_says_why(self):
+        import io
+
+        def broken():
+            raise OSError("nope")
+        out = io.StringIO()
+        with contextlib.redirect_stderr(io.StringIO()):
+            ps.print_camera_list("tsv", out=out, lister=broken)
+        self.assertEqual(out.getvalue().splitlines(),
+                         [ps.CAMERA_LIST_HEADER, "error\tcould not list the cameras: nope"])
 
 
 class SwitchingCv2(FakeCv2):
