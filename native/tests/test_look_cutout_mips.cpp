@@ -210,20 +210,20 @@ struct CutoutScene {
 //  - kMin4: 256 texels over 64 px, 4 texels per pixel. The landed coverage
 //    reads mip 2 (16x anisotropic, isotropic footprint), where the box mips
 //    are (255 + 0) x 2 / 4 = 127 everywhere: 0.498 under the 0.588 cut, a
-//    constant field (fwidth 0) -> coverage 0. The per-sample test reads level
-//    clamp(log2 4 - 1, 0, 1) = 1, where the lines alternate 255 / 0 per texel,
-//    2 level-1 texels per pixel. Pixel p's centre is level-1 coordinate
+//    constant field (fwidth 0) -> coverage 0. The per-sample test reads
+//    retail's level for the pixel, clamp(log2 4, 0, 1) = 1, where the lines
+//    alternate 255 / 0 per texel, 2 level-1 texels per pixel. Pixel p's centre is level-1 coordinate
 //    2p + 1, and sample offset o (pixels) sits at 2p + 1 + 2o; the bilinear
 //    weight on the even (255) texel is then 0.75 at o = -0.125 (sample 0) and
 //    -0.375 (sample 2), 0.25 at +0.375 (1) and +0.125 (3). 0.75 > 0.588 >
 //    0.25: exactly samples 0 and 2 pass in every pixel, coverage 2/4. Level 0
 //    instead (float error under 1) reads texels 4p+1 / 4p / 4p+3 / 4p+2 dead
 //    centre: the same two samples.
-//  - kMin8: 256 texels over 32 px, 8 texels per pixel: log2 8 - 1 = 2 is
+//  - kMin8: 256 texels over 32 px, 8 texels per pixel: log2 8 = 3 is
 //    clamped to retail's last level, 1. There 4 level-1 texels per pixel, and
 //    the samples sit on texel centres 4p + 1 / 4p + 3 / 4p / 4p + 2 for
 //    samples 0..3: samples 2 and 3 (even texels) pass, coverage 2/4 again. The
-//    full chain (level 2, the box's 127) would cover nothing.
+//    full chain (level 3, the box's 127) would cover nothing.
 //
 // Under the cut (the PeakLine regression), a constant alpha, so every level
 // reads the same value:
@@ -235,17 +235,18 @@ struct CutoutScene {
 //
 // Bit order: a quad 1/4 px thin that geometrically covers exactly one of the
 // standard 4x positions (6,2) (14,6) (2,10) (10,14) sixteenths in each pixel
-// of one row or column, textured at 2 texels per pixel (level 0) with alpha
-// 255 on one texel parity class only. Pixel p's texels are 2p, 2p + 1; the
-// bilinear weight on the even column is 0.75 for samples 0 and 2 (x offsets
-// -0.125, -0.375) and 0.25 for 1 and 3, on the even row 0.75 for 0 and 1
-// (y offsets -0.375, -0.125) and 0.25 for 2 and 3. With alpha 255 on (even,
-// even) texels sample 0 reads 0.75 x 0.75 = 0.5625 and the others 0.1875 or
-// 0.0625; likewise (odd, even) passes only sample 1, (even, odd) only 2,
-// (odd, odd) only 3, at a threshold of 90 (0.353). A pixel is then lit, to
-// 1/4 of white, iff the sample the shader computed for mask bit j is the one
-// the geometry covers: the diagonal of a 4 x 4 matrix. A fifth column, alpha
-// 255 everywhere, checks the geometry alone (1/4 in every row).
+// of one row or column, textured at 1 texel per pixel (footprint 1: level 0)
+// with alpha 255 on every third texel row or column only. Each sample is
+// extreme on one axis: sample 0 reaches furthest up (y -0.375), 1 right
+// (x +0.375), 2 left (x -0.375), 3 down (y +0.375). In a test pixel (texel
+// index 1 of the period of 3) the bilinear weight on the neighbour texel
+// toward an offset o is |o|; so with alpha 255 on the row above (index 0)
+// sample 0 reads 0.375, sample 1 (y -0.125) 0.125 and 2, 3 nothing; likewise
+// the row below passes only sample 3, the column right only 1, the column left
+// only 2, at a threshold of 64 (0.251). A test pixel is then lit, to 1/4 of
+// white, iff the sample the shader computed for mask bit j is the one the
+// geometry covers: the diagonal of a 4 x 4 matrix. A fifth column, alpha 255
+// everywhere, checks the geometry alone (1/4 in every row).
 const PxRect kSolid = {960, 40, 1024, 104};
 const PxRect kMin4 = {760, 40, 824, 104};
 const PxRect kMin8 = {860, 40, 892, 72};
@@ -259,6 +260,10 @@ constexpr int kBitLen = 32;
 // sample index that passes, 4 = all): its line's origin pixel.
 inline int BitCellX(int j) { return 760 + 48 * j; }
 inline int BitCellY(int k) { return 400 + 48 * k; }
+// The cells' texture origin is 4 px before the cell (texel 4 = index 1 of the
+// period at the cell's first pixel), so the test pixels are every third pixel
+// along the line from its start.
+constexpr int kBitOrigin = 4;
 // The pixels the cell's geometry covers: row y (k = 0: y in [Y, Y + 1/4),
 // position (6,2); k = 3: [Y + 3/4, Y + 1), (10,14)) or column x (k = 1:
 // [X + 3/4, X + 1), (14,6); k = 2: [X, X + 1/4), (2,10)).
@@ -422,10 +427,12 @@ CutoutFrames DrawCutoutFrames() {
     texs = {lines, c140, c100, all};
     RndTex *bit[4];
     for (int j = 0; j < 4; j++) {
-        // Sample j passes alone: 255 on texels of column parity j & 1 and
-        // row parity j >> 1 (see the layout).
+        // Sample j passes alone: 255 on the row above (0), the column right
+        // (1), the column left (2) or the row below (3) of each test texel
+        // (index 1 of a period of 3; see the layout).
         bit[j] = MakeAlphaTex(bmpBit[j], [j](int x, int y) {
-            return ((x & 1) == (j & 1) && (y & 1) == (j >> 1)) ? 255 : 0;
+            const bool lit = j == 0 ? y % 3 == 0 : j == 3 ? y % 3 == 2 : j == 1 ? x % 3 == 2 : x % 3 == 0;
+            return lit ? 255 : 0;
         });
         texs.push_back(bit[j]);
     }
@@ -443,13 +450,13 @@ CutoutFrames DrawCutoutFrames() {
         scene.Add(kUnderAlphaMin, underAlpha);
         scene.Add(kUnderAlphaBase, underAlpha);
         for (int j = 0; j <= 4; j++) {
-            RndMat *m = mat(MakeCutMat(j < 4 ? bit[j] : all, 90));
+            RndMat *m = mat(MakeCutMat(j < 4 ? bit[j] : all, 64));
             for (int k = 0; k < 4; k++) {
-                // 2 texels per pixel, the cell's origin 4 px inside the texture
-                // so no fetch reaches its border (texel 8 at the origin).
+                // 1 texel per pixel, the texture's origin kBitOrigin px before
+                // the cell, so no fetch reaches its border.
                 const PxRectF g = BitCellGeometry(k, j);
-                const float ox = (float)BitCellX(j) - 4.0f, oy = (float)BitCellY(k) - 4.0f;
-                const float s = 2.0f / kTexSize;
+                const float ox = (float)(BitCellX(j) - kBitOrigin), oy = (float)(BitCellY(k) - kBitOrigin);
+                const float s = 1.0f / kTexSize;
                 scene.Add(g, m, (g.x0 - ox) * s, (g.y0 - oy) * s, (g.x1 - ox) * s, (g.y1 - oy) * s);
             }
         }
@@ -560,8 +567,7 @@ TEST_F(LookCutoutMipTest, AlphaJustUnderTheCutStaysInvisible) {
 // arithmetic gives exactly 1/4 and 0. A
 // backend whose mask bits were another order, or offsets with a flipped y,
 // lights off-diagonal cells. Sabotage: every sample at the centre uv (S2) --
-// the centre reads 0.25 everywhere (under the 0.353 cut): the diagonal goes
-// dark.
+// the centre reads its own texel, 0: the diagonal goes dark.
 TEST_F(LookCutoutMipTest, MaskBitIIsSampleI) {
     CUTOUT_RENDER_PRECONDITIONS();
     ScopedLookOverride enhanced(LookProfile::Enhanced);
@@ -572,7 +578,14 @@ TEST_F(LookCutoutMipTest, MaskBitIIsSampleI) {
         char line[256];
         int n = snprintf(line, sizeof line, "[ cutout samples ] geometry %-7s:", kSamplePos[k]);
         for (int j = 0; j <= 4; j++) {
-            const double cov = px.Mean(f.on, BitCellPixels(k, j), 0) / f.white;
+            // The test pixels: every third along the line from its start.
+            const PxRect r = BitCellPixels(k, j);
+            double sum = 0;
+            int n3 = 0;
+            for (int y = r.y0; y < r.y1; y++)
+                for (int x = r.x0; x < r.x1; x++)
+                    if ((x - r.x0) % 3 == 0 && (y - r.y0) % 3 == 0) sum += px.G(f.on, x, y), n3++;
+            const double cov = sum / n3 / f.white;
             n += snprintf(line + n, sizeof line - n, " %s%d %.3f", j < 4 ? "bit" : "all",
                           j < 4 ? j : 4, cov);
             if (j == 4 || j == k)
