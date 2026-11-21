@@ -22,6 +22,7 @@
 #include "gfx/BindGroupCache.h"
 #include "gfx/DofPass.h"
 #include "gfx/GpuDevice.h"
+#include "gfx/PipelineCount.h"
 #include "gfx/PostProcPass.h"
 #include "gfx/RB3RetailPost.h"
 #include "platform/LookProfile.h"
@@ -1433,9 +1434,12 @@ TEST_F(DC3LookPostTest, PresentDitherFollowsPostPrecision) {
 // (Xenia and the hardware show it; item23/c). With the enhanced look's
 // depth-weighted blur the background beside the figure is background only.
 // A bright half (in focus) against a dark half (far plane), through DofPass
-// enhanced with and without the weighting. Sabotages: the downsample's weight
-// back to 1 (fs_down_tent_dw) -- the fringe returns, red; the composite's
-// division removed -- the background goes dark, red.
+// enhanced with and without the weighting. Sabotages (item23/c2/sabotage):
+// the half-size factor pre-pass (fs_dw_factor_half) writing 1 -- the fringe
+// returns, red; writing 0 -- the far stripes stay sharp, red; the factor read
+// one half-size texel toward the background -- red; the composite's division
+// removed -- the background goes dark, red; Prewarm skipping the weight's
+// pipelines -- red.
 TEST_F(DC3LookPostTest, DepthWeightedDofKeepsTheFigureOutOfTheBackgroundBlur) {
     ASSERT_TRUE(TheDOFProc);
     GpuDevice &gpu = Gpu();
@@ -1453,13 +1457,16 @@ TEST_F(DC3LookPostTest, DepthWeightedDofKeepsTheFigureOutOfTheBackgroundBlur) {
     TheDOFProc->Set(nullptr, 10.0f, 0.5f, 1.0f, 0.0f);   // focal 10, blur depth 0.5, max 1, min 0
     ASSERT_TRUE(TheDOFProc->Enabled());
 
-    constexpr int W = 1280, H = 720, kEdge = W / 2;
-    const uint8_t kFig = 230, kBg = 20;
+    constexpr int W = 1280, H = 720, kEdge = W / 2, kStripes = kEdge + 300;
+    const uint8_t kFig = 230, kBg = 20, kStripe = 60;
     std::vector<uint8_t> px((size_t)W * H * 4);
     for (int y = 0; y < H; y++)
         for (int x = 0; x < W; x++) {
             uint8_t *p = &px[((size_t)y * W + x) * 4];
-            p[0] = p[1] = p[2] = x < kEdge ? kFig : kBg;
+            // Far right: 8 px stripes in the far background, which the
+            // weighted blur must still blur (the factor pre-pass writing
+            // nothing would leave them sharp).
+            p[0] = p[1] = p[2] = x < kEdge ? kFig : (x >= kStripes && (x / 8) % 2) ? kStripe : kBg;
             p[3] = 255;
         }
     wgpu::Texture scene = UploadOn(gpu, W, H, px);
@@ -1472,6 +1479,10 @@ TEST_F(DC3LookPostTest, DepthWeightedDofKeepsTheFigureOutOfTheBackgroundBlur) {
     wgpu::Texture depth = gpu.Device().CreateTexture(&zd);
     wgpu::TextureView depthView = depth.CreateView();
     DofPass dof;
+    // Warm as WgpuRnd::PrewarmFixedKeyPipelines does when the look starts
+    // with the depth weight on: no Run below may compile a pipeline.
+    dof.Prewarm(wgpu::TextureFormat::RGBA8Unorm, gpu, true, true);
+    const uint64_t pipesWarm = GpuPipelineCreateCount();
     auto run = [&](bool weighted, std::vector<uint8_t> &out) {
         wgpu::CommandEncoder enc = gpu.Device().CreateCommandEncoder();
         const bool ran = dof.Run(enc, sv, wgpu::TextureFormat::RGBA8Unorm, depthView, 4, W, H, gpu, true, weighted);
@@ -1534,6 +1545,7 @@ TEST_F(DC3LookPostTest, DepthWeightedDofKeepsTheFigureOutOfTheBackgroundBlur) {
     EXPECT_FALSE(dof.LastRunDepthWeighted());
     run(true, out[1]);
     EXPECT_TRUE(dof.LastRunDepthWeighted());
+    EXPECT_EQ(GpuPipelineCreateCount(), pipesWarm) << "Prewarm(enhanced, depthWeighted) warms every DOF pipeline";
     dof.Terminate();
     TheDOFProc->UnSet();
     if (prev) prev->Select(); else RndCam::ClearCurrent();
@@ -1542,7 +1554,7 @@ TEST_F(DC3LookPostTest, DepthWeightedDofKeepsTheFigureOutOfTheBackgroundBlur) {
     delete game;
 
     // Column means of the green over the middle rows.
-    double fringe[2], far[2], fig[2];
+    double fringe[2], far[2], fig[2], stripes[2];
     for (int e = 0; e < 2; e++) {
         std::vector<double> col(W, 0.0);
         for (int y = 200; y < 520; y++)
@@ -1551,10 +1563,17 @@ TEST_F(DC3LookPostTest, DepthWeightedDofKeepsTheFigureOutOfTheBackgroundBlur) {
         fringe[e] = mean(kEdge + 2, kEdge + 12) - kBg;   // the background beside the figure, lifted
         far[e] = mean(kEdge + 120, kEdge + 200);
         fig[e] = mean(kEdge - 60, kEdge - 4);
+        // The stripes' contrast: the column means' standard deviation.
+        const double m = mean(kStripes + 60, kStripes + 300);
+        double v = 0;
+        for (int x = kStripes + 60; x < kStripes + 300; x++) v += (col[x] - m) * (col[x] - m);
+        stripes[e] = std::sqrt(v / 240.0);
     }
     printf("DC3LookPost depth-weighted DOF: background lift 2-12 px beside the figure %.2f -> %.2f levels; "
            "far background %.2f -> %.2f; figure %.2f -> %.2f\n",
            fringe[0], fringe[1], far[0], far[1], fig[0], fig[1]);
+    printf("DC3LookPost depth-weighted DOF: far-background stripes' contrast (sd, levels) %.2f unblurred -> %.2f "
+           "-> %.2f\n", (kStripe - kBg) / 2.0, stripes[0], stripes[1]);
     EXPECT_GT(fringe[0], 15.0) << "retail's depth-blind blur lifts the background beside the figure (non-vacuous)";
     // Neither lifted nor darkened: the background beside the figure is the
     // background's own blur (the weighted colour divided back out).
@@ -1562,6 +1581,11 @@ TEST_F(DC3LookPostTest, DepthWeightedDofKeepsTheFigureOutOfTheBackgroundBlur) {
     EXPECT_NEAR(far[1], kBg, 1.0) << "the background far from the figure keeps its level";
     EXPECT_NEAR(far[0], kBg, 1.0);
     EXPECT_NEAR(fig[1], kFig, 1.0) << "the in-focus figure stays sharp";
+    // The far background is blurred as much with the weight as without (the
+    // half-size factor pre-pass writes the far plane's weight; writing none,
+    // the composite would fade back to the sharp scene).
+    EXPECT_LT(stripes[0], (kStripe - kBg) / 2.0 * 0.5) << "the unweighted blur blurs the stripes (non-vacuous)";
+    EXPECT_NEAR(stripes[1], stripes[0], 1.0) << "the depth-weighted blur blurs the far background as much";
 }
 
 // LookSettings::postDofDepthWeight follows the look and its inspection token
