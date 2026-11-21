@@ -30,8 +30,11 @@
 
 #include "gfx/PipelineCount.h"
 #include "gfx/RB3RetailPost.h"
+#include "platform/ContactShadowHook.h"
 #include "platform/LookProfile.h"
 #include "platform/Rnd_Wgpu.h"
+#include "obj/Object.h"
+#include "rndobj/Cam.h"
 #include "rndobj/Rnd.h"
 
 #include <string>
@@ -155,4 +158,48 @@ TEST_F(FixedKeyPipelinesTest, WarmedEnhancedBloomFramesCompileNothing) {
                                   << " (all creates: " << GpuPipelineCreateCount() - before << ")";
         post.Terminate();
     }
+}
+
+// The crowd contact shadow (np-look32, gfx/ContactShadowPass.h) owns one
+// pipeline per target outside PipelineManager. The main frame pass's joins
+// the warm for the look that draws shadows, so the first crowd frame of a
+// song compiles nothing: after the warm it is ready, and a frame that draws a
+// shadow creates no pipeline. (ctest runs each test in its own process; run
+// as one binary, ContactShadowGpuTest's enhanced frame may have built the
+// pipeline first, and this then passes without proving the warm.)
+// Sabotage (np-look32 review, archive/np-gfx-2026-11-14/lanes/sharp/item32):
+//  - the Warm call removed from PrewarmFixedKeyPipelines -> not ready, and
+//    the shadow frame compiles "ContactShadow".
+TEST_F(FixedKeyPipelinesTest, CrowdContactShadowJoinsTheWarmForTheLookThatDrawsIt) {
+    if (!HaveGpu()) GTEST_SKIP() << "no GPU device (MILO_NORENDER or no adapter)";
+    milo::ScopedLookOverride keep(milo::LookProfile::Enhanced);
+    gWgpuRnd->PrewarmFixedKeyPipelines();
+    EXPECT_TRUE(gWgpuRnd->ContactShadowPipelineReady())
+        << "the enhanced look's warm did not build the main frame pass's contact shadow pipeline";
+    NativeContactShadowRenderer *r = GetNativeContactShadowRenderer();
+    ASSERT_NE(r, nullptr) << "WgpuRnd registered no contact shadow renderer";
+    RndCam *cam = Hmx::Object::New<RndCam>();
+    NativeContactShadow s{};
+    // In front of a default camera (Milo cameras look down +y).
+    s.centre[1] = 100.0f;
+    s.axisA[0] = 10.0f;
+    s.axisB[1] = 7.0f;
+    auto frame = [&](bool shadow) {
+        TheRnd.BeginDrawing();
+        RndCam *prev = RndCam::Current();
+        cam->Select();
+        if (shadow) EXPECT_TRUE(r->QueueContactShadow(s)) << "the enhanced frame pass took no shadow";
+        if (prev) prev->Select();
+        TheRnd.EndDrawing();
+        return gWgpuRnd->ContactShadowsDrawnThisFrame();
+    };
+    // The same frame without a shadow first, so whatever else a first frame
+    // with this camera compiles is not charged to the shadow.
+    EXPECT_EQ(frame(false), 0);
+    TakeRecentPipelineLabels();
+    const uint64_t before = GpuPipelineCreateCount();
+    EXPECT_EQ(frame(true), 1) << "the queued shadow was not drawn";
+    EXPECT_EQ(GpuPipelineCreateCount() - before, 0u)
+        << "the first shadow frame compiled: " << Join(TakeRecentPipelineLabels());
+    delete cam;
 }
