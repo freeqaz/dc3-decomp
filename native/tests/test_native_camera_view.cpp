@@ -24,7 +24,12 @@
 //                    and at least one box must show the player visibly.
 //   NoCameraViewTest the same sensor without --frames (protocol v2, what an
 //                    old pose server sends): no stream, no stand-in, nothing
-//                    drawn -- the pre-P-4 behaviour.
+//                    drawn -- the pre-P-4 behaviour.  And the two boxes are not
+//                    drawn at all (PLAN H-147, PlayerBox_Native.h): GET
+//                    /api/camera's "playerBox" member counts the cursor panel's
+//                    draws by what they did, while a script still reads both
+//                    groups as showing.  Each run then switches the boxes on
+//                    and off ({native_settings set_player_box ...}).
 //
 // The expected mask comes from camera_fixture.py --grid, the same renderer the
 // sensor uses, so the assertion is "the picture that went in is the picture
@@ -91,6 +96,9 @@ struct ViewRun {
     std::string output; // engine log
     std::string driver; // DRIVER: lines
     std::string camera; // GET /api/camera?grid=32x24
+    std::string showing; // the two box groups' own `showing`, read by a script
+    std::string boxOn;  // GET /api/camera after {native_settings set_player_box on}
+    std::string boxOff; // ... and after set_player_box off
     std::string health; // GET /api/health, six times, one per line
     bool Entered(const char *screen) const {
         return output.find(std::string("Screen '") + screen + "' Enter") != std::string::npos;
@@ -155,6 +163,17 @@ ViewRun RunToMainScreen(bool frames) {
        << "echo \"DRIVER: stop after ${SECONDS}s, engine alive=$(kill -0 $epid 2>/dev/null && echo 1 || echo 0)\"; "
        << "echo \"CAMERA: $(curl -s -m 10 \"$api/camera?grid=" << kGridW << "x" << kGridH
        << "\")\"; "
+       // The player boxes (PLAN H-147): what a script reads from the two
+       // groups, then the same run with the boxes switched on and off.
+       << "echo \"SHOWING: $(curl -s -m 10 -X POST --data-binary '{sprint"
+       << " {{cursor_panel find depth_buffer_left.grp} get showing}"
+       << " {{cursor_panel find depth_buffer_right.grp} get showing}}' \"$api/dta/eval\")\"; "
+       << "curl -s -m 10 -X POST --data-binary '{native_settings set_player_box on}'"
+       << " \"$api/dta/eval\" > /dev/null; sleep 1; "
+       << "echo \"BOXON: $(curl -s -m 10 \"$api/camera?grid=1x1\")\"; "
+       << "curl -s -m 10 -X POST --data-binary '{native_settings set_player_box off}'"
+       << " \"$api/dta/eval\" > /dev/null; sleep 1; "
+       << "echo \"BOXOFF: $(curl -s -m 10 \"$api/camera?grid=1x1\")\"; "
        // which engine answered: compared with the pid in its DC3_EXIT line
        << "for i in 1 2 3 4 5 6; do echo \"HEALTH: $(curl -s -m 5 \"$api/health\")\"; done; "
        << "kill $epid 2>/dev/null; sleep 1; kill -9 $epid 2>/dev/null; "
@@ -169,6 +188,12 @@ ViewRun RunToMainScreen(bool frames) {
             r.health += line.substr(7) + "\n";
         else if (!line.compare(0, 7, "CAMERA:"))
             r.camera += line.substr(7);
+        else if (!line.compare(0, 8, "SHOWING:"))
+            r.showing += line.substr(8);
+        else if (!line.compare(0, 6, "BOXON:"))
+            r.boxOn += line.substr(6);
+        else if (!line.compare(0, 7, "BOXOFF:"))
+            r.boxOff += line.substr(7);
         else
             r.output += line + "\n";
     }
@@ -184,6 +209,12 @@ std::string Token(const std::string &json, const char *key, size_t from = 0) {
     at += k.size();
     size_t end = json.find_first_of(",}]", at);
     return json.substr(at, end - at);
+}
+
+// The same, inside GET /api/camera's "playerBox" member (PlayerBox_Native.h).
+std::string BoxToken(const std::string &json, const char *key) {
+    size_t at = json.find("\"playerBox\":");
+    return at == std::string::npos ? "" : Token(json, key, at);
 }
 
 struct Grid {
@@ -236,7 +267,8 @@ std::string Dump(const ViewRun &r, int copy = 0) {
     std::string path = TestLogPath(copy ? "cameraview" + std::to_string(copy) : "cameraview");
     std::ofstream f(path);
     if (f.is_open())
-        f << r.driver << "CAMERA: " << r.camera << "\nHEALTH:\n" << r.health << r.output;
+        f << r.driver << "CAMERA: " << r.camera << "\nSHOWING: " << r.showing << "\nBOXON: "
+          << r.boxOn << "\nBOXOFF: " << r.boxOff << "\nHEALTH:\n" << r.health << r.output;
     return path;
 }
 
@@ -334,6 +366,20 @@ TEST_F(CameraViewTest, TheCursorBoxesDrawThePlayersMaskMirrored) {
     EXPECT_EQ(boxes, 2) << "expected depth_buffer_left.tex and depth_buffer_right.tex: "
                         << r.camera.substr(0, 400);
     EXPECT_GT(visible, 0) << "neither box shows the player with any opacity";
+
+    // The boxes themselves are drawn while the camera is live (PLAN H-147) ...
+    EXPECT_EQ(BoxToken(r.camera, "mode"), "\"auto\"") << where;
+    EXPECT_EQ(BoxToken(r.camera, "drawn"), "true") << "a live camera, and the boxes are hidden";
+    long shownAuto = atol(BoxToken(r.camera, "drawsShown").c_str());
+    EXPECT_GT(shownAuto, 0) << "no cursor-panel draw ran with the boxes drawn; " << where;
+    EXPECT_EQ(BoxToken(r.camera, "groupsHidden"), "0") << where;
+    // ... and `off` takes them away from a camera too.
+    EXPECT_EQ(BoxToken(r.boxOff, "mode"), "\"off\"") << r.boxOff.substr(0, 300);
+    EXPECT_EQ(BoxToken(r.boxOff, "drawn"), "false") << where;
+    EXPECT_EQ(BoxToken(r.boxOff, "groupsHidden"), "2") << "off did not hide both boxes; " << where;
+    EXPECT_GT(atol(BoxToken(r.boxOff, "drawsHidden").c_str()),
+              atol(BoxToken(r.boxOn, "drawsHidden").c_str()))
+        << "no draw ran with the boxes hidden after `off`; " << where;
 }
 
 TEST_F(NoCameraViewTest, AV2SensorDrawsNoPlayerView) {
@@ -346,6 +392,40 @@ TEST_F(NoCameraViewTest, AV2SensorDrawsNoPlayerView) {
     EXPECT_EQ(Token(r.camera, "standIn"), "false") << r.camera;
     EXPECT_EQ(Token(r.camera, "uploads"), "0") << r.camera;
     EXPECT_EQ(r.output.find("stand-in attached"), std::string::npos) << where;
+}
+
+// With no camera stream the two player boxes are not drawn (PLAN H-147): the
+// present player's box would be an empty frame, the other side's the "step
+// into view" figure.  The same run then switches them on -- what
+// DC3_PLAYER_BOX=on starts with -- and they are drawn again.
+TEST_F(NoCameraViewTest, ThePlayerBoxesAreNotDrawn) {
+    ViewRun r = RunToMainScreen(false);
+    ASSERT_TRUE(r.setupError.empty()) << r.setupError;
+    std::string where = Dump(r, 3);
+    ASSERT_TRUE(r.Entered("main_screen")) << "never reached main_screen; " << r.driver << where;
+    ASSERT_NE(r.camera.find("\"playerBox\":"), std::string::npos)
+        << "GET /api/camera has no playerBox member: " << r.camera.substr(0, 300);
+    EXPECT_EQ(BoxToken(r.camera, "mode"), "\"auto\"") << where;
+    EXPECT_EQ(BoxToken(r.camera, "drawn"), "false") << "no camera, and the boxes are drawn";
+    long hiddenAuto = atol(BoxToken(r.camera, "drawsHidden").c_str());
+    EXPECT_GT(hiddenAuto, 10) << "the cursor panel's draws did not go through the scope; "
+                               << where;
+    EXPECT_EQ(BoxToken(r.camera, "drawsShown"), "0") << "a draw showed the boxes; " << where;
+    EXPECT_EQ(BoxToken(r.camera, "groupsHidden"), "2")
+        << "the last draw did not hide both of cursor.milo's box groups; " << where;
+    // Draw time only: a script still reads both groups as showing.
+    EXPECT_NE(r.showing.find("\"value\":\"11\""), std::string::npos)
+        << "the groups' own showing is not what the game set: " << r.showing;
+
+    // on: drawn, with no camera.
+    EXPECT_EQ(BoxToken(r.boxOn, "mode"), "\"on\"") << r.boxOn.substr(0, 300);
+    EXPECT_EQ(BoxToken(r.boxOn, "drawn"), "true") << where;
+    EXPECT_GT(atol(BoxToken(r.boxOn, "drawsShown").c_str()), 0)
+        << "no draw ran with the boxes drawn after `on`; " << where;
+    EXPECT_EQ(BoxToken(r.boxOn, "groupsHidden"), "0") << where;
+    // off: gone again.
+    EXPECT_EQ(BoxToken(r.boxOff, "drawn"), "false") << where;
+    EXPECT_EQ(BoxToken(r.boxOff, "groupsHidden"), "2") << where;
 }
 
 // Two copies of the same flow, started together, must each reach main_screen

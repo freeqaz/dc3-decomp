@@ -1269,6 +1269,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/StbVorbisImpl.cpp
     src/platform/FxSendNative.cpp
     src/platform/MeshFilter.cpp
+    src/platform/PlayerBox_Native.cpp # PLAN H-147: no camera stream, no player boxes
     src/platform/BoneSetup.cpp
     src/platform/MeshGpuCache.cpp
     src/platform/MaterialSetup.cpp
@@ -1552,6 +1553,7 @@ set(DC3_WEB_CORE_SOURCES
     # Rnd_Wgpu.cpp / MeshGpuCache.cpp lifted to milo-engine; compiled via
     # DC3_WEB_LIFTED_ENGINE_SOURCES below.
     src/platform/MeshFilter.cpp
+    src/platform/PlayerBox_Native.cpp # PLAN H-147: no camera stream, no player boxes
     src/platform/Memcard_Stub.cpp
     src/platform/ContentMgr_Native.cpp
     src/platform/Achievements_Stub.cpp
@@ -2248,6 +2250,7 @@ if(BUILD_TESTS)
         tests/test_camera_stream.cpp
         tests/test_depthbuffer3d.cpp
         tests/test_native_camera_view.cpp
+        tests/test_player_box.cpp
         tests/test_native_boxyman.cpp
         tests/test_native_crowd.cpp
         tests/test_native_shadow.cpp
