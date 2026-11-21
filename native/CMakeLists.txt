@@ -1259,6 +1259,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/PoseEstimate_Native.cpp # DC3_POSE_ESTIMATE: joints the camera cannot see (np-cutoff)
     src/platform/MenuGesture_Native.cpp # menu gestures on a webcam: measurement (np-menu-gestures)
+    src/platform/PoseCamera_Native.cpp # which camera the pose server reads: the Options row, $DC3_SAVE_DIR/pose_camera.txt
     src/platform/NuiImageSurface_Native.cpp
     src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
     src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
@@ -1541,6 +1542,7 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
     src/platform/PoseEstimate_Native.cpp # DC3_POSE_ESTIMATE: joints the camera cannot see (np-cutoff)
     src/platform/MenuGesture_Native.cpp # menu gestures on a webcam: measurement (np-menu-gestures)
+    src/platform/PoseCamera_Native.cpp # which camera the pose server reads: the Options row, $DC3_SAVE_DIR/pose_camera.txt
     src/platform/NuiImageSurface_Native.cpp
     src/platform/CameraStream_Native.cpp # PLAN P-4: webcam -> Kinect colour/depth streams
     src/platform/StreamCompose_Native.cpp # PLAN P-4: StreamRenderer's shaders on the CPU
@@ -2281,6 +2283,7 @@ if(BUILD_TESTS)
         tests/test_native_pose_socket.cpp
         tests/test_native_pose_identity.cpp  # np-player-identity: who is who (People, Players)
         tests/test_native_pose_spawner.cpp
+        tests/test_native_pose_camera.cpp  # the camera setting: list parsing, the saved choice, launch precedence
         tests/test_native_tree_paths.cpp
         tests/test_movie_audio.cpp
         tests/test_texrenderer_clear.cpp
