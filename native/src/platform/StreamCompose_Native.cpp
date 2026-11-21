@@ -2,6 +2,7 @@
 
 #include "StreamCompose_Native.h"
 #include "CameraStream_Native.h"
+#include "PlayerBox_Native.h"
 #include "rndobj/Tex.h"
 
 #include <cstdio>
@@ -267,6 +268,8 @@ std::string Dc3CameraJson(int gridW, int gridH) {
     j += "]";
     // DepthBuffer3D's draw (DepthBuffer3DDraw_Native.cpp)
     j += ",\"boxyman\":" + Dc3BoxymanJson();
+    // whether the cursor panel's two boxes are drawn at all (PlayerBox_Native.h)
+    j += ",\"playerBox\":" + NativePlayerBox::StateJson();
     j += "}";
     return j;
 }

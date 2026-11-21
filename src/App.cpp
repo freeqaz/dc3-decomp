@@ -47,6 +47,7 @@ bool gDrawJmpBufSet = false;
 #include "ui\UILabel.h"
 #include "platform\Rnd_Wgpu.h"
 #include "platform\NativeSettings.h"
+#include "platform\PlayerBox_Native.h"
 #include "platform\PersistentFileCache.h"
 #include "utl\Locale.h"
 
@@ -122,6 +123,18 @@ public:
         if (sym == "menu_arc_start") return DataNode(Symbol(Dc3MenuArcStartName()));
         if (sym == "set_menu_arc_start")
             return DataNode(Dc3SetMenuArcStart(msg->Str(2)) ? 1 : 0);
+        // DC3_PLAYER_BOX (platform/PlayerBox_Native.h): whether the cursor
+        // panel's two player boxes are drawn -- auto (only while a camera
+        // stream is live), on or off.
+        if (sym == "player_box")
+            return DataNode(Symbol(NativePlayerBox::ModeName(NativePlayerBox::GetMode())));
+        if (sym == "set_player_box") {
+            NativePlayerBox::Mode mode;
+            if (!NativePlayerBox::ParseMode(msg->Str(2), &mode))
+                return DataNode(0);
+            NativePlayerBox::SetMode(mode);
+            return DataNode(1);
+        }
         if (sym == "get_camera_blend") return DataNode(NativeSettings::Get().cameraBlend ? 1 : 0);
         if (sym == "toggle_camera_blend") {
             NativeSettings::Get().cameraBlend = !NativeSettings::Get().cameraBlend;
