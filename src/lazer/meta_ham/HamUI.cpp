@@ -715,6 +715,10 @@ DataNode HamUI::OnMsg(const ButtonDownMsg &msg) {
     // Every pad press of the run passes here first: the natively drawn song
     // browser's hint bar names the device it came from.
     NativeSongBrowser::OnAnyButtonDown(msg.GetPadNum());
+    // The press hold (System_Native.cpp): the idle timer restarted below was
+    // restarted by a press.
+    extern void Dc3ControllerHoldNotePress();
+    Dc3ControllerHoldNotePress();
 #endif
     static ResetControllerModeTimeoutMsg resetControllerModeTimeoutMsg;
     Export(resetControllerModeTimeoutMsg, true);

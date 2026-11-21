@@ -2289,6 +2289,7 @@ if(BUILD_TESTS)
         tests/test_texrenderer_clear.cpp
         tests/test_texblender_compose.cpp  # H-117 the TexBlender output: base over the whole target, layers at their UVs
         tests/test_native_gesture_menus.cpp
+        tests/test_native_controller_hold.cpp  # H-157 a press keeps the menus; both hands raised give them back
         tests/test_native_audioseek.cpp
         tests/test_native_notables.cpp
         tests/test_lp64_literals.cpp
