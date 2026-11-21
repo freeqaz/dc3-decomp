@@ -214,8 +214,10 @@ TEST(LookTexPass, EnhancedTurnsOnStep1RetailAndNativeNot) {
 
 // Step 2's size follows the OUTPUT's rows (GpuDevice::OutputHeight), so a
 // 1920x1080 window gets the same target at render scale 1 and 2.
-// Sabotage: TexPassGpuSize reading the drawn rows (drawnH in place of
-// outputH below) gives 2048 at 1080 scale 2 -> red (seen, reverted).
+// Sabotage: texPassBaseRows 480 in place of 720 (1080 rows -> 2048) -> red
+// (seen, reverted). Which rows the engine passes (OutputHeight, not the
+// drawn WindowHeight) is checked by the running game's pass line, not here:
+// the GPU tests below set the rows themselves.
 TEST(LookTexPass, GpuSizeFollowsTheOutputRows) {
     milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
     const milo::LookSettings &enh = milo::Look();
@@ -530,9 +532,9 @@ TEST_F(TexPassScaleTest, AScaledTargetReadsBackAtItsOwnSizeWithThePictureDrawn) 
     EXPECT_EQ(magenta, 32 * 64) << "the clear's half";
 }
 
-// Sabotage: re-sizing in EnsureRenderTargetData (round 1: on the sampling
-// call) loses the picture: the readback after the flip is not the picture
-// -> red (seen, reverted).
+// Sabotage: re-sizing at the sampling call (GetGpuTexView running the
+// clearing-pass resize, as round 1's EnsureRenderTargetData did) -> the size
+// is 64 after the flip and the picture is gone -> red (seen, reverted).
 TEST_F(TexPassScaleTest, ASizeChangeWithNoRedrawKeepsThePicture) {
     Draw();
     ASSERT_EQ(GpuWidth(), 96u);
@@ -557,9 +559,12 @@ TEST_F(TexPassScaleTest, ASizeChangeWithNoRedrawKeepsThePicture) {
 
 // A full rect and a full viewport cover all of a scaled target: the viewport
 // is the attachment's (96x96), not the texture's 64 nor 64 scaled twice.
-// Sabotage: ApplyCameraViewport taking mCurrentTargetWidth (the attachment)
-// as the texture's pixels again -> the viewport is 144 wide -> red (seen,
-// reverted).
+// DC3's RndCam::Select sets the viewport in the target's own pixels
+// (mTargetTex->Width()), and FrameViewport scales it to the attachment.
+// Sabotage: FrameViewport leaving a texture pass's viewport unscaled -> the
+// viewport is 64 wide and the rect covers 64 of 96 -> red (seen, reverted).
+// (ApplyCameraViewport, the rb3 path, kCamSelectSetsViewport false, is not
+// reached by DC3: making it read the attachment's width stays green here.)
 TEST_F(TexPassScaleTest, AFullRectAndAFullViewportCoverAScaledTarget) {
     mDraw.rectW = 64.0f;
     Draw();
@@ -576,6 +581,8 @@ TEST_F(TexPassScaleTest, AFullRectAndAFullViewportCoverAScaledTarget) {
 
 // A CPU write to a scaled target puts it at its own size and keeps what was
 // written, and later passes keep it there.
+// Sabotage: UploadRGBAToRndTex not setting cpuWritten -> the next pass makes
+// it 96 again -> red (seen, reverted).
 TEST_F(TexPassScaleTest, ACpuWriteHoldsTheTargetAtItsOwnSize) {
     Draw();
     ASSERT_EQ(GpuWidth(), 96u);
