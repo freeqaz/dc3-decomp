@@ -234,9 +234,11 @@ Rnd::Rnd()
 // sizes below to the look's);
 // rtt_cap_1024|rtt_cap_1536|rtt_cap_2048|rtt_cap_rule set step 2's cap on the
 // longer side (texPassMaxSide) and rtt_rows_360|rtt_rows_480|rtt_rows_720|
-// rtt_rows_rule its base rows (texPassBaseRows), so one launch times one size
-// against another; neither turns step 2 on or off, and a target takes the new
-// size at its next clearing pass (SetLookTexPassSizeForInspection);
+// rtt_rows_rule its base rows (texPassBaseRows), each number for every adapter
+// class (the _rule tokens return each class's to the look's), so one launch
+// times one size against another; neither turns step 2 on or off, and a
+// target takes the new size at its next clearing pass
+// (SetLookTexPassSizeForInspection);
 // adapter_apple|adapter_other|adapter_discrete|adapter_rule force the adapter
 // class the look's four per-adapter rules use (np-look49: the near field and
 // its spread, the texture pass's MSAA and size; an Apple GPU, any other
