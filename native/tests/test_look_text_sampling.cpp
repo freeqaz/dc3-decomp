@@ -115,8 +115,9 @@ TEST_F(LookTextSamplingTest, TextDrawsTakeTheTextBiasWorldDrawsDoNot) {
 }
 
 // The tokens move the values, and the _rule tokens give the look's back; the
-// scene block carries what is in force. Sabotage: text_bias_rule restoring 0
-// instead of the look's value, or text_levels_all leaving the clamp -- red.
+// scene block carries what is in force, rewritten on a held frame where only
+// the token moved. Sabotage: text_bias_rule restoring 0 instead of the look's
+// value, or EnsureSceneUniformsCurrent not comparing the glyph bias -- red.
 TEST_F(LookTextSamplingTest, TheTokensMoveTheRuleAndTheRuleTokensRestoreIt) {
     if (IsSkipped()) return;
     ScopedLookOverride enhanced(LookProfile::Enhanced);
@@ -147,10 +148,13 @@ TEST_F(LookTextSamplingTest, TheTokensMoveTheRuleAndTheRuleTokensRestoreIt) {
         cam->SetFrustum(1.0f, 1000.0f, 1.0f, 0.75f);
         TheRnd.BeginDrawing();
         cam->Select();
+        gWgpuRnd->EnsureSceneUniformsCurrent();
+        // Each value alone, same camera: a held frame where only the token moved.
         milo::SetLookUiLodBiasForInspection(false, -0.5f);
-        milo::SetLookUiLodBiasScopeForInspection(0);
         gWgpuRnd->EnsureSceneUniformsCurrent();
         written = gWgpuRnd->LastSceneUiLodBias();
+        milo::SetLookUiLodBiasScopeForInspection(0);
+        gWgpuRnd->EnsureSceneUniformsCurrent();
         writtenArt = gWgpuRnd->LastSceneUiArtLodBias();
         milo::SetLookUiLodBiasForInspection(true, 0.0f);
         milo::SetLookUiLodBiasScopeForInspection(-1);
