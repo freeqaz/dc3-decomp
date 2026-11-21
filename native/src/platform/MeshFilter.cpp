@@ -99,14 +99,22 @@ static const char *SkipRule(const char* name) {
         !strcmp(name, "ribbon_blocker.mesh")) {
         return "microphone";
     }
-    // pose_flash_p0/p1: NOT a camera path (PLAN P-4 survey, 2026-11-13).  Their
-    // projection.tex / projectionp2.tex are TexRenderer targets that render the
-    // AVATAR (projection.rndtex), not the Kinect depth buffer; a live camera
-    // stream does not fill them.  Why they draw white natively is a
-    // TexRenderer question, still open.
-    if (!strncmp(name, "pose_flash", 10)) {
-        return "pose_flash";
-    }
+    // No pose_flash rule (PLAN H-174).  A name-prefix test hid five meshes on
+    // the belief that they drew white.  pose_flash_p0/p1 and
+    // pose_flash_bg_p0/p1 (world/shared/chars_base.milo) are the pose-off
+    // flash: the player's avatar projection (projection.tex /
+    // projectionp2.tex, drawn by projection.rndtex -- not a camera path) as a
+    // black silhouette over a blue or magenta burst, on every scored pose in
+    // Strike a Pose and in a Dance Battle's closing pose-off.
+    // pose_flashcard_bg (ui/hud/static_hud.milo, hud_shared.milo) is the card
+    // behind "N COMBO!" there; the prefix caught it by accident.  Measured
+    // with the rule lifted (Strike a Pose and Dance Battle, two synthetic
+    // players, three launches): silhouette, burst and card draw as on Xbox
+    // 360 footage, and no white or black quad showed in any frame; with it
+    // on, 0 of 76 Strike a Pose frames in three launches had a flash or a
+    // card.  In an ordinary song and in Break It Down lifting it changes
+    // nothing (held frames at 20 s of a song and at 12 and 32 s of Break It
+    // Down: 0 pixels over 8 levels).
     // No preview.mesh rule (G-15, np-media).  It was hidden while the song-
     // preview movie (preview.tmov -> preview.tex) did not decode on desktop;
     // it does now, and the image filters nothing.  song_info.milo puts it on
@@ -116,10 +124,17 @@ static const char *SkipRule(const char* name) {
     // the song-select box shows the album art at steady state, as the
     // original does under Xenia (YMCA / Better Off Alone / The Hustle,
     // 5-171 s after the highlight).
-    // Name substrings from the milo-viewer era.  Matched NOTHING on the
-    // measured routes (the whole perform route, and a fresh console up to
-    // tutorial_perform_it_screen_0), so there is no evidence either way; kept
-    // until a tutorial / party survey logs what it catches.
+    // Name substrings from the milo-viewer era.  "tutorial", "gesture" and
+    // "nav_tut" matched NOTHING on the measured routes (the whole perform
+    // route, a fresh console up to tutorial_perform_it_screen_0, Break It
+    // Down, Strike a Pose, Dance Battle), so there is no evidence either way.
+    // "spotlight" catches exactly two meshes on those routes: spotlight1.mesh
+    // and spotlight2.mesh of ui/augmented_photo.milo, which HamUI draws into
+    // the final-pose photo of the battle and crew results, one at each
+    // player's feet (PLAN H-174).  Whether the photo misses them is not
+    // settled: no native frame of that photo has been taken with the rule
+    // lifted, and the Xbox 360 footage at hand is too small to show them.
+    // Kept until that frame exists.
     if (strstr(name, "tutorial") || strstr(name, "gesture") ||
         strstr(name, "spotlight") || strstr(name, "nav_tut")) {
         return "tutorial/gesture/spotlight";

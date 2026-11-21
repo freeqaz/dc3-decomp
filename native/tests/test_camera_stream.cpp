@@ -369,7 +369,6 @@ TEST(CameraMeshFilterTest, ThePlayerViewBoxDrawsOnlyWithAStream) {
     // not camera paths: unchanged either way.  preview.mesh (the song-preview
     // movie) draws now that the movie decodes on desktop (G-15, np-media).
     EXPECT_FALSE(ShouldSkipMesh("preview.mesh", nullptr));
-    EXPECT_TRUE(ShouldSkipMesh("pose_flash_p0.mesh", nullptr));
     EXPECT_TRUE(ShouldSkipMesh("grid_80by60_cube.mesh", nullptr));
     for (const char *m : frame)
         EXPECT_FALSE(ShouldSkipMesh(m, nullptr)) << m << " hidden with a camera stream";
@@ -377,5 +376,30 @@ TEST(CameraMeshFilterTest, ThePlayerViewBoxDrawsOnlyWithAStream) {
     for (const char *m : box)
         EXPECT_TRUE(ShouldSkipMesh(m, nullptr)) << m << " drawn after the stream stopped";
     EXPECT_FALSE(ShouldSkipMesh("preview.mesh", nullptr)) << "preview.mesh hidden without a stream";
+    ResetForTest();
+}
+
+// The pose-off flash and its combo card (PLAN H-174).  The original draws the
+// player's avatar projection as a black silhouette over a blue or magenta
+// burst on every scored pose in Strike a Pose and in a Dance Battle's closing
+// pose-off (pose_flash_pN, pose_flash_bg_pN in world/shared/chars_base.milo),
+// and a card behind "N COMBO!" (pose_flashcard_bg in the HUD).  A name rule
+// hid all five; none of them is a camera path, so they draw with a stream,
+// without one and after one stopped.
+TEST(CameraMeshFilterTest, ThePoseOffFlashAndItsComboCardAreDrawn) {
+    ResetForTest();
+    const char *poseOff[] = { "pose_flash_p0.mesh",    "pose_flash_p1.mesh",
+                              "pose_flash_bg_p0.mesh", "pose_flash_bg_p1.mesh",
+                              "pose_flashcard_bg.mesh" };
+    for (const char *m : poseOff)
+        EXPECT_FALSE(ShouldSkipMesh(m, nullptr)) << m << " hidden with no camera";
+    Image img;
+    img.width = 2, img.height = 2, img.rgb.assign(12, 0), img.mask.assign(4, 0);
+    Publish(std::move(img));
+    for (const char *m : poseOff)
+        EXPECT_FALSE(ShouldSkipMesh(m, nullptr)) << m << " hidden with a camera stream";
+    Stop();
+    for (const char *m : poseOff)
+        EXPECT_FALSE(ShouldSkipMesh(m, nullptr)) << m << " hidden after the stream stopped";
     ResetForTest();
 }
