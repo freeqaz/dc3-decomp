@@ -1556,7 +1556,9 @@ TEST_F(DC3LookPostTest, DepthWeightedDofKeepsTheFigureOutOfTheBackgroundBlur) {
            "far background %.2f -> %.2f; figure %.2f -> %.2f\n",
            fringe[0], fringe[1], far[0], far[1], fig[0], fig[1]);
     EXPECT_GT(fringe[0], 15.0) << "retail's depth-blind blur lifts the background beside the figure (non-vacuous)";
-    EXPECT_LT(fringe[1], 2.0) << "the depth-weighted blur keeps the figure out of the background";
+    // Neither lifted nor darkened: the background beside the figure is the
+    // background's own blur (the weighted colour divided back out).
+    EXPECT_NEAR(fringe[1], 0.0, 1.5) << "the depth-weighted blur keeps the figure out of the background";
     EXPECT_NEAR(far[1], kBg, 1.0) << "the background far from the figure keeps its level";
     EXPECT_NEAR(far[0], kBg, 1.0);
     EXPECT_NEAR(fig[1], kFig, 1.0) << "the in-focus figure stays sharp";
