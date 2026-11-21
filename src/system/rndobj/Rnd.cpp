@@ -181,6 +181,7 @@ Rnd::Rnd()
 
 #ifdef HX_NATIVE
 #include "platform/LookProfile.h"
+#include "gfx/PostProcPass.h"
 // Native inspection (np-gfx-post round 10): {rnd native_look retail|enhanced}
 // switches the engine's DC3_LOOK profile at run time, so one frozen frame can
 // be graded both ways; post_retail|post_enhanced switch only the post chain's
@@ -197,6 +198,8 @@ Rnd::Rnd()
 // retail's every-material-Backwards, the old per-material flip, or the shape's
 // rule (item 20 b's per-venue before/after from one launch; a cull change
 // selects another cached pipeline, nothing is rebuilt per frame);
+// noise_rows_on|noise_rows_off|noise_rows_rule switch the post noise map's
+// output-row re-tiling (np-look23 a; enhanced's rule on, retail's off);
 // {rnd native_look} alone reports it. Returns the profile
 // now in force.
 static Symbol NativeLook(const DataArray *msg) {
@@ -222,13 +225,61 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "refl_cull_force") milo::SetReflectionCullForInspection(1);
         else if (s == "refl_cull_flip") milo::SetReflectionCullForInspection(0);
         else if (s == "refl_cull_rule") milo::SetReflectionCullForInspection(-1);
+        else if (s == "noise_rows_on") milo::SetLookNoiseRowsForInspection(1);
+        else if (s == "noise_rows_off") milo::SetLookNoiseRowsForInspection(0);
+        else if (s == "noise_rows_rule") milo::SetLookNoiseRowsForInspection(-1);
         else MILO_NOTIFY("native_look: %s is not retail, enhanced, post_retail, post_enhanced, "
                          "post_precision, post_bloom_filter, post_dof_filter, specular_aa_on, "
                          "specular_aa_off, lod_bias_0, lod_bias_m05, lod_bias_m1, "
                          "lod_bias_rule, aniso_1, aniso_4, aniso_16, aniso_rule, "
-                         "refl_cull_force, refl_cull_flip or refl_cull_rule", s.Str());
+                         "refl_cull_force, refl_cull_flip, refl_cull_rule, noise_rows_on, "
+                         "noise_rows_off or noise_rows_rule", s.Str());
     }
     return milo::LookProfileName(milo::Look().profile);
+}
+
+// Native inspection (np-look23 c): {rnd native_post_skip [mask]} leaves
+// stages of the DC3 retail chain out of the frame (PostProcPass::sInspectSkip:
+// 1 depth of field, 2 bloom, 4 motion blur, 8 camera velocity blur; 0 = none)
+// and returns the mask in force.
+static int NativePostSkip(const DataArray *msg) {
+    if (msg->Size() > 2) PostProcPass::sInspectSkip = (unsigned)msg->Int(2);
+    return (int)PostProcPass::sInspectSkip;
+}
+
+// Native inspection (np-look23 a): {rnd native_noise [scale]} scales every
+// PostProc's noise intensity as the engine reads it (0 = off, 1 = authored)
+// and reports the current PostProc's noise map and tiling.
+static DataNode NativeNoise(const DataArray *msg) {
+    if (msg->Size() > 2) RndPostProc::sNoiseInspectScale = msg->Float(2);
+    const RndPostProc *pp = RndPostProc::Current();
+    if (!pp) return DataNode("no current postproc");
+    const RndTex *map = pp->GetNoiseMap();
+    const Vector2 &base = pp->GetNoiseBaseScale();
+    // {rnd native_noise scale "out.ppm"}: also write the map's bitmap as a PPM.
+    if (msg->Size() > 3 && map) {
+        const RndBitmap &bm = map->Bitmap();
+        if (FILE *f = fopen(msg->Str(3), "wb")) {
+            fprintf(f, "P6\n%d %d\n255\n", bm.Width(), bm.Height());
+            for (int y = 0; y < bm.Height(); y++)
+                for (int x = 0; x < bm.Width(); x++) {
+                    u8 r, g, b, a;
+                    bm.PixelColor(x, y, r, g, b, a);
+                    const u8 px[3] = {r, g, b};
+                    fwrite(px, 1, 3, f);
+                }
+            fclose(f);
+        }
+    }
+    static char buf[512];
+    snprintf(buf, sizeof(buf),
+        "pp=%s map=%s file=%s size=%dx%d base=%g,%g top=%g intensity=%g stationary=%d "
+        "midtone=%d inspect_scale=%g",
+        pp->Name(), map ? map->Name() : "(none)", map ? map->File().c_str() : "",
+        map ? map->Width() : 0, map ? map->Height() : 0, (double)base.x, (double)base.y,
+        (double)pp->GetNoiseTopScale(), (double)pp->GetNoiseIntensityAuthored(), (int)pp->GetNoiseStationary(),
+        (int)pp->GetNoiseMidtone(), (double)RndPostProc::sNoiseInspectScale);
+    return DataNode(buf);
 }
 #endif
 
@@ -341,6 +392,8 @@ BEGIN_HANDLERS(Rnd)
     HANDLE_EXPR(toggle_all_postprocs, mDisablePostProc = !mDisablePostProc)
 #ifdef HX_NATIVE
     HANDLE_EXPR(native_look, NativeLook(_msg))
+    HANDLE_EXPR(native_noise, NativeNoise(_msg))
+    HANDLE_EXPR(native_post_skip, NativePostSkip(_msg))
 #endif
     HANDLE_ACTION(recreate_defaults, CreateDefaults())
     HANDLE_ACTION(
