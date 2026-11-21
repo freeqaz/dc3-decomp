@@ -219,6 +219,14 @@ Rnd::Rnd()
 // crowd_shadow_on|crowd_shadow_off|crowd_shadow_rule switch the soft contact
 // shadows under the 3D crowd (np-look32, LookSettings::crowdContactShadow;
 // enhanced's rule on, retail's off; nothing compiles after the first);
+// text_bias_off|text_bias_half|text_bias_on|text_bias_rule put the text and
+// HUD LOD bias (np-look34, LookSettings::uiLodBias) at 0 / -0.5 / -1 or the
+// look's value; text_levels_2|text_levels_all|text_levels_rule set the text
+// and HUD samplers' level clamp (uiMipLevels) to two levels, none, or the
+// look's (a sampler and bind-group cache miss, as the aniso tokens);
+// text_bias_glyphs|text_bias_all_ui|text_bias_scope_rule give the bias to
+// glyph pages only, to every text/HUD draw, or the look's choice (uniforms:
+// nothing compiles; item 34b's held-frame A/B);
 // {rnd native_look} alone reports it. Returns the profile
 // now in force.
 static Symbol NativeLook(const DataArray *msg) {
@@ -264,6 +272,16 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "crowd_shadow_on") milo::SetLookCrowdShadowForInspection(1);
         else if (s == "crowd_shadow_off") milo::SetLookCrowdShadowForInspection(0);
         else if (s == "crowd_shadow_rule") milo::SetLookCrowdShadowForInspection(-1);
+        else if (s == "text_bias_off") milo::SetLookUiLodBiasForInspection(false, 0.0f);
+        else if (s == "text_bias_half") milo::SetLookUiLodBiasForInspection(false, -0.5f);
+        else if (s == "text_bias_on") milo::SetLookUiLodBiasForInspection(false, -1.0f);
+        else if (s == "text_bias_rule") milo::SetLookUiLodBiasForInspection(true, 0.0f);
+        else if (s == "text_levels_2") milo::SetLookUiMipLevelsForInspection(2);
+        else if (s == "text_levels_all") milo::SetLookUiMipLevelsForInspection(0);
+        else if (s == "text_levels_rule") milo::SetLookUiMipLevelsForInspection(-1);
+        else if (s == "text_bias_glyphs") milo::SetLookUiLodBiasScopeForInspection(1);
+        else if (s == "text_bias_all_ui") milo::SetLookUiLodBiasScopeForInspection(0);
+        else if (s == "text_bias_scope_rule") milo::SetLookUiLodBiasScopeForInspection(-1);
         else MILO_NOTIFY("native_look: %s is not retail, enhanced, post_retail, post_enhanced, "
                          "post_precision, post_bloom_filter, post_dof_filter, specular_aa_on, "
                          "specular_aa_off, lod_bias_0, lod_bias_m05, lod_bias_m1, "
@@ -273,8 +291,10 @@ static Symbol NativeLook(const DataArray *msg) {
                          "dof_depth_weight_off, dof_depth_weight_rule, hair_edge_on, "
                          "hair_edge_off, hair_edge_rule, hair_edge_b, hair_edge_c, "
                          "hair_edge_e, hair_edge_centre, display_tv, display_srgb, "
-                         "display_off, display_rule, crowd_shadow_on, crowd_shadow_off "
-                         "or crowd_shadow_rule", s.Str());
+                         "display_off, display_rule, crowd_shadow_on, crowd_shadow_off, "
+                         "crowd_shadow_rule, text_bias_off, text_bias_half, text_bias_on, "
+                         "text_bias_rule, text_levels_2, text_levels_all, text_levels_rule, "
+                         "text_bias_glyphs, text_bias_all_ui or text_bias_scope_rule", s.Str());
     }
     return milo::LookProfileName(milo::Look().profile);
 }
