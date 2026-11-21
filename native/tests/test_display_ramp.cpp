@@ -198,7 +198,7 @@ TEST_F(DisplayRampGpuTest, SRGBPassIsTheOldFormula) {
 // The real pass, display type TV: each byte comes back as the table's code.
 // Then back to sRGB on the same object (the pipeline switches back), and TV
 // again at another gamma (the table is rewritten). Sabotages: the shader's
-// lut index i >> 2 / i & 3 swapped (S8); the table not re-uploaded when g
+// table texel scrambled (S8); the table not re-uploaded when g
 // changes (S9); the alpha dropped (S13, RunRamp's alpha check).
 TEST_F(DisplayRampGpuTest, TVPassIsTheTable) {
     const std::vector<int> r = RunRamp(0.85f, DisplayRamp::kDisplayTV);
