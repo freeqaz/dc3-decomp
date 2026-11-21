@@ -204,6 +204,12 @@ Rnd::Rnd()
 // output-row re-tiling (np-look23 a; enhanced's rule on, retail's off);
 // dof_depth_weight_on|dof_depth_weight_off|dof_depth_weight_rule switch the
 // enhanced depth of field's depth-weighted blur (np-look23 c);
+// dof_near_on|_off|_rule and dof_near_spread_on|_off|_rule switch its near
+// field (np-look36: an out-of-focus object in front of the focus takes the
+// depth-blind blur; the spread mixes its blur over the figure beside it; the
+// field compiles four pipelines once, the spread is a uniform; each rule is
+// by adapter class, on for a discrete GPU, and the on and off tokens force
+// it on any GPU);
 // hair_edge_on|hair_edge_off|hair_edge_rule switch the enhanced cutout's
 // alpha test per MSAA sample (np-look26 d; LookSettings::cutoutSampleTest; a
 // uniform, nothing compiles): on = mode E, off = the landed sharpened
@@ -219,6 +225,14 @@ Rnd::Rnd()
 // crowd_shadow_on|crowd_shadow_off|crowd_shadow_rule switch the soft contact
 // shadows under the 3D crowd (np-look32, LookSettings::crowdContactShadow;
 // enhanced's rule on, retail's off; nothing compiles after the first);
+// text_bias_off|text_bias_half|text_bias_on|text_bias_rule put the text and
+// HUD LOD bias (np-look34, LookSettings::uiLodBias) at 0 / -0.5 / -1 or the
+// look's value; text_levels_2|text_levels_all|text_levels_rule set the text
+// and HUD samplers' level clamp (uiMipLevels) to two levels, none, or the
+// look's (a sampler and bind-group cache miss, as the aniso tokens);
+// text_bias_glyphs|text_bias_all_ui|text_bias_scope_rule give the bias to
+// glyph pages only, to every text/HUD draw, or the look's choice (uniforms:
+// nothing compiles; item 34b's held-frame A/B);
 // {rnd native_look} alone reports it. Returns the profile
 // now in force.
 static Symbol NativeLook(const DataArray *msg) {
@@ -250,6 +264,13 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "dof_depth_weight_on") milo::SetLookDofDepthWeightForInspection(1);
         else if (s == "dof_depth_weight_off") milo::SetLookDofDepthWeightForInspection(0);
         else if (s == "dof_depth_weight_rule") milo::SetLookDofDepthWeightForInspection(-1);
+        // np-look36: the depth weight's near field, and its spread.
+        else if (s == "dof_near_on") milo::SetLookDofNearForInspection(1);
+        else if (s == "dof_near_off") milo::SetLookDofNearForInspection(0);
+        else if (s == "dof_near_rule") milo::SetLookDofNearForInspection(-1);
+        else if (s == "dof_near_spread_on") milo::SetLookDofNearForInspection(1, true);
+        else if (s == "dof_near_spread_off") milo::SetLookDofNearForInspection(0, true);
+        else if (s == "dof_near_spread_rule") milo::SetLookDofNearForInspection(-1, true);
         else if (s == "hair_edge_on") milo::SetLookCutoutSampleTestForInspection(1);
         else if (s == "hair_edge_off") milo::SetLookCutoutSampleTestForInspection(0);
         else if (s == "hair_edge_rule") milo::SetLookCutoutSampleTestForInspection(-1);
@@ -264,17 +285,31 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "crowd_shadow_on") milo::SetLookCrowdShadowForInspection(1);
         else if (s == "crowd_shadow_off") milo::SetLookCrowdShadowForInspection(0);
         else if (s == "crowd_shadow_rule") milo::SetLookCrowdShadowForInspection(-1);
+        else if (s == "text_bias_off") milo::SetLookUiLodBiasForInspection(false, 0.0f);
+        else if (s == "text_bias_half") milo::SetLookUiLodBiasForInspection(false, -0.5f);
+        else if (s == "text_bias_on") milo::SetLookUiLodBiasForInspection(false, -1.0f);
+        else if (s == "text_bias_rule") milo::SetLookUiLodBiasForInspection(true, 0.0f);
+        else if (s == "text_levels_2") milo::SetLookUiMipLevelsForInspection(2);
+        else if (s == "text_levels_all") milo::SetLookUiMipLevelsForInspection(0);
+        else if (s == "text_levels_rule") milo::SetLookUiMipLevelsForInspection(-1);
+        else if (s == "text_bias_glyphs") milo::SetLookUiLodBiasScopeForInspection(1);
+        else if (s == "text_bias_all_ui") milo::SetLookUiLodBiasScopeForInspection(0);
+        else if (s == "text_bias_scope_rule") milo::SetLookUiLodBiasScopeForInspection(-1);
         else MILO_NOTIFY("native_look: %s is not retail, enhanced, post_retail, post_enhanced, "
                          "post_precision, post_bloom_filter, post_dof_filter, specular_aa_on, "
                          "specular_aa_off, lod_bias_0, lod_bias_m05, lod_bias_m1, "
                          "lod_bias_rule, aniso_1, aniso_4, aniso_16, aniso_rule, "
                          "refl_cull_force, refl_cull_flip, refl_cull_rule, noise_rows_on, "
                          "noise_rows_off, noise_rows_rule, dof_depth_weight_on, "
-                         "dof_depth_weight_off, dof_depth_weight_rule, hair_edge_on, "
+                         "dof_depth_weight_off, dof_depth_weight_rule, dof_near_on, dof_near_off, "
+                         "dof_near_rule, dof_near_spread_on, dof_near_spread_off, "
+                         "dof_near_spread_rule, hair_edge_on, "
                          "hair_edge_off, hair_edge_rule, hair_edge_b, hair_edge_c, "
                          "hair_edge_e, hair_edge_centre, display_tv, display_srgb, "
-                         "display_off, display_rule, crowd_shadow_on, crowd_shadow_off "
-                         "or crowd_shadow_rule", s.Str());
+                         "display_off, display_rule, crowd_shadow_on, crowd_shadow_off, "
+                         "crowd_shadow_rule, text_bias_off, text_bias_half, text_bias_on, "
+                         "text_bias_rule, text_levels_2, text_levels_all, text_levels_rule, "
+                         "text_bias_glyphs, text_bias_all_ui or text_bias_scope_rule", s.Str());
     }
     return milo::LookProfileName(milo::Look().profile);
 }
