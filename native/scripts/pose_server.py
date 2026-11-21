@@ -225,16 +225,166 @@ class V4L2Devices:
     def exists(self, path):
         return os.path.exists(path)
 
+    def by_id_names(self):
+        """{/dev/v4l/by-id name: the /dev/videoN it points at}."""
+        try:
+            names = sorted(os.listdir(self.by_id_dir))
+        except OSError:
+            return {}
+        return {n: os.path.realpath(os.path.join(self.by_id_dir, n)) for n in names}
 
-def resolve_camera(spec, devices, log=None):
+
+# ---- Which cameras there are (--list-cameras; the game's camera setting) ----
+#
+# A camera has three things here: an identity that stays with the device
+# (`id`), a name for a person (`name`), and what to pass to --camera to get it
+# (`spec`, "id:<identity>" whenever there is a real identity). An index is not
+# an identity: MEASURED on a Mac with OpenCV 5.0.0, AVFoundation cameras are
+# numbered in order of their uniqueID string (index 0 = "MX Brio"
+# 0x220000046d0944, index 1 = "FaceTime HD Camera" 3642F2CD-...), so unplugging
+# the first renumbers the second; a /dev/videoN moves the same way when a USB
+# camera re-enumerates.
+CAMERA_ID_PREFIX = "id:"
+CAMERA_LIST_HEADER = "dc3-pose-cameras 1"   # first line of --list-cameras tsv
+
+
+def _number_duplicate_names(cameras):
+    """Two cameras of one model get "Name" and "Name (2)", in list order."""
+    seen = {}
+    for cam in cameras:
+        n = seen.get(cam["name"], 0) + 1
+        seen[cam["name"]] = n
+        if n > 1:
+            cam["name"] = f"{cam['name']} ({n})"
+    return cameras
+
+
+def linux_camera_list(devices):
+    """The V4L2 video-capture devices, by node number -- so the first is the
+    one --camera auto opens. The identity is the /dev/v4l/by-id name where
+    udev made one (it names the USB device, not the node), else the node."""
+    by_node = {}
+    for name, node in sorted(getattr(devices, "by_id_names", dict)().items()):
+        by_node.setdefault(node, name)
+    cameras = []
+    for node in devices.nodes():
+        ok, desc = devices.query(node)
+        if not ok:
+            continue
+        ident = by_node.get(node)
+        cameras.append({
+            "id": ident or node,
+            "name": desc or node,
+            "spec": (CAMERA_ID_PREFIX + ident) if ident else node,
+            "index": int(node[len("/dev/video"):]),
+            "node": node,
+        })
+    return _number_duplicate_names(cameras)
+
+
+def parse_system_profiler_cameras(text):
+    """`system_profiler SPCameraDataType -json` -> the cameras in OpenCV's
+    AVFoundation order: sorted by unique id (see CAMERA_ID_PREFIX above), so
+    `index` is the number cv2.VideoCapture takes NOW. Raises ValueError on
+    text that is not that JSON."""
+    import json
+    data = json.loads(text)
+    items = data.get("SPCameraDataType") if isinstance(data, dict) else None
+    found = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        uid = item.get("spcamera_unique-id")
+        if not uid:
+            continue
+        found.append((str(uid), str(item.get("_name") or uid)))
+    found.sort(key=lambda pair: pair[0])
+    return _number_duplicate_names([
+        {"id": uid, "name": name, "spec": CAMERA_ID_PREFIX + uid, "index": i}
+        for i, (uid, name) in enumerate(found)])
+
+
+def _run_system_profiler():
+    import subprocess
+    done = subprocess.run(["system_profiler", "SPCameraDataType", "-json"],
+                          capture_output=True, text=True, timeout=20)
+    if done.returncode != 0:
+        raise OSError(f"system_profiler exited {done.returncode}: {done.stderr.strip()[:200]}")
+    return done.stdout
+
+
+def list_cameras(devices=None, platform=None, profiler=_run_system_profiler):
+    """This box's cameras, without opening one: [{id, name, spec, index}, ...].
+    Raises OSError / ValueError when the box cannot be asked."""
+    platform = sys.platform if platform is None else platform
+    if platform.startswith("linux"):
+        return linux_camera_list(V4L2Devices() if devices is None else devices)
+    if platform == "darwin":
+        return parse_system_profiler_cameras(profiler())
+    return []
+
+
+def find_camera(cameras, wanted):
+    """The entry `wanted` names -- its spec, its identity (with or without
+    "id:"), or its name (any case) -- or None."""
+    wanted = str(wanted).strip()
+    bare = wanted[len(CAMERA_ID_PREFIX):] if wanted.startswith(CAMERA_ID_PREFIX) else wanted
+    for cam in cameras:
+        if wanted == cam["spec"] or bare == cam["id"]:
+            return cam
+    if wanted.startswith(CAMERA_ID_PREFIX):
+        return None
+    for cam in cameras:
+        if cam["name"].lower() == wanted.lower():
+            return cam
+    return None
+
+
+def format_camera_list(cameras, fmt="json", platform=None, error=None):
+    """--list-cameras' output. json is for people and scripts; tsv is what the
+    game reads (PoseCamera_Native.cpp): the header line, then
+    "camera<TAB>spec<TAB>id<TAB>name" per camera, "error<TAB>why" if the box
+    could not be asked."""
+    if fmt == "tsv":
+        def clean(value):
+            return " ".join(str(value).split())
+        lines = [CAMERA_LIST_HEADER]
+        if error:
+            lines.append("error\t" + clean(error))
+        lines += ["\t".join(("camera", clean(c["spec"]), clean(c["id"]), clean(c["name"])))
+                  for c in cameras]
+        return "\n".join(lines) + "\n"
+    import json
+    out = {"platform": sys.platform if platform is None else platform, "cameras": cameras}
+    if error:
+        out["error"] = error
+    return json.dumps(out, indent=2) + "\n"
+
+
+def resolve_camera(spec, devices, log=None, lister=None):
     """--camera -> (source for cv2.VideoCapture, description). The source is a
     /dev/videoN path, or an int index where there is no V4L2 (macOS). Raises
-    ServerExit(EXIT_NO_CAMERA) when nothing matches. Called on every open."""
+    ServerExit(EXIT_NO_CAMERA) when nothing matches. Called on every open, so
+    an identity ("id:...", or a camera's name) follows the device to whatever
+    index or node it has now. `lister` stands in for list_cameras (tests)."""
     log = log or (lambda msg: print(msg, file=sys.stderr))
     spec = "auto" if spec is None else str(spec).strip()
     if not devices.available():
-        return (0 if spec in ("", "auto") else (int(spec) if spec.isdigit() else spec)), \
-            f"camera {spec}"
+        if spec in ("", "auto"):
+            return 0, f"camera {spec}"
+        if spec.isdigit():
+            return int(spec), f"camera {spec}"
+        if not spec.startswith(CAMERA_ID_PREFIX) and ("/" in spec or "://" in spec):
+            return spec, f"camera {spec}"       # a path or URL: OpenCV's business
+        try:
+            cameras = (lister or list_cameras)()
+        except (OSError, ValueError) as e:
+            raise ServerExit(EXIT_NO_CAMERA, f"camera {spec}: could not list the cameras ({e})")
+        cam = find_camera(cameras, spec)
+        if cam is None:
+            there = ", ".join(c["name"] for c in cameras) or "no cameras"
+            raise ServerExit(EXIT_NO_CAMERA, f"camera {spec} is not present (found: {there})")
+        return cam["index"], f"camera {cam['index']} ({cam['name']}) [{spec}]"
 
     def scan(why):
         skipped = []
@@ -259,12 +409,16 @@ def resolve_camera(spec, devices, log=None):
             log(f"Camera {spec}: {node} is not a camera ({desc}); looking for one instead")
             return scan(f"camera {spec} not a capture device")
         return node, f"{node} ({desc}) [camera {spec}]"
-    path = spec
+    path = spec[len(CAMERA_ID_PREFIX):] if spec.startswith(CAMERA_ID_PREFIX) else spec
     if not path.startswith("/"):
-        for cand in (os.path.join(devices.by_id_dir, spec), os.path.join("/dev", spec)):
+        for cand in (os.path.join(devices.by_id_dir, path), os.path.join("/dev", path)):
             if devices.exists(cand):
                 path = cand
                 break
+        else:
+            cam = find_camera(linux_camera_list(devices), spec)   # a camera's name
+            if cam is not None:
+                path = cam["node"]
     if not devices.exists(path):
         raise ServerExit(EXIT_NO_CAMERA, f"camera {spec} is not present")
     node = devices.realpath(path)
@@ -824,7 +978,14 @@ def parse_args(argv=None):
     input_group = parser.add_mutually_exclusive_group()
     input_group.add_argument("--camera", default="auto",
                              help="auto (default: the first V4L2 video-capture device), "
-                                  "an index, a /dev/videoN path or a /dev/v4l/by-id name")
+                                  "an index, a /dev/videoN path, a /dev/v4l/by-id name, or "
+                                  "what --list-cameras prints for a camera: its spec "
+                                  "(id:<identity>) or its name")
+    parser.add_argument("--list-cameras", nargs="?", const="json", default=None,
+                        choices=("json", "tsv"), metavar="json|tsv",
+                        help="Print this box's cameras (identity, name, the --camera spec) "
+                             "and exit, without opening one. json (default) or tsv, which "
+                             "is what the game's camera setting reads.")
     input_group.add_argument("--video", default=None, help="Path to a video file to use as input instead of a camera")
     parser.add_argument("--loop", action="store_true", help="Loop the video at EOF (video mode only)")
     parser.add_argument("--fps", type=float, default=None,
@@ -1189,8 +1350,26 @@ def clear_background_scheduling():
     return True
 
 
+def print_camera_list(fmt, out=None, lister=list_cameras):
+    """--list-cameras: always exits 0; a box that cannot be asked prints no
+    cameras and says why."""
+    out = sys.stdout if out is None else out
+    cameras, error = [], None
+    try:
+        cameras = lister()
+    except (OSError, ValueError) as e:
+        error = f"could not list the cameras: {e}"
+        print(error, file=sys.stderr)
+    out.write(format_camera_list(cameras, fmt, error=error))
+    out.flush()
+
+
 def main(argv=None):
     args = parse_args(argv)
+    fmt = getattr(args, "list_cameras", None)
+    if fmt:
+        print_camera_list(fmt)
+        return
     clear_background_scheduling()
     try:
         run(args)
