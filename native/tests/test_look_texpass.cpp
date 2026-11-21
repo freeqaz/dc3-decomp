@@ -1004,6 +1004,7 @@ TEST(LookAdapterClasses, TheSettersWriteAllThreeClasses) {
         {"near spread", [](int m) { return milo::SetLookDofNearForInspection(m, true); }, milo::LookDofNearSpread},
         {"texture pass msaa", milo::SetLookTexPassMsaaForInspection, milo::LookTexPassMsaa},
         {"texture pass scale", milo::SetLookTexPassScaleForInspection, milo::LookTexPassScale},
+        {"depth of field edge rule", milo::SetLookDofEdgeForInspection, milo::LookDofEdge},  // np-look51
     };
     for (LookProfile p : {LookProfile::Enhanced, LookProfile::Retail}) {
         milo::ScopedLookOverride look(p);
@@ -1051,21 +1052,21 @@ TEST(LookAdapterClasses, TheClassLineWording) {
     const std::string discrete = line(LookAdapterType::Discrete, 0x10DE, false, "Vulkan");
     EXPECT_TRUE(begins(discrete, "[look] adapter class: discrete GPU;")) << discrete;
     EXPECT_EQ(discrete.find("not a discrete GPU"), std::string::npos) << discrete;
-    EXPECT_NE(discrete.find("; depth of field near field 1, near spread 1, texture pass msaa 1, scale 1 "
+    EXPECT_NE(discrete.find("; depth of field near field 1, near spread 1, edge 1, texture pass msaa 1, scale 1 "
                             "(cap 2048, base rows 360) [type discrete, vendor 0x10de, backend Vulkan] "
                             "(profile enhanced)\n"),
               std::string::npos)
         << discrete;
     const std::string apple = line(LookAdapterType::Integrated, 0x106B, true, "Metal");
     EXPECT_TRUE(begins(apple, "[look] adapter class: Apple GPU (not a discrete GPU);")) << apple;
-    EXPECT_NE(apple.find("; depth of field near field 1, near spread 1, texture pass msaa 1, scale 1 "
+    EXPECT_NE(apple.find("; depth of field near field 1, near spread 1, edge 0, texture pass msaa 1, scale 1 "
                          "(cap 1536, base rows 720) [type integrated, vendor 0x106b, backend Metal] "
                          "(profile enhanced)\n"),
               std::string::npos)
         << apple;
     const std::string other = line(LookAdapterType::Integrated, 0x1002, false, "Vulkan");
     EXPECT_TRUE(begins(other, "[look] adapter class: not a discrete GPU;")) << other;
-    EXPECT_NE(other.find("; depth of field near field 0, near spread 0, texture pass msaa 0, scale 0 "
+    EXPECT_NE(other.find("; depth of field near field 0, near spread 0, edge 0, texture pass msaa 0, scale 0 "
                          "(cap 2048, base rows 360) [type integrated, vendor 0x1002, backend Vulkan] "
                          "(profile enhanced)\n"),
               std::string::npos)
@@ -1091,6 +1092,101 @@ TEST(LookAdapterClasses, TheClassLineWording) {
     EXPECT_EQ(sizeRule, "[look] texture pass size cap 2048, 2048 on a non-discrete GPU, 1536 on an Apple GPU (the "
                         "rule), base rows 360, 360 on a non-discrete GPU, 720 on an Apple GPU (the rule) "
                         "(inspection, profile enhanced)\n");
+}
+
+// ---- np-look51: the depth of field's edge rule (LookSettings::postDofEdge) ----
+// Decided by adapter class like the near field: enhanced on for a discrete
+// GPU, off for Apple (kAppleDofEdge, until the landing session's M3 timing)
+// and for anything else (until the 890M's); retail and Native off. The
+// setter is in TheSettersWriteAllThreeClasses; its line and the class
+// lines' "edge %d" are below and in the two line tests above; the GPU side is
+// test_dc3_look_post.cpp DofEdgeRule*. Sabotages, each seen red and reverted
+// (item51/build/sab): SettingsFor reading Apple's value from the discrete
+// field -> TheEdgeRuleByClass, TheEdgeRuleLine, TheClassLineWording,
+// TheClassTokenLine, TheDofEdgeTokens and the PostProcPass GPU test; the setter
+// not writing the non-discrete class -> TheSettersWriteAllThreeClasses,
+// TheEdgeRuleLine, TheDofEdgeTokens and the PostProcPass test; the setter not
+// refusing Native -> NativeRefusesTheEdgeRule, TheSettersWriteAllThreeClasses,
+// TheDofEdgeTokens and the PostProcPass test.
+TEST(LookAdapterClasses, TheEdgeRuleByClass) {
+    struct Row {
+        LookProfile profile;
+        bool discrete, apple, other;
+    };
+    const Row rows[] = {
+        {LookProfile::Enhanced, true, false, false},
+        {LookProfile::Retail, false, false, false},
+        {LookProfile::Native, false, false, false},
+    };
+    for (const Row &r : rows) {
+        milo::ScopedLookOverride look(r.profile);
+        const milo::LookSettings &s = milo::Look();
+        EXPECT_EQ(milo::LookDofEdge(s, LookAdapterClass::Discrete), r.discrete) << milo::LookProfileName(r.profile);
+        EXPECT_EQ(milo::LookDofEdge(s, LookAdapterClass::Apple), r.apple) << milo::LookProfileName(r.profile);
+        EXPECT_EQ(milo::LookDofEdge(s, LookAdapterClass::OtherNonDiscrete), r.other)
+            << milo::LookProfileName(r.profile);
+        EXPECT_EQ(s.postDofEdge, r.discrete);
+        EXPECT_EQ(s.postDofEdgeApple, r.apple);
+        EXPECT_EQ(s.postDofEdgeIntegrated, r.other);
+    }
+    // The picker picks by class: a local copy with each class's own value.
+    milo::ScopedLookOverride look(LookProfile::Enhanced);
+    for (int bits = 0; bits < 8; bits++) {
+        milo::LookSettings copy = milo::Look();
+        copy.postDofEdge = bits & 1;
+        copy.postDofEdgeApple = bits & 2;
+        copy.postDofEdgeIntegrated = bits & 4;
+        EXPECT_EQ(milo::LookDofEdge(copy, LookAdapterClass::Discrete), (bool)(bits & 1)) << bits;
+        EXPECT_EQ(milo::LookDofEdge(copy, LookAdapterClass::Apple), (bool)(bits & 2)) << bits;
+        EXPECT_EQ(milo::LookDofEdge(copy, LookAdapterClass::OtherNonDiscrete), (bool)(bits & 4)) << bits;
+    }
+}
+
+TEST(LookAdapterClasses, NativeRefusesTheEdgeRule) {
+    milo::ScopedLookOverride native(LookProfile::Native);
+    for (int mode : {1, 0, -1}) {
+        EXPECT_FALSE(milo::SetLookDofEdgeForInspection(mode)) << mode;
+        const milo::LookSettings &s = milo::Look();
+        EXPECT_FALSE(s.postDofEdge || s.postDofEdgeApple || s.postDofEdgeIntegrated)
+            << "a refused token changes nothing; mode " << mode;
+    }
+}
+
+// The setter's line, in the near field's wording.
+TEST(LookAdapterClasses, TheEdgeRuleLine) {
+    milo::ScopedLookOverride look(LookProfile::Enhanced);
+    auto line = [](int mode) {
+        testing::internal::CaptureStderr();
+        milo::SetLookDofEdgeForInspection(mode);
+        return testing::internal::GetCapturedStderr();
+    };
+    EXPECT_EQ(line(1), "[look] depth of field edge rule 1, 1 on a non-discrete GPU, 1 on an Apple GPU (inspection, "
+                       "profile enhanced)\n");
+    EXPECT_EQ(line(0), "[look] depth of field edge rule 0, 0 on a non-discrete GPU, 0 on an Apple GPU (inspection, "
+                       "profile enhanced)\n");
+    EXPECT_EQ(line(-1), "[look] depth of field edge rule 1, 0 on a non-discrete GPU, 0 on an Apple GPU (the rule) "
+                        "(inspection, profile enhanced)\n");
+    milo::ScopedLookOverride retail(LookProfile::Retail);
+    EXPECT_EQ(line(1), "[look] depth of field edge rule 1, 1 on a non-discrete GPU, 1 on an Apple GPU (inspection, "
+                       "profile retail)\n");
+}
+
+// The three tokens through Rnd's handler. Sabotage: dof_edge_off calling the
+// setter with 1 -> red (seen, reverted).
+TEST_F(LookTexPassTokens, TheDofEdgeTokens) {
+    milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
+    const milo::LookSettings &s = milo::Look();
+    auto all = [&]() { return (int)s.postDofEdge + 2 * (int)s.postDofEdgeApple + 4 * (int)s.postDofEdgeIntegrated; };
+    EXPECT_EQ(all(), 1) << "enhanced: discrete only";
+    Token("dof_edge_off");
+    EXPECT_EQ(all(), 0);
+    Token("dof_edge_on");
+    EXPECT_EQ(all(), 7);
+    Token("dof_edge_rule");
+    EXPECT_EQ(all(), 1);
+    milo::ScopedLookOverride native(milo::LookProfile::Native);
+    Token("dof_edge_on");
+    EXPECT_EQ(all(), 0) << "Native refuses the token";
 }
 
 // ---- np-look49: the adapter class token ({rnd native_look adapter_*}) ----
@@ -1172,8 +1268,8 @@ TEST(LookAdapterClasses, TheClassTokenLine) {
     const std::string forced = testing::internal::GetCapturedStderr();
     EXPECT_EQ(forced, "[look] adapter class forced for inspection: Apple GPU (not a discrete GPU); the adapter "
                       "is a discrete GPU [type discrete, vendor 0x10de, backend Vulkan]; depth of field near "
-                      "field 1, near spread 1, texture pass msaa 1, scale 1 (cap 1536, base rows 720) (profile "
-                      "enhanced)\n");
+                      "field 1, near spread 1, edge 0, texture pass msaa 1, scale 1 (cap 1536, base rows 720) "
+                      "(profile enhanced)\n");
     testing::internal::CaptureStderr();
     milo::SetLookAdapterClassForInspection(false, LookAdapterClass::OtherNonDiscrete);
     const std::string other = testing::internal::GetCapturedStderr();
@@ -1185,9 +1281,9 @@ TEST(LookAdapterClasses, TheClassTokenLine) {
     testing::internal::CaptureStderr();
     milo::SetLookAdapterClassForInspection(true);
     const std::string rule = testing::internal::GetCapturedStderr();
-    EXPECT_EQ(rule, "[look] adapter class: discrete GPU; depth of field near field 1, near spread 1, texture pass "
-                    "msaa 1, scale 1 (cap 2048, base rows 360) [type discrete, vendor 0x10de, backend Vulkan] "
-                    "(profile enhanced)\n");
+    EXPECT_EQ(rule, "[look] adapter class: discrete GPU; depth of field near field 1, near spread 1, edge 1, "
+                    "texture pass msaa 1, scale 1 (cap 2048, base rows 360) [type discrete, vendor 0x10de, backend "
+                    "Vulkan] (profile enhanced)\n");
     milo::LogLookAdapterClass(saved);
 }
 

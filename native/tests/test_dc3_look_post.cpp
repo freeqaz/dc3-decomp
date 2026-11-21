@@ -1768,6 +1768,369 @@ TEST_F(DC3LookPostTest, DofNearFieldSoftensANearObjectsEdgeAndLeavesTheFarField)
                     << "x " << x << " y " << y;
 }
 
+// np-look51: LookSettings::postDofEdge, the edge rule. Every composite took
+// its mix amount from depth sample 0 of the 4x depth while the scene it mixes
+// is resolved, so a pixel an in-focus figure half covers was kept whole or
+// replaced whole (dc3 item 51: 143 kept, 142 replaced, 19 between of 304 edge
+// pixels on held dci cu01). This drives DofPass's composites with a synthetic
+// 4-sample depth written per sample (frag_depth at sample rate, the sample
+// index choosing the depth) under a scene of 2 px stripes (230 / 20), so the
+// blur (~125) and the scene are always far apart. Five zones across x:
+//   A all four samples far (behind, factor 1), B all at the focus (factor 0),
+//   C split between in focus and far (masks below; sample 0 far at the
+//     odd-odd pixels the half-size factor pre-pass reads, so the weighted
+//     blur there carries colour); the in-focus samples a little in front of
+//     the focal plane (t = -0.03) in the top half, a little behind it in the
+//     bottom half (+0.03): a min over the samples at or behind the focus
+//     alone would leave the far sample's factor in the top half,
+//   D one sample in front of the focus (t = -1.5, factor 1), the rest at the
+//     focus; which sample varies by pixel (sample 0 at the odd-odd pixels),
+//   E all four in front.
+// (1) C with the rule on is the scene (within 8 levels: factor 0.03); off it
+//     is the scene where sample 0 is in focus and the blur where it is far.
+// (2) D with the rule on is blurred whichever sample is in front; off, a
+//     pixel whose sample 0 is at the focus is the scene (weighted path).
+// (3) A, B and E (the samples agree): on equals off to the bit.
+// (4) The retail composite does not read the rule.
+// For each enhanced composite: weighted (non-discrete), the near field
+// (discrete) with and without the spread, and the non-weighted one
+// (dof_depth_weight_off). Warmed with the rule, no run compiles a pipeline.
+// Sabotages (item51/build/sabotage, each seen red, reverted, rebuilt):
+// dof_edge reading sample 0 only -- red (1), first at cOnKept; the smallest
+// taking the mean instead -- red (1), cOnKept; the in-front samples not raising
+// it (no max) -- red (2), 0 of 17280 blurred; the smallest over the samples at
+// or behind the focus only (the brief's first form) -- red (3) first, agreeDiff:
+// an all-in-focus pixel just in front of the focus gets no smallest and blurs;
+// Prewarm skipping the edge composites -- red (pipelines), the create count.
+// Logs: archive/np-gfx-2026-11-14/lanes/sharp/item51/build/sab/.
+TEST_F(DC3LookPostTest, DofEdgeRuleKeepsAnInFocusEdgesBlend) {
+    ASSERT_TRUE(TheDOFProc);
+    GpuDevice &gpu = Gpu();
+    UIScreen *game = Hmx::Object::New<UIScreen>();
+    game->SetName("game_screen", ObjectDir::Main());
+    class ProbeUI : public UIManager {
+    public:
+        void SetCurrent(UIScreen *sc) { mCurrentScreen = sc; }
+    } ui;
+    UIManager *savedUI = TheUI;
+    TheUI = &ui;
+    ui.SetCurrent(game);
+    RndCam *prev = RndCam::Current();
+    RndCam::ClearCurrent();
+    TheDOFProc->Set(nullptr, 10.0f, 0.5f, 1.0f, 0.0f);
+    ASSERT_TRUE(TheDOFProc->Enabled());
+
+    constexpr int W = 1280, H = 720, kZone = 256;
+    const uint8_t kHi = 230, kLo = 20;
+    std::vector<uint8_t> px((size_t)W * H * 4);
+    for (int y = 0; y < H; y++)
+        for (int x = 0; x < W; x++) {
+            uint8_t *p = &px[((size_t)y * W + x) * 4];
+            p[0] = p[1] = p[2] = (x / 2) % 2 ? kHi : kLo;
+            p[3] = 255;
+        }
+    wgpu::Texture scene = UploadOn(gpu, W, H, px);
+    wgpu::TextureView sv = scene.CreateView();
+    wgpu::TextureDescriptor zd{};
+    zd.size = {(uint32_t)W, (uint32_t)H, 1};
+    zd.format = wgpu::TextureFormat::Depth32Float;
+    zd.sampleCount = 4;
+    zd.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+    wgpu::Texture depth = gpu.Device().CreateTexture(&zd);
+    wgpu::TextureView depthView = depth.CreateView();
+    DofPass dof;
+    const wgpu::TextureFormat kFmt = wgpu::TextureFormat::RGBA8Unorm;
+    dof.Prewarm(kFmt, gpu, true, false, false, true);
+    dof.Prewarm(kFmt, gpu, true, true, false, true);
+    dof.Prewarm(kFmt, gpu, true, true, true, true);
+    const uint64_t pipesWarm = GpuPipelineCreateCount();
+    auto run = [&](bool enhanced, bool weighted, bool nearField, bool spread, bool edge,
+                   std::vector<uint8_t> &out) {
+        wgpu::CommandEncoder enc = gpu.Device().CreateCommandEncoder();
+        EXPECT_TRUE(dof.Run(enc, sv, kFmt, depthView, 4, W, H, gpu, enhanced, weighted, nearField, spread, edge));
+        EXPECT_EQ(dof.LastRunEdge(), enhanced && edge);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        out.assign((size_t)W * H * 4, 0);
+        EXPECT_TRUE(gpu.ReadbackTexture(dof.OutputTexture(), W, H, out.data(), out.size()));
+    };
+    std::vector<uint8_t> tmp;
+    run(true, true, false, false, false, tmp);
+    const float *c = dof.LastCompositeConstants();
+    ASSERT_NE(c[0], 0.0f);
+    const float zFocus = -c[1] / c[0];
+    const float zFront = (-1.5f - c[1]) / c[0];
+    ASSERT_GT(zFront, 0.0f);
+    ASSERT_LT(zFront, zFocus);
+    ASSERT_LT(zFocus, 1.0f);
+    // C's in-focus samples: a little in front of the focal plane in the top
+    // half (t = -0.03), a little behind it in the bottom half (t = +0.03), as
+    // an in-focus figure is on both sides of it.
+    const float zInFront = (-0.03f - c[1]) / c[0], zBehind = (0.03f - c[1]) / c[0];
+    // The masks of far samples in C (bit i: sample i far), and D's front
+    // sample, by pixel. Sample 0 far / in front at the odd-odd pixels.
+    static const unsigned kMasksC[6] = {0x1, 0xE, 0x3, 0xC, 0x5, 0xA};
+    auto maskC = [](int x, int y) { return (x & y & 1) ? 0x7u : kMasksC[(x + 2 * y) % 6]; };
+    auto frontD = [](int x, int y) { return (x & y & 1) ? 0 : 1 + (x + 2 * y) % 3; };
+    {
+        char wgsl[2048];
+        snprintf(wgsl, sizeof(wgsl),
+                 "@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {\n"
+                 "  let x = f32(i32(i & 1u)) * 4.0 - 1.0;\n"
+                 "  let y = f32(i32(i >> 1u)) * 4.0 - 1.0;\n"
+                 "  return vec4f(x, y, 0.5, 1.0);\n}\n"
+                 "const kMasksC = array<u32, 6>(1u, 14u, 3u, 12u, 5u, 10u);\n"
+                 "@fragment fn fs(@builtin(position) pos: vec4f, @builtin(sample_index) s: u32)"
+                 " -> @builtin(frag_depth) f32 {\n"
+                 "  let x = i32(pos.x); let y = i32(pos.y); let zone = x / %d;\n"
+                 "  let zf = %.9f; let zn = %.9f; let odd = (x & y & 1) == 1;\n"
+                 "  let zc = select(%.9f, %.9f, y < %d);\n"
+                 "  if (zone == 0) { return 1.0; }\n"
+                 "  if (zone == 1) { return zf; }\n"
+                 "  if (zone == 2) {\n"
+                 "    var m = kMasksC[(x + 2 * y) %% 6]; if (odd) { m = 7u; }\n"
+                 "    return select(zc, 1.0, ((m >> s) & 1u) == 1u);\n  }\n"
+                 "  if (zone == 3) {\n"
+                 "    var k = u32(1 + (x + 2 * y) %% 3); if (odd) { k = 0u; }\n"
+                 "    return select(zf, zn, s == k);\n  }\n"
+                 "  return zn;\n}\n",
+                 kZone, zFocus, zFront, zBehind, zInFront, H / 2);
+        wgpu::ShaderSourceWGSL src;
+        src.code = wgsl;
+        wgpu::ShaderModuleDescriptor smd{};
+        smd.nextInChain = &src;
+        wgpu::ShaderModule sm = gpu.Device().CreateShaderModule(&smd);
+        wgpu::DepthStencilState ds{};
+        ds.format = wgpu::TextureFormat::Depth32Float;
+        ds.depthWriteEnabled = wgpu::OptionalBool::True;
+        ds.depthCompare = wgpu::CompareFunction::Always;
+        wgpu::FragmentState fs{};
+        fs.module = sm;
+        fs.entryPoint = "fs";
+        fs.targetCount = 0;
+        wgpu::RenderPipelineDescriptor pd{};
+        pd.label = "TestDofEdgeDepthPerSample";
+        pd.vertex.module = sm;
+        pd.vertex.entryPoint = "vs";
+        pd.fragment = &fs;
+        pd.depthStencil = &ds;
+        pd.multisample.count = 4;
+        wgpu::RenderPipeline pipe = gpu.Device().CreateRenderPipeline(&pd);
+        wgpu::RenderPassDepthStencilAttachment za{};
+        za.view = depthView;
+        za.depthLoadOp = wgpu::LoadOp::Clear;
+        za.depthStoreOp = wgpu::StoreOp::Store;
+        za.depthClearValue = 1.0f;
+        wgpu::RenderPassDescriptor rp{};
+        rp.label = "TestDofEdgeDepth";
+        rp.depthStencilAttachment = &za;
+        wgpu::CommandEncoder enc = gpu.Device().CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = enc.BeginRenderPass(&rp);
+        pass.SetPipeline(pipe);
+        pass.Draw(3);
+        pass.End();
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+    }
+    // The paths: {enhanced, weighted, near field, spread}.
+    struct Path {
+        const char *name;
+        bool enhanced, weighted, nearField, spread;
+    };
+    const Path paths[] = {
+        {"weighted (non-discrete)", true, true, false, false},
+        {"near field (discrete)", true, true, true, false},
+        {"near field + spread (discrete)", true, true, true, true},
+        {"not weighted", true, false, false, false},
+        {"retail", false, false, false, false},
+    };
+    std::vector<uint8_t> outs[5][2];
+    for (int k = 0; k < 5; k++)
+        for (int e = 0; e < 2; e++) run(paths[k].enhanced, paths[k].weighted, paths[k].nearField, paths[k].spread,
+                                         e == 1, outs[k][e]);
+    EXPECT_EQ(GpuPipelineCreateCount(), pipesWarm) << "Prewarm(.., edge) warms the edge rule's composites";
+    dof.Terminate();
+    TheDOFProc->UnSet();
+    if (prev) prev->Select(); else RndCam::ClearCurrent();
+    TheUI = savedUI;
+    ui.SetCurrent(nullptr);
+    delete game;
+
+    auto g = [&](const std::vector<uint8_t> &o, int x, int y) { return (int)o[((size_t)y * W + x) * 4 + 1]; };
+    auto sceneAt = [&](int x) { return (x / 2) % 2 ? (int)kHi : (int)kLo; };
+    const int kMargin = 48, y0 = 120, y1 = H - 120;
+    for (int k = 0; k < 5; k++) {
+        const Path &p = paths[k];
+        const std::vector<uint8_t> &off = outs[k][0], &on = outs[k][1];
+        // (3) and (4): every pixel whose samples agree (A, B, E); the retail
+        // composite everywhere.
+        size_t agreeDiff = 0, allDiff = 0;
+        for (int y = 0; y < H; y++)
+            for (int x = 0; x < W; x++) {
+                const int zone = x / kZone;
+                for (int ch = 0; ch < 4; ch++) {
+                    const size_t i = ((size_t)y * W + x) * 4 + ch;
+                    if (on[i] != off[i]) {
+                        allDiff++;
+                        if (zone == 0 || zone == 1 || zone == 4) agreeDiff++;
+                    }
+                }
+            }
+        if (!p.enhanced) {
+            EXPECT_EQ(allDiff, 0u) << "the retail composite does not read the edge rule";
+            continue;
+        }
+        EXPECT_EQ(agreeDiff, 0u) << p.name << ": where the samples agree the rule changes nothing";
+        // (1) zone C.
+        int cOnKept = 0, cN = 0, cOffFarBlurred = 0, cOffFar = 0, cOffFocusKept = 0, cOffFocus = 0;
+        for (int y = y0; y < y1; y++)
+            for (int x = 2 * kZone + kMargin; x < 3 * kZone - kMargin; x++) {
+                const int s = sceneAt(x);
+                cN++;
+                cOnKept += std::abs(g(on, x, y) - s) <= 8;
+                if (maskC(x, y) & 1u) {
+                    cOffFar++;
+                    cOffFarBlurred += std::abs(g(off, x, y) - s) > 40;
+                } else {
+                    cOffFocus++;
+                    cOffFocusKept += std::abs(g(off, x, y) - s) <= 8;
+                }
+            }
+        // (2) zone D, per front sample.
+        int dOnBlurred[4] = {}, dN[4] = {}, dOffKept[4] = {};
+        for (int y = y0; y < y1; y++)
+            for (int x = 3 * kZone + kMargin; x < 4 * kZone - kMargin; x++) {
+                const int s = sceneAt(x), i = frontD(x, y);
+                dN[i]++;
+                dOnBlurred[i] += std::abs(g(on, x, y) - s) > 40;
+                dOffKept[i] += g(off, x, y) == s;
+            }
+        printf("DC3LookPost DOF edge rule, %s: split pixels kept on %d/%d; off: sample 0 far blurred %d/%d, "
+               "sample 0 in focus kept %d/%d; one sample in front blurred on (sample 0..3) %d/%d %d/%d %d/%d "
+               "%d/%d, kept off %d %d %d %d; pixels on != off %zu\n",
+               p.name, cOnKept, cN, cOffFarBlurred, cOffFar, cOffFocusKept, cOffFocus, dOnBlurred[0], dN[0],
+               dOnBlurred[1], dN[1], dOnBlurred[2], dN[2], dOnBlurred[3], dN[3], dOffKept[0], dOffKept[1],
+               dOffKept[2], dOffKept[3], allDiff / 4);
+        EXPECT_EQ(cOnKept, cN) << p.name << ": a pixel split between the focus and far keeps the resolved scene";
+        EXPECT_EQ(cOffFocusKept, cOffFocus) << p.name << ": off, sample 0 in focus keeps the scene";
+        EXPECT_GT(cOffFarBlurred, cOffFar * 9 / 10) << p.name << ": off, sample 0 far takes the blur (non-vacuous)";
+        for (int i = 0; i < 4; i++) {
+            ASSERT_GT(dN[i], 1000) << "sample " << i;
+            EXPECT_GT(dOnBlurred[i], dN[i] * 9 / 10)
+                << p.name << ": one sample in front (sample " << i << ") blurs the pixel";
+        }
+        if (!p.spread) {
+            for (int i = 1; i < 4; i++)
+                EXPECT_GT(dOffKept[i], dN[i] * 9 / 10)
+                    << p.name << ": off, sample 0 in focus keeps the scene (sample " << i << " in front; "
+                    << "non-vacuous)";
+        }
+    }
+}
+
+// The edge rule through PostProcPass::Run: the world grade's depth of field
+// takes LookDofEdge for GpuDevice::LookClass(), so the class token reaches it
+// (enhanced: on for a discrete GPU, off for Apple and the rest), the edge
+// tokens force it on any class, and the retail and Native profiles never run
+// it whatever the token. Sabotage: Run passing LookAdapterClass::Discrete in
+// place of LookClass() -- red (Apple and other ran the rule).
+TEST_F(DC3LookPostTest, DofEdgeRuleFollowsTheAdapterClassThroughPostProcPass) {
+    ASSERT_TRUE(TheDOFProc);
+    GpuDevice &gpu = Gpu();
+    UIScreen *game = Hmx::Object::New<UIScreen>();
+    game->SetName("game_screen", ObjectDir::Main());
+    class ProbeUI : public UIManager {
+    public:
+        void SetCurrent(UIScreen *sc) { mCurrentScreen = sc; }
+    } ui;
+    UIManager *savedUI = TheUI;
+    TheUI = &ui;
+    ui.SetCurrent(game);
+    RndCam *prevCam = RndCam::Current();
+    RndCam::ClearCurrent();
+    TheDOFProc->Set(nullptr, 10.0f, 0.5f, 1.0f, 0.0f);
+    ASSERT_TRUE(TheDOFProc->Enabled());
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    RndPostProc *prevPP = RndPostProc::Current();
+    pp->Select();
+    constexpr int W = 256, H = 144;
+    auto &dev = gpu.Device();
+    wgpu::Texture scene = UploadOn(gpu, W, H, std::vector<uint8_t>((size_t)W * H * 4, 128));
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)W, (uint32_t)H, 1};
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture frame = dev.CreateTexture(&d);
+    wgpu::TextureDescriptor zd{};
+    zd.size = {(uint32_t)W, (uint32_t)H, 1};
+    zd.format = wgpu::TextureFormat::Depth32Float;
+    zd.sampleCount = 4;
+    zd.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+    wgpu::Texture depth = dev.CreateTexture(&zd);
+    std::vector<uint8_t> k = {0, 0, 0, 255};
+    wgpu::Texture black = UploadOn(gpu, 1, 1, k, wgpu::TextureUsage::None);
+    wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView(),
+                      depthView = depth.CreateView(), blackView = black.CreateView();
+    PostProcPass pass;
+    pass.Init(gpu);
+    auto ranEdge = [&]() {
+        pass.SetWorldGrade(true);
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        pass.Run(enc, sceneView, scene, W, H, depthView, 4, frameView, blackView, gpu);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        pass.SetWorldGrade(false);
+        return pass.Dof().LastRunEdge();
+    };
+    using milo::LookAdapterClass;
+    const LookAdapterClass classes[] = {LookAdapterClass::Discrete, LookAdapterClass::Apple,
+                                        LookAdapterClass::OtherNonDiscrete};
+    const char *names[] = {"discrete", "Apple", "other"};
+    {
+        milo::ScopedLookOverride o(milo::LookProfile::Enhanced);
+        const bool want[] = {true, false, false};
+        for (int c = 0; c < 3; c++) {
+            ASSERT_TRUE(milo::SetLookAdapterClassForInspection(false, classes[c]));
+            EXPECT_EQ(ranEdge(), want[c]) << "enhanced, the class token forced " << names[c];
+            EXPECT_TRUE(pass.Dof().LastRunDepthWeighted()) << "the depth of field ran (non-vacuous)";
+        }
+        ASSERT_TRUE(milo::SetLookDofEdgeForInspection(1));
+        for (int c = 0; c < 3; c++) {
+            ASSERT_TRUE(milo::SetLookAdapterClassForInspection(false, classes[c]));
+            EXPECT_TRUE(ranEdge()) << "dof_edge_on on " << names[c];
+        }
+        ASSERT_TRUE(milo::SetLookDofEdgeForInspection(0));
+        for (int c = 0; c < 3; c++) {
+            ASSERT_TRUE(milo::SetLookAdapterClassForInspection(false, classes[c]));
+            EXPECT_FALSE(ranEdge()) << "dof_edge_off on " << names[c];
+        }
+        ASSERT_TRUE(milo::SetLookAdapterClassForInspection(true));
+        ASSERT_TRUE(milo::SetLookDofEdgeForInspection(-1));
+    }
+    {
+        milo::ScopedLookOverride o(milo::LookProfile::Retail);
+        ASSERT_TRUE(milo::SetLookDofEdgeForInspection(1));
+        for (int c = 0; c < 3; c++) {
+            ASSERT_TRUE(milo::SetLookAdapterClassForInspection(false, classes[c]));
+            EXPECT_FALSE(ranEdge()) << "retail's composite never takes the rule; " << names[c];
+        }
+        ASSERT_TRUE(milo::SetLookAdapterClassForInspection(true));
+    }
+    {
+        milo::ScopedLookOverride o(milo::LookProfile::Native);
+        EXPECT_FALSE(milo::SetLookDofEdgeForInspection(1));
+        EXPECT_FALSE(ranEdge()) << "Native";
+    }
+    pass.Terminate();
+    if (prevPP) prevPP->Select();
+    delete pp;
+    TheDOFProc->UnSet();
+    if (prevCam) prevCam->Select(); else RndCam::ClearCurrent();
+    TheUI = savedUI;
+    ui.SetCurrent(nullptr);
+    delete game;
+}
+
 // LookSettings::postDofNearField / Spread follow the look and their tokens
 // ({rnd native_look dof_near_on|_off|_rule, dof_near_spread_*}); retail and
 // Native take none, and Native refuses the token. Sabotage: the setter
