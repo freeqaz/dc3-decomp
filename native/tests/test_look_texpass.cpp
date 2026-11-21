@@ -37,6 +37,7 @@
 
 #include "char/Character.h"
 #include "gfx/GpuDevice.h"
+#include "obj/DataFile.h"
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
 #include "platform/LookProfile.h"
@@ -49,6 +50,7 @@
 #include "rndobj/Tex.h"
 #include "rndobj/TexRenderer.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <string>
@@ -266,6 +268,106 @@ TEST(LookTexPass, GpuSizeFollowsTheOutputRows) {
             EXPECT_EQ(w, win.side) << win.h << " rows, scale " << scale;
         }
     }
+}
+
+// The side TexPassGpuSize gives a 1024x1024 target at `rows` under the look
+// in force (both sides: the target is square).
+int Side1024(int rows) {
+    int w = 0, h = 0;
+    milo::TexPassGpuSize(milo::Look(), 1024, 1024, rows, w, h);
+    EXPECT_EQ(w, h) << rows << " rows";
+    return w;
+}
+
+// np-look49: SetLookTexPassSizeForInspection moves the two numbers of step 2's
+// rule (rtt_cap_* / rtt_rows_*): > 0 sets, 0 leaves alone, < 0 the profile's.
+// Sabotage: the setter ignoring maxSide -> red; 0 returning a value to the
+// profile's in place of leaving it -> red (both seen, reverted).
+TEST(LookTexPass, TheSizeSetterMovesTheCapAndTheRows) {
+    milo::ScopedLookOverride look(milo::LookProfile::Enhanced);  // restores both numbers
+    ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(1536, 0));
+    EXPECT_EQ(Side1024(1440), 1536) << "cap 1536";
+    EXPECT_EQ(Side1024(720), 1536) << "cap 1536";
+    EXPECT_EQ(Side1024(540), 1536) << "cap 1536, the rows left at 360";
+    EXPECT_EQ(milo::Look().texPassBaseRows, 360) << "0 leaves the rows alone";
+    ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(0, 480));
+    EXPECT_EQ(milo::Look().texPassMaxSide, 1536) << "0 leaves the cap alone";
+    EXPECT_EQ(Side1024(1080), 1536) << "rows 480 under cap 1536";
+    ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(-1, 0));
+    EXPECT_EQ(milo::Look().texPassMaxSide, 2048) << "the cap's rule";
+    EXPECT_EQ(milo::Look().texPassBaseRows, 480) << "the cap's rule leaves the rows";
+    EXPECT_EQ(Side1024(713), 1521) << "rows 480";
+    EXPECT_EQ(Side1024(720), 1536) << "rows 480";
+    EXPECT_EQ(Side1024(1080), 2048) << "rows 480, cap 2048";
+    ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(0, 720));
+    EXPECT_EQ(Side1024(713), 1024) << "rows 720";
+    EXPECT_EQ(Side1024(1080), 1536) << "rows 720";
+    ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(0, 0));
+    EXPECT_EQ(milo::Look().texPassMaxSide, 2048) << "0, 0 changes nothing";
+    EXPECT_EQ(milo::Look().texPassBaseRows, 720) << "0, 0 changes nothing";
+    ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(1024, 0));
+    ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(-1, -1));
+    EXPECT_EQ(Side1024(713), 2028) << "the rule";
+    EXPECT_EQ(Side1024(720), 2048) << "the rule";
+    EXPECT_EQ(Side1024(1440), 2048) << "the rule";
+    EXPECT_EQ(Side1024(2160), 2048) << "the rule";
+    // The numbers only: step 2 stays as it was, on and off.
+    EXPECT_TRUE(milo::Look().texPassScale && !milo::Look().texPassScaleIntegrated);
+    ASSERT_TRUE(milo::SetLookTexPassScaleForInspection(0));
+    ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(1536, 480));
+    EXPECT_FALSE(milo::Look().texPassScale || milo::Look().texPassScaleIntegrated);
+}
+
+// Under the Native profile (rb3, rb3-xenon) the setter refuses and nothing moves.
+// Sabotage: the setter not refusing under Native -> red (seen, reverted).
+TEST(LookTexPass, NativeRefusesTheSizeSetter) {
+    milo::ScopedLookOverride look(milo::LookProfile::Native);
+    EXPECT_FALSE(milo::SetLookTexPassSizeForInspection(1536, 480));
+    EXPECT_FALSE(milo::SetLookTexPassSizeForInspection(-1, -1));
+    EXPECT_EQ(milo::Look().texPassMaxSide, 2048);
+    EXPECT_EQ(milo::Look().texPassBaseRows, 360);
+    EXPECT_EQ(Side1024(713), 2028);
+    EXPECT_EQ(Side1024(1440), 2048);
+    EXPECT_FALSE(milo::Look().texPassScale || milo::Look().texPassScaleIntegrated);
+}
+
+// The tokens, through Rnd's handler as the HTTP eval reaches it; rtt_rule
+// returns both numbers as well as both steps.
+// Sabotage: rtt_rule not returning the two numbers -> red; the setter
+// ignoring maxSide -> red (both seen, reverted).
+class LookTexPassTokens : public EngineTestFixture {
+protected:
+    static void Token(const char *t) {
+        char text[96];
+        snprintf(text, sizeof(text), "(nil native_look %s)", t);
+        DataArray *file = DataReadString(text);
+        TheRnd.Handle(file->Array(0), true);
+        file->Release();
+    }
+};
+
+TEST_F(LookTexPassTokens, TheSizeTokensAndRttRule) {
+    milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
+    const milo::LookSettings &s = milo::Look();
+    struct Case { const char *token; int cap, rows; } cases[] = {
+        {"rtt_cap_1536", 1536, 360}, {"rtt_cap_1024", 1024, 360}, {"rtt_cap_2048", 2048, 360},
+        {"rtt_rows_480", 2048, 480}, {"rtt_rows_720", 2048, 720}, {"rtt_rows_360", 2048, 360},
+        {"rtt_cap_1536", 1536, 360}, {"rtt_rows_720", 1536, 720}, {"rtt_cap_rule", 2048, 720},
+        {"rtt_rows_rule", 2048, 360},
+    };
+    for (const Case &c : cases) {
+        Token(c.token);
+        EXPECT_EQ(s.texPassMaxSide, c.cap) << c.token;
+        EXPECT_EQ(s.texPassBaseRows, c.rows) << c.token;
+    }
+    Token("rtt_off");
+    Token("rtt_cap_1024");
+    Token("rtt_rows_480");
+    EXPECT_FALSE(s.texPassScale) << "a size token does not turn step 2 on";
+    Token("rtt_rule");
+    EXPECT_TRUE(s.texPassMsaa && s.texPassScale) << "rtt_rule: both steps the profile's";
+    EXPECT_EQ(s.texPassMaxSide, 2048) << "rtt_rule: the profile's cap";
+    EXPECT_EQ(s.texPassBaseRows, 360) << "rtt_rule: the profile's rows";
 }
 
 // The box filter a scaled target is read back through: 1.5 texels a texel.
@@ -615,6 +717,36 @@ TEST_F(TexPassScaleTest, ACpuWriteHoldsTheTargetAtItsOwnSize) {
     EXPECT_EQ(px, blue);
     Draw();
     EXPECT_EQ(GpuWidth(), 64u) << "held at its own size after a CPU write";
+}
+
+// np-look49: the size setter (rtt_cap_* / rtt_rows_*) moves a scaled target's
+// GPU size at its next clearing pass, not at a sampling call or a resumed
+// pass. 540 rows: base rows 360 -> x1.5 (96), cap 80 -> 80, rows 480 ->
+// x1.125 (72). The fixture's look scope restores both numbers.
+// Sabotage: GetGpuTexView re-sizing at the sampling call -> red; a scaled
+// target never re-sized to another scaled size (only to or from its own)
+// -> red; the setter ignoring maxSide -> red (all seen, reverted).
+TEST_F(TexPassScaleTest, TheSizeSetterTakesEffectAtTheNextClearingPass) {
+    Draw();
+    ASSERT_EQ(GpuWidth(), 96u);
+    ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(80, 0));
+    EXPECT_TRUE(GetGpuTexView(mTex));
+    EXPECT_EQ(GpuWidth(), 96u) << "a sampling call or a resumed pass keeps the size";
+    Draw();
+    EXPECT_EQ(GpuWidth(), 80u) << "the next clearing pass takes the cap";
+    ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(-1, 480));
+    EXPECT_TRUE(GetGpuTexView(mTex));
+    EXPECT_EQ(GpuWidth(), 80u) << "a sampling call or a resumed pass keeps the size";
+    Draw();
+    EXPECT_EQ(GpuWidth(), 72u) << "the next clearing pass takes the rows";
+    int green, magenta, w, h, leftGreen;
+    Count(green, magenta, w, h, leftGreen);
+    EXPECT_EQ(w, 64);
+    EXPECT_EQ(leftGreen, 32 * 64) << "drawn at the new size";
+    EXPECT_EQ(magenta, 32 * 64);
+    ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(-1, -1));
+    Draw();
+    EXPECT_EQ(GpuWidth(), 96u) << "the rule";
 }
 #endif
 
