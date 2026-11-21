@@ -225,9 +225,12 @@ Rnd::Rnd()
 // crowd_shadow_on|crowd_shadow_off|crowd_shadow_rule switch the soft contact
 // shadows under the 3D crowd (np-look32, LookSettings::crowdContactShadow;
 // enhanced's rule on, retail's off; nothing compiles after the first);
-// rtt_msaa_on|off|rule switch how a render-to-texture target the look draws
-// like the frame is drawn (np-look47 step 1, LookSettings::texPassMsaa: 4x
-// MSAA resolved into it; enhanced's rule on, retail's off);
+// rtt_msaa_on|off|rule (step 1) and rtt_scale_on|off|rule (step 2) switch how
+// a render-to-texture target the look draws like the frame is drawn
+// (np-look47, LookSettings::texPassMsaa / texPassScale: 4x MSAA resolved into
+// it, and a GPU texture sized for the output's rows, changed at the target's
+// next clearing pass); rtt_off, rtt_step1, rtt_on and rtt_rule set both
+// (enhanced's rule both on, retail's both off);
 // text_bias_off|text_bias_half|text_bias_on|text_bias_rule put the text and
 // HUD LOD bias (np-look34, LookSettings::uiLodBias) at 0 / -0.5 / -1 or the
 // look's value; text_levels_2|text_levels_all|text_levels_rule set the text
@@ -291,6 +294,22 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "rtt_msaa_on") milo::SetLookTexPassMsaaForInspection(1);
         else if (s == "rtt_msaa_off") milo::SetLookTexPassMsaaForInspection(0);
         else if (s == "rtt_msaa_rule") milo::SetLookTexPassMsaaForInspection(-1);
+        else if (s == "rtt_scale_on") milo::SetLookTexPassScaleForInspection(1);
+        else if (s == "rtt_scale_off") milo::SetLookTexPassScaleForInspection(0);
+        else if (s == "rtt_scale_rule") milo::SetLookTexPassScaleForInspection(-1);
+        else if (s == "rtt_off") {
+            milo::SetLookTexPassMsaaForInspection(0);
+            milo::SetLookTexPassScaleForInspection(0);
+        } else if (s == "rtt_step1") {
+            milo::SetLookTexPassMsaaForInspection(1);
+            milo::SetLookTexPassScaleForInspection(0);
+        } else if (s == "rtt_on") {
+            milo::SetLookTexPassMsaaForInspection(1);
+            milo::SetLookTexPassScaleForInspection(1);
+        } else if (s == "rtt_rule") {
+            milo::SetLookTexPassMsaaForInspection(-1);
+            milo::SetLookTexPassScaleForInspection(-1);
+        }
         else if (s == "text_bias_off") milo::SetLookUiLodBiasForInspection(false, 0.0f);
         else if (s == "text_bias_half") milo::SetLookUiLodBiasForInspection(false, -0.5f);
         else if (s == "text_bias_on") milo::SetLookUiLodBiasForInspection(false, -1.0f);
@@ -314,7 +333,8 @@ static Symbol NativeLook(const DataArray *msg) {
                          "hair_edge_e, hair_edge_centre, display_tv, display_srgb, "
                          "display_off, display_rule, crowd_shadow_on, crowd_shadow_off, "
                          "crowd_shadow_rule, rtt_msaa_on, rtt_msaa_off, rtt_msaa_rule, "
-                         "text_bias_off, text_bias_half, text_bias_on, "
+                         "rtt_scale_on, rtt_scale_off, rtt_scale_rule, rtt_off, rtt_step1, "
+                         "rtt_on, rtt_rule, text_bias_off, text_bias_half, text_bias_on, "
                          "text_bias_rule, text_levels_2, text_levels_all, text_levels_rule, "
                          "text_bias_glyphs, text_bias_all_ui or text_bias_scope_rule", s.Str());
     }
