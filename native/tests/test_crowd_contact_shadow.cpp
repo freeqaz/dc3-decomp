@@ -156,7 +156,10 @@ TEST_F(ContactShadowGpuTest, DarkensCentreLeavesRimAndAlpha) {
     const int c = At(px, W / 2, H / 2, 0);
     EXPECT_NEAR(c, Expected(1), 3) << "the shadow's centre is not 45 % darker";
     EXPECT_EQ(At(px, 0, 0, 0), kGrey) << "the quad's corner (r > 1) is darkened";
-    EXPECT_EQ(At(px, W - 1, H / 2, 0), kGrey) << "the quad's rim (r = 1) is darkened";
+    // Outside the ellipse (r > 1) but inside the quad.
+    EXPECT_EQ(At(px, W - 1, 12, 0), kGrey) << "a pixel outside the ellipse (r > 1) is darkened";
+    EXPECT_LE(At(px, W - 1, H / 2, 0) - c, kGrey - c) << "the edge is darker than the centre";
+    EXPECT_GE(At(px, W - 1, H / 2, 0), kGrey - 2) << "the falloff does not reach ~0 at the edge";
     // Monotone falloff from the centre out along a row.
     int last = c, rises = 0;
     for (int x = W / 2; x < W; x++) {
