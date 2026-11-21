@@ -515,6 +515,7 @@ Tests: `NativeExitTest.*` and `NativeWindowTest.*` (run their own Xvfb; no windo
 | `DC3_CONTROLLER_MODE_TIMEOUT_MS` | helpbar value | faithful policy only: overrides the helpbar's `controller_mode_timeout` | `native/src/platform/System_Native.cpp` |
 | `DC3_HTTP_PACE_FPS` | unset (unpaced) | Cap the frame rate of a debug-server run, so a client answering every frame (the synthetic performer on `/api/frame/wait`) keeps up; `PUT /api/pace?fps=N` changes it at run time | `native/src/platform/HttpServer.cpp` |
 | `DC3_MESHFILTER_LOG` / `DC3_MESHFILTER_ALLOW` | unset | Log each mesh `MeshFilter` refuses (once, with its rule) / draw what the named rules (or `all`) would refuse | `native/src/platform/MeshFilter.cpp` |
+| `DC3_PLAYER_BOX` | `auto` | The cursor panel's two player boxes (top corners of the menus, under each score in a song). `auto`: drawn only while a camera stream is live; `on`: always, as before 2026-11-21; `off`: never. Changes at run time with `{native_settings set_player_box auto\|on\|off}`; `GET /api/camera`'s `playerBox` member says what the draws did (PLAN H-147) | `native/src/platform/PlayerBox_Native.h` |
 
 ### Scoring and pose
 

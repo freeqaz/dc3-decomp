@@ -37,6 +37,7 @@
 #include "utl\Symbol.h"
 #ifdef HX_NATIVE
 #include "platform/SongBrowserHooks_Native.h"
+#include "platform/PlayerBox_Native.h"
 #endif
 
 ShellInput::ShellInput()
@@ -137,6 +138,9 @@ void ShellInput::Draw() {
     // (the skeleton box and the player camera box in the top corners) is not
     // drawn over it.
     if (NativeSongBrowser::HidesGameChrome()) return;
+    // With no camera stream the two player boxes are not drawn (PLAN H-147,
+    // platform/PlayerBox_Native.h; DC3_PLAYER_BOX=on draws them always).
+    NativePlayerBox::DrawScope playerBoxes(mCursorPanel->LoadedDir());
 #endif
     mCursorPanel->Draw();
 }
