@@ -19,6 +19,15 @@
 // threshold 110, alpha just under) as a solid band. Retail and Native: off;
 // the scene block then carries 0 and no retail pipeline reads it (retail's cut
 // is fs_main). The suite keeps the item-26 name.
+//
+// np-look26 e: the test is a mode (milo::CutoutSampleMode in the scene block),
+// the enhanced default C: retail's test at the pixel centre first, a pass
+// drawing the pixel solid, a fail leaving the four results (a fringe). B (the
+// four results alone) was faithful but noisy on hair minified past retail's
+// level 1. E is B where retail's level resolves the alpha (lod <= 1), C above.
+// The render tests run the default mode and, where the geometry makes the
+// answer the same, E; B and the centre-only diagnostic are read where they
+// show a test can tell the modes apart.
 #include "test_helpers.h"
 
 #include "gfx/GpuDevice.h"
@@ -255,6 +264,27 @@ const PxRect kUnderAlphaMin = {860, 140, 924, 204};
 const PxRect kUnderSrcBase = {40, 20, 360, 340};
 const PxRect kUnderAlphaBase = {400, 20, 720, 340};
 const PxRect kWholeFrame = {0, 0, 1280, 720};
+// Superset of retail (mode C's first rule): an isolated strand one pixel wide,
+// minified like kMin4 (4 texels per pixel, pixel p = texels 4p..4p+3), alpha
+// 255 on texel columns x % 16 in [4, 8), else 0, cut at 217 (0.851). Retail's
+// level for the pixel is clamp(log2 4, 0, 1) = 1, where the strand is the two
+// level-1 texels 2p, 2p+1 of the pixels p % 4 == 1 (and level 2's texel p,
+// for a sampler that reads the chain at lod 2: the same pixels). In a strand
+// pixel the centre (level-1 coordinate 2p + 1) reads 1, as do samples 0 and 3
+// (2p + 0.75, 2p + 1.25); samples 1 and 2 (2p + 1.75, 2p + 0.25) read 0.75,
+// under the cut. Retail's single test passes: the pixel is solid. B: 2 of 4.
+// C (and E: lod 2 > 1): the centre passes, full. Off the strand every fetch
+// reads at most 0.25: nothing.
+const PxRect kStrand = {760, 240, 824, 304};
+// Fringe (mode C's second rule): a whole-pixel quad of the bit-order texture
+// j (below) at 1 texel per pixel, cut at 64. In a test pixel (texel index 1 of
+// the period of 3 on both axes) the centre reads its own texel, 0, and fails;
+// exactly sample j passes (weight 0.375 on the lit neighbour; the others read
+// 0.125 or 0). The quad covers all four positions, so the pixel resolves to
+// exactly 1/4: C keeps B's mask where the centre fails. E reads B here (lod
+// 0). Retail's test fails at the centre: retail draws nothing there.
+inline int FringeX(int j) { return 40 + 48 * j; }
+constexpr int kFringeY = 400, kFringeLen = 33;
 constexpr int kBitLen = 32;
 // Bit-order cell (geometry k = the sample position covered, alpha j = the
 // sample index that passes, 4 = all): its line's origin pixel.
@@ -290,10 +320,12 @@ const char *const kSamplePos[4] = {"(6,2)", "(14,6)", "(2,10)", "(10,14)"};
 // under retail (S5), or CutoutSampleTestFor ignoring the bool -- red.
 TEST_F(LookCutoutMipTest, OnlyTheEnhancedLookTestsEachSample) {
     if (IsSkipped()) return;
+    static_assert(milo::kCutoutModeDefault == milo::kCutoutModeC, "np-look26 e: the default is C");
     {
         ScopedLookOverride enhanced(LookProfile::Enhanced);
         EXPECT_TRUE(Look().cutoutSampleTest);
-        EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), 1.0f);
+        EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), (float)milo::kCutoutModeC)
+            << "the enhanced look carries the default mode, C";
     }
     {
         ScopedLookOverride retail(LookProfile::Retail);
@@ -307,8 +339,10 @@ TEST_F(LookCutoutMipTest, OnlyTheEnhancedLookTestsEachSample) {
     }
 }
 
-// {rnd native_look hair_edge_on|hair_edge_off|hair_edge_rule}. Sabotage: the
-// rule mode not restoring the profile's value -- red.
+// {rnd native_look hair_edge_on|hair_edge_off|hair_edge_rule} and the mode
+// tokens hair_edge_b|c|e|centre. Sabotage: the rule mode not restoring the
+// profile's value, a mode token surviving hair_edge_on or a profile switch --
+// red.
 TEST_F(LookCutoutMipTest, TheInspectionSwitchAlternatesAndRestores) {
     if (IsSkipped()) return;
     {
@@ -316,10 +350,31 @@ TEST_F(LookCutoutMipTest, TheInspectionSwitchAlternatesAndRestores) {
         ASSERT_TRUE(milo::SetLookCutoutSampleTestForInspection(0));
         EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), 0.0f);
         ASSERT_TRUE(milo::SetLookCutoutSampleTestForInspection(1));
-        EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), 1.0f);
+        EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), (float)milo::kCutoutModeDefault);
+        for (int m = milo::kCutoutModeB; m <= milo::kCutoutModeCentre; m++) {
+            ASSERT_TRUE(milo::SetLookCutoutModeForInspection(m)) << "mode " << m;
+            EXPECT_TRUE(Look().cutoutSampleTest);
+            EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), (float)m) << "mode token " << m;
+        }
+        EXPECT_FALSE(milo::SetLookCutoutModeForInspection(0)) << "0 is hair_edge_off, not a mode";
+        EXPECT_FALSE(milo::SetLookCutoutModeForInspection(5));
+        EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), (float)milo::kCutoutModeCentre)
+            << "a refused mode leaves the last one";
+        ASSERT_TRUE(milo::SetLookCutoutSampleTestForInspection(1));
+        EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), (float)milo::kCutoutModeDefault)
+            << "hair_edge_on: back to the default mode";
+        ASSERT_TRUE(milo::SetLookCutoutModeForInspection(milo::kCutoutModeB));
         ASSERT_TRUE(milo::SetLookCutoutSampleTestForInspection(0));
+        EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), 0.0f) << "hair_edge_off after a mode";
+        ASSERT_TRUE(milo::SetLookCutoutModeForInspection(milo::kCutoutModeE));
         ASSERT_TRUE(milo::SetLookCutoutSampleTestForInspection(-1));
         EXPECT_TRUE(Look().cutoutSampleTest) << "hair_edge_rule: enhanced's own value";
+        EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), (float)milo::kCutoutModeDefault)
+            << "hair_edge_rule: enhanced's own mode";
+        ASSERT_TRUE(milo::SetLookCutoutModeForInspection(milo::kCutoutModeB));
+        ASSERT_TRUE(milo::SetLookProfileForInspection(LookProfile::Enhanced));
+        EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), (float)milo::kCutoutModeDefault)
+            << "{rnd native_look enhanced}: the profile's own mode";
     }
     {
         ScopedLookOverride retail(LookProfile::Retail);
@@ -329,7 +384,9 @@ TEST_F(LookCutoutMipTest, TheInspectionSwitchAlternatesAndRestores) {
     {
         ScopedLookOverride native(LookProfile::Native);
         EXPECT_FALSE(milo::SetLookCutoutSampleTestForInspection(1)) << "no switch for rb3";
+        EXPECT_FALSE(milo::SetLookCutoutModeForInspection(milo::kCutoutModeC)) << "no mode for rb3";
         EXPECT_FALSE(Look().cutoutSampleTest);
+        EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), 0.0f);
     }
 }
 
@@ -351,15 +408,23 @@ TEST_F(LookCutoutMipTest, TheSceneBlockCarriesTheSwitch) {
     milo::SetLookCutoutSampleTestForInspection(0);
     gWgpuRnd->EnsureSceneUniformsCurrent();   // same camera: the switch alone moved
     const float off = gWgpuRnd->LastSceneCutoutSampleTest();
+    float modes[5] = {0, 0, 0, 0, 0};
+    for (int m = milo::kCutoutModeB; m <= milo::kCutoutModeCentre; m++) {
+        milo::SetLookCutoutModeForInspection(m);
+        gWgpuRnd->EnsureSceneUniformsCurrent();   // a mode alone moved
+        modes[m] = gWgpuRnd->LastSceneCutoutSampleTest();
+    }
     milo::SetLookCutoutSampleTestForInspection(-1);
     gWgpuRnd->EnsureSceneUniformsCurrent();
     const float rule = gWgpuRnd->LastSceneCutoutSampleTest();
     if (prev) prev->Select(); else RndCam::ClearCurrent();
     TheRnd.EndDrawing();
     delete cam;
-    EXPECT_FLOAT_EQ(on, 1.0f) << "enhanced world pass";
+    EXPECT_FLOAT_EQ(on, (float)milo::kCutoutModeC) << "enhanced world pass: the default mode";
     EXPECT_FLOAT_EQ(off, 0.0f) << "hair_edge_off reached the block";
-    EXPECT_FLOAT_EQ(rule, 1.0f) << "hair_edge_rule reached the block";
+    for (int m = milo::kCutoutModeB; m <= milo::kCutoutModeCentre; m++)
+        EXPECT_FLOAT_EQ(modes[m], (float)m) << "mode " << m << " reached the block";
+    EXPECT_FLOAT_EQ(rule, (float)milo::kCutoutModeC) << "hair_edge_rule reached the block";
 }
 
 // The cutout pipelines that read it build: a world cutout (4 samples, LOD
@@ -409,14 +474,15 @@ TEST_F(LookCutoutMipTest, TheCutoutPipelinesBuild) {
 namespace {
 
 struct CutoutFrames {
-    std::vector<uint8_t> off, offAgain, on, onAgain;
+    // on: the default mode (hair_edge_on); mode[m]: mode m's token (1..4).
+    std::vector<uint8_t> off, offAgain, on, onAgain, mode[5];
     double white = 0;
     bool ok = false;
 };
 
 CutoutFrames DrawCutoutFrames() {
     CutoutFrames f;
-    RndBitmap bmpLines, bmp140, bmp100, bmpAll, bmpBit[4];
+    RndBitmap bmpLines, bmp140, bmp100, bmpAll, bmpBit[4], bmpStrand;
     std::vector<RndTex *> texs;
     std::vector<RndMat *> mats;
     auto mat = [&](RndMat *m) { mats.push_back(m); return m; };
@@ -424,7 +490,8 @@ CutoutFrames DrawCutoutFrames() {
     RndTex *c140 = MakeAlphaTex(bmp140, [](int, int) { return 140; });
     RndTex *c100 = MakeAlphaTex(bmp100, [](int, int) { return 100; });
     RndTex *all = MakeAlphaTex(bmpAll, [](int, int) { return 255; });
-    texs = {lines, c140, c100, all};
+    RndTex *strand = MakeAlphaTex(bmpStrand, [](int x, int) { return (x % 16) >= 4 && (x % 16) < 8 ? 255 : 0; });
+    texs = {lines, c140, c100, all, strand};
     RndTex *bit[4];
     for (int j = 0; j < 4; j++) {
         // Sample j passes alone: 255 on the row above (0), the column right
@@ -449,8 +516,16 @@ CutoutFrames DrawCutoutFrames() {
         scene.Add(kUnderSrcBase, underSrc);
         scene.Add(kUnderAlphaMin, underAlpha);
         scene.Add(kUnderAlphaBase, underAlpha);
+        scene.Add(kStrand, mat(MakeCutMat(strand, 217)));
         for (int j = 0; j <= 4; j++) {
             RndMat *m = mat(MakeCutMat(j < 4 ? bit[j] : all, 64));
+            if (j < 4) {
+                // The fringe quad: the same texture origin rule as the cells.
+                const float X = (float)FringeX(j), Y = (float)kFringeY, s = 1.0f / kTexSize;
+                const PxRectF g = {X, Y, X + kFringeLen, Y + kFringeLen};
+                scene.Add(g, m, (float)kBitOrigin * s, (float)kBitOrigin * s,
+                          (kBitOrigin + kFringeLen) * s, (kBitOrigin + kFringeLen) * s);
+            }
             for (int k = 0; k < 4; k++) {
                 // 1 texel per pixel, the texture's origin kBitOrigin px before
                 // the cell, so no fetch reaches its border.
@@ -465,6 +540,10 @@ CutoutFrames DrawCutoutFrames() {
         f.ok = scene.Draw(warm) && scene.Draw(f.off) && scene.Draw(f.offAgain);
         milo::SetLookCutoutSampleTestForInspection(1);
         f.ok = f.ok && scene.Draw(f.on) && scene.Draw(f.onAgain);
+        for (int m = milo::kCutoutModeB; m <= milo::kCutoutModeCentre; m++) {
+            milo::SetLookCutoutModeForInspection(m);
+            f.ok = f.ok && scene.Draw(f.mode[m]);
+        }
         milo::SetLookCutoutSampleTestForInspection(-1);
         if (f.ok) f.white = scene.Mean(f.off, kSolid);
     }
@@ -516,6 +595,15 @@ TEST_F(LookCutoutMipTest, AMinifiedStrandCoversTheHalfOfThePixelItCrosses) {
     CutoutScene px;   // the pixel helpers only
     const double off4 = px.Mean(f.off, kMin4) / f.white, on4 = px.Mean(f.on, kMin4) / f.white;
     const double off8 = px.Mean(f.off, kMin8) / f.white, on8 = px.Mean(f.on, kMin8) / f.white;
+    // np-look26 e: the default (C) reads the centre first; here it reads the
+    // two level-1 texels' mean, 0.5, under the cut, so C keeps B's mask.
+    const double b4 = px.Mean(f.mode[milo::kCutoutModeB], kMin4) / f.white;
+    const double e4 = px.Mean(f.mode[milo::kCutoutModeE], kMin4) / f.white;
+    const double e8 = px.Mean(f.mode[milo::kCutoutModeE], kMin8) / f.white;
+    printf("[ cutout samples ] minified strand: B %.4f, E %.4f / %.4f (4 / 8 texels/px)\n", b4, e4, e8);
+    EXPECT_NEAR(b4, Shown(0.5), 0.05) << "mode B at 4 texels/px";
+    EXPECT_NEAR(e4, Shown(0.5), 0.05) << "mode E at 4 texels/px (lod 2: C's rule)";
+    EXPECT_NEAR(e8, Shown(0.5), 0.05) << "mode E at 8 texels/px";
     const size_t control = px.Differing(f.off, f.offAgain, kWholeFrame);
     const size_t controlOn = px.Differing(f.on, f.onAgain, kWholeFrame);
     printf("[ cutout samples ] enhanced: white %.1f; 4 texels/px coverage off %.4f on %.4f; "
@@ -553,9 +641,13 @@ TEST_F(LookCutoutMipTest, AlphaJustUnderTheCutStaysInvisible) {
     };
     for (const auto &c : cases) {
         const int maxOn = px.Max(f.on, c.r), maxOff = px.Max(f.off, c.r);
-        printf("[ cutout samples ] under the cut, %s: max green off %d on %d\n", c.name, maxOff,
-               maxOn);
-        EXPECT_LE(maxOn, 8) << c.name << ": hair_edge_on drew content under the cut";
+        const int maxE = px.Max(f.mode[milo::kCutoutModeE], c.r);
+        const int maxB = px.Max(f.mode[milo::kCutoutModeB], c.r);
+        printf("[ cutout samples ] under the cut, %s: max green off %d on (C) %d E %d B %d\n", c.name,
+               maxOff, maxOn, maxE, maxB);
+        EXPECT_LE(maxOn, 8) << c.name << ": hair_edge_on (C) drew content under the cut";
+        EXPECT_LE(maxE, 8) << c.name << ": mode E drew content under the cut";
+        EXPECT_LE(maxB, 8) << c.name << ": mode B drew content under the cut";
         EXPECT_LE(maxOff, 8) << c.name << ": hair_edge_off drew content under the cut";
     }
 }
@@ -574,9 +666,13 @@ TEST_F(LookCutoutMipTest, MaskBitIIsSampleI) {
     const CutoutFrames f = DrawCutoutFrames();
     ASSERT_TRUE(f.ok) << "frame readback failed";
     CutoutScene px;
+    for (int which = 0; which < 2; which++) {
+    const std::vector<uint8_t> &frame = which == 0 ? f.on : f.mode[milo::kCutoutModeE];
+    const char *modeName = which == 0 ? "C" : "E";
     for (int k = 0; k < 4; k++) {
         char line[256];
-        int n = snprintf(line, sizeof line, "[ cutout samples ] geometry %-7s:", kSamplePos[k]);
+        int n = snprintf(line, sizeof line, "[ cutout samples ] %s geometry %-7s:", modeName,
+                         kSamplePos[k]);
         for (int j = 0; j <= 4; j++) {
             // The test pixels: every third along the line from its start.
             const PxRect r = BitCellPixels(k, j);
@@ -584,20 +680,116 @@ TEST_F(LookCutoutMipTest, MaskBitIIsSampleI) {
             int n3 = 0;
             for (int y = r.y0; y < r.y1; y++)
                 for (int x = r.x0; x < r.x1; x++)
-                    if ((x - r.x0) % 3 == 0 && (y - r.y0) % 3 == 0) sum += px.G(f.on, x, y), n3++;
+                    if ((x - r.x0) % 3 == 0 && (y - r.y0) % 3 == 0) sum += px.G(frame, x, y), n3++;
             const double cov = sum / n3 / f.white;
             n += snprintf(line + n, sizeof line - n, " %s%d %.3f", j < 4 ? "bit" : "all",
                           j < 4 ? j : 4, cov);
             if (j == 4 || j == k)
                 EXPECT_NEAR(cov, Shown(0.25), 0.05)
-                    << "geometry " << kSamplePos[k] << ", alpha passing "
+                    << modeName << ": geometry " << kSamplePos[k] << ", alpha passing "
                     << (j < 4 ? "mask bit " + std::to_string(j) : std::string("every sample"))
                     << ": one sample of four should be lit, read " << cov;
             else
-                EXPECT_LT(cov, 0.03) << "geometry " << kSamplePos[k] << " lit by mask bit " << j
+                EXPECT_LT(cov, 0.03) << modeName << ": geometry " << kSamplePos[k] << " lit by mask bit " << j
                                      << ": bit " << j << " is not that sample position";
         }
         printf("%s\n", line);
+    }
+    }
+}
+
+// Mode C's first rule, the superset of retail: kStrand (layout) drawn through
+// the same fixture under the retail look (fs_main, the original's test) and
+// under the enhanced default; every pixel retail lights reads full under C
+// and E (>= 0.9 of each look's own white; the arithmetic gives 1), and B, the
+// four results alone, reads those pixels at 2 of 4 (the test can tell the
+// modes apart). The strand's 16 columns x 64 rows must be lit by retail at
+// all, or the comparison is vacuous. Sabotage: C's centre pass returning B's
+// mask (S1) -- C reads 0.555 there; every sample at the centre uv (S5) does
+// not move this test (the centre passes) but reddens the fringe.
+TEST_F(LookCutoutMipTest, TheDefaultDrawsEveryPixelRetailDrawsSolid) {
+    CUTOUT_RENDER_PRECONDITIONS();
+    CutoutFrames retail, enh;
+    {
+        ScopedLookOverride r(LookProfile::Retail);
+        retail = DrawCutoutFrames();
+    }
+    {
+        ScopedLookOverride e(LookProfile::Enhanced);
+        enh = DrawCutoutFrames();
+    }
+    ASSERT_TRUE(retail.ok && enh.ok) << "frame readback failed";
+    CutoutScene px;
+    int lit = 0, cShort = 0, eShort = 0;
+    double cMin = 1e9, eMin = 1e9, bSum = 0, offStrandMax = 0;
+    for (int y = kStrand.y0; y < kStrand.y1; y++)
+        for (int x = kStrand.x0; x < kStrand.x1; x++) {
+            const double r = px.G(retail.off, x, y) / retail.white;
+            const double c = px.G(enh.on, x, y) / enh.white;
+            const double e = px.G(enh.mode[milo::kCutoutModeE], x, y) / enh.white;
+            if (r < 0.9) {
+                offStrandMax = std::max(offStrandMax, c);
+                continue;
+            }
+            lit++;
+            cMin = std::min(cMin, c);
+            eMin = std::min(eMin, e);
+            cShort += c < 0.9;
+            eShort += e < 0.9;
+            bSum += px.G(enh.mode[milo::kCutoutModeB], x, y) / enh.white;
+        }
+    const double bMean = lit ? bSum / lit : 0.0;
+    printf("[ cutout samples ] superset: retail lights %d px; under C min %.4f (%d short), E min "
+           "%.4f (%d short); B mean %.4f; C off retail's strand max %.4f\n",
+           lit, cMin, cShort, eMin, eShort, bMean, offStrandMax);
+    EXPECT_EQ(lit, 16 * 64) << "retail lights the strand's 16 columns x 64 rows";
+    EXPECT_EQ(cShort, 0) << "C: a pixel retail draws read less than full (min " << cMin << ")";
+    EXPECT_EQ(eShort, 0) << "E (lod 2): a pixel retail draws read less than full (min " << eMin << ")";
+    EXPECT_NEAR(bMean, Shown(0.5), 0.05) << "B: samples 1 and 2 read 0.75, under the 0.851 cut";
+    EXPECT_LT(offStrandMax, 0.03) << "C: off the strand every fetch reads at most 0.25";
+}
+
+// Mode C's second rule, the fringe: where the centre fails and exactly one
+// sample position passes, the pixel reads one quarter of white (the quad
+// covers all four positions; layout, kFringe). Retail draws nothing there.
+// Bound Shown(0.25) +- 0.05, as the bit-order matrix. Sabotages: the fringe
+// dropped (S2, a centre fail discards) -- 0; every sample at the centre uv
+// (S5) -- 0.
+TEST_F(LookCutoutMipTest, TheDefaultDrawsAQuarterWhereOneSamplePasses) {
+    CUTOUT_RENDER_PRECONDITIONS();
+    CutoutFrames retail, enh;
+    {
+        ScopedLookOverride r(LookProfile::Retail);
+        retail = DrawCutoutFrames();
+    }
+    {
+        ScopedLookOverride e(LookProfile::Enhanced);
+        enh = DrawCutoutFrames();
+    }
+    ASSERT_TRUE(retail.ok && enh.ok) << "frame readback failed";
+    CutoutScene px;
+    for (int j = 0; j < 4; j++) {
+        double c = 0, e = 0, r = 0, ctr = 0;
+        int n = 0;
+        for (int i = 0; i < kFringeLen; i += 3)
+            for (int k = 0; k < kFringeLen; k += 3) {
+                const int x = FringeX(j) + i, y = kFringeY + k;
+                c += px.G(enh.on, x, y);
+                e += px.G(enh.mode[milo::kCutoutModeE], x, y);
+                ctr += px.G(enh.mode[milo::kCutoutModeCentre], x, y);
+                r += px.G(retail.off, x, y);
+                n++;
+            }
+        c /= n * enh.white;
+        e /= n * enh.white;
+        ctr /= n * enh.white;
+        r /= n * retail.white;
+        printf("[ cutout samples ] fringe, sample %d passes alone (%d px): C %.4f E %.4f centre-only "
+               "%.4f retail %.4f\n", j, n, c, e, ctr, r);
+        EXPECT_NEAR(c, Shown(0.25), 0.05) << "C, sample " << j << " alone: one of four";
+        EXPECT_NEAR(e, Shown(0.25), 0.05) << "E (lod 0: B), sample " << j << " alone: one of four";
+        EXPECT_LT(ctr, 0.03) << "centre-only: the centre fails, nothing";
+        EXPECT_LT(r, 0.03) << "retail: the centre fails, nothing";
     }
 }
 
@@ -617,6 +809,13 @@ TEST_F(LookCutoutMipTest, TheRetailCutIsUnmovedByTheSwitch) {
     CutoutScene px;
     const size_t moved = px.Differing(f.off, f.on, kWholeFrame);
     const size_t control = px.Differing(f.off, f.offAgain, kWholeFrame);
+    size_t movedByMode[5] = {0, 0, 0, 0, 0};
+    for (int m = milo::kCutoutModeB; m <= milo::kCutoutModeCentre; m++) {
+        movedByMode[m] = px.Differing(f.off, f.mode[m], kWholeFrame);
+        EXPECT_EQ(movedByMode[m], 0u) << "retail: mode token " << m << " moved pixels";
+    }
+    printf("[ cutout samples ] retail moved by B %zu, C %zu, E %zu, centre %zu px\n", movedByMode[1],
+           movedByMode[2], movedByMode[3], movedByMode[4]);
     printf("[ cutout samples ] retail: white %.1f; 4 texels/px mean off %.1f on %.1f; "
            "moved by the switch %zu px; off vs off %zu px\n",
            f.white, px.Mean(f.off, kMin4), px.Mean(f.on, kMin4), moved, control);

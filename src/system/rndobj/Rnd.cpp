@@ -205,7 +205,9 @@ Rnd::Rnd()
 // hair_edge_on|hair_edge_off|hair_edge_rule switch the enhanced cutout's
 // alpha test per MSAA sample (np-look26 d: hair strands that dotted out; off =
 // the landed sharpened coverage; LookSettings::cutoutSampleTest; a uniform,
-// nothing compiles);
+// nothing compiles; on = the default mode, C); hair_edge_b|hair_edge_c|
+// hair_edge_e|hair_edge_centre pick one CutoutSampleMode (np-look26 e;
+// inspection only, centre a diagnostic);
 // {rnd native_look} alone reports it. Returns the profile
 // now in force.
 static Symbol NativeLook(const DataArray *msg) {
@@ -240,6 +242,10 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "hair_edge_on") milo::SetLookCutoutSampleTestForInspection(1);
         else if (s == "hair_edge_off") milo::SetLookCutoutSampleTestForInspection(0);
         else if (s == "hair_edge_rule") milo::SetLookCutoutSampleTestForInspection(-1);
+        else if (s == "hair_edge_b") milo::SetLookCutoutModeForInspection(milo::kCutoutModeB);
+        else if (s == "hair_edge_c") milo::SetLookCutoutModeForInspection(milo::kCutoutModeC);
+        else if (s == "hair_edge_e") milo::SetLookCutoutModeForInspection(milo::kCutoutModeE);
+        else if (s == "hair_edge_centre") milo::SetLookCutoutModeForInspection(milo::kCutoutModeCentre);
         else MILO_NOTIFY("native_look: %s is not retail, enhanced, post_retail, post_enhanced, "
                          "post_precision, post_bloom_filter, post_dof_filter, specular_aa_on, "
                          "specular_aa_off, lod_bias_0, lod_bias_m05, lod_bias_m1, "
@@ -247,7 +253,8 @@ static Symbol NativeLook(const DataArray *msg) {
                          "refl_cull_force, refl_cull_flip, refl_cull_rule, noise_rows_on, "
                          "noise_rows_off, noise_rows_rule, dof_depth_weight_on, "
                          "dof_depth_weight_off, dof_depth_weight_rule, hair_edge_on, "
-                         "hair_edge_off or hair_edge_rule", s.Str());
+                         "hair_edge_off, hair_edge_rule, hair_edge_b, hair_edge_c, "
+                         "hair_edge_e or hair_edge_centre", s.Str());
     }
     return milo::LookProfileName(milo::Look().profile);
 }
