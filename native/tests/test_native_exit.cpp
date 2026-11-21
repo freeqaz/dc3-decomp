@@ -429,6 +429,10 @@ TEST_F(NativeExitTest, HealthUptimeIsWallClockNotSongTime) {
     Start(e, mRunDir, {"MILO_HEADLESS=1", "MILO_NORENDER=1", "DC3_HTTP=1", "DC3_HTTP_PORT=0",
                        "DC3_HTTP_PORT_FILE=" + portFile, "DC3_FAST_BOOT"});
     ASSERT_TRUE(e.WaitFor("DC3 Native: Entering main loop", 120)) << Tail(e.Output());
+    // The server binds after that line and writes the port file before its
+    // own DC3_HTTP_PORT= line: wait for the line.  Reading at once failed the
+    // gate on 2026-11-21 under load ~74 (port 0; the file held 36563 later).
+    ASSERT_TRUE(e.WaitFor("DC3_HTTP_PORT=", 60)) << Tail(e.Output());
     int port = atoi(ReadAll(portFile).c_str());
     ASSERT_GT(port, 0) << Tail(e.Output());
     std::string api = "http://127.0.0.1:" + std::to_string(port) + "/api";
@@ -619,6 +623,9 @@ TEST_F(NativeExitTest, QuitWithARequestInFlightLeavesThroughTheMainLoop) {
     Start(e, mRunDir, {"MILO_HEADLESS=1", "MILO_NORENDER=1", "DC3_HTTP=1", "DC3_HTTP_PORT=0",
                        "DC3_HTTP_PORT_FILE=" + portFile});
     ASSERT_TRUE(e.WaitFor("DC3 Native: Entering main loop", 120)) << Tail(e.Output());
+    // As in HealthUptimeIsWallClockNotSongTime: the port file exists once the
+    // server's DC3_HTTP_PORT= line does, not at the main loop's line.
+    ASSERT_TRUE(e.WaitFor("DC3_HTTP_PORT=", 60)) << Tail(e.Output());
     int port = atoi(ReadAll(portFile).c_str());
     ASSERT_GT(port, 0) << Tail(e.Output());
     std::string api = "http://127.0.0.1:" + std::to_string(port) + "/api";
