@@ -1588,6 +1588,217 @@ TEST_F(DC3LookPostTest, DepthWeightedDofKeepsTheFigureOutOfTheBackgroundBlur) {
     EXPECT_NEAR(stripes[1], stripes[0], 1.0) << "the depth-weighted blur blurs the far background as much";
 }
 
+// np-look36: LookSettings::postDofNearField / postDofNearSpread. The depth
+// weight keeps in-focus colour out of every blurred pixel, which is right
+// behind the focus (the test above) and wrong in front of it: a blurred
+// object between the camera and an in-focus figure kept a hard cut-out edge
+// (item35's crops). A bright in-focus figure (left) beside a dark surface
+// NEARER than the focus and out of focus (right): the edge across the
+// silhouette must be softer with the near field than without, and no harder
+// than the depth-blind (retail) blur's. Mirrored in depth (the dark surface
+// BEHIND the focus) the near field changes nothing, to the pixel, so H-151's
+// property stands. Warmed with the near field, no switch compiles a pipeline.
+// Sabotages (item36/sabotage): dof_near returning 0 -- the near edge stays
+// hard, red; dof_near ignoring the sign of t (both sides) -- the mirror moves,
+// red; the composite's spread ignoring near.x -- the spread-off row equals the
+// spread-on row, red; Prewarm skipping the near pipelines -- red.
+TEST_F(DC3LookPostTest, DofNearFieldSoftensANearObjectsEdgeAndLeavesTheFarField) {
+    ASSERT_TRUE(TheDOFProc);
+    GpuDevice &gpu = Gpu();
+    UIScreen *game = Hmx::Object::New<UIScreen>();
+    game->SetName("game_screen", ObjectDir::Main());
+    class ProbeUI : public UIManager {
+    public:
+        void SetCurrent(UIScreen *sc) { mCurrentScreen = sc; }
+    } ui;
+    UIManager *savedUI = TheUI;
+    TheUI = &ui;
+    ui.SetCurrent(game);
+    RndCam *prev = RndCam::Current();
+    RndCam::ClearCurrent();
+    TheDOFProc->Set(nullptr, 10.0f, 0.5f, 1.0f, 0.0f);
+    ASSERT_TRUE(TheDOFProc->Enabled());
+
+    constexpr int W = 1280, H = 720, kEdge = W / 2;
+    const uint8_t kFig = 230, kDark = 20;
+    std::vector<uint8_t> px((size_t)W * H * 4);
+    for (int y = 0; y < H; y++)
+        for (int x = 0; x < W; x++) {
+            uint8_t *p = &px[((size_t)y * W + x) * 4];
+            p[0] = p[1] = p[2] = x < kEdge ? kFig : kDark;
+            p[3] = 255;
+        }
+    wgpu::Texture scene = UploadOn(gpu, W, H, px);
+    wgpu::TextureView sv = scene.CreateView();
+    wgpu::TextureDescriptor zd{};
+    zd.size = {(uint32_t)W, (uint32_t)H, 1};
+    zd.format = wgpu::TextureFormat::Depth32Float;
+    zd.sampleCount = 4;
+    zd.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+    wgpu::Texture depth = gpu.Device().CreateTexture(&zd);
+    wgpu::TextureView depthView = depth.CreateView();
+    DofPass dof;
+    dof.Prewarm(wgpu::TextureFormat::RGBA8Unorm, gpu, true, true, true);
+    const uint64_t pipesWarm = GpuPipelineCreateCount();
+    auto run = [&](bool enhanced, bool weighted, bool nearField, bool spread, std::vector<uint8_t> &out) {
+        wgpu::CommandEncoder enc = gpu.Device().CreateCommandEncoder();
+        EXPECT_TRUE(dof.Run(enc, sv, wgpu::TextureFormat::RGBA8Unorm, depthView, 4, W, H, gpu, enhanced,
+                            weighted, nearField, spread));
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        out.assign((size_t)W * H * 4, 0);
+        EXPECT_TRUE(gpu.ReadbackTexture(dof.OutputTexture(), W, H, out.data(), out.size()));
+    };
+    std::vector<uint8_t> tmp;
+    run(true, true, false, false, tmp);
+    const float *c = dof.LastCompositeConstants();
+    ASSERT_NE(c[0], 0.0f);
+    const float zFocus = -c[1] / c[0];
+    const float zNear = (-1.5f - c[1]) / c[0];   // t = -1.5: in front, fully out of focus
+    ASSERT_GT(zNear, 0.0f);
+    ASSERT_LT(zNear, zFocus);
+    // Depth: zLeft under the figure, zRight under the dark half.
+    auto drawDepth = [&](float zLeft, float zRight) {
+        wgpu::RenderPassDepthStencilAttachment za{};
+        za.view = depthView;
+        za.depthLoadOp = wgpu::LoadOp::Clear;
+        za.depthStoreOp = wgpu::StoreOp::Store;
+        za.depthClearValue = 1.0f;
+        wgpu::RenderPassDescriptor rp{};
+        rp.label = "TestDofNearDepth";
+        rp.depthStencilAttachment = &za;
+        wgpu::CommandEncoder enc = gpu.Device().CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = enc.BeginRenderPass(&rp);
+        for (int side = 0; side < 2; side++) {
+            char wgsl[512];
+            snprintf(wgsl, sizeof(wgsl),
+                     "@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {\n"
+                     "  let x = f32(i32(i & 1u)) * 4.0 - 1.0;\n"
+                     "  let y = f32(i32(i >> 1u)) * 4.0 - 1.0;\n"
+                     "  return vec4f(x, y, %.9f, 1.0);\n}\n", side ? zRight : zLeft);
+            wgpu::ShaderSourceWGSL src;
+            src.code = wgsl;
+            wgpu::ShaderModuleDescriptor smd{};
+            smd.nextInChain = &src;
+            wgpu::ShaderModule sm = gpu.Device().CreateShaderModule(&smd);
+            wgpu::DepthStencilState ds{};
+            ds.format = wgpu::TextureFormat::Depth32Float;
+            ds.depthWriteEnabled = wgpu::OptionalBool::True;
+            ds.depthCompare = wgpu::CompareFunction::Always;
+            wgpu::RenderPipelineDescriptor pd{};
+            pd.label = "TestDofNearDepthPipe";
+            pd.vertex.module = sm;
+            pd.vertex.entryPoint = "vs";
+            pd.depthStencil = &ds;
+            pd.multisample.count = 4;
+            wgpu::RenderPipeline pipe = gpu.Device().CreateRenderPipeline(&pd);
+            pass.SetPipeline(pipe);
+            pass.SetScissorRect(side ? kEdge : 0, 0, side ? W - kEdge : kEdge, H);
+            pass.Draw(3);
+        }
+        pass.End();
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+    };
+    // 0 retail (depth-blind), 1 weighted, 2 near field, 3 near field + spread.
+    std::vector<uint8_t> nearOut[4], farOut[4];
+    drawDepth(zFocus, zNear);
+    run(false, false, false, false, nearOut[0]);
+    run(true, true, false, false, nearOut[1]);
+    EXPECT_FALSE(dof.LastRunNearField());
+    run(true, true, true, false, nearOut[2]);
+    EXPECT_TRUE(dof.LastRunNearField());
+    run(true, true, true, true, nearOut[3]);
+    run(true, false, true, true, tmp);
+    EXPECT_FALSE(dof.LastRunNearField()) << "the near field rides on the depth weight only";
+    drawDepth(zFocus, 1.0f);   // mirrored: the dark half behind the focus
+    run(true, true, false, false, farOut[1]);
+    run(true, true, true, false, farOut[2]);
+    run(true, true, true, true, farOut[3]);
+    EXPECT_EQ(GpuPipelineCreateCount(), pipesWarm) << "Prewarm(.., nearField) warms every near-field pipeline; "
+                                                      "no switch compiles";
+    dof.Terminate();
+    TheDOFProc->UnSet();
+    if (prev) prev->Select(); else RndCam::ClearCurrent();
+    TheUI = savedUI;
+    ui.SetCurrent(nullptr);
+    delete game;
+
+    auto cols = [&](const std::vector<uint8_t> &o) {
+        std::vector<double> col(W, 0.0);
+        for (int y = 200; y < 520; y++)
+            for (int x = 0; x < W; x++) col[x] += o[((size_t)y * W + x) * 4 + 1] / 320.0;
+        return col;
+    };
+    double grad[4], inside[4], outside[4];
+    for (int e = 0; e < 4; e++) {
+        const std::vector<double> col = cols(nearOut[e]);
+        grad[e] = 0.0;
+        for (int x = kEdge - 40; x < kEdge + 40; x++) grad[e] = std::max(grad[e], std::fabs(col[x + 1] - col[x]));
+        inside[e] = col[kEdge + 2];    // the near object just inside its silhouette
+        outside[e] = col[kEdge - 3];   // the figure just outside it
+    }
+    printf("DC3LookPost DOF near field: largest edge step (levels/px) retail %.1f, weighted %.1f, near %.1f, "
+           "near + spread %.1f; near object 2 px in %.1f %.1f %.1f %.1f; figure 3 px out %.1f %.1f %.1f %.1f\n",
+           grad[0], grad[1], grad[2], grad[3], inside[0], inside[1], inside[2], inside[3], outside[0], outside[1],
+           outside[2], outside[3]);
+    EXPECT_GT(grad[1], 150.0) << "the weighted blur keeps the near object's cut-out edge (non-vacuous)";
+    EXPECT_LT(grad[2], 0.75 * grad[1]) << "the near field softens the near object's edge";
+    EXPECT_LE(grad[2], 1.1 * grad[0]) << "no harder than the depth-blind blur's";
+    EXPECT_LT(grad[3], grad[2] - 5.0) << "the spread softens it further";
+    EXPECT_GT(inside[2], inside[1] + 40.0) << "the figure shows through the near object's blurred edge";
+    EXPECT_LT(outside[3], outside[2] - 10.0) << "the near object's blur spreads over the figure beside it";
+    // The far field: the near field changes nothing, to the pixel.
+    for (int e = 2; e < 4; e++) {
+        size_t diff = 0;
+        for (size_t i = 0; i < farOut[1].size(); i++) diff += farOut[e][i] != farOut[1][i];
+        EXPECT_EQ(diff, 0u) << "near field (spread " << (e == 3) << ") changed the far field";
+    }
+    // And the in-focus figure away from the near object is untouched.
+    for (int e = 2; e < 4; e++)
+        for (int y = 200; y < 520; y += 7)
+            for (int x = 0; x < kEdge - 64; x += 5)
+                ASSERT_EQ(nearOut[e][((size_t)y * W + x) * 4 + 1], nearOut[1][((size_t)y * W + x) * 4 + 1])
+                    << "x " << x << " y " << y;
+}
+
+// LookSettings::postDofNearField / Spread follow the look and their tokens
+// ({rnd native_look dof_near_on|_off|_rule, dof_near_spread_*}); retail and
+// Native take none, and Native refuses the token. Sabotage: the setter
+// writing the field for the spread token -- red.
+TEST(DC3LookDofNear, FollowsTheLookAndItsSwitch) {
+    {
+        milo::ScopedLookOverride o(milo::LookProfile::Retail);
+        EXPECT_FALSE(milo::Look().postDofNearField) << "retail has no near field";
+        EXPECT_FALSE(milo::Look().postDofNearSpread);
+        EXPECT_TRUE(milo::SetLookDofNearForInspection(1));
+        EXPECT_TRUE(milo::Look().postDofNearField);
+        EXPECT_FALSE(milo::Look().postDofNearSpread);
+        EXPECT_TRUE(milo::SetLookDofNearForInspection(-1));
+        EXPECT_FALSE(milo::Look().postDofNearField);
+    }
+    {
+        milo::ScopedLookOverride o(milo::LookProfile::Native);
+        EXPECT_FALSE(milo::Look().postDofNearField) << "Native (rb3, rb3-xenon) has no near field";
+        EXPECT_FALSE(milo::Look().postDofNearSpread);
+        EXPECT_FALSE(milo::SetLookDofNearForInspection(1));
+        EXPECT_FALSE(milo::Look().postDofNearField);
+    }
+    {
+        milo::ScopedLookOverride o(milo::LookProfile::Enhanced);
+        const bool field = milo::Look().postDofNearField, spread = milo::Look().postDofNearSpread;
+        EXPECT_TRUE(milo::SetLookDofNearForInspection(0, true));
+        EXPECT_FALSE(milo::Look().postDofNearSpread);
+        EXPECT_EQ(milo::Look().postDofNearField, field) << "the spread token leaves the field";
+        EXPECT_TRUE(milo::SetLookDofNearForInspection(!field));
+        EXPECT_EQ(milo::Look().postDofNearField, !field);
+        EXPECT_TRUE(milo::SetLookDofNearForInspection(-1));
+        EXPECT_TRUE(milo::SetLookDofNearForInspection(-1, true));
+        EXPECT_EQ(milo::Look().postDofNearField, field);
+        EXPECT_EQ(milo::Look().postDofNearSpread, spread);
+    }
+}
+
 // LookSettings::postDofDepthWeight follows the look and its inspection token
 // ({rnd native_look dof_depth_weight_on|off|rule}). Sabotage: the switch
 // ignored -- red.

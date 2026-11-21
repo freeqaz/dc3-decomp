@@ -258,6 +258,13 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "dof_depth_weight_on") milo::SetLookDofDepthWeightForInspection(1);
         else if (s == "dof_depth_weight_off") milo::SetLookDofDepthWeightForInspection(0);
         else if (s == "dof_depth_weight_rule") milo::SetLookDofDepthWeightForInspection(-1);
+        // np-look36: the depth weight's near field, and its spread.
+        else if (s == "dof_near_on") milo::SetLookDofNearForInspection(1);
+        else if (s == "dof_near_off") milo::SetLookDofNearForInspection(0);
+        else if (s == "dof_near_rule") milo::SetLookDofNearForInspection(-1);
+        else if (s == "dof_near_spread_on") milo::SetLookDofNearForInspection(1, true);
+        else if (s == "dof_near_spread_off") milo::SetLookDofNearForInspection(0, true);
+        else if (s == "dof_near_spread_rule") milo::SetLookDofNearForInspection(-1, true);
         else if (s == "hair_edge_on") milo::SetLookCutoutSampleTestForInspection(1);
         else if (s == "hair_edge_off") milo::SetLookCutoutSampleTestForInspection(0);
         else if (s == "hair_edge_rule") milo::SetLookCutoutSampleTestForInspection(-1);
@@ -288,7 +295,9 @@ static Symbol NativeLook(const DataArray *msg) {
                          "lod_bias_rule, aniso_1, aniso_4, aniso_16, aniso_rule, "
                          "refl_cull_force, refl_cull_flip, refl_cull_rule, noise_rows_on, "
                          "noise_rows_off, noise_rows_rule, dof_depth_weight_on, "
-                         "dof_depth_weight_off, dof_depth_weight_rule, hair_edge_on, "
+                         "dof_depth_weight_off, dof_depth_weight_rule, dof_near_on, dof_near_off, "
+                         "dof_near_rule, dof_near_spread_on, dof_near_spread_off, "
+                         "dof_near_spread_rule, hair_edge_on, "
                          "hair_edge_off, hair_edge_rule, hair_edge_b, hair_edge_c, "
                          "hair_edge_e, hair_edge_centre, display_tv, display_srgb, "
                          "display_off, display_rule, crowd_shadow_on, crowd_shadow_off, "
