@@ -211,11 +211,12 @@ Rnd::Rnd()
 // by adapter class, on for a discrete GPU, and the on and off tokens force
 // it on any GPU);
 // dof_edge_on|dof_edge_off|dof_edge_rule switch the enhanced depth of field's
-// edge rule (np-look51, LookSettings::postDofEdge: the composite's mix amount
-// from every depth sample of the pixel, not sample 0 alone, so an in-focus
-// outline over the blurred background keeps its anti-aliasing; by adapter
-// class, on for a discrete GPU; on and off force it on any GPU; the first
-// switch on compiles one pipeline);
+// edge rule (np-look51, LookSettings::postDofEdge: where a pixel's depth
+// samples disagree the composite mixes each sample's own colour by its own
+// depth's amount, not the resolved pixel by sample 0's, so an in-focus
+// outline over the blurred background keeps its anti-aliasing with the
+// background half blurred; by adapter class, on for a discrete GPU; on and
+// off force it on any GPU; the first switch on compiles one pipeline);
 // hair_edge_on|hair_edge_off|hair_edge_rule switch the enhanced cutout's
 // alpha test per MSAA sample (np-look26 d; LookSettings::cutoutSampleTest; a
 // uniform, nothing compiles): on = mode E, off = the landed sharpened
