@@ -237,6 +237,12 @@ Rnd::Rnd()
 // rtt_rows_rule its base rows (texPassBaseRows), so one launch times one size
 // against another; neither turns step 2 on or off, and a target takes the new
 // size at its next clearing pass (SetLookTexPassSizeForInspection);
+// adapter_apple|adapter_other|adapter_discrete|adapter_rule force the adapter
+// class the look's four per-adapter rules use (np-look49: the near field and
+// its spread, the texture pass's MSAA and size; an Apple GPU, any other
+// non-discrete GPU, a discrete GPU) or return it to the adapter's own; each
+// rule takes it as it takes its own token, and nothing that sizes the frame
+// reads it (SetLookAdapterClassForInspection);
 // text_bias_off|text_bias_half|text_bias_on|text_bias_rule put the text and
 // HUD LOD bias (np-look34, LookSettings::uiLodBias) at 0 / -0.5 / -1 or the
 // look's value; text_levels_2|text_levels_all|text_levels_rule set the text
@@ -325,6 +331,13 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "rtt_rows_480") milo::SetLookTexPassSizeForInspection(0, 480);
         else if (s == "rtt_rows_720") milo::SetLookTexPassSizeForInspection(0, 720);
         else if (s == "rtt_rows_rule") milo::SetLookTexPassSizeForInspection(0, -1);
+        // np-look49: the adapter class the look's per-adapter rules use.
+        else if (s == "adapter_apple") milo::SetLookAdapterClassForInspection(false, milo::LookAdapterClass::Apple);
+        else if (s == "adapter_other")
+            milo::SetLookAdapterClassForInspection(false, milo::LookAdapterClass::OtherNonDiscrete);
+        else if (s == "adapter_discrete")
+            milo::SetLookAdapterClassForInspection(false, milo::LookAdapterClass::Discrete);
+        else if (s == "adapter_rule") milo::SetLookAdapterClassForInspection(true);
         else if (s == "text_bias_off") milo::SetLookUiLodBiasForInspection(false, 0.0f);
         else if (s == "text_bias_half") milo::SetLookUiLodBiasForInspection(false, -0.5f);
         else if (s == "text_bias_on") milo::SetLookUiLodBiasForInspection(false, -1.0f);
@@ -351,7 +364,8 @@ static Symbol NativeLook(const DataArray *msg) {
                          "rtt_scale_on, rtt_scale_off, rtt_scale_rule, rtt_off, rtt_step1, "
                          "rtt_on, rtt_rule, rtt_cap_1024, rtt_cap_1536, rtt_cap_2048, "
                          "rtt_cap_rule, rtt_rows_360, rtt_rows_480, rtt_rows_720, "
-                         "rtt_rows_rule, text_bias_off, text_bias_half, text_bias_on, "
+                         "rtt_rows_rule, adapter_apple, adapter_other, adapter_discrete, "
+                         "adapter_rule, text_bias_off, text_bias_half, text_bias_on, "
                          "text_bias_rule, text_levels_2, text_levels_all, text_levels_rule, "
                          "text_bias_glyphs, text_bias_all_ui or text_bias_scope_rule", s.Str());
     }
