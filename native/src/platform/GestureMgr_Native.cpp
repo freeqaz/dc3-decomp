@@ -84,6 +84,46 @@ static HRESULT NativeNuiSkeletonFrameSource(NUI_SKELETON_FRAME *) {
     return (cam && cam->NewFrame()) ? 0 : (HRESULT)0x83010001;
 }
 
+// Who is who, in the log (DC3_BINDING_LOG, on under the dev profile; PLAN
+// H-158).  One "DC3 SCORING:" line each time a skeleton slot gets a new
+// occupant, a player is bound to another body, a stand-in is released, or the
+// tracker's id for a person is re-matched: the events that say which body a
+// player was being scored on.  Playtest 2026-11-20: somebody walked through a
+// two-player song and the log could not say whom the players were bound to
+// before, during or after, because these lines needed DC3_SCORING_DEBUG.
+//
+// They print on a change only.  A camera that keeps finding and losing a body
+// can still change something on most frames, so outside DC3_SCORING_DEBUG (a
+// test's or a developer's, which gets every line) at most kBindingLogBudget
+// lines are printed per 5 s and the rest are counted in one line.
+static bool BindingLog() {
+    static const bool sEvery = Dc3EnvFlag("DC3_SCORING_DEBUG", false);
+    if (sEvery)
+        return true;
+    static const bool sOn = Dc3EnvFlag("DC3_BINDING_LOG", false);
+    if (!sOn)
+        return false;
+    const int kBindingLogBudget = 20;
+    static auto sWindow = std::chrono::steady_clock::now();
+    static int sPrinted = 0;
+    static int sDropped = 0;
+    auto now = std::chrono::steady_clock::now();
+    if (now - sWindow >= std::chrono::seconds(5)) {
+        if (sDropped > 0)
+            fprintf(stderr, "DC3 SCORING: %d more binding lines in the last 5 s not printed "
+                            "(DC3_SCORING_DEBUG=1 prints every one)\n", sDropped);
+        sWindow = now;
+        sPrinted = 0;
+        sDropped = 0;
+    }
+    if (sPrinted >= kBindingLogBudget) {
+        sDropped++;
+        return false;
+    }
+    sPrinted++;
+    return true;
+}
+
 // Persistent trackId -> skeleton-slot assignment (index = slot, value = owning
 // trackId, -1 = free). A new trackId claims the lowest free slot and keeps it
 // while it persists; when a trackId stops appearing the slot is released so a
@@ -441,8 +481,7 @@ static int AssignSlots(const int *trackIds, const Vector3 *hips, int numValid,
                     sSlotHold[s].presentMs = kHoldMinPresenceMs;
                 gEstimate.ResetSlot(s);
                 reassignments++;
-                static bool sDebug = Dc3EnvFlag("DC3_SCORING_DEBUG", false);
-                if (sDebug)
+                if (BindingLog())
                     fprintf(stderr, "DC3 SCORING: slot %d <- tracking id %d\n", s, trackIds[k]);
                 break;
             }
@@ -568,7 +607,7 @@ static void NativeAutoAssignPlayers(float elapsedMs) {
         sLastAssign[p] = result.assign[p];
         sLastRule[p] = result.rule[p];
         sSinceMs[p] = 0.0f;
-        if (sDebug && changed)
+        if (changed && BindingLog())
             fprintf(stderr,
                 "DC3 SCORING: bind p%d -> tracking id %d slot %d rule=%s lost=%.0fms dist=%.2fm\n",
                 p, result.assign[p], result.slot[p], Dc3PoseIdentity::RuleName(result.rule[p]),
@@ -600,7 +639,7 @@ static void NativeAutoAssignPlayers(float elapsedMs) {
     for (int p = 0; p < 2; p++) {
         if (result.assign[p] >= 0)
             boundNow = true;
-        if (sDebug && result.released[p] >= 0)
+        if (result.released[p] >= 0 && BindingLog())
             fprintf(stderr, "DC3 SCORING: stand-in tracking id %d released by p%d\n",
                 result.released[p], p);
     }
@@ -615,7 +654,10 @@ static void NativeAutoAssignPlayers(float elapsedMs) {
             TheGestureMgr->SetTrackedSkeletons(held[0], held[1]);
     }
 
-    if (sDebug) {
+    {
+        // The tracking ids ride along: the slot says which skeleton, the id
+        // says which person (a slot is reused, an id is not).  A new person in
+        // the same slot is the "bind" line's to report.
         static int sPrevIdx[2] = { -2, -2 };
         int idx[2];
         for (int p = 0; p < 2; p++)
@@ -623,9 +665,14 @@ static void NativeAutoAssignPlayers(float elapsedMs) {
         if (idx[0] != sPrevIdx[0] || idx[1] != sPrevIdx[1]) {
             sPrevIdx[0] = idx[0];
             sPrevIdx[1] = idx[1];
-            fprintf(stderr, "DC3 SCORING: player->slot binding p0=%d p1=%d\n",
-                idx[0], idx[1]);
+            if (BindingLog())
+                fprintf(stderr,
+                    "DC3 SCORING: player->slot binding p0=%d p1=%d (tracking ids %d %d)\n",
+                    idx[0], idx[1], idx[0] >= 0 ? sSlotTrackId[idx[0]] : -1,
+                    idx[1] >= 0 ? sSlotTrackId[idx[1]] : -1);
         }
+    }
+    if (sDebug) {
         // How often this had to (re)bind: once per join is normal; every frame
         // means something else unbinds the player each frame.
         static int sReported[2] = { 0, 0 };
@@ -1267,17 +1314,16 @@ static void IdentifyPeople(NativeSkeletonProvider::PersonData *persons, int numP
     int movedBefore = gPeople.Moved();
     int jumpedBefore = gPeople.Jumped();
     gPeople.Update(dets, count, dt, Dc3PoseIdentity::ReacquireMs(), ids);
-    static bool sDebug = Dc3EnvFlag("DC3_SCORING_DEBUG", false);
-    if (sDebug && gPeople.Jumped() != jumpedBefore && count > 0)
+    if (gPeople.Jumped() != jumpedBefore && count > 0 && BindingLog())
         fprintf(stderr,
             "DC3 SCORING: the one body in view jumped (to x=%+.2f y=%+.2f z=%.2f); still tracking id %d\n",
             dets[0].x, dets[0].y, dets[0].z, ids[0]);
-    if (sDebug && gPeople.Moved() != movedBefore && count > 0)
+    if (gPeople.Moved() != movedBefore && count > 0 && BindingLog())
         fprintf(stderr,
             "DC3 SCORING: the picture moved under %d %s (to x=%+.2f y=%+.2f z=%.2f); tracking ids kept\n",
             count, count == 1 ? "person" : "people", dets[0].x, dets[0].y, dets[0].z);
     for (int k = 0; k < count; k++) {
-        if (sDebug && gPeople.Reacquired() != before && ids[k] != dets[k].rawId)
+        if (gPeople.Reacquired() != before && ids[k] != dets[k].rawId && BindingLog())
             fprintf(stderr, "DC3 SCORING: tracker id %d is tracking id %d (x=%+.2f z=%.2f)\n",
                 dets[k].rawId, ids[k], dets[k].x, dets[k].z);
         persons[index[k]].trackId = ids[k];
