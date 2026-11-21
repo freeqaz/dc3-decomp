@@ -110,7 +110,7 @@ protected:
             for (int x = 0; x < W; x++) {
                 uint8_t *p = &px[((size_t)y * W + x) * 4];
                 p[0] = p[1] = p[2] = (uint8_t)x;
-                p[3] = 255;
+                p[3] = (uint8_t)(x ^ 0x5A);   // the pass keeps the frame's alpha
             }
         wgpu::TexelCopyTextureInfo dst{};
         dst.texture = frame;
@@ -126,7 +126,12 @@ protected:
         std::vector<uint8_t> out((size_t)W * H * 4);
         EXPECT_TRUE(gpu.ReadbackTexture(frame, W, H, out.data(), out.size()));
         std::vector<int> r(W);
-        for (int x = 0; x < W; x++) r[x] = out[((size_t)1 * W + x) * 4];
+        int alphaBad = 0;
+        for (int x = 0; x < W; x++) {
+            r[x] = out[((size_t)1 * W + x) * 4];
+            alphaBad += out[((size_t)1 * W + x) * 4 + 3] != (x ^ 0x5A);
+        }
+        EXPECT_EQ(alphaBad, 0) << "alpha changed in " << alphaBad << " columns (type " << type << ")";
         return r;
     }
     DisplayRamp mRamp;
@@ -194,7 +199,7 @@ TEST_F(DisplayRampGpuTest, SRGBPassIsTheOldFormula) {
 // Then back to sRGB on the same object (the pipeline switches back), and TV
 // again at another gamma (the table is rewritten). Sabotages: the shader's
 // lut index i >> 2 / i & 3 swapped (S8); the table not re-uploaded when g
-// changes (S9); the alpha dropped (not caught: alpha is not read here).
+// changes (S9); the alpha dropped (S13, RunRamp's alpha check).
 TEST_F(DisplayRampGpuTest, TVPassIsTheTable) {
     const std::vector<int> r = RunRamp(0.85f, DisplayRamp::kDisplayTV);
     int bad = 0;
