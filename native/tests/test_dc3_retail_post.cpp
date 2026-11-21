@@ -2494,3 +2494,356 @@ TEST_F(DC3RetailPostGpuTest, TogglePostProcsSkipsDepthOfField) {
     if (prev) prev->Select(); else pp->Unselect();
     delete pp;
 }
+
+// ---- np-look23 (a): the noise map tied to output rows ----------------------
+//
+// noise_mono.tex (8 x 256, alternating rows: authored scanlines) is tiled
+// (1, 3) in screen uv: 768 map rows down any screen, so one texel is 0.94
+// output rows at 720 and 1.41 at 1080, and the linear filter blended
+// neighbouring map rows by a weight drifting down the screen -- a 2.1-2.8 px
+// line pattern under a slow beat (Xenia's 1280x720 frame shows it too, at
+// 2.14 px). NoiseRowSnapConstants (NoiseRows.h) makes each layer's texel a
+// whole number of output rows and moves the seeds by whole texels; the
+// shaders read every row of a texel at one place, d past its centre, with d
+// set so the line contrast on every row equals the authored tiling's MEAN at
+// that size (the lines lose their beat and do not get more visible).
+// The ENHANCED look's only (LookSettings::noiseSnapsToOutputRows, on a shape
+// with rndshape::kNoiseSnapsToOutputRows): DC3_LOOK=retail keeps the authored
+// tiling at every size, the Xbox's beat included, as Xenia shows it at 720
+// (RetailKeepsTheAuthoredTilingAtEverySize, EnhancedIsRetiledAt720).
+// Sabotages (archive item23/a/sabotage/): S1 NoiseRowSnapConstants never
+// applied (the authored 768 rows) fails the CPU tests and the GPU test; S2 the
+// retail composite's snap removed fails the GPU test; S3 d = 0 (texel centre:
+// full contrast) fails the visibility checks; S4 the property gate ignored
+// (snap applied with `enabled` false) fails DisabledLeavesConstantsUntouched;
+// S5 the look gate ignored (PostProcPass::NoiseRowsSnapped = the shape's
+// capability alone) fails RetailKeepsTheAuthoredTilingAtEverySize; S6 the
+// inspection switch ignored fails InspectionSwitchesTheRetiling; S7 the memo
+// never hit fails SnapIsMemoised.
+#include "gfx/NoiseRows.h"
+#include "platform/LookProfile.h"
+
+namespace {
+// The texel row the DC3 composite reads for drawn row `yi` of `drawnRows`
+// (pixel-centre uv, the shader's floor).
+long NoiseTexelRow(int yi, int drawnRows, float seedY, float scaleY, int mapH) {
+    const double uv = ((double)yi + 0.5) / drawnRows;
+    return (long)std::floor((uv + (double)seedY) * (double)scaleY * mapH);
+}
+} // namespace
+
+static_assert(rndshape::kNoiseSnapsToOutputRows, "dc3-decomp retiles its noise map to output rows");
+
+TEST(DC3NoiseRows, EveryOutputRowReadsOneTexelAtEverySize) {
+    // The five sizes of the item, plus the Xbox's own 720 and 1440 (k = 2).
+    struct Size { int outRows; int scale; };
+    const Size sizes[] = {{360, 1}, {713, 1}, {800, 1}, {1080, 1}, {1080, 2}, {720, 1}, {1440, 1}};
+    // Every venue's noise as authored: (1, 3) stationary (top x1), the
+    // non-stationary top layer (x1.35914), bid's (8, 6).
+    struct Tiling { float baseY, top; };
+    const Tiling tilings[] = {{3.0f, 1.0f}, {3.0f, 1.35914f}, {6.0f, 1.35914f}};
+    const int mapH = 256;
+    int checked = 0;
+    for (const Size &sz : sizes) {
+        for (const Tiling &tl : tilings) {
+            float seeds[4] = {0.137f, 0.731f, 0.412f, 0.269f};
+            float params[4] = {1.0f, tl.baseY, tl.top, 1.0f};
+            float snap[3];
+            NoiseRowSnapConstants(true, sz.outRows, mapH, seeds, params, snap);
+            EXPECT_EQ(snap[0], 1.0f);
+            const int drawn = sz.outRows * sz.scale;
+            const float layerY[2] = {params[1], params[1] * params[2]};
+            const float layerSeed[2] = {seeds[1], seeds[3]};
+            for (int L = 0; L < 2; L++) {
+                const double authored = (double)std::fabs(tl.baseY * (L ? tl.top : 1.0f)) * mapH;
+                const int k = NoiseOutputRowsPerTexel(sz.outRows, authored);
+                const double d = snap[1 + L];
+                // Every drawn row of an output row reads the same texel row, and
+                // the texel rows run down the screen in runs of one whole length:
+                // each texel covers exactly k output rows (the last run may be cut).
+                std::vector<int> runs;
+                std::vector<double> v;   // the +-1 alternating map as the shader reads it
+                long prev = 0;
+                int bad = 0;
+                for (int r = 0; r < sz.outRows; r++) {
+                    const long t = NoiseTexelRow(r * sz.scale, drawn, layerSeed[L], layerY[L], mapH);
+                    for (int j = 1; j < sz.scale; j++)
+                        bad += NoiseTexelRow(r * sz.scale + j, drawn, layerSeed[L], layerY[L], mapH) != t;
+                    if (r == 0 || t != prev) {
+                        bad += r > 0 && t != prev + 1;
+                        runs.push_back(1);
+                    } else {
+                        runs.back()++;
+                    }
+                    prev = t;
+                    const double a = (t % 2 == 0) ? 1.0 : -1.0;
+                    v.push_back(a * (1.0 - d) - a * d);
+                }
+                for (size_t i = 0; i + 1 < runs.size(); i++) bad += runs[i] != runs[0];
+                bad += runs.back() > runs[0];
+                const int step = runs[0];
+                // Texel row count across the screen is outRows / k exactly.
+                const double rows = (double)layerY[L] * mapH;
+                EXPECT_NEAR(rows, (double)sz.outRows / k, 1e-3)
+                    << sz.outRows << " rows x" << sz.scale << " baseY " << tl.baseY << " layer " << L;
+                EXPECT_EQ(bad, 0) << sz.outRows << " rows x" << sz.scale << " baseY " << tl.baseY
+                                  << " layer " << L << ": " << bad
+                                  << " output rows read a fraction of a texel";
+                EXPECT_EQ(step, k) << sz.outRows << " rows x" << sz.scale << " layer " << L;
+                // Visibility: the 2-row amplitude of the lines as read, whole
+                // texel runs only, against the authored tiling's mean at this
+                // size -- equal (not more visible), and the same on every run
+                // (no beat).
+                const int n = (int)(v.size() / k) * k;
+                double sum = 0.0, lo = 1e9, hi = -1e9;
+                std::vector<double> amp;
+                for (int i = 1; i + 1 < n; i++) amp.push_back(std::fabs(2 * v[i] - v[i - 1] - v[i + 1]) / 4.0);
+                for (size_t i = 0; i + (size_t)k <= amp.size(); i += k) {
+                    double a = 0.0;
+                    for (int j = 0; j < k; j++) a += amp[i + j];
+                    a /= k;
+                    sum += a;
+                    lo = std::min(lo, a);
+                    hi = std::max(hi, a);
+                }
+                const double mean = sum / (double)(amp.size() / k);
+                const double want = NoiseLineContrast(authored / sz.outRows);
+                EXPECT_NEAR(mean, std::min(want, 1.0 / k), 0.02 * std::max(want, 0.05))
+                    << sz.outRows << " rows layer " << L << " baseY " << tl.baseY
+                    << ": line contrast " << mean << " vs the authored mean " << want;
+                EXPECT_LE(mean, want + 0.005) << sz.outRows << " rows layer " << L << ": more visible";
+                EXPECT_LE(hi - lo, 0.01) << sz.outRows << " rows layer " << L
+                                         << ": the line contrast still varies down the screen";
+                checked++;
+            }
+        }
+    }
+    EXPECT_EQ(checked, 7 * 3 * 2);
+    // 1080: the authored 1.406 rows per texel lies between 1 and 2; 1 is the
+    // nearer in log terms (x1.406 vs x1.422). 1440 (1.875) takes 2.
+    EXPECT_EQ(NoiseOutputRowsPerTexel(1080, 768.0), 1);
+    EXPECT_EQ(NoiseOutputRowsPerTexel(1440, 768.0), 2);
+    EXPECT_EQ(NoiseOutputRowsPerTexel(360, 768.0), 1);
+    // The authored contrast against the before/after ratio measured on held
+    // throneroom frames (item23/a/line_beat_amplitudes.txt).
+    EXPECT_NEAR(NoiseLineContrast(768.0 / 360), 0.018, 0.01);
+    EXPECT_NEAR(NoiseLineContrast(768.0 / 713), 0.49, 0.01);
+    EXPECT_NEAR(NoiseLineContrast(768.0 / 1080), 0.417, 0.01);
+}
+
+namespace {
+bool NoiseConstantsUntouched(PostProcPass &pass, int rows) {
+    const float seeds0[4] = {0.137f, 0.731f, 0.412f, 0.269f};
+    const float params0[4] = {1.0f, 3.0f, 1.0f, 1.0f};
+    float seeds[4], params[4], snap[3] = {7, 7, 7};
+    std::memcpy(seeds, seeds0, sizeof(seeds));
+    std::memcpy(params, params0, sizeof(params));
+    pass.SnapNoiseConstants(rows, 256, seeds, params, snap);
+    return std::memcmp(seeds, seeds0, sizeof(seeds)) == 0 &&
+           std::memcmp(params, params0, sizeof(params)) == 0 && snap[0] == 0.0f &&
+           snap[1] == 0.0f && snap[2] == 0.0f;
+}
+} // namespace
+
+TEST(DC3NoiseRows, RetailKeepsTheAuthoredTilingAtEverySize) {
+    // DC3_LOOK=retail is the original: 768 map rows down any screen, the
+    // linear filter's drifting blend and its beat (Xenia's 720 frame shows
+    // it). Through PostProcPass's own gate: every constant as authored and
+    // the shaders' snap flag zero, at every size.
+    milo::ScopedLookOverride look(milo::LookProfile::Retail);
+    EXPECT_FALSE(PostProcPass::NoiseRowsSnapped(milo::Look()));
+    PostProcPass pass;
+    for (int rows : {360, 713, 720, 1080})
+        EXPECT_TRUE(NoiseConstantsUntouched(pass, rows)) << rows << " rows: retail re-tiled";
+    EXPECT_EQ(pass.NoiseRowSnapMemo().computes, 0u);
+}
+
+TEST(DC3NoiseRows, EnhancedIsRetiledAt720) {
+    // Enhanced at the Xbox's own 720 rows: 720 map rows, every row at the
+    // authored mean contrast (0.50 of the map's), no 15-row beat.
+    milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
+    EXPECT_TRUE(PostProcPass::NoiseRowsSnapped(milo::Look()));
+    PostProcPass pass;
+    float seeds[4] = {0.3f, 0.37f, 0.3f, 0.37f};
+    float params[4] = {1.0f, 3.0f, 1.0f, 1.0f};
+    float snap[3];
+    pass.SnapNoiseConstants(720, 256, seeds, params, snap);
+    EXPECT_EQ(snap[0], 1.0f);
+    EXPECT_NEAR((double)params[1] * 256, 720.0, 1e-3);
+    EXPECT_NEAR(1.0 - 2.0 * snap[1], NoiseLineContrast(768.0 / 720), 1e-6);
+    EXPECT_NEAR(1.0 - 2.0 * snap[1], 0.496, 0.01);
+    EXPECT_EQ(snap[1], snap[2]);
+}
+
+TEST(DC3NoiseRows, InspectionSwitchesTheRetiling) {
+    // {rnd native_look noise_rows_on|noise_rows_off|noise_rows_rule}.
+    PostProcPass pass;
+    {
+        milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
+        ASSERT_FALSE(NoiseConstantsUntouched(pass, 720));
+        EXPECT_TRUE(milo::SetLookNoiseRowsForInspection(0));
+        EXPECT_TRUE(NoiseConstantsUntouched(pass, 720)) << "enhanced, noise_rows_off";
+        EXPECT_TRUE(milo::SetLookNoiseRowsForInspection(1));
+        EXPECT_FALSE(NoiseConstantsUntouched(pass, 720)) << "enhanced, noise_rows_on";
+        EXPECT_TRUE(milo::SetLookNoiseRowsForInspection(0));
+        EXPECT_TRUE(milo::SetLookNoiseRowsForInspection(-1));
+        EXPECT_FALSE(NoiseConstantsUntouched(pass, 720)) << "enhanced, noise_rows_rule";
+    }
+    {
+        milo::ScopedLookOverride look(milo::LookProfile::Retail);
+        ASSERT_TRUE(NoiseConstantsUntouched(pass, 720));
+        EXPECT_TRUE(milo::SetLookNoiseRowsForInspection(1));
+        EXPECT_FALSE(NoiseConstantsUntouched(pass, 720)) << "retail, noise_rows_on";
+        EXPECT_TRUE(milo::SetLookNoiseRowsForInspection(-1));
+        EXPECT_TRUE(NoiseConstantsUntouched(pass, 720)) << "retail, noise_rows_rule";
+    }
+}
+
+TEST(DC3NoiseRows, SnapIsMemoised) {
+    // NoiseLineContrast is ~2,000 steps a layer: the memo computes once per
+    // (rows, map height, base, top) and gives the pure function's constants.
+    milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
+    PostProcPass pass;
+    for (int rows : {713, 713, 713, 1080, 1080, 713}) {
+        const float seeds0[4] = {0.137f, 0.731f, 0.412f, 0.269f};
+        const float params0[4] = {1.0f, 3.0f, 1.35914f, 1.0f};
+        float s1[4], p1[4], n1[3], s2[4], p2[4], n2[3];
+        std::memcpy(s1, seeds0, sizeof(s1)); std::memcpy(s2, seeds0, sizeof(s2));
+        std::memcpy(p1, params0, sizeof(p1)); std::memcpy(p2, params0, sizeof(p2));
+        pass.SnapNoiseConstants(rows, 256, s1, p1, n1);
+        NoiseRowSnapConstants(true, rows, 256, s2, p2, n2);
+        EXPECT_EQ(std::memcmp(s1, s2, sizeof(s1)), 0) << rows;
+        EXPECT_EQ(std::memcmp(p1, p2, sizeof(p1)), 0) << rows;
+        EXPECT_EQ(std::memcmp(n1, n2, sizeof(n1)), 0) << rows;
+    }
+    EXPECT_EQ(pass.NoiseRowSnapMemo().computes, 3u);   // 713, 1080, 713
+}
+
+TEST(DC3NoiseRows, DisabledLeavesConstantsUntouched) {
+    // The shape property off (rb3, rb3-xenon): every constant exactly as the
+    // authored uv had it, and the shaders' snap flag zero.
+    const float seeds0[4] = {0.137f, 0.731f, 0.412f, 0.269f};
+    const float params0[4] = {1.0f, 3.0f, 1.35914f, 1.0f};
+    for (int rows : {360, 720, 1080}) {
+        float seeds[4], params[4], snap[3] = {7, 7, 7};
+        std::memcpy(seeds, seeds0, sizeof(seeds));
+        std::memcpy(params, params0, sizeof(params));
+        NoiseRowSnapConstants(false, rows, 256, seeds, params, snap);
+        EXPECT_EQ(std::memcmp(seeds, seeds0, sizeof(seeds)), 0) << rows;
+        EXPECT_EQ(std::memcmp(params, params0, sizeof(params)), 0) << rows;
+        EXPECT_EQ(snap[0], 0.0f);
+        EXPECT_EQ(snap[1], 0.0f);
+        EXPECT_EQ(snap[2], 0.0f);
+    }
+}
+
+TEST_F(DC3RetailPostGpuTest, NoiseMapReadsOneTexelPerOutputRow) {
+    // A 2x-drawn frame (1080 drawn rows, 540 output rows) through the real
+    // composite: a flat s = 64/255 scene, the overlay's lower branch at
+    // intensity 1 gives c = 2 n s with n = v^2 (stationary: both layers at
+    // one seed), v the map read d past the texel's centre, so each drawn
+    // row's level names the blend it read.
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    auto &dev = gpu.Device();
+    const int W = 16, H = 1080, outRows = 540, mapW = 8, mapH = 256;
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)W, (uint32_t)H, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    wgpu::Texture scene = dev.CreateTexture(&d);
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture frame = dev.CreateTexture(&d);
+    d.size = {(uint32_t)mapW, (uint32_t)mapH, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    wgpu::Texture noise = dev.CreateTexture(&d);
+    const uint8_t grey = 64;
+    std::vector<uint8_t> px((size_t)W * H * 4), out((size_t)W * H * 4);
+    for (size_t i = 0; i < px.size(); i += 4) {
+        px[i] = px[i + 1] = px[i + 2] = grey;
+        px[i + 3] = 255;
+    }
+    wgpu::TexelCopyTextureInfo dst{};
+    dst.texture = scene;
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = W * 4;
+    wgpu::Extent3D ext = {(uint32_t)W, (uint32_t)H, 1};
+    gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+    // Map rows far apart from their neighbours, the same in every column.
+    std::vector<uint8_t> mp((size_t)mapW * mapH * 4);
+    std::vector<float> rowV(mapH);
+    for (int r = 0; r < mapH; r++) {
+        const uint8_t v = (uint8_t)(r % 2 ? 250 - (r * 7) % 60 : 130 + (r * 11) % 50);
+        rowV[r] = v / 255.0f;
+        for (int x = 0; x < mapW; x++) {
+            uint8_t *p = &mp[((size_t)r * mapW + x) * 4];
+            p[0] = p[1] = p[2] = v;
+            p[3] = 255;
+        }
+    }
+    dst.texture = noise;
+    layout.bytesPerRow = mapW * 4;
+    ext = {(uint32_t)mapW, (uint32_t)mapH, 1};
+    gpu.Queue().WriteTexture(&dst, mp.data(), mp.size(), &layout, &ext);
+    wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView(),
+                      noiseView = noise.CreateView();
+
+    RB3RetailPost post;
+    post.Init(gpu);
+    RetailPostParams p;
+    p.dc3 = true;
+    for (int i = 0; i < 3; i++) p.xfm[i][i] = 1.0f;
+    p.noiseMap = noiseView;
+    float seeds[4] = {0.3f, 0.37f, 0.3f, 0.37f};
+    float params[4] = {1.0f, 3.0f, 1.0f, 1.0f};   // noise_mono's (1, 3), stationary, intensity 1
+    NoiseRowSnapConstants(true, outRows, mapH, seeds, params, p.noiseSnap);
+    std::memcpy(p.noiseSeeds, seeds, sizeof(seeds));
+    std::memcpy(p.noiseParams, params, sizeof(params));
+    const float dd = p.noiseSnap[1];
+    ASSERT_GT(dd, 0.05f);   // 768 / 540 = 1.42 map rows per output row: well past the centre
+    wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+    post.Run(enc, sceneView, sceneView, W, H, frameView, p, gpu);
+    wgpu::CommandBuffer cmd = enc.Finish();
+    gpu.Queue().Submit(1, &cmd);
+    ASSERT_TRUE(gpu.ReadbackTexture(frame, W, H, out.data(), out.size()));
+    post.Terminate();
+
+    const float s = grey / 255.0f;
+    int bad = 0, worst = 0;
+    std::string first;
+    for (int yi = 0; yi < H; yi++) {
+        const long t = NoiseTexelRow(yi, H, seeds[1], params[1], mapH);
+        const int row = (int)(((t % mapH) + mapH) % mapH), next = (row + 1) % mapH;
+        const float v = (1.0f - dd) * rowV[row] + dd * rowV[next];
+        const float want = 2.0f * v * v * s * 255.0f;
+        const int got = out[((size_t)yi * W + W / 2) * 4 + 1];
+        const int err = (int)std::lround(std::fabs(got - want));
+        worst = std::max(worst, err);
+        if (err > 1) {
+            if (bad == 0)
+                first = "drawn row " + std::to_string(yi) + ": " + std::to_string(got) + " vs " +
+                        std::to_string(want) + " (map row " + std::to_string(row) + ")";
+            bad++;
+        }
+    }
+    EXPECT_EQ(bad, 0) << bad << " of " << H << " drawn rows did not read their texel's fixed blend, worst "
+                      << worst << " levels; first " << first;
+    // Both drawn rows of each output row read one blend (the box filter to
+    // the output then sees no drift either): a 768-row tiling fails this.
+    int split = 0;
+    for (int r = 0; r < outRows; r++) {
+        const int a = out[((size_t)(2 * r) * W + W / 2) * 4 + 1];
+        const int b = out[((size_t)(2 * r + 1) * W + W / 2) * 4 + 1];
+        split += std::abs(a - b) > 1;
+    }
+    EXPECT_EQ(split, 0) << split << " of " << outRows << " output rows straddle two map rows";
+    // Non-vacuous: the noise is on (the rows span tens of levels).
+    int lo = 255, hi = 0;
+    for (int yi = 0; yi < H; yi++) {
+        const int g = out[((size_t)yi * W + W / 2) * 4 + 1];
+        lo = std::min(lo, g);
+        hi = std::max(hi, g);
+    }
+    EXPECT_GT(hi - lo, 20) << "the noise map did not reach the frame";
+}
