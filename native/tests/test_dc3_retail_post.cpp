@@ -2506,15 +2506,22 @@ TEST_F(DC3RetailPostGpuTest, TogglePostProcsSkipsDepthOfField) {
 // whole number of output rows and moves the seeds by whole texels; the
 // shaders read every row of a texel at one place, d past its centre, with d
 // set so the line contrast on every row equals the authored tiling's MEAN at
-// that size (the lines lose their beat and do not get more visible). The
-// retail look is retiled too, at 720 as everywhere (item23/a README: option
-// (ii), pinned by RetailAt720IsRetiled below).
-// Sabotages (archive item23/a/sabotage.txt): S1 NoiseRowSnapConstants never
+// that size (the lines lose their beat and do not get more visible).
+// The ENHANCED look's only (LookSettings::noiseSnapsToOutputRows, on a shape
+// with rndshape::kNoiseSnapsToOutputRows): DC3_LOOK=retail keeps the authored
+// tiling at every size, the Xbox's beat included, as Xenia shows it at 720
+// (RetailKeepsTheAuthoredTilingAtEverySize, EnhancedIsRetiledAt720).
+// Sabotages (archive item23/a/sabotage/): S1 NoiseRowSnapConstants never
 // applied (the authored 768 rows) fails the CPU tests and the GPU test; S2 the
 // retail composite's snap removed fails the GPU test; S3 d = 0 (texel centre:
 // full contrast) fails the visibility checks; S4 the property gate ignored
-// (snap applied with `enabled` false) fails DisabledLeavesConstantsUntouched.
+// (snap applied with `enabled` false) fails DisabledLeavesConstantsUntouched;
+// S5 the look gate ignored (PostProcPass::NoiseRowsSnapped = the shape's
+// capability alone) fails RetailKeepsTheAuthoredTilingAtEverySize; S6 the
+// inspection switch ignored fails InspectionSwitchesTheRetiling; S7 the memo
+// never hit fails SnapIsMemoised.
 #include "gfx/NoiseRows.h"
+#include "platform/LookProfile.h"
 
 namespace {
 // The texel row the DC3 composite reads for drawn row `yi` of `drawnRows`
@@ -2624,19 +2631,92 @@ TEST(DC3NoiseRows, EveryOutputRowReadsOneTexelAtEverySize) {
     EXPECT_NEAR(NoiseLineContrast(768.0 / 1080), 0.417, 0.01);
 }
 
-TEST(DC3NoiseRows, RetailAt720IsRetiled) {
-    // Option (ii): at the Xbox's own 720 rows the retail look is retiled too
-    // -- 720 map rows, every row at the authored mean contrast (0.50 of the
-    // map's), rather than the authored 768 rows and their 15-row beat.
+namespace {
+bool NoiseConstantsUntouched(PostProcPass &pass, int rows) {
+    const float seeds0[4] = {0.137f, 0.731f, 0.412f, 0.269f};
+    const float params0[4] = {1.0f, 3.0f, 1.0f, 1.0f};
+    float seeds[4], params[4], snap[3] = {7, 7, 7};
+    std::memcpy(seeds, seeds0, sizeof(seeds));
+    std::memcpy(params, params0, sizeof(params));
+    pass.SnapNoiseConstants(rows, 256, seeds, params, snap);
+    return std::memcmp(seeds, seeds0, sizeof(seeds)) == 0 &&
+           std::memcmp(params, params0, sizeof(params)) == 0 && snap[0] == 0.0f &&
+           snap[1] == 0.0f && snap[2] == 0.0f;
+}
+} // namespace
+
+TEST(DC3NoiseRows, RetailKeepsTheAuthoredTilingAtEverySize) {
+    // DC3_LOOK=retail is the original: 768 map rows down any screen, the
+    // linear filter's drifting blend and its beat (Xenia's 720 frame shows
+    // it). Through PostProcPass's own gate: every constant as authored and
+    // the shaders' snap flag zero, at every size.
+    milo::ScopedLookOverride look(milo::LookProfile::Retail);
+    EXPECT_FALSE(PostProcPass::NoiseRowsSnapped(milo::Look()));
+    PostProcPass pass;
+    for (int rows : {360, 713, 720, 1080})
+        EXPECT_TRUE(NoiseConstantsUntouched(pass, rows)) << rows << " rows: retail re-tiled";
+    EXPECT_EQ(pass.NoiseRowSnapMemo().computes, 0u);
+}
+
+TEST(DC3NoiseRows, EnhancedIsRetiledAt720) {
+    // Enhanced at the Xbox's own 720 rows: 720 map rows, every row at the
+    // authored mean contrast (0.50 of the map's), no 15-row beat.
+    milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
+    EXPECT_TRUE(PostProcPass::NoiseRowsSnapped(milo::Look()));
+    PostProcPass pass;
     float seeds[4] = {0.3f, 0.37f, 0.3f, 0.37f};
     float params[4] = {1.0f, 3.0f, 1.0f, 1.0f};
     float snap[3];
-    NoiseRowSnapConstants(rndshape::kNoiseSnapsToOutputRows, 720, 256, seeds, params, snap);
+    pass.SnapNoiseConstants(720, 256, seeds, params, snap);
     EXPECT_EQ(snap[0], 1.0f);
     EXPECT_NEAR((double)params[1] * 256, 720.0, 1e-3);
     EXPECT_NEAR(1.0 - 2.0 * snap[1], NoiseLineContrast(768.0 / 720), 1e-6);
     EXPECT_NEAR(1.0 - 2.0 * snap[1], 0.496, 0.01);
     EXPECT_EQ(snap[1], snap[2]);
+}
+
+TEST(DC3NoiseRows, InspectionSwitchesTheRetiling) {
+    // {rnd native_look noise_rows_on|noise_rows_off|noise_rows_rule}.
+    PostProcPass pass;
+    {
+        milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
+        ASSERT_FALSE(NoiseConstantsUntouched(pass, 720));
+        EXPECT_TRUE(milo::SetLookNoiseRowsForInspection(0));
+        EXPECT_TRUE(NoiseConstantsUntouched(pass, 720)) << "enhanced, noise_rows_off";
+        EXPECT_TRUE(milo::SetLookNoiseRowsForInspection(1));
+        EXPECT_FALSE(NoiseConstantsUntouched(pass, 720)) << "enhanced, noise_rows_on";
+        EXPECT_TRUE(milo::SetLookNoiseRowsForInspection(0));
+        EXPECT_TRUE(milo::SetLookNoiseRowsForInspection(-1));
+        EXPECT_FALSE(NoiseConstantsUntouched(pass, 720)) << "enhanced, noise_rows_rule";
+    }
+    {
+        milo::ScopedLookOverride look(milo::LookProfile::Retail);
+        ASSERT_TRUE(NoiseConstantsUntouched(pass, 720));
+        EXPECT_TRUE(milo::SetLookNoiseRowsForInspection(1));
+        EXPECT_FALSE(NoiseConstantsUntouched(pass, 720)) << "retail, noise_rows_on";
+        EXPECT_TRUE(milo::SetLookNoiseRowsForInspection(-1));
+        EXPECT_TRUE(NoiseConstantsUntouched(pass, 720)) << "retail, noise_rows_rule";
+    }
+}
+
+TEST(DC3NoiseRows, SnapIsMemoised) {
+    // NoiseLineContrast is ~2,000 steps a layer: the memo computes once per
+    // (rows, map height, base, top) and gives the pure function's constants.
+    milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
+    PostProcPass pass;
+    for (int rows : {713, 713, 713, 1080, 1080, 713}) {
+        const float seeds0[4] = {0.137f, 0.731f, 0.412f, 0.269f};
+        const float params0[4] = {1.0f, 3.0f, 1.35914f, 1.0f};
+        float s1[4], p1[4], n1[3], s2[4], p2[4], n2[3];
+        std::memcpy(s1, seeds0, sizeof(s1)); std::memcpy(s2, seeds0, sizeof(s2));
+        std::memcpy(p1, params0, sizeof(p1)); std::memcpy(p2, params0, sizeof(p2));
+        pass.SnapNoiseConstants(rows, 256, s1, p1, n1);
+        NoiseRowSnapConstants(true, rows, 256, s2, p2, n2);
+        EXPECT_EQ(std::memcmp(s1, s2, sizeof(s1)), 0) << rows;
+        EXPECT_EQ(std::memcmp(p1, p2, sizeof(p1)), 0) << rows;
+        EXPECT_EQ(std::memcmp(n1, n2, sizeof(n1)), 0) << rows;
+    }
+    EXPECT_EQ(pass.NoiseRowSnapMemo().computes, 3u);   // 713, 1080, 713
 }
 
 TEST(DC3NoiseRows, DisabledLeavesConstantsUntouched) {
