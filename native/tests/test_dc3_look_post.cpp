@@ -1426,3 +1426,162 @@ TEST_F(DC3LookPostTest, PresentDitherFollowsPostPrecision) {
     TheRnd.BeginDrawing();
     TheRnd.EndDrawing();
 }
+
+// np-look23 (c): LookSettings::postDofDepthWeight. Retail's downsample_4x is
+// depth-blind, so an in-focus figure's colour spreads into the blurred
+// background beside it: the bright fringe round every figure in a close-up
+// (Xenia and the hardware show it; item23/c). With the enhanced look's
+// depth-weighted blur the background beside the figure is background only.
+// A bright half (in focus) against a dark half (far plane), through DofPass
+// enhanced with and without the weighting. Sabotages: the downsample's weight
+// back to 1 (fs_down_tent_dw) -- the fringe returns, red; the composite's
+// division removed -- the background goes dark, red.
+TEST_F(DC3LookPostTest, DepthWeightedDofKeepsTheFigureOutOfTheBackgroundBlur) {
+    ASSERT_TRUE(TheDOFProc);
+    GpuDevice &gpu = Gpu();
+    UIScreen *game = Hmx::Object::New<UIScreen>();
+    game->SetName("game_screen", ObjectDir::Main());
+    class ProbeUI : public UIManager {
+    public:
+        void SetCurrent(UIScreen *sc) { mCurrentScreen = sc; }
+    } ui;
+    UIManager *savedUI = TheUI;
+    TheUI = &ui;
+    ui.SetCurrent(game);
+    RndCam *prev = RndCam::Current();
+    RndCam::ClearCurrent();
+    TheDOFProc->Set(nullptr, 10.0f, 0.5f, 1.0f, 0.0f);   // focal 10, blur depth 0.5, max 1, min 0
+    ASSERT_TRUE(TheDOFProc->Enabled());
+
+    constexpr int W = 1280, H = 720, kEdge = W / 2;
+    const uint8_t kFig = 230, kBg = 20;
+    std::vector<uint8_t> px((size_t)W * H * 4);
+    for (int y = 0; y < H; y++)
+        for (int x = 0; x < W; x++) {
+            uint8_t *p = &px[((size_t)y * W + x) * 4];
+            p[0] = p[1] = p[2] = x < kEdge ? kFig : kBg;
+            p[3] = 255;
+        }
+    wgpu::Texture scene = UploadOn(gpu, W, H, px);
+    wgpu::TextureView sv = scene.CreateView();
+    wgpu::TextureDescriptor zd{};
+    zd.size = {(uint32_t)W, (uint32_t)H, 1};
+    zd.format = wgpu::TextureFormat::Depth32Float;
+    zd.sampleCount = 4;
+    zd.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+    wgpu::Texture depth = gpu.Device().CreateTexture(&zd);
+    wgpu::TextureView depthView = depth.CreateView();
+    DofPass dof;
+    auto run = [&](bool weighted, std::vector<uint8_t> &out) {
+        wgpu::CommandEncoder enc = gpu.Device().CreateCommandEncoder();
+        const bool ran = dof.Run(enc, sv, wgpu::TextureFormat::RGBA8Unorm, depthView, 4, W, H, gpu, true, weighted);
+        EXPECT_TRUE(ran);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        out.assign((size_t)W * H * 4, 0);
+        EXPECT_TRUE(gpu.ReadbackTexture(dof.OutputTexture(), W, H, out.data(), out.size()));
+    };
+    // The focal plane's depth from the composite's own constants (t = 0).
+    std::vector<uint8_t> out[2];
+    run(false, out[0]);
+    const float *c = dof.LastCompositeConstants();
+    ASSERT_NE(c[0], 0.0f);
+    const float zFocus = -c[1] / c[0];
+    ASSERT_GT(zFocus, 0.0f);
+    ASSERT_LT(zFocus, 1.0f);
+    // Depth: the far plane everywhere, the focal plane under the bright half.
+    {
+        char wgsl[512];
+        snprintf(wgsl, sizeof(wgsl),
+                 "@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {\n"
+                 "  let x = f32(i32(i & 1u)) * 4.0 - 1.0;\n"
+                 "  let y = f32(i32(i >> 1u)) * 4.0 - 1.0;\n"
+                 "  return vec4f(x, y, %.9f, 1.0);\n}\n", zFocus);
+        wgpu::ShaderSourceWGSL src;
+        src.code = wgsl;
+        wgpu::ShaderModuleDescriptor smd{};
+        smd.nextInChain = &src;
+        wgpu::ShaderModule sm = gpu.Device().CreateShaderModule(&smd);
+        wgpu::DepthStencilState ds{};
+        ds.format = wgpu::TextureFormat::Depth32Float;
+        ds.depthWriteEnabled = wgpu::OptionalBool::True;
+        ds.depthCompare = wgpu::CompareFunction::Always;
+        wgpu::RenderPipelineDescriptor pd{};
+        pd.label = "TestDofFocusDepth";
+        pd.vertex.module = sm;
+        pd.vertex.entryPoint = "vs";
+        pd.depthStencil = &ds;
+        pd.multisample.count = 4;
+        wgpu::RenderPipeline pipe = gpu.Device().CreateRenderPipeline(&pd);
+        wgpu::RenderPassDepthStencilAttachment za{};
+        za.view = depthView;
+        za.depthLoadOp = wgpu::LoadOp::Clear;
+        za.depthStoreOp = wgpu::StoreOp::Store;
+        za.depthClearValue = 1.0f;
+        wgpu::RenderPassDescriptor rp{};
+        rp.label = "TestDofDepth";
+        rp.depthStencilAttachment = &za;
+        wgpu::CommandEncoder enc = gpu.Device().CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = enc.BeginRenderPass(&rp);
+        pass.SetPipeline(pipe);
+        pass.SetScissorRect(0, 0, kEdge, H);
+        pass.Draw(3);
+        pass.End();
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+    }
+    run(false, out[0]);
+    EXPECT_FALSE(dof.LastRunDepthWeighted());
+    run(true, out[1]);
+    EXPECT_TRUE(dof.LastRunDepthWeighted());
+    dof.Terminate();
+    TheDOFProc->UnSet();
+    if (prev) prev->Select(); else RndCam::ClearCurrent();
+    TheUI = savedUI;
+    ui.SetCurrent(nullptr);
+    delete game;
+
+    // Column means of the green over the middle rows.
+    double fringe[2], far[2], fig[2];
+    for (int e = 0; e < 2; e++) {
+        std::vector<double> col(W, 0.0);
+        for (int y = 200; y < 520; y++)
+            for (int x = 0; x < W; x++) col[x] += out[e][((size_t)y * W + x) * 4 + 1] / 320.0;
+        auto mean = [&](int a, int b) { double s = 0; for (int x = a; x < b; x++) s += col[x]; return s / (b - a); };
+        fringe[e] = mean(kEdge + 2, kEdge + 12) - kBg;   // the background beside the figure, lifted
+        far[e] = mean(kEdge + 120, kEdge + 200);
+        fig[e] = mean(kEdge - 60, kEdge - 4);
+    }
+    printf("DC3LookPost depth-weighted DOF: background lift 2-12 px beside the figure %.2f -> %.2f levels; "
+           "far background %.2f -> %.2f; figure %.2f -> %.2f\n",
+           fringe[0], fringe[1], far[0], far[1], fig[0], fig[1]);
+    EXPECT_GT(fringe[0], 15.0) << "retail's depth-blind blur lifts the background beside the figure (non-vacuous)";
+    // Neither lifted nor darkened: the background beside the figure is the
+    // background's own blur (the weighted colour divided back out).
+    EXPECT_NEAR(fringe[1], 0.0, 1.5) << "the depth-weighted blur keeps the figure out of the background";
+    EXPECT_NEAR(far[1], kBg, 1.0) << "the background far from the figure keeps its level";
+    EXPECT_NEAR(far[0], kBg, 1.0);
+    EXPECT_NEAR(fig[1], kFig, 1.0) << "the in-focus figure stays sharp";
+}
+
+// LookSettings::postDofDepthWeight follows the look and its inspection token
+// ({rnd native_look dof_depth_weight_on|off|rule}). Sabotage: the switch
+// ignored -- red.
+TEST(DC3LookDofDepthWeight, FollowsTheLookAndItsSwitch) {
+    {
+        milo::ScopedLookOverride o(milo::LookProfile::Retail);
+        EXPECT_FALSE(milo::Look().postDofDepthWeight) << "retail keeps the depth-blind blur";
+        EXPECT_TRUE(milo::SetLookDofDepthWeightForInspection(1));
+        EXPECT_TRUE(milo::Look().postDofDepthWeight);
+        EXPECT_TRUE(milo::SetLookDofDepthWeightForInspection(-1));
+        EXPECT_FALSE(milo::Look().postDofDepthWeight);
+    }
+    {
+        milo::ScopedLookOverride o(milo::LookProfile::Enhanced);
+        EXPECT_TRUE(milo::Look().postDofDepthWeight);
+        EXPECT_TRUE(milo::SetLookDofDepthWeightForInspection(0));
+        EXPECT_FALSE(milo::Look().postDofDepthWeight);
+        EXPECT_TRUE(milo::SetLookDofDepthWeightForInspection(-1));
+        EXPECT_TRUE(milo::Look().postDofDepthWeight);
+    }
+}
