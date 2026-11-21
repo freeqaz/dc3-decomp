@@ -37,6 +37,7 @@
 #include "platform/rndshape/RndShape.h"
 
 #include "obj/Object.h"
+#include "rndobj/Bitmap.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Env.h"
 #include "rndobj/Mat.h"
@@ -456,6 +457,52 @@ TEST_F(ParticleColorTest, RelativeSpaceVelocityGoesThroughTheInverse) {
     ExpectVec(q.up, 4.0f, 0.0f, 0.0f);
 }
 
+// animate_uvs decides whether a quad reads one tile of its sheet or the whole
+// texture (lane np-look39). The shipped particles vertex shader (xbox_shaders
+// `particles`, every textured permutation) branches on c51.x, which
+// DxParticleSys::DrawShowing loads with mAnimateUVs ? 1 : 0:
+//
+//         setp_eq p0, c51.x
+//   (p0)  max r3.xy, r0.yx, r0.yx          the corner's own 0/1 uv
+//   (!p0) ... mul r3.xy, r0.zw, c50.zw     (corner + (col, row)) / tiles
+//         dp2add o0.x, r3.yx, c20.yx, c20.w
+//
+// so a system with animate_uvs off draws the whole texture on each quad,
+// whatever num_tiles_across/down say. throneroom's smoke.mat systems are such:
+// 6 x 5 tiles, animate_uvs 0, so the original shows 30 small puffs per quad (a
+// fine, dark, speckled haze); the engine drew tile 0 alone, magnified, as flat
+// translucent polygons with hard edges.
+//
+// Sabotage tried (np-look39): DrawParticlesBillboard reading the tile whatever
+// animate_uvs says (the pre-fix code) -> RenderedSheetWithoutAnimateUVsIsWhole
+// fails (one colour where four are expected); ParticleTileUV without its
+// animate_uvs branch -> WholeTextureWithoutAnimateUVs fails as well.
+TEST_F(ParticleColorTest, WholeTextureWithoutAnimateUVs) {
+    const ParticleUVRect whole = ParticleTileUV(7, 6, 5, false);
+    EXPECT_FLOAT_EQ(whole.u0, 0.0f);
+    EXPECT_FLOAT_EQ(whole.v0, 0.0f);
+    EXPECT_FLOAT_EQ(whole.u1, 1.0f);
+    EXPECT_FLOAT_EQ(whole.v1, 1.0f);
+    // animate_uvs on: tile 7 of a 6 x 5 sheet is column 1, row 1.
+    const ParticleUVRect tile = ParticleTileUV(7, 6, 5, true);
+    EXPECT_FLOAT_EQ(tile.u0, 1.0f / 6.0f);
+    EXPECT_FLOAT_EQ(tile.v0, 1.0f / 5.0f);
+    EXPECT_FLOAT_EQ(tile.u1, 2.0f / 6.0f);
+    EXPECT_FLOAT_EQ(tile.v1, 2.0f / 5.0f);
+}
+
+TEST_F(ParticleColorTest, DC3ShapeReadsAnimateUVs) {
+    ASSERT_TRUE(rndshape::PartHasAnimateUVs<RndParticleSys>::value)
+        << "RndParticleSys::AnimateUVs() is not visible to the DC3 shape; every "
+           "system would read one tile of its sheet";
+    RndParticleSys *sys = Hmx::Object::New<RndParticleSys>();
+    sys->SetProperty("animate_uvs", DataNode(0));
+    EXPECT_FALSE(rndshape::PartAnimatesUVs(sys));
+    sys->SetProperty("animate_uvs", DataNode(1));
+    EXPECT_TRUE(rndshape::PartAnimatesUVs(sys));
+    delete sys;
+}
+
 #ifdef MILO_READBACK_GPU_RENDER_TARGET
 // One white particle, opaque kBlendSrc material (1, 0.5, 0.25) under an environ
 // whose ambient is 0.5 grey, drawn into a 64x48 target: the pixel under the
@@ -683,5 +730,103 @@ TEST_F(ParticleColorTest, RenderedVelocityAlignedParticleIsAStreak) {
     EXPECT_NEAR(streak.x0, cx, 1.5f)
         << "the streak should start at the particle and lead along +X, x0 "
         << streak.x0 << " (particle column " << cx << ")";
+}
+// The draw takes it: a 2 x 2 tile sheet whose quadrants differ in green (40,
+// 100, 160, 220), on one particle that covers the view. With animate_uvs off
+// the quad carries the whole sheet, so the four points around the view centre
+// see four different greens; with it on (tile 0) they see one.
+namespace {
+bool RenderTileSheet(bool animate, int green[4]) {
+    const int kTex = 32;
+    std::vector<unsigned char> sheet(kTex * kTex * 4);
+    const unsigned char kGreen[4] = {40, 100, 160, 220};  // TL, TR, BL, BR
+    for (int y = 0; y < kTex; y++)
+        for (int x = 0; x < kTex; x++) {
+            unsigned char *q = &sheet[(y * kTex + x) * 4];
+            q[0] = 0;
+            q[1] = kGreen[(y >= kTex / 2) * 2 + (x >= kTex / 2)];
+            q[2] = 0;
+            q[3] = 0xFF;
+        }
+    RndBitmap bmp;
+    bmp.Create(kTex, kTex, 0, 32, 0, nullptr, (void *)sheet.data(), nullptr);
+    RndTex *sheetTex = Hmx::Object::New<RndTex>();
+    sheetTex->SetBitmap(bmp, nullptr, true, RndTex::kRegular);
+
+    RndTex *tex = Hmx::Object::New<RndTex>();
+    tex->SetBitmap(64, 64, 32, RndTex::kRendered, false, nullptr);
+    RndCam *cam = Hmx::Object::New<RndCam>();
+    cam->SetLocalRot(Hmx::Matrix3::GetIdentity()); // looks down +y, z up
+    cam->SetLocalPos(Vector3(0.0f, 0.0f, 0.0f));
+    cam->SetFrustum(1.0f, 1000.0f, 0.8f, 1.0f);
+    cam->SetTargetTex(tex);
+    RndMat *mat = MakeMat(1.0f, 1.0f, 1.0f, 1.0f, BaseMaterial::kBlendSrc, false);
+    mat->SetZMode(kZModeDisable);
+    mat->SetDiffuseTex(sheetTex);
+    RndParticleSys *sys = Hmx::Object::New<RndParticleSys>();
+    sys->SetMat(mat);
+    sys->SetPool(4, RndParticleSys::kBasic);
+    sys->SetProperty("num_tiles_across", DataNode(2));
+    sys->SetProperty("num_tiles_down", DataNode(2));
+    sys->SetProperty("num_tiles_total", DataNode(4));
+    sys->SetProperty("animate_uvs", DataNode(animate ? 1 : 0));
+    sys->SetBoxExtent(Vector3(0.0f, 0.0f, 0.0f), Vector3(0.0f, 0.0f, 0.0f));
+    sys->SetLocalPos(Vector3(0.0f, 10.0f, 0.0f));
+    PartOverride po;
+    po.mask = 1 | 2 | 4 | 0x10;
+    po.life = 1000.0f;
+    po.speed = 0.0f;
+    po.size = 8.0f; // most of the view at 10 units
+    po.startColor = Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f);
+    sys->ExplicitParticles(1, true, po);
+    RndParticle *p = sys->ActiveParticles();
+    bool ok = p != nullptr;
+    if (ok) {
+        p->angle = 0.0f;
+        p->swingArm = 0.0f;
+        p->mCurrentTileIndex = 0;
+        TheRnd.BeginDrawing();
+        RndCam *prev = RndCam::Current();
+        cam->Select();
+        sys->DrawShowing();
+        cam->SetTargetTex(nullptr);
+        if (prev) prev->Select();
+        TheRnd.EndDrawing();
+        std::vector<uint8_t> px;
+        int w = 0, h = 0;
+        ok = ReadbackGpuRenderTarget(tex, px, w, h) && w == 64 && h == 64;
+        // Points a quarter of the quad off centre in each direction (the quad
+        // spans about 60 px of the 64 here).
+        const int pts[4][2] = {{24, 24}, {40, 24}, {24, 40}, {40, 40}};
+        for (int i = 0; ok && i < 4; i++) green[i] = px[(pts[i][1] * w + pts[i][0]) * 4 + 1];
+    }
+    delete sys;
+    delete mat;
+    delete cam;
+    delete tex;
+    delete sheetTex;
+    return ok;
+}
+} // namespace
+
+TEST_F(ParticleColorTest, RenderedSheetWithoutAnimateUVsIsWhole) {
+    if (IsSkipped()) return;
+    if (!gWgpuRnd || !gWgpuRnd->Gpu().IsReady())
+        GTEST_SKIP() << "no GPU device (MILO_NORENDER or no adapter)";
+    int whole[4] = {}, tiled[4] = {};
+    ASSERT_TRUE(RenderTileSheet(false, whole)) << "no GPU render target";
+    ASSERT_TRUE(RenderTileSheet(true, tiled));
+    // animate_uvs off: the whole sheet, its four quadrants in place.
+    const int expect[4] = {40, 100, 160, 220};
+    for (int i = 0; i < 4; i++)
+        EXPECT_NEAR(whole[i], expect[i], 4)
+            << "animate_uvs 0: point " << i << " should see quadrant " << i
+            << " of the whole texture; greens " << whole[0] << "," << whole[1] << ","
+            << whole[2] << "," << whole[3];
+    // animate_uvs on, tile 0: the top-left quadrant everywhere.
+    for (int i = 0; i < 4; i++)
+        EXPECT_NEAR(tiled[i], 40, 4)
+            << "animate_uvs 1: tile 0 alone; greens " << tiled[0] << "," << tiled[1] << ","
+            << tiled[2] << "," << tiled[3];
 }
 #endif
