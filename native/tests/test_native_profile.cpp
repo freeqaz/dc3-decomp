@@ -91,7 +91,7 @@ TEST(Dc3ProfileTest, DevTableCarriesTheDeveloperDefaults) {
         {"DC3_DEV_OPTIONS", "1"}, {"DC3_DEV_MENU", "1"},  {"DC3_RND_OVERLAYS", "log"},
         {"DC3_HTTP", "1"},        {"DC3_TEL", "api"},     {"DC3_TAG_MODALS", "dev"},
         {"MILO_INPUT_LOG", "1"},  {"DC3_MOVE_RATING_LOG", "1"}, {"MILO_PERF", "1"},
-        {"DC3_DLC", "1"},
+        {"DC3_DLC", "1"},         {"DC3_BINDING_LOG", "1"},
     };
     std::map<std::string, std::string> have;
     for (const Dc3ProfileDefault &row : Rows()) have[row.name] = row.value;

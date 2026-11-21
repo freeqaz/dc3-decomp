@@ -109,6 +109,10 @@ static const Dc3ProfileDefault kDc3DevDefaults[] = {
      "a Joypad: line per button press"},
     {"DC3_MOVE_RATING_LOG", "1", false, "one DC3 MOVE_RATING line per passed move",
      "a DC3 MOVE_RATING line per scored move"},
+    {"DC3_BINDING_LOG", "1", false,
+     "a DC3 SCORING line when a player is bound to another body or a skeleton "
+     "slot changes hands (at most 20 per 5 s)",
+     "a DC3 SCORING line when a player's body changes"},
     {"MILO_PERF", "1", false, "a [PERF] fps/frame-time line every 5 s",
      "a [PERF] frame-time line every 5 s", true},
     // Installed content, as on a 360 with packages on its drive: the original
