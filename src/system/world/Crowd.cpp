@@ -145,13 +145,15 @@ namespace {
     // ground at the member's feet (its Character's origin once Apply3DCharXfm
     // has placed it: the instance sits at half the member's height), as wide
     // as about a shoulder (0.2 x mHeight half extent side to side, 0.13 x front
-    // to back), lifted 0.005 x mHeight off its ground plane so the floor's own
-    // depth does not hide it. Normal draws only: not the occlusion-depth pass,
+    // to back), lifted 0.03 x mHeight (2.25 units at the shipped 75) off the
+    // member's origin: the placements sink the origin into the floor by up to
+    // about 2 units (streetside's sidewalk members stand at z 4.0 to 4.6), and
+    // a shadow under the floor's own depth is hidden. Normal draws only: not the occlusion-depth pass,
     // and the renderer itself refuses anything but the main frame pass (no
     // reflection, impostor or shadow-map render).
     const float kShadowHalfSide = 0.2f;
     const float kShadowHalfDepth = 0.13f;
-    const float kShadowLift = 0.005f;
+    const float kShadowLift = 0.03f;
 
     void NativeCrowdContactShadow(Character *c, float height) {
         if (TheRnd.DrawMode() != Rnd::kDrawNormal || !milo::Look().crowdContactShadow)
