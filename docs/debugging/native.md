@@ -778,7 +778,9 @@ highlight and selected rows. So under `faithful`:
 - an idle exit that follows a press waits `DC3_CONTROLLER_HOLD_MS` (default
   300000) instead of the helpbar's 5000. The exit line logs the timeout in
   force (`timeout_ms=300000`). The handover when a camera comes up with no
-  key touched is still the helpbar's 5 s;
+  key touched is still the helpbar's 5 s; a key touched within the hold while
+  the policy was still `forced` keeps the menus through it
+  (`Dc3ControllerHoldNoteHandover`);
 - raising both hands (the image's `HandsUpGestureFilter`, 1.2 s, at least
   1.5 s after the last press) leaves controller mode at once, logged as
   `DC3 ControllerMode: both hands raised, the hands take the menus`. That

@@ -479,6 +479,7 @@ int Dc3ControllerHoldMs() {
 namespace {
 // A press restarted ShellInput's idle timer since the hands last had the menus.
 bool sHoldPressed = false;
+std::chrono::steady_clock::time_point sHoldPressedAt;
 // This raise of the hands already gave them the menus (until the hands drop).
 bool sHoldHandsUpSpent = false;
 // A raise takes the menus only this long after the last press: the person at
@@ -506,7 +507,25 @@ bool HoldOn() { return !Dc3ControllerModeForced() && Dc3ControllerHoldMs() > 0; 
 
 // Every pad/keyboard press of the run (HamUI::OnMsg(ButtonDownMsg), which also
 // restarts ShellInput's idle timer).
-void Dc3ControllerHoldNotePress() { sHoldPressed = true; }
+void Dc3ControllerHoldNotePress() {
+    sHoldPressed = true;
+    sHoldPressedAt = std::chrono::steady_clock::now();
+}
+
+// The auto policy just went forced -> faithful (a camera came up) and restarted
+// the idle timer (NativeControllerModePolicyTick).  Forced counts presses too:
+// a key touched within the hold keeps the menus through the handover, with the
+// notice; one older than the hold does not, and the handover is the image's 5 s.
+void Dc3ControllerHoldNoteHandover() {
+    if (!sHoldPressed || !HoldOn())
+        return;
+    auto idle = std::chrono::steady_clock::now() - sHoldPressedAt;
+    if (idle >= std::chrono::milliseconds(Dc3ControllerHoldMs())) {
+        sHoldPressed = false;
+        return;
+    }
+    Dc3ControllerHoldNoteTaken();
+}
 
 // ShellInput's idle exit: the timeout to use now, given the helpbar's.
 int Dc3ControllerIdleTimeoutMs(int imageMs) {
@@ -518,7 +537,7 @@ int Dc3ControllerIdleTimeoutMs(int imageMs) {
 // A press outside controller mode just took the menus
 // (ShellInput::OnMsg(ButtonDownMsg)): say how the hands get them back.
 void Dc3ControllerHoldNoteTaken() {
-    sHoldPressed = true;
+    Dc3ControllerHoldNotePress();
     if (!HoldOn() || sHoldTakenNoticesLeft <= 0)
         return;
     sHoldTakenNoticesLeft--;

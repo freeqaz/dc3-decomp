@@ -109,6 +109,7 @@ int Dc3ControllerHoldMs();
 void Dc3ControllerHoldNotePress();            // every press (HamUI)
 int Dc3ControllerIdleTimeoutMs(int imageMs);  // ShellInput's idle exit, now
 void Dc3ControllerHoldNoteTaken();            // a press took the menus: the notice
+void Dc3ControllerHoldNoteHandover();         // auto went forced -> faithful
 // Once per ShellInput::Poll; true = the raised hands take the menus now.
 bool Dc3ControllerHoldPoll(bool inControllerMode, bool handsUp, float idleMs);
 bool Dc3ControllerHoldHandsUpSpent();         // this raise already did
