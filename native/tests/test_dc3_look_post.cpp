@@ -1817,21 +1817,26 @@ TEST(DC3LookDofNear, FollowsTheLookAndItsSwitch) {
 // it); an on token writing the discrete value only -- red (forced on reads off
 // on a non-discrete adapter).
 TEST(DC3LookDofNear, TheNearFieldFollowsTheAdapterClass) {
+    // The discrete class and the other non-discrete one (np-look49; the Apple
+    // class is LookAdapterClasses.*).
+    auto C = [](bool discrete) {
+        return discrete ? milo::LookAdapterClass::Discrete : milo::LookAdapterClass::OtherNonDiscrete;
+    };
     {
         milo::ScopedLookOverride o(milo::LookProfile::Enhanced);
         const milo::LookSettings rule = milo::Look();
-        EXPECT_TRUE(milo::LookDofNearField(rule, true)) << "a discrete GPU has the near field";
-        EXPECT_FALSE(milo::LookDofNearField(rule, false)) << "anything else does not, until it is timed";
-        EXPECT_TRUE(milo::LookDofNearSpread(rule, true)) << "a discrete GPU spreads";
-        EXPECT_FALSE(milo::LookDofNearSpread(rule, false)) << "anything else does not, until it is timed";
+        EXPECT_TRUE(milo::LookDofNearField(rule, C(true))) << "a discrete GPU has the near field";
+        EXPECT_FALSE(milo::LookDofNearField(rule, C(false))) << "anything else does not, until it is timed";
+        EXPECT_TRUE(milo::LookDofNearSpread(rule, C(true))) << "a discrete GPU spreads";
+        EXPECT_FALSE(milo::LookDofNearSpread(rule, C(false))) << "anything else does not, until it is timed";
         for (bool spread : {false, true}) {
             auto get = [&](bool discrete) {
-                return spread ? milo::LookDofNearSpread(milo::Look(), discrete)
-                              : milo::LookDofNearField(milo::Look(), discrete);
+                return spread ? milo::LookDofNearSpread(milo::Look(), C(discrete))
+                              : milo::LookDofNearField(milo::Look(), C(discrete));
             };
             auto other = [&](bool discrete) {
-                return spread ? milo::LookDofNearField(milo::Look(), discrete)
-                              : milo::LookDofNearSpread(milo::Look(), discrete);
+                return spread ? milo::LookDofNearField(milo::Look(), C(discrete))
+                              : milo::LookDofNearSpread(milo::Look(), C(discrete));
             };
             const bool otherDiscrete = other(true), otherElse = other(false);
             EXPECT_TRUE(milo::SetLookDofNearForInspection(1, spread));
@@ -1850,8 +1855,8 @@ TEST(DC3LookDofNear, TheNearFieldFollowsTheAdapterClass) {
     for (milo::LookProfile p : {milo::LookProfile::Retail, milo::LookProfile::Native}) {
         milo::ScopedLookOverride o(p);
         for (bool discrete : {false, true}) {
-            EXPECT_FALSE(milo::LookDofNearField(milo::Look(), discrete)) << "only the enhanced look has it";
-            EXPECT_FALSE(milo::LookDofNearSpread(milo::Look(), discrete));
+            EXPECT_FALSE(milo::LookDofNearField(milo::Look(), C(discrete))) << "only the enhanced look has it";
+            EXPECT_FALSE(milo::LookDofNearSpread(milo::Look(), C(discrete)));
         }
     }
 }

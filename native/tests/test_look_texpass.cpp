@@ -202,9 +202,9 @@ TEST(LookTexPass, EnhancedTurnsOnStep1RetailAndNativeNot) {
         const milo::LookSettings &enh = milo::Look();
         // Discrete GPUs only until an integrated GPU's timing says it fits.
         EXPECT_TRUE(enh.texPassMsaa && !enh.texPassMsaaIntegrated);
-        EXPECT_TRUE(milo::LookTexPassMsaa(enh, true) && !milo::LookTexPassMsaa(enh, false));
+        EXPECT_TRUE(milo::LookTexPassMsaa(enh, milo::LookAdapterClass::Discrete) && !milo::LookTexPassMsaa(enh, milo::LookAdapterClass::OtherNonDiscrete));
         EXPECT_TRUE(enh.texPassScale && !enh.texPassScaleIntegrated);
-        EXPECT_TRUE(milo::LookTexPassScale(enh, true) && !milo::LookTexPassScale(enh, false));
+        EXPECT_TRUE(milo::LookTexPassScale(enh, milo::LookAdapterClass::Discrete) && !milo::LookTexPassScale(enh, milo::LookAdapterClass::OtherNonDiscrete));
     }
     for (milo::LookProfile p : {milo::LookProfile::Retail, milo::LookProfile::Native}) {
         milo::ScopedLookOverride look(p);
@@ -751,3 +751,232 @@ TEST_F(TexPassScaleTest, TheSizeSetterTakesEffectAtTheNextClearingPass) {
 #endif
 
 } // namespace
+
+// ---- np-look49: three adapter classes for the look's per-adapter rules ----
+// The four rules (the depth of field's near field and near spread, the texture
+// pass's MSAA and size) are decided by milo::LookAdapterClass: discrete,
+// Apple (not discrete, vendor 0x106B, Metal), other non-discrete. Everything
+// that sizes the frame keeps GpuDevice::IsDiscreteGpu() and is not tested
+// here. Sabotages, each seen red and reverted: the Metal condition dropped ->
+// TheClassificationTable (MoltenVK read Apple); the vendor condition dropped
+// -> TheClassificationTable (Intel graphics on Metal read Apple); other
+// non-discrete given the Apple msaa value -> OtherNonDiscreteIsTodays,
+// TheSettersWriteAllThreeClasses, TheClassLineWording and
+// EnhancedTurnsOnStep1RetailAndNativeNot; other non-discrete given the Apple
+// near field -> OtherNonDiscreteIsTodays, TheClassLineWording and
+// DC3LookDofNear.TheNearFieldFollowsTheAdapterClass; the msaa setter not
+// writing the Apple value -> TheSettersWriteAllThreeClasses; the scale picker
+// returning the discrete value for Apple -> TheAppleValues,
+// TheClassLineWording.
+namespace {
+
+using milo::LookAdapterClass;
+using milo::LookAdapterType;
+using milo::LookProfile;
+
+// One rule's outcome on each class.
+struct ClassOutcomes {
+    bool nearField, nearSpread, texPassMsaa, texPassScale;
+};
+
+ClassOutcomes OutcomesFor(LookAdapterClass c) {
+    const milo::LookSettings &s = milo::Look();
+    return {milo::LookDofNearField(s, c), milo::LookDofNearSpread(s, c), milo::LookTexPassMsaa(s, c),
+            milo::LookTexPassScale(s, c)};
+}
+
+std::string Describe(const ClassOutcomes &o) {
+    char b[96];
+    snprintf(b, sizeof(b), "near field %d, near spread %d, msaa %d, scale %d", (int)o.nearField,
+             (int)o.nearSpread, (int)o.texPassMsaa, (int)o.texPassScale);
+    return b;
+}
+
+bool Same(const ClassOutcomes &a, const ClassOutcomes &b) {
+    return a.nearField == b.nearField && a.nearSpread == b.nearSpread && a.texPassMsaa == b.texPassMsaa
+           && a.texPassScale == b.texPassScale;
+}
+
+const LookProfile kProfiles[] = {LookProfile::Enhanced, LookProfile::Retail, LookProfile::Native};
+
+}  // namespace
+
+// The classification, walked without a device.
+TEST(LookAdapterClasses, TheClassificationTable) {
+    const uint32_t kNvidia = 0x10DE, kAmd = 0x1002, kIntel = 0x8086, kApple = 0x106B;
+    struct Row {
+        LookAdapterType type;
+        uint32_t vendor;
+        bool metal;
+        LookAdapterClass want;
+        const char *what;
+    };
+    const Row rows[] = {
+        {LookAdapterType::Discrete, kNvidia, false, LookAdapterClass::Discrete, "an NVIDIA card on Vulkan"},
+        {LookAdapterType::Discrete, kAmd, true, LookAdapterClass::Discrete, "an Intel Mac's Radeon on Metal"},
+        {LookAdapterType::Discrete, kApple, true, LookAdapterClass::Discrete, "a discrete adapter stays discrete"},
+        {LookAdapterType::Integrated, kApple, true, LookAdapterClass::Apple, "Apple silicon on Metal"},
+        {LookAdapterType::Integrated, kApple, false, LookAdapterClass::OtherNonDiscrete,
+         "Apple silicon through MoltenVK (Vulkan)"},
+        {LookAdapterType::Integrated, kIntel, true, LookAdapterClass::OtherNonDiscrete,
+         "an Intel Mac's Intel graphics on Metal"},
+        {LookAdapterType::Integrated, kAmd, false, LookAdapterClass::OtherNonDiscrete, "the 890M on Vulkan"},
+        {LookAdapterType::Cpu, kApple, true, LookAdapterClass::OtherNonDiscrete, "a CPU adapter, even Apple's"},
+        {LookAdapterType::Cpu, kNvidia, false, LookAdapterClass::OtherNonDiscrete, "a CPU adapter"},
+        {LookAdapterType::Unknown, kApple, true, LookAdapterClass::OtherNonDiscrete,
+         "an unknown type, even Apple's"},
+        {LookAdapterType::Unknown, 0, false, LookAdapterClass::OtherNonDiscrete, "an unknown type"},
+        {LookAdapterType::Integrated, 0, true, LookAdapterClass::OtherNonDiscrete, "vendor 0 on Metal"},
+        {LookAdapterType::Integrated, 0, false, LookAdapterClass::OtherNonDiscrete, "vendor 0 on Vulkan"},
+    };
+    for (const Row &r : rows)
+        EXPECT_EQ((int)milo::ClassifyLookAdapter(r.type, r.vendor, r.metal), (int)r.want) << r.what;
+    milo::LookAdapterFacts none;  // a device that never got an adapter (the web build too)
+    EXPECT_EQ((int)milo::ClassifyLookAdapter(none), (int)LookAdapterClass::OtherNonDiscrete);
+    EXPECT_EQ((int)GpuDevice().LookClass(), (int)LookAdapterClass::OtherNonDiscrete)
+        << "a device with no adapter is other non-discrete";
+}
+
+// The pass-for-pass promise for the handheld and the web: the other
+// non-discrete class gets, in every profile and for each of the four rules,
+// exactly what today's one non-discrete class (the ...Integrated values) got,
+// and the discrete class what it got. The table is today's values, written
+// out: a change to either class's value has to change this table too.
+TEST(LookAdapterClasses, OtherNonDiscreteIsTodays) {
+    struct Row {
+        LookProfile profile;
+        ClassOutcomes discrete, other;
+    };
+    const Row today[] = {
+        {LookProfile::Enhanced, {true, true, true, true}, {false, false, false, false}},
+        {LookProfile::Retail, {false, false, false, false}, {false, false, false, false}},
+        {LookProfile::Native, {false, false, false, false}, {false, false, false, false}},
+    };
+    for (const Row &r : today) {
+        milo::ScopedLookOverride look(r.profile);
+        const milo::LookSettings &s = milo::Look();
+        const ClassOutcomes other = OutcomesFor(LookAdapterClass::OtherNonDiscrete);
+        const ClassOutcomes integrated = {s.postDofNearFieldIntegrated, s.postDofNearSpreadIntegrated,
+                                          s.texPassMsaaIntegrated, s.texPassScaleIntegrated};
+        EXPECT_TRUE(Same(other, r.other)) << milo::LookProfileName(r.profile) << ": other non-discrete "
+                                          << Describe(other) << ", today " << Describe(r.other);
+        EXPECT_TRUE(Same(other, integrated)) << milo::LookProfileName(r.profile)
+                                             << ": the picker is the ...Integrated values";
+        const ClassOutcomes discrete = OutcomesFor(LookAdapterClass::Discrete);
+        EXPECT_TRUE(Same(discrete, r.discrete)) << milo::LookProfileName(r.profile) << ": discrete "
+                                                << Describe(discrete) << ", today " << Describe(r.discrete);
+    }
+}
+
+// The Apple class's values, one table: enhanced near field on, near spread
+// on, msaa on, scale off (as of np-look49, timed on an M3 by the landing
+// session; the scale is not yet decided); retail and native all off. A
+// change to LookProfile.cpp's kApple* constants changes this table.
+TEST(LookAdapterClasses, TheAppleValues) {
+    struct Row {
+        LookProfile profile;
+        ClassOutcomes apple;
+    };
+    const Row kApple[] = {
+        {LookProfile::Enhanced, {true, true, true, false}},
+        {LookProfile::Retail, {false, false, false, false}},
+        {LookProfile::Native, {false, false, false, false}},
+    };
+    for (const Row &r : kApple) {
+        milo::ScopedLookOverride look(r.profile);
+        const ClassOutcomes apple = OutcomesFor(LookAdapterClass::Apple);
+        EXPECT_TRUE(Same(apple, r.apple)) << milo::LookProfileName(r.profile) << ": Apple " << Describe(apple)
+                                          << ", the table " << Describe(r.apple);
+    }
+}
+
+// Every inspection setter of the four rules writes all three classes: on
+// forces each on, off each off, and the rule (-1) returns each class to the
+// profile's own value.
+TEST(LookAdapterClasses, TheSettersWriteAllThreeClasses) {
+    const LookAdapterClass classes[] = {LookAdapterClass::Discrete, LookAdapterClass::Apple,
+                                        LookAdapterClass::OtherNonDiscrete};
+    const char *names[] = {"discrete", "Apple", "other"};
+    struct Rule {
+        const char *what;
+        bool (*set)(int);
+        bool (*get)(const milo::LookSettings &, LookAdapterClass);
+    };
+    const Rule rules[] = {
+        {"near field", [](int m) { return milo::SetLookDofNearForInspection(m, false); }, milo::LookDofNearField},
+        {"near spread", [](int m) { return milo::SetLookDofNearForInspection(m, true); }, milo::LookDofNearSpread},
+        {"texture pass msaa", milo::SetLookTexPassMsaaForInspection, milo::LookTexPassMsaa},
+        {"texture pass scale", milo::SetLookTexPassScaleForInspection, milo::LookTexPassScale},
+    };
+    for (LookProfile p : {LookProfile::Enhanced, LookProfile::Retail}) {
+        milo::ScopedLookOverride look(p);
+        for (const Rule &r : rules) {
+            bool profiles[3];
+            for (int i = 0; i < 3; i++) profiles[i] = r.get(milo::Look(), classes[i]);
+            for (int mode : {1, 0}) {
+                ASSERT_TRUE(r.set(mode));
+                for (int i = 0; i < 3; i++)
+                    EXPECT_EQ(r.get(milo::Look(), classes[i]), mode != 0)
+                        << milo::LookProfileName(p) << " " << r.what << " " << mode << " on " << names[i];
+            }
+            ASSERT_TRUE(r.set(-1));
+            for (int i = 0; i < 3; i++)
+                EXPECT_EQ(r.get(milo::Look(), classes[i]), profiles[i])
+                    << milo::LookProfileName(p) << " " << r.what << " the rule on " << names[i];
+        }
+    }
+    // The rule is the profile's even after a token moved every class.
+    milo::ScopedLookOverride look(LookProfile::Enhanced);
+    ASSERT_TRUE(milo::SetLookTexPassMsaaForInspection(0));
+    ASSERT_TRUE(milo::SetLookTexPassMsaaForInspection(-1));
+    EXPECT_TRUE(milo::LookTexPassMsaa(milo::Look(), LookAdapterClass::Apple)) << "enhanced's Apple msaa is on";
+    EXPECT_FALSE(milo::LookTexPassMsaa(milo::Look(), LookAdapterClass::OtherNonDiscrete));
+    {
+        milo::ScopedLookOverride native(LookProfile::Native);
+        for (const Rule &r : rules) EXPECT_FALSE(r.set(1)) << "Native refuses " << r.what;
+    }
+}
+
+// The class line's wording (other sessions' scripts grep it).
+TEST(LookAdapterClasses, TheClassLineWording) {
+    milo::ScopedLookOverride look(LookProfile::Enhanced);
+    auto line = [](LookAdapterType type, uint32_t vendor, bool metal, const char *backend) {
+        milo::LookAdapterFacts f;
+        f.type = type;
+        f.vendorId = vendor;
+        f.metalBackend = metal;
+        f.backendName = backend;
+        testing::internal::CaptureStderr();
+        milo::PrintLookAdapterClass(f);
+        return testing::internal::GetCapturedStderr();
+    };
+    auto begins = [](const std::string &s, const char *prefix) { return s.rfind(prefix, 0) == 0; };
+    const std::string discrete = line(LookAdapterType::Discrete, 0x10DE, false, "Vulkan");
+    EXPECT_TRUE(begins(discrete, "[look] adapter class: discrete GPU;")) << discrete;
+    EXPECT_EQ(discrete.find("not a discrete GPU"), std::string::npos) << discrete;
+    EXPECT_NE(discrete.find("; depth of field near field 1, near spread 1, texture pass msaa 1, scale 1 "
+                            "[type discrete, vendor 0x10de, backend Vulkan] (profile enhanced)\n"),
+              std::string::npos)
+        << discrete;
+    const std::string apple = line(LookAdapterType::Integrated, 0x106B, true, "Metal");
+    EXPECT_TRUE(begins(apple, "[look] adapter class: Apple GPU (not a discrete GPU);")) << apple;
+    EXPECT_NE(apple.find("; depth of field near field 1, near spread 1, texture pass msaa 1, scale 0 "
+                         "[type integrated, vendor 0x106b, backend Metal] (profile enhanced)\n"),
+              std::string::npos)
+        << apple;
+    const std::string other = line(LookAdapterType::Integrated, 0x1002, false, "Vulkan");
+    EXPECT_TRUE(begins(other, "[look] adapter class: not a discrete GPU;")) << other;
+    EXPECT_NE(other.find("; depth of field near field 0, near spread 0, texture pass msaa 0, scale 0 "
+                         "[type integrated, vendor 0x1002, backend Vulkan] (profile enhanced)\n"),
+              std::string::npos)
+        << other;
+    const std::string cpu = line(LookAdapterType::Cpu, 0, false, "Vulkan");
+    EXPECT_TRUE(begins(cpu, "[look] adapter class: not a discrete GPU;")) << cpu;
+    EXPECT_NE(cpu.find("[type cpu, vendor 0x0000, backend Vulkan]"), std::string::npos) << cpu;
+    // The setters' lines keep their words and gain the Apple value.
+    testing::internal::CaptureStderr();
+    milo::SetLookTexPassMsaaForInspection(-1);
+    const std::string set = testing::internal::GetCapturedStderr();
+    EXPECT_EQ(set, "[look] texture pass msaa 1, 0 on a non-discrete GPU, 1 on an Apple GPU (the rule) "
+                   "(inspection, profile enhanced)\n");
+}
