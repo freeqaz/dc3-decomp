@@ -513,7 +513,7 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
                             last = det->LastDetectFrac(i1);
                         MILO_LOG(
                             "DC3 MOVE_RATING p=%d measure=%d move=%s rating=%s lastfrac=%.4f "
-                            "score=%d diff=%s songbeat=%d\n",
+                            "score=%d diff=%s songbeat=%d body=%d\n",
                             i1,
                             i5,
                             current->Name(),
@@ -521,7 +521,8 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
                             last,
                             (sc && sc->Type() == kDataInt) ? sc->Int() : -1,
                             DifficultyToSym(player_data->GetDifficulty()).Str(),
-                            currentBeat
+                            currentBeat,
+                            player_data->GetSkeletonTrackingID()
                         );
                     }
                     // Observed-trigger evidence for the default-on runtime gate:

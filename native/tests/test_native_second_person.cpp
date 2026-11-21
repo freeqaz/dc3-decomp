@@ -332,7 +332,10 @@ struct SessionRun {
 
 // Real time, headless with no GPU; plays until the pause screen, or gameplay
 // telemetry past `stopSecs`, or the bounded wait runs out.
-SessionRun RunStandInSession(double stopSecs) {
+// `logEnv`: " DC3_SCORING_DEBUG=1" for every binding line and the per-second
+// counters; "" for the dev profile's own (DC3_BINDING_LOG); " DC3_BINDING_LOG=0"
+// for neither.
+SessionRun RunStandInSession(double stopSecs, const char *logEnv = " DC3_SCORING_DEBUG=1") {
     SessionRun r;
     std::string dir = BinaryDir();
     std::string bin = dir + "/dc3-native";
@@ -367,7 +370,7 @@ SessionRun RunStandInSession(double stopSecs) {
     sh << kShellTimeoutLookup << "cd " << dir << " || exit 1; "
        << "( MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1"
        << " MILO_MAX_FRAMES=0 DC3_TEL=1 DC3_TEL_INTERVAL=15 DC3_CONTROLLER_MODE=forced"
-       << " DC3_SCORING_DEBUG=1"
+       << logEnv
        << " DC3_CACHE_DIR=" << R << "/cache DC3_SAVE_DIR=" << R << "/saves"
        << " MILO_INPUT_SCRIPT=" << route << " DC3_POSE=external"
        << " DC3_POSE_PERFORM=session:" << session << " DC3_POSE_SESSION_SYNC=song"
@@ -425,6 +428,8 @@ double SongSecs(const std::string &sample) {
 class ReacquiredDancerTest : public PerformFixture {};
 class SecondPersonPerformTest : public PerformFixture {};
 class LostPlayerStandInTest : public PerformFixture {};
+class BindingLogTest : public PerformFixture {};
+class BindingLogSabotageTest : public PerformFixture {};
 
 } // namespace
 
@@ -560,4 +565,84 @@ TEST_F(LostPlayerStandInTest, TheStandInIsNobodyAgainAndTheSongNeverPauses) {
     EXPECT_GE(all.back().first, 0) << "player 1 not on a skeleton at the stop; " << where;
     EXPECT_EQ(r.output.find("-> tracking id 9 ", released), std::string::npos)
         << "the stand-in was bound again after she was released; " << where;
+}
+
+// The who-is-who lines are in a playtest's log without DC3_SCORING_DEBUG
+// (DC3_BINDING_LOG, a dev-profile default; PLAN H-158).  Playtest 2026-11-20:
+// somebody walked through a two-player song, and the log held neither the
+// bindings nor which body a rating was taken on.
+//
+// The same recorded session as LostPlayerStandInTest, with nothing set: the
+// stand-in, the player's return and her new body are each a line, every
+// MOVE_RATING names the body it was taken on, and the per-second counters of
+// DC3_SCORING_DEBUG are not there.
+TEST_F(BindingLogTest, APlaytestLogSaysWhichBodyEachPlayerWasScoredOn) {
+    SessionRun r = RunStandInSession(36.0, "");
+    ASSERT_TRUE(r.setupError.empty()) << r.setupError;
+    std::string where = TestTempFile("binding_log"); // removed at exit on a pass
+    {
+        std::ofstream f(where);
+        if (f.is_open())
+            f << r.driver << r.output;
+    }
+    size_t game = r.output.find("Screen 'game_screen' Enter");
+    ASSERT_NE(game, std::string::npos) << "never reached gameplay; " << r.driver << where;
+    ASSERT_GE(r.LastPlayingSecs(), 35.0) << "the song did not play on to the stop; " << r.driver << where;
+
+    size_t standIn = r.output.find("DC3 SCORING: bind p0 -> tracking id 9 ", game);
+    ASSERT_NE(standIn, std::string::npos) << "the stand-in's binding is not in the log; " << where;
+    size_t back = r.output.find("DC3 SCORING: bind p0 -> tracking id 5 ", standIn);
+    EXPECT_NE(back, std::string::npos) << "the player's return is not in the log; " << where;
+    EXPECT_NE(r.output.find("DC3 SCORING: stand-in tracking id 9 released by p0", standIn),
+        std::string::npos)
+        << where;
+    size_t near = r.output.find("DC3 SCORING: bind p0 -> tracking id 7 ", standIn);
+    EXPECT_NE(near, std::string::npos) << "the player's new body is not in the log; " << where;
+    EXPECT_NE(r.output.find("DC3 SCORING: slot "), std::string::npos) << where;
+    EXPECT_NE(r.output.find("DC3 SCORING: player->slot binding p0="), std::string::npos) << where;
+
+    // Every rating names a body, and they are the player's own two: 5 until
+    // she left the picture, 7 where she stood afterwards.
+    int ratings = 0, unnamed = 0, onFirst = 0, onNew = 0;
+    {
+        std::istringstream ss(r.output);
+        std::string line;
+        while (std::getline(ss, line)) {
+            if (line.compare(0, 20, "DC3 MOVE_RATING p=0 "))
+                continue;
+            ratings++;
+            size_t at = line.find(" body=");
+            if (at == std::string::npos) {
+                unnamed++;
+                continue;
+            }
+            int body = atoi(line.c_str() + at + 6);
+            if (body == 5)
+                onFirst++;
+            if (body == 7)
+                onNew++;
+        }
+    }
+    EXPECT_GT(ratings, 0) << "no DC3 MOVE_RATING line for player 1; " << where;
+    EXPECT_EQ(unnamed, 0) << "a DC3 MOVE_RATING line without body=; " << where;
+    EXPECT_GT(onFirst, 0) << "no rating on tracking id 5, the player until 20 s; " << where;
+    EXPECT_GT(onNew, 0) << "no rating on tracking id 7, the player from 30 s; " << where;
+
+    // The developer's floods stay the developer's.
+    EXPECT_EQ(r.output.find("DC3 SCORING: newFrames="), std::string::npos) << where;
+    EXPECT_EQ(r.output.find("DC3 SCORING: auto-assign rebinds"), std::string::npos) << where;
+    EXPECT_EQ(r.output.find("DC3 SCORING: move_passed"), std::string::npos) << where;
+}
+
+// The standing negative control: with the log switched off the same run, past
+// the stand-in at 20 s, prints none of it -- so the test above is reading the
+// default, not something every run prints.
+TEST_F(BindingLogSabotageTest, TheSameRunWithTheLogOffSaysNothing) {
+    SessionRun r = RunStandInSession(26.0, " DC3_BINDING_LOG=0");
+    ASSERT_TRUE(r.setupError.empty()) << r.setupError;
+    size_t game = r.output.find("Screen 'game_screen' Enter");
+    ASSERT_NE(game, std::string::npos) << "never reached gameplay; " << r.driver;
+    ASSERT_GE(r.LastPlayingSecs(), 25.0) << "the song did not play past the stand-in; " << r.driver;
+    EXPECT_EQ(r.output.find("DC3 SCORING:"), std::string::npos)
+        << "a DC3 SCORING: line with DC3_BINDING_LOG=0 and no DC3_SCORING_DEBUG";
 }
