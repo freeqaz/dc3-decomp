@@ -1799,6 +1799,41 @@ TEST(DC3LookDofNear, FollowsTheLookAndItsSwitch) {
     }
 }
 
+// The spread is decided by adapter class, as supersampling is
+// (milo::LookDofNearSpread): the composite pays one more texture read at every
+// full-size pixel for it. Enhanced: on for a discrete GPU, off for anything
+// else until a handheld's timing says it fits (the second expectation below is
+// that default; it moves with LookProfile.cpp when the timing is in). The field
+// is on for every adapter. The on and off tokens force the spread on any GPU;
+// the rule token returns each class to the profile's. Sabotages:
+// LookDofNearSpread ignoring the class -- red (a non-discrete adapter
+// spreads); the on token writing the discrete value only -- red (forced on
+// reads off on a non-discrete adapter).
+TEST(DC3LookDofNear, TheSpreadFollowsTheAdapterClass) {
+    {
+        milo::ScopedLookOverride o(milo::LookProfile::Enhanced);
+        const milo::LookSettings rule = milo::Look();
+        EXPECT_TRUE(rule.postDofNearField) << "the field is on for every adapter";
+        EXPECT_TRUE(milo::LookDofNearSpread(rule, true)) << "a discrete GPU spreads";
+        EXPECT_FALSE(milo::LookDofNearSpread(rule, false)) << "anything else does not, until it is timed";
+        EXPECT_TRUE(milo::SetLookDofNearForInspection(1, true));
+        EXPECT_TRUE(milo::LookDofNearSpread(milo::Look(), true));
+        EXPECT_TRUE(milo::LookDofNearSpread(milo::Look(), false)) << "the on token forces it on any GPU";
+        EXPECT_TRUE(milo::SetLookDofNearForInspection(0, true));
+        EXPECT_FALSE(milo::LookDofNearSpread(milo::Look(), true)) << "the off token forces it off on any GPU";
+        EXPECT_FALSE(milo::LookDofNearSpread(milo::Look(), false));
+        EXPECT_TRUE(milo::SetLookDofNearForInspection(-1, true));
+        EXPECT_TRUE(milo::LookDofNearSpread(milo::Look(), true)) << "the rule token returns each class to the profile's";
+        EXPECT_FALSE(milo::LookDofNearSpread(milo::Look(), false));
+        EXPECT_TRUE(milo::Look().postDofNearField) << "the spread tokens leave the field";
+    }
+    for (milo::LookProfile p : {milo::LookProfile::Retail, milo::LookProfile::Native}) {
+        milo::ScopedLookOverride o(p);
+        EXPECT_FALSE(milo::LookDofNearSpread(milo::Look(), true)) << "only the enhanced look spreads";
+        EXPECT_FALSE(milo::LookDofNearSpread(milo::Look(), false));
+    }
+}
+
 // LookSettings::postDofDepthWeight follows the look and its inspection token
 // ({rnd native_look dof_depth_weight_on|off|rule}). Sabotage: the switch
 // ignored -- red.

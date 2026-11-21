@@ -207,7 +207,9 @@ Rnd::Rnd()
 // dof_near_on|_off|_rule and dof_near_spread_on|_off|_rule switch its near
 // field (np-look36: an out-of-focus object in front of the focus takes the
 // depth-blind blur; the spread mixes its blur over the figure beside it; the
-// field compiles three pipelines once, the spread is a uniform);
+// field compiles three pipelines once, the spread is a uniform; the spread's
+// rule is by adapter class, on for a discrete GPU, and its on and off tokens
+// force it on any GPU);
 // hair_edge_on|hair_edge_off|hair_edge_rule switch the enhanced cutout's
 // alpha test per MSAA sample (np-look26 d; LookSettings::cutoutSampleTest; a
 // uniform, nothing compiles): on = mode E, off = the landed sharpened
