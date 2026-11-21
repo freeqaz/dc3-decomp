@@ -204,6 +204,10 @@ Rnd::Rnd()
 // output-row re-tiling (np-look23 a; enhanced's rule on, retail's off);
 // dof_depth_weight_on|dof_depth_weight_off|dof_depth_weight_rule switch the
 // enhanced depth of field's depth-weighted blur (np-look23 c);
+// dof_near_on|_off|_rule and dof_near_spread_on|_off|_rule switch its near
+// field (np-look36: an out-of-focus object in front of the focus takes the
+// depth-blind blur; the spread mixes its blur over the figure beside it; the
+// field compiles three pipelines once, the spread is a uniform);
 // hair_edge_on|hair_edge_off|hair_edge_rule switch the enhanced cutout's
 // alpha test per MSAA sample (np-look26 d; LookSettings::cutoutSampleTest; a
 // uniform, nothing compiles): on = mode E, off = the landed sharpened
