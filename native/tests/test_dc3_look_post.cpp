@@ -1434,9 +1434,12 @@ TEST_F(DC3LookPostTest, PresentDitherFollowsPostPrecision) {
 // (Xenia and the hardware show it; item23/c). With the enhanced look's
 // depth-weighted blur the background beside the figure is background only.
 // A bright half (in focus) against a dark half (far plane), through DofPass
-// enhanced with and without the weighting. Sabotages: the downsample's weight
-// back to 1 (fs_down_tent_dw) -- the fringe returns, red; the composite's
-// division removed -- the background goes dark, red.
+// enhanced with and without the weighting. Sabotages (item23/c2/sabotage):
+// the half-size factor pre-pass (fs_dw_factor_half) writing 1 -- the fringe
+// returns, red; writing 0 -- the far stripes stay sharp, red; the factor read
+// one half-size texel toward the background -- red; the composite's division
+// removed -- the background goes dark, red; Prewarm skipping the weight's
+// pipelines -- red.
 TEST_F(DC3LookPostTest, DepthWeightedDofKeepsTheFigureOutOfTheBackgroundBlur) {
     ASSERT_TRUE(TheDOFProc);
     GpuDevice &gpu = Gpu();
