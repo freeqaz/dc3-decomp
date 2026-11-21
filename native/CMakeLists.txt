@@ -1289,6 +1289,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/KinectShare_Stub.cpp
     src/platform/Cache_Stub.cpp
     src/platform/PipelineWarm.cpp   # load-time material pipeline warm (DirLoader, H-104)
+    src/platform/TexPassRule.cpp    # np-look47: dc3 half of "a texture pass is drawn like the frame"
     src/platform/ChecksumData_Stub.cpp
     src/platform/Keygen_Stub.cpp
     src/platform/NetworkSocket_Stub.cpp
@@ -1566,6 +1567,7 @@ set(DC3_WEB_CORE_SOURCES
     # defines. (The engine's own Cache_Stub.cpp is a comment-only placeholder.)
     src/platform/Cache_Stub.cpp
     src/platform/PipelineWarm.cpp
+    src/platform/TexPassRule.cpp
     src/platform/WebMovieImpl.cpp
     src/platform/NetXbox_Stub.cpp
     src/platform/KinectShare_Stub.cpp

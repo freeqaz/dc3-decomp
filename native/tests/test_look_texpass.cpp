@@ -5,36 +5,188 @@
 // kRendered 1024x1024 target) and shown on a quad; the frame round her has 4x
 // MSAA at the look's render scale. The enhanced look draws such a target with
 // the frame's sample count, resolved into the texture (step 1). Retail and
-// Native keep the one-sample target at its own size. Which targets:
-// TexPassDrawnLikeFrame (engine Tex_Wgpu.cpp), the one place the rule lives,
-// and OnlyAColourAndDepthTargetIsDrawnLikeTheFrame, its one test, which lists
-// the target kinds; the rule is round 1's (RndTex type exactly kRendered, no
-// mip chain) until the census lane hands over its successor.
+// Native keep the one-sample target at its own size.
 //
-// Sabotage (np-look47, before landing): TexPassDrawnLikeFrame returning true
-// for every render target -> OnlyAColourAndDepthTargetIsDrawnLikeTheFrame
-// fails on kRenderedNoZ, kShadowMap, kDepthVolumeMap and kDensityMap;
-// SettingsFor setting texPassMsaa = true in every profile ->
-// EnhancedTurnsOnStep1RetailAndNativeNot fails. Both seen red on the 3090 and
-// reverted (round 1).
+// Which targets (round 2b, decided by the census, CENSUS.md section 6): a
+// texture pass is drawn like the frame when its target is the output of a
+// texture renderer that draws a character. Two halves: the engine's
+// (TexPassDrawnLikeFrame, engine Tex_Wgpu.cpp: RndTex type exactly kRendered,
+// no mip chain) and dc3's predicate (NativeTexPassDrawsCharacter,
+// native/src/platform/TexPassRule.cpp: at least one RndTexRenderer has the
+// target as output, and every one that does draws a Character without
+// force_mips). The engine asks the predicate only where a clearing pass
+// begins and keeps the answer until the next one.
+//
+// Tests of the engine half register a test predicate (ScopedPredicate);
+// tests of dc3's half call the predicate dc3 registers, read back through
+// GetTexPassLikeFramePredicate.
+//
+// Sabotage, round 1: TexPassDrawnLikeFrame true for every render target ->
+// EngineHalfIsAColourAndDepthTargetWithNoMips fails on kRenderedNoZ,
+// kShadowMap, kDepthVolumeMap, kDensityMap; texPassMsaa = true in every
+// profile -> EnhancedTurnsOnStep1RetailAndNativeNot fails. Round 2b: the
+// predicate answering yes for any renderer -> the Group-draw cases fail;
+// the predicate ignoring force_mips -> ACharacterWithForceMipsIsNot fails;
+// EnsureRenderTargetData asking the rule again ->
+// TheAnswerIsKeptUntilTheNextClearingPass fails. All seen red, reverted.
 
 #include "test_helpers.h"
 
+#include "char/Character.h"
+#include "obj/Dir.h"
+#include "obj/DirLoader.h"
 #include "platform/LookProfile.h"
 #include "platform/Rnd_Wgpu.h"
 #include "platform/TexGpu.h"
-#include "rndobj/Tex.h"
-
-#ifdef MILO_READBACK_GPU_RENDER_TARGET
 #include "rndobj/Cam.h"
 #include "rndobj/Group.h"
 #include "rndobj/Rnd.h"
+#include "rndobj/Tex.h"
 #include "rndobj/TexRenderer.h"
-#endif
 
+#include <cstdlib>
+#include <string>
 #include <vector>
 
+bool NativeTexPassDrawsCharacter(RndTex *tex);
+
 namespace {
+
+// Holds a predicate for one test and puts back the one registered before.
+class ScopedPredicate {
+public:
+    explicit ScopedPredicate(TexPassLikeFrameFn fn) : mOld(GetTexPassLikeFramePredicate()) {
+        SetTexPassLikeFramePredicate(fn);
+    }
+    ~ScopedPredicate() { SetTexPassLikeFramePredicate(mOld); }
+private:
+    TexPassLikeFrameFn mOld;
+};
+
+bool AnyTarget(RndTex *) { return true; }
+bool sSwitchAnswer = true;
+bool SwitchedTarget(RndTex *) { return sSwitchAnswer; }
+
+// The predicate dc3 registered at static init (TexPassRule.cpp), not a copy.
+bool Dc3Rule(RndTex *tex) {
+    TexPassLikeFrameFn fn = GetTexPassLikeFramePredicate();
+    return fn && fn(tex);
+}
+
+RndTex *NewRendered(int w, int h) {
+    RndTex *tex = Hmx::Object::New<RndTex>();
+    tex->SetBitmap(w, h, 32, RndTex::kRendered, false, nullptr);
+    return tex;
+}
+
+RndTexRenderer *NewRenderer(RndTex *out, Hmx::Object *draw) {
+    RndTexRenderer *tr = Hmx::Object::New<RndTexRenderer>();
+    tr->SetProperty("output_texture", DataNode(out));
+    tr->SetProperty("draw", DataNode(draw));
+    return tr;
+}
+
+class TexPassRuleTest : public EngineTestFixture {};
+
+TEST_F(TexPassRuleTest, Dc3RegistersItsPredicate) {
+    EXPECT_EQ(GetTexPassLikeFramePredicate(), &NativeTexPassDrawsCharacter);
+}
+
+TEST_F(TexPassRuleTest, ATargetNoRendererDrawsIntoIsNot) {
+    RndTex *tex = NewRendered(640, 480);
+    EXPECT_FALSE(Dc3Rule(tex));
+    delete tex;
+}
+
+// keep_me.tex's shape: augmented_photo's TexRenderer.rndtex draws Group.grp.
+TEST_F(TexPassRuleTest, AGroupDrawRendererIsNot) {
+    RndTex *keep = NewRendered(640, 480);
+    RndGroup *grp = Hmx::Object::New<RndGroup>();
+    RndTexRenderer *tr = NewRenderer(keep, grp);
+    EXPECT_FALSE(Dc3Rule(keep));
+    // Re-pointed at a second texture (a snapshot): neither is drawn like the frame.
+    RndTex *snap = NewRendered(640, 480);
+    tr->SetProperty("output_texture", DataNode(snap));
+    EXPECT_FALSE(Dc3Rule(keep));
+    EXPECT_FALSE(Dc3Rule(snap));
+    delete tr;
+    delete grp;
+    delete snap;
+    delete keep;
+}
+
+TEST_F(TexPassRuleTest, ACharacterDrawRendererIs) {
+    RndTex *tex = NewRendered(1024, 1024);
+    Character *ch = Hmx::Object::New<Character>();
+    RndTexRenderer *tr = NewRenderer(tex, ch);
+    EXPECT_TRUE(Dc3Rule(tex));
+    delete tr;
+    delete ch;
+    delete tex;
+}
+
+TEST_F(TexPassRuleTest, ACharacterWithForceMipsIsNot) {
+    RndTex *tex = NewRendered(1024, 1024);
+    Character *ch = Hmx::Object::New<Character>();
+    RndTexRenderer *tr = NewRenderer(tex, ch);
+    tr->SetProperty("force_mips", DataNode(1));
+    EXPECT_FALSE(Dc3Rule(tex));
+    delete tr;
+    delete ch;
+    delete tex;
+}
+
+TEST_F(TexPassRuleTest, TwoRenderersOneAGroupsIsNot) {
+    RndTex *tex = NewRendered(640, 480);
+    Character *ch = Hmx::Object::New<Character>();
+    RndGroup *grp = Hmx::Object::New<RndGroup>();
+    RndTexRenderer *a = NewRenderer(tex, ch);
+    RndTexRenderer *b = NewRenderer(tex, grp);
+    EXPECT_FALSE(Dc3Rule(tex));
+    delete b;
+    EXPECT_TRUE(Dc3Rule(tex)) << "control: the Character renderer alone";
+    delete a;
+    delete grp;
+    delete ch;
+    delete tex;
+}
+
+TEST_F(TexPassRuleTest, ATargetWhoseRendererOutputWasClearedIsNot) {
+    RndTex *tex = NewRendered(1024, 1024);
+    Character *ch = Hmx::Object::New<Character>();
+    RndTexRenderer *tr = NewRenderer(tex, ch);
+    ASSERT_TRUE(Dc3Rule(tex));
+    tr->SetProperty("output_texture", DataNode((Hmx::Object *)nullptr));
+    EXPECT_FALSE(Dc3Rule(tex));
+    delete tr;
+    delete ch;
+    delete tex;
+}
+
+// The game's own keep_me.tex, from ui/augmented_photo.milo.
+TEST_F(TexPassRuleTest, AugmentedPhotoKeepMeIsNot) {
+    const char *root = getenv("MILO_LIB");
+    if (!root || !root[0])
+        GTEST_SKIP() << "MILO_LIB not set";
+    std::string path = std::string(root) + "/ui/gen/augmented_photo.milo_xbox";
+    ObjectDir *dir = DirLoader::LoadObjects(FilePath(path.c_str()), nullptr, nullptr);
+    ASSERT_NE(dir, nullptr) << path;
+    RndTexRenderer *tr = dir->Find<RndTexRenderer>("TexRenderer.rndtex", false);
+    ASSERT_NE(tr, nullptr);
+    RndTex *keep = dir->Find<RndTex>("keep_me.tex", false);
+    ASSERT_NE(keep, nullptr);
+    ASSERT_EQ(tr->GetOutputTexture(), keep);
+    EXPECT_EQ((int)keep->GetType(), (int)RndTex::kRendered);
+    EXPECT_FALSE(Dc3Rule(keep));
+    // A snapshot-shaped texture set as the renderer's output (what
+    // StreamRecorder-side code does with the photo targets).
+    RndTex *snap = NewRendered(640, 480);
+    tr->SetProperty("output_texture", DataNode(snap));
+    EXPECT_FALSE(Dc3Rule(snap));
+    EXPECT_FALSE(Dc3Rule(keep));
+    tr->SetProperty("output_texture", DataNode(keep));
+    delete snap;
+}
 
 TEST(LookTexPass, EnhancedTurnsOnStep1RetailAndNativeNot) {
     {
@@ -70,7 +222,8 @@ protected:
     }
 };
 
-TEST_F(TexPassGpuTest, OnlyAColourAndDepthTargetIsDrawnLikeTheFrame) {
+TEST_F(TexPassGpuTest, EngineHalfIsAColourAndDepthTargetWithNoMips) {
+    ScopedPredicate yes(&AnyTarget);
     milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
     milo::SetLookTexPassMsaaForInspection(1);  // both adapter classes (the scope restores it)
     struct Case { RndTex::Type type; uint32_t samples; const char *what; } cases[] = {
@@ -104,7 +257,55 @@ TEST_F(TexPassGpuTest, OnlyAColourAndDepthTargetIsDrawnLikeTheFrame) {
     delete impostor;
 }
 
+TEST_F(TexPassGpuTest, NoPredicateDrawsNothingLikeTheFrame) {
+    ScopedPredicate none(nullptr);
+    milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
+    milo::SetLookTexPassMsaaForInspection(1);
+    RndTex *tex = NewTarget(64, 64, RndTex::kRendered);
+    GpuTexPassTarget t;
+    ASSERT_TRUE(GetGpuTexPassTarget(tex, t));
+    EXPECT_EQ(t.samples, 1u);
+    EXPECT_FALSE(t.likeFrame);
+    EXPECT_FALSE(t.msaaView);
+    delete tex;
+}
+
+// Asked at a clearing pass only: sampling calls (GetGpuTexView, a pass
+// resumed with a load) and a change in the predicate's answer leave the kept
+// answer and the 4x pair alone until the next clearing pass.
+TEST_F(TexPassGpuTest, TheAnswerIsKeptUntilTheNextClearingPass) {
+    ScopedPredicate sw(&SwitchedTarget);
+    milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
+    milo::SetLookTexPassMsaaForInspection(1);
+    sSwitchAnswer = false;
+    RndTex *tex = NewTarget(64, 64, RndTex::kRendered);
+    // A sampling call before any pass: the rule is not asked, one sample.
+    EXPECT_TRUE(GetGpuTexView(tex));
+    sSwitchAnswer = true;
+    GpuTexPassTarget t;
+    ASSERT_TRUE(GetGpuTexPassTarget(tex, t, false));
+    EXPECT_EQ(t.samples, 1u) << "a resumed pass does not ask";
+    ASSERT_TRUE(GetGpuTexPassTarget(tex, t, true));
+    EXPECT_EQ(t.samples, WgpuRnd::kTexPassMsaaSamples);
+    EXPECT_TRUE(t.likeFrame);
+    const wgpu::TextureView pair = t.msaaView;
+    sSwitchAnswer = false;
+    for (int i = 0; i < 3; ++i) {
+        EXPECT_TRUE(GetGpuTexView(tex));
+        ASSERT_TRUE(GetGpuTexPassTarget(tex, t, false));
+        EXPECT_EQ(t.samples, WgpuRnd::kTexPassMsaaSamples) << "sampling call " << i;
+        EXPECT_TRUE(t.likeFrame) << "sampling call " << i;
+        EXPECT_TRUE(t.msaaView.Get() == pair.Get()) << "the pair is kept, " << i;
+    }
+    ASSERT_TRUE(GetGpuTexPassTarget(tex, t, true));
+    EXPECT_EQ(t.samples, 1u) << "the next clearing pass takes the new answer";
+    EXPECT_FALSE(t.likeFrame);
+    EXPECT_FALSE(t.msaaView);
+    delete tex;
+}
+
 TEST_F(TexPassGpuTest, RetailAndNativeKeepOneSample) {
+    ScopedPredicate yes(&AnyTarget);
     for (milo::LookProfile p : {milo::LookProfile::Retail, milo::LookProfile::Native}) {
         milo::ScopedLookOverride look(p);
         RndTex *tex = NewTarget(64, 64, RndTex::kRendered);
@@ -122,6 +323,7 @@ TEST_F(TexPassGpuTest, RetailAndNativeKeepOneSample) {
 // through the multisampled pass (WgpuRnd::Clear restarts it) and survives the
 // resolve, and the readback is the texture's own size.
 TEST_F(TexPassGpuTest, AClearReachesAMultisampledTargetThroughTheResolve) {
+    ScopedPredicate yes(&AnyTarget);  // the engine's pass, not dc3's rule
     milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
     milo::SetLookTexPassMsaaForInspection(1);
     RndTex *tex = NewTarget(64, 48, RndTex::kRendered);
