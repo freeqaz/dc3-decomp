@@ -181,6 +181,7 @@ Rnd::Rnd()
 
 #ifdef HX_NATIVE
 #include "platform/LookProfile.h"
+#include "gfx/PostProcPass.h"
 // Native inspection (np-gfx-post round 10): {rnd native_look retail|enhanced}
 // switches the engine's DC3_LOOK profile at run time, so one frozen frame can
 // be graded both ways; post_retail|post_enhanced switch only the post chain's
@@ -229,6 +230,15 @@ static Symbol NativeLook(const DataArray *msg) {
                          "refl_cull_force, refl_cull_flip or refl_cull_rule", s.Str());
     }
     return milo::LookProfileName(milo::Look().profile);
+}
+
+// Native inspection (np-look23 c): {rnd native_post_skip [mask]} leaves
+// stages of the DC3 retail chain out of the frame (PostProcPass::sInspectSkip:
+// 1 depth of field, 2 bloom, 4 motion blur, 8 camera velocity blur; 0 = none)
+// and returns the mask in force.
+static int NativePostSkip(const DataArray *msg) {
+    if (msg->Size() > 2) PostProcPass::sInspectSkip = (unsigned)msg->Int(2);
+    return (int)PostProcPass::sInspectSkip;
 }
 
 // Native inspection (np-look23 a): {rnd native_noise [scale]} scales every
@@ -377,6 +387,7 @@ BEGIN_HANDLERS(Rnd)
 #ifdef HX_NATIVE
     HANDLE_EXPR(native_look, NativeLook(_msg))
     HANDLE_EXPR(native_noise, NativeNoise(_msg))
+    HANDLE_EXPR(native_post_skip, NativePostSkip(_msg))
 #endif
     HANDLE_ACTION(recreate_defaults, CreateDefaults())
     HANDLE_ACTION(
