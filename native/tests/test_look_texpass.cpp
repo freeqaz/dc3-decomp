@@ -5,8 +5,8 @@
 // kRendered 1024x1024 target) and shown on a quad; the frame round her has 4x
 // MSAA at the look's render scale. The enhanced look draws such a target with
 // the frame's sample count, resolved into the texture (step 1), and draws it
-// into a GPU texture sized for the output's rows (step 2: 1024 up to 720 rows,
-// 1536 at 1080, 2048 at 1440 and above), re-made only where a pass that
+// into a GPU texture sized for the output's rows (step 2: 1024 up to 360 rows,
+// 1536 at 540, 2048 from 720 rows up), re-made only where a pass that
 // clears it begins. Retail and Native keep the one-sample target at its own
 // size.
 //
@@ -213,16 +213,22 @@ TEST(LookTexPass, EnhancedTurnsOnStep1RetailAndNativeNot) {
 }
 
 // Step 2's size follows the OUTPUT's rows (GpuDevice::OutputHeight), so a
-// 1920x1080 window gets the same target at render scale 1 and 2.
-// Sabotage: texPassBaseRows 480 in place of 720 (1080 rows -> 2048) -> red
-// (seen, reverted). Which rows the engine passes (OutputHeight, not the
+// window gets the same target at render scale 1 and 2. The rule is one
+// constant, texPassBaseRows 360: about two texels a screen pixel at 720
+// rows, where one (base rows 720, the rule as first built) left the Break It
+// Down dancer softer than the main frame's (PLAN H-175).
+// Sabotage: texPassBaseRows 480 in place of 360 (720 rows -> 1536, the
+// fallback the PLAN row names: taking it means changing this table) -> red
+// (seen, reverted); and 720, the first rule (720 rows -> 1024) -> red (seen,
+// reverted). Which rows the engine passes (OutputHeight, not the
 // drawn WindowHeight) is checked by the running game's pass line, not here:
 // the GPU tests below set the rows themselves.
 TEST(LookTexPass, GpuSizeFollowsTheOutputRows) {
     milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
     const milo::LookSettings &enh = milo::Look();
     struct Case { int rows; int side; } cases[] = {
-        {713, 1024}, {720, 1024}, {1080, 1536}, {1440, 2048}, {1600, 2048}, {2160, 2048},
+        {180, 1024}, {360, 1024}, {540, 1536}, {713, 2028}, {720, 2048},
+        {1080, 2048}, {1440, 2048}, {2160, 2048},
     };
     for (const Case &c : cases) {
         int w = 0, h = 0;
@@ -231,23 +237,34 @@ TEST(LookTexPass, GpuSizeFollowsTheOutputRows) {
         EXPECT_EQ(h, c.side) << c.rows << " rows";
     }
     int w = 0, h = 0;
-    milo::TexPassGpuSize(enh, 640, 480, 1080, w, h);  // x1.5 keeps the shape
+    milo::TexPassGpuSize(enh, 640, 480, 540, w, h);  // x1.5 keeps the shape
     EXPECT_EQ(w, 960);
     EXPECT_EQ(h, 720);
-    // The rows the engine reads, from the frame rule itself: 1920x1080 at
+    milo::TexPassGpuSize(enh, 640, 480, 720, w, h);  // x2
+    EXPECT_EQ(w, 1280);
+    EXPECT_EQ(h, 960);
+    milo::TexPassGpuSize(enh, 640, 480, 2160, w, h);  // the longer side at the cap
+    EXPECT_EQ(w, 2048);
+    EXPECT_EQ(h, 1536);
+    // The rows the engine reads, from the frame rule itself: a window at
     // render scale 1 and 2 (dc3's desktop look: following output, 1280x720
-    // logical) leaves the renderer at 1080 rows either way.
-    for (float scale : {1.0f, 2.0f}) {
-        GpuDeviceDesc d;
-        d.outputFollowsTarget = true;
-        d.logicalWidth = 1280;
-        d.logicalHeight = 720;
-        d.renderScaleExplicit = scale;
-        const FrameSizes f = ResolveFrameSizes(d, true, true, 1920, 1080);
-        EXPECT_EQ(f.outputH, 1080) << "scale " << scale;
-        EXPECT_EQ(f.drawnH, (int)(1080 * scale)) << "scale " << scale;
-        milo::TexPassGpuSize(enh, 1024, 1024, f.outputH, w, h);
-        EXPECT_EQ(w, 1536) << "scale " << scale;
+    // logical) leaves the renderer at the window's rows either way. 960x540
+    // is the window that tells the two apart (the drawn frame at scale 2 has
+    // 1080 rows, which would be 2048); 1920x1080 is at the cap both ways.
+    struct Window { int w, h, side; } windows[] = {{960, 540, 1536}, {1920, 1080, 2048}};
+    for (const Window &win : windows) {
+        for (float scale : {1.0f, 2.0f}) {
+            GpuDeviceDesc d;
+            d.outputFollowsTarget = true;
+            d.logicalWidth = 1280;
+            d.logicalHeight = 720;
+            d.renderScaleExplicit = scale;
+            const FrameSizes f = ResolveFrameSizes(d, true, true, win.w, win.h);
+            EXPECT_EQ(f.outputH, win.h) << "scale " << scale;
+            EXPECT_EQ(f.drawnH, (int)(win.h * scale)) << "scale " << scale;
+            milo::TexPassGpuSize(enh, 1024, 1024, f.outputH, w, h);
+            EXPECT_EQ(w, win.side) << win.h << " rows, scale " << scale;
+        }
     }
 }
 
@@ -420,9 +437,10 @@ TEST_F(TexPassGpuTest, AClearReachesAMultisampledTargetThroughTheResolve) {
 
 // np-look47 step 2 on the GPU. The picture: the target cleared to opaque
 // magenta, a green rect over its left half (in the target's own pixels,
-// DxRnd::DrawRect's rule, RndShape_DC3.h kRectTargetPixels), drawn at 1080
-// output rows (SetTexPassOutputRowsForTest), so a 64x64 target is 96x96 on
-// the GPU. While it draws, the drawable records the viewport and the
+// DxRnd::DrawRect's rule, RndShape_DC3.h kRectTargetPixels), drawn at 540
+// output rows (SetTexPassOutputRowsForTest: x1.5, a fractional scale, so the
+// readback's box filter has footprints that straddle texels), so a 64x64
+// target is 96x96 on the GPU. While it draws, the drawable records the viewport and the
 // attachment it was given.
 class HalfGreen : public RndDrawable {
 public:
@@ -450,7 +468,7 @@ protected:
         mLook.reset(new milo::ScopedLookOverride(milo::LookProfile::Enhanced));
         milo::SetLookTexPassMsaaForInspection(1);
         milo::SetLookTexPassScaleForInspection(1);
-        SetTexPassOutputRowsForTest(1080);
+        SetTexPassOutputRowsForTest(540);
         mTex = NewTarget(64, 64, RndTex::kRendered);
         mCam = Hmx::Object::New<RndCam>();
         mTr = Hmx::Object::New<RndTexRenderer>();
@@ -522,7 +540,7 @@ TEST_F(TexPassScaleTest, TheSizeFollowsTheKeptAnswer) {
 // reads back 96x96 -> red (seen, reverted).
 TEST_F(TexPassScaleTest, AScaledTargetReadsBackAtItsOwnSizeWithThePictureDrawn) {
     Draw();
-    EXPECT_EQ(GpuWidth(), 96u) << "1080 output rows: a 64 target is drawn at 96";
+    EXPECT_EQ(GpuWidth(), 96u) << "540 output rows: a 64 target is drawn at 96";
     int green, magenta, w, h, leftGreen;
     Count(green, magenta, w, h, leftGreen);
     EXPECT_EQ(w, 64);
@@ -538,10 +556,10 @@ TEST_F(TexPassScaleTest, AScaledTargetReadsBackAtItsOwnSizeWithThePictureDrawn) 
 TEST_F(TexPassScaleTest, ASizeChangeWithNoRedrawKeepsThePicture) {
     Draw();
     ASSERT_EQ(GpuWidth(), 96u);
-    // The output changes size (720 rows: the target would be 64) and the
+    // The output changes size (360 rows: the target would be 64) and the
     // scale token flips off; nothing draws into the target, but a draw
     // samples it, and a pass resumes it with a load.
-    SetTexPassOutputRowsForTest(720);
+    SetTexPassOutputRowsForTest(360);
     milo::SetLookTexPassScaleForInspection(0);
     EXPECT_TRUE(GetGpuTexView(mTex));
     EXPECT_EQ(GpuWidth(), 96u) << "the size changes only at a clearing pass";
