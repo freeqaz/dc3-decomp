@@ -207,6 +207,7 @@ class BenchKinect(SyntheticKinect):
         self.vis = {}            # arm -> [score of its wrist now, engine time it changes at]
         self.packets = 0
         self.absent = False
+        self.hands_up = False    # both hands above the head (HandsUpGestureFilter)
 
     def configure(self, rate, noise, seed):
         with self.lock:
@@ -240,6 +241,9 @@ class BenchKinect(SyntheticKinect):
                     y = y + r * math.sin(tilt)
                 sx, sy, sz = pts[j]
                 pts[j] = (sx + (x - sx) * out, sy + (y - sy) * out, sz + (z - sz) * out)
+        if self.hands_up:
+            for j, (x, y) in list(sk.RAISE_RIGHT.items()) + list(sk.RAISE_LEFT.items()):
+                pts[j] = (x, y, 0.0)
         return [(pts[j][0] + ox, pts[j][1], self.depth + pts[j][2]) for j in range(sk.NUM_JOINTS)]
 
     def _joints(self, i, pose):
@@ -1216,9 +1220,15 @@ def run_check(a):
               "hold: nothing is held or selected in controller mode",
               f"controller={r['controller']} events={src(r)} progress={r['max_progress']:.2f}")
         p.arms_down(0.5)
+        # The press keeps the menus for the press hold (minutes; PLAN H-157):
+        # the performer takes them back the way a player does, both hands up.
+        b.wait(1.5)
+        b.k.hands_up = True
         end = time.monotonic() + 30
         while b.state().get("controller_mode") and time.monotonic() < end:
             b.wait(0.5)
+        b.k.hands_up = False
+        b.wait(1.0)
         p.to_screen(force=True)
 
         # 6. both: either selects

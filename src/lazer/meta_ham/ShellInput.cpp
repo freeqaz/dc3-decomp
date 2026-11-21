@@ -211,12 +211,30 @@ void ShellInput::Poll() {
     // Before the idle-timeout check below, so a handover starts its timer
     // this frame.  docs/debugging/native.md "Controller mode policy".
     NativeControllerModePolicyTick(this);
-#endif
-
+    // The press hold (System_Native.cpp, PLAN H-157; faithful only): raising
+    // both hands gives the menus back to the hands at once, as Start does,
+    // and the idle exit below waits the hold out after a press instead of the
+    // helpbar's 5 s.
+    extern bool Dc3ControllerHoldPoll(bool inControllerMode, bool handsUp, float idleMs);
+    extern int Dc3ControllerIdleTimeoutMs(int imageMs);
+    extern bool Dc3ControllerHoldHandsUpSpent();
+    if (Dc3ControllerHoldPoll(
+            TheGestureMgr->InControllerMode(), mHandsUpGestureFilter->GetHandsUp(),
+            unk_0x68.SplitMs()
+        ))
+        ExitControllerMode(false);
+    if (TheGestureMgr->InControllerMode()
+        && unk_0x68.SplitMs() >= Dc3ControllerIdleTimeoutMs(unk_0x98)) {
+#else
     if (TheGestureMgr->InControllerMode() && unk_0x68.SplitMs() >= unk_0x98) {
+#endif
         ExitControllerMode(true);
     }
     if (mHandsUpGestureFilter->GetHandsUp()
+#ifdef HX_NATIVE
+        // The raise that just took the menus back does not open the overlay too.
+        && !Dc3ControllerHoldHandsUpSpent()
+#endif
         && TheHamUI.EventDialogPanel()
         && TheHamUI.EventDialogPanel()->GetState() != UIPanel::kUp
         && !TheHamUI.InTransition()) {
@@ -454,11 +472,13 @@ void ShellInput::ExitControllerMode(bool b) {
         return;
     }
     // faithful: the image body below. The idle/timeout pair is logged so a
-    // test can tell the timeout exit from the others.
+    // test can tell the timeout exit from the others (the timeout is the one
+    // in force: the press hold's after a press, System_Native.cpp).
+    extern int Dc3ControllerIdleTimeoutMs(int imageMs);
     printf("DC3 ControllerMode: exit (immediate=%d, was_in=%d, idle_ms=%d, "
            "timeout_ms=%d)\n",
            (int)b, (int)TheGestureMgr->InControllerMode(), (int)unk_0x68.SplitMs(),
-           (int)unk_0x98);
+           Dc3ControllerIdleTimeoutMs(unk_0x98));
 #endif
     if (TheHamUI.GetHelpBarPanel())
         TheHamUI.GetHelpBarPanel()->ExitControllerMode(b);
@@ -585,6 +605,12 @@ DataNode ShellInput::OnMsg(const ButtonDownMsg &msg) {
         }
         if (!b2 && !TheGestureMgr->InControllerMode()) {
             EnterControllerMode(false);
+#ifdef HX_NATIVE
+            // The press hold (System_Native.cpp): this press took the menus.
+            extern void Dc3ControllerHoldNoteTaken();
+            if (TheGestureMgr->InControllerMode())
+                Dc3ControllerHoldNoteTaken();
+#endif
             if (msg.GetButton() != kPad_Xbox_B) {
                 if (!TheHamUI.GetHelpBarPanel()->AllowController()) {
                     TheSynth->RunFlow("invalid_select.flow");

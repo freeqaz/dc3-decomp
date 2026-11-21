@@ -254,6 +254,10 @@ void NativeControllerModePolicyTick(ShellInput *shellInput) {
     // then keeps controller mode, as on the 360.
     static ResetControllerModeTimeoutMsg resetMsg;
     shellInput->Handle(resetMsg, false);
+    // The press hold (System_Native.cpp, PLAN H-157): a key touched lately
+    // keeps the menus through the handover.
+    extern void Dc3ControllerHoldNoteHandover();
+    Dc3ControllerHoldNoteHandover();
 }
 #endif
 

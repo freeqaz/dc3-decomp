@@ -100,6 +100,20 @@ bool Dc3ControllerModeLatchAuto(bool providerRunning);
 // controller_mode_timeout; -1 when unset.
 int Dc3ControllerModeTimeoutMs();
 
+// The press hold, DC3_CONTROLLER_HOLD_MS (defined in System_Native.cpp, which
+// has the reasons; docs/debugging/native.md "Controller mode policy").  Under
+// the faithful policy a keyboard/pad press keeps the menus for this long
+// without another one (default 300000; the image hands them to the hand
+// cursor after 5000), and raising both hands gives them back at once.  0 = off.
+int Dc3ControllerHoldMs();
+void Dc3ControllerHoldNotePress();            // every press (HamUI)
+int Dc3ControllerIdleTimeoutMs(int imageMs);  // ShellInput's idle exit, now
+void Dc3ControllerHoldNoteTaken();            // a press took the menus: the notice
+void Dc3ControllerHoldNoteHandover();         // auto went forced -> faithful
+// Once per ShellInput::Poll; true = the raised hands take the menus now.
+bool Dc3ControllerHoldPoll(bool inControllerMode, bool handsUp, float idleMs);
+bool Dc3ControllerHoldHandsUpSpent();         // this raise already did
+
 // Menu select, DC3_MENU_SELECT=swipe (default) | hold | both (defined in
 // MenuGesture_Native.cpp; docs/native/PLAYTEST.md "Playing").  How a hand
 // picks the highlighted row of a menu list: the original's sweep of the
