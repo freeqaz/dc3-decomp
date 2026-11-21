@@ -28,6 +28,14 @@
 // The render tests run the default mode and, where the geometry makes the
 // answer the same, E; B and the centre-only diagnostic are read where they
 // show a test can tell the modes apart.
+//
+// np-look26 f: the default is E. C's two rules are tested through E where the
+// geometry is minified past retail's level 1 (lod 2: the strand, the superset
+// and the lod-2 fringe), and E must equal B below it (the lod-0 quad whose
+// centre passes while two samples fail: C draws it solid, B and E at 2 of 4).
+// C is read through its own token. LookSwitchLevelsTest (end of file): after
+// {rnd native_look retail} in a run started enhanced, world textures read
+// retail's two levels.
 #include "test_helpers.h"
 
 #include "gfx/GpuDevice.h"
@@ -284,6 +292,30 @@ const PxRect kStrand = {760, 240, 824, 304};
 // exactly 1/4: C keeps B's mask where the centre fails. E reads B here (lod
 // 0). Retail's test fails at the centre: retail draws nothing there.
 inline int FringeX(int j) { return 40 + 48 * j; }
+// np-look26 f. The fringe minified past retail's level 1, where E takes C's
+// rules: a 256-texel texture over 64 px (4 texels per pixel, lod 2, read at
+// level 1: 2 level-1 texels per pixel, pixel p's centre at level-1 coordinate
+// 2p + 1). Level 0 is lit (255) in the 2 x 2 blocks whose block indices
+// (x >> 1, y >> 1) have parities (px, py), so level 1 (the box) is 255 exactly
+// on the texels with parities (px, py) and 0 elsewhere. Bilinear weight on the
+// lit parity, x then y: centre 0.5 x 0.5 = 0.25; sample 0 (-0.125, -0.375)
+// reads 0.75 x 0.75 = 0.5625 for (even, even) and at most 0.1875 for the other
+// parities; likewise sample 1 (+0.375, -0.125) for (odd, even), sample 2
+// (-0.375, +0.125) for (even, odd), sample 3 (+0.125, +0.375) for (odd, odd).
+// Cut at 102 (0.400): the centre fails, exactly sample j passes, the pixel
+// resolves to 1/4. Retail (two levels, level 1 at the centre: 0.25) draws
+// nothing.
+inline PxRect Fringe2(int j) { return {40 + 80 * j, 600, 104 + 80 * j, 664}; }
+inline int Fringe2Alpha(int j, int x, int y) {
+    return ((x >> 1) & 1) == (j & 1) && ((y >> 1) & 1) == (j >> 1) ? 255 : 0;
+}
+// np-look26 f. Below retail's level 1, E is B: the column texture lit on x % 3
+// == 0 (bit texture 2) at 1 texel per pixel (lod 0, level 0) over 64 x 64 px,
+// cut at 191 (0.749). In a lit column (pixel i, texel i) the centre reads 1
+// and passes; samples 0 and 3 (x -0.125, +0.125) read 0.875 and pass, samples
+// 1 and 2 (x +0.375, -0.375) read 0.625 and fail. C draws the pixel solid,
+// B (and so E) 2 of 4. Unlit columns read at most 0.375: nothing.
+const PxRect kCentrePassLod0 = {400, 600, 464, 664};
 constexpr int kFringeY = 400, kFringeLen = 33;
 constexpr int kBitLen = 32;
 // Bit-order cell (geometry k = the sample position covered, alpha j = the
@@ -320,12 +352,12 @@ const char *const kSamplePos[4] = {"(6,2)", "(14,6)", "(2,10)", "(10,14)"};
 // under retail (S5), or CutoutSampleTestFor ignoring the bool -- red.
 TEST_F(LookCutoutMipTest, OnlyTheEnhancedLookTestsEachSample) {
     if (IsSkipped()) return;
-    static_assert(milo::kCutoutModeDefault == milo::kCutoutModeC, "np-look26 e: the default is C");
+    static_assert(milo::kCutoutModeDefault == milo::kCutoutModeE, "np-look26 f: the default is E");
     {
         ScopedLookOverride enhanced(LookProfile::Enhanced);
         EXPECT_TRUE(Look().cutoutSampleTest);
-        EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), (float)milo::kCutoutModeC)
-            << "the enhanced look carries the default mode, C";
+        EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), (float)milo::kCutoutModeE)
+            << "the enhanced look carries the default mode, E";
     }
     {
         ScopedLookOverride retail(LookProfile::Retail);
@@ -366,7 +398,7 @@ TEST_F(LookCutoutMipTest, TheInspectionSwitchAlternatesAndRestores) {
         ASSERT_TRUE(milo::SetLookCutoutModeForInspection(milo::kCutoutModeB));
         ASSERT_TRUE(milo::SetLookCutoutSampleTestForInspection(0));
         EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), 0.0f) << "hair_edge_off after a mode";
-        ASSERT_TRUE(milo::SetLookCutoutModeForInspection(milo::kCutoutModeE));
+        ASSERT_TRUE(milo::SetLookCutoutModeForInspection(milo::kCutoutModeC));
         ASSERT_TRUE(milo::SetLookCutoutSampleTestForInspection(-1));
         EXPECT_TRUE(Look().cutoutSampleTest) << "hair_edge_rule: enhanced's own value";
         EXPECT_FLOAT_EQ(milo::CutoutSampleTestFor(Look()), (float)milo::kCutoutModeDefault)
@@ -420,11 +452,11 @@ TEST_F(LookCutoutMipTest, TheSceneBlockCarriesTheSwitch) {
     if (prev) prev->Select(); else RndCam::ClearCurrent();
     TheRnd.EndDrawing();
     delete cam;
-    EXPECT_FLOAT_EQ(on, (float)milo::kCutoutModeC) << "enhanced world pass: the default mode";
+    EXPECT_FLOAT_EQ(on, (float)milo::kCutoutModeE) << "enhanced world pass: the default mode, E";
     EXPECT_FLOAT_EQ(off, 0.0f) << "hair_edge_off reached the block";
     for (int m = milo::kCutoutModeB; m <= milo::kCutoutModeCentre; m++)
         EXPECT_FLOAT_EQ(modes[m], (float)m) << "mode " << m << " reached the block";
-    EXPECT_FLOAT_EQ(rule, (float)milo::kCutoutModeC) << "hair_edge_rule reached the block";
+    EXPECT_FLOAT_EQ(rule, (float)milo::kCutoutModeE) << "hair_edge_rule reached the block";
 }
 
 // The cutout pipelines that read it build: a world cutout (4 samples, LOD
@@ -482,7 +514,7 @@ struct CutoutFrames {
 
 CutoutFrames DrawCutoutFrames() {
     CutoutFrames f;
-    RndBitmap bmpLines, bmp140, bmp100, bmpAll, bmpBit[4], bmpStrand;
+    RndBitmap bmpLines, bmp140, bmp100, bmpAll, bmpBit[4], bmpStrand, bmpFringe2[4];
     std::vector<RndTex *> texs;
     std::vector<RndMat *> mats;
     auto mat = [&](RndMat *m) { mats.push_back(m); return m; };
@@ -503,6 +535,11 @@ CutoutFrames DrawCutoutFrames() {
         });
         texs.push_back(bit[j]);
     }
+    RndTex *fringe2[4];
+    for (int j = 0; j < 4; j++) {
+        fringe2[j] = MakeAlphaTex(bmpFringe2[j], [j](int x, int y) { return Fringe2Alpha(j, x, y); });
+        texs.push_back(fringe2[j]);
+    }
     {
         CutoutScene scene;
         scene.Add(kWholeFrame, mat(MakeFlatMat(0.0f)));
@@ -517,6 +554,13 @@ CutoutFrames DrawCutoutFrames() {
         scene.Add(kUnderAlphaMin, underAlpha);
         scene.Add(kUnderAlphaBase, underAlpha);
         scene.Add(kStrand, mat(MakeCutMat(strand, 217)));
+        for (int j = 0; j < 4; j++) scene.Add(Fringe2(j), mat(MakeCutMat(fringe2[j], 102)));
+        {
+            const PxRect &r = kCentrePassLod0;
+            const float s = 1.0f / kTexSize;
+            scene.Add(PxRectF{(float)r.x0, (float)r.y0, (float)r.x1, (float)r.y1}, mat(MakeCutMat(bit[2], 191)),
+                      0.0f, 0.0f, (r.x1 - r.x0) * s, (r.y1 - r.y0) * s);
+        }
         for (int j = 0; j <= 4; j++) {
             RndMat *m = mat(MakeCutMat(j < 4 ? bit[j] : all, 64));
             if (j < 4) {
@@ -595,15 +639,16 @@ TEST_F(LookCutoutMipTest, AMinifiedStrandCoversTheHalfOfThePixelItCrosses) {
     CutoutScene px;   // the pixel helpers only
     const double off4 = px.Mean(f.off, kMin4) / f.white, on4 = px.Mean(f.on, kMin4) / f.white;
     const double off8 = px.Mean(f.off, kMin8) / f.white, on8 = px.Mean(f.on, kMin8) / f.white;
-    // np-look26 e: the default (C) reads the centre first; here it reads the
-    // two level-1 texels' mean, 0.5, under the cut, so C keeps B's mask.
+    // The default (E; lod 2 and 3 here, so C's rules) reads the centre first;
+    // here it reads the two level-1 texels' mean, 0.5, under the cut, so it
+    // keeps B's mask.
     const double b4 = px.Mean(f.mode[milo::kCutoutModeB], kMin4) / f.white;
-    const double e4 = px.Mean(f.mode[milo::kCutoutModeE], kMin4) / f.white;
-    const double e8 = px.Mean(f.mode[milo::kCutoutModeE], kMin8) / f.white;
-    printf("[ cutout samples ] minified strand: B %.4f, E %.4f / %.4f (4 / 8 texels/px)\n", b4, e4, e8);
+    const double c4 = px.Mean(f.mode[milo::kCutoutModeC], kMin4) / f.white;
+    const double c8 = px.Mean(f.mode[milo::kCutoutModeC], kMin8) / f.white;
+    printf("[ cutout samples ] minified strand: B %.4f, C %.4f / %.4f (4 / 8 texels/px)\n", b4, c4, c8);
     EXPECT_NEAR(b4, Shown(0.5), 0.05) << "mode B at 4 texels/px";
-    EXPECT_NEAR(e4, Shown(0.5), 0.05) << "mode E at 4 texels/px (lod 2: C's rule)";
-    EXPECT_NEAR(e8, Shown(0.5), 0.05) << "mode E at 8 texels/px";
+    EXPECT_NEAR(c4, Shown(0.5), 0.05) << "mode C at 4 texels/px";
+    EXPECT_NEAR(c8, Shown(0.5), 0.05) << "mode C at 8 texels/px";
     const size_t control = px.Differing(f.off, f.offAgain, kWholeFrame);
     const size_t controlOn = px.Differing(f.on, f.onAgain, kWholeFrame);
     printf("[ cutout samples ] enhanced: white %.1f; 4 texels/px coverage off %.4f on %.4f; "
@@ -641,12 +686,12 @@ TEST_F(LookCutoutMipTest, AlphaJustUnderTheCutStaysInvisible) {
     };
     for (const auto &c : cases) {
         const int maxOn = px.Max(f.on, c.r), maxOff = px.Max(f.off, c.r);
-        const int maxE = px.Max(f.mode[milo::kCutoutModeE], c.r);
+        const int maxC = px.Max(f.mode[milo::kCutoutModeC], c.r);
         const int maxB = px.Max(f.mode[milo::kCutoutModeB], c.r);
-        printf("[ cutout samples ] under the cut, %s: max green off %d on (C) %d E %d B %d\n", c.name,
-               maxOff, maxOn, maxE, maxB);
-        EXPECT_LE(maxOn, 8) << c.name << ": hair_edge_on (C) drew content under the cut";
-        EXPECT_LE(maxE, 8) << c.name << ": mode E drew content under the cut";
+        printf("[ cutout samples ] under the cut, %s: max green off %d on (E) %d C %d B %d\n", c.name,
+               maxOff, maxOn, maxC, maxB);
+        EXPECT_LE(maxOn, 8) << c.name << ": hair_edge_on (E) drew content under the cut";
+        EXPECT_LE(maxC, 8) << c.name << ": mode C drew content under the cut";
         EXPECT_LE(maxB, 8) << c.name << ": mode B drew content under the cut";
         EXPECT_LE(maxOff, 8) << c.name << ": hair_edge_off drew content under the cut";
     }
@@ -667,8 +712,8 @@ TEST_F(LookCutoutMipTest, MaskBitIIsSampleI) {
     ASSERT_TRUE(f.ok) << "frame readback failed";
     CutoutScene px;
     for (int which = 0; which < 2; which++) {
-    const std::vector<uint8_t> &frame = which == 0 ? f.on : f.mode[milo::kCutoutModeE];
-    const char *modeName = which == 0 ? "C" : "E";
+    const std::vector<uint8_t> &frame = which == 0 ? f.on : f.mode[milo::kCutoutModeC];
+    const char *modeName = which == 0 ? "E" : "C";
     for (int k = 0; k < 4; k++) {
         char line[256];
         int n = snprintf(line, sizeof line, "[ cutout samples ] %s geometry %-7s:", modeName,
@@ -725,8 +770,8 @@ TEST_F(LookCutoutMipTest, TheDefaultDrawsEveryPixelRetailDrawsSolid) {
     for (int y = kStrand.y0; y < kStrand.y1; y++)
         for (int x = kStrand.x0; x < kStrand.x1; x++) {
             const double r = px.G(retail.off, x, y) / retail.white;
-            const double c = px.G(enh.on, x, y) / enh.white;
-            const double e = px.G(enh.mode[milo::kCutoutModeE], x, y) / enh.white;
+            const double c = px.G(enh.mode[milo::kCutoutModeC], x, y) / enh.white;
+            const double e = px.G(enh.on, x, y) / enh.white;
             if (r < 0.9) {
                 offStrandMax = std::max(offStrandMax, c);
                 continue;
@@ -744,7 +789,8 @@ TEST_F(LookCutoutMipTest, TheDefaultDrawsEveryPixelRetailDrawsSolid) {
            lit, cMin, cShort, eMin, eShort, bMean, offStrandMax);
     EXPECT_EQ(lit, 16 * 64) << "retail lights the strand's 16 columns x 64 rows";
     EXPECT_EQ(cShort, 0) << "C: a pixel retail draws read less than full (min " << cMin << ")";
-    EXPECT_EQ(eShort, 0) << "E (lod 2): a pixel retail draws read less than full (min " << eMin << ")";
+    EXPECT_EQ(eShort, 0) << "E, the default (lod 2: C's rule): a pixel retail draws read less than full (min "
+                         << eMin << ")";
     EXPECT_NEAR(bMean, Shown(0.5), 0.05) << "B: samples 1 and 2 read 0.75, under the 0.851 cut";
     EXPECT_LT(offStrandMax, 0.03) << "C: off the strand every fetch reads at most 0.25";
 }
@@ -774,8 +820,8 @@ TEST_F(LookCutoutMipTest, TheDefaultDrawsAQuarterWhereOneSamplePasses) {
         for (int i = 0; i < kFringeLen; i += 3)
             for (int k = 0; k < kFringeLen; k += 3) {
                 const int x = FringeX(j) + i, y = kFringeY + k;
-                c += px.G(enh.on, x, y);
-                e += px.G(enh.mode[milo::kCutoutModeE], x, y);
+                c += px.G(enh.mode[milo::kCutoutModeC], x, y);
+                e += px.G(enh.on, x, y);
                 ctr += px.G(enh.mode[milo::kCutoutModeCentre], x, y);
                 r += px.G(retail.off, x, y);
                 n++;
@@ -791,6 +837,57 @@ TEST_F(LookCutoutMipTest, TheDefaultDrawsAQuarterWhereOneSamplePasses) {
         EXPECT_LT(ctr, 0.03) << "centre-only: the centre fails, nothing";
         EXPECT_LT(r, 0.03) << "retail: the centre fails, nothing";
     }
+    // np-look26 f: the fringe at lod 2 (Fringe2), where the default E takes
+    // C's rules. Sabotage: C's fringe dropped (S2) -- E and C read 0 here.
+    for (int j = 0; j < 4; j++) {
+        const PxRect q = Fringe2(j);
+        const double e = px.Mean(enh.on, q) / enh.white, c = px.Mean(enh.mode[milo::kCutoutModeC], q) / enh.white;
+        const double b = px.Mean(enh.mode[milo::kCutoutModeB], q) / enh.white;
+        const double ctr = px.Mean(enh.mode[milo::kCutoutModeCentre], q) / enh.white;
+        const double r = px.Mean(retail.off, q) / retail.white;
+        printf("[ cutout samples ] fringe at lod 2, sample %d passes alone: E %.4f C %.4f B %.4f centre-only %.4f "
+               "retail %.4f\n", j, e, c, b, ctr, r);
+        EXPECT_NEAR(e, Shown(0.25), 0.05) << "E (lod 2: C's fringe), sample " << j << " alone: one of four";
+        EXPECT_NEAR(c, Shown(0.25), 0.05) << "C, lod 2, sample " << j << " alone";
+        EXPECT_NEAR(b, Shown(0.25), 0.05) << "B, lod 2, sample " << j << " alone";
+        EXPECT_LT(ctr, 0.03) << "centre-only, lod 2: the centre (0.25) fails";
+        EXPECT_LT(r, 0.03) << "retail, lod 2: the centre (0.25) fails";
+    }
+}
+
+// np-look26 f: below retail's level 1 the default E is B. kCentrePassLod0
+// (layout): the centre passes, two samples fail, so C (centre first) draws the
+// lit columns solid and B draws them at 2 of 4; E must be B pixel for pixel.
+// Sabotage: E taking C's rules at every lod (S6) -- E reads full.
+TEST_F(LookCutoutMipTest, BelowLevelOneTheDefaultIsB) {
+    CUTOUT_RENDER_PRECONDITIONS();
+    ScopedLookOverride e(LookProfile::Enhanced);
+    const CutoutFrames f = DrawCutoutFrames();
+    ASSERT_TRUE(f.ok) << "frame readback failed";
+    CutoutScene px;
+    const PxRect &q = kCentrePassLod0;
+    double eSum = 0, bSum = 0, cSum = 0, unlitMax = 0;
+    int n = 0;
+    for (int y = q.y0 + 4; y < q.y1 - 4; y++)
+        for (int x = q.x0 + 6; x < q.x1 - 6; x++) {
+            if ((x - q.x0) % 3 != 0) {
+                unlitMax = std::max(unlitMax, px.G(f.on, x, y) / f.white);
+                continue;
+            }
+            eSum += px.G(f.on, x, y);
+            bSum += px.G(f.mode[milo::kCutoutModeB], x, y);
+            cSum += px.G(f.mode[milo::kCutoutModeC], x, y);
+            n++;
+        }
+    const double eM = eSum / n / f.white, bM = bSum / n / f.white, cM = cSum / n / f.white;
+    const size_t eVsB = px.Differing(f.on, f.mode[milo::kCutoutModeB], q);
+    printf("[ cutout samples ] lod 0, centre passes, 2 samples fail (%d px): E %.4f B %.4f C %.4f; E vs B "
+           "%zu px differ; unlit max %.4f\n", n, eM, bM, cM, eVsB, unlitMax);
+    EXPECT_NEAR(eM, Shown(0.5), 0.05) << "E at lod 0 is B: samples 0 and 3 pass, 2 of 4";
+    EXPECT_NEAR(bM, Shown(0.5), 0.05) << "B: 2 of 4";
+    EXPECT_GT(cM, 0.9) << "C: the centre passes, solid (the test tells C from B)";
+    EXPECT_EQ(eVsB, 0u) << "E must equal B below lod 1";
+    EXPECT_LT(unlitMax, 0.03) << "unlit columns: every fetch under the cut";
 }
 
 // Retail: the original's alpha test is fs_main and reads no per-sample test,
@@ -822,4 +919,156 @@ TEST_F(LookCutoutMipTest, TheRetailCutIsUnmovedByTheSwitch) {
     EXPECT_GT(f.white, 200.0) << "the uncut reference quad was drawn";
     EXPECT_EQ(control, 0u) << "two hair_edge_off frames must be the same frame";
     EXPECT_EQ(moved, 0u) << "retail's cut is fs_main: hair_edge_on must not move a pixel";
+}
+
+// ---- np-look26 f: a look switch reads the levels the switched look uploads ----
+// Textures are uploaded once, with the startup look's level count (Tex_Wgpu,
+// Look().bitmapMipLevels: retail 2, enhanced the whole chain). So
+// {rnd native_look retail} in a run started enhanced used to sample the whole
+// chain through retail's sampler, which is not retail wherever a texture is
+// minified past level 1 (26e: oblio04's hair mass read solid where real retail
+// has holes). ApplyLookSampling now clamps world samplers to the switched
+// look's level count (milo::WorldTexLodMaxLevels). Here: a hand-filled chain
+// whose levels 0 and 1 are grey 200 and levels 2 and deeper grey 40, drawn at
+// 8 texels per pixel (lod 3) as a plain opaque quad. Reference: the same quad
+// in a scope started retail (two levels uploaded). Switched: uploaded in a
+// scope started enhanced, then the retail look selected by the inspection
+// call. The two must agree within 1 level per channel over the quad; the
+// enhanced frame itself must read the deep levels (so the test can fail).
+// Sabotage: the clamp removed (S7) -- the switched frame reads ~40 shown.
+namespace {
+class LookSwitchLevelsTest : public LookCutoutMipTest {};
+
+const PxRect kDeepQuad = {1000, 40, 1032, 72};   // 256 texels over 32 px: lod 3
+
+RndTex *MakeTwoToneChain(RndBitmap &bmp) {
+    std::vector<unsigned char> px(kTexSize * kTexSize * 4, 0xFF);
+    bmp.Create(kTexSize, kTexSize, 0, 32, 0, nullptr, px.data(), nullptr);
+    bmp.GenerateMips();
+    int level = 0;
+    for (RndBitmap *m = &bmp; m; m = m->nextMip(), level++) {
+        const unsigned char v = level <= 1 ? 200 : 40;
+        unsigned char *p = m->Pixels();
+        for (int i = 0; i < m->Width() * m->Height(); i++) {
+            p[i * 4 + 0] = p[i * 4 + 1] = p[i * 4 + 2] = v;
+            p[i * 4 + 3] = 0xFF;
+        }
+    }
+    RndTex *tex = Hmx::Object::New<RndTex>();
+    tex->SetBitmap(bmp, nullptr, true, RndTex::kRegular);
+    tex->PresyncBitmap();
+    return tex;
+}
+
+struct DeepFrames {
+    std::vector<uint8_t> reference, enhanced, switched, switchedBack;
+    int levels = 0;   // levels in the hand-filled chain
+    bool ok = false;
+};
+
+// Draws the quad (warm-up frame first after every look change: a render scale
+// change resizes targets on the next frame).
+bool DrawDeep(CutoutScene &scene, std::vector<uint8_t> &out) {
+    std::vector<uint8_t> warm;
+    return scene.Draw(warm) && scene.Draw(out);
+}
+
+DeepFrames DrawDeepFrames() {
+    DeepFrames f;
+    f.ok = true;
+    {
+        ScopedLookOverride r(LookProfile::Retail);   // a run started retail
+        RndBitmap bmp;
+        RndTex *tex = MakeTwoToneChain(bmp);
+        for (RndBitmap *m = &bmp; m; m = m->nextMip()) f.levels++;
+        RndMat *mat = MakeFlatMat(1.0f), *black = MakeFlatMat(0.0f);
+        mat->SetDiffuseTex(tex);
+        {
+            CutoutScene scene;
+            scene.Add(kWholeFrame, black);
+            scene.Add(kDeepQuad, mat);
+            f.ok = f.ok && DrawDeep(scene, f.reference);
+        }
+        delete black;
+        delete mat;
+        delete tex;
+    }
+    {
+        ScopedLookOverride e(LookProfile::Enhanced);   // a run started enhanced
+        RndBitmap bmp;
+        RndTex *tex = MakeTwoToneChain(bmp);
+        RndMat *mat = MakeFlatMat(1.0f), *black = MakeFlatMat(0.0f);
+        mat->SetDiffuseTex(tex);
+        {
+            CutoutScene scene;
+            scene.Add(kWholeFrame, black);
+            scene.Add(kDeepQuad, mat);
+            f.ok = f.ok && DrawDeep(scene, f.enhanced);
+            f.ok = f.ok && milo::SetLookProfileForInspection(LookProfile::Retail);   // {rnd native_look retail}
+            f.ok = f.ok && DrawDeep(scene, f.switched);
+            f.ok = f.ok && milo::SetLookProfileForInspection(LookProfile::Enhanced);
+            f.ok = f.ok && DrawDeep(scene, f.switchedBack);
+        }
+        delete black;
+        delete mat;
+        delete tex;
+    }
+    return f;
+}
+
+int MaxChannelDiff(const CutoutScene &px, const std::vector<uint8_t> &a, const std::vector<uint8_t> &b,
+                   const PxRect &r) {
+    int m = 0;
+    for (int y = r.y0; y < r.y1; y++)
+        for (int x = r.x0; x < r.x1; x++)
+            for (int c = 0; c < 3; c++) {
+                const size_t i = ((size_t)y * px.W + x) * 4 + c;
+                m = std::max(m, std::abs((int)a[i] - (int)b[i]));
+            }
+    return m;
+}
+} // namespace
+
+// The rule itself: no clamp for any look in a run that never switches (every
+// launch, and rb3 / rb3-xenon, whose Native look cannot switch); a clamp to
+// retail's two levels after a switch from enhanced; none for the reverse (a
+// run started retail has two levels to read; the limit in LookProfile.h).
+TEST_F(LookSwitchLevelsTest, TheClampIsOnlyForASwitchToFewerLevels) {
+    if (IsSkipped()) return;
+    for (LookProfile p : {LookProfile::Native, LookProfile::Retail, LookProfile::Enhanced}) {
+        ScopedLookOverride o(p);
+        EXPECT_EQ(milo::StartupBitmapMipLevels(), Look().bitmapMipLevels) << "a scope stands for a run started in it";
+        EXPECT_EQ(milo::WorldTexLodMaxLevels(Look(), milo::StartupBitmapMipLevels()), 0)
+            << milo::LookProfileName(p) << ": never switched, never clamped";
+    }
+    ScopedLookOverride e(LookProfile::Enhanced);
+    const int startedEnhanced = milo::StartupBitmapMipLevels();
+    ASSERT_TRUE(milo::SetLookProfileForInspection(LookProfile::Retail));
+    EXPECT_EQ(milo::StartupBitmapMipLevels(), startedEnhanced) << "the token does not re-upload";
+    EXPECT_EQ(milo::WorldTexLodMaxLevels(Look(), startedEnhanced), 2) << "retail's two levels";
+    {
+        ScopedLookOverride r(LookProfile::Retail);
+        const int startedRetail = milo::StartupBitmapMipLevels();
+        ASSERT_TRUE(milo::SetLookProfileForInspection(LookProfile::Enhanced));
+        EXPECT_EQ(milo::WorldTexLodMaxLevels(Look(), startedRetail), 0) << "the reverse: nothing to clamp";
+    }
+    EXPECT_EQ(milo::StartupBitmapMipLevels(), startedEnhanced) << "the inner scope restored it";
+}
+
+TEST_F(LookSwitchLevelsTest, ARetailSwitchReadsRetailsTwoLevels) {
+    CUTOUT_RENDER_PRECONDITIONS();
+    const DeepFrames f = DrawDeepFrames();
+    ASSERT_TRUE(f.ok) << "frame readback or look switch failed";
+    CutoutScene px;
+    const double ref = px.Mean(f.reference, kDeepQuad), enh = px.Mean(f.enhanced, kDeepQuad);
+    const double sw = px.Mean(f.switched, kDeepQuad), back = px.Mean(f.switchedBack, kDeepQuad);
+    const int swVsRef = MaxChannelDiff(px, f.switched, f.reference, kDeepQuad);
+    const int backVsEnh = MaxChannelDiff(px, f.switchedBack, f.enhanced, kDeepQuad);
+    printf("[ look switch ] chain of %d levels at lod 3: mean green started-retail %.1f, enhanced %.1f, "
+           "enhanced->retail %.1f, ->enhanced again %.1f; max channel diff switched vs started-retail %d, "
+           "back vs enhanced %d\n", f.levels, ref, enh, sw, back, swVsRef, backVsEnh);
+    EXPECT_GE(f.levels, 4) << "the chain must have levels 2 and deeper";
+    EXPECT_GT(ref - enh, 50.0) << "the enhanced frame must read the deep levels (else the test is vacuous)";
+    EXPECT_LE(swVsRef, 1) << "enhanced->retail must read what a run started retail reads";
+    EXPECT_LE(backVsEnh, 1) << "back to enhanced: the whole chain again";
 }

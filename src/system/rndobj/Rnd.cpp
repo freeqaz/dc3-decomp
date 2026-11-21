@@ -205,7 +205,8 @@ Rnd::Rnd()
 // hair_edge_on|hair_edge_off|hair_edge_rule switch the enhanced cutout's
 // alpha test per MSAA sample (np-look26 d: hair strands that dotted out; off =
 // the landed sharpened coverage; LookSettings::cutoutSampleTest; a uniform,
-// nothing compiles; on = the default mode, C); hair_edge_b|hair_edge_c|
+// nothing compiles; on = the default mode, E since np-look26 f);
+// hair_edge_b|hair_edge_c|
 // hair_edge_e|hair_edge_centre pick one CutoutSampleMode (np-look26 e;
 // inspection only, centre a diagnostic);
 // {rnd native_look} alone reports it. Returns the profile
