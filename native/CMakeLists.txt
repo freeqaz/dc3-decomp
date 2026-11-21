@@ -2192,6 +2192,7 @@ if(BUILD_TESTS)
         tests/test_postproc_noise.cpp
         tests/test_bitmap_mip_levels.cpp
         tests/test_look_sampling.cpp
+        tests/test_look_cutout_mips.cpp
         tests/test_dc3_retail_post.cpp
         tests/test_dc3_look_post.cpp
         tests/test_merge_scope_parity.cpp
