@@ -56,8 +56,8 @@ The game then tells the player, through `NativeNotice`
 from App.cpp's ImGui overlay pass whether or not the debug panel is open): a
 banner across the top for 20 s from the first frame that can draw it — *"No
 camera found (camera 0) - pose tracking is off. The game is using a stand-in
-skeleton, so your dancing is not scored. Connect a webcam and restart, or pick
-another camera with DC3_POSE_CAMERA."* — then a one-line reminder in the
+skeleton, so your dancing is not scored. Connect a webcam, or pick another
+camera in Options > Gameplay Settings > Camera."* — then a one-line reminder in the
 bottom-right corner (*"No camera: pose tracking off"*) for the rest of the
 session. Each exit code, a crash, a lost stream and the 5 s timeout have their
 own text. Every notice is also printed as `DC3 NOTICE [pose]: …` on stderr.
@@ -131,16 +131,124 @@ node beside it. A fixed index then named a node that no longer existed
 (`EXIT_NO_CAMERA` at boot) and a mid-song loss (`VIDIOC_REQBUFS` errno 19) was
 exit 7 with no way back.
 
-`pose_server.py --camera` (from `DC3_POSE_CAMERA`, passed as given) is:
+`pose_server.py --camera` (the camera setting below, passed as given) is:
 
 | Value | Opens |
 |---|---|
 | `auto` (default; also unset/empty) | the first `/dev/videoN` whose `VIDIOC_QUERYCAP` says video capture; metadata nodes are skipped and named in the log line (`Camera: using /dev/video1 (Integrated Camera) [auto; skipped …]`) |
 | an index `N` | `/dev/videoN` if it exists and is a capture device, else the `auto` scan, with a log line saying why |
 | `/dev/videoN`, `/dev/v4l/by-id/<name>` or a bare by-id name | that device, following the symlink — `usb-SunplusIT_Inc_Integrated_Camera_JX20250923V2-video-index0` names the GPD camera whatever its number |
+| `id:<identity>` | the camera with that identity in `--list-cameras`: on Linux its `/dev/v4l/by-id` name, on macOS its AVFoundation unique id. This is what the setting saves |
+| a camera's name (`"MX Brio"`, any case) | the camera `--list-cameras` gives that name |
 
-Off Linux (no V4L2) an index goes to OpenCV as before and `auto` is 0. The
-spec is resolved again on every open.
+Off Linux (no V4L2) `auto` is OpenCV's camera 0 and an index goes to OpenCV
+as it is; an identity or a name is looked up in the camera list and becomes
+that camera's index, and one that is not in the list is `EXIT_NO_CAMERA`
+naming the cameras that were found. The spec is resolved again on every open.
+
+#### The camera setting (np-camera-setting, 2026-11-21)
+
+Which camera is a setting the player changes while the game runs
+(`native/src/platform/PoseCamera_Native.{h,cpp}`); `DC3_POSE_CAMERA` at
+launch used to be the only way.
+
+**The list.** `pose_server.py --list-cameras` prints this box's cameras as
+JSON and exits 0, without capturing from a camera or importing MediaPipe or
+OpenCV (on Linux it asks each node what it is, `VIDIOC_QUERYCAP`, as `auto`
+does). Shortened:
+
+```sh
+python3 native/scripts/pose_server.py --list-cameras
+# {"platform": "darwin", "cameras": [
+#   {"id": "0x220000046d0944", "name": "MX Brio", "spec": "id:0x220000046d0944", "index": 0},
+#   {"id": "3642F2CD-…", "name": "FaceTime HD Camera", "spec": "id:3642F2CD-…", "index": 1}]}
+```
+
+`spec` is the value to give `--camera`; the first entry is the one `auto`
+opens. On Linux the list is the V4L2 video-capture nodes in `/dev/videoN`
+order, each with its `/dev/v4l/by-id` name as its identity (a camera with no
+by-id link is named by its node path, which is not stable). On macOS it is
+`system_profiler SPCameraDataType -json` **sorted by unique id**: MEASURED on
+the playtest Mac (OpenCV 5.0.0), OpenCV numbers AVFoundation cameras in that
+order, so the MX Brio (`0x22…`) is index 0 and the built-in FaceTime camera
+(`3642…`) index 1 — and unplugging the Brio makes the FaceTime camera index
+0. An index is therefore not something to save; the identity is. Two cameras
+with the same name are listed as `Name` and `Name (2)`. The game reads the
+same list in a line form, `--list-cameras tsv` (`dc3-pose-cameras 1`, then
+`camera<TAB>spec<TAB>identity<TAB>name` lines), run under the interpreter the
+pose server runs under, with an 8 s limit.
+
+**Changing it.** Options → Gameplay Settings has a **Camera** row on a
+desktop build whose pose provider launched the camera server — not on web
+(the browser owns the camera), not with pose input off, `DC3_POSE_NO_SPAWN`,
+`DC3_POSE_VIDEO` or the in-process performer. The row's label is fixed; the
+description line under the list reads *"Camera in use: MX Brio. Select to
+switch to the next of 2 cameras."* Selecting it moves to the next camera in
+the list (wrapping) and posts *"Camera: FaceTime HD Camera (2 of 2)."* With
+one camera, selecting restarts nothing and saves nothing: *"Camera: FaceTime
+HD Camera (the only camera found)."* The list is read again on every select
+(the description line shows the last list read), so a camera plugged in
+while the screen is open is found by the next select. The same thing from
+DTA and over HTTP:
+
+| | |
+|---|---|
+| `{native_settings get_pose_camera}` | the `--camera` value in force (`auto`, `id:…`) |
+| `{native_settings pose_camera_name}` | `MX Brio`; `MX Brio (automatic)` under `auto` |
+| `{native_settings list_pose_cameras}` | an array of `(spec name identity)` |
+| `{native_settings cycle_pose_camera}` | the next camera |
+| `{native_settings set_pose_camera <spec, name or identity>}` | that camera; `auto`; or a raw `--camera` value (an index, a path) |
+| `{native_settings pose_camera_available}` | whether the row is shown |
+| `GET /api/pose_camera` | `{"available":…,"current":…,"name":…,"source":…,"saved":…,"savedName":…,"listed":…,"cameras":[{"spec":…,"id":…,"name":…,"inUse":…}]}`; `listed` false = the box could not be asked |
+| `POST /api/pose_camera?cycle=1`, `?set=<…>` | the same two actions; 400 with the notice's reason when nothing was switched |
+
+**The switch** does not restart the game. `NativeSkeletonProvider::SwitchCamera`
+records the new spec and the reader thread replaces the server through the
+path that already copes with a server that died (`ServerGone`): SIGTERM to
+the old server, wait up to 1 s for it to go, unlink the socket path so the
+connect cannot reach the dying server's listener, launch the server with the
+new `--camera`, connect, carry on. A switch is not a failure — it has no
+back-off, does not post *"restarting pose tracking"*, and does not count
+against the three restarts a session gets (it resets them). Tracking resumes
+with the new server's first frame (the real server loads its model first: a
+few seconds). A provider whose server is not running (no camera at launch)
+is started by the switch instead.
+
+**Remembering it.** There was no store for native-only settings to put this
+in: `NativeSettings` is in memory only, and the one native file beside the
+profile saves was song select's `song_select.txt`. The choice is saved the
+same way, in `$DC3_SAVE_DIR/pose_camera.txt` (default
+`~/.local/share/dc3/saves/`), written through a temporary and a rename:
+
+```
+dc3-pose-camera 1
+camera id:0x220000046d0944
+name MX Brio
+```
+
+At launch, in this order: `DC3_POSE_CAMERA`, when set, is used and the file
+is left alone (`scripts/play.sh --camera X` sets it; plain `scripts/play.sh`
+unsets it); otherwise the saved choice; otherwise `auto`. A saved camera
+that is not in the list at launch gives `auto` for that run, with *"Camera
+"MX Brio" is not connected - using the default camera. It is still your
+saved choice."*, and the file is not touched, so the next launch with the
+camera plugged in uses it again. When the list could not be read at all the
+saved value goes to the server as it is. A change made in the menu while
+`DC3_POSE_CAMERA` is set takes effect and is saved, and its notice adds
+*"DC3_POSE_CAMERA is set and decides again at the next launch."* Cycling
+never goes back to `auto`; `{native_settings set_pose_camera auto}` (or
+deleting the file) does. The console log has one line per decision:
+`DC3 POSE CAMERA: id:0x22… (saved, MX Brio; …)` at launch (the word is
+`default`, `env`, `saved` or `saved-missing`) and `DC3 POSE CAMERA: now
+id:3642… (FaceTime HD Camera)` for each change.
+
+Not checked on a Mac (written and tested on Linux against that Mac's
+`system_profiler` output): that `system_profiler` lists exactly the devices
+OpenCV's AVFoundation backend numbers (a Continuity Camera iPhone, a virtual
+camera), and how long it takes there — the launch runs it only when a choice
+is saved, the menu when the row is first described and on every select.
+`scripts/play.sh`'s pre-flight still checks the camera `auto` picks, not the
+saved one.
 
 When frames stop for 2 s mid-run the server keeps the socket, prints
 `CAMERA_LOST`, and sends zero-person packets with `FLAG_NO_CAMERA` every
@@ -160,6 +268,17 @@ and tracking resumes; one that never comes back is exit 7 after the budget,
 with backed-off rescans); milo-tests
 `PoseSocketReaderTest.ACameraThatGoesAndComesBackPostsOneNoticeEach` and
 `PoseServerStartTest.TheCameraSpecReachesTheServerAsGivenAndDefaultsToAuto`.
+The setting: `tests/test_pose_server.py` `CameraListTest` (the Linux list
+from fake device tables, the Mac list and its index order from
+`tests/data/pose_cameras/mac-system_profiler-SPCameraDataType.json`, identity
+and name resolution, the tsv form); milo-tests `PoseCamera*` (the list, the
+saved file, the launch precedence, a saved camera that is not plugged in),
+`PoseSpawnerTest.ACameraSwitchReplacesTheServerOnTheNewCamera` and
+`.TheCameraSettingSwitchesAtRunTimeAndIsRememberedAtTheNextLaunch` (a stub
+server that records every `--camera` it was launched with), and
+`OptionsCameraRowFlowTest` (the real menu, headless, with
+`pose_server_synthetic.py` and a two-camera list from `DC3_POSE_CAMERA_LIST`).
+None of them reads this box's cameras.
 
 Env-var reference: [SCORING_ENV_VARS.md](SCORING_ENV_VARS.md) and the master
 table in [../debugging/native.md](../debugging/native.md).

@@ -189,6 +189,45 @@ TEST(StreamReceiverNative, PauseProducesSilence) {
     }
 }
 
+// A stream's audio can end before its song does: DC3's Technologic has
+// 145.94 s of audio and its MIDI [end] at 146.89 s. On the 360 the voice plays
+// zero-filled buffers for as long as the receiver is polled, and the stream's
+// clock (bytes played) runs on through them. The native mixer used to drop the
+// receiver as soon as the stream was finished -- one whole 0x4000-byte buffer
+// past the buffer holding the last byte -- so the count stopped there, song
+// time froze at 146.2 s and the song never reached [end] (2026-11-21, on a
+// real device; a headless run has no mixer and never showed it).
+TEST(StreamReceiverNative, TheMixerPlaysOnThroughSilenceAfterTheStreamFinished) {
+    StreamReceiverNative rcvr(4, false);
+    rcvr.Play(); // into the mixer; ~StreamReceiverNative takes it out
+
+    const int pcmBytes = 0x5000;
+    std::vector<int16_t> pcm(pcmBytes / 2, 1000);
+    rcvr.WriteData(pcm.data(), pcmBytes);
+    rcvr.EndData();
+
+    // The device: 512-frame callbacks, one main-thread poll after each.
+    std::vector<float> mix(2 * 512);
+    const unsigned long long finishAt = 0xC000; // (ceil(0x5000 / 0x4000) + 1) buffers
+    for (int i = 0; i < 1000 && rcvr.GetBytesPlayed() < finishAt; i++) {
+        AudioDevice::GetInstance().MixSources(mix.data(), 512);
+        rcvr.Poll();
+    }
+    ASSERT_GE(rcvr.GetBytesPlayed(), finishAt) << "the stream never reached its finish point";
+    rcvr.Poll(); // the finish is counted on the poll after the cursor passes it
+
+    // One more second of callbacks: mono int16, two bytes a frame.
+    const unsigned long long before = rcvr.GetBytesPlayed();
+    const int callbacks = 86;
+    for (int i = 0; i < callbacks; i++) {
+        AudioDevice::GetInstance().MixSources(mix.data(), 512);
+        rcvr.Poll();
+    }
+    EXPECT_FALSE(rcvr.IsFinished()) << "the mixer drops a source that says it is finished";
+    EXPECT_EQ(rcvr.GetBytesPlayed(), before + (unsigned long long)callbacks * 512 * 2)
+        << "the stream's clock stopped after it finished";
+}
+
 TEST(StreamReceiverNative, VolumeScaling) {
     StreamReceiverNative rcvr(4, false);
 

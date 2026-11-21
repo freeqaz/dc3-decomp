@@ -1344,6 +1344,94 @@ TEST_F(OptionsGameplayPlayerFlowTest, PlayerSeesTheRetailRowsOnly) {
     EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }
 
+// The Camera row (platform/PoseCamera_Native.h): every player sees it when a
+// camera pose server runs, and selecting it moves to the next camera at run
+// time.  The engine runs with a pose provider (DC3_POSE=1) whose server is
+// pose_server_synthetic.py as a DC3_POSE_SERVER drop-in -- it prints the
+// --camera it was launched with and opens none -- and with a fixed two-camera
+// list (DC3_POSE_CAMERA_LIST), so this box's devices are never asked.  The two
+// suites above run with no provider and pin the row's ABSENCE: their row
+// counts (6 and 4) would read 7 and 5 if it were appended there.
+class OptionsCameraRowFlowTest : public ControllerModeFlowTest {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+    static void SetUpTestSuite() {
+        if (!getenv("DC3_DTA_FLOW_TESTS") || sRanEngine) return;
+        std::string native = GetScriptDir() + "/../../native";
+        std::string env = "env -u DC3_DEV_OPTIONS -u DC3_POSE_CAMERA -u DC3_POSE_VIDEO"
+                          " -u DC3_POSE_NO_SPAWN -u DC3_POSE_PERFORM DC3_PROFILE=release"
+                          " DC3_POSE=1 DC3_CONTROLLER_MODE=forced"
+                          " DC3_POSE_SERVER=" + native + "/scripts/pose_server_synthetic.py"
+                          " DC3_POSE_CAMERA_LIST=" + native + "/tests/data/pose_cameras/two-cameras.tsv";
+        sResult = RunDtaFlow(3000, 180, "options-camera.txt", env.c_str());
+        sRanEngine = true;
+    }
+    void SetUp() override { CheckRan(sResult, sRanEngine); }
+    void TearDown() override {
+        if (HasFailure() && sRanEngine) Dump(sResult, "_camera_row");
+    }
+    static std::vector<std::string> LinesWith(const char *needle) {
+        std::vector<std::string> out;
+        std::istringstream ss(sResult.output);
+        std::string line;
+        while (std::getline(ss, line))
+            if (line.find(needle) != std::string::npos) out.push_back(line);
+        return out;
+    }
+};
+DtaRunResult OptionsCameraRowFlowTest::sResult = {};
+bool OptionsCameraRowFlowTest::sRanEngine = false;
+
+TEST_F(OptionsCameraRowFlowTest, ThePlayerSeesTheCameraRowAndSelectingItSwitchesTheCamera) {
+    const std::string faceTime = "id:3642F2CD-E322-42E7-9360-19815B003AA6";
+    const std::string brio = "id:0x220000046d0944";
+    // The row is the fifth of five (the retail four, then Camera), selected twice.
+    std::vector<std::string> selects = LinesWith("sym='option_pose_camera'");
+    ASSERT_EQ(selects.size(), 2u) << "options-camera.txt selects the Camera row twice";
+    for (const std::string &line : selects)
+        EXPECT_NE(line.find("numData=5"), std::string::npos) << line;
+
+    // Each select moved to the next camera: auto is the first (the Brio), so
+    // FaceTime, then round to the Brio by its identity; each named in a notice.
+    std::vector<std::string> changes = LinesWith("DC3 POSE CAMERA: now ");
+    ASSERT_EQ(changes.size(), 2u);
+    EXPECT_NE(changes[0].find(faceTime), std::string::npos) << changes[0];
+    EXPECT_NE(changes[1].find(brio), std::string::npos) << changes[1];
+    std::vector<std::string> notices = LinesWith("[pose-camera]");
+    ASSERT_EQ(notices.size(), 2u);
+    EXPECT_NE(notices[0].find("Camera: FaceTime HD Camera (2 of 2)."), std::string::npos) << notices[0];
+    EXPECT_NE(notices[1].find("Camera: MX Brio (1 of 2)."), std::string::npos) << notices[1];
+
+    // The pose server was launched three times: at boot on auto, then once
+    // per switch on the new camera -- and frames came back each time.
+    std::vector<std::string> launches = LinesWith("Synthetic pose server: launched for camera ");
+    ASSERT_EQ(launches.size(), 3u);
+    EXPECT_NE(launches[0].find("camera auto"), std::string::npos) << launches[0];
+    EXPECT_NE(launches[1].find(faceTime), std::string::npos) << launches[1];
+    EXPECT_NE(launches[2].find(brio), std::string::npos) << launches[2];
+    EXPECT_EQ(LinesWith("Pose server streaming: first pose frame received").size(), 3u);
+    EXPECT_TRUE(LinesWith("restarting pose tracking").empty()) << "a switch is not a restart";
+
+    // And the last choice is on disk for the next launch.
+    std::ifstream saved(sResult.persistenceRoot + "/saves/pose_camera.txt");
+    std::stringstream text;
+    text << saved.rdbuf();
+    EXPECT_EQ(text.str(), "dc3-pose-camera 1\ncamera " + brio + "\nname MX Brio\n");
+
+    int fails = 0;
+    std::string firstBad;
+    for (const std::string &line :
+         LinesFrom(sResult.output, "Screen 'options_gameplay_screen' Enter")) {
+        if (StartsWith(line, "FAIL:")) {
+            fails++;
+            if (firstBad.empty()) firstBad = line;
+        }
+    }
+    EXPECT_EQ(fails, 0) << "the Camera row raised MILO_FAILs; first: " << firstBad;
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
+}
+
 TEST_F(OptionsGameplayFlowTest, KinectTunerGivesFeedback) {
     const std::string &out = sResult.output;
     size_t sel = out.find("sym='natal_troubleshooter'");

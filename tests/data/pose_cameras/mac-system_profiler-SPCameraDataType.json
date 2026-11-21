@@ -1,0 +1,14 @@
+{
+  "SPCameraDataType" : [
+    {
+      "_name" : "MX Brio",
+      "spcamera_model-id" : "UVC Camera VendorID_1133 ProductID_2372",
+      "spcamera_unique-id" : "0x220000046d0944"
+    },
+    {
+      "_name" : "FaceTime HD Camera",
+      "spcamera_model-id" : "FaceTime HD Camera",
+      "spcamera_unique-id" : "3642F2CD-E322-42E7-9360-19815B003AA6"
+    }
+  ]
+}

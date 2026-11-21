@@ -4,6 +4,7 @@
 #include "platform/NativeNotice.h"
 #include "platform/CameraStream_Native.h"
 #include "hamobj/MoveDir.h" // NativeSetLatencySeconds (a declared latency, the fill delay)
+#include <cerrno>
 #include <cstdint>
 #include <cstring>
 #include <cstdio>
@@ -112,8 +113,8 @@ NativeSkeletonProvider::Problem NativeSkeletonProvider::DescribeServerExit(
     switch (code) {
     case kExitNoCamera:
         snprintf(buf, sizeof(buf),
-            "No camera found (camera %s) - pose tracking is off.%s Connect a webcam"
-            " and restart, or pick another camera with DC3_POSE_CAMERA.",
+            "No camera found (camera %s) - pose tracking is off.%s Connect a webcam,"
+            " or pick another camera in Options > Gameplay Settings > Camera.",
             camera.c_str(), kStandIn);
         p.brief = "No camera: pose tracking off";
         break;
@@ -360,7 +361,13 @@ void NativeSkeletonProvider::Stop() {
     mRunning = false;
     NativeCamera::Stop(); // the camera picture goes with the pose stream
 }
+bool NativeSkeletonProvider::SwitchCamera(const std::string &) { return false; } // the page owns the camera
 #endif
+
+std::string NativeSkeletonProvider::Camera() {
+    std::lock_guard<std::mutex> lock(mSwapMutex);
+    return mCamera;
+}
 
 // COCO keypoint indices
 enum COCOKeypoint {
@@ -567,12 +574,13 @@ bool NativeSkeletonProvider::Start(
 
     mSocketPath = socketPath;
     mModelPath = modelPath;
-    mCamera = camera.empty() ? std::string("auto") : camera;
     mNoCamera = false;
     mStopRequested = false;
+    mSwitchRequested = false;
     mRestarts = 0;
     {
         std::lock_guard<std::mutex> lock(mSwapMutex);
+        mCamera = camera.empty() ? std::string("auto") : camera;
         mProblem = Problem();
     }
 
@@ -600,7 +608,7 @@ bool NativeSkeletonProvider::Start(
         mReaderThread = std::thread(&NativeSkeletonProvider::ReaderThread, this);
         return true;
     case kServerExited:
-        ReportProblem(DescribeServerExit(status, mCamera, mPython));
+        ReportProblem(DescribeServerExit(status, Camera(), mPython));
         Stop();
         return false;
     case kTimedOut:
@@ -625,7 +633,7 @@ bool NativeSkeletonProvider::LaunchServer() {
     PythonChoice py = ChoosePosePython();
     mPython = py.path;
     printf("Pose server python: %s (%s)\n", py.path.c_str(), py.why.c_str());
-    std::vector<std::string> argv = ServerCommand(scriptPath, mSocketPath, mModelPath, mCamera);
+    std::vector<std::string> argv = ServerCommand(scriptPath, mSocketPath, mModelPath, Camera());
     printf("Pose server command:");
     for (const std::string &a : argv)
         printf(" %s", a.c_str());
@@ -708,6 +716,28 @@ void NativeSkeletonProvider::Stop() {
     }
 }
 
+bool NativeSkeletonProvider::SwitchCamera(const std::string &camera) {
+    if (!LaunchesServer())
+        return false;
+    std::string spec = camera.empty() ? std::string("auto") : camera;
+    if (mRunning) {
+        {
+            std::lock_guard<std::mutex> lock(mSwapMutex);
+            mCamera = spec;
+        }
+        // The reader does the rest between two packets (ReaderThread), or at
+        // the top of a restart already under way (ServerGone): every launch
+        // and kill of the server stays on that one thread.
+        mSwitchRequested = true;
+        return true;
+    }
+    // Nothing is running -- the last camera did not open, or the restarts ran
+    // out: start over on the new one.  Stop() joins the ended reader.
+    Stop();
+    std::string socketPath = mSocketPath, modelPath = mModelPath;
+    return Start(socketPath, modelPath, spec);
+}
+
 bool NativeSkeletonProvider::ServerExitIsRestartable(int waitStatus) {
     if (WIFSIGNALED(waitStatus))
         return true; // a crash, e.g. the kernel's SIGKILL
@@ -762,7 +792,7 @@ bool NativeSkeletonProvider::ServerGone() {
         ReportProblem(streamStopped);
         return false;
     }
-    Problem problem = exited ? DescribeServerExit(status, mCamera, mPython) : streamStopped;
+    Problem problem = exited ? DescribeServerExit(status, Camera(), mPython) : streamStopped;
     if (mServerStalled) {
         problem.text = std::string("The pose server stopped sending frames - pose tracking is off.")
             + kStandIn;
@@ -777,6 +807,26 @@ bool NativeSkeletonProvider::ServerGone() {
     for (;;) {
         if (mStopRequested)
             return false;
+        // SwitchCamera: the player picked another camera, perhaps while a
+        // restart was under way.  Not a failure: launch on it now, with no
+        // backoff, and its own restart budget.  The old server's socket path
+        // is removed first, so the connect below can only reach the new
+        // server (a dying process keeps its listening socket until its memory
+        // is torn down).
+        if (mSwitchRequested) {
+            mSwitchRequested = false;
+            mCameraSwitches = mCameraSwitches + 1;
+            mRestarts = 0;
+            mServerStalled = false;
+            unlink(mSocketPath.c_str());
+            printf("Pose server: switching to camera %s\n", Camera().c_str());
+            if (!LaunchServer()) {
+                exited = false;
+                problem = streamStopped;
+                continue; // falls to the restart policy below, with its notice
+            }
+            goto launched;
+        }
         if (exited && !ServerExitIsRestartable(status))
             break;
         if (mRestarts >= mMaxRestarts) {
@@ -786,6 +836,7 @@ bool NativeSkeletonProvider::ServerGone() {
             break;
         }
         mRestarts = mRestarts + 1;
+        {
         int delayMs = mRestartBackoffMs;
         for (int i = 1; i < mRestarts && delayMs < 30000; i++)
             delayMs *= 2;
@@ -813,11 +864,15 @@ bool NativeSkeletonProvider::ServerGone() {
         restarting.brief = brief;
         ReportProblem(restarting);
 
-        for (int waited = 0; waited < delayMs && !mStopRequested; waited += 50)
+        for (int waited = 0; waited < delayMs && !mStopRequested && !mSwitchRequested; waited += 50)
             usleep(50 * 1000);
+        if (mSwitchRequested)
+            continue; // a new camera was picked while waiting: launch on that
         if (mStopRequested || !LaunchServer())
             continue; // a failed fork counts as a restart
+        }
 
+    launched:
         switch (WaitForServer(kServerTimeoutMs, &status)) {
         case kConnected:
             // Connected is not tracking: the model loads after the socket is
@@ -831,7 +886,7 @@ bool NativeSkeletonProvider::ServerGone() {
             return true;
         case kServerExited:
             exited = true;
-            problem = DescribeServerExit(status, mCamera, mPython);
+            problem = DescribeServerExit(status, Camera(), mPython);
             break;
         case kTimedOut:
             exited = false;
@@ -847,6 +902,27 @@ bool NativeSkeletonProvider::ServerGone() {
     }
     ReportProblem(problem);
     return false;
+}
+
+// SwitchCamera, on the reader thread: stop the server that is running and let
+// ServerGone launch the next one on the new camera.
+bool NativeSkeletonProvider::ReplaceServerForSwitch() {
+    if (mServerPid > 0) {
+        pid_t old = mServerPid;
+        // Untracked from here: the spawner collects it (and SIGKILLs it if it
+        // ignores this).
+        NativeSpawner::Kill(old, SIGTERM);
+        mServerPid = -1;
+        // Give it a moment to be gone, so the camera is free if the new
+        // choice is the same device under another name.  Bounded: a zombie
+        // nobody reaps still answers kill(pid, 0).
+        for (int i = 0; i < 40 && !mStopRequested; i++) {
+            if (kill(old, 0) != 0 && errno == ESRCH)
+                break;
+            usleep(25000);
+        }
+    }
+    return ServerGone();
 }
 
 // The v3 camera block that follows the persons: hand it to the camera stream
@@ -899,6 +975,15 @@ void NativeSkeletonProvider::ReaderThread() {
     auto lastPacket = std::chrono::steady_clock::now();
     bool receivedFrame = false;
     while (mRunning && !mStopRequested) {
+        if (mSwitchRequested && mSpawned) {
+            bool back = ReplaceServerForSwitch();
+            lastPacket = std::chrono::steady_clock::now();
+            receivedFrame = false;
+            if (back)
+                continue;
+            mRunning = false;
+            break;
+        }
         // Poll for data with timeout
         struct pollfd pfd;
         pfd.fd = mSocketFd;

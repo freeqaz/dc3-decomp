@@ -141,6 +141,24 @@ public:
     void Stop();
     bool IsRunning() const { return mRunning; }
 
+    // Change the camera at run time (the camera setting,
+    // PoseCamera_Native.h).  The server this provider launched is replaced by
+    // one started with the new --camera, on the reader thread and through the
+    // path that restarts a dead server (ServerGone) -- without its backoff,
+    // and with a fresh restart budget for the new camera.  Returns at once;
+    // CameraSwitches() counts the replacements made.  When the provider is not
+    // running (the last camera did not open, the restarts ran out) it is
+    // started again instead, which waits for the server as Start() does.
+    // False: there is no server of this provider's to replace
+    // (DC3_POSE_NO_SPAWN, the in-process performer, never started, web), or
+    // that start failed.
+    bool SwitchCamera(const std::string &camera);
+    int CameraSwitches() const { return mCameraSwitches; }
+    // The --camera the server was, or will next be, launched with.
+    std::string Camera();
+    // Whether Start() launched (and so can relaunch) the pose server.
+    bool LaunchesServer() const { return mSpawned && !mSocketPath.empty(); }
+
     // Restart-on-death.  When a server this provider launched dies after it
     // had connected, the reader relaunches it -- at most `maxRestarts` times
     // per Start(), waiting baseBackoffMs, then twice that, and so on -- with a
@@ -277,6 +295,8 @@ private:
     bool ServerGone();
     // Launch pose_server.py through NativeSpawner; sets mServerPid.
     bool LaunchServer();
+    // Reader thread, SwitchCamera: stop the running server, then ServerGone.
+    bool ReplaceServerForSwitch();
     enum WaitResult { kConnected, kServerExited, kTimedOut, kStopped };
     // Wait for the server's socket and connect (mSocketFd).  kServerExited
     // fills *exitStatus.
@@ -289,7 +309,9 @@ private:
     int mSocketFd = -1;
     pid_t mServerPid = -1;
     bool mSpawned = false; // this provider launched the server (not DC3_POSE_NO_SPAWN)
-    std::string mCamera = "auto";
+    std::string mCamera = "auto"; // guarded by mSwapMutex once the reader runs (SwitchCamera)
+    volatile bool mSwitchRequested = false; // SwitchCamera -> the reader: relaunch on mCamera
+    volatile int mCameraSwitches = 0;
     std::string mPython = "python3"; // the interpreter LaunchServer chose (for notices)
     volatile bool mNoCamera = false; // the last packet carried FLAG_NO_CAMERA
     int mMaxRestarts = 3;

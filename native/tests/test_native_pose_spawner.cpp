@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include "platform/NativeNotice.h"
+#include "platform/PoseCamera_Native.h"
 #include "platform/ProcessSpawner_Native.h"
 #include "platform/Skeleton_Native.h"
 
@@ -154,7 +155,8 @@ public:
     ~StubDir() {
         // Only the files this test made, by name.
         for (const char *name : { "python3", "stub.py", "runs", "limits.1", "limits.2", "limits.3",
-                                  "limits.4", "server.sock", "stderr.log" })
+                                  "limits.4", "server.sock", "stderr.log", "cameras",
+                                  "pose_camera.txt", "pose_camera.txt.tmp" })
             unlink((mDir + "/" + name).c_str());
         rmdir(mDir.c_str());
     }
@@ -168,6 +170,15 @@ public:
         while (std::getline(ss, line))
             n++;
         return n;
+    }
+    // The --camera each run was launched with, one per run.
+    std::vector<std::string> Cameras() const {
+        std::istringstream ss(ReadFile(mDir + "/cameras"));
+        std::string line;
+        std::vector<std::string> out;
+        while (std::getline(ss, line))
+            out.push_back(line);
+        return out;
     }
 
 private:
@@ -189,6 +200,9 @@ mode = os.environ.get("DC3_STUB_MODE", "serve")
 with open(os.path.join(d, "runs"), "a") as f:
     f.write("%d\n" % os.getpid())
 run = sum(1 for _ in open(os.path.join(d, "runs")))
+if "--camera" in sys.argv:
+    with open(os.path.join(d, "cameras"), "a") as f:
+        f.write(sys.argv[sys.argv.index("--camera") + 1] + "\n")
 with open("/proc/self/limits") as src, open(os.path.join(d, "limits.%d" % run), "w") as dst:
     dst.write(src.read())
 path = sys.argv[sys.argv.index("--socket") + 1]
@@ -400,6 +414,188 @@ TEST_F(PoseSpawnerTest, ADeadServerIsRestartedAndTrackingResumes) {
     pid_t second = provider.ServerPid();
     provider.Stop();
     EXPECT_TRUE(WaitUntil([&] { return ProcessGone(second); }, 3000)) << "Stop() left the server";
+}
+
+// The camera setting at run time (PoseCamera_Native.h): a switch replaces the
+// running server with one launched on the new --camera -- no backoff, no
+// restart spent, no "pose" problem left up -- and tracking resumes.
+// Sabotaged: drop the mSwitchRequested check from ReaderThread -> the server
+// is never replaced, Runs() stays 1 and the frame-id wait times out.
+TEST_F(PoseSpawnerTest, ACameraSwitchReplacesTheServerOnTheNewCamera) {
+    std::string py = RealPython();
+    if (py.empty())
+        GTEST_SKIP() << "no python3 to run the stub server";
+    ASSERT_TRUE(NativeSpawner::Init());
+    StubDir stub(PythonStub(py));
+    ASSERT_TRUE(stub.ok() && WriteStubPy(stub));
+    ScopedEnv mode("DC3_STUB_MODE", "serve");
+    ScopedEnv noSpawn("DC3_POSE_NO_SPAWN", nullptr);
+    ScopedEnv noVideo("DC3_POSE_VIDEO", nullptr);
+
+    NativeSkeletonProvider provider;
+    provider.SetRestartPolicy(3, 300);
+    ASSERT_TRUE(provider.Start(stub.sock(), "unused.task", "auto"));
+    pid_t first = provider.ServerPid();
+    ASSERT_TRUE(WaitUntil([&] {
+        provider.Poll();
+        return provider.FrameId() > 1000;
+    }, 5000));
+    EXPECT_TRUE(provider.LaunchesServer());
+    EXPECT_EQ(provider.Camera(), "auto");
+
+    auto started = std::chrono::steady_clock::now();
+    ASSERT_TRUE(provider.SwitchCamera("id:fake-camera-b"));
+    EXPECT_EQ(provider.Camera(), "id:fake-camera-b");
+    EXPECT_TRUE(WaitUntil([&] {
+        provider.Poll();
+        return provider.FrameId() > 2000;
+    }, 8000)) << "frame id " << provider.FrameId();
+    double ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - started).count();
+    printf("camera switch: frames from the new server after %.0f ms\n", ms);
+    EXPECT_TRUE(provider.IsRunning());
+    EXPECT_EQ(provider.CameraSwitches(), 1);
+    EXPECT_EQ(provider.Restarts(), 0) << "a switch is not a restart";
+    EXPECT_EQ(stub.Runs(), 2);
+    EXPECT_EQ(stub.Cameras(), (std::vector<std::string>{ "auto", "id:fake-camera-b" }));
+    EXPECT_NE(provider.ServerPid(), first);
+    EXPECT_TRUE(WaitUntil([&] { return ProcessGone(first); }, 3000)) << "the old server lives on";
+    EXPECT_TRUE(provider.LastProblem().empty()) << provider.LastProblem().text;
+    EXPECT_EQ(NativeNotice::Text("pose"), "");
+
+    pid_t second = provider.ServerPid();
+    provider.Stop();
+    EXPECT_TRUE(WaitUntil([&] { return ProcessGone(second); }, 3000)) << "Stop() left the server";
+}
+
+std::string TwoFakeCameras() {
+    return "dc3-pose-cameras 1\n"
+           "camera\tid:0x220000046d0944\t0x220000046d0944\tMX Brio\n"
+           "camera\tid:3642F2CD-E322-42E7-9360-19815B003AA6\t3642F2CD-E322-42E7-9360-19815B003AA6\t"
+           "FaceTime HD Camera\n";
+}
+std::string OneFakeCamera() {
+    return "dc3-pose-cameras 1\n"
+           "camera\tid:3642F2CD-E322-42E7-9360-19815B003AA6\t3642F2CD-E322-42E7-9360-19815B003AA6\t"
+           "FaceTime HD Camera\n";
+}
+
+// The setting end to end, as the Options row drives it: the launch is auto,
+// "next camera" restarts the server on the second camera's IDENTITY, names it
+// in a notice and saves it; with one camera -- the one in use -- selecting
+// the row restarts nothing; and the next launch reads the saved choice.  The
+// cameras are a fixed list (this box's devices are never asked).
+TEST_F(PoseSpawnerTest, TheCameraSettingSwitchesAtRunTimeAndIsRememberedAtTheNextLaunch) {
+    std::string py = RealPython();
+    if (py.empty())
+        GTEST_SKIP() << "no python3 to run the stub server";
+    ASSERT_TRUE(NativeSpawner::Init());
+    StubDir stub(PythonStub(py));
+    ASSERT_TRUE(stub.ok() && WriteStubPy(stub));
+    ScopedEnv mode("DC3_STUB_MODE", "serve");
+    ScopedEnv noSpawn("DC3_POSE_NO_SPAWN", nullptr);
+    ScopedEnv noVideo("DC3_POSE_VIDEO", nullptr);
+    ScopedEnv noCamera("DC3_POSE_CAMERA", nullptr);
+    const std::string faceTime = "id:3642F2CD-E322-42E7-9360-19815B003AA6";
+    const std::string savedPath = stub.dir() + "/pose_camera.txt";
+
+    struct Restore {
+        NativeSkeletonProvider *old = TheSkeletonProvider;
+        ~Restore() {
+            TheSkeletonProvider = old;
+            Dc3PoseCamera::SetListerForTest(nullptr);
+            Dc3PoseCamera::SetSavedPathForTest("");
+            Dc3PoseCamera::ResetForTest();
+        }
+    } restore;
+    Dc3PoseCamera::SetListerForTest(TwoFakeCameras);
+    Dc3PoseCamera::SetSavedPathForTest(savedPath);
+    Dc3PoseCamera::ResetForTest();
+
+    // No provider: there is nothing to switch, and the row is not shown.
+    TheSkeletonProvider = nullptr;
+    EXPECT_FALSE(Dc3PoseCamera::Available());
+    EXPECT_FALSE(Dc3PoseCamera::Cycle());
+
+    const Dc3PoseCamera::Launch &launch = Dc3PoseCamera::Boot();
+    EXPECT_EQ(launch.spec, "auto");
+    EXPECT_EQ(launch.source, Dc3PoseCamera::kFromDefault);
+
+    NativeSkeletonProvider provider;
+    provider.SetRestartPolicy(3, 300);
+    ASSERT_TRUE(provider.Start(stub.sock(), "unused.task", launch.spec));
+    TheSkeletonProvider = &provider;
+    ASSERT_TRUE(WaitUntil([&] {
+        provider.Poll();
+        return provider.FrameId() > 1000;
+    }, 5000));
+    ASSERT_TRUE(Dc3PoseCamera::Available());
+    EXPECT_EQ(Dc3PoseCamera::Description(),
+              "Camera in use: MX Brio (automatic). Select to switch to the next of 2 cameras.");
+
+    // Next camera: auto is the first (MX Brio), so this is the FaceTime one.
+    EXPECT_TRUE(Dc3PoseCamera::Cycle());
+    EXPECT_EQ(Dc3PoseCamera::Current(), faceTime);
+    EXPECT_EQ(Dc3PoseCamera::CurrentName(), "FaceTime HD Camera");
+    EXPECT_EQ(NativeNotice::Text("pose-camera"), "Camera: FaceTime HD Camera (2 of 2).");
+    EXPECT_TRUE(WaitUntil([&] {
+        provider.Poll();
+        return provider.FrameId() > 2000;
+    }, 8000)) << "frame id " << provider.FrameId();
+    EXPECT_EQ(stub.Cameras(), (std::vector<std::string>{ "auto", faceTime }));
+    Dc3PoseCamera::Saved saved = Dc3PoseCamera::LoadSaved(savedPath);
+    EXPECT_EQ(saved.spec, faceTime);
+    EXPECT_EQ(saved.name, "FaceTime HD Camera");
+
+    // The Brio is unplugged: one camera, the one in use.  Nothing restarts.
+    Dc3PoseCamera::SetListerForTest(OneFakeCamera);
+    EXPECT_TRUE(Dc3PoseCamera::Cycle());
+    EXPECT_EQ(NativeNotice::Text("pose-camera"), "Camera: FaceTime HD Camera (the only camera found).");
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    EXPECT_EQ(stub.Runs(), 2);
+    EXPECT_EQ(provider.CameraSwitches(), 1);
+
+    // By name, any case; a name that is nobody's changes nothing.
+    Dc3PoseCamera::SetListerForTest(TwoFakeCameras);
+    EXPECT_FALSE(Dc3PoseCamera::Set("no such camera"));
+    EXPECT_EQ(Dc3PoseCamera::Current(), faceTime);
+    EXPECT_TRUE(Dc3PoseCamera::Set("mx brio"));
+    EXPECT_EQ(Dc3PoseCamera::Current(), "id:0x220000046d0944");
+    EXPECT_TRUE(WaitUntil([&] {
+        provider.Poll();
+        return provider.FrameId() > 3000;
+    }, 8000)) << "frame id " << provider.FrameId();
+    EXPECT_EQ(stub.Cameras().back(), "id:0x220000046d0944");
+    EXPECT_EQ(provider.Restarts(), 0);
+    provider.Stop();
+    TheSkeletonProvider = nullptr;
+
+    // The next launch: the saved choice, by identity.  With that camera
+    // unplugged: auto for this run, a notice, and the choice still saved.
+    Dc3PoseCamera::ResetForTest();
+    const Dc3PoseCamera::Launch &again = Dc3PoseCamera::Boot();
+    EXPECT_EQ(again.spec, "id:0x220000046d0944");
+    EXPECT_EQ(again.source, Dc3PoseCamera::kFromSaved);
+    EXPECT_EQ(again.name, "MX Brio");
+
+    Dc3PoseCamera::ResetForTest();
+    Dc3PoseCamera::SetListerForTest(OneFakeCamera);
+    const Dc3PoseCamera::Launch &unplugged = Dc3PoseCamera::Boot();
+    EXPECT_EQ(unplugged.spec, "auto");
+    EXPECT_EQ(unplugged.source, Dc3PoseCamera::kFromSavedMissing);
+    EXPECT_NE(NativeNotice::Text("pose-camera").find("\"MX Brio\" is not connected"),
+              std::string::npos) << NativeNotice::Text("pose-camera");
+    EXPECT_EQ(Dc3PoseCamera::LoadSaved(savedPath).spec, "id:0x220000046d0944");
+
+    // DC3_POSE_CAMERA wins over the file and does not rewrite it.
+    Dc3PoseCamera::ResetForTest();
+    {
+        ScopedEnv env("DC3_POSE_CAMERA", "1");
+        const Dc3PoseCamera::Launch &byEnv = Dc3PoseCamera::Boot();
+        EXPECT_EQ(byEnv.spec, "1");
+        EXPECT_EQ(byEnv.source, Dc3PoseCamera::kFromEnv);
+        EXPECT_EQ(Dc3PoseCamera::LoadSaved(savedPath).spec, "id:0x220000046d0944");
+    }
 }
 
 // A server that hangs -- connected, alive, silent (np-cutoff, PLAN H-94) --

@@ -23,6 +23,7 @@
 #include "lazer/game/GamePanel.h"  // TheGamePanel: the stall notice is for a song in play
 #include "PoseFill_Native.h"      // DC3_POSE_FILL
 #include "MenuGesture_Native.h"   // DC3_MENU_ARC_START: the camera's own joint confidences
+#include "PoseCamera_Native.h"    // which camera: DC3_POSE_CAMERA, the saved choice, auto
 #include "PoseIdentity_Native.h"  // DC3_POSE_REACQUIRE_MS: who is who
 #include "NativeNotice.h"         // DC3_POSE_STALL_MS
 #include "meta_ham/HamUI.h"          // TheHamUI -> ShellInput -> SkeletonChooser
@@ -264,19 +265,12 @@ void GestureMgr_NativeInit() {
     }
 
     const char *poseMode = getenv("DC3_POSE");
-    // DC3_POSE_CAMERA goes to pose_server.py --camera as is: unset or "auto"
-    // = the first V4L2 video-capture device, re-resolved whenever the server
-    // reopens it (a USB camera re-enumerates under a new /dev/videoN); also an
-    // index, a /dev/videoN path or a /dev/v4l/by-id name.
-    const char *camStr = getenv("DC3_POSE_CAMERA");
-    std::string camSpec = (camStr && *camStr) ? camStr : "auto";
 
 #ifdef __EMSCRIPTEN__
     // Web: nothing to spawn or connect to.  The provider is created idle; the
     // page's camera pipeline starts it with its first dc3_pose_push
     // (PoseInput_Web.cpp) and stops it when the camera goes away.  Until then
     // BuildSensorFrame feeds the dummy, exactly as with no provider.
-    (void)camSpec;
     if ((!poseMode || strcmp(poseMode, "off") != 0) && !TheSkeletonProvider) {
         TheSkeletonProvider = new NativeSkeletonProvider();
         printf("Native: web pose provider ready (waiting for dc3_pose_push)\n");
@@ -305,6 +299,15 @@ void GestureMgr_NativeInit() {
             // showed MediaPipe dominates it on depth AND detection robustness
             // (tools/pose_corpus/bench_model_z.py, bench_detection.py).
             std::string modelPath = GestureMgr_NativePoseModelPath();
+
+            // The camera goes to pose_server.py --camera as is:
+            // DC3_POSE_CAMERA when set, else the choice saved from Options >
+            // Gameplay Settings > Camera, else "auto" (PoseCamera_Native.h).
+            // auto = the first V4L2 video-capture device, re-resolved whenever
+            // the server reopens it (a USB camera re-enumerates under a new
+            // /dev/videoN); also an index, a /dev/videoN path, a
+            // /dev/v4l/by-id name, or a camera's identity ("id:...").
+            std::string camSpec = Dc3PoseCamera::Boot().spec;
 
             if (TheSkeletonProvider->Start(socketPath, modelPath, camSpec)) {
                 printf("Native: external pose server started\n");

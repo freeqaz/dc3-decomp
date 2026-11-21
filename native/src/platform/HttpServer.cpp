@@ -8,6 +8,7 @@
 #include "platform/DtaEvalSupport.h"
 #include "platform/NativeSettings.h"
 #include "platform/MenuGesture_Native.h"
+#include "platform/PoseCamera_Native.h"
 #include "platform/TextInput_Native.h"
 #include "songbrowser/SongCatalogSource_Native.h" // GET /api/songs
 #include "platform/SongBrowserHooks_Native.h" // GET /api/songbrowser/state
@@ -445,6 +446,7 @@ void HttpServer::ProcessCommands() {
             case kCmdPoseTarget:   HandlePoseTarget(*cmd); break;
             case kCmdCamera:       HandleCamera(*cmd); break;
             case kCmdMenuState:    HandleMenuState(*cmd); break;
+            case kCmdPoseCamera:   HandlePoseCamera(*cmd); break;
             case kCmdInputText:    HandleInputText(*cmd); break;
             case kCmdSongs:        HandleSongs(*cmd); break;
             case kCmdSongBrowserState: HandleSongBrowserState(*cmd); break;
@@ -1139,6 +1141,25 @@ void HttpServer::HandleMenuState(Command& cmd) {
     cmd.result.ok = true;
 }
 
+// /api/pose_camera: the camera setting (platform/PoseCamera_Native.h).
+// param1 = "get" | "set" | "cycle"; param2 = the camera for "set".  The answer
+// is always the state afterwards; a set that named nothing is a 400.
+void HttpServer::HandlePoseCamera(Command& cmd) {
+    bool ok = true;
+    if (cmd.param1 == "set")
+        ok = Dc3PoseCamera::Set(cmd.param2);
+    else if (cmd.param1 == "cycle")
+        ok = Dc3PoseCamera::Cycle();
+    cmd.result.jsonData = Dc3PoseCamera::StateJson(cmd.param1 == "get");
+    cmd.result.ok = ok;
+    if (!ok) {
+        cmd.result.httpStatus = 400;
+        cmd.result.error = cmd.param1 == "set"
+            ? "no such camera, or no camera pose server in this run: " + cmd.param2
+            : "no camera to switch to, or no camera pose server in this run";
+    }
+}
+
 // GET /api/songbrowser/state: the natively drawn song browser in song select
 // (platform/SongBrowserPanel_Native.cpp).  Read-only.
 void HttpServer::HandleSongBrowserState(Command& cmd) {
@@ -1816,6 +1837,35 @@ void HttpServer::RegisterEndpoints() {
             res.set_content(JsonError(result.error), "application/json");
         }
     });
+
+    // GET /api/pose_camera — the camera the pose server reads, where the
+    // choice came from, and this box's cameras (listed afresh).
+    // POST /api/pose_camera?set=<spec|name|identity|auto> or ?cycle=1 changes
+    // it at run time, as the Options > Gameplay Settings > Camera row does.
+    svr->Get("/api/pose_camera", [this](const httplib::Request&, httplib::Response& res) {
+        auto result = QueueAndWait(kCmdPoseCamera, "get");
+        res.set_content(JsonOk(result.jsonData), "application/json");
+    });
+    auto poseCameraChange = [this](const httplib::Request& req, httplib::Response& res) {
+        CommandResult result;
+        if (req.has_param("set")) {
+            result = QueueAndWait(kCmdPoseCamera, "set", req.get_param_value("set"));
+        } else if (req.has_param("cycle")) {
+            result = QueueAndWait(kCmdPoseCamera, "cycle");
+        } else {
+            res.status = 400;
+            res.set_content(JsonError("want ?set=<camera> or ?cycle=1"), "application/json");
+            return;
+        }
+        if (result.ok) {
+            res.set_content(JsonOk(result.jsonData), "application/json");
+        } else {
+            res.status = result.httpStatus;
+            res.set_content(JsonError(result.error), "application/json");
+        }
+    };
+    svr->Post("/api/pose_camera", poseCameraChange);
+    svr->Put("/api/pose_camera", poseCameraChange);
 
     // GET /api/songbrowser/state — the natively drawn song browser: whether it
     // is shown and why, the focused part, the selected song, the query, the row
