@@ -139,6 +139,10 @@ enum Pass { kWorld = 1, kOverlay = 2, kTexture = 4 };
 
 struct Contexts {
     MeshPassContext world, reflection, overlay, texture, caster;
+    // np-look47: the character's texture pass as the look draws a target it
+    // draws like the frame (4x under texPassMsaa); the same as `texture` when
+    // the look does not, and then not walked twice.
+    MeshPassContext textureLikeFrame;
 };
 
 // The states the loaded property animations key on each material.
@@ -253,6 +257,8 @@ public:
             if (d.second & kOverlay) n += QueueDir(d.first, mCtx.overlay);
             if (d.second & kTexture) {
                 n += QueueDir(d.first, mCtx.texture);
+                if (mCtx.textureLikeFrame.sampleCount != mCtx.texture.sampleCount)
+                    n += QueueDir(d.first, mCtx.textureLikeFrame);
                 if (mCtx.caster.selfShadowCaster) n += QueueDir(d.first, mCtx.caster);
             }
         }
@@ -402,8 +408,14 @@ void NativeWarmLoadedDir(ObjectDir *dir) {
     c.world = gWgpuRnd->WorldPassContext(false);
     c.reflection = gWgpuRnd->WorldPassContext(true);
     c.overlay = gWgpuRnd->OverlayPassContext();
+    // A character drawn into a target of its own, at one sample and, when the
+    // look draws that target like the frame (np-look47 step 1), at 4: both,
+    // since which one a target gets is the rule's (TexPassDrawnLikeFrame) and a
+    // character's target need not be one the rule reaches. The self-shadow
+    // caster pass draws into the 0x42 map, one sample always.
     c.texture = gWgpuRnd->TexturePassContext(true);
-    c.caster = c.texture;
+    c.textureLikeFrame = gWgpuRnd->TexturePassContext(true, true);
+    c.caster = gWgpuRnd->TexturePassContext(true);
     c.caster.selfShadowCaster = rndshape::kSelfShadowMap;
 
     Warm warm(c);

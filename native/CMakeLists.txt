@@ -336,7 +336,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "eb31faa79abf90b076f523081fb99c69c6f3422e"
+set(MILO_ENGINE_PIN "31f26316680b9e3638b3452748dc979ba8435b96"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -1289,6 +1289,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/KinectShare_Stub.cpp
     src/platform/Cache_Stub.cpp
     src/platform/PipelineWarm.cpp   # load-time material pipeline warm (DirLoader, H-104)
+    src/platform/TexPassRule.cpp    # np-look47: dc3 half of "a texture pass is drawn like the frame"
     src/platform/ChecksumData_Stub.cpp
     src/platform/Keygen_Stub.cpp
     src/platform/NetworkSocket_Stub.cpp
@@ -1566,6 +1567,7 @@ set(DC3_WEB_CORE_SOURCES
     # defines. (The engine's own Cache_Stub.cpp is a comment-only placeholder.)
     src/platform/Cache_Stub.cpp
     src/platform/PipelineWarm.cpp
+    src/platform/TexPassRule.cpp
     src/platform/WebMovieImpl.cpp
     src/platform/NetXbox_Stub.cpp
     src/platform/KinectShare_Stub.cpp
@@ -2199,6 +2201,7 @@ if(BUILD_TESTS)
         tests/test_display_ramp.cpp
         tests/test_crowd_contact_shadow.cpp # np-look32: the enhanced look's crowd contact shadows
         tests/test_look_text_sampling.cpp # np-look34: the enhanced look's text and HUD sampling rule
+        tests/test_look_texpass.cpp # np-look47: render-to-texture targets drawn like the frame
         tests/test_dc3_look_post.cpp
         tests/test_merge_scope_parity.cpp
         tests/test_merge_lifecycle.cpp

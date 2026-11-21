@@ -225,6 +225,9 @@ Rnd::Rnd()
 // crowd_shadow_on|crowd_shadow_off|crowd_shadow_rule switch the soft contact
 // shadows under the 3D crowd (np-look32, LookSettings::crowdContactShadow;
 // enhanced's rule on, retail's off; nothing compiles after the first);
+// rtt_msaa_on|off|rule switch how a render-to-texture target the look draws
+// like the frame is drawn (np-look47 step 1, LookSettings::texPassMsaa: 4x
+// MSAA resolved into it; enhanced's rule on, retail's off);
 // text_bias_off|text_bias_half|text_bias_on|text_bias_rule put the text and
 // HUD LOD bias (np-look34, LookSettings::uiLodBias) at 0 / -0.5 / -1 or the
 // look's value; text_levels_2|text_levels_all|text_levels_rule set the text
@@ -285,6 +288,9 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "crowd_shadow_on") milo::SetLookCrowdShadowForInspection(1);
         else if (s == "crowd_shadow_off") milo::SetLookCrowdShadowForInspection(0);
         else if (s == "crowd_shadow_rule") milo::SetLookCrowdShadowForInspection(-1);
+        else if (s == "rtt_msaa_on") milo::SetLookTexPassMsaaForInspection(1);
+        else if (s == "rtt_msaa_off") milo::SetLookTexPassMsaaForInspection(0);
+        else if (s == "rtt_msaa_rule") milo::SetLookTexPassMsaaForInspection(-1);
         else if (s == "text_bias_off") milo::SetLookUiLodBiasForInspection(false, 0.0f);
         else if (s == "text_bias_half") milo::SetLookUiLodBiasForInspection(false, -0.5f);
         else if (s == "text_bias_on") milo::SetLookUiLodBiasForInspection(false, -1.0f);
@@ -307,7 +313,8 @@ static Symbol NativeLook(const DataArray *msg) {
                          "hair_edge_off, hair_edge_rule, hair_edge_b, hair_edge_c, "
                          "hair_edge_e, hair_edge_centre, display_tv, display_srgb, "
                          "display_off, display_rule, crowd_shadow_on, crowd_shadow_off, "
-                         "crowd_shadow_rule, text_bias_off, text_bias_half, text_bias_on, "
+                         "crowd_shadow_rule, rtt_msaa_on, rtt_msaa_off, rtt_msaa_rule, "
+                         "text_bias_off, text_bias_half, text_bias_on, "
                          "text_bias_rule, text_levels_2, text_levels_all, text_levels_rule, "
                          "text_bias_glyphs, text_bias_all_ui or text_bias_scope_rule", s.Str());
     }
