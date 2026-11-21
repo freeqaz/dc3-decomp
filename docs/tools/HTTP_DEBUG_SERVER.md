@@ -119,7 +119,8 @@ Reads and modifies `NativeSettings` live. Available fields:
 # Which webcam the pose server reads, and the ones it could
 curl localhost:9090/api/pose_camera
 # {"available":true,"current":"id:0x220000046d0944","name":"MX Brio","source":"setting",
-#  "saved":"id:0x220000046d0944","cameras":[{"spec":"id:0x22…","id":"0x22…","name":"MX Brio"},…]}
+#  "saved":"id:0x220000046d0944","savedName":"MX Brio","listed":true,
+#  "cameras":[{"spec":"id:0x22…","id":"0x22…","name":"MX Brio","inUse":true},…]}
 
 # The next camera / one particular camera (its spec, identity or name; or auto)
 curl -X POST 'localhost:9090/api/pose_camera?cycle=1'

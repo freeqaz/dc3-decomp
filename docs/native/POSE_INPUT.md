@@ -199,7 +199,7 @@ DTA and over HTTP:
 | `{native_settings cycle_pose_camera}` | the next camera |
 | `{native_settings set_pose_camera <spec, name or identity>}` | that camera; `auto`; or a raw `--camera` value (an index, a path) |
 | `{native_settings pose_camera_available}` | whether the row is shown |
-| `GET /api/pose_camera` | `{"available":…,"current":…,"name":…,"source":…,"saved":…,"savedName":…,"cameras":[…]}` |
+| `GET /api/pose_camera` | `{"available":…,"current":…,"name":…,"source":…,"saved":…,"savedName":…,"listed":…,"cameras":[{"spec":…,"id":…,"name":…,"inUse":…}]}`; `listed` false = the box could not be asked |
 | `POST /api/pose_camera?cycle=1`, `?set=<…>` | the same two actions; 400 with the notice's reason when nothing was switched |
 
 **The switch** does not restart the game. `NativeSkeletonProvider::SwitchCamera`
