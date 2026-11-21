@@ -115,7 +115,12 @@ public:
     bool GetBloomStreak() const { return mBloomStreak; }
     float GetBloomStreakAttenuation() const { return mBloomStreakAttenuation; }
     float GetBloomStreakAngle() const { return mBloomStreakAngle; }
-    float GetNoiseIntensity() const { return mNoiseIntensity; }
+    // Native inspection ({rnd native_noise <scale>}): every PostProc's noise
+    // intensity as the engine reads it is scaled by this (1 = as authored), so
+    // one held frame can be captured with the noise map on and off.
+    static inline float sNoiseInspectScale = 1.0f;
+    float GetNoiseIntensity() const { return mNoiseIntensity * sNoiseInspectScale; }
+    float GetNoiseIntensityAuthored() const { return mNoiseIntensity; }
     bool GetNoiseMidtone() const { return mNoiseMidtone; }
     bool GetNoiseStationary() const { return mNoiseStationary; }
     // The noise map and its tiling: NgPostProc::CheckNoise hands these to the

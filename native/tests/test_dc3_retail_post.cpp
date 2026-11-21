@@ -2494,3 +2494,198 @@ TEST_F(DC3RetailPostGpuTest, TogglePostProcsSkipsDepthOfField) {
     if (prev) prev->Select(); else pp->Unselect();
     delete pp;
 }
+
+// ---- np-look23 (a): the noise map tied to output rows ----------------------
+//
+// noise_mono.tex (8 x 256, a per-row grain) is tiled (1, 3) in screen uv: 768
+// map rows down any screen, so one texel is 0.94 output rows at 720 and 1.41
+// at 1080, and the linear filter blended neighbouring map rows by a weight
+// drifting down the screen -- a 2.1-2.8 px line pattern under a slow beat
+// (measured 1.2-3.6 8-bit levels at 2.81 px at 1920x1080; Xenia's 1280x720
+// frame shows it too, at 2.14 px). SnapNoiseToOutputRows (NoiseRows.h) makes
+// each layer's texel a whole number of output rows and moves the seeds by
+// whole texels; the shaders sample each row at its texel's centre.
+// Sabotages (archive item23/a): S1 SnapNoiseToOutputRows a no-op (the
+// authored 768 rows) fails both tests; S2 the composite shader's texel-centre
+// snap removed fails the GPU test (a 2x-drawn frame reads 0.25 / 0.75 of the
+// way between rows and blends them).
+#include "gfx/NoiseRows.h"
+
+namespace {
+// The texel row the DC3 composite reads for drawn row `yi` of `drawnRows`
+// (pixel centre uv, the shader's floor at the texel centre).
+long NoiseTexelRow(int yi, int drawnRows, float seedY, float scaleY, int mapH) {
+    const double uv = ((double)yi + 0.5) / drawnRows;
+    return (long)std::floor((uv + (double)seedY) * (double)scaleY * mapH);
+}
+} // namespace
+
+TEST(DC3NoiseRows, EveryOutputRowReadsOneTexelAtEverySize) {
+    // The five sizes of the item, plus the Xbox's own 720 and 1440 (k = 2).
+    struct Size { int outRows; int scale; };
+    const Size sizes[] = {{360, 1}, {713, 1}, {800, 1}, {1080, 1}, {1080, 2}, {720, 1}, {1440, 1}};
+    // Every venue's noise as authored: (1, 3) stationary (top x1), the
+    // non-stationary top layer (x1.35914), bid's (8, 6).
+    struct Tiling { float baseY, top; };
+    const Tiling tilings[] = {{3.0f, 1.0f}, {3.0f, 1.35914f}, {6.0f, 1.35914f}};
+    const int mapH = 256;
+    int checked = 0;
+    for (const Size &sz : sizes) {
+        for (const Tiling &tl : tilings) {
+            float seeds[4] = {0.137f, 0.731f, 0.412f, 0.269f};
+            float params[4] = {1.0f, tl.baseY, tl.top, 1.0f};
+            SnapNoiseToOutputRows(sz.outRows, mapH, seeds, params);
+            const int drawn = sz.outRows * sz.scale;
+            const float layerY[2] = {params[1], params[1] * params[2]};
+            const float layerSeed[2] = {seeds[1], seeds[3]};
+            for (int L = 0; L < 2; L++) {
+                // Every drawn row of an output row reads the same texel row, and
+                // the texel rows run down the screen in runs of one whole length:
+                // each texel covers exactly k output rows (the last run may be cut).
+                std::vector<int> runs;
+                long prev = 0;
+                int bad = 0;
+                for (int r = 0; r < sz.outRows; r++) {
+                    const long t = NoiseTexelRow(r * sz.scale, drawn, layerSeed[L], layerY[L], mapH);
+                    for (int j = 1; j < sz.scale; j++)
+                        bad += NoiseTexelRow(r * sz.scale + j, drawn, layerSeed[L], layerY[L], mapH) != t;
+                    if (r == 0 || t != prev) {
+                        bad += r > 0 && t != prev + 1;
+                        runs.push_back(1);
+                    } else {
+                        runs.back()++;
+                    }
+                    prev = t;
+                }
+                for (size_t i = 0; i + 1 < runs.size(); i++) bad += runs[i] != runs[0];
+                bad += runs.back() > runs[0];
+                const int step = runs[0];
+                const int k = NoiseOutputRowsPerTexel(sz.outRows, (double)std::fabs(tl.baseY *
+                                                       (L ? tl.top : 1.0f)) * mapH);
+                // Texel row count across the screen is outRows / k exactly.
+                const double rows = (double)layerY[L] * mapH;
+                EXPECT_NEAR(rows, (double)sz.outRows / k, 1e-3)
+                    << sz.outRows << " rows x" << sz.scale << " baseY " << tl.baseY << " layer " << L;
+                EXPECT_EQ(bad, 0) << sz.outRows << " rows x" << sz.scale << " baseY " << tl.baseY
+                                  << " layer " << L << ": " << bad
+                                  << " output rows read a fraction of a texel";
+                EXPECT_EQ(step, k) << sz.outRows << " rows x" << sz.scale << " layer " << L;
+                checked++;
+            }
+        }
+    }
+    EXPECT_EQ(checked, 7 * 3 * 2);
+    // 1080: the authored 1.406 rows per texel lies between 1 and 2; 1 is the
+    // nearer in log terms (x1.406 vs x1.422). 1440 (1.875) takes 2.
+    EXPECT_EQ(NoiseOutputRowsPerTexel(1080, 768.0), 1);
+    EXPECT_EQ(NoiseOutputRowsPerTexel(1440, 768.0), 2);
+    EXPECT_EQ(NoiseOutputRowsPerTexel(360, 768.0), 1);
+}
+
+TEST_F(DC3RetailPostGpuTest, NoiseMapReadsOneTexelPerOutputRow) {
+    // A 2x-drawn frame (1080 drawn rows, 540 output rows) through the real
+    // composite: a flat s = 64/255 scene, the overlay's lower branch at
+    // intensity 1 gives c = 2 n s with n = map^2 (stationary: both layers at
+    // one seed), so each drawn row's level names the map row it read.
+    GpuDevice &gpu = gWgpuRnd->Gpu();
+    auto &dev = gpu.Device();
+    const int W = 16, H = 1080, outRows = 540, mapW = 8, mapH = 256;
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)W, (uint32_t)H, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    wgpu::Texture scene = dev.CreateTexture(&d);
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture frame = dev.CreateTexture(&d);
+    d.size = {(uint32_t)mapW, (uint32_t)mapH, 1};
+    d.format = wgpu::TextureFormat::RGBA8Unorm;
+    d.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    wgpu::Texture noise = dev.CreateTexture(&d);
+    const uint8_t grey = 64;
+    std::vector<uint8_t> px((size_t)W * H * 4), out((size_t)W * H * 4);
+    for (size_t i = 0; i < px.size(); i += 4) {
+        px[i] = px[i + 1] = px[i + 2] = grey;
+        px[i + 3] = 255;
+    }
+    wgpu::TexelCopyTextureInfo dst{};
+    dst.texture = scene;
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = W * 4;
+    wgpu::Extent3D ext = {(uint32_t)W, (uint32_t)H, 1};
+    gpu.Queue().WriteTexture(&dst, px.data(), px.size(), &layout, &ext);
+    // Map rows far apart from their neighbours (a blend of two is never
+    // within a level of either), the same in every column.
+    std::vector<uint8_t> mp((size_t)mapW * mapH * 4);
+    std::vector<float> rowV(mapH);
+    for (int r = 0; r < mapH; r++) {
+        const uint8_t v = (uint8_t)(r % 2 ? 250 - (r * 7) % 60 : 130 + (r * 11) % 50);
+        rowV[r] = v / 255.0f;
+        for (int x = 0; x < mapW; x++) {
+            uint8_t *p = &mp[((size_t)r * mapW + x) * 4];
+            p[0] = p[1] = p[2] = v;
+            p[3] = 255;
+        }
+    }
+    dst.texture = noise;
+    layout.bytesPerRow = mapW * 4;
+    ext = {(uint32_t)mapW, (uint32_t)mapH, 1};
+    gpu.Queue().WriteTexture(&dst, mp.data(), mp.size(), &layout, &ext);
+    wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView(),
+                      noiseView = noise.CreateView();
+
+    RB3RetailPost post;
+    post.Init(gpu);
+    RetailPostParams p;
+    p.dc3 = true;
+    for (int i = 0; i < 3; i++) p.xfm[i][i] = 1.0f;
+    p.noiseMap = noiseView;
+    float seeds[4] = {0.3f, 0.37f, 0.3f, 0.37f};
+    float params[4] = {1.0f, 3.0f, 1.0f, 1.0f};   // noise_mono's (1, 3), stationary, intensity 1
+    SnapNoiseToOutputRows(outRows, mapH, seeds, params);
+    std::memcpy(p.noiseSeeds, seeds, sizeof(seeds));
+    std::memcpy(p.noiseParams, params, sizeof(params));
+    wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+    post.Run(enc, sceneView, sceneView, W, H, frameView, p, gpu);
+    wgpu::CommandBuffer cmd = enc.Finish();
+    gpu.Queue().Submit(1, &cmd);
+    ASSERT_TRUE(gpu.ReadbackTexture(frame, W, H, out.data(), out.size()));
+    post.Terminate();
+
+    const float s = grey / 255.0f;
+    int bad = 0, worst = 0;
+    std::string first;
+    for (int yi = 0; yi < H; yi++) {
+        const long t = NoiseTexelRow(yi, H, seeds[1], params[1], mapH);
+        const int row = (int)(((t % mapH) + mapH) % mapH);
+        const float want = 2.0f * rowV[row] * rowV[row] * s * 255.0f;
+        const int got = out[((size_t)yi * W + W / 2) * 4 + 1];
+        const int err = (int)std::lround(std::fabs(got - want));
+        worst = std::max(worst, err);
+        if (err > 1) {
+            if (bad == 0)
+                first = "drawn row " + std::to_string(yi) + ": " + std::to_string(got) + " vs " +
+                        std::to_string(want) + " (map row " + std::to_string(row) + ")";
+            bad++;
+        }
+    }
+    EXPECT_EQ(bad, 0) << bad << " of " << H << " drawn rows read a blend of two map rows, worst "
+                      << worst << " levels; first " << first;
+    // Both drawn rows of each output row read one texel (the box filter to
+    // the output then sees no blend either): a 768-row tiling fails this.
+    int split = 0;
+    for (int r = 0; r < outRows; r++) {
+        const int a = out[((size_t)(2 * r) * W + W / 2) * 4 + 1];
+        const int b = out[((size_t)(2 * r + 1) * W + W / 2) * 4 + 1];
+        split += std::abs(a - b) > 1;
+    }
+    EXPECT_EQ(split, 0) << split << " of " << outRows << " output rows straddle two map rows";
+    // Non-vacuous: the noise is on (the rows span tens of levels).
+    int lo = 255, hi = 0;
+    for (int yi = 0; yi < H; yi++) {
+        const int g = out[((size_t)yi * W + W / 2) * 4 + 1];
+        lo = std::min(lo, g);
+        hi = std::max(hi, g);
+    }
+    EXPECT_GT(hi - lo, 20) << "the noise map did not reach the frame";
+}

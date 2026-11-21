@@ -230,6 +230,41 @@ static Symbol NativeLook(const DataArray *msg) {
     }
     return milo::LookProfileName(milo::Look().profile);
 }
+
+// Native inspection (np-look23 a): {rnd native_noise [scale]} scales every
+// PostProc's noise intensity as the engine reads it (0 = off, 1 = authored)
+// and reports the current PostProc's noise map and tiling.
+static DataNode NativeNoise(const DataArray *msg) {
+    if (msg->Size() > 2) RndPostProc::sNoiseInspectScale = msg->Float(2);
+    const RndPostProc *pp = RndPostProc::Current();
+    if (!pp) return DataNode("no current postproc");
+    const RndTex *map = pp->GetNoiseMap();
+    const Vector2 &base = pp->GetNoiseBaseScale();
+    // {rnd native_noise scale "out.ppm"}: also write the map's bitmap as a PPM.
+    if (msg->Size() > 3 && map) {
+        const RndBitmap &bm = map->Bitmap();
+        if (FILE *f = fopen(msg->Str(3), "wb")) {
+            fprintf(f, "P6\n%d %d\n255\n", bm.Width(), bm.Height());
+            for (int y = 0; y < bm.Height(); y++)
+                for (int x = 0; x < bm.Width(); x++) {
+                    u8 r, g, b, a;
+                    bm.PixelColor(x, y, r, g, b, a);
+                    const u8 px[3] = {r, g, b};
+                    fwrite(px, 1, 3, f);
+                }
+            fclose(f);
+        }
+    }
+    static char buf[512];
+    snprintf(buf, sizeof(buf),
+        "pp=%s map=%s file=%s size=%dx%d base=%g,%g top=%g intensity=%g stationary=%d "
+        "midtone=%d inspect_scale=%g",
+        pp->Name(), map ? map->Name() : "(none)", map ? map->File().c_str() : "",
+        map ? map->Width() : 0, map ? map->Height() : 0, (double)base.x, (double)base.y,
+        (double)pp->GetNoiseTopScale(), (double)pp->GetNoiseIntensityAuthored(), (int)pp->GetNoiseStationary(),
+        (int)pp->GetNoiseMidtone(), (double)RndPostProc::sNoiseInspectScale);
+    return DataNode(buf);
+}
 #endif
 
 BEGIN_HANDLERS(Rnd)
@@ -341,6 +376,7 @@ BEGIN_HANDLERS(Rnd)
     HANDLE_EXPR(toggle_all_postprocs, mDisablePostProc = !mDisablePostProc)
 #ifdef HX_NATIVE
     HANDLE_EXPR(native_look, NativeLook(_msg))
+    HANDLE_EXPR(native_noise, NativeNoise(_msg))
 #endif
     HANDLE_ACTION(recreate_defaults, CreateDefaults())
     HANDLE_ACTION(
