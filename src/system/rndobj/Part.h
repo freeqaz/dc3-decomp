@@ -285,6 +285,10 @@ public:
 #ifdef HX_NATIVE
     int NumTilesAcross() const { return mNumTilesAcross; }
     int NumTilesDown() const { return mNumTilesDown; }
+    // animate_uvs: DxParticleSys::DrawShowing loads c51 with it, and the
+    // particles shader reads one tile only when it is set (the whole texture
+    // otherwise; rndshape::PartAnimatesUVs in the shared engine).
+    bool AnimateUVs() const { return mAnimateUVs; }
 #endif
 
 protected:
