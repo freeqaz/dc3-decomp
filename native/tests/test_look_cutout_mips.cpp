@@ -34,8 +34,8 @@
 // and the lod-2 fringe), and E must equal B below it (the lod-0 quad whose
 // centre passes while two samples fail: C draws it solid, B and E at 2 of 4).
 // C is read through its own token. LookSwitchLevelsTest (end of file): after
-// {rnd native_look retail} in a run started enhanced, world textures read
-// retail's two levels.
+// {rnd native_look retail} in a run started enhanced, world textures (and
+// retail's text and HUD samplers) read retail's two levels.
 #include "test_helpers.h"
 
 #include "gfx/GpuDevice.h"
@@ -57,6 +57,13 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+
+// Declared here, not via the engine's MaterialSetup.h: dc3's own
+// native/src/platform/MaterialSetup.h (a pre-engine copy, compiled into no
+// engine-linked target) is earlier on the include path and shadows it. Same
+// convention as test_look_sampling.cpp.
+void ApplyLookSampling(SamplerDesc &desc, bool uiClass, const milo::LookSettings &look,
+                       int startupBitmapMipLevels);
 
 using milo::Look;
 using milo::LookProfile;
@@ -928,7 +935,7 @@ TEST_F(LookCutoutMipTest, TheRetailCutIsUnmovedByTheSwitch) {
 // chain through retail's sampler, which is not retail wherever a texture is
 // minified past level 1 (26e: oblio04's hair mass read solid where real retail
 // has holes). ApplyLookSampling now clamps world samplers to the switched
-// look's level count (milo::WorldTexLodMaxLevels). Here: a hand-filled chain
+// look's level count (milo::LookSwitchTexLevels). Here: a hand-filled chain
 // whose levels 0 and 1 are grey 200 and levels 2 and deeper grey 40, drawn at
 // 8 texels per pixel (lod 3) as a plain opaque quad. Reference: the same quad
 // in a scope started retail (two levels uploaded). Switched: uploaded in a
@@ -1038,21 +1045,58 @@ TEST_F(LookSwitchLevelsTest, TheClampIsOnlyForASwitchToFewerLevels) {
     for (LookProfile p : {LookProfile::Native, LookProfile::Retail, LookProfile::Enhanced}) {
         ScopedLookOverride o(p);
         EXPECT_EQ(milo::StartupBitmapMipLevels(), Look().bitmapMipLevels) << "a scope stands for a run started in it";
-        EXPECT_EQ(milo::WorldTexLodMaxLevels(Look(), milo::StartupBitmapMipLevels()), 0)
+        EXPECT_EQ(milo::LookSwitchTexLevels(Look(), milo::StartupBitmapMipLevels()), 0)
             << milo::LookProfileName(p) << ": never switched, never clamped";
     }
     ScopedLookOverride e(LookProfile::Enhanced);
     const int startedEnhanced = milo::StartupBitmapMipLevels();
     ASSERT_TRUE(milo::SetLookProfileForInspection(LookProfile::Retail));
     EXPECT_EQ(milo::StartupBitmapMipLevels(), startedEnhanced) << "the token does not re-upload";
-    EXPECT_EQ(milo::WorldTexLodMaxLevels(Look(), startedEnhanced), 2) << "retail's two levels";
+    EXPECT_EQ(milo::LookSwitchTexLevels(Look(), startedEnhanced), 2) << "retail's two levels";
     {
         ScopedLookOverride r(LookProfile::Retail);
         const int startedRetail = milo::StartupBitmapMipLevels();
         ASSERT_TRUE(milo::SetLookProfileForInspection(LookProfile::Enhanced));
-        EXPECT_EQ(milo::WorldTexLodMaxLevels(Look(), startedRetail), 0) << "the reverse: nothing to clamp";
+        EXPECT_EQ(milo::LookSwitchTexLevels(Look(), startedRetail), 0) << "the reverse: nothing to clamp";
     }
     EXPECT_EQ(milo::StartupBitmapMipLevels(), startedEnhanced) << "the inner scope restored it";
+}
+
+// Text and HUD draws: the same textures, the same upload rule, so the same
+// switch. Their class rule comes first (enhanced: uiMipLevels 2, switched or
+// not); a look with no class rule (retail) takes the switched look's level
+// count, so the retail token in a run started enhanced reads a glyph page or
+// HUD texture at retail's two levels. No clamp in a run that never switches.
+// Sabotage: the text/HUD branch left without the switched-look clamp (the
+// state before this test) -- the switched sampler reads 16.
+TEST_F(LookSwitchLevelsTest, TextAndHudReadTheSwitchedLooksLevelsToo) {
+    if (IsSkipped()) return;
+    for (LookProfile p : {LookProfile::Native, LookProfile::Retail}) {
+        ScopedLookOverride o(p);
+        SamplerDesc ui;
+        ApplyLookSampling(ui, true, Look(), milo::StartupBitmapMipLevels());
+        EXPECT_EQ(ui.lodMaxClamp, 16.0f) << milo::LookProfileName(p) << ": never switched, never clamped";
+    }
+    {
+        ScopedLookOverride e(LookProfile::Enhanced);
+        SamplerDesc ui;
+        ApplyLookSampling(ui, true, Look(), milo::StartupBitmapMipLevels());
+        EXPECT_EQ(ui.lodMaxClamp, 1.0f) << "enhanced: the class rule, two levels";
+        ASSERT_TRUE(milo::SetLookProfileForInspection(LookProfile::Retail));
+        SamplerDesc switched, world;
+        ApplyLookSampling(switched, true, Look(), milo::StartupBitmapMipLevels());
+        ApplyLookSampling(world, false, Look(), milo::StartupBitmapMipLevels());
+        EXPECT_EQ(switched.lodMaxClamp, 1.0f) << "enhanced->retail: retail's two levels for text and HUD";
+        EXPECT_EQ(switched.maxAnisotropy, 1) << "the class keeps no anisotropy";
+        EXPECT_EQ(world.lodMaxClamp, 1.0f) << "and for world draws (the control)";
+    }
+    {
+        ScopedLookOverride r(LookProfile::Retail);
+        ASSERT_TRUE(milo::SetLookProfileForInspection(LookProfile::Enhanced));
+        SamplerDesc ui;
+        ApplyLookSampling(ui, true, Look(), milo::StartupBitmapMipLevels());
+        EXPECT_EQ(ui.lodMaxClamp, 1.0f) << "retail->enhanced: enhanced's class rule";
+    }
 }
 
 TEST_F(LookSwitchLevelsTest, ARetailSwitchReadsRetailsTwoLevels) {
