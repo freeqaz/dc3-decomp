@@ -113,6 +113,24 @@ Reads and modifies `NativeSettings` live. Available fields:
 | `camLateralOffset` | float | 0.0 | View-space lateral offset |
 | `cameraDebug` | bool | false | Camera debug overlay |
 
+### Pose camera
+
+```bash
+# Which webcam the pose server reads, and the ones it could
+curl localhost:9090/api/pose_camera
+# {"available":true,"current":"id:0x220000046d0944","name":"MX Brio","source":"setting",
+#  "saved":"id:0x220000046d0944","cameras":[{"spec":"id:0x22…","id":"0x22…","name":"MX Brio"},…]}
+
+# The next camera / one particular camera (its spec, identity or name; or auto)
+curl -X POST 'localhost:9090/api/pose_camera?cycle=1'
+curl -X POST 'localhost:9090/api/pose_camera?set=FaceTime%20HD%20Camera'
+```
+
+The same setting as Options → Gameplay Settings → Camera: the pose server is
+replaced on the new camera at once and the choice is saved. A request that
+switched nothing (no such camera, no camera server in this run) is 400.
+`docs/native/POSE_INPUT.md` "The camera setting".
+
 ### DTA Eval
 
 ```bash
