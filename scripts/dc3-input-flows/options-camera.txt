@@ -1,0 +1,31 @@
+# Options > Gameplay Settings > Camera, selected twice (the camera setting,
+# native/src/platform/PoseCamera_Native.h)
+#
+# Run with a camera pose server (DC3_POSE=1 and a DC3_POSE_SERVER drop-in in a
+# headless test) and DC3_PROFILE=release, so the rows are provider_no_voice.hnp's
+# four -- option_photo, option_freestyle, autosave, option_choosestorage --
+# and then the native overlay's option_pose_camera, row 4.  Each select moves
+# to the next camera: with two cameras, from auto (the first) to the second,
+# then back to the first.  (Offsets are from the wait_screen, not from the
+# line before.)
+wait_screen main_screen
++43 wake
++90 y
+
+wait_screen options_screen
++43 wake
++90 confirm
+
+wait_screen options_gameplay_screen
++43 wake
++45 down
++90 down
++135 down
++180 down
++240 confirm
++480 confirm
++720 cancel
+
+wait_screen options_screen
++43 wake
++90 cancel

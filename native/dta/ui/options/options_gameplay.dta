@@ -1,5 +1,7 @@
-;; DC3 Native overlay — adds the Camera Blend and Debug Overlay toggles to
-;; Gameplay Settings in developer builds (DC3_DEV_OPTIONS=1); retail rows otherwise.
+;; DC3 Native overlay — adds the Camera row (which camera the pose server
+;; reads; every player, when a camera pose server runs) and, in developer builds
+;; (DC3_DEV_OPTIONS=1), the Camera Blend and Debug Overlay toggles to Gameplay
+;; Settings; retail rows otherwise.
 ;; This file shadows the archive version via the overlay engine.
 {new
    HamPanel
@@ -55,12 +57,23 @@
       ;; once-only guard), so this appends unconditionally.  HamNavProvider has
       ;; no `num_data` handler -- it is not in its handler chain -- so the row
       ;; count is the `nav_items` property's size.
+      ;; Every player: the Camera row, when this run's pose input is a camera
+      ;; the game's own pose server reads (platform/PoseCamera_Native.h) --
+      ;; never on web, where the browser owns the camera, nor with pose input
+      ;; off.  Not a checkbox: selecting it moves to the next camera, and the
+      ;; description line names the one in use.
+      {if
+         {native_settings pose_camera_available}
+         {$this append_native_row option_pose_camera 0}}
       {if
          {native_settings dev_options}
          {$this append_native_option option_camera_blend}
          {$this append_native_option option_debug_panel}})
    (append_native_option
       ($token)
+      {$this append_native_row $token 1})
+   (append_native_row
+      ($token $checkbox)
       {[provider] append_nav_item}
       {do
          ($index
@@ -69,7 +82,7 @@
          {[provider]
             set
             (nav_items $index checkbox)
-            1}})
+            $checkbox}})
    (exit
       {memcardmgr remove_sink $this}
       {hamprovider remove_sink $this on_ui_nav_player_change}
@@ -171,6 +184,10 @@
                   manual_save
                   {profile_mgr get_active_profile}}}
             skip_select_anim)
+         (option_pose_camera
+            {native_settings cycle_pose_camera}
+            {$this update_description option_pose_camera}
+            skip_select_anim)
          (option_camera_blend
             {native_settings toggle_camera_blend}
             {$this update_all}
@@ -237,6 +254,10 @@
             {description.lbl set text_token option_autosave_desc})
          (option_choosestorage
             {description.lbl set text_token option_choosestorage_desc})
+         (option_pose_camera
+            {description.lbl
+               set_prelocalized_string
+               {native_settings pose_camera_description}})
          (option_camera_blend
             {description.lbl set text_token option_camera_blend_desc})
          (option_debug_panel

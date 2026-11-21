@@ -69,7 +69,16 @@ def main():
     parser = argparse.ArgumentParser(description="DC3 synthetic pose server")
     parser.add_argument("--socket", default="/tmp/dc3_pose.sock")
     parser.add_argument("--fps", type=float, default=20.0)
-    args = parser.parse_args()
+    parser.add_argument("--camera", default=None,
+                        help="Accepted and printed, never opened: with it (and the "
+                             "arguments it ignores) this script can stand in for "
+                             "pose_server.py under DC3_POSE_SERVER, so the game's camera "
+                             "setting can be driven with no camera")
+    # pose_server.py's other arguments (--model, --frames, --hfov, ...) mean
+    # nothing here; taking them is what makes this a drop-in.
+    args, _ignored = parser.parse_known_args()
+    if args.camera is not None:
+        print(f"Synthetic pose server: launched for camera {args.camera}", flush=True)
 
     if os.path.exists(args.socket):
         os.unlink(args.socket)
