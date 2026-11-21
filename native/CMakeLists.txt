@@ -2199,6 +2199,7 @@ if(BUILD_TESTS)
         tests/test_display_ramp.cpp
         tests/test_crowd_contact_shadow.cpp # np-look32: the enhanced look's crowd contact shadows
         tests/test_look_text_sampling.cpp # np-look34: the enhanced look's text and HUD sampling rule
+        tests/test_look_texpass.cpp # np-look47: render-to-texture targets drawn like the frame
         tests/test_dc3_look_post.cpp
         tests/test_merge_scope_parity.cpp
         tests/test_merge_lifecycle.cpp
