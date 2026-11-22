@@ -161,16 +161,14 @@ const Params &P() {
     return gParams;
 }
 
-// How wide a row is, in row pitches either side of the centre the list
-// reports, and where its centre sits from that point (pitches, + = right).
-// MEASURED on the main menu and the song list (np-pointer screenshots): the
-// list's element position is the ribbon's centre line.
-float RowHalfWidthPitches() {
-    static float v = EnvFloat("DC3_POINTER_ROW_HALF_WIDTH", 3.4f);
-    return v;
-}
-float RowCentreOffsetPitches() {
-    static float v = EnvFloat("DC3_POINTER_ROW_X_OFFSET", 0.0f);
+// How far a row reaches back past the point the list reports, in row
+// pitches.  MEASURED on the main menu (np-pointer, mainmenu_calib.png): the
+// element position is where the label starts, and DC3's ribbons run from a
+// little before it to the edge of the screen on the list's side -- the right
+// hand's list (x 871) is lit from ~785 to 1280, the help bar's left list
+// (x 346) from 0 to ~430.  1.7 pitches is 87 px on the main menu.
+float RowLeadPitches() {
+    static float v = EnvFloat("DC3_POINTER_ROW_LEAD", 1.7f);
     return v;
 }
 
@@ -201,6 +199,15 @@ void ReleaseButton() {
         JoypadPushThroughMsg(msg);
     }
     gHeldButton = kPad_NumButtons;
+}
+
+// Whether any list drawn last frame has a row to aim at.  The title's lists
+// are drawn with none.
+bool AnyRows() {
+    for (auto &kv : gDrawn)
+        if (!kv.second.rows.empty())
+            return true;
+    return false;
 }
 
 void TakeTheMenus() {
@@ -376,6 +383,9 @@ void Act(const Output &out) {
     }
     if (!any)
         return;
+    // a tap ends any scroll still owed (a fling the press stopped)
+    if (out.tap || out.back)
+        gPendingSteps = 0;
 
     // the natively drawn song browser has its own rows
     if (NativeSongBrowser::HidesGameChrome()) {
@@ -388,9 +398,12 @@ void Act(const Output &out) {
             gPendingSteps += out.steps;
         if (out.tap) {
             gTaps++;
-            gTapPresses++;
-            PressButton(kPad_X);
-            gLastAction = "browser tap: A";
+            if (NativeSongBrowser::PointerTap(out.tapX, out.tapY)) {
+                gTapSelects++;
+                gLastAction = "browser: pick the tapped row";
+            } else {
+                gLastAction = "browser: tap off the song rows";
+            }
         }
         return;
     }
@@ -418,7 +431,7 @@ void Act(const Output &out) {
                         + std::to_string(row);
                 }
             }
-        } else if (gDrawn.empty()) {
+        } else if (!AnyRows()) {
             // nothing to aim at (the title, a movie, a screen of buttons the
             // pad drives): a tap is the pad's A
             TakeTheMenus();
@@ -460,6 +473,13 @@ void Act(const Output &out) {
 
 // One row a frame at most, at the list's own pace.
 void RunSteps() {
+    // the browser came or went: what was owed belonged to the other list
+    static bool sWasBrowser = false;
+    const bool browser = NativeSongBrowser::HidesGameChrome();
+    if (browser != sWasBrowser) {
+        sWasBrowser = browser;
+        gPendingSteps = 0;
+    }
     const int cap = (int)P().maxFlingRows;
     gPendingSteps = std::max(-cap, std::min(cap, gPendingSteps));
     if (!gPendingSteps)
@@ -556,10 +576,24 @@ void NoteListDrawn(HamNavList *list, const UIListWidgetDrawState &state, const T
         d.rows.push_back(r);
     }
     d.pitch = RowPitch(d.rows, 60.0f);
+    // A row is never taller than this, whatever the gap to the next: the help
+    // bar's left list puts its two rows at the top and the bottom of the
+    // screen (pitch 642 on the main menu, MEASURED), and a row as tall as that
+    // took a tap in the middle of the screen.
+    const float rowHeight = std::min(d.pitch, 64.0f);
     for (Row &r : d.rows) {
-        r.halfH = d.pitch * 0.5f;
-        r.halfW = d.pitch * RowHalfWidthPitches();
-        r.cx += d.pitch * RowCentreOffsetPitches();
+        r.halfH = rowHeight * 0.5f;
+        const float lead = rowHeight * RowLeadPitches();
+        float left, right;
+        if (r.cx > fw * 0.5f) { // a right-hand list: to the right edge
+            left = r.cx - lead;
+            right = fw;
+        } else { // a left-hand list: from the left edge
+            left = 0.0f;
+            right = r.cx + lead;
+        }
+        r.cx = (left + right) * 0.5f;
+        r.halfW = (right - left) * 0.5f;
     }
 }
 

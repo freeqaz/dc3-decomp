@@ -54,6 +54,11 @@ void NoteInjectedPadPress();
 // name is unknown, the classic list has no such row in this mode).
 bool RunCommand(const std::string &name, std::string &error);
 
+// The mouse or a finger tapped (x, y) in the 1280x720 frame while the
+// browser is shown (Pointer_Native.cpp).  True: it was on a row of the song
+// list, and that row is now picked, as the pad's Down/Up and A would.
+bool PointerTap(float x, float y);
+
 struct Hooks {
     void (*enter)(UIPanel *);
     void (*exit)(UIPanel *);
@@ -65,6 +70,7 @@ struct Hooks {
     void (*anyButtonDown)(int);
     void (*injectedPadPress)();
     bool (*command)(const std::string &, std::string &);
+    bool (*pointerTap)(float, float);
 };
 // Called once, by the browser's translation unit.
 void Install(const Hooks *hooks);
