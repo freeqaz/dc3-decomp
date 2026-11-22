@@ -260,6 +260,14 @@ Rnd::Rnd()
 // text_bias_glyphs|text_bias_all_ui|text_bias_scope_rule give the bias to
 // glyph pages only, to every text/HUD draw, or the look's choice (uniforms:
 // nothing compiles; item 34b's held-frame A/B);
+// present_up_on|present_up_off|present_up_rule switch the enhanced present's
+// upscale for every adapter class, or give each class the look's choice back
+// (np-present60, LookSettings::presentUpscale and its ...Apple and
+// ...Integrated: on for a discrete GPU only; a frame drawn smaller
+// than its window rectangle -- a row cap, a thermal step -- is stretched with
+// a clamped Catmull-Rom cubic instead of one bilinear tap; nothing changes at
+// a scale of 1, a downscale or a whole-number scale; the first switch on
+// compiles one pipeline);
 // {rnd native_look} alone reports it. Returns the profile
 // now in force.
 static Symbol NativeLook(const DataArray *msg) {
@@ -361,6 +369,10 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "text_bias_glyphs") milo::SetLookUiLodBiasScopeForInspection(1);
         else if (s == "text_bias_all_ui") milo::SetLookUiLodBiasScopeForInspection(0);
         else if (s == "text_bias_scope_rule") milo::SetLookUiLodBiasScopeForInspection(-1);
+        // np-present60: the present's upscale filter.
+        else if (s == "present_up_on") milo::SetLookPresentUpscaleForInspection(1);
+        else if (s == "present_up_off") milo::SetLookPresentUpscaleForInspection(0);
+        else if (s == "present_up_rule") milo::SetLookPresentUpscaleForInspection(-1);
         else MILO_NOTIFY("native_look: %s is not retail, enhanced, post_retail, post_enhanced, "
                          "post_precision, post_bloom_filter, post_dof_filter, specular_aa_on, "
                          "specular_aa_off, lod_bias_0, lod_bias_m05, lod_bias_m1, "
@@ -381,7 +393,8 @@ static Symbol NativeLook(const DataArray *msg) {
                          "rtt_rows_rule, adapter_apple, adapter_other, adapter_discrete, "
                          "adapter_rule, text_bias_off, text_bias_half, text_bias_on, "
                          "text_bias_rule, text_levels_2, text_levels_all, text_levels_rule, "
-                         "text_bias_glyphs, text_bias_all_ui or text_bias_scope_rule", s.Str());
+                         "text_bias_glyphs, text_bias_all_ui, text_bias_scope_rule, "
+                         "present_up_on, present_up_off or present_up_rule", s.Str());
     }
     return milo::LookProfileName(milo::Look().profile);
 }

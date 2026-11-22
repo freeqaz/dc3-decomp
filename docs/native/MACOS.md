@@ -71,8 +71,14 @@ YMCA flow the Linux gate runs, before the window), `--assets <dir | orig-assets.
 
 Notes:
 
-- Dawn: the macOS tarball's `webgpu.h`/`webgpu_cpp.h` are byte-identical to
-  the Linux build's (**MEASURED**). Its CMake package is a static
+- Dawn: the macOS tarball's `include/webgpu/webgpu.h` and `webgpu_cpp.h` are
+  byte-identical to the Linux build's (**MEASURED**), but those two files are
+  30-line forwarders to `include/dawn/`, and the API headers behind them are
+  not the same release: the Linux prebuilt in `dc3-decomp-deps` carries
+  `v20260303.162254`'s headers, the Mac and both CI workflows use
+  `v20260423.175430`, and `dawn/webgpu.h` differs by 225 lines between the
+  two (**MEASURED** 2026-11-22, PLAN H-189). The game compiles and passes its
+  window, present and look tests against both. The CMake package is a static
   `libwebgpu_dawn.a` (arm64 Mach-O) whose `dawn::webgpu_dawn` target already
   links Metal, QuartzCore, IOSurface, IOKit, Cocoa and Foundation.
 - `native_configure.sh` no longer probes `dc3-decomp-deps/dawn` on a Mac. That
