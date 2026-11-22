@@ -45,9 +45,10 @@ await shot('01_title');
 // the title: its row if it draws one, else the picture's centre (A on a screen with no rows)
 { const t = rowOf(await S(), 'right_hand.hnl', 0), pic = s0.picture;
   const at = t ? t.page : [pic[0] + pic[2] / 2, pic[1] + pic[3] / 2];
+  const from = st.screen;
   await page.touchscreen.tap(at[0], at[1]);
-  check(await waitFor(() => st.screen && st.screen !== 'title_screen', 20000),
-    `a tap on the title (${t ? `${t.list} row ${t.row}` : 'centre'}, page ${at.map(Math.round)}) moved on -> ${st.screen}`); }
+  check(await waitFor(() => st.screen && st.screen !== from, 20000),
+    `a tap on ${from} (${t ? `${t.list} row ${t.row}` : 'centre'}, page ${at.map(Math.round)}) moved on -> ${st.screen}`); }
 await sleep(4000); await shot('02_menu');
 for (let i = 0; i < 5 && !st.screen.includes('song_select'); i++) {
   const s = st.screen; let t = null;
