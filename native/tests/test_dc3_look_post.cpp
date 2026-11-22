@@ -1768,6 +1768,161 @@ TEST_F(DC3LookPostTest, DofNearFieldSoftensANearObjectsEdgeAndLeavesTheFarField)
                     << "x " << x << " y " << y;
 }
 
+// dof57: the near field drew a dotted one-pixel line along a near object's
+// ORIGINAL hard silhouette (seen on the GPD's 890M: the out-of-focus hooded
+// figure at streetside cu01, the adapter class whose look has no edge rule).
+// The near composite took a pixel's depth from sample 0 alone, so a pixel on
+// the silhouette whose sample 0 is behind the near object kept the resolved
+// scene there -- the near object's anti-aliased edge -- at weight 1 - a, while
+// both of its neighbours were replaced by the blurs. This draws that edge with
+// a 4x depth written per sample: an in-focus figure (230) left of x = 640, the
+// near object (20, t = -1.5) right of it, and the column x = 640 half covered,
+// samples 1 and 2 near on the even rows (sample 0 behind) and samples 0 and 3
+// on the odd rows; the resolved scene there is the samples' mean, 125. With
+// the near field and its spread, and without the edge rule:
+//   (1) the column is no darker than both neighbours by more than 6 levels on
+//       the even rows (it was ~50 below them: the line), and
+//   (2) the even and odd rows agree within 6 levels there (they differed by
+//       about as much: the dots).
+// The control run (the depth weight alone, no near field) keeps the hard edge
+// at the column, which is how the old near composite treated its even rows.
+// Sabotage (dof57fix): the composite back on sample 0's depth -- (1) and (2)
+// red.
+TEST_F(DC3LookPostTest, DofNearFieldLeavesNoLineOnTheSilhouette) {
+    ASSERT_TRUE(TheDOFProc);
+    GpuDevice &gpu = Gpu();
+    UIScreen *game = Hmx::Object::New<UIScreen>();
+    game->SetName("game_screen", ObjectDir::Main());
+    class ProbeUI : public UIManager {
+    public:
+        void SetCurrent(UIScreen *sc) { mCurrentScreen = sc; }
+    } ui;
+    UIManager *savedUI = TheUI;
+    TheUI = &ui;
+    ui.SetCurrent(game);
+    RndCam *prev = RndCam::Current();
+    RndCam::ClearCurrent();
+    TheDOFProc->Set(nullptr, 10.0f, 0.5f, 1.0f, 0.0f);
+    ASSERT_TRUE(TheDOFProc->Enabled());
+
+    constexpr int W = 1280, H = 720, kEdge = W / 2;
+    const uint8_t kFig = 230, kNear = 20;
+    auto &dev = gpu.Device();
+    std::vector<uint8_t> px((size_t)W * H * 4);
+    for (int y = 0; y < H; y++)
+        for (int x = 0; x < W; x++) {
+            uint8_t *p = &px[((size_t)y * W + x) * 4];
+            p[0] = p[1] = p[2] = x < kEdge ? kFig : x > kEdge ? kNear : (uint8_t)((2 * kFig + 2 * kNear) / 4);
+            p[3] = 255;
+        }
+    wgpu::Texture scene = UploadOn(gpu, W, H, px);
+    wgpu::TextureView sv = scene.CreateView();
+    wgpu::TextureDescriptor zd{};
+    zd.size = {(uint32_t)W, (uint32_t)H, 1};
+    zd.format = wgpu::TextureFormat::Depth32Float;
+    zd.sampleCount = 4;
+    zd.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+    wgpu::Texture depth = dev.CreateTexture(&zd);
+    wgpu::TextureView depthView = depth.CreateView();
+    DofPass dof;
+    const wgpu::TextureFormat kFmt = wgpu::TextureFormat::RGBA8Unorm;
+    dof.Prewarm(kFmt, gpu, true, true, true);
+    auto run = [&](bool nearField, bool spread, std::vector<uint8_t> &out) {
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        EXPECT_TRUE(dof.Run(enc, sv, kFmt, depthView, 4, W, H, gpu, true, true, nearField, spread));
+        EXPECT_FALSE(dof.LastRunEdge()) << "the near composite without the edge rule";
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        out.assign((size_t)W * H * 4, 0);
+        EXPECT_TRUE(gpu.ReadbackTexture(dof.OutputTexture(), W, H, out.data(), out.size()));
+    };
+    std::vector<uint8_t> weighted, nearSpread;
+    run(false, false, weighted);   // also the constants
+    const float *c = dof.LastCompositeConstants();
+    ASSERT_NE(c[0], 0.0f);
+    const float zFocus = -c[1] / c[0];
+    const float zNear = (-1.5f - c[1]) / c[0];
+    ASSERT_GT(zNear, 0.0f);
+    ASSERT_LT(zNear, zFocus);
+    {
+        char wgsl[1024];
+        snprintf(wgsl, sizeof(wgsl),
+                 "@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {\n"
+                 "  let x = f32(i32(i & 1u)) * 4.0 - 1.0;\n"
+                 "  let y = f32(i32(i >> 1u)) * 4.0 - 1.0;\n"
+                 "  return vec4f(x, y, 0.5, 1.0);\n}\n"
+                 "@fragment fn fs(@builtin(position) pos: vec4f, @builtin(sample_index) s: u32)"
+                 " -> @builtin(frag_depth) f32 {\n"
+                 "  let x = i32(pos.x); let y = i32(pos.y);\n"
+                 "  let m = select(6u, 9u, (y & 1) == 1);\n"
+                 "  let nearS = x > %d || (x == %d && ((m >> s) & 1u) == 1u);\n"
+                 "  return select(%.9f, %.9f, nearS);\n}\n",
+                 kEdge, kEdge, zFocus, zNear);
+        wgpu::ShaderSourceWGSL src;
+        src.code = wgsl;
+        wgpu::ShaderModuleDescriptor smd{};
+        smd.nextInChain = &src;
+        wgpu::ShaderModule sm = dev.CreateShaderModule(&smd);
+        wgpu::DepthStencilState ds{};
+        ds.format = wgpu::TextureFormat::Depth32Float;
+        ds.depthWriteEnabled = wgpu::OptionalBool::True;
+        ds.depthCompare = wgpu::CompareFunction::Always;
+        wgpu::FragmentState fs{};
+        fs.module = sm;
+        fs.entryPoint = "fs";
+        fs.targetCount = 0;
+        wgpu::RenderPipelineDescriptor pd{};
+        pd.label = "TestDofNearSilhouette";
+        pd.vertex.module = sm;
+        pd.vertex.entryPoint = "vs";
+        pd.fragment = &fs;
+        pd.depthStencil = &ds;
+        pd.multisample.count = 4;
+        wgpu::RenderPipeline pipe = dev.CreateRenderPipeline(&pd);
+        wgpu::RenderPassDepthStencilAttachment za{};
+        za.view = depthView;
+        za.depthLoadOp = wgpu::LoadOp::Clear;
+        za.depthStoreOp = wgpu::StoreOp::Store;
+        za.depthClearValue = 1.0f;
+        wgpu::RenderPassDescriptor rp{};
+        rp.label = "TestDofNearSilhouetteDepth";
+        rp.depthStencilAttachment = &za;
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = enc.BeginRenderPass(&rp);
+        pass.SetPipeline(pipe);
+        pass.Draw(3);
+        pass.End();
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+    }
+    run(false, false, weighted);
+    run(true, true, nearSpread);
+    EXPECT_TRUE(dof.LastRunNearField());
+    dof.Terminate();
+    TheDOFProc->UnSet();
+    if (prev) prev->Select(); else RndCam::ClearCurrent();
+    TheUI = savedUI;
+    ui.SetCurrent(nullptr);
+    delete game;
+
+    auto g = [&](const std::vector<uint8_t> &o, int x, int y) { return (int)o[((size_t)y * W + x) * 4 + 1]; };
+    int worstNotch = -255, worstDots = 0, ctrlStep = 0;
+    double sum[2][3] = {};
+    for (int y = 200; y < 520; y++) {
+        const int l = g(nearSpread, kEdge - 1, y), m = g(nearSpread, kEdge, y), r = g(nearSpread, kEdge + 1, y);
+        if ((y & 1) == 0) worstNotch = std::max(worstNotch, std::min(l, r) - m);
+        else worstDots = std::max(worstDots, std::abs(m - g(nearSpread, kEdge, y - 1)));
+        for (int k = 0; k < 3; k++) sum[y & 1][k] += g(nearSpread, kEdge - 1 + k, y) / 160.0;
+        if ((y & 1) == 0) ctrlStep = std::max(ctrlStep, g(weighted, kEdge, y) - g(weighted, kEdge + 1, y));
+    }
+    printf("DC3LookPost DOF near silhouette: x 639/640/641 even rows (sample 0 behind) %.1f %.1f %.1f, odd rows %.1f "
+           "%.1f %.1f; worst notch %d, worst dot %d; weighted (no near field) edge step %d\n",
+           sum[0][0], sum[0][1], sum[0][2], sum[1][0], sum[1][1], sum[1][2], worstNotch, worstDots, ctrlStep);
+    EXPECT_GT(ctrlStep, 60) << "the depth weight alone keeps the hard edge at x = 640 (non-vacuous)";
+    EXPECT_LE(worstNotch, 6) << "the near field draws a dark line along the silhouette";
+    EXPECT_LE(worstDots, 6) << "the silhouette's pixels alternate with their sample 0 (dotted)";
+}
+
 // np-look51: LookSettings::postDofEdge, the edge rule. Every composite took
 // its mix amount from depth sample 0 of the 4x depth while the scene it mixes
 // is resolved, so a pixel an in-focus figure half covers was kept whole or
@@ -2347,13 +2502,15 @@ TEST(DC3LookDofNear, FollowsTheLookAndItsSwitch) {
 // supersampling is (milo::LookDofNearField / LookDofNearSpread): the field
 // adds a second quarter target and 8 reads per quarter texel to each blur, the
 // spread one more read at every full-size pixel of the composite. Enhanced: on
-// for a discrete GPU, off for anything else until a handheld's timing says
-// each fits (the "anything else" expectations below are that default; they
-// move with LookProfile.cpp when the timing is in). The on and off tokens
-// force each on any GPU; the rule token returns each class to the profile's.
-// Sabotages: a helper ignoring the class -- red (a non-discrete adapter gets
-// it); an on token writing the discrete value only -- red (forced on reads off
-// on a non-discrete adapter).
+// in every class since dof57 (the other non-discrete class timed on the GPD's
+// 890M, 2026-11-22; Apple's is LookAdapterClasses.*), so the picker is checked
+// on a settings copy whose classes disagree. The on and off tokens force each
+// on any GPU (on from retail, where every class is off; off from enhanced,
+// where every class is on); the rule token returns each class to the
+// profile's. Sabotages: a helper ignoring the class -- red (the copies);
+// an on token writing the discrete value only -- red (forced on reads off on
+// a non-discrete adapter); the other class's value left off in LookProfile.cpp
+// -- red (the enhanced rule).
 TEST(DC3LookDofNear, TheNearFieldFollowsTheAdapterClass) {
     // The discrete class and the other non-discrete one (np-look49; the Apple
     // class is LookAdapterClasses.*).
@@ -2363,10 +2520,30 @@ TEST(DC3LookDofNear, TheNearFieldFollowsTheAdapterClass) {
     {
         milo::ScopedLookOverride o(milo::LookProfile::Enhanced);
         const milo::LookSettings rule = milo::Look();
-        EXPECT_TRUE(milo::LookDofNearField(rule, C(true))) << "a discrete GPU has the near field";
-        EXPECT_FALSE(milo::LookDofNearField(rule, C(false))) << "anything else does not, until it is timed";
-        EXPECT_TRUE(milo::LookDofNearSpread(rule, C(true))) << "a discrete GPU spreads";
-        EXPECT_FALSE(milo::LookDofNearSpread(rule, C(false))) << "anything else does not, until it is timed";
+        for (bool discrete : {true, false}) {
+            EXPECT_TRUE(milo::LookDofNearField(rule, C(discrete))) << "enhanced has the near field; discrete "
+                                                                   << discrete;
+            EXPECT_TRUE(milo::LookDofNearSpread(rule, C(discrete))) << "and spreads; discrete " << discrete;
+        }
+        // The picker reads the class's own value, in both directions.
+        for (bool discreteOn : {true, false}) {
+            milo::LookSettings copy = rule;
+            copy.postDofNearField = copy.postDofNearSpread = discreteOn;
+            copy.postDofNearFieldIntegrated = copy.postDofNearSpreadIntegrated = !discreteOn;
+            EXPECT_EQ(milo::LookDofNearField(copy, C(true)), discreteOn);
+            EXPECT_EQ(milo::LookDofNearField(copy, C(false)), !discreteOn);
+            EXPECT_EQ(milo::LookDofNearSpread(copy, C(true)), discreteOn);
+            EXPECT_EQ(milo::LookDofNearSpread(copy, C(false)), !discreteOn);
+        }
+    }
+    struct From {
+        milo::LookProfile profile;
+        int force;    // the token that changes every class from the profile's
+        bool before;  // every class's value under the profile
+    };
+    for (const From f : {From{milo::LookProfile::Retail, 1, false}, From{milo::LookProfile::Enhanced, 0, true}}) {
+        milo::ScopedLookOverride o(f.profile);
+        const char *name = milo::LookProfileName(f.profile);
         for (bool spread : {false, true}) {
             auto get = [&](bool discrete) {
                 return spread ? milo::LookDofNearSpread(milo::Look(), C(discrete))
@@ -2377,17 +2554,16 @@ TEST(DC3LookDofNear, TheNearFieldFollowsTheAdapterClass) {
                               : milo::LookDofNearSpread(milo::Look(), C(discrete));
             };
             const bool otherDiscrete = other(true), otherElse = other(false);
-            EXPECT_TRUE(milo::SetLookDofNearForInspection(1, spread));
-            EXPECT_TRUE(get(true)) << "spread " << spread;
-            EXPECT_TRUE(get(false)) << "the on token forces it on any GPU; spread " << spread;
-            EXPECT_TRUE(milo::SetLookDofNearForInspection(0, spread));
-            EXPECT_FALSE(get(true)) << "the off token forces it off on any GPU; spread " << spread;
-            EXPECT_FALSE(get(false)) << "spread " << spread;
+            EXPECT_EQ(get(true), f.before) << name << " spread " << spread;
+            EXPECT_EQ(get(false), f.before) << name << " spread " << spread;
+            EXPECT_TRUE(milo::SetLookDofNearForInspection(f.force, spread));
+            EXPECT_EQ(get(true), !f.before) << name << ": the token forces it on any GPU; spread " << spread;
+            EXPECT_EQ(get(false), !f.before) << name << ": the token forces it on any GPU; spread " << spread;
             EXPECT_TRUE(milo::SetLookDofNearForInspection(-1, spread));
-            EXPECT_TRUE(get(true)) << "the rule token returns each class to the profile's; spread " << spread;
-            EXPECT_FALSE(get(false)) << "spread " << spread;
-            EXPECT_EQ(other(true), otherDiscrete) << "one's tokens leave the other; spread " << spread;
-            EXPECT_EQ(other(false), otherElse) << "spread " << spread;
+            EXPECT_EQ(get(true), f.before) << name << ": the rule token returns each class; spread " << spread;
+            EXPECT_EQ(get(false), f.before) << name << " spread " << spread;
+            EXPECT_EQ(other(true), otherDiscrete) << name << ": one's tokens leave the other; spread " << spread;
+            EXPECT_EQ(other(false), otherElse) << name << " spread " << spread;
         }
     }
     for (milo::LookProfile p : {milo::LookProfile::Retail, milo::LookProfile::Native}) {
