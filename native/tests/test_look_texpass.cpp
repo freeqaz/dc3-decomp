@@ -52,6 +52,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -832,7 +833,7 @@ TEST(LookAdapterClasses, TheClassificationTable) {
     };
     for (const Row &r : rows)
         EXPECT_EQ((int)milo::ClassifyLookAdapter(r.type, r.vendor, r.metal), (int)r.want) << r.what;
-    milo::LookAdapterFacts none;  // a device that never got an adapter (the web build too)
+    milo::LookAdapterFacts none;  // a device that never got an adapter (the web build before its adapter)
     EXPECT_EQ((int)milo::ClassifyLookAdapter(none), (int)LookAdapterClass::OtherNonDiscrete);
     EXPECT_EQ((int)GpuDevice().LookClass(), (int)LookAdapterClass::OtherNonDiscrete)
         << "a device with no adapter is other non-discrete";
@@ -1284,6 +1285,140 @@ TEST(LookAdapterClasses, TheClassTokenLine) {
     EXPECT_EQ(rule, "[look] adapter class: discrete GPU; depth of field near field 1, near spread 1, edge 1, "
                     "texture pass msaa 1, scale 1 (cap 2048, base rows 360) [type discrete, vendor 0x10de, backend "
                     "Vulkan] (profile enhanced)\n");
+    milo::LogLookAdapterClass(saved);
+}
+
+// ---- np-look56: the web build's class, from the browser's adapter info ----
+// A browser reports no adapter type, vendor id or backend (emdawnwebgpu:
+// Unknown / CPU for a fallback, 0, WebGPU), so GpuDevice_Web.cpp records the
+// page's GPUAdapterInfo strings (LookAdapterFacts::web) and the class is
+// decided from the vendor string, texture-compression-bc and fallback.
+namespace {
+
+milo::LookAdapterFacts WebFacts(const char *vendor, bool bc, bool fallback, const char *arch = "") {
+    milo::LookAdapterFacts f;
+    f.web = true;
+    f.backendName = "WebGPU";
+    f.type = fallback ? LookAdapterType::Cpu : LookAdapterType::Unknown;
+    f.webHasBC = bc;
+    f.webFallback = fallback;
+    milo::SetLookAdapterWebStrings(f, vendor, strlen(vendor), arch, strlen(arch));
+    return f;
+}
+
+}  // namespace
+
+// The browser's rule, walked without a device, with the Apple-in-a-browser
+// constant passed both ways. Sabotages (each seen red, then reverted; README
+// of dc3 lane item 56): "nvidia" mapped to other -> red; the fallback check
+// dropped -> red; the BC condition dropped -> red; the constant ignored
+// (Apple whatever its value) -> red; the facts overload ignoring f.web -> red.
+TEST(LookAdapterClasses, TheBrowserClassificationTable) {
+    const LookAdapterClass D = LookAdapterClass::Discrete, A = LookAdapterClass::Apple,
+                           O = LookAdapterClass::OtherNonDiscrete;
+    struct Row {
+        const char *vendor;
+        bool bc, fallback;
+        LookAdapterClass wantAppleOff, wantAppleOn;
+        const char *what;
+    };
+    const Row rows[] = {
+        {"nvidia", true, false, D, D, "an NVIDIA GPU in Chrome"},
+        {"nvidia", false, false, D, D, "an NVIDIA GPU without BC is still NVIDIA's"},
+        {"nvidia", true, true, O, O, "a fallback adapter that says nvidia"},
+        {"apple", true, false, O, A, "an Apple silicon Mac (BC)"},
+        {"apple", false, false, O, O, "an iPhone or iPad (no BC)"},
+        {"apple", true, true, O, O, "a fallback adapter that says apple"},
+        {"amd", true, false, O, O, "AMD: a desktop card or a handheld's iGPU"},
+        {"intel", true, false, O, O, "Intel"},
+        {"arm", false, false, O, O, "Arm"},
+        {"qualcomm", false, false, O, O, "Qualcomm"},
+        {"", true, false, O, O, "an empty vendor"},
+        {"", true, true, O, O, "an empty vendor on a fallback adapter"},
+        {"made-up-vendor", true, false, O, O, "a made-up vendor"},
+        // Case: compared exactly (the specification's identifiers are lower case).
+        {"NVIDIA", true, false, O, O, "NVIDIA in capitals is not a normalised identifier"},
+        {"Nvidia", true, false, O, O, "mixed case"},
+        {"nvidia ", true, false, O, O, "a trailing space"},
+        {"Apple", true, false, O, O, "Apple in capitals"},
+    };
+    for (const Row &r : rows) {
+        EXPECT_EQ((int)milo::ClassifyWebLookAdapter(r.vendor, r.bc, r.fallback, false), (int)r.wantAppleOff)
+            << r.what << " (Apple in a browser off)";
+        EXPECT_EQ((int)milo::ClassifyWebLookAdapter(r.vendor, r.bc, r.fallback, true), (int)r.wantAppleOn)
+            << r.what << " (Apple in a browser on)";
+        // Through the facts, with the constant as it stands.
+        const LookAdapterClass want = milo::LookAppleInBrowser() ? r.wantAppleOn : r.wantAppleOff;
+        EXPECT_EQ((int)milo::ClassifyLookAdapter(WebFacts(r.vendor, r.bc, r.fallback)), (int)want)
+            << r.what << " (the facts)";
+    }
+    EXPECT_EQ((int)milo::ClassifyWebLookAdapter(nullptr, true, false, true), (int)O) << "no vendor at all";
+    // The constant starts off: a Mac in a browser is other non-discrete, as
+    // before np-look56, until a Mac in a browser is timed.
+    EXPECT_FALSE(milo::LookAppleInBrowser());
+    // The browser's facts decide alone: native fields a browser never gives
+    // do not move it, and native facts never take the browser rule.
+    milo::LookAdapterFacts webAmd = WebFacts("amd", true, false);
+    webAmd.type = LookAdapterType::Discrete;
+    webAmd.vendorId = 0x10DE;
+    EXPECT_EQ((int)milo::ClassifyLookAdapter(webAmd), (int)O) << "web facts ignore the native fields";
+    milo::LookAdapterFacts nativeUnknown;  // the native facts the web build had before np-look56
+    milo::SetLookAdapterWebStrings(nativeUnknown, "nvidia", 6, "ampere", 6);
+    EXPECT_EQ((int)milo::ClassifyLookAdapter(nativeUnknown), (int)O)
+        << "without f.web the strings are not read (the native rule: unknown type)";
+}
+
+// The facts' strings are copied, truncated to fit, and need no terminator.
+TEST(LookAdapterClasses, TheBrowserStringsAreCopied) {
+    milo::LookAdapterFacts f;
+    const char vendorBytes[] = {'n', 'v', 'i', 'd', 'i', 'a', 'X'};  // no terminator; length 6 is "nvidia"
+    milo::SetLookAdapterWebStrings(f, vendorBytes, 6, nullptr, 0);
+    EXPECT_STREQ(f.webVendor, "nvidia");
+    EXPECT_STREQ(f.webArchitecture, "");
+    milo::SetLookAdapterWebStrings(f, "apple", (size_t)-1, "metal-3", (size_t)-1);  // WGPU_STRLEN
+    EXPECT_STREQ(f.webVendor, "apple");
+    EXPECT_STREQ(f.webArchitecture, "metal-3");
+    const std::string longVendor(100, 'x');
+    milo::SetLookAdapterWebStrings(f, longVendor.data(), longVendor.size(), "", 0);
+    EXPECT_EQ(strlen(f.webVendor), (size_t)milo::kLookAdapterWebStringSize - 1);
+    // A long vendor that starts "nvidia" is not "nvidia".
+    const std::string nvidiaLong = "nvidia" + std::string(60, 'z');
+    f.web = true;
+    milo::SetLookAdapterWebStrings(f, nvidiaLong.data(), nvidiaLong.size(), "", 0);
+    EXPECT_EQ((int)milo::ClassifyLookAdapter(f), (int)LookAdapterClass::OtherNonDiscrete);
+}
+
+// The class line names what the browser's class was decided from (the
+// vendor string, BC, fallback) and the backend reads WebGPU; the forced
+// line too. Sabotage: the browser's description dropped (the native one
+// printed for web facts) -> red.
+TEST(LookAdapterClasses, TheBrowserClassLine) {
+    milo::ScopedLookOverride look(LookProfile::Enhanced);
+    const milo::LookAdapterFacts saved = milo::LoggedLookAdapter();
+    const milo::LookAdapterFacts nvidia = WebFacts("nvidia", true, false, "ampere");
+    testing::internal::CaptureStderr();
+    milo::PrintLookAdapterClass(nvidia);
+    const std::string line = testing::internal::GetCapturedStderr();
+    EXPECT_EQ(line, "[look] adapter class: discrete GPU; depth of field near field 1, near spread 1, edge 1, "
+                    "texture pass msaa 1, scale 1 (cap 2048, base rows 360) [browser vendor \"nvidia\", "
+                    "architecture \"ampere\", texture-compression-bc 1, fallback 0, backend WebGPU] (profile "
+                    "enhanced)\n");
+    testing::internal::CaptureStderr();
+    milo::PrintLookAdapterClass(WebFacts("apple", true, false, "metal-3"));
+    const std::string mac = testing::internal::GetCapturedStderr();
+    EXPECT_EQ(mac, "[look] adapter class: not a discrete GPU; depth of field near field 0, near spread 0, edge 0, "
+                   "texture pass msaa 0, scale 0 (cap 2048, base rows 360) [browser vendor \"apple\", "
+                   "architecture \"metal-3\", texture-compression-bc 1, fallback 0, backend WebGPU] (profile "
+                   "enhanced)\n");
+    milo::LogLookAdapterClass(nvidia);
+    testing::internal::CaptureStderr();
+    milo::SetLookAdapterClassForInspection(false, LookAdapterClass::OtherNonDiscrete);
+    const std::string forced = testing::internal::GetCapturedStderr();
+    EXPECT_EQ(forced, "[look] adapter class forced for inspection: not a discrete GPU; the adapter is a discrete "
+                      "GPU [browser vendor \"nvidia\", architecture \"ampere\", texture-compression-bc 1, "
+                      "fallback 0, backend WebGPU]; depth of field near field 0, near spread 0, edge 0, texture "
+                      "pass msaa 0, scale 0 (cap 2048, base rows 360) (profile enhanced)\n");
+    ASSERT_TRUE(milo::SetLookAdapterClassForInspection(true));
     milo::LogLookAdapterClass(saved);
 }
 
