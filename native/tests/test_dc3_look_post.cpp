@@ -2347,13 +2347,15 @@ TEST(DC3LookDofNear, FollowsTheLookAndItsSwitch) {
 // supersampling is (milo::LookDofNearField / LookDofNearSpread): the field
 // adds a second quarter target and 8 reads per quarter texel to each blur, the
 // spread one more read at every full-size pixel of the composite. Enhanced: on
-// for a discrete GPU, off for anything else until a handheld's timing says
-// each fits (the "anything else" expectations below are that default; they
-// move with LookProfile.cpp when the timing is in). The on and off tokens
-// force each on any GPU; the rule token returns each class to the profile's.
-// Sabotages: a helper ignoring the class -- red (a non-discrete adapter gets
-// it); an on token writing the discrete value only -- red (forced on reads off
-// on a non-discrete adapter).
+// in every class since dof57 (the other non-discrete class timed on the GPD's
+// 890M, 2026-11-22; Apple's is LookAdapterClasses.*), so the picker is checked
+// on a settings copy whose classes disagree. The on and off tokens force each
+// on any GPU (on from retail, where every class is off; off from enhanced,
+// where every class is on); the rule token returns each class to the
+// profile's. Sabotages: a helper ignoring the class -- red (the copies);
+// an on token writing the discrete value only -- red (forced on reads off on
+// a non-discrete adapter); the other class's value left off in LookProfile.cpp
+// -- red (the enhanced rule).
 TEST(DC3LookDofNear, TheNearFieldFollowsTheAdapterClass) {
     // The discrete class and the other non-discrete one (np-look49; the Apple
     // class is LookAdapterClasses.*).
@@ -2363,10 +2365,30 @@ TEST(DC3LookDofNear, TheNearFieldFollowsTheAdapterClass) {
     {
         milo::ScopedLookOverride o(milo::LookProfile::Enhanced);
         const milo::LookSettings rule = milo::Look();
-        EXPECT_TRUE(milo::LookDofNearField(rule, C(true))) << "a discrete GPU has the near field";
-        EXPECT_FALSE(milo::LookDofNearField(rule, C(false))) << "anything else does not, until it is timed";
-        EXPECT_TRUE(milo::LookDofNearSpread(rule, C(true))) << "a discrete GPU spreads";
-        EXPECT_FALSE(milo::LookDofNearSpread(rule, C(false))) << "anything else does not, until it is timed";
+        for (bool discrete : {true, false}) {
+            EXPECT_TRUE(milo::LookDofNearField(rule, C(discrete))) << "enhanced has the near field; discrete "
+                                                                   << discrete;
+            EXPECT_TRUE(milo::LookDofNearSpread(rule, C(discrete))) << "and spreads; discrete " << discrete;
+        }
+        // The picker reads the class's own value, in both directions.
+        for (bool discreteOn : {true, false}) {
+            milo::LookSettings copy = rule;
+            copy.postDofNearField = copy.postDofNearSpread = discreteOn;
+            copy.postDofNearFieldIntegrated = copy.postDofNearSpreadIntegrated = !discreteOn;
+            EXPECT_EQ(milo::LookDofNearField(copy, C(true)), discreteOn);
+            EXPECT_EQ(milo::LookDofNearField(copy, C(false)), !discreteOn);
+            EXPECT_EQ(milo::LookDofNearSpread(copy, C(true)), discreteOn);
+            EXPECT_EQ(milo::LookDofNearSpread(copy, C(false)), !discreteOn);
+        }
+    }
+    struct From {
+        milo::LookProfile profile;
+        int force;    // the token that changes every class from the profile's
+        bool before;  // every class's value under the profile
+    };
+    for (const From f : {From{milo::LookProfile::Retail, 1, false}, From{milo::LookProfile::Enhanced, 0, true}}) {
+        milo::ScopedLookOverride o(f.profile);
+        const char *name = milo::LookProfileName(f.profile);
         for (bool spread : {false, true}) {
             auto get = [&](bool discrete) {
                 return spread ? milo::LookDofNearSpread(milo::Look(), C(discrete))
@@ -2377,17 +2399,16 @@ TEST(DC3LookDofNear, TheNearFieldFollowsTheAdapterClass) {
                               : milo::LookDofNearSpread(milo::Look(), C(discrete));
             };
             const bool otherDiscrete = other(true), otherElse = other(false);
-            EXPECT_TRUE(milo::SetLookDofNearForInspection(1, spread));
-            EXPECT_TRUE(get(true)) << "spread " << spread;
-            EXPECT_TRUE(get(false)) << "the on token forces it on any GPU; spread " << spread;
-            EXPECT_TRUE(milo::SetLookDofNearForInspection(0, spread));
-            EXPECT_FALSE(get(true)) << "the off token forces it off on any GPU; spread " << spread;
-            EXPECT_FALSE(get(false)) << "spread " << spread;
+            EXPECT_EQ(get(true), f.before) << name << " spread " << spread;
+            EXPECT_EQ(get(false), f.before) << name << " spread " << spread;
+            EXPECT_TRUE(milo::SetLookDofNearForInspection(f.force, spread));
+            EXPECT_EQ(get(true), !f.before) << name << ": the token forces it on any GPU; spread " << spread;
+            EXPECT_EQ(get(false), !f.before) << name << ": the token forces it on any GPU; spread " << spread;
             EXPECT_TRUE(milo::SetLookDofNearForInspection(-1, spread));
-            EXPECT_TRUE(get(true)) << "the rule token returns each class to the profile's; spread " << spread;
-            EXPECT_FALSE(get(false)) << "spread " << spread;
-            EXPECT_EQ(other(true), otherDiscrete) << "one's tokens leave the other; spread " << spread;
-            EXPECT_EQ(other(false), otherElse) << "spread " << spread;
+            EXPECT_EQ(get(true), f.before) << name << ": the rule token returns each class; spread " << spread;
+            EXPECT_EQ(get(false), f.before) << name << " spread " << spread;
+            EXPECT_EQ(other(true), otherDiscrete) << name << ": one's tokens leave the other; spread " << spread;
+            EXPECT_EQ(other(false), otherElse) << name << " spread " << spread;
         }
     }
     for (milo::LookProfile p : {milo::LookProfile::Retail, milo::LookProfile::Native}) {

@@ -850,7 +850,7 @@ TEST(LookAdapterClasses, OtherNonDiscreteIsTodays) {
         ClassOutcomes discrete, other;
     };
     const Row today[] = {
-        {LookProfile::Enhanced, {true, true, true, true}, {false, false, false, false}},
+        {LookProfile::Enhanced, {true, true, true, true}, {true, true, false, false}},
         {LookProfile::Retail, {false, false, false, false}, {false, false, false, false}},
         {LookProfile::Native, {false, false, false, false}, {false, false, false, false}},
     };
@@ -1067,7 +1067,7 @@ TEST(LookAdapterClasses, TheClassLineWording) {
         << apple;
     const std::string other = line(LookAdapterType::Integrated, 0x1002, false, "Vulkan");
     EXPECT_TRUE(begins(other, "[look] adapter class: not a discrete GPU;")) << other;
-    EXPECT_NE(other.find("; depth of field near field 0, near spread 0, edge 0, texture pass msaa 0, scale 0 "
+    EXPECT_NE(other.find("; depth of field near field 1, near spread 1, edge 0, texture pass msaa 0, scale 0 "
                          "(cap 2048, base rows 360) [type integrated, vendor 0x1002, backend Vulkan] "
                          "(profile enhanced)\n"),
               std::string::npos)
@@ -1223,7 +1223,7 @@ TEST(LookAdapterClasses, TheClassTokenReachesEveryPickersCaller) {
                                         LookAdapterClass::OtherNonDiscrete};
     // What each class's callers get under enhanced (the two tables above).
     const ClassOutcomes want[] = {{true, true, true, true}, {true, true, true, true},
-                                  {false, false, false, false}};
+                                  {true, true, false, false}};
     GpuDevice noAdapter;  // a caller's accessor; its own class is other non-discrete
     for (int f = 0; f < 3; f++) {
         for (int c = 0; c < 3; c++) {
@@ -1406,7 +1406,7 @@ TEST(LookAdapterClasses, TheBrowserClassLine) {
     testing::internal::CaptureStderr();
     milo::PrintLookAdapterClass(WebFacts("apple", true, false, "metal-3"));
     const std::string mac = testing::internal::GetCapturedStderr();
-    EXPECT_EQ(mac, "[look] adapter class: not a discrete GPU; depth of field near field 0, near spread 0, edge 0, "
+    EXPECT_EQ(mac, "[look] adapter class: not a discrete GPU; depth of field near field 1, near spread 1, edge 0, "
                    "texture pass msaa 0, scale 0 (cap 2048, base rows 360) [browser vendor \"apple\", "
                    "architecture \"metal-3\", texture-compression-bc 1, fallback 0, backend WebGPU] (profile "
                    "enhanced)\n");
@@ -1416,7 +1416,7 @@ TEST(LookAdapterClasses, TheBrowserClassLine) {
     const std::string forced = testing::internal::GetCapturedStderr();
     EXPECT_EQ(forced, "[look] adapter class forced for inspection: not a discrete GPU; the adapter is a discrete "
                       "GPU [browser vendor \"nvidia\", architecture \"ampere\", texture-compression-bc 1, "
-                      "fallback 0, backend WebGPU]; depth of field near field 0, near spread 0, edge 0, texture "
+                      "fallback 0, backend WebGPU]; depth of field near field 1, near spread 1, edge 0, texture "
                       "pass msaa 0, scale 0 (cap 2048, base rows 360) (profile enhanced)\n");
     ASSERT_TRUE(milo::SetLookAdapterClassForInspection(true));
     milo::LogLookAdapterClass(saved);
