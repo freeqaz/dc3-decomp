@@ -37,6 +37,11 @@ public:
         int mWidth, mHeight, mBpp, mNumMips, mOrder;
     };
 
+#ifdef HX_NATIVE
+    // Native only: releases the GPU copy keyed on this address (CubeTex.cpp;
+    // the same hook as RndTex::~RndTex). Retail has no destructor here.
+    virtual ~RndCubeTex();
+#endif
     OBJ_CLASSNAME(CubeTex);
     OBJ_SET_TYPE(CubeTex);
     virtual DataNode Handle(DataArray *, bool);
