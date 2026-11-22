@@ -22,9 +22,11 @@
 //    the new size; one face's pixels changed at the same size (UpdateFace, the
 //    Sync() branch of Update) gives a new view.
 // The mip count is the observable: under the Retail look a cube map uploads
-// every level its faces carry (LookSettings::cubeMipChain), so a 64x64 face
-// chain is 7 levels and a 16x16 one 5. View identity is compared while the
-// earlier view is still held, so the allocator cannot hand its handle on.
+// every level its faces carry (LookSettings::cubeMipChain): 3 for a 64x64
+// face and 1 for a 16x16 one, since RndBitmap::GenerateMips stops at 16
+// pixels. The tests read the count from the bitmap (Levels) and never assume
+// it. View identity is compared while the earlier view is still held, so the
+// allocator cannot hand its handle on.
 //
 // Sabotage (dc3-decomp archive/np-gfx-2026-11-14/lanes/sharp/item58): the
 // destructor hook removed; CleanupGpuCubeTex erasing nothing; the cleanup in
