@@ -185,6 +185,10 @@ void Tracker::Feed(const Input &in, const Params &p) {
         mPressed = false;
         if (mDragging) {
             const float v = Velocity(in.t, p);
+            mReleaseV = v;
+            mReleaseN = (int)mSamples.size();
+            mReleaseSpan = mSamples.empty() ? 0.0f : in.t - mSamples.front().t;
+            mReleases++;
             if (std::fabs(v) >= p.flickVelocity)
                 mFlingVelocity = v;
         } else if (!mSuppressTap) {

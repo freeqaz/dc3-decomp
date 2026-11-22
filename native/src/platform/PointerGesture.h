@@ -139,6 +139,12 @@ public:
     bool Pressed() const { return mPressed; }
     bool Dragging() const { return mDragging; }
     bool Flinging() const { return mFlingVelocity != 0.0f; }
+    // The last drag's release: its velocity (frame px/s), how many samples
+    // and over how long they ran, and how many drags have been released.
+    float ReleaseVelocity() const { return mReleaseV; }
+    int ReleaseSamples() const { return mReleaseN; }
+    float ReleaseSpan() const { return mReleaseSpan; }
+    unsigned Releases() const { return mReleases; }
     // Whether the list is still moving on its own (rows owed from a fling the
     // caller is still running, a scroll animation).  A press then stops it and
     // picks nothing, as a press that stops this tracker's own fling does.
@@ -155,6 +161,9 @@ private:
     bool mDragging = false;
     bool mSuppressTap = false; // the press stopped a fling
     bool mListMoving = false;
+    float mReleaseV = 0.0f, mReleaseSpan = 0.0f;
+    int mReleaseN = 0;
+    unsigned mReleases = 0;
     bool mStoppedPending = false;
     bool mTouch = false;       // the press is a finger's
     float mSlop = 16.0f;       // this press's slop, frame pixels

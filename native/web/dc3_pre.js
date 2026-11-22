@@ -455,7 +455,8 @@ function dc3PictureBox(c) {
         // the event's own time: a slow frame hands over a burst of events,
         // and the release velocity needs when each happened (Fable review)
         var age = e && typeof e.timeStamp === 'number' && typeof performance !== 'undefined'
-            ? Math.max(0, (performance.now() - e.timeStamp) / 1000) : 0;
+            ? (performance.now() - e.timeStamp) / 1000 : 0;
+        if (!(age >= 0 && age < 0.5)) age = 0; // another clock, or nonsense: now
         fn(kind, x, y, r.width, r.height, wheel || 0, touch, age);
     }
     function lose() {

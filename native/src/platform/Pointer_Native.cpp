@@ -832,6 +832,13 @@ void FramePoll() {
         RunSteps();
         // one line per action (the web has no HTTP server: the phone check
         // reads these from the console)
+        static unsigned sReleases = 0;
+        if (gTracker.Releases() != sReleases) {
+            sReleases = gTracker.Releases();
+            printf("[dc3-pointer] release: %.0f px/s over %d samples, %.3f s (fling at %.0f)\n",
+                   gTracker.ReleaseVelocity(), gTracker.ReleaseSamples(), gTracker.ReleaseSpan(),
+                   P().flickVelocity);
+        }
         static std::string sLogged;
         static unsigned sLoggedCount = 0;
         const unsigned count = gTaps + gHovers + gBacks + (unsigned)gStepsDone;
@@ -878,7 +885,10 @@ extern "C" EMSCRIPTEN_KEEPALIVE void dc3_pointer(int kind, float bx, float by, f
                                                  float ageSeconds) {
     Input in;
     in.kind = (Kind)kind;
-    in.t = Dc3Pointer::Now() - std::max(0.0f, std::min(ageSeconds, 1.0f));
+    // never earlier than the event before it (the samples stay in order)
+    static float sLastT = 0.0f;
+    in.t = std::max(sLastT, Dc3Pointer::Now() - std::max(0.0f, std::min(ageSeconds, 0.5f)));
+    sLastT = in.t;
     in.wheel = wheel;
     in.touch = touch != 0;
     const bool inside =
