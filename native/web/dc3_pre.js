@@ -366,10 +366,39 @@ Module.preRun.push(function () {
 // drag scroll the list (a flick keeps going), the right button is back.
 // Pointer Events on the canvas, so mouse, pen and touch share one path; the
 // on-screen pad (touch_controls.js) is its own elements above the canvas and
-// is not touched.  Coordinates go in as the canvas box's CSS pixels with the
-// box's size; the engine maps them into the 1280x720 frame (the picture is the
-// box's centred 16:9 rectangle).  ?env=DC3_POINTER=0 is the original: the
-// engine ignores them.
+// is not touched.  Coordinates go in relative to the PICTURE -- where the
+// canvas's buffer is shown inside its CSS box (dc3PictureBox: the whole box
+// when the buffer is stretched to it, which is the page's normal layout; the
+// contained/covered rectangle under object-fit, e.g. fullscreen's contain) --
+// with the picture's CSS size; the engine scales that onto its surface (the
+// canvas buffer, all of which is the frame on the web) and into the frame.
+// Nothing assumes 16:9 or a centred box.  ?env=DC3_POINTER=0 is the original:
+// the engine ignores them.
+function dc3PictureBox(c) {
+    var r = c.getBoundingClientRect();
+    // the content box: getBoundingClientRect includes border and padding
+    var cs = typeof getComputedStyle === 'function' ? getComputedStyle(c) : null;
+    function px(v) { var n = parseFloat(v); return isFinite(n) ? n : 0; }
+    var l = r.left, t = r.top, w = r.width, h = r.height;
+    if (cs) {
+        var bl = px(cs.borderLeftWidth) + px(cs.paddingLeft), bt = px(cs.borderTopWidth) + px(cs.paddingTop);
+        l += bl; t += bt;
+        w -= bl + px(cs.borderRightWidth) + px(cs.paddingRight);
+        h -= bt + px(cs.borderBottomWidth) + px(cs.paddingBottom);
+    }
+    var fit = cs ? cs.objectFit : 'fill', bw = c.width, bh = c.height;
+    if (!fit || fit === 'fill' || !(bw > 0 && bh > 0) || !(w > 0 && h > 0))
+        return { left: l, top: t, width: w, height: h };
+    var k = fit === 'cover' ? Math.max(w / bw, h / bh)
+          : fit === 'none' ? 1
+          : fit === 'scale-down' ? Math.min(1, Math.min(w / bw, h / bh))
+          : Math.min(w / bw, h / bh); // contain
+    var pw = bw * k, ph = bh * k;
+    // object-position: its computed form is two lengths/percentages ("50% 50%")
+    var pos = (cs.objectPosition || '50% 50%').split(/\s+/);
+    function at(v, free) { return /%$/.test(v) ? free * parseFloat(v) / 100 : px(v); }
+    return { left: l + at(pos[0] || '50%', w - pw), top: t + at(pos[1] || '50%', h - ph), width: pw, height: ph };
+}
 (function () {
     if (typeof document === 'undefined') return;
     var KIND = { move: 0, down: 1, up: 2, wheel: 3, cancel: 4, back: 5 };
@@ -378,7 +407,7 @@ Module.preRun.push(function () {
         var fn = Module['_dc3_pointer'];
         var c = document.getElementById('dc3-canvas');
         if (!fn || !c) return;
-        var r = c.getBoundingClientRect();
+        var r = dc3PictureBox(c);
         if (r.width <= 0 || r.height <= 0) return;
         var touch = e && e.pointerType && e.pointerType !== 'mouse' ? 1 : 0;
         var x = e ? e.clientX - r.left : 0, y = e ? e.clientY - r.top : 0;
@@ -426,16 +455,17 @@ Module.preRun.push(function () {
 
 // For tests and tools (scripts/phone_pointer.mjs): GET /api/pointer/state's
 // JSON, from the engine now, with each drawn row's centre also in PAGE CSS
-// pixels (row.page = [x, y]) -- mapped back through the picture rectangle the
-// engine last presented (state.present, GpuDevice::LastPresentRect on the
-// canvas buffer) and the canvas's CSS box, the same two the engine uses to
-// map a pointer in.  null before the engine is up.
+// pixels (row.page = [x, y]) -- mapped back through the same two rectangles a
+// pointer is mapped in by: the picture inside the canvas's CSS box
+// (dc3PictureBox, s.picture) and where the frame sits on the engine's surface
+// (s.present; on the web the whole canvas buffer).  null before the engine is
+// up.
 Module.dc3PointerState = function () {
     var fn = Module['_dc3_pointer_state'];
     var c = typeof document !== 'undefined' && document.getElementById('dc3-canvas');
     if (!fn || !c) return null;
     var s = JSON.parse(UTF8ToString(fn()));
-    var r = c.getBoundingClientRect(), p = s.present;
+    var r = dc3PictureBox(c), p = s.present;
     if (p && p.surface_w > 0 && p.w > 0) {
         s.lists.forEach(function (l) {
             l.rows.forEach(function (row) {
@@ -443,7 +473,9 @@ Module.dc3PointerState = function () {
                 row.page = [r.left + bx * r.width / p.surface_w, r.top + by * r.height / p.surface_h];
             });
         });
-        s.canvas = [r.left, r.top, r.width, r.height];
+        s.picture = [r.left, r.top, r.width, r.height];
+        var cr = c.getBoundingClientRect();
+        s.canvas = [cr.left, cr.top, cr.width, cr.height, c.width, c.height];
     }
     return s;
 };

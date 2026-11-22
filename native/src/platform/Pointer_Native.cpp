@@ -544,20 +544,32 @@ void Push(const Input &in, float delaySeconds, bool windowSpace) {
 
 // Where the engine last put the frame on its surface, in surface pixels, and
 // the surface's size: the real picture rectangle, whatever the window or the
-// canvas is (GpuDevice::LastPresentRect, written by every present: the
-// PresentScale letterbox on the desktop, the canvas buffer on the web).
+// canvas is.  Desktop: GpuDevice::LastPresentRect, written by every present
+// (the PresentScale letterbox of a fixed frame, else the whole surface).  Web:
+// the engine has no present pass there -- the frame is drawn straight into
+// the canvas buffer -- so the picture is the whole surface, and where that
+// buffer sits on the page is the page's business (dc3_pre.js dc3PictureBox
+// sends the point relative to it).
 static bool PresentInfo(Rect &present, int &surfW, int &surfH) {
     if (!gWgpuRnd)
         return false;
     GpuDevice &g = gWgpuRnd->Gpu();
     surfW = g.SurfaceWidth();
     surfH = g.SurfaceHeight();
-    const PresentRect r = g.LastPresentRect();
-    if (r.w > 0 && r.h > 0) {
-        present = {(float)r.x, (float)r.y, (float)r.w, (float)r.h};
-    } else {
-        present = {0.0f, 0.0f, (float)surfW, (float)surfH};
+#ifdef __EMSCRIPTEN__
+    // the web device keeps no surface size; the canvas's buffer is the surface
+    int cw = 0, ch = 0;
+    if (g.CanvasSize(cw, ch) && cw > 0 && ch > 0) {
+        surfW = cw;
+        surfH = ch;
     }
+#endif
+    present = {0.0f, 0.0f, (float)surfW, (float)surfH};
+#ifndef __EMSCRIPTEN__
+    const PresentRect r = g.LastPresentRect();
+    if (r.w > 0 && r.h > 0)
+        present = {(float)r.x, (float)r.y, (float)r.w, (float)r.h};
+#endif
     return surfW > 0 && surfH > 0;
 }
 
