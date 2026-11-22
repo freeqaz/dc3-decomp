@@ -78,8 +78,11 @@
             --pic-h: calc((100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) * 9 / 16);
             --deck-h: calc(100vh - var(--pic-h) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
             /* one touch button's size (touch_controls.js): a quarter of the
-               width, less when the deck is short, never under 44 px */
-            --tb: min(24vw, 112px, max(44px, calc((var(--deck-h) - 250px) / 3.2)));
+               width, less when the deck is short, never under 48 px (so the
+               d-pad's 0.92 is 44 px; B and Start are floored at 44 px). This
+               is the fallback: portrait.js measures the deck and sets --tb,
+               --panel-top and --view-h inline (layoutDeck). */
+            --tb: min(24vw, 112px, max(48px, calc((var(--deck-h) - 250px) / 3.2)));
         }
         @supports (height: 100dvh) {
             html.dc3-portrait { --deck-h: calc(100dvh - var(--pic-h) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
@@ -108,11 +111,29 @@
            back can read (in the 16:9 strip it was about 23 px tall). */
         html.dc3-portrait:not(.dev) #pose-panel {
             position: fixed; z-index: 16; bottom: auto; left: 50%; transform: translateX(-50%);
-            top: calc(env(safe-area-inset-top, 0px) + var(--pic-h) + 140px);
+            top: var(--panel-top, calc(env(safe-area-inset-top, 0px) + var(--pic-h) + 140px));
             width: max-content; max-width: 92vw; gap: 10px; font-size: 13px; align-items: center;
         }
-        html.dc3-portrait:not(.dev) #pose-view { height: min(26vw, calc(var(--deck-h) - 156px - 3.4 * var(--tb))); min-height: 48px; border-radius: 10px; }
+        html.dc3-portrait:not(.dev) #pose-view { height: var(--view-h, min(26vw, calc(var(--deck-h) - 156px - 3.4 * var(--tb)))); min-height: 40px; border-radius: 10px; }
         html.dc3-portrait:not(.dev) #pose-status { max-width: 56vw; }
+        /* A short deck (a split screen, a near-square foldable; portrait.js
+           decides): the button cluster at the right, the now card and the
+           camera view in the column left of it, no tip. */
+        html.dc3-portrait.dc3-portrait-compact:not(.dev) #dc3-deck .tip { display: none; }
+        html.dc3-portrait.dc3-portrait-compact:not(.dev) #dc3-deck .now { margin-right: calc(var(--tb) * 3 + 12px); }
+        html.dc3-portrait.dc3-portrait-compact:not(.dev) #pose-panel {
+            left: max(14px, env(safe-area-inset-left, 0px)); transform: none; max-width: var(--col-w, 52vw);
+        }
+        html.dc3-portrait.dc3-portrait-compact:not(.dev) #pose-status { max-width: none; min-width: 0; font-size: 11px; }
+        /* A long screen name stops at three lines (two, smaller, in the
+           compact column), so it cannot push the camera view off the screen. */
+        html.dc3-portrait:not(.dev) #dc3-deck .screen {
+            display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+        }
+        html.dc3-portrait.dc3-portrait-compact:not(.dev) #dc3-deck .screen { font-size: 18px; -webkit-line-clamp: 2; }
+        /* The full-screen button (touch_controls.js): the corner of the now
+           card in portrait; the card leaves it room. */
+        html.dc3-portrait:not(.dev) #dc3-deck .now { padding-right: 58px; position: relative; }
         /* A song held upright (portrait.js, html.dc3-portrait-song; the
            engine draws a 9:16 frame then): the picture is 9:16, full width
            at the top, unless the screen is too short for that and a strip;
@@ -258,6 +279,20 @@
             function on(v) { return v !== null && v !== '0' && v !== 'false' && v !== 'off'; }
             window.dc3DevPage = on(q.get('dev')) || (on(q.get('debug')) && q.get('dev') === null);
             if (window.dc3DevPage) document.documentElement.classList.add('dev');
+            // The one touch test the page uses (portrait.js, touch_controls.js
+            // and the sound button read it): the PRIMARY pointer is a finger.
+            // "(any-pointer: fine)" false was the old test, and a phone with a
+            // stylus or a Bluetooth mouse paired has a fine pointer too, so it
+            // lost its buttons; a touch laptop's primary pointer stays fine.
+            window.dc3TouchOnly = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+            // ?portrait= / ?touch= / ?dev= share one reading of a switch.
+            window.dc3Switch = function(v) {
+                if (v === null || v === undefined) return null;
+                v = String(v).toLowerCase();
+                if (v === '0' || v === 'false' || v === 'off' || v === 'no') return false;
+                if (v === '1' || v === 'true' || v === 'on' || v === 'yes' || v === '') return true;
+                return null;
+            };
         })();
     </script>
     <script>
@@ -290,8 +325,7 @@
                 document.addEventListener(t, unlock, { capture: true, passive: true });
             });
             var q = new URLSearchParams(location.search).get('sound_button');
-            var touchOnly = !(window.matchMedia && window.matchMedia('(any-pointer: fine)').matches) &&
-                            ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+            var touchOnly = window.dc3TouchOnly;
             var useButton = q === '1' || (q !== '0' && touchOnly);
             var btn = null;
             function update() {
@@ -762,12 +796,56 @@
             }, 0);
         }
 
-        // Player page: double-click the game for fullscreen (the pose panel is
-        // inside the same container, so it comes along).
+        // Player page with a mouse: double-click the game for fullscreen (the
+        // pose panel is inside the same container, so it comes along). Not
+        // with the on-screen buttons: they and the portrait deck live on
+        // <body>, outside the container, so a fullscreen container hid every
+        // one of them (a double tap on a phone did it by accident). There the
+        // "Full screen" button (touch_controls.js) makes the whole page
+        // fullscreen instead.
         document.getElementById('dc3-canvas').addEventListener('dblclick', function() {
+            if (window.dc3TouchControls && window.dc3TouchControls.shown) return;
             var c = document.getElementById('canvas-container');
             if (!DEV && !document.fullscreenElement && c.requestFullscreen) c.requestFullscreen().catch(function() {});
         });
+
+        // Keep the screen on while a player is playing (a camera player does
+        // not touch the phone, and it dimmed mid-song). Held on every screen
+        // but the idle ones (attract, title), released there and whenever the
+        // page is hidden -- the browser drops the lock itself then, so it is
+        // asked for again when the page is visible. ?wakelock=0 never asks.
+        // window.dc3WakeLock = { held, requests, errors } for phone.mjs.
+        (function() {
+            var wl = window.dc3WakeLock = { held: false, requests: 0, errors: 0, want: false };
+            if (window.dc3Switch(new URLSearchParams(location.search).get('wakelock')) === false) return;
+            var sentinel = null, asking = false;
+            function sync() {
+                var want = wl.want && document.visibilityState === 'visible';
+                if (want && !sentinel && !asking && navigator.wakeLock && navigator.wakeLock.request) {
+                    asking = true;
+                    wl.requests++;
+                    navigator.wakeLock.request('screen').then(function(s) {
+                        asking = false;
+                        sentinel = s;
+                        wl.held = true;
+                        s.addEventListener('release', function() {
+                            if (sentinel === s) { sentinel = null; wl.held = false; }
+                        });
+                        if (!(wl.want && document.visibilityState === 'visible')) sync();
+                    }, function() { asking = false; wl.errors++; });
+                } else if (!want && sentinel) {
+                    var s = sentinel;
+                    sentinel = null;
+                    wl.held = false;
+                    s.release().catch(function() {});
+                }
+            }
+            document.addEventListener('dc3-screen', function(e) {
+                wl.want = !/^(attract|title)_screen$/.test(e.detail.screen);
+                sync();
+            });
+            document.addEventListener('visibilitychange', sync);
+        })();
 
         btnPause.addEventListener('click', togglePause);
         btnStep.addEventListener('click', stepFrame);

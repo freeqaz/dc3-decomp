@@ -7,7 +7,8 @@
 // keyboard can drive, a thumb can too (a camera player can also use the
 // game's own hand cursor, POSE_INPUT.md "Gesture menus").
 //
-// Shown when the device has no fine pointer (`(any-pointer: fine)` false) or
+// Shown when the primary pointer is a finger (window.dc3TouchOnly, index.html:
+// `(pointer: coarse)`; a phone with a stylus or mouse paired keeps them) or
 // with ?touch=1; ?touch=0 hides it.  Layout: a d-pad on the left and
 // A (Enter, confirm) / B (Esc, back) / Start (Space) on the right, outside the
 // game picture when the window has room (portrait), over its lower corners
@@ -16,9 +17,9 @@
 (function () {
     'use strict';
     var q = new URLSearchParams(location.search);
-    var force = q.get('touch');
-    var fine = window.matchMedia && window.matchMedia('(any-pointer: fine)').matches;
-    var show = force === '1' || (force !== '0' && !fine && ('ontouchstart' in window || navigator.maxTouchPoints > 0));
+    var sw = window.dc3Switch || function (v) { return v === '0' ? false : v === '1' ? true : null; };
+    var force = sw(q.get('touch'));
+    var show = force === true || (force !== false && !!window.dc3TouchOnly);
     // The page refused to boot the engine (no secure context, WebGPU or
     // JSPI): its message owns the screen, and buttons would only cover it
     // (W-31: on an iPhone they sat over the JSPI message).
@@ -36,7 +37,7 @@
         '  font:600 calc(var(--b) * 0.32)/1 system-ui,sans-serif; touch-action:none;' +
         '  -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; padding:0; }' +
         '#dc3-touch button.on { background:#c0f8; border-color:#fff; }' +
-        '#dc3-touch { --b:min(15vmin, 72px); --g:calc(var(--b) * 0.1); }' +
+        '#dc3-touch { --b:max(44px, min(15vmin, 72px)); --g:calc(var(--b) * 0.1); }' +
         '#dc3-touch .dpad { position:absolute; left:calc(var(--g) * 3 + env(safe-area-inset-left, 0px));' +
         '  bottom:calc(var(--g) * 3 + env(safe-area-inset-bottom, 0px));' +
         '  width:calc(var(--b) * 3); height:calc(var(--b) * 3); }' +
@@ -65,8 +66,14 @@
         'html.dc3-portrait #dc3-touch .dpad button, html.dc3-portrait #dc3-touch button[data-key="Enter"] {' +
         '  width:calc(var(--b) * 0.92); height:calc(var(--b) * 0.92); margin:calc(var(--b) * 0.04); }' +
         'html.dc3-portrait #dc3-touch button[data-key="Enter"] { background:#a0c8; border-color:#fffa; font-size:calc(var(--b) * 0.4); }' +
+        // B and Start are smaller, but never under 44 px (Apple's and
+        // Google's minimum target; at 360x560 they were 35 px)
         'html.dc3-portrait #dc3-touch button[data-key="Escape"], html.dc3-portrait #dc3-touch button[data-key=" "] {' +
-        '  width:calc(var(--b) * 0.8); height:calc(var(--b) * 0.8); font-size:calc(var(--b) * 0.28); }' +
+        '  width:max(44px, calc(var(--b) * 0.8)); height:max(44px, calc(var(--b) * 0.8)); font-size:max(14px, calc(var(--b) * 0.28)); }' +
+        // A short deck (portrait.js, html.dc3-portrait-compact): the cluster
+        // at the right, clear of the now card and the camera view at the left.
+        'html.dc3-portrait.dc3-portrait-compact #dc3-touch .dpad, html.dc3-portrait.dc3-portrait-compact #dc3-touch .face {' +
+        '  left:auto; transform:none; right:max(14px, env(safe-area-inset-right, 0px)); bottom:calc(12px + env(safe-area-inset-bottom, 0px)); }' +
         // A song held upright (portrait.js, html.dc3-portrait-song): the
         // picture is 9:16 and a slim strip is left under it; a song needs
         // only B and Start, side by side at its right. No d-pad, no A.
@@ -74,21 +81,38 @@
         'html.dc3-portrait-song #dc3-touch .face { left:auto; transform:none; width:calc(var(--b) * 2.2); height:var(--b);' +
         '  right:calc(10px + env(safe-area-inset-right, 0px)); bottom:calc((var(--strip, 92px) - var(--b)) / 2 + env(safe-area-inset-bottom, 0px)); }' +
         'html.dc3-portrait-song #dc3-touch button[data-key="Escape"] { left:0; top:0; }' +
-        'html.dc3-portrait-song #dc3-touch button[data-key=" "] { left:calc(var(--b) * 1.2); top:0; }';
+        'html.dc3-portrait-song #dc3-touch button[data-key=" "] { left:calc(var(--b) * 1.2); top:0; }' +
+        // The full-screen button (not on the double tap: that made the game's
+        // container fullscreen and hid every button). It makes the whole page
+        // fullscreen, so the buttons and the deck stay. Hidden where the page
+        // cannot go fullscreen (an iPhone allows it only for video).
+        '#dc3-fs { position:fixed; z-index:21; width:44px; height:44px; padding:10px; border-radius:10px;' +
+        '  border:1px solid #fff5; background:#0007; color:#fffc; touch-action:none; -webkit-tap-highlight-color:transparent;' +
+        '  top:calc(8px + env(safe-area-inset-top, 0px)); right:calc(8px + env(safe-area-inset-right, 0px)); }' +
+        '#dc3-fs svg { display:block; width:100%; height:100%; }' +
+        'html.dc3-portrait:not(.dev) #dc3-fs { top:calc(env(safe-area-inset-top, 0px) + var(--pic-h) + 23px);' +
+        '  right:calc(max(14px, env(safe-area-inset-right, 0px)) + 11px); }' +
+        'html.dc3-portrait.dc3-portrait-compact:not(.dev) #dc3-fs { right:calc(max(14px, env(safe-area-inset-right, 0px)) + var(--tb) * 3 + 23px); }' +
+        'html.dc3-portrait-song #dc3-fs, html.dev #dc3-fs { display:none; }';
     var style = document.createElement('style');
     style.textContent = css;
     document.head.appendChild(style);
 
     var root = document.createElement('div');
     root.id = 'dc3-touch';
-    // [label, key, container, left, top, portrait left, portrait top] in
-    // button units inside the container (in portrait both containers are the
-    // same 3x3 box, so the face buttons sit in the d-pad's middle and corners)
+    // [label, key, container, left, top, portrait left, portrait top, name]
+    // in button units inside the container (in portrait both containers are
+    // the same 3x3 box, so the face buttons sit in the d-pad's middle and
+    // corners). The triangles carry U+FE0E (text presentation): a bare
+    // U+25B6/U+25C0 is drawn as a colour emoji on iOS and Android, a blue
+    // box beside the plain up and down triangles. The name is what a screen
+    // reader says (it said the key: "Escape", " ").
+    var T = '\uFE0E';
     var buttons = [
-        ['▲', 'ArrowUp', 'dpad', 1, 0, 1, 0], ['▼', 'ArrowDown', 'dpad', 1, 2, 1, 2],
-        ['◀', 'ArrowLeft', 'dpad', 0, 1, 0, 1], ['▶', 'ArrowRight', 'dpad', 2, 1, 2, 1],
-        ['A', 'Enter', 'face', 1.6, 1.0, 1, 1], ['B', 'Escape', 'face', 0.6, 2.0, 0.1, 2.1],
-        ['▶❙', ' ', 'face', 0.0, 0.0, 2.1, 0.1],
+        ['\u25B2' + T, 'ArrowUp', 'dpad', 1, 0, 1, 0, 'Up'], ['\u25BC' + T, 'ArrowDown', 'dpad', 1, 2, 1, 2, 'Down'],
+        ['\u25C0' + T, 'ArrowLeft', 'dpad', 0, 1, 0, 1, 'Left'], ['\u25B6' + T, 'ArrowRight', 'dpad', 2, 1, 2, 1, 'Right'],
+        ['A', 'Enter', 'face', 1.6, 1.0, 1, 1, 'A, confirm'], ['B', 'Escape', 'face', 0.6, 2.0, 0.1, 2.1, 'Back'],
+        ['\u25B6' + T + '\u2759', ' ', 'face', 0.0, 0.0, 2.1, 0.1, 'Start'],
     ];
     var boxes = {};
     ['dpad', 'face'].forEach(function (k) {
@@ -109,7 +133,7 @@
     buttons.forEach(function (b) {
         var el = document.createElement('button');
         el.textContent = b[0];
-        el.setAttribute('aria-label', b[1] === ' ' ? 'Start' : b[1]);
+        el.setAttribute('aria-label', b[7]);
         el.dataset.key = b[1];
         el.style.setProperty('--lx', b[3]);
         el.style.setProperty('--ly', b[4]);
@@ -146,7 +170,29 @@
         el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
         boxes[b[2]].appendChild(el);
     });
-    function mount() { document.body.appendChild(root); }
+    // Full screen: the whole page (document.documentElement), from a button.
+    var page = document.documentElement;
+    var reqFs = page.requestFullscreen || page.webkitRequestFullscreen;
+    var exitFs = document.exitFullscreen || document.webkitExitFullscreen;
+    var fsBtn = null;
+    if (reqFs && document.fullscreenEnabled !== false && sw(q.get('fullscreen_button')) !== false) {
+        fsBtn = document.createElement('button');
+        fsBtn.id = 'dc3-fs';
+        fsBtn.type = 'button';
+        fsBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">' +
+            '<path d="M3 9V3h6M15 3h6v6M21 15v6h-6M9 21H3v-6"/></svg>';
+        var fsElement = function () { return document.fullscreenElement || document.webkitFullscreenElement || null; };
+        var fsLabel = function () { fsBtn.setAttribute('aria-label', fsElement() ? 'Leave full screen' : 'Full screen'); };
+        fsLabel();
+        fsBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            var r = fsElement() ? exitFs.call(document) : reqFs.call(page);
+            if (r && r.catch) r.catch(function () {});
+        });
+        document.addEventListener('fullscreenchange', fsLabel);
+        document.addEventListener('webkitfullscreenchange', fsLabel);
+    }
+    function mount() { document.body.appendChild(root); if (fsBtn) document.body.appendChild(fsBtn); }
     if (document.body) mount(); else document.addEventListener('DOMContentLoaded', mount);
-    console.log('[dc3-touch] on-screen buttons shown (' + (force === '1' ? '?touch=1' : 'no fine pointer') + ')');
+    console.log('[dc3-touch] on-screen buttons shown (' + (force === true ? '?touch=1' : 'coarse pointer') + ')');
 })();

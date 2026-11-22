@@ -35,11 +35,14 @@
 // frame } for the tests (scripts/web/phone.mjs).
 (function () {
     'use strict';
-    var q = new URLSearchParams(location.search).get('portrait');
-    var mode = q === '0' ? 'off' : q === '1' ? 'on' : 'auto';
-    var fine = window.matchMedia && window.matchMedia('(any-pointer: fine)').matches;
-    var touchOnly = !fine && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-    var songMode = new URLSearchParams(location.search).get('portraitsong') !== '0';
+    // ?portrait= / ?portraitsong= read like ?dev: 0/false/off/no, 1/true/on/yes
+    // (index.html's dc3Switch); anything else is auto.
+    var sw = window.dc3Switch || function (v) { return v === '0' ? false : v === '1' ? true : null; };
+    var qs = new URLSearchParams(location.search);
+    var q = sw(qs.get('portrait'));
+    var mode = q === false ? 'off' : q === true ? 'on' : 'auto';
+    var touchOnly = !!window.dc3TouchOnly;  // index.html: (pointer: coarse)
+    var songMode = sw(qs.get('portraitsong')) !== false;
     var state = window.dc3Portrait = { mode: mode, active: false, changes: 0, screen: '', song: '',
                                        song9x16: false, songChanges: 0, frameAsked: -1 };
     // The page refused to boot (no secure context, WebGPU or JSPI): its card
@@ -48,7 +51,7 @@
     if (mode === 'off' || window.dc3DevPage) return;  // ?dev keeps its own layout
 
     var root = document.documentElement;
-    var deck = null, nowEl = null, songEl = null;
+    var deck = null, nowEl = null, songEl = null;  // (inset: see layoutDeck)
 
     // Screen names from the engine's "will enter '<screen>'" lines (index.html
     // re-sends them as a dc3-screen event), in the words a player uses.
@@ -74,6 +77,10 @@
             '<div class="tip">Turn sideways for the full screen</div>';
         nowEl = deck.querySelector('.screen');
         songEl = deck.querySelector('.song');
+        // reads env(safe-area-inset-bottom) for layoutDeck
+        inset = document.createElement('div');
+        inset.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;height:0;padding-bottom:env(safe-area-inset-bottom, 0px)';
+        document.body.appendChild(inset);
         document.body.appendChild(deck);
         render();
     }
@@ -82,6 +89,54 @@
         nowEl.textContent = state.screen ? pretty(state.screen) : 'Loading…';
         songEl.textContent = state.song ? state.song : '';
         songEl.style.display = state.song ? 'block' : 'none';
+        layoutDeck();
+    }
+
+    // The deck's layout, measured rather than guessed (np-portrait2 round
+    // 2: a fixed 140 px panel offset put the camera view over a long screen
+    // name, and a short deck -- a split screen, a near-square foldable --
+    // stacked the buttons over the card and the camera view).
+    //   stacked  the now card, the tip, the camera view under them, the
+    //            button cluster centred at the bottom
+    //   compact  (html.dc3-portrait-compact) when the stack does not fit:
+    //            the cluster at the right, the now card and the camera view
+    //            in the column left of it, no tip
+    // It sets --tb (one button), --panel-top and --view-h on <html>. Every
+    // button is at least 44 px (touch_controls.js floors B and Start too).
+    var inset = null, TB_MIN = 48, VIEW_MIN = 48;
+    function clearLayout() {
+        root.classList.remove('dc3-portrait-compact');
+        ['--tb', '--panel-top', '--view-h', '--col-w'].forEach(function (k) { root.style.removeProperty(k); });
+    }
+    function layoutDeck() {
+        if (!deck) return;
+        if (!state.active || state.song9x16 || getComputedStyle(deck).display === 'none') { clearLayout(); return; }
+        var vw = window.innerWidth;
+        var top = deck.getBoundingClientRect().top;
+        var bottom = window.innerHeight - (inset ? inset.getBoundingClientRect().height : 0);
+        var deckH = bottom - top;
+        var px = function (v) { return Math.round(v * 10) / 10 + 'px'; };
+        // stacked
+        var tb = Math.min(0.24 * vw, 112, Math.max(TB_MIN, (deckH - 250) / 3.2));
+        root.classList.remove('dc3-portrait-compact');
+        root.style.setProperty('--tb', px(tb));
+        root.style.removeProperty('--col-w');
+        var tip = deck.querySelector('.tip').getBoundingClientRect();
+        var panelTop = tip.bottom + 8;
+        var viewH = Math.min(0.26 * vw, bottom - 3.4 * tb - 12 - panelTop);
+        var compact = viewH < VIEW_MIN;
+        if (compact) {
+            tb = Math.max(TB_MIN, Math.min(0.24 * vw, 112, (deckH - 24) / 3.2, (vw - 28 - 12 - 170) / 3));
+            var colW = vw - 28 - 12 - 3 * tb;
+            root.classList.add('dc3-portrait-compact');
+            root.style.setProperty('--tb', px(tb));
+            root.style.setProperty('--col-w', px(colW));
+            panelTop = deck.querySelector('.now').getBoundingClientRect().bottom + 8;
+            viewH = Math.max(40, Math.min(colW * 0.45, bottom - 12 - panelTop));
+        }
+        root.style.setProperty('--panel-top', px(panelTop));
+        root.style.setProperty('--view-h', px(Math.max(compact ? 40 : VIEW_MIN, viewH)));
+        state.layout = compact ? 'compact' : 'stacked';
     }
 
     function update() {
@@ -94,6 +149,7 @@
             window.dispatchEvent(new CustomEvent('dc3-portrait', { detail: { active: on } }));
         }
         updateSong();
+        layoutDeck();
     }
 
     // The song's 9:16 frame: on only while the layout is portrait and the
@@ -120,6 +176,7 @@
             state.songChanges++;
             root.classList.toggle('dc3-portrait-song', on);
             window.dispatchEvent(new CustomEvent('dc3-portrait-song', { detail: { active: on } }));
+            layoutDeck();
         }
         if (!frameTimer) askFrame();
     }

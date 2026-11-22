@@ -60,7 +60,19 @@
 //                         after the change, the deck must name the song
 // --sabotage-portrait class|rotate|switch|screen|size breaks one part of the
 // portrait layout (see the comment at its route); run with --only portrait.
-// --only iphone|sound|portrait|shots|song runs just those checks.
+// --only iphone|sound|portrait|shots|song|deck runs just those checks.
+//   deck (np-portrait2 round 2) the Fable review of step 1: a double tap
+//                         leaves full screen alone (all 7 buttons still under
+//                         a finger); a "Full screen" button makes the PAGE
+//                         full screen; the wake lock (held in play, again
+//                         after the page is hidden, not on the title); one
+//                         touch test, (pointer: coarse); every button >= 44 px
+//                         and nothing overlapping on 11 upright screens (split
+//                         screen, near-square foldable, long names); real
+//                         button names, text-presented triangles; ?portrait=
+//                         off/false/on/true. --sabotage-portrait dbltap|
+//                         fsbutton|wake|wakevis|coarse|floor|compact|paneltop|
+//                         glyph|labels|switchwords must each fail one.
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import os from 'node:os';
@@ -97,7 +109,8 @@ const { defaultBrowserType: _ignored, ...iphone } = devices['iPhone 15'];
 const MAC_SAFARI_26 = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15';
 
 async function open({ landscape = false, mobile = true, query = '?pose=off', host = '127.0.0.1', camera = false, block = false,
-                      device = null, noJspi = false, userAgent = null, inBrowser = browser, iosAudio = false } = {}) {
+                      device = null, noJspi = false, userAgent = null, inBrowser = browser, iosAudio = false,
+                      noEngine = false, wakeStub = false, finePointerToo = false } = {}) {
     const vp = mobile ? pixel.viewport : { width: 1280, height: 720 };
     const ctx = await inBrowser.newContext(device ? { ...device, ...(landscape ? { viewport: { width: device.viewport.height, height: device.viewport.width } } : {}) }
         : userAgent ? { viewport: vp, userAgent } : mobile
@@ -134,6 +147,41 @@ async function open({ landscape = false, mobile = true, query = '?pose=off', hos
             }
         };
     });
+    // noEngine: dc3-web.js is served empty (a page-only check; saves the box
+    // an engine boot).
+    if (noEngine) await page.route(/\/dc3-web\.js/, (route) => route.fulfill({ status: 200, contentType: 'text/javascript', body: 'void 0;' }));
+    // wakeStub: navigator.wakeLock is a counter, and the test drives
+    // visibility (window.__setVisible): a hidden page drops every lock, as a
+    // browser does, and fires visibilitychange.
+    if (wakeStub) await page.addInitScript(() => {
+        const wl = window.__wl = { requests: 0, live: [] };
+        const make = () => {
+            const t = new EventTarget();
+            t.type = 'screen'; t.released = false;
+            t.release = async () => { if (!t.released) { t.released = true; t.dispatchEvent(new Event('release')); } };
+            return t;
+        };
+        Object.defineProperty(navigator, 'wakeLock', { configurable: true,
+            value: { request: async () => { wl.requests++; const s = make(); wl.live.push(s); return s; } } });
+        let vis = 'visible';
+        Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => vis });
+        Object.defineProperty(document, 'hidden', { configurable: true, get: () => vis !== 'visible' });
+        window.__wlHeld = () => wl.live.filter((x) => !x.released).length;
+        window.__setVisible = (v) => {
+            vis = v ? 'visible' : 'hidden';
+            if (!v) wl.live.forEach((x) => x.release());
+            document.dispatchEvent(new Event('visibilitychange'));
+        };
+    });
+    // finePointerToo: a phone with a stylus or a mouse paired -- the primary
+    // pointer is still the finger, but (any-pointer: fine) is true.
+    if (finePointerToo) await page.addInitScript(() => {
+        const mm = window.matchMedia.bind(window);
+        window.matchMedia = (q) => {
+            if (/any-pointer:\s*fine/.test(q)) { const m = Object.create(mm(q)); Object.defineProperty(m, 'matches', { value: true }); return m; }
+            return mm(q);
+        };
+    });
     if (sabotageSound) {
         await page.route(/\/(index\.html)?(\?.*)?$/, async (route) => {
             const r = await route.fetch();
@@ -158,13 +206,36 @@ async function open({ landscape = false, mobile = true, query = '?pose=off', hos
         const edits = {
             class: ['portrait.js', "root.classList.toggle('dc3-portrait', on);", 'void 0;'],
             rotate: ['portrait.js', "window.addEventListener('resize', update);", 'update = function () {};'],
-            switch: ['portrait.js', "q === '0' ? 'off'", "false ? 'off'"],
+            switch: ['portrait.js', "q === false ? 'off'", "false ? 'off'"],
             screen: ['index', "if (sm) document.dispatchEvent(new CustomEvent('dc3-screen'", "if (false) document.dispatchEvent(new CustomEvent('dc3-screen'"],
             size: ['touch_controls.js', "'html.dc3-portrait #dc3-touch { --b:var(--tb, 18vw); }' +", ''],
             song: ['portrait.js', "root.classList.toggle('dc3-portrait-song', on);", 'void 0;'],
             frame: ['portrait.js', 'Module._milo_web_set_portrait_frame(want);', 'void 0;'],
             songrotate: ['portrait.js', "var on = songMode && state.active && state.screen === 'game_screen';", "var on = songMode && state.screen === 'game_screen';"],
             strip: ['touch_controls.js', "'html.dc3-portrait-song #dc3-touch .dpad, html.dc3-portrait-song #dc3-touch button[data-key=\"Enter\"] { display:none; }' +", ''],
+            //   (--only deck, np-portrait2 round 2:)
+            //   dbltap     a double tap on the picture still makes the game's container fullscreen
+            //   fsbutton   the full-screen button makes the game's container fullscreen, not the page
+            //   wake       the page never asks for a wake lock
+            //   wakevis    the lock is not asked for again when the page is visible again
+            //   coarse     the touch test is (any-pointer: fine) again
+            //   floor      B and Start lose their 44 px floor
+            //   compact    a short deck keeps the stacked layout
+            //   paneltop   the camera view sits 140 px under the picture, whatever the card's height
+            //   glyph      the triangles lose their text presentation selector
+            //   labels     the buttons are named by their keys again
+            //   switchwords ?portrait= reads only 0 and 1
+            dbltap: ['index', "if (window.dc3TouchControls && window.dc3TouchControls.shown) return;", ''],
+            fsbutton: ['touch_controls.js', 'reqFs.call(page)', "reqFs.call(document.getElementById('canvas-container'))"],
+            wake: ['index', "navigator.wakeLock.request('screen').then(", "Promise.reject().then("],
+            wakevis: ['index', "document.addEventListener('visibilitychange', sync);", ''],
+            coarse: ['index', "window.matchMedia('(pointer: coarse)').matches)", "!window.matchMedia('(any-pointer: fine)').matches)"],
+            floor: ['touch_controls.js', 'width:max(44px, calc(var(--b) * 0.8)); height:max(44px, calc(var(--b) * 0.8));', 'width:calc(var(--b) * 0.8); height:calc(var(--b) * 0.8);'],
+            compact: ['portrait.js', 'var compact = viewH < VIEW_MIN;', 'var compact = false;'],
+            paneltop: ['portrait.js', 'var panelTop = tip.bottom + 8;', 'var panelTop = top + 140;'],
+            glyph: ['touch_controls.js', "var T = '\\uFE0E';", "var T = '';"],
+            labels: ['touch_controls.js', "el.setAttribute('aria-label', b[7]);", "el.setAttribute('aria-label', b[1]);"],
+            switchwords: ['index', "v === '0' || v === 'false' || v === 'off' || v === 'no'", "v === '0'"],
         };
         const [file, from, to] = edits[sabPortrait];
         await page.route(file === 'index' ? /\/(index\.html)?(\?.*)?$/ : '**/' + file, async (route) => {
@@ -396,6 +467,148 @@ try {
         }
     }
 
+    // --- the deck, round 2 (np-portrait2): a Fable review of step 1 --------
+    // --only deck: full screen off the double tap and onto a button, the
+    // screen wake lock, one touch test ((pointer: coarse)), a 44 px floor on
+    // every button and no overlap on short or near-square upright screens,
+    // plain-text triangles and real button names, ?portrait= words.
+    if (!only || only === 'deck') {
+        const sz = (b) => Math.min(b.w, b.h);
+        const D = (page) => page.evaluate(() => {
+            const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
+            const vis = (el) => !!el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().height > 0;
+            const q = (x) => document.querySelector(x);
+            const hit = (el) => { const b = el.getBoundingClientRect(); const e = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return !!e && (e === el || el.contains(e)); };
+            return {
+                vw: innerWidth, vh: innerHeight, sh: document.documentElement.scrollHeight,
+                cls: document.documentElement.className, layout: window.dc3Portrait && window.dc3Portrait.layout,
+                canvas: r(q('#dc3-canvas')), now: vis(q('#dc3-deck .now')) ? r(q('#dc3-deck .now')) : null,
+                tip: vis(q('#dc3-deck .tip')) ? r(q('#dc3-deck .tip')) : null,
+                panel: vis(q('#pose-panel')) ? r(q('#pose-panel')) : null, view: vis(q('#pose-view')) ? r(q('#pose-view')) : null,
+                fs: vis(q('#dc3-fs')) ? { ...r(q('#dc3-fs')), hit: hit(q('#dc3-fs')), label: q('#dc3-fs').getAttribute('aria-label') } : null,
+                fsEl: document.fullscreenElement ? (document.fullscreenElement === document.documentElement ? 'html' : document.fullscreenElement.id || document.fullscreenElement.tagName) : null,
+                btns: [...document.querySelectorAll('#dc3-touch button')].map((b) => ({ key: b.dataset.key, label: b.getAttribute('aria-label'), text: b.textContent, hit: hit(b), ...r(b) })),
+            };
+        });
+        // --no-engine: the page without the engine (dc3-web.js served empty;
+        // the title is a synthetic dc3-screen event). Every deck check is the
+        // page's; the sabotage runs use it to spare the box eleven boots.
+        const ne = argv.includes('--no-engine');
+        const { ctx, page, st } = await open({ query: '?env=DC3_AUDIO_GAIN%3D0', camera: true, wakeStub: true, noEngine: ne });
+        if (ne) { await sleep(3000); await page.evaluate(() => { const l = document.getElementById('loading'); if (l) l.classList.add('hidden'); }); await page.evaluate(() => document.dispatchEvent(new CustomEvent('dc3-screen', { detail: { screen: 'title_screen' } }))); st.screen = 'title_screen (synthetic)'; }
+        else await waitFor(() => st.screen === 'title_screen', 240000);
+        await waitFor(() => ['tracking', 'noperson', 'waiting'].includes(st.pose), 30000);
+        await sleep(1500);
+        const coarse = await page.evaluate(() => ({ coarse: matchMedia('(pointer: coarse)').matches, anyFine: matchMedia('(any-pointer: fine)').matches, touchOnly: window.dc3TouchOnly }));
+        console.log(`     pixel 7 emulation: ${JSON.stringify(coarse)} screen=${st.screen} pose=${st.pose}`);
+        // 1. a double tap on the picture (two taps 90 ms apart)
+        let L = await D(page);
+        const cx = L.canvas.l + L.canvas.w / 2, cy = L.canvas.t + L.canvas.h / 2;
+        await page.touchscreen.tap(cx, cy); await sleep(90); await page.touchscreen.tap(cx, cy);
+        await sleep(1500);
+        L = await D(page);
+        check(L.fsEl === null && L.btns.length === 7 && L.btns.every((b) => b.hit),
+            `deck: a double tap on the picture leaves full screen off (${L.fsEl}) and all 7 buttons under a finger (${L.btns.filter((b) => !b.hit).map((b) => b.label).join(',') || 'all hit'})`);
+        // ... and the full-screen button makes the PAGE full screen, buttons kept
+        check(!!L.fs && L.fs.hit && L.fs.w >= 44 && L.fs.h >= 44 && L.fs.label === 'Full screen', `deck: a "Full screen" button (${JSON.stringify(L.fs && { w: L.fs.w, label: L.fs.label, hit: L.fs.hit })})`);
+        if (L.fs) {
+            await page.touchscreen.tap(L.fs.l + L.fs.w / 2, L.fs.t + L.fs.h / 2);
+            await waitFor(() => page.evaluate(() => !!document.fullscreenElement), 4000);
+            await sleep(1500);
+            const F = await D(page);
+            await page.screenshot({ path: path.join(out, 'deck-fullscreen.png') });
+            check(F.fsEl === 'html' && F.btns.every((b) => b.hit) && F.now && F.fs && F.fs.label === 'Leave full screen',
+                `deck: the button makes the page full screen (${F.fsEl}), all 7 buttons under a finger (${F.btns.filter((b) => !b.hit).map((b) => b.label).join(',') || 'all hit'}), the card shown, label "${F.fs && F.fs.label}"`);
+            if (F.fs) { await page.touchscreen.tap(F.fs.l + F.fs.w / 2, F.fs.t + F.fs.h / 2); await waitFor(() => page.evaluate(() => !document.fullscreenElement), 4000); }
+            await sleep(1000);
+        }
+        // whatever the checks above did (a sabotage can leave the container
+        // fullscreen), leave full screen so the window can be resized
+        await page.evaluate(() => document.fullscreenElement && document.exitFullscreen().catch(() => {}));
+        await sleep(800);
+        // 5. names and glyphs
+        L = await D(page);
+        const names = L.btns.map((b) => b.label).join('|');
+        check(names === 'Up|Down|Left|Right|A, confirm|Back|Start', `deck: the buttons' names ${names}`);
+        const emojiProne = L.btns.filter((b) => /[▶◀](?!︎)/.test(b.text));
+        check(emojiProne.length === 0, `deck: every triangle is text-presented (${L.btns.map((b) => [...b.text].map((c) => c.codePointAt(0).toString(16)).join('+')).join(' ')})`);
+        // 4. sizes and overlaps, upright screens tall to near-square
+        const longName = async (on) => page.evaluate((on) => {
+            window.dc3Portrait.song = on ? 'Ain\'t It Fun (Remix) feat. a long name' : '';
+            document.dispatchEvent(new CustomEvent('dc3-screen', { detail: { screen: on ? 'crew_showdown_choose_your_crew_and_venue_screen' : 'title_screen' } }));
+        }, on);
+        const cases = [[412, 839], [393, 659], [375, 553], [360, 560], [412, 450], [673, 690], [344, 780], [820, 1106], [393, 659, 'long'], [412, 450, 'long'], [360, 560, 'long']];
+        for (const [w, h, ln] of cases) {
+            await page.setViewportSize({ width: w, height: h });
+            await longName(!!ln);
+            await sleep(1200);
+            L = await D(page);
+            const issues = [];
+            const B = L.btns;
+            B.forEach((b) => {
+                if (sz(b) < 43.5) issues.push(`${b.label} ${sz(b).toFixed(0)}px`);
+                if (b.t < L.canvas.b - 0.5 || b.b > L.vh + 0.5 || b.l < -0.5 || b.r > L.vw + 0.5) issues.push(`${b.label} off the deck`);
+                for (const [n, o] of [['the now card', L.now], ['the tip', L.tip], ['the camera panel', L.panel], ['the full-screen button', L.fs]]) if (o && overlaps(b, o)) issues.push(`${b.label} over ${n}`);
+            });
+            for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++) if (overlaps(B[i], B[j])) issues.push(`${B[i].label} over ${B[j].label}`);
+            for (const [n, o] of [['the now card', L.now], ['the tip', L.tip]]) if (o && L.panel && overlaps(L.panel, o)) issues.push(`the camera panel over ${n}`);
+            if (L.panel && (L.panel.b > L.vh + 0.5 || L.panel.r > L.vw + 0.5)) issues.push('the camera panel off screen');
+            if (!L.view || L.view.h < 39.5) issues.push(`camera view ${L.view ? L.view.h.toFixed(0) : 'hidden'}`);
+            if (L.sh > L.vh) issues.push(`scrolls ${L.sh}`);
+            const smallest = Math.min(...B.map(sz));
+            check(issues.length === 0, `deck ${w}x${h}${ln ? ' long name + song' : ''}: ${L.layout} layout, A ${sz(B.find((b) => b.key === 'Enter')).toFixed(0)}px, smallest ${smallest.toFixed(0)}px, view ${L.view ? L.view.h.toFixed(0) : '-'}px${issues.length ? ' | ' + issues.join('; ') : ', no overlap'}`);
+            await page.screenshot({ path: path.join(out, `deck-${w}x${h}${ln ? '-long' : ''}.png`) });
+        }
+        await longName(false);
+        await page.setViewportSize(pixel.viewport);
+        await sleep(800);
+        // 2. the wake lock: none on the title, held in play, dropped and
+        // asked for again around a hidden page, let go back on the title
+        const wl = async () => page.evaluate(() => ({ held: window.__wlHeld(), requests: window.__wl.requests, page: window.dc3WakeLock }));
+        const screen = (s) => page.evaluate((s) => document.dispatchEvent(new CustomEvent('dc3-screen', { detail: { screen: s } })), s);
+        let W0 = await wl();
+        await screen('main_screen');
+        await waitFor(async () => (await wl()).held === 1, 3000);
+        const W1 = await wl();
+        await page.evaluate(() => window.__setVisible(false)); await sleep(500);
+        const W2 = await wl();
+        await page.evaluate(() => window.__setVisible(true));
+        await waitFor(async () => (await wl()).held === 1, 3000);
+        const W3 = await wl();
+        await screen('title_screen'); await sleep(500);
+        const W4 = await wl();
+        check(W0.held === 0 && W1.held === 1 && W2.held === 0 && W3.held === 1 && W3.requests === W1.requests + 1 && W4.held === 0,
+            `deck: wake lock title ${W0.held}, in play ${W1.held}, hidden ${W2.held}, visible again ${W3.held} (requests ${W1.requests} -> ${W3.requests}), title again ${W4.held}`);
+        await ctx.close();
+        // 3. a phone with a stylus or a mouse paired: (any-pointer: fine) is
+        // true, the primary pointer is still a finger -- buttons and the deck
+        {
+            const { ctx, page } = await open({ query: '?pose=off', noEngine: true, finePointerToo: true });
+            await sleep(2500);
+            const T = await page.evaluate(() => ({ anyFine: matchMedia('(any-pointer: fine)').matches, shown: window.dc3TouchControls && window.dc3TouchControls.shown, portrait: document.documentElement.classList.contains('dc3-portrait') }));
+            check(T.anyFine && T.shown && T.portrait, `deck: a phone with a stylus (any-pointer: fine ${T.anyFine}): buttons ${T.shown ? 'shown' : 'NOT shown'}, portrait ${T.portrait}`);
+            await ctx.close();
+        }
+        {
+            const { readFileSync } = await import('node:fs');
+            const web = path.join(here, '..', '..', 'native', 'web');
+            const src = Object.fromEntries(['index.html', 'portrait.js', 'touch_controls.js'].map((f) => [f, readFileSync(path.join(web, f), 'utf8')]));
+            const anyFine = Object.entries(src).filter(([, t]) => /matchMedia\([^)]*any-pointer/.test(t)).map(([f]) => f);
+            const coarseAt = Object.entries(src).filter(([, t]) => /matchMedia\('\(pointer: coarse\)'\)/.test(t)).map(([f]) => f);
+            check(anyFine.length === 0 && coarseAt.join() === 'index.html', `deck: one touch test, in index.html (coarse in ${coarseAt.join(',') || '-'}; any-pointer in ${anyFine.join(',') || 'none'})`);
+        }
+        // 6. ?portrait= words
+        for (const [q, mobile, want] of [['off', true, false], ['false', true, false], ['on', false, true], ['true', false, true]]) {
+            const { ctx, page } = await open({ query: '?pose=off&portrait=' + q, mobile, noEngine: true });
+            if (!mobile) await page.setViewportSize({ width: 720, height: 1280 });
+            await sleep(2000);
+            const on = await page.evaluate(() => document.documentElement.classList.contains('dc3-portrait'));
+            check(on === want, `deck: ?portrait=${q} on a ${mobile ? 'Pixel 7' : '720x1280 desktop window'}: portrait ${on ? 'on' : 'off'} (want ${want ? 'on' : 'off'})`);
+            await ctx.close();
+        }
+        if (only) throw 'only';
+    }
+
     // --- portrait layout, rotation, the switch back (np-portrait) -----------
     if (!only || only === 'portrait' || only === 'song') {
         const P = (page) => page.evaluate(() => {
@@ -467,7 +680,8 @@ try {
                 const L = await P(page);
                 console.log(`     ${f}  screen=${st.screen} canvas ${L.canvas.w.toFixed(0)}x${L.canvas.h.toFixed(0)}+${L.canvas.l.toFixed(0)}+${L.canvas.t.toFixed(0)} buffer ${L.buffer.join('x')} viewport ${L.vw}x${L.vh}`);
             };
-            await waitFor(() => st.screen === 'title_screen', 240000);
+            if (!await waitFor(() => st.screen === 'title_screen', 240000))
+                console.log(`     no title_screen in 240 s (screens ${st.screens.join(' > ') || '-'}); last logs:\n       ${st.logs.slice(-12).join('\n       ')}`);
             await sleep(2000);
             let L = await S();
             check(!L.song.cls && L.song.frame === 0 && near(L.buffer[0] / L.buffer[1], 16 / 9, 0.02), `${name} title: the 16:9 picture (song class ${L.song.cls}, frame ${L.song.frame}, buffer ${L.buffer.join('x')})`);
