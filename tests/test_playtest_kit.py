@@ -245,6 +245,37 @@ class SessionSummaryTest(unittest.TestCase):
         self.assertIn("game fps: mean 50.0", text)
         self.assertIn("tracker: 30.0 fps", text)
 
+    def test_dlc_songs_difficulty_and_unseen_measures(self):
+        # The 2026-11-21 GPD session: a DLC song's midi path carries its
+        # content root, and two players can dance at different difficulties.
+        self.write(
+            "DC3 HamSongData::Load — midi='songs/betteroffalone/betteroffalone.mid'\n"
+            "DC3 MOVE_RATING p=0 measure=3 move=a.move rating=move_ok lastfrac=0.6 score=10 "
+            "diff=easy songbeat=0 body=5 seen=1.00\n"
+            "DC3 MOVE_RATING p=1 measure=3 move=a.move rating=move_bad lastfrac=0.1 score=0 "
+            "diff=expert songbeat=0 body=6 seen=0.40\n"
+            "DC3 MOVE_RATING p=1 measure=4 move=a.move rating=move_bad lastfrac=0.3 score=0 "
+            "diff=expert songbeat=0 body=6 seen=0.95\n"
+            "DC3 MOVE_RATING p=1 measure=5 move=a.move rating=move_ok lastfrac=0.6 score=9 "
+            "diff=expert songbeat=0 body=-1 seen=-1\n"
+            "DC3 UI: Screen 'perform_endgame_screen' Enter (from '<null>')\n"
+            "DC3 HamSongData::Load — midi='cnt00000003:/songs/fireburning/fireburning.mid'\n"
+            "DC3 MOVE_RATING p=0 measure=3 move=b.move rating=move_awesome lastfrac=0.8 score=20 "
+            "diff=easy songbeat=0 body=7\n")
+        text, r = session_summary.summarise(self.dir)
+        self.assertEqual([s["song"] for s in r["songs"]], ["betteroffalone", "fireburning"])
+        boa, fire = r["songs"]
+        self.assertEqual(boa["ratings"][1], {"move_bad": 2, "move_ok": 1})
+        self.assertEqual(fire["ratings"][0], {"move_awesome": 1})
+        self.assertIsNone(fire["results_screen"])
+        self.assertEqual(boa["difficulty"], {0: {"easy"}, 1: {"expert"}})
+        # under 80% seen: measure 3 only (seen=-1 is no body, not "unseen")
+        self.assertEqual(boa["unseen"], {0: {}, 1: {"move_bad": 1}})
+        self.assertNotIn("unseen", fire)  # an older log without seen=
+        self.assertIn("p1 expert", text)
+        self.assertIn("1 of them with the body seen in under 80%", text)
+        self.assertIn("fireburning", text)
+
     def test_no_exit_line_says_so(self):
         self.write(LOG)
         text, r = session_summary.summarise(self.dir)

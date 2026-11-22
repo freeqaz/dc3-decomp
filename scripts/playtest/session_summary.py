@@ -23,7 +23,23 @@ import pose_session  # noqa: E402
 RATING_RE = re.compile(r"DC3 MOVE_RATING p=(\d+) measure=(-?\d+) move=(\S+) rating=(\S+) "
                        r"lastfrac=(-?[\d.]+) score=(-?\d+)")
 MODAL_RE = re.compile(r"^MILO_(FAIL|NOTIFY|WARN|ASSERT)\w*: (.*)$")
-SONG_RE = re.compile(r"HamSongData::Load .*midi='songs/([^/']+)/")
+# A disc song loads midi='songs/<name>/...'; a DLC or custom song's path carries
+# its content root first, midi='cnt00000004:/songs/<name>/...'.  Without the
+# optional root every DLC song was "?" (or, after a disc song, was counted as
+# that one: the 2026-11-21 GPD session's "betteroffalone" row held fireburning's
+# moves, and its "?" row two abandoned thefox attempts and milkshake).
+SONG_RE = re.compile(r"HamSongData::Load .*midi='(?:[^':/]+:/)?songs/([^/']+)/")
+# seen= on a MOVE_RATING line (native, GestureMgr_Native.cpp): the fraction of
+# the camera's frames during that measure in which the player's body was
+# really detected (not held, not missing).  -1 = no body bound.
+SEEN_RE = re.compile(r" seen=(-?[\d.]+)")
+# A measure the camera saw the player in less than this much of is reported
+# apart: its rating says more about the tracker than about the dancing.
+SEEN_LOW = 0.8
+# The difficulty each player was rated at.  Shown per row: in the 2026-11-21
+# GPD session player 2 danced betteroffalone on expert beside player 1 on easy,
+# which nothing in the summary said.
+DIFF_RE = re.compile(r" diff=(\w+)")
 SCREEN_RE = re.compile(r"DC3 UI: Screen '([^']+)' Enter")
 PERF_RE = re.compile(r"DC3 PERF: fps=([\d.]+) pose_fps=([\d.]+) persons=([\d.]+)")
 POSE_RE = re.compile(r"POSE_STATS: fps=([\d.]+) infer_ms_mean=([\d.]+) infer_ms_p95=([\d.]+)")
@@ -56,6 +72,14 @@ def parse_log(path):
                 p = int(m.group(1))
                 r = cur["ratings"].setdefault(p, {})
                 r[m.group(4)] = r.get(m.group(4), 0) + 1
+                dm = DIFF_RE.search(line)
+                if dm:
+                    cur.setdefault("difficulty", {}).setdefault(p, set()).add(dm.group(1))
+                sm = SEEN_RE.search(line)
+                if sm and float(sm.group(1)) >= 0.0:
+                    lo = cur.setdefault("unseen", {}).setdefault(p, {})
+                    if float(sm.group(1)) < SEEN_LOW:
+                        lo[m.group(4)] = lo.get(m.group(4), 0) + 1
                 cur["score"][p] = int(m.group(6))
                 cur["moves"] += 1
                 continue
@@ -124,9 +148,16 @@ def summarise(session):
         for p in sorted(s["ratings"]) or [0]:
             rt = s["ratings"].get(p, {})
             parts = ", ".join(f"{k} {v}" for k, v in sorted(rt.items(), key=lambda kv: -kv[1]))
-            lines.append(f"  {s['song']:<22} p{p}  {sum(rt.values()):3d} moves  score "
+            diff = "/".join(sorted(s.get("difficulty", {}).get(p, ()))) or "?"
+            lines.append(f"  {s['song']:<22} p{p} {diff:<7} {sum(rt.values()):3d} moves  score "
                          f"{s['score'].get(p, 0):>9,}  {parts}"
                          f"{'' if s['results_screen'] else '  (no results screen)'}")
+            lo = s.get("unseen", {}).get(p)
+            if lo is not None:
+                n = sum(lo.values())
+                lines.append(f"  {'':<22}    {'':<7} {n:3d} of them with the body seen in under "
+                             f"{SEEN_LOW:.0%} of the measure's camera frames"
+                             + (f": move_bad {lo.get('move_bad', 0)}" if n else ""))
     if r["perf"]:
         fps = [p[0] for p in r["perf"]]
         pfs = [p[1] for p in r["perf"] if p[1] > 0]
