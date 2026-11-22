@@ -2226,6 +2226,7 @@ if(BUILD_TESTS)
         tests/test_pipeline_disk_cache.cpp # hitch: the persistent pipeline cache reads back exactly or misses
         tests/test_tex_share.cpp # framecost: byte-identical bitmaps share one GPU texture
         tests/test_tex_bytes.cpp # H-116: [GPUCOUNT] texBytes / texBytesPeak count a mip chain, a shared texture once
+        tests/test_cube_tex_release.cpp # item 58: a cube map's GPU copy goes with it; changed faces upload again
         tests/test_frame_times.cpp # H-116: frame-times header and rows: [FT] prefix on stdout, columns agree
         tests/test_outfit_remap_cost.cpp # H-118: GetEntriesForOutfit searches OUTFIT_REMAP once a call
         tests/test_color_pack_roundtrip.cpp
