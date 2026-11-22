@@ -470,3 +470,27 @@ TEST(Dc3BootPlanTest, PlayedBeforeIsTheGlobalOptionsFile) {
         else unsetenv(names[i]);
     }
 }
+
+// The MILO_CAM_* variables are read when the game starts (np-portrait,
+// 2026-11-22): NativeSettings::Init() had no caller, so MILO_CAM_ASPECT and
+// the rest were documented and silently ignored. Dc3ProfileApply() runs first
+// thing in main() on native and web and now reads them, under both profiles.
+TEST(Dc3ProfileTest, MiloCamVariablesAreReadAtStartup) {
+    NativeSettings &s = NativeSettings::Get();
+    const NativeSettings saved = s;
+    const char *had = getenv("MILO_CAM_ASPECT");
+    const std::string hadValue = had ? had : "";
+    for (const char *profile : { "dev", "release" }) {
+        ScopedProfileEnv scope;
+        setenv("DC3_PROFILE", profile, 1);
+        s.aspectOverride = -1.0f;
+        setenv("MILO_CAM_ASPECT", "0.5625", 1);
+        Dc3ProfileApply();
+        EXPECT_FLOAT_EQ(s.aspectOverride, 0.5625f) << "profile " << profile;
+    }
+    if (had)
+        setenv("MILO_CAM_ASPECT", hadValue.c_str(), 1);
+    else
+        unsetenv("MILO_CAM_ASPECT");
+    s = saved;
+}
