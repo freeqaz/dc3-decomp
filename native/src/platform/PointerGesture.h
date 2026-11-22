@@ -56,9 +56,13 @@ int HitRow(const std::vector<Row> &rows, float x, float y);
 float RowPitch(const std::vector<Row> &rows, float fallback);
 
 struct Params {
-    // A press that travels less than this (frame pixels) is a tap.  A phone's
-    // frame is drawn small, so this is a little over a finger's wobble there.
+    // A press that travels less than this (frame pixels) is a tap.
     float slop = 16.0f;
+    // ... and for a finger, at least this many of the screen's own pixels
+    // (CSS pixels on the web; Input::unitPx says how many frame pixels one
+    // is).  A phone held upright draws the 1280-wide frame ~412 CSS px wide, so
+    // 16 frame px is 5 CSS px there -- under a finger's wobble (Fable review).
+    float touchSlopUnits = 10.0f;
     // Release faster than this (frame pixels/s) and the list keeps going.
     float flickVelocity = 700.0f;
     // The fling slows as exp(-friction * t) ...
@@ -68,8 +72,19 @@ struct Params {
     // A fling covers at most this many rows (a long list is not run off in
     // one flick past the point of reading it).
     float maxFlingRows = 40.0f;
-    // Velocity is taken over the last this-many seconds of the drag.
+    // Velocity at release is the travel over [t_up - window, t_up] (the
+    // finger's position interpolated between samples): a finger that rested
+    // for the window before lifting has none.
     float velocityWindow = 0.08f;
+    // ... over at least this long (a burst of events with near-equal times is
+    // not a 10000 px/s flick).
+    float minVelocityDt = 0.01f;
+    // A fling advances by at most this much time a tick (a 3 s frame gap was
+    // 149 rows in one tick before this).
+    float maxTickDt = 0.05f;
+    // A scroll remainder (part of a row, a part-notch of the wheel) older than
+    // this is dropped: it does not join the next gesture.
+    float remainderIdle = 0.5f;
 };
 
 enum Kind {
@@ -87,6 +102,7 @@ struct Input {
     float t = 0.0f;           // seconds, any monotonic clock
     float wheel = 0.0f;
     bool touch = false;       // a finger: no hover
+    float unitPx = 1.0f;      // frame pixels per screen pixel (CSS px on the web)
 };
 
 struct Output {
@@ -94,6 +110,8 @@ struct Output {
     float x = 0.0f, y = 0.0f;
     bool tap = false; // a tap: select what is at (tapX, tapY)
     float tapX = 0.0f, tapY = 0.0f;
+    bool tapTouch = false; // the tap was a finger's (Pointer_Native: the first highlights)
+    bool stopped = false;  // a press stopped the list moving (a fling, or rows owed)
     int steps = 0;     // rows to scroll: > 0 = later rows
     bool back = false; // the secondary button was pressed
     bool dragging = false;
@@ -103,7 +121,9 @@ struct Output {
 // Gesture safety (the GPD: a camera, the menus on the hands, a mouse that may
 // be bumped).  Whether what the pointer did this frame takes the menus from the
 // hands (controller mode): only a deliberate act -- a tap or click, the back
-// button, a scroll by wheel or drag.  A mouse that moves, or rests, never does.
+// button, a scroll by wheel or drag.  A mouse that moves, or rests, never does,
+// and nor does a drag on a frame that scrolls nothing (a finger resting on the
+// glass).
 bool TakesTheMenus(const Output &out);
 // Whether a hover may move a list's highlight: only while the menus are
 // already the pad's, keyboard's or pointer's.  Under the hands, the hand
@@ -119,17 +139,26 @@ public:
     bool Pressed() const { return mPressed; }
     bool Dragging() const { return mDragging; }
     bool Flinging() const { return mFlingVelocity != 0.0f; }
+    // Whether the list is still moving on its own (rows owed from a fling the
+    // caller is still running, a scroll animation).  A press then stops it and
+    // picks nothing, as a press that stops this tracker's own fling does.
+    void SetListMoving(bool moving) { mListMoving = moving; }
     void Reset() { *this = Tracker(); }
 
 private:
     struct Sample {
         float y, t;
     };
-    float Velocity(const Params &p) const;
+    float Velocity(float tUp, const Params &p) const;
 
     bool mPressed = false;
     bool mDragging = false;
     bool mSuppressTap = false; // the press stopped a fling
+    bool mListMoving = false;
+    bool mStoppedPending = false;
+    bool mTouch = false;       // the press is a finger's
+    float mSlop = 16.0f;       // this press's slop, frame pixels
+    float mLastScrollT = -1.0f; // when mPixels / mWheelRows last grew
     float mDownX = 0.0f, mDownY = 0.0f;
     float mLastY = 0.0f;
     std::vector<Sample> mSamples;
@@ -144,6 +173,7 @@ private:
     bool mHoverPending = false;
     float mHoverX = 0.0f, mHoverY = 0.0f;
     bool mTapPending = false;
+    bool mTapTouch = false;
     float mTapX = 0.0f, mTapY = 0.0f;
     bool mBackPending = false;
 };

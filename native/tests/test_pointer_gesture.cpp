@@ -27,6 +27,14 @@
 //   TakesTheMenus counts a hover                      -> PointerSafetyTest.* (both)
 //   HoverMayHighlight always true                     -> PointerSafetyTest.AMouseThatMoves...
 //   PresentToFrame ignores the rectangle's offset     -> PointerMapTest.ThePresentRectangleIsThePicture
+// Round 3, the Fable review (same harness, 6 of 6 failed, each only in the
+// tests named; /home/free/tmp/claude-1000/np-pointer/scripts/sabotage3.py):
+//   TakesTheMenus counts a drag that scrolls nothing  -> PointerSafetyTest.ADragThatScrollsNothing...
+//   the round-2 release velocity (last sample's window) -> ADragThatRestsBeforeRelease..., A10fpsBurst...
+//   no clamp on a fling tick's dt                     -> AFrameGapDoesNotRunTheListOff
+//   remainders kept across gestures                   -> ARemainderDoesNotJoinTheNextGesture
+//   a finger's slop in frame pixels                   -> ATouchSlopIsInScreenPixels
+//   a list still moving does not stop the tap         -> APressWhileTheListMovesStops...
 
 #include <gtest/gtest.h>
 
@@ -356,11 +364,194 @@ TEST(PointerSafetyTest, AClickAWheelOrATouchDoes) {
     EXPECT_TRUE(TakesTheMenus(f.outs.back()));
     Finger g;
     g.Drag(500, 300, 0.5f, false); // a finger on the glass, dragging
-    EXPECT_TRUE(TakesTheMenus(g.outs.back()));
+    bool scrolled = false;
+    for (const Output &o : g.outs)
+        if (o.steps != 0) {
+            scrolled = true;
+            EXPECT_TRUE(TakesTheMenus(o)); // a frame of the drag that scrolls a row
+        }
+    EXPECT_TRUE(scrolled);
     Finger b;
     b.Ev(kBack, 0, 0, false);
     b.Frame();
     EXPECT_TRUE(TakesTheMenus(b.outs.back()));
+}
+
+// Round 3 (Fable review).  A drag takes the menus only on a frame that moves
+// the list: a finger resting on the glass, or a slow drag between rows, does
+// not.
+TEST(PointerSafetyTest, ADragThatScrollsNothingDoesNotTakeTheMenus) {
+    Finger g;
+    g.Drag(500, 300, 0.5f, false);
+    ASSERT_TRUE(g.outs.back().dragging);
+    ASSERT_EQ(g.outs.back().steps, 0);
+    EXPECT_FALSE(TakesTheMenus(g.outs.back())); // the finger rests: no act
+}
+
+// A fast drag that stops, rests, and lifts: the finger was still when it left
+// the glass, so the list stays where it is.
+TEST(PointerTrackerTest, ADragThatRestsBeforeReleaseDoesNotFling) {
+    Finger f;
+    f.Drag(500, 380, 0.1f, false); // 1200 px/s ...
+    const int atRest = f.steps;
+    for (int i = 0; i < 18; i++) // ... then 0.3 s on the glass, still
+        f.Frame();
+    f.Ev(kUp, 640, 380);
+    f.Frame();
+    EXPECT_FALSE(f.tr.Flinging());
+    for (int i = 0; i < 60; i++)
+        f.Frame();
+    EXPECT_EQ(f.steps, atRest);
+}
+
+// A 10 fps web frame: the browser hands the page a burst of pointer events
+// between frames.  A slow drag (240 px/s) whose events arrive six at a time,
+// stamped a millisecond apart, is still a slow drag.
+TEST(PointerTrackerTest, A10fpsBurstOfEventsIsNotAFlick) {
+    Finger f;
+    f.Ev(kDown, 640, 500);
+    f.Frame(0.1f);
+    float y = 500;
+    for (int frame = 0; frame < 10; frame++) {
+        for (int k = 0; k < 6; k++) {
+            y -= 4;
+            Input in;
+            in.kind = kMove;
+            in.x = 640;
+            in.y = y;
+            in.t = f.t + 0.001f * k;
+            in.touch = true;
+            f.tr.Feed(in, f.p);
+        }
+        f.Frame(0.1f);
+    }
+    Input up;
+    up.kind = kUp;
+    up.x = 640;
+    up.y = y;
+    up.t = f.t - 0.1f + 0.005f; // the last burst's last event
+    up.touch = true;
+    f.tr.Feed(up, f.p);
+    f.Frame(0.1f);
+    EXPECT_FALSE(f.tr.Flinging());
+    // and a real flick seen at 10 fps -- events stamped with their own times
+    // (the web's e.timeStamp), 60 Hz apart, handed over six a frame -- flings
+    Finger g;
+    g.Ev(kDown, 640, 600);
+    g.Frame(0.1f);
+    float gy = 600, gt = 0.0f;
+    for (int frame = 0; frame < 2; frame++) {
+        for (int k = 0; k < 6; k++) {
+            gy -= 20; // 1200 px/s
+            gt += 1.0f / 60;
+            Input in;
+            in.kind = kMove;
+            in.x = 640;
+            in.y = gy;
+            in.t = gt;
+            in.touch = true;
+            g.tr.Feed(in, g.p);
+        }
+        g.Frame(0.1f);
+    }
+    Input gup;
+    gup.kind = kUp;
+    gup.x = 640;
+    gup.y = gy;
+    gup.t = gt;
+    gup.touch = true;
+    g.tr.Feed(gup, g.p);
+    g.Frame(0.1f);
+    EXPECT_TRUE(g.tr.Flinging());
+}
+
+// A frame that took 3 s (a load, a backgrounded tab) moves a fling by one
+// ordinary frame's worth, not by 3 s of it (149 rows in one tick before).
+TEST(PointerTrackerTest, AFrameGapDoesNotRunTheListOff) {
+    Finger f;
+    f.Drag(500, 380, 0.1f);
+    ASSERT_TRUE(f.tr.Flinging());
+    const int before = f.steps;
+    f.Frame(3.0f);
+    EXPECT_LE(f.steps - before, 2);
+}
+
+// Part of a row left by one drag, or part of a wheel notch, does not join the
+// next gesture a second later.
+TEST(PointerTrackerTest, ARemainderDoesNotJoinTheNextGesture) {
+    Finger f;
+    f.Drag(500, 450, 1.0f); // 50 px: under a row
+    EXPECT_EQ(f.steps, 0);
+    for (int i = 0; i < 60; i++)
+        f.Frame();
+    f.Drag(500, 470, 1.0f); // 30 px more: 80 in all, but not one gesture
+    EXPECT_EQ(f.steps, 0);
+    Finger w;
+    Input in;
+    in.kind = kWheel;
+    in.wheel = 0.6f;
+    in.t = w.t;
+    w.tr.Feed(in, w.p);
+    w.Frame();
+    for (int i = 0; i < 60; i++)
+        w.Frame();
+    in.t = w.t;
+    w.tr.Feed(in, w.p);
+    w.Frame();
+    EXPECT_EQ(w.steps, 0);
+}
+
+// A finger's slop is in the screen's own pixels: on a phone held upright one
+// CSS pixel is ~3.1 frame pixels, and a 25-frame-pixel wobble (8 CSS px) is a
+// tap.  The same travel with a mouse is a drag.
+TEST(PointerTrackerTest, ATouchSlopIsInScreenPixels) {
+    Finger f;
+    Input in;
+    in.kind = kDown;
+    in.x = 640;
+    in.y = 300;
+    in.t = f.t;
+    in.touch = true;
+    in.unitPx = 1280.0f / 412.0f;
+    f.tr.Feed(in, f.p);
+    f.Frame();
+    in.kind = kMove;
+    in.y = 325;
+    f.tr.Feed(in, f.p);
+    f.Frame();
+    in.kind = kUp;
+    f.tr.Feed(in, f.p);
+    f.Frame();
+    EXPECT_EQ(f.taps, 1);
+    EXPECT_TRUE(f.outs.back().tapTouch);
+    Finger m;
+    m.Ev(kDown, 640, 300, false);
+    m.Frame();
+    m.Ev(kMove, 640, 325, false);
+    m.Frame();
+    m.Ev(kUp, 640, 325, false);
+    m.Frame();
+    EXPECT_EQ(m.taps, 0);
+}
+
+// The list is still running rows a fling owed (Pointer_Native's RunSteps) after
+// this tracker's own fling has ended: a press then stops it and picks nothing.
+TEST(PointerTrackerTest, APressWhileTheListMovesStopsItAndPicksNothing) {
+    Finger f;
+    f.tr.SetListMoving(true);
+    f.Ev(kDown, 640, 300);
+    f.Frame();
+    EXPECT_TRUE(f.outs.back().stopped);
+    f.tr.SetListMoving(false);
+    f.Ev(kUp, 640, 300);
+    f.Frame();
+    EXPECT_EQ(f.taps, 0);
+    f.Ev(kDown, 640, 300);
+    f.Frame();
+    EXPECT_FALSE(f.outs.back().stopped);
+    f.Ev(kUp, 640, 300);
+    f.Frame();
+    EXPECT_EQ(f.taps, 1);
 }
 
 } // namespace
