@@ -25,6 +25,7 @@
 
 #include "platform/PoseIdentity_Native.h"
 #include "platform/PoseSeen_Native.h"
+#include "platform/PoseTwin_Native.h"
 
 #ifndef DC3_DECOMP_SRC_DIR
 #error "DC3_DECOMP_SRC_DIR is the repo's src/ (native/CMakeLists.txt)"
@@ -1212,4 +1213,133 @@ TEST(PoseSeenTest, CountsCameraFramesPerBodySinceTheLastQuestion) {
     EXPECT_FLOAT_EQ(c.Since(42), -1.0f);
     c.Reset();
     EXPECT_FLOAT_EQ(c.Since(7), -1.0f);
+}
+
+// ---------------------------------------------------------------------------
+// Dc3PoseTwin::Twins (PoseTwin_Native.h, gpd-menubind): one body reported
+// twice at two depths.  The geometry is the shape measured on the GPD session
+// of 2026-11-21 (not its data): a dancer 1.1 m from the camera, and a second
+// report of her with the same head and shoulders in the picture, her hips
+// guessed higher and so read 0.4 m further away.
+namespace {
+
+// A body: hip centre at (x, hipY, z), shoulders 0.45 m above the hip, head
+// 0.25 m above them, shoulders 0.18 m to each side -- all scaled about the
+// camera by `s`, which keeps every joint where it is in the picture.
+Dc3PoseTwin::View TwinBody(int rawId, float x, float hipY, float z, float s, int seen) {
+    Dc3PoseTwin::View v;
+    v.rawId = rawId;
+    auto put = [&](float *d, float px, float py, float pz) {
+        d[0] = px * s;
+        d[1] = py * s;
+        d[2] = pz * s;
+    };
+    put(v.shoulder, x, 0.30f, z);
+    put(v.head, x, 0.55f, z);
+    put(v.shoulderL, x - 0.18f, 0.30f, z);
+    put(v.shoulderR, x + 0.18f, 0.30f, z);
+    put(v.hip, x, hipY, z);
+    v.seen = seen;
+    return v;
+}
+
+struct TwinEnv {
+    TwinEnv() { unsetenv("DC3_POSE_TWIN"); }
+    ~TwinEnv() { unsetenv("DC3_POSE_TWIN"); }
+};
+
+} // namespace
+
+TEST(PoseTwinTest, OneBodyReportedTwiceIsOneDetection) {
+    TwinEnv env;
+    Dc3PoseTwin::Twins twins;
+    // Her report (legs seen, 16 joints) and the twin: the same upper body 1.4x
+    // further away, its hip 0.12 m higher in her frame.
+    Dc3PoseTwin::View v[2] = { TwinBody(64, 0.35f, -0.15f, 1.10f, 1.0f, 16),
+                               TwinBody(68, 0.35f, -0.03f, 1.10f, 1.4f, 11) };
+    EXPECT_LT(Dc3PoseTwin::UpperBodyRatio(v[0], v[1]), 0.05f);
+    Dc3PoseTwin::Result r = twins.Update(v, 2, 0.06f);
+    EXPECT_FALSE(r.drop[0]);
+    EXPECT_TRUE(r.drop[1]);
+    // Either order: the one with more joints seen is kept.
+    Dc3PoseTwin::View w[2] = { v[1], v[0] };
+    r = twins.Update(w, 2, 0.06f);
+    EXPECT_TRUE(r.drop[0]);
+    EXPECT_FALSE(r.drop[1]);
+}
+
+TEST(PoseTwinTest, TheTwinAloneIsHerAtHerDepth) {
+    TwinEnv env;
+    Dc3PoseTwin::Twins twins;
+    Dc3PoseTwin::View v[2] = { TwinBody(64, 0.35f, -0.15f, 1.10f, 1.0f, 16),
+                               TwinBody(68, 0.35f, -0.03f, 1.10f, 1.4f, 11) };
+    twins.Update(v, 2, 0.06f);
+    // Next frame MediaPipe reports only the twin.
+    Dc3PoseTwin::View alone = TwinBody(68, 0.36f, -0.03f, 1.10f, 1.4f, 11);
+    Dc3PoseTwin::Result r = twins.Update(&alone, 1, 0.06f);
+    EXPECT_FALSE(r.drop[0]);
+    EXPECT_EQ(r.rawId[0], 64);
+    EXPECT_NEAR(alone.shoulder[2] * r.scale[0], 1.10f, 0.01f);
+    // And she herself, back, is herself.
+    Dc3PoseTwin::View back = TwinBody(64, 0.36f, -0.15f, 1.10f, 1.0f, 16);
+    r = twins.Update(&back, 1, 0.06f);
+    EXPECT_EQ(r.rawId[0], 64);
+    EXPECT_FLOAT_EQ(r.scale[0], 1.0f);
+}
+
+TEST(PoseTwinTest, TheTwinsMemoryEnds) {
+    TwinEnv env;
+    Dc3PoseTwin::Twins twins;
+    Dc3PoseTwin::View v[2] = { TwinBody(64, 0.35f, -0.15f, 1.10f, 1.0f, 16),
+                               TwinBody(68, 0.35f, -0.03f, 1.10f, 1.4f, 11) };
+    twins.Update(v, 2, 0.06f);
+    Dc3PoseTwin::View alone = TwinBody(68, 0.35f, -0.03f, 1.10f, 1.4f, 11);
+    Dc3PoseTwin::Result r = twins.Update(&alone, 1, Dc3PoseTwin::kTwinMemorySec + 0.1f);
+    EXPECT_EQ(r.rawId[0], 68);
+    EXPECT_FLOAT_EQ(r.scale[0], 1.0f);
+    // Seen apart (two bodies after all), the memory goes at once.
+    twins.Update(v, 2, 0.06f);
+    Dc3PoseTwin::View apart[2] = { TwinBody(64, 0.35f, -0.15f, 1.10f, 1.0f, 16),
+                                   TwinBody(68, 0.95f, -0.15f, 1.20f, 1.0f, 11) };
+    r = twins.Update(apart, 2, 0.06f);
+    EXPECT_FALSE(r.drop[0]);
+    EXPECT_FALSE(r.drop[1]);
+    r = twins.Update(&apart[1], 1, 0.06f);
+    EXPECT_EQ(r.rawId[0], 68);
+    EXPECT_EQ(twins.Aliases(), 0);
+}
+
+TEST(PoseTwinTest, TwoPeopleAreNeverTwins) {
+    TwinEnv env;
+    Dc3PoseTwin::Twins twins;
+    // Side by side, 0.6 m apart (P-18's dancers were never closer than 0.43).
+    Dc3PoseTwin::View side[2] = { TwinBody(1, -0.30f, -0.15f, 2.5f, 1.0f, 18),
+                                  TwinBody(2, 0.30f, -0.15f, 2.5f, 1.0f, 18) };
+    // One 0.5 m behind the other and 0.3 m aside (the walk-past of P-18).
+    Dc3PoseTwin::View behind[2] = { TwinBody(3, 0.0f, -0.15f, 2.5f, 1.0f, 18),
+                                    TwinBody(4, 0.30f, -0.15f, 3.0f, 1.0f, 18) };
+    // One standing behind the other, head over her shoulder (0.15 m aside).
+    Dc3PoseTwin::View over[2] = { TwinBody(5, 0.0f, -0.15f, 2.0f, 1.0f, 18),
+                                  TwinBody(6, 0.15f, -0.05f, 2.6f, 1.0f, 18) };
+    for (int f = 0; f < 30; f++) {
+        Dc3PoseTwin::Result r = twins.Update(side, 2, 0.1f);
+        EXPECT_FALSE(r.drop[0] || r.drop[1]);
+        r = twins.Update(behind, 2, 0.1f);
+        EXPECT_FALSE(r.drop[0] || r.drop[1]);
+        r = twins.Update(over, 2, 0.1f);
+        EXPECT_FALSE(r.drop[0] || r.drop[1]) << Dc3PoseTwin::UpperBodyRatio(over[0], over[1]);
+    }
+    EXPECT_EQ(twins.Aliases(), 0);
+}
+
+TEST(PoseTwinTest, OffIsTheBehaviourBefore) {
+    TwinEnv env;
+    setenv("DC3_POSE_TWIN", "0", 1);
+    Dc3PoseTwin::Twins twins;
+    Dc3PoseTwin::View v[2] = { TwinBody(64, 0.35f, -0.15f, 1.10f, 1.0f, 16),
+                               TwinBody(68, 0.35f, -0.03f, 1.10f, 1.4f, 11) };
+    Dc3PoseTwin::Result r = twins.Update(v, 2, 0.06f);
+    EXPECT_FALSE(r.drop[0] || r.drop[1]);
+    Dc3PoseTwin::Result s = twins.Update(&v[1], 1, 0.06f);
+    EXPECT_EQ(s.rawId[0], 68);
 }
