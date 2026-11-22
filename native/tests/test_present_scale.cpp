@@ -385,13 +385,15 @@ TEST_F(PresentUpscaleGpu, ASteadyFrameCreatesNothing) {
 }
 
 // The look, by adapter class as the depth of field's edge rule is: retail and
-// Native off; enhanced on for a discrete GPU, off for an Apple GPU and for
-// anything else (neither is timed: item 60); Native refuses; the three
+// Native off; enhanced on for a discrete GPU and for anything else (the 890M
+// timed it under its limit: np-present60b), off for an Apple GPU (the M3 has
+// not timed it); Native refuses; the three
 // tokens through Rnd's handler write all three classes' fields; a drawn frame
 // hands GpuDevice the choice for the adapter class in effect, so the class
 // token reaches the present; GpuDevice's setter picks the clamped 5-read
 // cubic. Sabotages, each seen red and reverted (item60/sab/G..K): Enhanced's
-// presentUpscale false; Enhanced's presentUpscaleIntegrated true; the picker
+// presentUpscale false; Enhanced's presentUpscaleIntegrated true (since
+// np-present60b: false, and Enhanced's presentUpscaleApple true); the picker
 // reading the discrete field for every class; BeginDrawing passing
 // Look().presentUpscale without the class; present_up_off calling the setter
 // with 1; the setter not writing the non-discrete class.
@@ -406,7 +408,7 @@ protected:
     }
 };
 
-TEST_F(PresentUpscaleLook, EnhancedOnADiscreteGpuOnlyAndTheTokens) {
+TEST_F(PresentUpscaleLook, EnhancedOnAllButAppleAndTheTokens) {
     if (IsSkipped()) return;
     using milo::LookAdapterClass;
     auto fields = [] {
@@ -430,8 +432,8 @@ TEST_F(PresentUpscaleLook, EnhancedOnADiscreteGpuOnlyAndTheTokens) {
         EXPECT_EQ(fields(), 0) << "Native refuses the token";
     }
     milo::ScopedLookOverride enhanced(milo::LookProfile::Enhanced);
-    EXPECT_EQ(fields(), 1) << "enhanced: a discrete GPU only (1 discrete, 2 Apple, 4 anything else)";
-    EXPECT_EQ(picked(milo::Look()), 1);
+    EXPECT_EQ(fields(), 5) << "enhanced: a discrete GPU and anything else, not Apple (1 discrete, 2 Apple, 4 anything else)";
+    EXPECT_EQ(picked(milo::Look()), 5);
     // The picker picks by class: a local copy with each class's own value.
     for (int bits = 0; bits < 8; bits++) {
         milo::LookSettings copy = milo::Look();
@@ -446,7 +448,7 @@ TEST_F(PresentUpscaleLook, EnhancedOnADiscreteGpuOnlyAndTheTokens) {
     EXPECT_EQ(fields(), 7) << "on: all three classes";
     Token("present_up_off");
     Token("present_up_rule");
-    EXPECT_EQ(fields(), 1) << "the rule gives the look's values back";
+    EXPECT_EQ(fields(), 5) << "the rule gives the look's values back";
     if (gWgpuRnd && gWgpuRnd->Gpu().IsReady()) {
         GpuDevice &gpu = gWgpuRnd->Gpu();
         const bool was = gpu.PresentUpscale();
@@ -465,7 +467,7 @@ TEST_F(PresentUpscaleLook, EnhancedOnADiscreteGpuOnlyAndTheTokens) {
             return gpu.PresentUpscale();
         };
         for (int c = 0; c < 3; c++) {
-            EXPECT_EQ(drawn(classes[c], c != 0), c == 0) << "the rule, class " << c;
+            EXPECT_EQ(drawn(classes[c], c == 1), c != 1) << "the rule, class " << c;
         }
         Token("present_up_on");
         for (int c = 0; c < 3; c++) EXPECT_TRUE(drawn(classes[c], false)) << "present_up_on, class " << c;
