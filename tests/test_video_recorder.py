@@ -112,13 +112,20 @@ class RecorderTest(unittest.TestCase):
         d = scratch(self)
         fake = FakeCv2(gate=threading.Event())
         rec = vr.VideoRecorder(os.path.join(d, "camera.mkv"), fake, queue_frames=4, log=Logs())
-        worst = 0.0
-        for k in range(200):
-            t = time.perf_counter()
-            rec.offer(frame(k), k, float(k), float(k))
-            worst = max(worst, time.perf_counter() - t)
-        self.assertLess(worst, 0.05, "offer() waited for the writer")
+        worst = [0.0]
+
+        def tracker():
+            for k in range(200):
+                t = time.perf_counter()
+                rec.offer(frame(k), k, float(k), float(k))
+                worst[0] = max(worst[0], time.perf_counter() - t)
+        th = threading.Thread(target=tracker, daemon=True)
+        th.start()
+        th.join(5)
+        finished = not th.is_alive()
         fake.gate.set()
+        self.assertTrue(finished, "the tracker's offer() loop was held up by a stuck writer")
+        self.assertLess(worst[0], 0.05, "offer() waited for the writer")
         rec.close(timeout_s=5)
         self.assertEqual(rec.offered, 200)
         self.assertGreater(rec.dropped, 150)

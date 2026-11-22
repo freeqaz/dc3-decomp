@@ -259,3 +259,30 @@ from run to run; with `DC3_FAST_TIME=1` a replay is repeatable move for move
 a camera, `scripts/play.sh --video clip.mp4` plays recorded footage through
 the real tracker in step with the song (`scripts/playtest/make_footage.py`
 cuts clips).
+
+## The camera video (developers)
+
+`scripts/play.sh --record-video` -- or, on a machine whose
+`~/.config/dc3/playtest.env` says `DC3_PLAY_RECORD_VIDEO=1` (the GPD's does),
+every camera session -- also writes `<session>/camera.mkv`: every frame the
+tracker was given, at the camera's own size (640x480 on the GPD), MPEG-4 part 2
+in Matroska, with `camera.frames.tsv` (line k = video frame k: its pose packet
+id and capture time, which join `pose.dc3session`). It stays out of the
+`.tar.gz` -- it is large and it shows the room -- and the summary has one
+`camera video:` line for it. A restarted pose server writes `camera-2.mkv`, and
+so on; recording stops at 24 GB or 10 GB free (`--record-max-gb`,
+`DC3_POSE_RECORD_VIDEO_MAX_GB`). Then:
+
+```sh
+scripts/playtest/camera_video.py info SESSION                 # parts, drops, video per song segment
+scripts/playtest/camera_video.py detect SESSION 4 --out d.tsv -- --conf 0.3   # re-track song 4 offline, compare with live
+scripts/playtest/camera_video.py cut SESSION 4 song.mkv       # song 4 on the song clock, 8 s pre-roll
+scripts/play.sh --video song.mkv --video-pre 8                # ... replayed in the game, in step with the song
+```
+
+`detect` runs `pose_server.py`'s own MediaPipe backend, built from the options
+after `--`, over every recorded frame of the song with its own timestamp; no
+game is needed. `cut` places each frame at its capture song time
+(`pose.dc3session`'s `steady_t0` line gives the exact offset); a replay in the
+game declares 0 ms of camera latency where the live camera left the game at
+100 ms, so pass `DC3_POSE_LATENCY_MS=100` for a scoring-faithful replay.

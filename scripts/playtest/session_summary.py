@@ -3,7 +3,8 @@
 
   session_summary.py SESSION_DIR [--json OUT]
 
-Reads SESSION_DIR/engine.log (and pose.dc3session when there is one) and
+Reads SESSION_DIR/engine.log (and pose.dc3session and the camera video's
+timestamp sidecars, camera*.frames.tsv, when there are) and
 prints: how the game ended, each song played with its per-move ratings, the
 frame rates (DC3 PERF / POSE_STATS lines), memory over time, and every
 MILO_FAIL / MILO_ASSERT / MILO_NOTIFY / MILO_WARN the game raised, counted.
@@ -19,6 +20,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import pose_session  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), "native", "scripts"))
+import video_recorder  # noqa: E402  (standard library only at import)
 
 RATING_RE = re.compile(r"DC3 MOVE_RATING p=(\d+) measure=(-?\d+) move=(\S+) rating=(\S+) "
                        r"lastfrac=(-?[\d.]+) score=(-?\d+)")
@@ -255,7 +258,50 @@ def summarise(session):
                          f"(scripts/playtest/pose_session.py info {sess})")
         except (OSError, ValueError) as e:
             lines.append(f"pose recording unreadable: {e}")
+    video = camera_video_line(session)
+    if video:
+        lines.append(video)
     return "\n".join(lines), r
+
+
+def camera_video_line(session, name="camera.mkv"):
+    """One line about the camera video (scripts/play.sh --record-video), or
+    None when the session has none.  Read from the sidecars, which the .tar.gz
+    carries; the video's size from the video when it is there."""
+    try:
+        parts = video_recorder.parts_of(os.path.join(session, name))
+    except OSError:
+        parts = []
+    if not parts:
+        return None
+    frames = dropped = size = 0
+    span = 0.0
+    cut_off, problems = [], []
+    for p in parts:
+        side = video_recorder.sidecar_path(p)
+        try:
+            _, rows, counts = video_recorder.read_sidecar(side)
+        except (OSError, ValueError) as e:
+            problems.append(f"{os.path.basename(side)} unreadable ({e})")
+            continue
+        frames += len(rows)
+        dropped += counts.get("dropped", 0)
+        if len(rows) > 1:
+            span += rows[-1][2] - rows[0][2]
+        if counts["stopped"] is None:
+            cut_off.append(os.path.basename(p))
+        elif counts["stopped"] not in ("closed",):
+            problems.append(f"{os.path.basename(p)} stopped: {counts['stopped'].replace('_', ' ')}")
+        size += os.path.getsize(p) if os.path.exists(p) else counts.get("bytes", 0)
+    extra = f" (+{len(parts) - 1} more part{'s' if len(parts) > 2 else ''})" if len(parts) > 1 else ""
+    text = (f"camera video: {parts[0]}{extra}, {frames} frames, {span / 60:.1f} min, "
+            f"{size / 1e6:.0f} MB, {dropped} dropped -- not in the .tar.gz (it stays in the "
+            f"session folder; scripts/playtest/camera_video.py info {session})")
+    if cut_off:
+        text += f"; cut off without its last line (killed?): {', '.join(cut_off)}"
+    if problems:
+        text += "; " + "; ".join(problems)
+    return text
 
 
 def main(argv=None):

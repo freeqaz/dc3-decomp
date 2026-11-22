@@ -65,7 +65,28 @@
 #   --replay-sync song|wall   how the replay is timed (default song)
 #   --headless         no window (automation; implies no sound device)
 #   --no-pack          do not make the .tar.gz at the end
+#   --record-video     record the camera: every frame the tracker is given goes
+#                      to <session>/camera.mkv (with camera.frames.tsv, each
+#                      frame's capture time, to line it up with pose.dc3session
+#                      and the song; scripts/playtest/camera_video.py cuts and
+#                      replays it).  Left out of the .tar.gz: it is large, and
+#                      it is a video of the room
+#   --no-record-video  do not, whatever the settings file says
+#   --show-settings    print what the settings file sets, and stop
 #   -- ARGS            passed to dc3-native
+#
+# Settings file: ${XDG_CONFIG_HOME:-~/.config}/dc3/playtest.env (or
+# $DC3_PLAYTEST_SETTINGS), read if present: one KEY=VALUE per line, # comments
+# and blank lines ignored.  Only DC3_* and MILO_* names are taken (anything
+# else is refused and named); the value is taken literally -- nothing in it is
+# expanded or run -- with one pair of surrounding quotes removed.  A variable
+# already set in the environment wins over the file, and the file over the
+# defaults below.  DC3_PLAY_RECORD_VIDEO=1 there turns on --record-video for
+# every session on that machine (the camera only, not --video/--replay; the
+# options above override it).  E.g. the GPD's:
+#   DC3_PLAY_RECORD_VIDEO=1
+#   DC3_MEM_LOG=1
+#   DC3_HEARTBEAT_S=10
 #
 # $DC3_PLAY_BINARY names the dc3-native to run (default native/build/dc3-native).
 #
@@ -80,11 +101,42 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMMON="$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
 MAIN_CHECKOUT="${COMMON:+$(dirname "$COMMON")}"
 
+# ---- the per-machine settings file (see the header) -------------------------
+SETTINGS="${DC3_PLAYTEST_SETTINGS:-${XDG_CONFIG_HOME:-$HOME/.config}/dc3/playtest.env}"
+SETTINGS_APPLIED=(); SETTINGS_KEPT=(); SETTINGS_REFUSED=()
+if [ -f "$SETTINGS" ]; then
+    n=0
+    while IFS= read -r line || [ -n "$line" ]; do
+        n=$((n + 1))
+        line="${line%$'\r'}"
+        trimmed="${line#"${line%%[![:space:]]*}"}"
+        case "$trimmed" in ''|'#'*) continue ;; esac
+        key="${trimmed%%=*}"; key="${key%"${key##*[![:space:]]}"}"
+        if [ "$key" = "$trimmed" ] || ! [[ "$key" =~ ^(DC3|MILO)_[A-Za-z0-9_]+$ ]]; then
+            SETTINGS_REFUSED+=("line $n: ${trimmed:0:60}"); continue
+        fi
+        val="${trimmed#*=}"; val="${val#"${val%%[![:space:]]*}"}"; val="${val%"${val##*[![:space:]]}"}"
+        if [ "${#val}" -ge 2 ] && { [[ "$val" == \"*\" ]] || [[ "$val" == \'*\' ]]; }; then
+            val="${val:1:${#val}-2}"
+        fi
+        if [ -n "${!key+x}" ]; then SETTINGS_KEPT+=("$key"); continue; fi   # the environment wins
+        export "$key=$val"
+        SETTINGS_APPLIED+=("$key=$val")
+    done <"$SETTINGS"
+fi
+settings_report() {
+    if [ ! -f "$SETTINGS" ]; then echo "Settings: no $SETTINGS"; return; fi
+    echo "Settings: $SETTINGS: ${#SETTINGS_APPLIED[@]} set${SETTINGS_APPLIED[*]:+ (${SETTINGS_APPLIED[*]})}"
+    [ "${#SETTINGS_KEPT[@]}" -gt 0 ] && echo "  already in the environment, kept: ${SETTINGS_KEPT[*]}"
+    for r in "${SETTINGS_REFUSED[@]}"; do echo "  REFUSED (only DC3_*/MILO_* KEY=VALUE lines): $r"; done
+    return 0
+}
+
 CHECK=0; NO_PERSON=0; CAMERA="${DC3_POSE_CAMERA:-auto}"; VIDEO=""; FULLSCREEN=0; SIZE=""
 NO_POSE=0; FAST_BOOT=0; HOME_DIR="${DC3_PLAYTEST_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/dc3/playtest}"
 SESSION=""; REPLAY=""; REPLAY_SYNC="song"; HEADLESS=0; PACK=1; ENGINE_ARGS=()
 VIDEO_PRE=8; VIDEO_LOOP=0; WAYLAND=0; DLC="${DC3_DLC_DIR:-}"; DLC_DEFAULT=0; OVERLAYS=0
-MENU_SELECT=""
+MENU_SELECT=""; RECORD_VIDEO_FLAG=""; SHOW_SETTINGS=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1 ;;
@@ -114,12 +166,29 @@ while [ $# -gt 0 ]; do
         --replay-sync) REPLAY_SYNC="$2"; shift ;;
         --headless) HEADLESS=1 ;;
         --no-pack) PACK=0 ;;
+        --record-video) RECORD_VIDEO_FLAG=1 ;;
+        --no-record-video) RECORD_VIDEO_FLAG=0 ;;
+        --show-settings) SHOW_SETTINGS=1 ;;
         --) shift; ENGINE_ARGS=("$@"); break ;;
         -h|--help) sed -n '2,/^$/p' "$0"; exit 0 ;;   # the header comment
         *) echo "unknown option: $1 (see --help)" >&2; exit 1 ;;
     esac
     shift
 done
+
+# Camera video: the option, else the settings file / environment
+# (DC3_PLAY_RECORD_VIDEO), and from those only with the camera as the source.
+case "${DC3_PLAY_RECORD_VIDEO:-0}" in 1|true|on|yes) RECORD_VIDEO_SETTING=1 ;; *) RECORD_VIDEO_SETTING=0 ;; esac
+if [ -n "$RECORD_VIDEO_FLAG" ]; then RECORD_VIDEO="$RECORD_VIDEO_FLAG"; RECORD_WHY="the option"
+elif [ "$RECORD_VIDEO_SETTING" = 1 ] && [ -z "$VIDEO" ] && [ -z "$REPLAY" ] && [ "$NO_POSE" = 0 ]; then
+    RECORD_VIDEO=1; RECORD_WHY="DC3_PLAY_RECORD_VIDEO"
+else RECORD_VIDEO=0; RECORD_WHY="default"; fi
+[ "$NO_POSE" = 1 ] || [ -n "$REPLAY" ] && RECORD_VIDEO=0   # no camera, nothing to record
+if [ "$SHOW_SETTINGS" = 1 ]; then
+    settings_report
+    echo "Camera video: $([ "$RECORD_VIDEO" = 1 ] && echo on || echo off) ($RECORD_WHY)"
+    exit 0
+fi
 
 # $DC3_PLAY_BINARY: run another build of the game (e.g. a build dir configured
 # against an engine branch; np-soak3 soaked native/build-eng this way).
@@ -162,6 +231,8 @@ fi
 mkdir -p "$SESSION" "$HOME_DIR/saves" "$HOME_DIR/cache"
 SESSION="$(cd "$SESSION" && pwd)"
 echo "DC3 playtest session: $SESSION"
+settings_report
+[ -f "$SETTINGS" ] && cp "$SETTINGS" "$SESSION/playtest.env"
 echo "Checking the machine (scripts/play.sh --check runs only this) ..."
 if ! python3 -I "$REPO/scripts/playtest/preflight.py" "${pre_args[@]}" --no-person \
         --json "$SESSION/preflight.json" | tee "$SESSION/preflight.txt"; then
@@ -224,6 +295,14 @@ fi
 # Every session records what the sensor accepted -- a replay too, so a replay
 # can be checked against the file it replayed (pose_session.py compare).
 [ "$NO_POSE" = 1 ] || setdef DC3_POSE_RECORD "$SESSION/pose.dc3session"
+# The camera video (--record-video / DC3_PLAY_RECORD_VIDEO): the pose server
+# writes the frames it tracks (native/scripts/video_recorder.py).
+if [ "$RECORD_VIDEO" = 1 ]; then
+    setdef DC3_POSE_RECORD_VIDEO "$SESSION/camera.mkv"
+    echo "Camera video: recording to $DC3_POSE_RECORD_VIDEO (not packed into the .tar.gz)"
+else
+    unset DC3_POSE_RECORD_VIDEO
+fi
 mkdir -p "$DC3_SFX_PCM_DIR"
 
 {
@@ -268,7 +347,17 @@ cp -a "$DC3_CACHE_DIR/global" "$SESSION/saves-after/cache-global" 2>/dev/null
 
 python3 -I "$REPO/scripts/playtest/session_summary.py" "$SESSION" | tee "$SESSION/summary.txt"
 if [ "$PACK" = 1 ]; then
-    tar -czf "$SESSION.tar.gz" -C "$(dirname "$SESSION")" "$(basename "$SESSION")" \
+    # The camera video stays out: it is large and it shows the room.  Its
+    # small timestamp sidecars go in (the summary reads them).
+    excl=()
+    if [ -n "${DC3_POSE_RECORD_VIDEO:-}" ]; then
+        vb="$(basename "$DC3_POSE_RECORD_VIDEO")"
+        excl=(--exclude="${vb%.*}*.${vb##*.}")
+    fi
+    tar -czf "$SESSION.tar.gz" "${excl[@]}" -C "$(dirname "$SESSION")" "$(basename "$SESSION")" \
         && echo && echo "Send back: $SESSION.tar.gz ($(du -h "$SESSION.tar.gz" | cut -f1))"
+    if [ -n "${DC3_POSE_RECORD_VIDEO:-}" ] && compgen -G "${DC3_POSE_RECORD_VIDEO%.*}*.${vb##*.}" >/dev/null; then
+        echo "Not in it: the camera video ($(du -ch "${DC3_POSE_RECORD_VIDEO%.*}"*."${vb##*.}" | tail -1 | cut -f1)), kept in $SESSION"
+    fi
 fi
 exit "$RC"
