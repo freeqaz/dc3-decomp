@@ -84,7 +84,12 @@ void FlowManager::Poll() {
 
     mExecuting = true;
 
+#ifdef HX_NATIVE
+    // In creation order, not address order (FlowManager.h, FlowQueueKey).
+    for (std::map<FlowQueueKey, FlowNode::QueueState>::iterator it = mFlowQueue.begin();
+#else
     for (std::map<FlowNode *, FlowNode::QueueState>::iterator it = mFlowQueue.begin();
+#endif
          it != mFlowQueue.end();
          ++it) {
         if (it->second != FlowNode::kImmediate) {

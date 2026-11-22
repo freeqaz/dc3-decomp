@@ -11,6 +11,9 @@
 
 float FlowNode::sIntensity = 1.0f;
 bool FlowNode::sPushDrivenProperties = false;
+#ifdef HX_NATIVE
+unsigned long long FlowNode::sCreateCount = 0;
+#endif
 
 #pragma region Hmx::Object
 
@@ -18,6 +21,9 @@ FlowNode::FlowNode()
     : mChildNodes(this, (EraseMode)0, kObjListNoNull), mRunningNodes(this),
       mFlowParent(nullptr), mDrivenPropEntries(this), mStopRequested(0) {
     mDebugOutput = false;
+#ifdef HX_NATIVE
+    mCreateOrder = sCreateCount++;
+#endif
 }
 
 FlowNode::~FlowNode() {

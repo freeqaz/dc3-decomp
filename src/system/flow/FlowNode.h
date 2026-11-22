@@ -109,6 +109,17 @@ protected:
     FlowNode *mFlowParent; // 0x44
     ObjVector<DrivenPropertyEntry> mDrivenPropEntries; // 0x48
     bool mStopRequested; // 0x58
+
+#ifdef HX_NATIVE
+public:
+    // Native only: how many FlowNodes were constructed before this one. The
+    // flow queue runs in this order (FlowManager.h, FlowQueueKey).
+    unsigned long long CreateOrder() const { return mCreateOrder; }
+
+private:
+    unsigned long long mCreateOrder;
+    static unsigned long long sCreateCount;
+#endif
 };
 
 #define FLOW_LOG(...)                                                                    \
