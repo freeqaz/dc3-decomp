@@ -25,6 +25,7 @@
 
 #include "platform/PoseIdentity_Native.h"
 #include "platform/PoseSeen_Native.h"
+#include "platform/PoseTwin_Native.h"
 
 #ifndef DC3_DECOMP_SRC_DIR
 #error "DC3_DECOMP_SRC_DIR is the repo's src/ (native/CMakeLists.txt)"
@@ -725,7 +726,8 @@ protected:
 
     // One sensor frame (33 ms).  Returns the result; applies its bindings.
     Players::Result Tick(int autoPlayers = 1, int windowMs = kWindowMs) {
-        Players::Result r = mPlayers.Update(mSlots, mBound, autoPlayers, 33.0f, windowMs, 1000);
+        Players::Result r =
+            mPlayers.Update(mSlots, mBound, autoPlayers, 33.0f, windowMs, 1000, mReleaseWaitMs);
         for (int p = 0; p < 2; p++) {
             if (r.assign[p] >= 0) {
                 mBound[p] = r.assign[p];
@@ -758,6 +760,7 @@ protected:
     int mBound[2] = { -1, -1 };
     int mBinds[2] = { 0, 0 };
     int mLastRule[2] = { 0, 0 };
+    int mReleaseWaitMs = 0; // a song (or DC3_POSE_RELEASE_WAIT_MS=0); menus set it
 };
 
 TEST_F(PoseIdentityPlayersTest, ALostPlayerTwoIsBoundAgainWhenHerSkeletonReturns) {
@@ -1184,6 +1187,153 @@ TEST_F(PoseIdentityPlayersTest, ZeroIsTheOldRule) {
     EXPECT_EQ(mBound[1], -1);
 }
 
+// LET GO IN VIEW (gpd-menubind).  Song select, replay menu24 of the GPD
+// session: the image unbinds player 1 with her skeleton in view on about half
+// of all frames, and MediaPipe reports one of two people a frame; the frame
+// after a release often holds only the other one, 1.9 m deeper, and she was
+// bound to that one at once.  In a menu she now waits up to kReleaseWaitMs
+// for a body near where she was.
+class PoseIdentityReleaseTest : public PoseIdentityPlayersTest {
+protected:
+    // Player 1 on 701 (z 1.5); a second person, 702, at z 3.4, 0.3 m aside.
+    void Bound() {
+        mReleaseWaitMs = Dc3PoseIdentity::kDefaultReleaseWaitMs;
+        Skeleton(0, 701, 0.0f, 1.5f);
+        Tick();
+        ASSERT_EQ(mBound[0], 701);
+        Ticks(10);
+    }
+    // The camera frame holds only the other one (701's slot given up).
+    void OnlyTheOther() {
+        Gone(0);
+        Skeleton(1, 702, 0.3f, 3.4f);
+    }
+    void OnlyHer() {
+        Gone(1);
+        Skeleton(0, 701, 0.0f, 1.5f);
+    }
+};
+
+TEST_F(PoseIdentityReleaseTest, AlternatingFramesNeverHandHerToTheOtherPerson) {
+    Bound();
+    int changes = 0, last = mBound[0];
+    for (int f = 0; f < 60; f++) {
+        if (mBound[0] == 701 && mSlots[0].tracked) {
+            Unbind(0); // the image, with her in view
+            Tick();
+        }
+        if (f % 2)
+            OnlyHer();
+        else
+            OnlyTheOther();
+        Players::Result r = Tick();
+        if (mBound[0] >= 0 && mBound[0] != last) {
+            changes++;
+            last = mBound[0];
+        }
+        if (mSlots[1].tracked)
+            EXPECT_NE(mBound[0], 702) << "frame " << f << " rule " << r.rule[0];
+    }
+    EXPECT_EQ(changes, 0);
+    EXPECT_EQ(mBound[0], 701);
+}
+
+TEST_F(PoseIdentityReleaseTest, WhereTheImageKeepsNoBindingSheStaysOnOneBody) {
+    // Song select, measured (menu24): the image drops the binding Players
+    // makes by the next frame, every frame, so the binding is only ever
+    // Players' own.  Two people a frame in turn: before this, she was on
+    // whichever the frame held.
+    Bound();
+    int changes = 0, last = mBound[0];
+    for (int f = 0; f < 60; f++) {
+        Unbind(0);
+        if (f % 2)
+            OnlyHer();
+        else
+            OnlyTheOther();
+        Tick();
+        if (mBound[0] >= 0 && mBound[0] != last) {
+            changes++;
+            last = mBound[0];
+        }
+    }
+    EXPECT_EQ(changes, 0);
+}
+
+TEST_F(PoseIdentityReleaseTest, AFarBodyWaitsThenIsTaken) {
+    Bound();
+    Unbind(0); // let go, and the next frame holds only the other one
+    OnlyTheOther();
+    Players::Result r = Tick();
+    EXPECT_EQ(mBound[0], -1);
+    EXPECT_TRUE(r.waiting[0]);
+    // 33 ms a frame: still waiting at 660 ms, the other person's past 700.
+    Ticks(19);
+    EXPECT_EQ(mBound[0], -1);
+    Ticks(3);
+    EXPECT_EQ(mBound[0], 702);
+}
+
+TEST_F(PoseIdentityReleaseTest, HerBodyUnderANewIdIsBoundAtOnce) {
+    Bound();
+    Unbind(0);
+    Gone(0);
+    Skeleton(2, 703, 0.2f, 1.7f); // 0.22 m from where she was
+    Skeleton(1, 702, 0.3f, 3.4f);
+    Players::Result r = Tick();
+    EXPECT_EQ(mBound[0], 703);
+    EXPECT_FALSE(r.waiting[0]);
+}
+
+TEST_F(PoseIdentityReleaseTest, InASongSheIsBoundAtOnceAsBefore) {
+    Bound();
+    mReleaseWaitMs = 0; // NativeSongInPlay: a pause is worse
+    Unbind(0);
+    OnlyTheOther();
+    Tick();
+    EXPECT_EQ(mBound[0], 702);
+}
+
+TEST_F(PoseIdentityReleaseTest, HerSkeletonHeldButNotValidIsPreferredToAFarValidOne) {
+    // The measured shape of menu24's "rule=auto lost=0ms dist=1.9m": her
+    // skeleton still in its slot (the dropout hold) but not passing the
+    // quality filter, the other one passing it.  Valid-first took the other.
+    Bound();
+    Skeleton(0, 701, 0.0f, 1.5f, false);
+    Skeleton(1, 702, 0.3f, 3.4f);
+    Unbind(0);
+    Tick();
+    EXPECT_EQ(mBound[0], 701);
+}
+
+TEST_F(PoseIdentityReleaseTest, AfterALossInAMenuAFarBodyWaitsToo) {
+    // Out of view first, the image holding her binding, then let go: the
+    // wait runs from the let-go, and the other body is hers after it.
+    Bound();
+    OnlyTheOther();
+    Ticks(5);
+    Unbind(0);
+    Ticks(15);
+    EXPECT_EQ(mBound[0], -1);
+    Ticks(10);
+    EXPECT_EQ(mBound[0], 702);
+}
+
+TEST_F(PoseIdentityReleaseTest, PlayerTwoIsBoundBackToHerBodyAtOnce) {
+    // A two-player mode's menu: the image lets player 2 go in view; her own
+    // body is there, and is hers on the next frame.
+    mReleaseWaitMs = Dc3PoseIdentity::kDefaultReleaseWaitMs;
+    Skeleton(0, 711, 0.0f, 2.0f);
+    Skeleton(1, 712, -0.8f, 2.0f);
+    Ticks(10, 2);
+    ASSERT_EQ(mBound[0], 711);
+    ASSERT_EQ(mBound[1], 712);
+    Unbind(1);
+    Players::Result r = Tick(2);
+    EXPECT_EQ(mBound[1], 712);
+    EXPECT_FALSE(r.waiting[1]);
+}
+
 } // namespace
 
 // MOVE_RATING's seen= (np-gpd-track): per body, the fraction of the camera's
@@ -1212,4 +1362,171 @@ TEST(PoseSeenTest, CountsCameraFramesPerBodySinceTheLastQuestion) {
     EXPECT_FLOAT_EQ(c.Since(42), -1.0f);
     c.Reset();
     EXPECT_FLOAT_EQ(c.Since(7), -1.0f);
+}
+
+// ---------------------------------------------------------------------------
+// Dc3PoseTwin::Twins (PoseTwin_Native.h, gpd-menubind): one body reported
+// twice at two depths.  The geometry is the shape measured on the GPD session
+// of 2026-11-21 (not its data): a dancer 1.1 m from the camera, and a second
+// report of her with the same head and shoulders in the picture, her hips
+// guessed higher and so read 0.4 m further away.
+namespace {
+
+// A body: hip centre at (x, hipY, z), shoulders 0.45 m above the hip, head
+// 0.25 m above them, shoulders 0.18 m to each side -- all scaled about the
+// camera by `s`, which keeps every joint where it is in the picture.
+Dc3PoseTwin::View TwinBody(int rawId, float x, float hipY, float z, float s, int seen) {
+    Dc3PoseTwin::View v;
+    v.rawId = rawId;
+    auto put = [&](float *d, float px, float py, float pz) {
+        d[0] = px * s;
+        d[1] = py * s;
+        d[2] = pz * s;
+    };
+    put(v.shoulder, x, 0.30f, z);
+    put(v.head, x, 0.55f, z);
+    put(v.shoulderL, x - 0.18f, 0.30f, z);
+    put(v.shoulderR, x + 0.18f, 0.30f, z);
+    put(v.hip, x, hipY, z);
+    v.seen = seen;
+    return v;
+}
+
+struct TwinEnv {
+    TwinEnv() { unsetenv("DC3_POSE_TWIN"); }
+    ~TwinEnv() { unsetenv("DC3_POSE_TWIN"); }
+};
+
+} // namespace
+
+TEST(PoseTwinTest, OneBodyReportedTwiceIsOneDetection) {
+    TwinEnv env;
+    Dc3PoseTwin::Twins twins;
+    // Her report (legs seen, 16 joints) and the twin: the same upper body 1.4x
+    // further away, its hip 0.12 m higher in her frame.
+    Dc3PoseTwin::View v[2] = { TwinBody(64, 0.35f, -0.15f, 1.10f, 1.0f, 16),
+                               TwinBody(68, 0.35f, -0.03f, 1.10f, 1.4f, 11) };
+    EXPECT_LT(Dc3PoseTwin::UpperBodyRatio(v[0], v[1]), 0.05f);
+    Dc3PoseTwin::Result r = twins.Update(v, 2, 0.06f);
+    EXPECT_FALSE(r.drop[0]);
+    EXPECT_TRUE(r.drop[1]);
+    // Either order: the one with more joints seen is kept.
+    Dc3PoseTwin::View w[2] = { v[1], v[0] };
+    r = twins.Update(w, 2, 0.06f);
+    EXPECT_TRUE(r.drop[0]);
+    EXPECT_FALSE(r.drop[1]);
+}
+
+// The pair holds the body a player is bound to: that one is kept, whatever
+// the joint counts say.  MEASURED, replay of the 2026-11-21 results screen:
+// kept by joints alone, player 1's own body was the dropped twin for ~6 s,
+// player 2 was bound to the twin and player 1 sat unbound.
+TEST(PoseTwinTest, TheBoundTwinIsKept) {
+    TwinEnv env;
+    Dc3PoseTwin::Twins twins;
+    Dc3PoseTwin::View v[2] = { TwinBody(64, 0.35f, -0.15f, 1.10f, 1.0f, 16),
+                               TwinBody(68, 0.35f, -0.03f, 1.10f, 1.4f, 11) };
+    // Player 1 is bound to 68, the one with fewer joints: it stays.
+    const int bound[4] = { -1, 68, -1, -1 };
+    for (int f = 0; f < 3; f++) {
+        Dc3PoseTwin::Result r = twins.Update(v, 2, 0.06f, bound, 4);
+        EXPECT_TRUE(r.drop[0]) << "frame " << f;
+        EXPECT_FALSE(r.drop[1]) << "frame " << f;
+        EXPECT_EQ(r.rawId[1], 68);
+    }
+    // Either order.
+    Dc3PoseTwin::View w[2] = { v[1], v[0] };
+    Dc3PoseTwin::Result r = twins.Update(w, 2, 0.06f, bound, 4);
+    EXPECT_FALSE(r.drop[0]);
+    EXPECT_TRUE(r.drop[1]);
+    // And her body alone, the other report, is still the bound one.
+    Dc3PoseTwin::View alone = TwinBody(64, 0.36f, -0.15f, 1.10f, 1.0f, 16);
+    r = twins.Update(&alone, 1, 0.06f, bound, 4);
+    EXPECT_EQ(r.rawId[0], 68);
+    // Player 1's binding outranks player 2's when both are on the pair.
+    const int both[4] = { -1, 68, -1, 64 };
+    r = twins.Update(v, 2, 0.06f, both, 4);
+    EXPECT_TRUE(r.drop[0]);
+    EXPECT_FALSE(r.drop[1]);
+    // Nobody bound to either: joints decide, as before.
+    const int other[4] = { 3, -1, 5, -1 };
+    r = twins.Update(v, 2, 0.06f, other, 4);
+    EXPECT_FALSE(r.drop[0]);
+    EXPECT_TRUE(r.drop[1]);
+}
+
+TEST(PoseTwinTest, TheTwinAloneIsHerAtHerDepth) {
+    TwinEnv env;
+    Dc3PoseTwin::Twins twins;
+    Dc3PoseTwin::View v[2] = { TwinBody(64, 0.35f, -0.15f, 1.10f, 1.0f, 16),
+                               TwinBody(68, 0.35f, -0.03f, 1.10f, 1.4f, 11) };
+    twins.Update(v, 2, 0.06f);
+    // Next frame MediaPipe reports only the twin.
+    Dc3PoseTwin::View alone = TwinBody(68, 0.36f, -0.03f, 1.10f, 1.4f, 11);
+    Dc3PoseTwin::Result r = twins.Update(&alone, 1, 0.06f);
+    EXPECT_FALSE(r.drop[0]);
+    EXPECT_EQ(r.rawId[0], 64);
+    EXPECT_NEAR(alone.shoulder[2] * r.scale[0], 1.10f, 0.01f);
+    // And she herself, back, is herself.
+    Dc3PoseTwin::View back = TwinBody(64, 0.36f, -0.15f, 1.10f, 1.0f, 16);
+    r = twins.Update(&back, 1, 0.06f);
+    EXPECT_EQ(r.rawId[0], 64);
+    EXPECT_FLOAT_EQ(r.scale[0], 1.0f);
+}
+
+TEST(PoseTwinTest, TheTwinsMemoryEnds) {
+    TwinEnv env;
+    Dc3PoseTwin::Twins twins;
+    Dc3PoseTwin::View v[2] = { TwinBody(64, 0.35f, -0.15f, 1.10f, 1.0f, 16),
+                               TwinBody(68, 0.35f, -0.03f, 1.10f, 1.4f, 11) };
+    twins.Update(v, 2, 0.06f);
+    Dc3PoseTwin::View alone = TwinBody(68, 0.35f, -0.03f, 1.10f, 1.4f, 11);
+    Dc3PoseTwin::Result r = twins.Update(&alone, 1, Dc3PoseTwin::kTwinMemorySec + 0.1f);
+    EXPECT_EQ(r.rawId[0], 68);
+    EXPECT_FLOAT_EQ(r.scale[0], 1.0f);
+    // Seen apart (two bodies after all), the memory goes at once.
+    twins.Update(v, 2, 0.06f);
+    Dc3PoseTwin::View apart[2] = { TwinBody(64, 0.35f, -0.15f, 1.10f, 1.0f, 16),
+                                   TwinBody(68, 0.95f, -0.15f, 1.20f, 1.0f, 11) };
+    r = twins.Update(apart, 2, 0.06f);
+    EXPECT_FALSE(r.drop[0]);
+    EXPECT_FALSE(r.drop[1]);
+    r = twins.Update(&apart[1], 1, 0.06f);
+    EXPECT_EQ(r.rawId[0], 68);
+    EXPECT_EQ(twins.Aliases(), 0);
+}
+
+TEST(PoseTwinTest, TwoPeopleAreNeverTwins) {
+    TwinEnv env;
+    Dc3PoseTwin::Twins twins;
+    // Side by side, 0.6 m apart (P-18's dancers were never closer than 0.43).
+    Dc3PoseTwin::View side[2] = { TwinBody(1, -0.30f, -0.15f, 2.5f, 1.0f, 18),
+                                  TwinBody(2, 0.30f, -0.15f, 2.5f, 1.0f, 18) };
+    // One 0.5 m behind the other and 0.3 m aside (the walk-past of P-18).
+    Dc3PoseTwin::View behind[2] = { TwinBody(3, 0.0f, -0.15f, 2.5f, 1.0f, 18),
+                                    TwinBody(4, 0.30f, -0.15f, 3.0f, 1.0f, 18) };
+    // One standing behind the other, head over her shoulder (0.15 m aside).
+    Dc3PoseTwin::View over[2] = { TwinBody(5, 0.0f, -0.15f, 2.0f, 1.0f, 18),
+                                  TwinBody(6, 0.15f, -0.05f, 2.6f, 1.0f, 18) };
+    for (int f = 0; f < 30; f++) {
+        Dc3PoseTwin::Result r = twins.Update(side, 2, 0.1f);
+        EXPECT_FALSE(r.drop[0] || r.drop[1]);
+        r = twins.Update(behind, 2, 0.1f);
+        EXPECT_FALSE(r.drop[0] || r.drop[1]);
+        r = twins.Update(over, 2, 0.1f);
+        EXPECT_FALSE(r.drop[0] || r.drop[1]) << Dc3PoseTwin::UpperBodyRatio(over[0], over[1]);
+    }
+    EXPECT_EQ(twins.Aliases(), 0);
+}
+
+TEST(PoseTwinTest, OffIsTheBehaviourBefore) {
+    TwinEnv env;
+    setenv("DC3_POSE_TWIN", "0", 1);
+    Dc3PoseTwin::Twins twins;
+    Dc3PoseTwin::View v[2] = { TwinBody(64, 0.35f, -0.15f, 1.10f, 1.0f, 16),
+                               TwinBody(68, 0.35f, -0.03f, 1.10f, 1.4f, 11) };
+    Dc3PoseTwin::Result r = twins.Update(v, 2, 0.06f);
+    EXPECT_FALSE(r.drop[0] || r.drop[1]);
+    Dc3PoseTwin::Result s = twins.Update(&v[1], 1, 0.06f);
+    EXPECT_EQ(s.rawId[0], 68);
 }

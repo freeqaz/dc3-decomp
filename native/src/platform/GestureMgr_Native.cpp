@@ -26,6 +26,7 @@
 #include "MenuGesture_Native.h"   // DC3_MENU_ARC_START: the camera's own joint confidences
 #include "PoseCamera_Native.h"    // which camera: DC3_POSE_CAMERA, the saved choice, auto
 #include "PoseIdentity_Native.h"  // DC3_POSE_REACQUIRE_MS: who is who
+#include "PoseTwin_Native.h"     // DC3_POSE_TWIN: one body reported twice
 #include "NativeNotice.h"         // DC3_POSE_STALL_MS
 #include "meta_ham/HamUI.h"          // TheHamUI -> ShellInput -> SkeletonChooser
 #include "meta_ham/ShellInput.h"
@@ -181,6 +182,7 @@ static void ResetSlotHold(int s) {
 // fill and the slots see them; gPlayers re-binds a player the image unbound
 // because her skeleton was out of view (NativeAutoAssignPlayers).
 static Dc3PoseIdentity::People gPeople;
+static Dc3PoseTwin::Twins gTwins; // one body reported twice (PoseTwin_Native.h)
 static Dc3PoseIdentity::Players gPlayers;
 static_assert(Dc3PoseIdentity::kSlots == NUM_SKELETONS, "one SlotView per skeleton slot");
 static_assert(Dc3PoseIdentity::kMaxDetections == NativeSkeletonProvider::kMaxPersons,
@@ -192,6 +194,7 @@ static void ResetSlotMap() {
         ResetSlotHold(s);
     }
     gPeople.Reset();
+    gTwins.Reset();
 }
 
 // DC3_POSE_HOLD_MS: 0 turns the hold off (the pre-P-12 behaviour), unset or
@@ -553,7 +556,15 @@ static bool NativeModeNeedsTwoPlayers() {
 // unbound while her skeleton was in view (the chooser, a one-player mode) is
 // not remembered, so the first rule above still holds.  Anyone else joins the
 // image's way.  DC3_POSE_REACQUIRE_MS=0 is the behaviour before this.
+//
+// And it must not hand player 1 to whoever else the frame holds the moment her
+// skeleton misses a frame or the image lets her go (song select lets her go on
+// about half of all frames, gpd-menubind): outside a song the auto-assign
+// binds her at once only near where her bound skeleton was last seen, and a
+// farther body waits DC3_POSE_RELEASE_WAIT_MS (Dc3PoseIdentity::
+// kDefaultReleaseWaitMs; 0 = the behaviour before).
 static int sAutoAssignCount[2] = { 0, 0 };
+static bool NativeSongInPlay();
 
 static SkeletonChooser *NativeChooser() {
     ShellInput *shell = TheHamUI.GetShellInput();
@@ -587,8 +598,18 @@ static void NativeAutoAssignPlayers(float elapsedMs) {
     }
     static bool sDebug = Dc3EnvFlag("DC3_SCORING_DEBUG", false);
     const int autoPlayers = NativeModeNeedsTwoPlayers() ? 2 : 1;
-    Dc3PoseIdentity::Players::Result result = gPlayers.Update(
-        slots, boundId, autoPlayers, elapsedMs, Dc3PoseIdentity::ReacquireMs(), NativePoseHoldMs());
+    const int releaseWaitMs = NativeSongInPlay() ? 0 : Dc3PoseIdentity::ReleaseWaitMs();
+    Dc3PoseIdentity::Players::Result result =
+        gPlayers.Update(slots, boundId, autoPlayers, elapsedMs, Dc3PoseIdentity::ReacquireMs(),
+                        NativePoseHoldMs(), releaseWaitMs);
+    static bool sWaiting[2] = { false, false };
+    for (int p = 0; p < 2; p++) {
+        if (result.waiting[p] && !sWaiting[p] && BindingLog())
+            fprintf(stderr,
+                "DC3 SCORING: p%d waits up to %d ms for a body where her skeleton was\n",
+                p, releaseWaitMs);
+        sWaiting[p] = result.waiting[p];
+    }
     const Skeleton *bound[2] = { nullptr, nullptr };
     static int sLastAssign[2] = { -1, -1 };
     static int sLastRule[2] = { 0, 0 };
@@ -610,14 +631,34 @@ static void NativeAutoAssignPlayers(float elapsedMs) {
         sSinceMs[p] = 0.0f;
         if (changed && BindingLog())
             fprintf(stderr,
-                "DC3 SCORING: bind p%d -> tracking id %d slot %d rule=%s lost=%.0fms dist=%.2fm\n",
+                "DC3 SCORING: bind p%d -> tracking id %d slot %d rule=%s lost=%.0fms dist=%.2fm "
+                "wait=%dms from-bound=%.2fm/%.0fms\n",
                 p, result.assign[p], result.slot[p], Dc3PoseIdentity::RuleName(result.rule[p]),
-                result.lostMs[p], result.distance[p]);
+                result.lostMs[p], result.distance[p], releaseWaitMs, result.fromBound[p],
+                result.sinceBoundMs[p]);
     }
     if (SkeletonChooser *chooser = NativeChooser()) {
         for (int p = 0; p < 2; p++) {
             if (bound[p])
                 chooser->NativeSkeletonBound((int)(bound[p] - &TheGestureMgr->GetSkeleton(0)));
+        }
+    }
+    // DC3_HAND_LOG=1: player 1's skeleton and right hand on every sensor
+    // frame, for measuring what a menu's hand cursor is given (gpd-menubind:
+    // a jump of the bound body is a jump of the cursor).  Camera space; `rel`
+    // is the hand from the shoulder centre.
+    static const bool sHandLog = Dc3EnvFlag("DC3_HAND_LOG", false);
+    if (sHandLog) {
+        if (bound[0]) {
+            Vector3 hand, shoulder;
+            bound[0]->JointPos(kCoordCamera, kJointHandRight, hand);
+            bound[0]->JointPos(kCoordCamera, kJointShoulderCenter, shoulder);
+            fprintf(stderr,
+                "DC3 HAND: p0 id=%d slot=%d hand=%+.3f,%+.3f,%.3f rel=%+.3f,%+.3f,%+.3f\n",
+                bound[0]->TrackingID(), (int)(bound[0] - &TheGestureMgr->GetSkeleton(0)), hand.x,
+                hand.y, hand.z, hand.x - shoulder.x, hand.y - shoulder.y, hand.z - shoulder.z);
+        } else {
+            fprintf(stderr, "DC3 HAND: p0 none\n");
         }
     }
     // The player ids the image keeps beside the bindings (GestureMgr's, which
@@ -1289,6 +1330,65 @@ static bool StallWatchTick(bool newFrame, bool delivered) {
     return true;
 }
 
+// One body reported twice (Dc3PoseTwin, PoseTwin_Native.h): the second report
+// is not passed on, and a lone report under the twin's tracker id is her.
+static void DropTwins(NativeSkeletonProvider::PersonData *persons, int numPersons,
+                      double sensorTs) {
+    static double sPrevTs = -1.0;
+    float dt = 1.0f / 30.0f;
+    if (sensorTs >= 0.0 && sPrevTs >= 0.0 && sensorTs > sPrevTs && sensorTs - sPrevTs < 10.0)
+        dt = (float)(sensorTs - sPrevTs);
+    sPrevTs = sensorTs;
+    Dc3PoseTwin::View views[Dc3PoseTwin::kMaxDetections];
+    int index[Dc3PoseTwin::kMaxDetections];
+    int count = 0;
+    for (int i = 0; i < numPersons && count < Dc3PoseTwin::kMaxDetections; i++) {
+        if (!persons[i].valid)
+            continue;
+        Dc3PoseTwin::View &v = views[count];
+        const Vector3 *j = persons[i].joints;
+        auto put = [](float *d, const Vector3 &p) { d[0] = p.x; d[1] = p.y; d[2] = p.z; };
+        put(v.hip, j[kJointHipCenter]);
+        put(v.shoulder, j[kJointShoulderCenter]);
+        put(v.head, j[kJointHead]);
+        put(v.shoulderL, j[kJointShoulderLeft]);
+        put(v.shoulderR, j[kJointShoulderRight]);
+        v.rawId = persons[i].trackId;
+        v.seen = 0;
+        for (int k = 0; k < kNumJoints; k++) {
+            if (persons[i].confidence[k] == kConfidenceTracked)
+                v.seen++;
+        }
+        index[count++] = i;
+    }
+    // The bodies the players are bound to, and the one a lost player is
+    // waited for under, as tracker ids: a twin pair keeps the bound one.
+    int bound[4];
+    int boundCount = 0;
+    for (int p = 0; p < 2; p++) {
+        HamPlayerData *playerData = TheGameData ? TheGameData->Player(p) : nullptr;
+        int id = playerData ? playerData->GetSkeletonTrackingID() : -1;
+        bound[boundCount++] = gPeople.RawForStable(gPlayers.LostId(p));
+        bound[boundCount++] = gPeople.RawForStable(id);
+    }
+    int stoodIn = gTwins.StoodIn();
+    Dc3PoseTwin::Result r = gTwins.Update(views, count, dt, bound, boundCount);
+    for (int k = 0; k < count; k++) {
+        NativeSkeletonProvider::PersonData &p = persons[index[k]];
+        if (r.drop[k]) {
+            p.valid = false;
+            continue;
+        }
+        if (r.rawId[k] != p.trackId) {
+            p.trackId = r.rawId[k];
+            for (int j = 0; j < kNumJoints; j++)
+                p.joints[j] *= r.scale[k];
+        }
+    }
+    if (gTwins.StoodIn() != stoodIn && Dc3EnvFlag("DC3_SCORING_DEBUG", false))
+        fprintf(stderr, "DC3 SCORING: twin report stands for tracker id %d\n", r.rawId[0]);
+}
+
 // A camera frame's people, tracker ids in, tracking ids that stay with the
 // body out (Dc3PoseIdentity::People).  `sensorTs` is the frame's capture time
 // in seconds; when successive stamps advance the elapsed time is theirs (see
@@ -1387,6 +1487,7 @@ static const SkeletonFrame *BuildSensorFrame() {
             int numPersons = TheSkeletonProvider->NumPersons();
             for (int i = 0; i < numPersons; i++)
                 sPersons[i] = sCamera[i] = TheSkeletonProvider->GetPerson(i);
+            DropTwins(sPersons, numPersons, TheSkeletonProvider->Timestamp());
             IdentifyPeople(sPersons, numPersons, TheSkeletonProvider->Timestamp());
             // SkeletonFrame::Create's gravity step (PoseLevel_Native.h): the
             // slots hold raw camera space; a camera that does not know its

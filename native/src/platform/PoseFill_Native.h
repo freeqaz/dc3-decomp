@@ -215,8 +215,22 @@ static const float kMaxStepMetres = 0.10f;
 //     the other side's joint than its own by more than kSwapMargin) is not
 //     moved at all, so a tracker flip is held, never amplified.
 // The caller bounds `seconds` to one camera period.
+//
+// A person not valid in `prev` is held -- unless `earlier` has her: her last
+// camera frame before `prev` (gpd-menubind: one missed frame used to cost the
+// fill its velocity for her whole next period).  Her velocity is then over
+// the span from that frame to `last` (its stamps, else its arrivals); the
+// caller only passes frames within the camera-gap limit.
+struct Earlier {
+    Person person;
+    double ts = -1.0, arrival = 0.0;
+};
 void ExtrapolateGuarded(const Source &prev, const Source &last, float seconds, float period, float gain,
-                        Output &out);
+                        Output &out, const Earlier *earlier = nullptr, int numEarlier = 0);
+// DC3_POSE_FILL_VELOCITY: `seen` (the default) takes a person's velocity from
+// her last camera frame within the gap limit; `prev` only from the frame
+// before, the behaviour before gpd-menubind.
+bool VelocityFromLastSeen();
 static const float kMaxJointSpeed = 4.0f; // m/s: p99.6 of the footage's joints at 8 Hz
 static const float kSwapMargin = 0.5f;
 
@@ -321,6 +335,11 @@ private:
     double mSigma = -1e30;      // interp: the newest moment shown (monotonic)
     int mArrivalElapsedMs = 33;
     unsigned mFills = 0, mReals = 0;
+    // Each person's newest camera frame from before the newest-but-one
+    // (ExtrapolateGuarded's `earlier`); kept as the frames are delivered.
+    Earlier mSeen[kMaxPersons];
+    int mNumSeen = 0;
+    void NoteSeen(const Source &s);
 };
 
 // The filler's clock outside a song (np-menu-gestures).
