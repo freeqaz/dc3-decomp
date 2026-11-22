@@ -649,6 +649,18 @@ void FramePoll() {
             pitch = gDrawn[l].pitch;
         Act(gTracker.Tick(now, pitch, P()));
         RunSteps();
+        // one line per action (the web has no HTTP server: the phone check
+        // reads these from the console)
+        static std::string sLogged;
+        static unsigned sLoggedCount = 0;
+        const unsigned count = gTaps + gHovers + gBacks + (unsigned)gStepsDone;
+        if (gLastAction != sLogged || count != sLoggedCount) {
+            sLogged = gLastAction;
+            sLoggedCount = count;
+            printf("[dc3-pointer] %s (taps %u, selects %u, steps %d)\n", gLastAction.c_str(),
+                   gTaps, gTapSelects, gStepsDone);
+            fflush(stdout);
+        }
     }
 
     if (gStateWanted.exchange(false))

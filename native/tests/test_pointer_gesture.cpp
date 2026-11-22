@@ -19,6 +19,10 @@
 //   a drag ends in a tap too (no `else`)              -> PointerTrackerTest.ADragNeverTaps
 //   no fling (velocity ignored on release)            -> PointerTrackerTest.AFlickFlings
 //   a press during a fling still taps                 -> PointerTrackerTest.APressThatStops...
+//   the slop is lost when a drag starts               -> ADragNeverTaps, ADragDownGoesBack
+//     (the first build had exactly this bug; these two tests found it)
+// (the harness: each defect applied alone, milo-tests rebuilt, Pointer* run:
+// 7 of 7 failed, each in the tests named and no others)
 
 #include <gtest/gtest.h>
 
