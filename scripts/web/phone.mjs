@@ -43,7 +43,24 @@
 // tap check must then FAIL. That is the negative control for the tap.
 // --sabotage-sound serves an index.html that does not track AudioContexts:
 // the sound-button check must then FAIL.
-// --only iphone|sound runs just those checks (no game boot except sound).
+//   portrait (np-portrait) Pixel 7 upright: html.dc3-portrait; the 16:9
+//                         picture fills the width at the top; the deck fills
+//                         the rest with no turn-the-phone hint; 7 buttons under
+//                         the picture, A >= 80 px; the camera view under the
+//                         "now" card, clear of the buttons; no scroll; the deck
+//                         names the screen; the picture is drawn. Then rotated
+//                         to landscape (layout off, 16:9 fit, the engine's
+//                         buffer follows, picture drawn) and back (same as
+//                         before, buffer back), and a tap on A still leaves the
+//                         title. ?portrait=0 gives the old page; a 720x1280
+//                         desktop window is unchanged unless ?portrait=1.
+//   shots                 --only shots --tag T [--env K=V] [--orients ...]:
+//                         title, the next screen, song select, gameplay in
+//                         portrait and landscape, as <T>-<orientation>-<n>.png;
+//                         after the change, the deck must name the song
+// --sabotage-portrait class|rotate|switch|screen|size breaks one part of the
+// portrait layout (see the comment at its route); run with --only portrait.
+// --only iphone|sound|portrait|shots runs just those checks.
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import os from 'node:os';
@@ -71,8 +88,8 @@ const browser = await chromium.launch({
         '--enable-features=Vulkan,VulkanFromANGLE,WebAssemblyJSPromiseIntegration', '--mute-audio',
         '--autoplay-policy=no-user-gesture-required', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
 });
-let failures = 0;
-const check = (cond, msg) => { console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); if (!cond) failures++; };
+let failures = 0, checks = 0;
+const check = (cond, msg) => { checks++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); if (!cond) failures++; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const pixel = devices['Pixel 7'];
 
@@ -122,6 +139,30 @@ async function open({ landscape = false, mobile = true, query = '?pose=off', hos
             const r = await route.fetch();
             const body = (await r.text()).replace('window.AudioContext = Tracked;', '');
             await route.fulfill({ response: r, body });
+        });
+    }
+    // --sabotage-portrait KIND: break one part of the portrait layout; the
+    // portrait check named for it must then FAIL (--only portrait).
+    //   class   portrait.js never sets html.dc3-portrait
+    //   rotate  portrait.js decides once at load and ignores rotation
+    //   switch  ?portrait=0 is ignored
+    //   screen  the page never tells portrait.js the screen
+    //   size    the buttons keep the old landscape size in portrait
+    const sabPortrait = arg('sabotage-portrait', '');
+    if (sabPortrait) {
+        const edits = {
+            class: ['portrait.js', "root.classList.toggle('dc3-portrait', on);", 'void 0;'],
+            rotate: ['portrait.js', "window.addEventListener('resize', update);", 'update = function () {};'],
+            switch: ['portrait.js', "q === '0' ? 'off'", "false ? 'off'"],
+            screen: ['index', "if (sm) document.dispatchEvent(new CustomEvent('dc3-screen'", "if (false) document.dispatchEvent(new CustomEvent('dc3-screen'"],
+            size: ['touch_controls.js', "'html.dc3-portrait #dc3-touch { --b:var(--tb, 18vw); }' +", ''],
+        };
+        const [file, from, to] = edits[sabPortrait];
+        await page.route(file === 'index' ? /\/(index\.html)?(\?.*)?$/ : '**/' + file, async (route) => {
+            const r = await route.fetch();
+            const text = await r.text();
+            if (!text.includes(from)) console.log(`SABOTAGE ${sabPortrait}: pattern not found in ${file}`);
+            await route.fulfill({ response: r, body: text.replace(from, to) });
         });
     }
     if (sabotage) {
@@ -249,6 +290,227 @@ try {
             await ctx.close();
         }
     }
+    // --- screenshots: title, main menu, song select, gameplay ----------------
+    // --only shots [--tag before|after] [--env K=V] [--query-extra '&portrait=0']
+    // Drives the game with the keyboard (Enter through the menus, Enter on a
+    // song) in portrait and landscape and saves <tag>-<orientation>-<n>.png.
+    if (only === 'shots') {
+        const tag = arg('tag', 'shots');
+        const env = arg('env', '');
+        const extra = arg('query-extra', '');
+        const orients = (arg('orients', 'portrait,landscape')).split(',');
+        const q = '?' + (argv.includes('--pose') ? '' : 'pose=off&') + 'env=' + encodeURIComponent('DC3_AUDIO_GAIN=0' + (env ? ';' + env : '')) + extra;  // one env= (KEY=VAL;KEY=VAL)
+        // Keys as the touch buttons send them (a KeyboardEvent on document,
+        // held 160 ms), so the run does not depend on page focus.
+        const key = async (page, k) => {
+            const send = (t) => page.evaluate(([t, k]) => document.dispatchEvent(new KeyboardEvent(t, { key: k, code: k === ' ' ? 'Space' : k, bubbles: true })), [t, k]);
+            await send('keydown'); await sleep(160); await send('keyup'); await sleep(300);
+        };
+        // Enter until the screen changes (3 tries, 12 s each).
+        const advance = async (page, st) => {
+            for (let i = 0; i < 3; i++) {
+                const n = st.screens.length, from = st.screen;
+                await key(page, 'Enter');
+                if (await waitFor(() => st.screens.length > n && st.screen !== from, 12000)) return true;
+            }
+            return false;
+        };
+        for (const o of orients) {
+            const dev = arg('device', '') === 'iphone' ? iphone : null;
+            const { ctx, page, st } = await open({ landscape: o === 'landscape', query: q, camera: true, device: dev });
+            const shot = async (n) => {
+                const f = path.join(out, `${tag}-${dev ? 'iphone-' : ''}${o}-${n}.png`);
+                await page.screenshot({ path: f });
+                const L = await layout(page);
+                const buf = await page.evaluate(() => { const c = document.getElementById('dc3-canvas'); return [c.width, c.height]; });
+                const deck = await page.evaluate(() => window.dc3Portrait ? JSON.stringify({ active: window.dc3Portrait.active, screen: window.dc3Portrait.screen, song: window.dc3Portrait.song }) : '-');
+                console.log(`     ${f}  screen=${st.screen} canvas css ${JSON.stringify(L.canvas)} buffer ${buf.join('x')} viewport ${L.vw}x${L.vh} deck ${deck}`);
+            };
+            const at = async (name, ms) => waitFor(() => st.screen === name, ms);
+            if (await at('title_screen', 150000)) { await sleep(3000); await shot('1-title'); }
+            await advance(page, st);
+            await sleep(3000); await shot('2-' + st.screen.replace(/_screen$/, ''));
+            for (let i = 0; i < 4 && st.screen !== 'song_select_screen'; i++) { await advance(page, st); await sleep(2000); }
+            if (st.screen === 'song_select_screen') { await sleep(4000); await shot('3-songselect'); }
+            console.log(`     screens: ${st.screens.join(' > ')}`);
+            for (const l of st.logs.filter((l) => l.includes('[NativeSettings]'))) console.log(`     engine: ${l}`);
+            await key(page, 'ArrowDown'); await sleep(500); await key(page, 'ArrowDown'); await sleep(800); await key(page, 'Enter');
+            const t0 = Date.now();
+            // A profile that never played gets the first-run tutorial (five
+            // screens) and the multiuser screen between the pick and the song:
+            // Enter every 2 s until game_screen is entered (gameplay.mjs).
+            const entered = () => st.screens.includes('game_screen') || st.logs.some((l) => /PollForLoading|DONE \(state 4\)/.test(l));
+            for (let i = 0; i < 30 && !entered(); i++) { await sleep(2000); if (!entered()) await key(page, 'Enter'); }
+            let loaded = await waitFor(() => st.logs.some((l) => l.includes('DONE (state 4)')), 90000);
+            console.log(`     gameplay loaded=${loaded} after ${((Date.now() - t0) / 1000).toFixed(0)} s, screen=${st.screen}`);
+            if (loaded) {
+                await sleep(22000);
+                await shot('4-gameplay');
+                const probe = await page.evaluate(() => {
+                    try { return Module.ccall('dc3_dta_eval', 'string', ['string'], ['{meta_performer get_song}']); } catch (e) { return 'ERR ' + e; }
+                });
+                console.log(`     dta {meta_performer get_song} -> ${probe}`);
+                if (tag !== 'before') {
+                    const s = await page.evaluate(() => window.dc3Portrait && window.dc3Portrait.song);
+                    if (o === 'portrait') check(!!s && s.length > 1, `shots portrait gameplay: the deck names the song "${s}"`);
+                }
+            }
+            await ctx.close();
+        }
+    }
+    // --- probe: does a tap on A leave the title, with and without turning ---
+    if (only === 'probe') {
+        for (const turn of (arg('turns', 'none,twice')).split(',')) {
+            // --camera: the fake camera on (pose on), as the portrait checks run.
+            const cam = !!arg('camera', '');
+            const { ctx, page, st } = await open(cam ? { query: '?env=DC3_AUDIO_GAIN%3D0', camera: true } : { query: '?pose=off&env=DC3_AUDIO_GAIN%3D0' });
+            const reached = await waitFor(() => st.screen === 'title_screen', 240000);
+            await sleep(2500);
+            const pv = pixel.viewport;
+            if (turn === 'twice') {
+                await page.setViewportSize({ width: pv.height, height: pv.width }); await sleep(2500);
+                await page.setViewportSize(pv); await sleep(2500);
+            } else if (turn === 'once') {
+                await page.setViewportSize({ width: pv.height, height: pv.width }); await sleep(5000);
+            } else await sleep(5000);
+            const results = [];
+            for (let i = 0; i < 3; i++) {
+                const A = await page.evaluate(() => { const b = document.querySelector('#dc3-touch button[data-key="Enter"]').getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; });
+                const n = st.screens.length;
+                await page.touchscreen.tap(A[0], A[1]);
+                const moved = await waitFor(() => st.screens.length > n, 6000);
+                results.push(moved ? st.screen : 'stayed');
+                if (moved) break;
+            }
+            console.log(`probe camera=${cam} turn=${turn} reached=${reached}: taps -> ${results.join(', ')}; logs after title: ${st.logs.filter((l) => /canvas box|Joypad|keydown/i.test(l)).slice(-4).join(' | ')}`);
+            await ctx.close();
+        }
+    }
+
+    // --- portrait layout, rotation, the switch back (np-portrait) -----------
+    if (!only || only === 'portrait') {
+        const P = (page) => page.evaluate(() => {
+            const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
+            const vis = (el) => !!el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().height > 0;
+            const c = document.getElementById('dc3-canvas');
+            const deck = document.getElementById('dc3-deck');
+            const hint = document.querySelector('#dc3-touch .hint');
+            return {
+                cls: document.documentElement.classList.contains('dc3-portrait'),
+                state: window.dc3Portrait ? { ...window.dc3Portrait } : null,
+                canvas: r(c), buffer: [c.width, c.height], reconf: window.miloFrameReconfigures || 0,
+                deck: vis(deck) ? r(deck) : null, now: deck ? deck.querySelector('.screen').textContent : '',
+                nowCard: deck ? r(deck.querySelector('.now')) : null,
+                hint: vis(hint), view: vis(document.getElementById('pose-view')) ? r(document.getElementById('pose-view')) : null,
+                btns: [...document.querySelectorAll('#dc3-touch button')].map((b) => ({ key: b.dataset.key, ...r(b) })),
+                vw: innerWidth, vh: innerHeight, sh: document.documentElement.scrollHeight,
+            };
+        });
+        // Mean level and lit share of the canvas's pixels in a screenshot.
+        const lit = async (page, c) => {
+            const png = await page.screenshot({ clip: { x: c.l, y: c.t, width: c.w, height: c.h } });
+            return page.evaluate(async (b64) => {
+                const img = new Image();
+                img.src = 'data:image/png;base64,' + b64;
+                await img.decode();
+                const cv = document.createElement('canvas');
+                cv.width = img.width; cv.height = img.height;
+                const g = cv.getContext('2d');
+                g.drawImage(img, 0, 0);
+                const d = g.getImageData(0, 0, cv.width, cv.height).data;
+                let sum = 0, on = 0;
+                for (let i = 0; i < d.length; i += 4) { const y = (d[i] + d[i + 1] + d[i + 2]) / 3; sum += y; if (y > 24) on++; }
+                return { mean: sum / (d.length / 4), share: on / (d.length / 4) };
+            }, png.toString('base64'));
+        };
+        const near = (a, b, tol = 1.5) => Math.abs(a - b) <= tol;
+        const portraitOk = (L, name) => {
+            check(L.cls && L.state && L.state.active && L.state.mode === 'auto', `${name}: portrait layout on (class=${L.cls}, state=${JSON.stringify(L.state && { mode: L.state.mode, active: L.state.active, changes: L.state.changes })})`);
+            check(L.canvas && near(L.canvas.t, 0) && near(L.canvas.l, 0) && near(L.canvas.w, L.vw) && near(L.canvas.h, L.vw * 9 / 16),
+                `${name}: the picture fills the width at the top (${L.canvas && [L.canvas.l, L.canvas.t, L.canvas.w, L.canvas.h].map((v) => v.toFixed(1)).join(',')} in ${L.vw}x${L.vh})`);
+            check(L.deck && L.deck.t >= L.canvas.b - 1 && near(L.deck.b, L.vh) && !L.hint,
+                `${name}: the deck fills the space under it (${L.deck && [L.deck.t, L.deck.b].map((v) => v.toFixed(0)).join('..')}), no turn-the-phone hint (${L.hint ? 'SHOWN' : 'hidden'})`);
+            const A = L.btns.find((b) => b.key === 'Enter');
+            check(L.btns.length === 7 && L.btns.every((b) => b.t >= L.canvas.b && b.b <= L.vh + 0.5 && b.l >= 0 && b.r <= L.vw + 0.5) && A && A.w >= 80,
+                `${name}: 7 buttons under the picture and on screen, A ${A ? A.w.toFixed(0) : '-'} px (>= 80; 62 before)`);
+            check(L.view && L.nowCard && L.view.t >= L.nowCard.b && L.view.h >= 60 && L.btns.every((b) => !overlaps(b, L.view)),
+                `${name}: the camera view under the now card, ${L.view ? L.view.h.toFixed(0) : '-'} px tall (>= 60), clear of the buttons`);
+            check(L.sh <= L.vh, `${name}: no vertical scroll (${L.sh} in ${L.vh})`);
+        };
+        const { ctx, page, st } = await open({ query: '?env=DC3_AUDIO_GAIN%3D0', camera: true });
+        const reached = await waitFor(() => st.screen === 'title_screen', 240000);
+        await sleep(2500);
+        let L = await P(page);
+        portraitOk(L, 'portrait');
+        check(reached && /Press A/.test(L.now), `portrait: the deck says what is on screen: "${L.now}" (${st.screen})`);
+        await page.screenshot({ path: path.join(out, 'portrait-deck.png') });
+        const buf0 = L.buffer.join('x');
+        let pic = await lit(page, L.canvas);
+        check(pic.share > 0.2, `portrait: the picture is drawn (mean ${pic.mean.toFixed(1)}, ${(pic.share * 100).toFixed(0)}% lit)`);
+        // Rotate to landscape and back, as a player turning the phone.
+        const pv = pixel.viewport;
+        await page.setViewportSize({ width: pv.height, height: pv.width });
+        await sleep(2500);
+        L = await P(page);
+        const fitW = Math.min(L.vw, L.vh * 16 / 9), fitH = Math.min(L.vh, L.vw * 9 / 16);
+        check(!L.cls && !L.deck && L.canvas && near(L.canvas.w, fitW) && near(L.canvas.h, fitH) && L.btns.every((b) => b.l >= 0 && b.t >= 0 && b.r <= L.vw + 0.5 && b.b <= L.vh + 0.5),
+            `rotate to landscape: layout off, picture ${L.canvas && L.canvas.w.toFixed(0)}x${L.canvas && L.canvas.h.toFixed(0)} (fit ${fitW.toFixed(0)}x${fitH.toFixed(0)}), buttons on screen`);
+        const bufL = L.buffer.join('x');
+        check(bufL !== buf0 && near(L.buffer[0] / L.buffer[1], 16 / 9, 0.02), `rotate to landscape: the engine took the new box (buffer ${buf0} -> ${bufL}, reconfigures ${L.reconf})`);
+        pic = await lit(page, L.canvas);
+        check(pic.share > 0.2, `rotate to landscape: the picture is drawn (mean ${pic.mean.toFixed(1)}, ${(pic.share * 100).toFixed(0)}% lit)`);
+        await page.screenshot({ path: path.join(out, 'rotate-landscape.png') });
+        await page.setViewportSize(pv);
+        await sleep(2500);
+        L = await P(page);
+        portraitOk(L, 'rotate back to portrait');
+        check(L.buffer.join('x') === buf0, `rotate back to portrait: buffer ${bufL} -> ${L.buffer.join('x')} (was ${buf0})`);
+        pic = await lit(page, L.canvas);
+        check(pic.share > 0.2, `rotate back to portrait: the picture is drawn (mean ${pic.mean.toFixed(1)}, ${(pic.share * 100).toFixed(0)}% lit)`);
+        await page.screenshot({ path: path.join(out, 'rotate-back.png') });
+        // Input after the two turns: a tap on the cluster's A leaves the title.
+        const A = L.btns.find((b) => b.key === 'Enter');
+        const before = st.screens.length, from = st.screen;
+        const hit = await page.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return e ? (e.dataset && e.dataset.key ? 'button ' + e.dataset.key : e.tagName + '#' + e.id) : '-'; }, [(A.l + A.r) / 2, (A.t + A.b) / 2]);
+        const p0 = await page.evaluate(() => window.dc3TouchControls.presses);
+        // Up to three taps, 6 s apart. With the camera on, the title ignores
+        // the FIRST A press even with no rotation at all (`--only probe
+        // --camera 1 --turns none`: stayed, then wait_main_after_saveload);
+        // with the camera off the first tap leaves it after no, one or two
+        // turns. So a second tap is the title, not the rotation; the count
+        // is printed.
+        let moved = false, taps = 0;
+        while (!moved && taps < 3) {
+            taps++;
+            await page.touchscreen.tap((A.l + A.r) / 2, (A.t + A.b) / 2);
+            moved = await waitFor(() => st.screens.length > before && st.screen !== from, 6000);
+        }
+        await sleep(1500);
+        L = await P(page);
+        const p1 = await page.evaluate(() => window.dc3TouchControls.presses);
+        check(moved && from === 'title_screen' && L.now !== 'Press A to start', `after rotating: tapping A (${hit}, ${taps} tap(s), presses ${p0} -> ${p1}) left ${from} -> ${st.screen}, the deck says "${L.now}"`);
+        await ctx.close();
+
+        // The switch back: ?portrait=0 is the old page (centred picture, hint).
+        {
+            const { ctx, page } = await open({ query: '?pose=off&portrait=0' });
+            await sleep(4000);
+            const L = await P(page);
+            check(!L.cls && !L.deck && L.state && L.state.mode === 'off' && L.hint && L.canvas.t > 100,
+                `?portrait=0: the old layout (class=${L.cls}, deck ${L.deck ? 'shown' : 'none'}, hint ${L.hint ? 'shown' : 'hidden'}, picture top ${L.canvas.t.toFixed(0)})`);
+            await page.screenshot({ path: path.join(out, 'portrait-off.png') });
+            await ctx.close();
+        }
+        // A tall desktop window: unchanged unless ?portrait=1.
+        for (const [q, want] of [['?pose=off', false], ['?pose=off&portrait=1', true]]) {
+            const { ctx, page } = await open({ mobile: false, query: q });
+            await page.setViewportSize({ width: 720, height: 1280 });
+            await sleep(3000);
+            const L = await P(page);
+            check(L.cls === want && L.btns.length === 0, `desktop 720x1280 ${q}: portrait layout ${L.cls ? 'on' : 'off'} (want ${want ? 'on' : 'off'}), no buttons, picture top ${L.canvas.t.toFixed(0)}`);
+            await ctx.close();
+        }
+    }
     if (only) throw 'only';
 
     // --- layout, portrait and landscape (pose on so the panel exists) --------
@@ -340,5 +602,6 @@ try {
 } finally {
     await browser.close();
 }
-console.log(failures ? `PHONE: ${failures} check(s) FAILED${sabotage || sabotageSound ? ' (sabotage run: expected)' : ''}` : 'PHONE: all checks passed');
+console.log(`PHONE: ${checks} checks, ${checks - failures} passed, ${failures} failed`);
+console.log(failures ? `PHONE: ${failures} check(s) FAILED${sabotage || sabotageSound || arg('sabotage-portrait', '') ? ' (sabotage run: expected)' : ''}` : 'PHONE: all checks passed');
 process.exit(failures ? 1 : 0);

@@ -46,6 +46,7 @@
         pause_screen: 'Paused', perform_pause_screen: 'Paused', results_screen: 'Results',
         real_loading_screen: 'Loading the song', multiuser_screen: 'Who is playing',
         options_screen: 'Options', loading_screen: 'Loading',
+        autosave_warning_screen: 'Autosave', wait_main_after_saveload_screen: 'Loading your profile',
     };
     function pretty(s) {
         if (NAMES[s]) return NAMES[s];
