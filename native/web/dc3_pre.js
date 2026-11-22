@@ -360,3 +360,66 @@ Module.preRun.push(function () {
     dc3ApplyUrlEnv();
     dc3SaveStoreStart();
 });
+
+// Pointer input in the game's menus (np-pointer; native/src/platform/Pointer_Native.h):
+// a mouse hovers and clicks a row, a finger taps it, the wheel and a finger's
+// drag scroll the list (a flick keeps going), the right button is back.
+// Pointer Events on the canvas, so mouse, pen and touch share one path; the
+// on-screen pad (touch_controls.js) is its own elements above the canvas and
+// is not touched.  Coordinates go in as the canvas box's CSS pixels with the
+// box's size; the engine maps them into the 1280x720 frame (the picture is the
+// box's centred 16:9 rectangle).  ?env=DC3_POINTER=0 is the original: the
+// engine ignores them.
+(function () {
+    if (typeof document === 'undefined') return;
+    var KIND = { move: 0, down: 1, up: 2, wheel: 3, cancel: 4, back: 5 };
+    var activeId = null;
+    function send(kind, e, wheel) {
+        var fn = Module['_dc3_pointer'];
+        var c = document.getElementById('dc3-canvas');
+        if (!fn || !c) return;
+        var r = c.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) return;
+        var touch = e && e.pointerType && e.pointerType !== 'mouse' ? 1 : 0;
+        var x = e ? e.clientX - r.left : 0, y = e ? e.clientY - r.top : 0;
+        fn(kind, x, y, r.width, r.height, wheel || 0, touch);
+    }
+    function attach() {
+        var c = document.getElementById('dc3-canvas');
+        if (!c || c.dataset.dc3Pointer) return !!c;
+        c.dataset.dc3Pointer = '1';
+        // the browser must not scroll or zoom the page under a drag on the game
+        c.style.touchAction = 'none';
+        c.addEventListener('pointerdown', function (e) {
+            if (e.button === 2) { send(KIND.back, e); return; }
+            if (e.button !== 0 || (activeId !== null && activeId !== e.pointerId)) return;
+            activeId = e.pointerId;
+            try { c.setPointerCapture(e.pointerId); } catch (err) { /* old browser */ }
+            send(KIND.down, e);
+            if (e.pointerType !== 'mouse') e.preventDefault();
+        });
+        c.addEventListener('pointermove', function (e) {
+            if (activeId !== null && e.pointerId !== activeId) return;
+            if (activeId === null && e.pointerType !== 'mouse') return;
+            send(KIND.move, e);
+        });
+        function end(kind) {
+            return function (e) {
+                if (e.pointerId !== activeId) return;
+                activeId = null;
+                send(kind, e);
+            };
+        }
+        c.addEventListener('pointerup', end(KIND.up));
+        c.addEventListener('pointercancel', end(KIND.cancel));
+        c.addEventListener('wheel', function (e) {
+            // pixels -> rows: a mouse notch is ~100 px (a line, 3 rows of text)
+            var rows = e.deltaMode === 1 ? e.deltaY / 3 : e.deltaMode === 2 ? e.deltaY * 5 : e.deltaY / 100;
+            send(KIND.wheel, e, rows);
+            e.preventDefault();
+        }, { passive: false });
+        c.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+        return true;
+    }
+    if (!attach()) document.addEventListener('DOMContentLoaded', attach);
+})();

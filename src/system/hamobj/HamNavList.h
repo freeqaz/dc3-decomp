@@ -126,6 +126,9 @@ public:
     // native/src/platform/MenuGesture_Native.cpp: reads the list's gesture
     // state for the menu-gesture measurement (PLAN P-3).
     friend struct Dc3MenuGestureAccess;
+    // native/src/platform/Pointer_Native.cpp: highlights, selects and
+    // scrolls the list for the mouse and the finger (np-pointer).
+    friend struct Dc3PointerAccess;
 #endif
 
 #ifdef HX_NATIVE

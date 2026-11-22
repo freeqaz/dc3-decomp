@@ -2,6 +2,7 @@
 // branch np-menu-gestures).  See MenuGesture_Native.h.
 
 #include "MenuGesture_Native.h"
+#include "Pointer_Native.h"
 
 #ifdef HX_NATIVE
 
@@ -726,7 +727,12 @@ void Dc3SetMenuSelect(int mode) {
     Announce(mode);
 }
 
-void Dc3MenuSelectFramePoll() { Dc3MenuGesture::PollKey(); }
+void Dc3MenuSelectFramePoll() {
+    Dc3MenuGesture::PollKey();
+    // The mouse and the finger in the menus (np-pointer): the same once-a-frame
+    // point, so App.cpp needs no second hook.
+    Dc3Pointer::FramePoll();
+}
 
 // ---- the sweep's start (declared in NativeSettings.h) -----------------------
 

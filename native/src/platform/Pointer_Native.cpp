@@ -1,0 +1,655 @@
+// Pointer input for the game's own menus (np-pointer).  Pointer_Native.h has
+// what a player can do; PointerGesture.h the rules.
+//
+// Main thread except Push (any thread) and StateJson (any thread; it reads a
+// snapshot FramePoll writes when asked for one).
+
+#include "Pointer_Native.h"
+
+#include "NativeSettings.h" // Dc3EnvFlag
+#include "SongBrowserHooks_Native.h"
+#include "gesture/GestureMgr.h"
+#include "hamobj/HamListRibbon.h"
+#include "hamobj/HamNavList.h"
+#include "math/Mtx.h"
+#include "meta_ham/HamUI.h"
+#include "meta_ham/ShellInput.h"
+#include "os/Joypad.h"
+#include "os/JoypadMsgs.h"
+#include "os/System.h"
+#include "rndobj/Anim.h"
+#include "rndobj/Cam.h"
+#include "rndobj/Rnd.h"
+#include "ui/UI.h"
+#include "ui/UIListProvider.h"
+#include "ui/UIListWidget.h"
+
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#else
+#include "gfx/ImGuiBackend.h"
+#include "platform/Rnd_Wgpu.h"
+#include <GLFW/glfw3.h>
+extern GLFWwindow *gNativeWindow;
+extern WgpuRnd *gWgpuRnd;
+#endif
+
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <condition_variable>
+#include <cstdio>
+#include <cstdlib>
+#include <map>
+#include <mutex>
+#include <vector>
+
+using namespace Dc3PointerGesture;
+
+extern bool Dc3ControllerModeForced();
+
+// HamNavList's private parts, for the pointer (HamNavList.h befriends it).
+struct Dc3PointerAccess {
+    static bool CanAct(HamNavList *l) {
+        if (!l->mEnabled || l->mRefreshPending || !l->mListState.Provider())
+            return false;
+        if (l->mRibbonMode == HamListRibbon::kRibbonSelect || l->IsAnimating())
+            return false;
+        return !(TheGestureMgr && TheGestureMgr->GesturingWithVoice());
+    }
+    static int Selected(HamNavList *l) { return l->mListState.Selected(); }
+    static bool IsActive(HamNavList *l, int showing) {
+        UIListProvider *p = l->mListState.Provider();
+        return p && showing >= 0 && showing < l->mListState.NumShowing() && p->IsActive(showing);
+    }
+    static bool Scrollable(const HamNavList *l) { return l->mListState.ScrollPastMinDisplay(); }
+    static int FirstShowing(const HamNavList *l) { return l->mListState.FirstShowing(); }
+    static void Highlight(HamNavList *l, int showing) { l->SetHighlight(showing); }
+    static bool Select(HamNavList *l) {
+        if (!l->mSelectionEnabled)
+            return false;
+        l->SetSelecting(true);
+        return true;
+    }
+    // One row of scroll: > 0 later rows.  False: nothing more that way (an
+    // end of the list), or not now (a scroll is still moving: try again).
+    enum StepResult { kStepDone, kStepWait, kStepEnd };
+    static StepResult Step(HamNavList *l, int dir) {
+        if (l->mListState.ScrollPastMinDisplay()) {
+            HamScrollBehavior &s = l->mScrollBehavior;
+            if (s.IsScrolling())
+                return kStepWait;
+            if (dir > 0 ? s.AtBottom() : s.AtTop())
+                return kStepEnd;
+            const bool moved = dir > 0 ? s.ScrollDown(false) : s.ScrollUp(false);
+            return moved ? kStepDone : kStepWait;
+        }
+        // a list that does not scroll: the highlight moves, as the pad's does
+        int selected = l->mListState.Selected();
+        do {
+            selected += dir;
+            if (selected < 0 || selected >= l->mListState.NumShowing())
+                return kStepEnd;
+        } while (!l->mListState.Provider()->IsActive(selected));
+        l->SetHighlight(selected);
+        return kStepDone;
+    }
+    static const char *Name(const HamNavList *l) { return l->Name(); }
+};
+
+namespace Dc3Pointer {
+namespace {
+
+using Clock = std::chrono::steady_clock;
+const Clock::time_point kEpoch = Clock::now();
+
+struct Pending {
+    Input in;
+    float due;
+    bool window;
+};
+
+std::mutex gQueueMutex;
+std::vector<Pending> gQueue;
+
+int gEnabled = -1; // -1: DC3_POINTER not read yet
+
+struct DrawnList {
+    std::vector<Row> rows;
+    float pitch = 0.0f;
+    unsigned frame = 0;
+    bool scrollable = false;
+    int firstShowing = 0;
+};
+std::map<HamNavList *, DrawnList> gDrawn;
+
+Tracker gTracker;
+Params gParams;
+bool gParamsRead = false;
+
+int gPendingSteps = 0;
+HamNavList *gStepList = nullptr;
+float gLastX = -1.0f, gLastY = -1.0f; // where the pointer was last seen
+
+// a press of the pad: down this frame, up the next
+JoypadButton gHeldButton = kPad_NumButtons;
+
+// what the pointer did, for StateJson
+unsigned gTaps = 0, gTapSelects = 0, gTapPresses = 0, gHovers = 0, gBacks = 0;
+int gStepsDone = 0;
+std::string gLastAction = "none";
+
+std::mutex gStateMutex;
+std::condition_variable gStateCv;
+std::atomic<bool> gStateWanted{false};
+std::string gStateSnapshot;
+unsigned gStateSeq = 0;
+
+float EnvFloat(const char *name, float def) {
+    const char *v = std::getenv(name);
+    return v && *v ? (float)std::atof(v) : def;
+}
+
+const Params &P() {
+    if (!gParamsRead) {
+        gParamsRead = true;
+        gParams.slop = EnvFloat("DC3_POINTER_SLOP", gParams.slop);
+        gParams.flickVelocity = EnvFloat("DC3_POINTER_FLICK", gParams.flickVelocity);
+        gParams.friction = EnvFloat("DC3_POINTER_FRICTION", gParams.friction);
+    }
+    return gParams;
+}
+
+// How wide a row is, in row pitches either side of the centre the list
+// reports, and where its centre sits from that point (pitches, + = right).
+// MEASURED on the main menu and the song list (np-pointer screenshots): the
+// list's element position is the ribbon's centre line.
+float RowHalfWidthPitches() {
+    static float v = EnvFloat("DC3_POINTER_ROW_HALF_WIDTH", 3.4f);
+    return v;
+}
+float RowCentreOffsetPitches() {
+    static float v = EnvFloat("DC3_POINTER_ROW_X_OFFSET", 0.0f);
+    return v;
+}
+
+JoypadAction ActionFor(JoypadButton btn, Symbol type) {
+    JoypadAction a = ButtonToAction(btn, type);
+    if (a != kAction_None)
+        return a;
+    return btn == kPad_X ? kAction_Confirm : btn == kPad_Circle ? kAction_Cancel : kAction_None;
+}
+
+void PressButton(JoypadButton btn) {
+    JoypadData *pad = JoypadGetPadData(0);
+    if (!pad)
+        return;
+    if (gHeldButton != kPad_NumButtons)
+        return; // one at a time
+    ButtonDownMsg msg(pad->mUser, btn, ActionFor(btn, pad->mControllerType), 0);
+    JoypadPushThroughMsg(msg);
+    gHeldButton = btn;
+}
+
+void ReleaseButton() {
+    if (gHeldButton == kPad_NumButtons)
+        return;
+    JoypadData *pad = JoypadGetPadData(0);
+    if (pad) {
+        ButtonUpMsg msg(pad->mUser, gHeldButton, ActionFor(gHeldButton, pad->mControllerType), 0);
+        JoypadPushThroughMsg(msg);
+    }
+    gHeldButton = kPad_NumButtons;
+}
+
+void TakeTheMenus() {
+    if (!TheGestureMgr || TheGestureMgr->InControllerMode())
+        return;
+    ShellInput *shell = TheHamUI.GetShellInput();
+    if (shell)
+        shell->EnterControllerMode(true);
+}
+
+// The list (drawn last frame) and row under (x, y).  The focused list wins
+// where two overlap.
+HamNavList *ListAt(float x, float y, int &row) {
+    HamNavList *best = nullptr;
+    row = -1;
+    UIComponent *focus = TheUI ? TheUI->FocusComponent() : nullptr;
+    for (auto &kv : gDrawn) {
+        int r = HitRow(kv.second.rows, x, y);
+        if (r < 0)
+            continue;
+        if (!best || (UIComponent *)kv.first == focus) {
+            best = kv.first;
+            row = r;
+        }
+    }
+    return best;
+}
+
+// The list a scroll goes to: the one under the pointer, or the focused one,
+// or the only one drawn.
+HamNavList *ScrollTarget(float x, float y) {
+    int row;
+    HamNavList *under = ListAt(x, y, row);
+    if (under)
+        return under;
+    // nearest list by its rows' vertical span and horizontal band
+    UIComponent *focus = TheUI ? TheUI->FocusComponent() : nullptr;
+    for (auto &kv : gDrawn)
+        if ((UIComponent *)kv.first == focus)
+            return kv.first;
+    HamNavList *biggest = nullptr;
+    size_t most = 0;
+    for (auto &kv : gDrawn) {
+        if (kv.second.rows.size() > most) {
+            most = kv.second.rows.size();
+            biggest = kv.first;
+        }
+    }
+    return biggest;
+}
+
+void WriteState() {
+    std::string j = "{\"enabled\":";
+    j += Enabled() ? "true" : "false";
+    char buf[256];
+    snprintf(buf, sizeof buf,
+             ",\"controller_mode\":%s,\"browser\":%s,\"pointer\":[%.1f,%.1f],\"pressed\":%s,"
+             "\"dragging\":%s,\"flinging\":%s,\"pending_steps\":%d,\"taps\":%u,\"tap_selects\":%u,"
+             "\"tap_presses\":%u,\"hovers\":%u,\"backs\":%u,\"steps_done\":%d,\"last\":\"%s\"",
+             TheGestureMgr && TheGestureMgr->InControllerMode() ? "true" : "false",
+             NativeSongBrowser::HidesGameChrome() ? "true" : "false", gLastX, gLastY,
+             gTracker.Pressed() ? "true" : "false", gTracker.Dragging() ? "true" : "false",
+             gTracker.Flinging() ? "true" : "false", gPendingSteps, gTaps, gTapSelects,
+             gTapPresses, gHovers, gBacks, gStepsDone, gLastAction.c_str());
+    j += buf;
+    j += ",\"lists\":[";
+    bool first = true;
+    UIComponent *focus = TheUI ? TheUI->FocusComponent() : nullptr;
+    for (auto &kv : gDrawn) {
+        if (!first)
+            j += ",";
+        first = false;
+        snprintf(buf, sizeof buf,
+                 "{\"name\":\"%s\",\"focus\":%s,\"selected\":%d,\"first_showing\":%d,"
+                 "\"scrollable\":%s,\"pitch\":%.1f,\"rows\":[",
+                 Dc3PointerAccess::Name(kv.first),
+                 (UIComponent *)kv.first == focus ? "true" : "false",
+                 Dc3PointerAccess::Selected(kv.first), kv.second.firstShowing,
+                 kv.second.scrollable ? "true" : "false", kv.second.pitch);
+        j += buf;
+        for (size_t i = 0; i < kv.second.rows.size(); i++) {
+            const Row &r = kv.second.rows[i];
+            snprintf(buf, sizeof buf, "%s{\"row\":%d,\"x\":%.1f,\"y\":%.1f,\"w\":%.1f,\"h\":%.1f,\"active\":%s}",
+                     i ? "," : "", r.index, r.cx, r.cy, r.halfW * 2, r.halfH * 2,
+                     r.active ? "true" : "false");
+            j += buf;
+        }
+        j += "]}";
+    }
+    j += "]}";
+    std::lock_guard<std::mutex> lk(gStateMutex);
+    gStateSnapshot = j;
+    gStateSeq++;
+    gStateCv.notify_all();
+}
+
+#ifndef __EMSCRIPTEN__
+// GLFW: the engine's ImGui installed its callbacks first; ours chain to them.
+GLFWmousebuttonfun gPrevButton = nullptr;
+GLFWcursorposfun gPrevCursor = nullptr;
+GLFWscrollfun gPrevScroll = nullptr;
+bool gInstalled = false;
+
+bool ImGuiHasMouse() { return ImGuiBackend::WantCaptureMouse(); }
+
+void OnCursor(GLFWwindow *w, double x, double y) {
+    if (gPrevCursor)
+        gPrevCursor(w, x, y);
+    Input in;
+    in.kind = kMove;
+    in.t = Now();
+    if (!WindowToFrame(x, y, in.x, in.y) && !gTracker.Pressed())
+        return;
+    if (!ImGuiHasMouse())
+        Push(in);
+}
+
+void OnButton(GLFWwindow *w, int button, int action, int mods) {
+    if (gPrevButton)
+        gPrevButton(w, button, action, mods);
+    if (ImGuiHasMouse() && action == GLFW_PRESS)
+        return;
+    double x = 0, y = 0;
+    glfwGetCursorPos(w, &x, &y);
+    Input in;
+    in.t = Now();
+    const bool inside = WindowToFrame(x, y, in.x, in.y);
+    if (button == GLFW_MOUSE_BUTTON_LEFT) {
+        if (action == GLFW_PRESS && !inside)
+            return;
+        in.kind = action == GLFW_PRESS ? kDown : kUp;
+        Push(in);
+    } else if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {
+        in.kind = kBack;
+        Push(in);
+    }
+}
+
+void OnScroll(GLFWwindow *w, double dx, double dy) {
+    if (gPrevScroll)
+        gPrevScroll(w, dx, dy);
+    if (ImGuiHasMouse())
+        return;
+    double x = 0, y = 0;
+    glfwGetCursorPos(w, &x, &y);
+    Input in;
+    in.kind = kWheel;
+    in.t = Now();
+    WindowToFrame(x, y, in.x, in.y);
+    in.wheel = (float)-dy; // a notch toward the user = later rows
+    Push(in);
+}
+
+void InstallGlfw() {
+    if (gInstalled || !gNativeWindow)
+        return;
+    gInstalled = true;
+    gPrevButton = glfwSetMouseButtonCallback(gNativeWindow, OnButton);
+    gPrevCursor = glfwSetCursorPosCallback(gNativeWindow, OnCursor);
+    gPrevScroll = glfwSetScrollCallback(gNativeWindow, OnScroll);
+}
+#endif
+
+void Act(const Output &out) {
+    const bool any = out.hover || out.tap || out.steps || out.back || out.dragging;
+    if (out.hover) {
+        gLastX = out.x;
+        gLastY = out.y;
+    }
+    if (out.tap) {
+        gLastX = out.tapX;
+        gLastY = out.tapY;
+    }
+    if (!any)
+        return;
+
+    // the natively drawn song browser has its own rows
+    if (NativeSongBrowser::HidesGameChrome()) {
+        if (out.back) {
+            PressButton(kPad_Circle);
+            gBacks++;
+            gLastAction = "back";
+        }
+        if (out.steps)
+            gPendingSteps += out.steps;
+        if (out.tap) {
+            gTaps++;
+            gTapPresses++;
+            PressButton(kPad_X);
+            gLastAction = "browser tap: A";
+        }
+        return;
+    }
+
+    if (out.back) {
+        TakeTheMenus();
+        PressButton(kPad_Circle);
+        gBacks++;
+        gLastAction = "back";
+        return;
+    }
+
+    if (out.tap) {
+        gTaps++;
+        int row = -1;
+        HamNavList *list = ListAt(out.tapX, out.tapY, row);
+        if (list) {
+            TakeTheMenus();
+            if (Dc3PointerAccess::CanAct(list) && Dc3PointerAccess::IsActive(list, row)) {
+                if (Dc3PointerAccess::Selected(list) != row)
+                    Dc3PointerAccess::Highlight(list, row);
+                if (Dc3PointerAccess::Select(list)) {
+                    gTapSelects++;
+                    gLastAction = std::string("select ") + Dc3PointerAccess::Name(list) + " row "
+                        + std::to_string(row);
+                }
+            }
+        } else if (gDrawn.empty()) {
+            // nothing to aim at (the title, a movie, a screen of buttons the
+            // pad drives): a tap is the pad's A
+            TakeTheMenus();
+            PressButton(kPad_X);
+            gTapPresses++;
+            gLastAction = "press A (no list drawn)";
+        } else {
+            gLastAction = "tap between rows";
+        }
+        return;
+    }
+
+    if (out.hover) {
+        int row = -1;
+        HamNavList *list = ListAt(out.x, out.y, row);
+        if (list && Dc3PointerAccess::IsActive(list, row)) {
+            TakeTheMenus();
+            if (TheGestureMgr && TheGestureMgr->InControllerMode() && Dc3PointerAccess::CanAct(list)
+                && Dc3PointerAccess::Selected(list) != row) {
+                Dc3PointerAccess::Highlight(list, row);
+                gHovers++;
+                gLastAction = std::string("hover ") + Dc3PointerAccess::Name(list) + " row "
+                    + std::to_string(row);
+            }
+        }
+    }
+
+    if (out.steps) {
+        HamNavList *target = ScrollTarget(gLastX, gLastY);
+        if (target) {
+            TakeTheMenus();
+            if (target != gStepList)
+                gPendingSteps = 0;
+            gStepList = target;
+            gPendingSteps += out.steps;
+        }
+    }
+}
+
+// One row a frame at most, at the list's own pace.
+void RunSteps() {
+    const int cap = (int)P().maxFlingRows;
+    gPendingSteps = std::max(-cap, std::min(cap, gPendingSteps));
+    if (!gPendingSteps)
+        return;
+    const int dir = gPendingSteps > 0 ? 1 : -1;
+    if (NativeSongBrowser::HidesGameChrome()) {
+        if (gHeldButton == kPad_NumButtons) {
+            PressButton(dir > 0 ? kPad_DDown : kPad_DUp);
+            gPendingSteps -= dir;
+            gStepsDone++;
+        }
+        return;
+    }
+    if (!gStepList || !gDrawn.count(gStepList)) {
+        gPendingSteps = 0;
+        return;
+    }
+    if (!Dc3PointerAccess::CanAct(gStepList))
+        return;
+    switch (Dc3PointerAccess::Step(gStepList, dir)) {
+    case Dc3PointerAccess::kStepDone:
+        gPendingSteps -= dir;
+        gStepsDone++;
+        gLastAction = std::string("scroll ") + Dc3PointerAccess::Name(gStepList)
+            + (dir > 0 ? " +1" : " -1");
+        break;
+    case Dc3PointerAccess::kStepEnd:
+        gPendingSteps = 0;
+        break;
+    case Dc3PointerAccess::kStepWait:
+        break;
+    }
+}
+
+} // namespace
+
+bool Enabled() {
+    if (gEnabled < 0)
+        gEnabled = Dc3EnvFlag("DC3_POINTER", true) ? 1 : 0;
+    return gEnabled == 1;
+}
+
+void SetEnabled(bool on) { gEnabled = on ? 1 : 0; }
+
+float Now() { return std::chrono::duration<float>(Clock::now() - kEpoch).count(); }
+
+void Push(const Input &in, float delaySeconds, bool windowSpace) {
+    std::lock_guard<std::mutex> lk(gQueueMutex);
+    gQueue.push_back({in, Now() + delaySeconds, windowSpace});
+}
+
+bool WindowToFrame(double wx, double wy, float &fx, float &fy) {
+#ifndef __EMSCRIPTEN__
+    if (gWgpuRnd && gWgpuRnd->Gpu().Window()) {
+        double x = 0, y = 0;
+        const bool inside = gWgpuRnd->Gpu().WindowToFrame(wx, wy, x, y);
+        fx = (float)x;
+        fy = (float)y;
+        return inside;
+    }
+#endif
+    fx = (float)wx;
+    fy = (float)wy;
+    return true;
+}
+
+void NoteListDrawn(HamNavList *list, const UIListWidgetDrawState &state, const Transform &world,
+                   const RndCam *cam) {
+    if (!list || !cam || !Enabled())
+        return;
+    DrawnList &d = gDrawn[list];
+    d.frame = TheRnd.GetFrameID();
+    d.rows.clear();
+    d.scrollable = Dc3PointerAccess::Scrollable(list);
+    d.firstShowing = Dc3PointerAccess::FirstShowing(list);
+    const float fw = (float)TheRnd.Width(), fh = (float)TheRnd.Height();
+    for (const UIListElementDrawState &e : state.mElements) {
+        if (!e.mActive || e.mAlpha <= 0.01f)
+            continue;
+        if (d.scrollable
+            && (e.mShowing < d.firstShowing
+                || e.mShowing >= d.firstShowing + HamListRibbon::sNumListSelectable))
+            continue; // the rows gathered above and below the window are not targets
+        Vector3 local(e.mPosX, e.mPosY, e.mPosZ), w;
+        Multiply(local, world, w);
+        Vector2 s;
+        if (cam->WorldToScreen(w, s) <= 0.0f)
+            continue; // behind the camera
+        Row r;
+        r.index = e.mShowing;
+        r.cx = s.x * fw;
+        r.cy = s.y * fh;
+        r.active = Dc3PointerAccess::IsActive(list, e.mShowing);
+        d.rows.push_back(r);
+    }
+    d.pitch = RowPitch(d.rows, 60.0f);
+    for (Row &r : d.rows) {
+        r.halfH = d.pitch * 0.5f;
+        r.halfW = d.pitch * RowHalfWidthPitches();
+        r.cx += d.pitch * RowCentreOffsetPitches();
+    }
+}
+
+void Forget(HamNavList *list) {
+    gDrawn.erase(list);
+    if (gStepList == list) {
+        gStepList = nullptr;
+        gPendingSteps = 0;
+    }
+}
+
+void FramePoll() {
+#ifndef __EMSCRIPTEN__
+    InstallGlfw();
+#endif
+    ReleaseButton();
+
+    // lists not drawn last frame are gone from the screen
+    const unsigned frame = TheRnd.GetFrameID();
+    for (auto it = gDrawn.begin(); it != gDrawn.end();) {
+        if (frame - it->second.frame > 2)
+            it = gDrawn.erase(it);
+        else
+            ++it;
+    }
+
+    std::vector<Pending> due;
+    const float now = Now();
+    {
+        std::lock_guard<std::mutex> lk(gQueueMutex);
+        auto split = std::stable_partition(gQueue.begin(), gQueue.end(),
+                                           [now](const Pending &p) { return p.due <= now; });
+        due.assign(gQueue.begin(), split);
+        gQueue.erase(gQueue.begin(), split);
+    }
+
+    if (!Enabled()) {
+        gTracker.Reset();
+        gPendingSteps = 0;
+    } else {
+        for (Pending &p : due) {
+            if (p.window)
+                WindowToFrame(p.in.x, p.in.y, p.in.x, p.in.y);
+            if (p.in.kind != kWheel && p.in.kind != kBack) {
+                gLastX = p.in.x;
+                gLastY = p.in.y;
+            }
+            gTracker.Feed(p.in, P());
+        }
+        // a row of the list under the pointer is what a drag of one row is
+        float pitch = 60.0f;
+        if (HamNavList *l = ScrollTarget(gLastX, gLastY))
+            pitch = gDrawn[l].pitch;
+        Act(gTracker.Tick(now, pitch, P()));
+        RunSteps();
+    }
+
+    if (gStateWanted.exchange(false))
+        WriteState();
+}
+
+std::string StateJson() {
+    std::unique_lock<std::mutex> lk(gStateMutex);
+    const unsigned seq = gStateSeq;
+    gStateWanted = true;
+    gStateCv.wait_for(lk, std::chrono::milliseconds(2000), [seq] { return gStateSeq != seq; });
+    return gStateSnapshot.empty() ? std::string("{\"enabled\":false,\"error\":\"no frame\"}")
+                                  : gStateSnapshot;
+}
+
+} // namespace Dc3Pointer
+
+#ifdef __EMSCRIPTEN__
+// native/web/dc3_pre.js: a pointer event on the canvas.  (bx, by) in the
+// canvas box's CSS pixels, boxW x boxH the box.  kind: Dc3PointerGesture::Kind.
+// The picture is taken to be the frame's 16:9 rectangle centred in the box
+// (the present scale's rule); a box that is 16:9 is the frame stretched.
+extern "C" EMSCRIPTEN_KEEPALIVE void dc3_pointer(int kind, float bx, float by, float boxW,
+                                                 float boxH, float wheel, int touch) {
+    Input in;
+    in.kind = (Kind)kind;
+    in.t = Dc3Pointer::Now();
+    in.wheel = wheel;
+    in.touch = touch != 0;
+    const float fw = TheRnd.Width() > 0 ? (float)TheRnd.Width() : 1280.0f;
+    const float fh = TheRnd.Height() > 0 ? (float)TheRnd.Height() : 720.0f;
+    const bool inside = BoxToFrame(bx, by, boxW, boxH, fw, fh, true, in.x, in.y);
+    if (in.kind == kDown && !inside)
+        return;
+    Dc3Pointer::Push(in);
+}
+extern "C" EMSCRIPTEN_KEEPALIVE int dc3_pointer_enabled() { return Dc3Pointer::Enabled() ? 1 : 0; }
+#endif
