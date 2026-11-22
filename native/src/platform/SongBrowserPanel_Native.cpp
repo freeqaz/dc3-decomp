@@ -391,6 +391,19 @@ public:
     // then A picks it.  False, and nothing done, off the song list's rows or
     // while the list does not have the focus (the Recently Played shelf).
     bool PointerTap(float x, float y) {
+        if (!MoveSelectionTo(x, y)) {
+            return false;
+        }
+        gate_.HandleEvent(nativeui::ActionEvent{nativeui::Action::Accept});
+        return true;
+    }
+
+    // A resting mouse: the row under it is the selection (no pick).
+    bool PointerHover(float x, float y) { return MoveSelectionTo(x, y); }
+
+    // Walk the selection to the song row under (x, y) with the pad's own
+    // Down/Up, so every rule the pad obeys (headers, the gate) still holds.
+    bool MoveSelectionTo(float x, float y) {
         if (!shown_ || !screen_ || gate_.frozen) {
             return false;
         }
@@ -408,11 +421,7 @@ public:
                 return false; // the focus is not on the list
             }
         }
-        if (list.SelectedIndex() != row) {
-            return false;
-        }
-        gate_.HandleEvent(nativeui::ActionEvent{nativeui::Action::Accept});
-        return true;
+        return list.SelectedIndex() == row;
     }
 
     // POST /api/songbrowser/command: what the screen's onCommand runs.
@@ -1204,11 +1213,12 @@ bool HookCommand(const std::string &name, std::string &error) {
 }
 
 bool HookPointerTap(float x, float y) { return sBrowserMade && TheBrowser().PointerTap(x, y); }
+bool HookPointerHover(float x, float y) { return sBrowserMade && TheBrowser().PointerHover(x, y); }
 
 const NativeSongBrowser::Hooks kHooks = {
     HookEnter,       HookExit,      HookPoll,             HookDraw,   HookHandle,
     HookHidesChrome, HookStateJson, NoteButtonDown, HookInjectedPadPress, HookCommand,
-    HookPointerTap,
+    HookPointerTap,  HookPointerHover,
 };
 
 struct Installer {

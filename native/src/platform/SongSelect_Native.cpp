@@ -578,6 +578,10 @@ bool NativeSongBrowser::PointerTap(float x, float y) {
     return sBrowserHooks && sBrowserHooks->pointerTap && sBrowserHooks->pointerTap(x, y);
 }
 
+bool NativeSongBrowser::PointerHover(float x, float y) {
+    return sBrowserHooks && sBrowserHooks->pointerHover && sBrowserHooks->pointerHover(x, y);
+}
+
 bool NativeSongBrowser::RunCommand(const std::string &name, std::string &error) {
     if (sBrowserHooks) return sBrowserHooks->command(name, error);
     error = "this binary has no song browser";

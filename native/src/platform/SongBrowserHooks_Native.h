@@ -58,6 +58,10 @@ bool RunCommand(const std::string &name, std::string &error);
 // browser is shown (Pointer_Native.cpp).  True: it was on a row of the song
 // list, and that row is now picked, as the pad's Down/Up and A would.
 bool PointerTap(float x, float y);
+// The mouse rests over (x, y) while the browser is shown and the menus are
+// the pad's (controller mode): the row under it becomes the selection, as
+// the pad's Down/Up would; nothing is picked.  True when on a song row.
+bool PointerHover(float x, float y);
 
 struct Hooks {
     void (*enter)(UIPanel *);
@@ -71,6 +75,7 @@ struct Hooks {
     void (*injectedPadPress)();
     bool (*command)(const std::string &, std::string &);
     bool (*pointerTap)(float, float);
+    bool (*pointerHover)(float, float);
 };
 // Called once, by the browser's translation unit.
 void Install(const Hooks *hooks);

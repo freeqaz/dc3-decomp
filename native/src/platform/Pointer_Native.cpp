@@ -132,6 +132,7 @@ bool gParamsRead = false;
 int gPendingSteps = 0;
 HamNavList *gStepList = nullptr;
 float gLastX = -1.0f, gLastY = -1.0f; // where the pointer was last seen
+float gHoverX = -1.0f, gHoverY = -1.0f; // the browser hover last applied (one count per move)
 
 // a press of the pad: down this frame, up the next
 JoypadButton gHeldButton = kPad_NumButtons;
@@ -411,6 +412,15 @@ void Act(const Output &out) {
         }
         if (out.steps)
             gPendingSteps += out.steps;
+        if (out.hover && !out.tap
+            && HoverMayHighlight(TheGestureMgr && TheGestureMgr->InControllerMode())) {
+            if (NativeSongBrowser::PointerHover(out.x, out.y) && (out.x != gHoverX || out.y != gHoverY)) {
+                gHovers++;
+                gLastAction = "browser: hover a song row";
+            }
+            gHoverX = out.x;
+            gHoverY = out.y;
+        }
         if (out.tap) {
             gTaps++;
             if (NativeSongBrowser::PointerTap(out.tapX, out.tapY)) {
