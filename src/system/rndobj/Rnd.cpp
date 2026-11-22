@@ -261,7 +261,9 @@ Rnd::Rnd()
 // glyph pages only, to every text/HUD draw, or the look's choice (uniforms:
 // nothing compiles; item 34b's held-frame A/B);
 // present_up_on|present_up_off|present_up_rule switch the enhanced present's
-// upscale (np-present60, LookSettings::presentUpscale: a frame drawn smaller
+// upscale for every adapter class, or give each class the look's choice back
+// (np-present60, LookSettings::presentUpscale and its ...Apple and
+// ...Integrated: on for a discrete GPU only; a frame drawn smaller
 // than its window rectangle -- a row cap, a thermal step -- is stretched with
 // a clamped Catmull-Rom cubic instead of one bilinear tap; nothing changes at
 // a scale of 1, a downscale or a whole-number scale; the first switch on

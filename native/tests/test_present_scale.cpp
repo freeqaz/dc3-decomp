@@ -384,11 +384,17 @@ TEST_F(PresentUpscaleGpu, ASteadyFrameCreatesNothing) {
     EXPECT_EQ(GpuBindGroupCreateCount(), b0);
 }
 
-// The look: retail off, enhanced on (every adapter class: one field), Native
-// refuses; the three tokens through Rnd's handler; GpuDevice's setter picks
-// the clamped 5-read cubic. Sabotages: Enhanced's presentUpscale false ->
-// red; present_up_off calling the setter with 1 -> red; present_up_rule
-// restoring false -> red.
+// The look, by adapter class as the depth of field's edge rule is: retail and
+// Native off; enhanced on for a discrete GPU, off for an Apple GPU and for
+// anything else (neither is timed: item 60); Native refuses; the three
+// tokens through Rnd's handler write all three classes' fields; a drawn frame
+// hands GpuDevice the choice for the adapter class in effect, so the class
+// token reaches the present; GpuDevice's setter picks the clamped 5-read
+// cubic. Sabotages, each seen red and reverted (item60/sab/G..K): Enhanced's
+// presentUpscale false; Enhanced's presentUpscaleIntegrated true; the picker
+// reading the discrete field for every class; BeginDrawing passing
+// Look().presentUpscale without the class; present_up_off calling the setter
+// with 1; the setter not writing the non-discrete class.
 class PresentUpscaleLook : public EngineTestFixture {
 protected:
     static void Token(const char *t) {
@@ -400,27 +406,47 @@ protected:
     }
 };
 
-TEST_F(PresentUpscaleLook, RetailOffEnhancedOnAndTheTokens) {
+TEST_F(PresentUpscaleLook, EnhancedOnADiscreteGpuOnlyAndTheTokens) {
     if (IsSkipped()) return;
+    using milo::LookAdapterClass;
+    auto fields = [] {
+        const milo::LookSettings &s = milo::Look();
+        return (int)s.presentUpscale + 2 * (int)s.presentUpscaleApple + 4 * (int)s.presentUpscaleIntegrated;
+    };
+    auto picked = [](const milo::LookSettings &s) {
+        return (int)milo::LookPresentUpscale(s, LookAdapterClass::Discrete) +
+               2 * (int)milo::LookPresentUpscale(s, LookAdapterClass::Apple) +
+               4 * (int)milo::LookPresentUpscale(s, LookAdapterClass::OtherNonDiscrete);
+    };
     {
         milo::ScopedLookOverride retail(milo::LookProfile::Retail);
-        EXPECT_FALSE(milo::Look().presentUpscale);
+        EXPECT_EQ(fields(), 0);
+        EXPECT_EQ(picked(milo::Look()), 0);
     }
     {
         milo::ScopedLookOverride native(milo::LookProfile::Native);
-        EXPECT_FALSE(milo::Look().presentUpscale);
+        EXPECT_EQ(fields(), 0);
         Token("present_up_on");
-        EXPECT_FALSE(milo::Look().presentUpscale) << "Native refuses the token";
+        EXPECT_EQ(fields(), 0) << "Native refuses the token";
     }
     milo::ScopedLookOverride enhanced(milo::LookProfile::Enhanced);
-    EXPECT_TRUE(milo::Look().presentUpscale);
+    EXPECT_EQ(fields(), 1) << "enhanced: a discrete GPU only (1 discrete, 2 Apple, 4 anything else)";
+    EXPECT_EQ(picked(milo::Look()), 1);
+    // The picker picks by class: a local copy with each class's own value.
+    for (int bits = 0; bits < 8; bits++) {
+        milo::LookSettings copy = milo::Look();
+        copy.presentUpscale = bits & 1;
+        copy.presentUpscaleApple = bits & 2;
+        copy.presentUpscaleIntegrated = bits & 4;
+        EXPECT_EQ(picked(copy), bits);
+    }
     Token("present_up_off");
-    EXPECT_FALSE(milo::Look().presentUpscale);
+    EXPECT_EQ(fields(), 0);
     Token("present_up_on");
-    EXPECT_TRUE(milo::Look().presentUpscale);
+    EXPECT_EQ(fields(), 7) << "on: all three classes";
     Token("present_up_off");
     Token("present_up_rule");
-    EXPECT_TRUE(milo::Look().presentUpscale) << "the rule gives the look's value back";
+    EXPECT_EQ(fields(), 1) << "the rule gives the look's values back";
     if (gWgpuRnd && gWgpuRnd->Gpu().IsReady()) {
         GpuDevice &gpu = gWgpuRnd->Gpu();
         const bool was = gpu.PresentUpscale();
@@ -428,6 +454,25 @@ TEST_F(PresentUpscaleLook, RetailOffEnhancedOnAndTheTokens) {
         EXPECT_TRUE(gpu.PresentUpscale());
         gpu.SetPresentUpscale(false);
         EXPECT_FALSE(gpu.PresentUpscale());
+        // A drawn frame asks for the choice of the adapter class in effect.
+        const LookAdapterClass classes[] = {LookAdapterClass::Discrete, LookAdapterClass::Apple,
+                                            LookAdapterClass::OtherNonDiscrete};
+        auto drawn = [&](LookAdapterClass c, bool before) {
+            EXPECT_TRUE(milo::SetLookAdapterClassForInspection(false, c));
+            gpu.SetPresentUpscale(before);
+            TheRnd.BeginDrawing();
+            TheRnd.EndDrawing();
+            return gpu.PresentUpscale();
+        };
+        for (int c = 0; c < 3; c++) {
+            EXPECT_EQ(drawn(classes[c], c != 0), c == 0) << "the rule, class " << c;
+        }
+        Token("present_up_on");
+        for (int c = 0; c < 3; c++) EXPECT_TRUE(drawn(classes[c], false)) << "present_up_on, class " << c;
+        Token("present_up_off");
+        for (int c = 0; c < 3; c++) EXPECT_FALSE(drawn(classes[c], true)) << "present_up_off, class " << c;
+        Token("present_up_rule");
+        EXPECT_TRUE(milo::SetLookAdapterClassForInspection(true));
         gpu.SetPresentUpscale(was);
     }
 }
