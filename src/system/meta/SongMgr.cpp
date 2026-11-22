@@ -19,9 +19,16 @@
 #include <set>
 #include <vector>
 #include <map>
+#ifdef HX_NATIVE
+#include "platform/SongId_Native.h"
+#endif
 
 const char *SONG_CACHE_CONTAINER_NAME = "songcache";
+#ifdef HX_NATIVE
+int gSongCacheSaveVer = 13; // not the image's 12: platform/SongId_Native.h, "The song cache"
+#else
 int gSongCacheSaveVer = 12;
+#endif
 
 namespace {
     const char *gStrSongMgrState[] = { "kSongMgr_SaveMount",
@@ -34,10 +41,14 @@ namespace {
 int GetSongID(DataArray *main_arr, DataArray *backup_arr) {
     static Symbol song_id("song_id");
     int songID = 0;
+#ifdef HX_NATIVE
+    songID = NativeSongId::FindWithBackup(main_arr, backup_arr, song_id); // a named song_id: SongId_Native.h
+#else
     main_arr->FindData(song_id, songID, false);
     if (songID == 0 && backup_arr) {
         backup_arr->FindData(song_id, songID, false);
     }
+#endif
     return songID;
 }
 

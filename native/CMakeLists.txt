@@ -1254,6 +1254,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
     src/platform/SongSelect_Native.cpp # song select: Recently Played, sort by artist, section jumps (docs/native/SONG_SELECT.md)
     src/platform/SongSelectState_Native.cpp # song select: play history + sort kept in $DC3_SAVE_DIR/song_select.txt
+    src/platform/SongId_Native.cpp # a named song_id (community packages) becomes a stable number: FNV-1a of the name
     ${DC3_SONGBROWSER_SOURCES} # song browser data: catalog, search, arrangements, GET /api/songs
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
@@ -1538,6 +1539,7 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
     src/platform/SongSelect_Native.cpp # song select: Recently Played, sort by artist, section jumps (docs/native/SONG_SELECT.md)
     src/platform/SongSelectState_Native.cpp # song select: play history + sort kept in $DC3_SAVE_DIR/song_select.txt
+    src/platform/SongId_Native.cpp # a named song_id (community packages) becomes a stable number: FNV-1a of the name
     ${DC3_SONGBROWSER_SOURCES} # song browser data: catalog, search, arrangements, GET /api/songs
     src/platform/PoseLevel_Native.cpp # P-7: camera tilt -> vNormalToGravity, Create's level step
     src/platform/PoseFill_Native.cpp # DC3_POSE_FILL: frames between a slow camera's (np-pose-fill)
@@ -2262,6 +2264,7 @@ if(BUILD_TESTS)
         tests/test_depthbuffer3d.cpp
         tests/test_native_camera_view.cpp
         tests/test_player_box.cpp
+        tests/test_song_id.cpp # platform/SongId_Native.h: a named song_id is a stable number in a range no real song uses
         tests/test_native_boxyman.cpp
         tests/test_native_crowd.cpp
         tests/test_native_shadow.cpp

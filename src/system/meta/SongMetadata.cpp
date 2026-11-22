@@ -1,5 +1,8 @@
 #include "meta\SongMetadata.h"
 #include "os\Debug.h"
+#ifdef HX_NATIVE
+#include "platform/SongId_Native.h"
+#endif
 
 int SongMetadata::sSaveVer = 6;
 
@@ -34,7 +37,15 @@ SongMetadata::SongMetadata(DataArray *main_arr, DataArray *backup_arr, bool onDi
 
     static Symbol song_id("song_id");
     if (FIND_WITH_BACKUP(song_id))
+#ifdef HX_NATIVE
+        // A community package gives a name, `(song_id thefox)`: Int() on it
+        // logs a MILO_FAIL and returns half of the symbol's address.  A name
+        // becomes a number that depends on the name alone; an integer is
+        // passed through (platform/SongId_Native.h).
+        mID = NativeSongId::FromNode(member_arr->Node(1), member_arr);
+#else
         mID = member_arr->Int(1);
+#endif
     else
         MILO_FAIL("song data for song '%s' has no song_id", main_arr->Sym(0).Str());
 
