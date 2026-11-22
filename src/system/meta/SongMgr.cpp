@@ -25,12 +25,7 @@
 
 const char *SONG_CACHE_CONTAINER_NAME = "songcache";
 #ifdef HX_NATIVE
-// One more than the image's 12.  A song cache written before a named song_id
-// became a number derived from the name (platform/SongId_Native.h) holds half
-// of a symbol's address as that song's id, and the cache is read instead of
-// songs.dta for as long as it lasts.  The older revision is thrown away once
-// (LoadCachedSongInfo) and the packages are read again.
-int gSongCacheSaveVer = 13;
+int gSongCacheSaveVer = 13; // not the image's 12: platform/SongId_Native.h, "The song cache"
 #else
 int gSongCacheSaveVer = 12;
 #endif
@@ -47,13 +42,7 @@ int GetSongID(DataArray *main_arr, DataArray *backup_arr) {
     static Symbol song_id("song_id");
     int songID = 0;
 #ifdef HX_NATIVE
-    // The same reading as HamSongMgr::AddSongData and SongMetadata, so a song
-    // removed here is the one that was added there: a named song_id is a
-    // number derived from the name (platform/SongId_Native.h).
-    NativeSongId::Find(main_arr, song_id, songID);
-    if (songID == 0 && backup_arr) {
-        NativeSongId::Find(backup_arr, song_id, songID);
-    }
+    songID = NativeSongId::FindWithBackup(main_arr, backup_arr, song_id); // a named song_id: SongId_Native.h
 #else
     main_arr->FindData(song_id, songID, false);
     if (songID == 0 && backup_arr) {

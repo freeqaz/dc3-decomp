@@ -21,6 +21,22 @@
 // cache, the net jobs), so 30 bits of hash survive everywhere.
 //
 // An integer is passed through unchanged, whatever its value.
+//
+// The song cache.  A package's songs are read from songs.dta once and then
+// from the song cache ($DC3_CACHE_DIR/songcache) for as long as it lasts, id
+// included.  A cache written before this file existed holds half of a
+// symbol's address as a named song's id, so the native gSongCacheSaveVer
+// (SongMgr.cpp) is 13, one more than the image's 12: the older revision is
+// thrown away once (SongMgr::LoadCachedSongInfo) and the packages are read
+// again.
+//
+// The three places that read a song's id from songs.dta use this file:
+// HamSongMgr::AddSongData, the SongMetadata constructor and GetSongID
+// (SongMgr.cpp).  They must agree, or a song is added under one id and looked
+// for under another.  In SongMgr.cpp the native lines are kept few on
+// purpose: 13 or more extra lines near the top of that file swap two template
+// instantiations in the Xbox object (swap<bool> and MakeString<int>; measured
+// with blank lines, 12 do not), and the Xbox object is to stay as it was.
 
 class DataArray;
 class DataNode;
@@ -55,6 +71,10 @@ int FromNode(const DataNode &node, const DataArray *source);
 // `songData` and reads its value with FromNode.  False, and `songID` left
 // alone, when the song has no such entry.
 bool Find(const DataArray *songData, Symbol key, int &songID);
+
+// GetSongID's reading (SongMgr.cpp): the id in `songData`; when that is
+// absent or 0, the id in `backup`, which may be null.  0 when neither has one.
+int FindWithBackup(const DataArray *songData, const DataArray *backup, Symbol key);
 
 // Whether the song `newShortName` must be refused because its id is taken:
 // `songID` is a custom id and already belongs to `knownShortName`, a different

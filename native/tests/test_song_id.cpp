@@ -12,8 +12,8 @@
 //
 // Sabotage-checked (see the commit): an integer no longer passed through, a
 // changed hash, the range bit dropped, a constant id, the symbol handed to
-// DataNode::Int, a second log line, and a collision answer that is always
-// "no" each fail a test here.
+// DataNode::Int, a second log line, a collision answer that is always "no",
+// and a backup that is never read each fail a test here.
 
 #include "test_helpers.h"
 #include "platform/SongId_Native.h"
@@ -127,6 +127,30 @@ TEST_F(NativeSongIdTest, NoNameIsNoId) {
     EXPECT_FALSE(NativeSongId::Find(SongOf(file), Symbol("song_id"), songID));
     EXPECT_EQ(songID, 1234) << "an absent song_id must leave the caller's value alone";
     file->Release();
+}
+
+// GetSongID (SongMgr.cpp): the song's own entry first, then the backup's.
+TEST_F(NativeSongIdTest, TheBackupIsReadWhenTheSongHasNoId) {
+    DataArray *named = DataReadString("(thefox (song_id thefox))");
+    DataArray *integer = DataReadString("(ymca (song_id 7001))");
+    DataArray *none = DataReadString("(nosongid (name \"No Id\"))");
+    DataArray *zero = DataReadString("(zerosong (song_id 0))");
+    ASSERT_TRUE(named && integer && none && zero);
+    Symbol key("song_id");
+
+    EXPECT_EQ(NativeSongId::FindWithBackup(SongOf(named), nullptr, key), kTheFoxId);
+    EXPECT_EQ(NativeSongId::FindWithBackup(SongOf(named), SongOf(integer), key), kTheFoxId)
+        << "the song's own id wins over the backup's";
+    EXPECT_EQ(NativeSongId::FindWithBackup(SongOf(integer), SongOf(named), key), 7001);
+    EXPECT_EQ(NativeSongId::FindWithBackup(SongOf(none), SongOf(named), key), kTheFoxId);
+    EXPECT_EQ(NativeSongId::FindWithBackup(SongOf(zero), SongOf(integer), key), 7001);
+    EXPECT_EQ(NativeSongId::FindWithBackup(SongOf(none), nullptr, key), 0);
+    EXPECT_EQ(NativeSongId::FindWithBackup(SongOf(none), SongOf(none), key), 0);
+
+    named->Release();
+    integer->Release();
+    none->Release();
+    zero->Release();
 }
 
 // The deliberate case is quiet: no MILO_FAIL, and one line per name however

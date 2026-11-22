@@ -62,6 +62,14 @@ bool Find(const DataArray *songData, Symbol key, int &songID) {
     return true;
 }
 
+int FindWithBackup(const DataArray *songData, const DataArray *backup, Symbol key) {
+    int songID = 0;
+    Find(songData, key, songID);
+    if (songID == 0 && backup)
+        Find(backup, key, songID);
+    return songID;
+}
+
 bool Collides(int songID, const char *knownShortName, const char *newShortName) {
     if (!IsCustom(songID) || !knownShortName || !newShortName)
         return false;
