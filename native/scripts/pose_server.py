@@ -1023,6 +1023,22 @@ def parse_args(argv=None):
     parser.add_argument("--frames", default=None, metavar="WxH",
                         help="Also send the camera picture and a person mask at WxH "
                              "(protocol v3, the in-game player view; PLAN P-4)")
+    parser.add_argument("--record-video", default=None, metavar="PATH",
+                        help="Also write every frame given to MediaPipe, at the size the "
+                             "source delivered it, to PATH (a video; .mkv recommended) with "
+                             "a STEM.frames.tsv of each frame's packet id and capture "
+                             "timestamp, on a thread of its own: a frame the writer cannot "
+                             "take at once is dropped and counted, never waited for "
+                             "(video_recorder.py). The game passes DC3_POSE_RECORD_VIDEO.")
+    parser.add_argument("--record-max-gb", type=float, default=None, metavar="GB",
+                        help="Stop recording when the parts reach GB (default "
+                             "video_recorder.DEFAULT_MAX_GB). The game passes "
+                             "DC3_POSE_RECORD_VIDEO_MAX_GB.")
+    parser.add_argument("--record-min-free-gb", type=float, default=None, metavar="GB",
+                        help="Stop recording when the disk has less than GB free "
+                             "(default video_recorder.DEFAULT_MIN_FREE_GB)")
+    parser.add_argument("--record-codec", default=None, metavar="FOURCC",
+                        help="The recording's codec (default mp4v: pip OpenCV has no H.264 encoder)")
     parser.add_argument("--mask", choices=MASK_MODES, default="refined",
                         help="The person mask of --frames: refined (default: steadied across "
                              "frames, holes closed, tracked limbs filled in -- MaskRefiner) or "
@@ -1053,6 +1069,37 @@ def _default_backend(args):
     except ImportError as e:
         raise ServerExit(EXIT_NO_DEPS, f"mediapipe not importable: {e}")
     return backend, NUM_DC3_JOINTS, 1
+
+
+def make_recorder(args, cv2, fps):
+    """--record-video: the VideoRecorder, or None."""
+    path = getattr(args, "record_video", None)
+    if not path:
+        return None
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import video_recorder as vr
+    kw = {}
+    if getattr(args, "record_max_gb", None) is not None:
+        kw["max_bytes"] = args.record_max_gb * vr.GB
+    if getattr(args, "record_min_free_gb", None) is not None:
+        kw["min_free_bytes"] = args.record_min_free_gb * vr.GB
+    if getattr(args, "record_codec", None):
+        kw["codec"] = args.record_codec
+    return vr.VideoRecorder(path, cv2, fps=fps, **kw)
+
+
+def sigterm_is_a_clean_shutdown():
+    """The game stops its server with SIGTERM (SIGKILL 2 s later).  With a
+    recording open, turn it into the KeyboardInterrupt run() already shuts
+    down on, so the video is closed and its sidecar gets its last line."""
+    import signal
+
+    def handler(signum, frame):
+        raise KeyboardInterrupt
+    try:
+        signal.signal(signal.SIGTERM, handler)
+    except ValueError:   # not the main thread
+        pass
 
 
 def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
@@ -1144,7 +1191,9 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
         if getattr(args, "mask", "refined") != "raw":
             refiner = MaskRefiner(cv2, np)
         print(f"Person mask: {'refined' if refiner else 'raw'} (--mask)", file=sys.stderr)
+    recorder = None
     try:
+        recorder = make_recorder(args, cv2, video_fps if video_mode else CAMERA_FPS)
         backend, num_landmarks, layout = make_backend(args)
 
         stats = Stats() if os.environ.get("DC3_POSE_STATS") else None
@@ -1268,6 +1317,8 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
             frame_w, frame_h = (args.width, args.height)
             if frame is not None:
                 frame_h, frame_w = frame.shape[:2]
+                if recorder is not None:
+                    recorder.offer(frame, frame_id, timestamp, ts_ms)
                 t_infer = time.perf_counter()
                 for tid, joints in backend.process(frame, ts_ms):
                     if len(persons) >= args.max_persons:
@@ -1308,6 +1359,8 @@ def run(args, cv2=None, make_backend=_default_backend, clock=time.monotonic,
     except KeyboardInterrupt:
         print("\nShutting down", file=sys.stderr)
     finally:
+        if recorder is not None:
+            recorder.close()
         cap.release()
         if client:
             client.close()
@@ -1371,6 +1424,8 @@ def main(argv=None):
         print_camera_list(fmt)
         return
     clear_background_scheduling()
+    if getattr(args, "record_video", None):
+        sigterm_is_a_clean_shutdown()
     try:
         run(args)
     except ServerExit as e:
