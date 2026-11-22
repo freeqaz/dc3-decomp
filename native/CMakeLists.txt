@@ -2190,6 +2190,7 @@ if(BUILD_TESTS)
         tests/test_rhythm_scoring_window.cpp
         tests/test_milo_viewer_screenshot.cpp
         tests/test_object_lifetime.cpp
+        tests/test_flow_queue_order.cpp
         tests/test_manual_repro.cpp
         tests/test_charclipgroup.cpp
         tests/test_asset_loading.cpp
