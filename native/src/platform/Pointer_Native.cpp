@@ -20,7 +20,9 @@
 #include "rndobj/Anim.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Rnd.h"
+#include "synth/Synth.h"
 #include "ui/UI.h"
+#include "ui/UIScreen.h"
 #include "ui/UIListProvider.h"
 #include "ui/UIListWidget.h"
 
@@ -48,6 +50,8 @@ extern GLFWwindow *gNativeWindow;
 using namespace Dc3PointerGesture;
 
 extern bool Dc3ControllerModeForced();
+extern void Dc3ControllerHoldNotePress();
+extern void Dc3ControllerHoldNoteTaken();
 
 // HamNavList's private parts, for the pointer (HamNavList.h befriends it).
 struct Dc3PointerAccess {
@@ -56,7 +60,19 @@ struct Dc3PointerAccess {
             return false;
         if (l->mRibbonMode == HamListRibbon::kRibbonSelect || l->IsAnimating())
             return false;
+        // a screen on its way in or out: the pad's presses are not taken
+        // then either (UIManager drops them during a transition)
+        if (TheUI && TheUI->InTransition())
+            return false;
+        // HamNavList::SkipPoll's focus rule: a right-hand list that is used
+        // only while focused is not this list's to act on otherwise
+        if (l->mNavInputType == HamNavList::kNavInput_RightHand && l->mOnlyUseWhenFocused
+            && TheUI && TheUI->FocusComponent() != l)
+            return false;
         return !(TheGestureMgr && TheGestureMgr->GesturingWithVoice());
+    }
+    static bool Scrolling(HamNavList *l) {
+        return l->mListState.ScrollPastMinDisplay() && l->mScrollBehavior.IsScrolling();
     }
     static int Selected(HamNavList *l) { return l->mListState.Selected(); }
     static bool IsActive(HamNavList *l, int showing) {
@@ -138,7 +154,9 @@ float gHoverX = -1.0f, gHoverY = -1.0f; // the browser hover last applied (one c
 JoypadButton gHeldButton = kPad_NumButtons;
 
 // what the pointer did, for StateJson
-unsigned gTaps = 0, gTapSelects = 0, gTapPresses = 0, gHovers = 0, gBacks = 0;
+unsigned gTaps = 0, gTapSelects = 0, gTapPresses = 0, gTapHighlights = 0, gHovers = 0, gBacks = 0;
+// the screen a press went down on (a press that outlives its screen is dropped)
+UIScreen *gDownScreen = nullptr;
 int gStepsDone = 0;
 std::string gLastAction = "none";
 
@@ -174,12 +192,7 @@ float RowLeadPitches() {
     return v;
 }
 
-JoypadAction ActionFor(JoypadButton btn, Symbol type) {
-    JoypadAction a = ButtonToAction(btn, type);
-    if (a != kAction_None)
-        return a;
-    return btn == kPad_X ? kAction_Confirm : btn == kPad_Circle ? kAction_Cancel : kAction_None;
-}
+JoypadAction ActionFor(JoypadButton btn, Symbol type) { return PadButtonAction(btn, type); }
 
 void PressButton(JoypadButton btn) {
     JoypadData *pad = JoypadGetPadData(0);
@@ -212,12 +225,45 @@ bool AnyRows() {
     return false;
 }
 
-void TakeTheMenus() {
+// A deliberate act of the pointer on a list (a row tap, a scroll): the same
+// rule a press of the pad obeys (Fable review: the pointer used to force the
+// menus with EnterControllerMode(true), skipping all of this).
+//  - HamUI::OnMsg(ButtonDownMsg): every press restarts ShellInput's idle timer
+//    and arms the press hold (PLAN H-157), so the menus stay the pointer's
+//    while it is used.
+//  - ShellInput::OnMsg(ButtonDownMsg), outside controller mode: not on a
+//    gameplay panel (the press is the game's); otherwise EnterControllerMode
+//    (false), which the helpbar may refuse (helpbar_allow_controller FALSE on
+//    loading, meta_loading, about, perform_endgame) -- then the pad's press
+//    plays invalid_select and does nothing, and so does the pointer's; when
+//    it takes them, the notice.
+// The pad's first press only takes the menus; the pointer's act also acts,
+// since it was aimed at a row.  Taps that are a press of the pad (A on a
+// screen with no rows, the right button's B) go through the pad's own path
+// instead (PressButton) and need none of this.
+// True: the act may go on.
+bool PointerAct() {
+    Dc3ControllerHoldNotePress();
+    static ResetControllerModeTimeoutMsg resetControllerModeTimeoutMsg;
+    TheHamUI.Export(resetControllerModeTimeoutMsg, true);
     if (!TheGestureMgr || TheGestureMgr->InControllerMode())
-        return;
+        return true;
     ShellInput *shell = TheHamUI.GetShellInput();
-    if (shell)
-        shell->EnterControllerMode(true);
+    if (!shell || !shell->mInputPanel)
+        return true;
+    static Symbol is_gameplay_panel("is_gameplay_panel");
+    const DataNode *prop = shell->mInputPanel->Property(is_gameplay_panel, false);
+    if (prop && prop->Int() == 1)
+        return true;
+    shell->EnterControllerMode(false);
+    if (!TheGestureMgr->InControllerMode()) {
+        if (TheSynth)
+            TheSynth->RunFlow("invalid_select.flow");
+        gLastAction = "the helpbar keeps the menus from the pointer here";
+        return false;
+    }
+    Dc3ControllerHoldNoteTaken();
+    return true;
 }
 
 // The list (drawn last frame) and row under (x, y).  The focused list wins
@@ -264,16 +310,19 @@ HamNavList *ScrollTarget(float x, float y) {
 void WriteState() {
     std::string j = "{\"enabled\":";
     j += Enabled() ? "true" : "false";
-    char buf[256];
+    char buf[640];
     snprintf(buf, sizeof buf,
              ",\"controller_mode\":%s,\"browser\":%s,\"pointer\":[%.1f,%.1f],\"pressed\":%s,"
              "\"dragging\":%s,\"flinging\":%s,\"pending_steps\":%d,\"taps\":%u,\"tap_selects\":%u,"
-             "\"tap_presses\":%u,\"hovers\":%u,\"backs\":%u,\"steps_done\":%d,\"last\":\"%s\"",
+             "\"tap_presses\":%u,\"tap_highlights\":%u,\"hovers\":%u,\"backs\":%u,"
+             "\"steps_done\":%d,\"screen\":\"%s\",\"last\":\"%s\"",
              TheGestureMgr && TheGestureMgr->InControllerMode() ? "true" : "false",
              NativeSongBrowser::HidesGameChrome() ? "true" : "false", gLastX, gLastY,
              gTracker.Pressed() ? "true" : "false", gTracker.Dragging() ? "true" : "false",
              gTracker.Flinging() ? "true" : "false", gPendingSteps, gTaps, gTapSelects,
-             gTapPresses, gHovers, gBacks, gStepsDone, gLastAction.c_str());
+             gTapPresses, gTapHighlights, gHovers, gBacks, gStepsDone,
+             TheUI && TheUI->CurrentScreen() ? TheUI->CurrentScreen()->Name() : "",
+             gLastAction.c_str());
     j += buf;
     {
         Rect pr;
@@ -393,15 +442,21 @@ void Act(const Output &out) {
         gLastX = out.tapX;
         gLastY = out.tapY;
     }
+    // a press that stopped the list moving ends the scroll still owed (the
+    // press picks nothing: PointerGesture's Tracker::SetListMoving)
+    if (out.stopped) {
+        gPendingSteps = 0;
+        gLastAction = "a press stopped the list";
+    }
     if (!any)
         return;
-    // Only a deliberate act takes the menus from the hands; a mouse that
-    // moves or rests never does (TakesTheMenus, tested).
-    if (TakesTheMenus(out))
-        TakeTheMenus();
-    // a tap ends any scroll still owed (a fling the press stopped)
+    // a tap ends any scroll still owed
     if (out.tap || out.back)
         gPendingSteps = 0;
+    // Only a deliberate act takes the menus from the hands; a mouse that
+    // moves or rests never does, nor a drag on a frame that scrolls nothing
+    // (TakesTheMenus, tested).  Each such act below goes through PointerAct
+    // (or is a press of the pad).
 
     // the natively drawn song browser has its own rows
     if (NativeSongBrowser::HidesGameChrome()) {
@@ -410,7 +465,7 @@ void Act(const Output &out) {
             gBacks++;
             gLastAction = "back";
         }
-        if (out.steps)
+        if (out.steps && PointerAct())
             gPendingSteps += out.steps;
         if (out.hover && !out.tap
             && HoverMayHighlight(TheGestureMgr && TheGestureMgr->InControllerMode())) {
@@ -421,13 +476,22 @@ void Act(const Output &out) {
             gHoverX = out.x;
             gHoverY = out.y;
         }
-        if (out.tap) {
+        if (out.tap && PointerAct()) {
             gTaps++;
-            if (NativeSongBrowser::PointerTap(out.tapX, out.tapY)) {
+            // a finger's first tap on a row highlights it, a tap on the
+            // highlighted row picks it (a phone's rows are ~16 CSS px tall)
+            switch (NativeSongBrowser::PointerTap(out.tapX, out.tapY, out.tapTouch)) {
+            case 2:
                 gTapSelects++;
                 gLastAction = "browser: pick the tapped row";
-            } else {
+                break;
+            case 1:
+                gTapHighlights++;
+                gLastAction = "browser: highlight the tapped row";
+                break;
+            default:
                 gLastAction = "browser: tap off the song rows";
+                break;
             }
         }
         return;
@@ -445,10 +509,17 @@ void Act(const Output &out) {
         int row = -1;
         HamNavList *list = ListAt(out.tapX, out.tapY, row);
         if (list) {
-            if (Dc3PointerAccess::CanAct(list) && Dc3PointerAccess::IsActive(list, row)) {
-                if (Dc3PointerAccess::Selected(list) != row)
+            if (Dc3PointerAccess::CanAct(list) && Dc3PointerAccess::IsActive(list, row)
+                && PointerAct()) {
+                const bool wasSelected = Dc3PointerAccess::Selected(list) == row;
+                if (!wasSelected)
                     Dc3PointerAccess::Highlight(list, row);
-                if (Dc3PointerAccess::Select(list)) {
+                if (out.tapTouch && !wasSelected) {
+                    // a finger: the first tap highlights, the next picks
+                    gTapHighlights++;
+                    gLastAction = std::string("highlight ") + Dc3PointerAccess::Name(list) + " row "
+                        + std::to_string(row);
+                } else if (Dc3PointerAccess::Select(list)) {
                     gTapSelects++;
                     gLastAction = std::string("select ") + Dc3PointerAccess::Name(list) + " row "
                         + std::to_string(row);
@@ -461,6 +532,7 @@ void Act(const Output &out) {
             gTapPresses++;
             gLastAction = "press A (no list drawn)";
         } else {
+            PointerAct(); // aimed, if at nothing: the menus stay the pointer's
             gLastAction = "tap between rows";
         }
         return;
@@ -483,7 +555,7 @@ void Act(const Output &out) {
 
     if (out.steps) {
         HamNavList *target = ScrollTarget(gLastX, gLastY);
-        if (target) {
+        if (target && PointerAct()) {
             if (target != gStepList)
                 gPendingSteps = 0;
             gStepList = target;
@@ -537,6 +609,27 @@ void RunSteps() {
 
 } // namespace
 
+JoypadAction PadButtonAction(JoypadButton btn, Symbol controllerType) {
+    JoypadAction action = ButtonToAction(btn, controllerType);
+    if (action != kAction_None)
+        return action;
+    switch (btn) { // milo-native-engine Joypad_Native.cpp nativeButtonToAction
+    case kPad_X: return kAction_Confirm;
+    case kPad_Circle: return kAction_Cancel;
+    case kPad_Start: return kAction_Start;
+    case kPad_Select: return kAction_Option;
+    case kPad_DUp: return kAction_Up;
+    case kPad_DDown: return kAction_Down;
+    case kPad_DLeft: return kAction_Left;
+    case kPad_DRight: return kAction_Right;
+    case kPad_L1: return kAction_PageUp;
+    case kPad_R1: return kAction_PageDown;
+    case kPad_Square: return kAction_ViewModify;
+    case kPad_Tri: return kAction_ShellOption;
+    default: return kAction_None;
+    }
+}
+
 bool Enabled() {
     if (gEnabled < 0)
         gEnabled = Dc3EnvFlag("DC3_POINTER", true) ? 1 : 0;
@@ -583,13 +676,19 @@ static bool PresentInfo(Rect &present, int &surfW, int &surfH) {
     return surfW > 0 && surfH > 0;
 }
 
-bool BoxToFramePresent(float bx, float by, float boxW, float boxH, float &fx, float &fy) {
+bool BoxToFramePresent(float bx, float by, float boxW, float boxH, float &fx, float &fy,
+                       float *unitPx) {
     Rect present;
     int surfW = 0, surfH = 0;
     const float fw = TheRnd.Width() > 0 ? (float)TheRnd.Width() : 1280.0f;
     const float fh = TheRnd.Height() > 0 ? (float)TheRnd.Height() : 720.0f;
-    if (!PresentInfo(present, surfW, surfH) || boxW <= 0 || boxH <= 0)
+    if (!PresentInfo(present, surfW, surfH) || boxW <= 0 || boxH <= 0) {
+        if (unitPx)
+            *unitPx = boxW > 0 ? fw / FitFrame(fw, fh, boxW, boxH).w : 1.0f;
         return BoxToFrame(bx, by, boxW, boxH, fw, fh, true, fx, fy);
+    }
+    if (unitPx) // frame pixels per box pixel (a CSS pixel on the web)
+        *unitPx = present.w > 0 ? (surfW / boxW) * (fw / present.w) : 1.0f;
     // the box (window points / canvas CSS pixels) -> surface pixels (HiDPI,
     // a canvas buffer that is not its CSS size)
     return PresentToFrame(bx * surfW / boxW, by * surfH / boxH, present, fw, fh, fx, fy);
@@ -696,6 +795,24 @@ void FramePoll() {
         gTracker.Reset();
         gPendingSteps = 0;
     } else {
+        // A press that went down on another screen is not this one's: the
+        // screen changed under the finger (the press took a row that moved
+        // the menus on, a script), and its up must not tap here.
+        UIScreen *screen = TheUI ? TheUI->CurrentScreen() : nullptr;
+        auto dropPressOnScreenChange = [&](float t) {
+            if (gTracker.Pressed() && screen != gDownScreen) {
+                Input cancel;
+                cancel.kind = kCancel;
+                cancel.t = t;
+                gTracker.Feed(cancel, P());
+                gLastAction = "a press outlived its screen: dropped";
+            }
+        };
+        dropPressOnScreenChange(now);
+        // the list is still moving on its own: a press stops it and picks nothing
+        gTracker.SetListMoving(gPendingSteps != 0
+                               || (gStepList && gDrawn.count(gStepList)
+                                   && Dc3PointerAccess::Scrolling(gStepList)));
         for (Pending &p : due) {
             if (p.window)
                 WindowToFrame(p.in.x, p.in.y, p.in.x, p.in.y);
@@ -703,6 +820,8 @@ void FramePoll() {
                 gLastX = p.in.x;
                 gLastY = p.in.y;
             }
+            if (p.in.kind == kDown)
+                gDownScreen = screen;
             gTracker.Feed(p.in, P());
         }
         // a row of the list under the pointer is what a drag of one row is
@@ -751,14 +870,19 @@ std::string StateJson() {
 // canvas box's CSS pixels, boxW x boxH the box.  kind: Dc3PointerGesture::Kind.
 // The picture is taken to be the frame's 16:9 rectangle centred in the box
 // (the present scale's rule); a box that is 16:9 is the frame stretched.
+// ageSeconds: how long ago the event happened (performance.now() - e.timeStamp):
+// a 10 fps frame hands the page its events in a burst, and the release
+// velocity needs their own times, not the burst's.
 extern "C" EMSCRIPTEN_KEEPALIVE void dc3_pointer(int kind, float bx, float by, float boxW,
-                                                 float boxH, float wheel, int touch) {
+                                                 float boxH, float wheel, int touch,
+                                                 float ageSeconds) {
     Input in;
     in.kind = (Kind)kind;
-    in.t = Dc3Pointer::Now();
+    in.t = Dc3Pointer::Now() - std::max(0.0f, std::min(ageSeconds, 1.0f));
     in.wheel = wheel;
     in.touch = touch != 0;
-    const bool inside = Dc3Pointer::BoxToFramePresent(bx, by, boxW, boxH, in.x, in.y);
+    const bool inside =
+        Dc3Pointer::BoxToFramePresent(bx, by, boxW, boxH, in.x, in.y, &in.unitPx);
     if (in.kind == kDown && !inside)
         return;
     Dc3Pointer::Push(in);

@@ -484,24 +484,7 @@ void HttpServer::ProcessCommands() {
 // that from the physical/scripted pad every poll), so code that samples held
 // buttons instead of listening for messages does not see it.
 static JoypadAction HttpButtonAction(JoypadButton btn, Symbol controllerType) {
-    JoypadAction action = ButtonToAction(btn, controllerType);
-    if (action != kAction_None)
-        return action;
-    switch (btn) { // milo-native-engine Joypad_Native.cpp nativeButtonToAction
-    case kPad_X: return kAction_Confirm;
-    case kPad_Circle: return kAction_Cancel;
-    case kPad_Start: return kAction_Start;
-    case kPad_Select: return kAction_Option;
-    case kPad_DUp: return kAction_Up;
-    case kPad_DDown: return kAction_Down;
-    case kPad_DLeft: return kAction_Left;
-    case kPad_DRight: return kAction_Right;
-    case kPad_L1: return kAction_PageUp;
-    case kPad_R1: return kAction_PageDown;
-    case kPad_Square: return kAction_ViewModify;
-    case kPad_Tri: return kAction_ShellOption;
-    default: return kAction_None;
-    }
+    return Dc3Pointer::PadButtonAction(btn, controllerType); // the pointer's presses share it
 }
 
 // Set by POST /api/input/press with "device":"pad" (under mInputMutex), taken

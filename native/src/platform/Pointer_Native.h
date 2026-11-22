@@ -17,11 +17,15 @@
 // last frame (HamNavList::DrawShowing reports each row's centre through its
 // camera), so every screen built of them is reached without a per-screen
 // table.  The natively drawn song browser is reached through its own hook
-// (SongBrowserHooks_Native.h).  Everything runs in controller mode: the first
-// pointer action takes the menus from the hands, as a key press does.
+// (SongBrowserHooks_Native.h).  Everything runs in controller mode: a
+// deliberate pointer act takes the menus from the hands by the rule a key press
+// obeys (PointerAct in Pointer_Native.cpp).  A finger's first tap on a row
+// highlights it, the next picks it.
 //
-// DC3_POINTER=0 (or {native_settings set_pointer 0}) is the original: the
-// pointer does nothing in the game's menus.
+// DC3_POINTER=0 is the original: the pointer does nothing in the game's
+// menus (and on the web, dc3_pre.js leaves the canvas's touch, wheel and
+// context menu to the browser).  POST /api/input/pointer?op=enable&on=0 flips
+// it at run time on the desktop.
 //
 // The rules (tap / drag / flick, the present mapping, the hit test) are
 // PointerGesture.h, tested without a game.
@@ -29,6 +33,8 @@
 #include "PointerGesture.h"
 
 #include <string>
+
+#include "os/JoypadMsgs.h" // JoypadAction, JoypadButton, Symbol
 
 class HamNavList;
 class RndCam;
@@ -73,6 +79,14 @@ std::string StateJsonNow();
 // boxW x boxH -> the frame, through the picture rectangle the engine last
 // presented (GpuDevice::LastPresentRect on its SurfaceWidth x SurfaceHeight
 // surface).  False outside the picture.
-bool BoxToFramePresent(float bx, float by, float boxW, float boxH, float &fx, float &fy);
+// `unitPx` (optional): frame pixels per box pixel there (a finger's slop is in
+// box pixels).
+bool BoxToFramePresent(float bx, float by, float boxW, float boxH, float &fx, float &fy,
+                       float *unitPx = nullptr);
+
+// What a press of `btn` means on a pad of `controllerType`: the DTA mapping,
+// else the native pad's own (milo-native-engine nativeButtonToAction).  The
+// one table the pointer's presses and POST /api/input/press share.
+JoypadAction PadButtonAction(JoypadButton btn, Symbol controllerType);
 
 } // namespace Dc3Pointer

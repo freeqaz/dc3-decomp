@@ -574,8 +574,10 @@ void NativeSongBrowser::NoteInjectedPadPress() {
     if (sBrowserHooks) sBrowserHooks->injectedPadPress();
 }
 
-bool NativeSongBrowser::PointerTap(float x, float y) {
-    return sBrowserHooks && sBrowserHooks->pointerTap && sBrowserHooks->pointerTap(x, y);
+int NativeSongBrowser::PointerTap(float x, float y, bool firstHighlights) {
+    return sBrowserHooks && sBrowserHooks->pointerTap
+        ? sBrowserHooks->pointerTap(x, y, firstHighlights)
+        : 0;
 }
 
 bool NativeSongBrowser::PointerHover(float x, float y) {

@@ -388,14 +388,22 @@ public:
     // The mouse or a finger (Pointer_Native.cpp): a tap at (x, y) in the
     // frame.  The selection walks to the tapped row as the pad's Down/Up
     // would (so the classic list's highlight, sounds and preview follow), and
-    // then A picks it.  False, and nothing done, off the song list's rows or
-    // while the list does not have the focus (the Recently Played shelf).
-    bool PointerTap(float x, float y) {
+    // then A picks it (2).  A finger (`firstHighlights`) on a row that was not
+    // the selection only walks there (1): a phone's rows are ~16 CSS px tall,
+    // and the row picked should be the one the player saw lit.  0, and nothing
+    // done, off the song list's rows or while the list does not have the focus
+    // (the Recently Played shelf).
+    int PointerTap(float x, float y, bool firstHighlights) {
+        const bool wasSelected = shown_ && screen_
+            && screen_->List().RowAt({x, y}) == screen_->List().SelectedIndex();
         if (!MoveSelectionTo(x, y)) {
-            return false;
+            return 0;
+        }
+        if (firstHighlights && !wasSelected) {
+            return 1;
         }
         gate_.HandleEvent(nativeui::ActionEvent{nativeui::Action::Accept});
-        return true;
+        return 2;
     }
 
     // A resting mouse: the row under it is the selection (no pick).
@@ -1212,7 +1220,9 @@ bool HookCommand(const std::string &name, std::string &error) {
     return false;
 }
 
-bool HookPointerTap(float x, float y) { return sBrowserMade && TheBrowser().PointerTap(x, y); }
+int HookPointerTap(float x, float y, bool firstHighlights) {
+    return sBrowserMade ? TheBrowser().PointerTap(x, y, firstHighlights) : 0;
+}
 bool HookPointerHover(float x, float y) { return sBrowserMade && TheBrowser().PointerHover(x, y); }
 
 const NativeSongBrowser::Hooks kHooks = {
