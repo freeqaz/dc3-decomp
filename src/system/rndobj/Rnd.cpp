@@ -210,6 +210,13 @@ Rnd::Rnd()
 // field compiles four pipelines once, the spread is a uniform; each rule is
 // by adapter class, on for a discrete GPU, and the on and off tokens force
 // it on any GPU);
+// dof_edge_on|dof_edge_off|dof_edge_rule switch the enhanced depth of field's
+// edge rule (np-look51, LookSettings::postDofEdge: where a pixel's depth
+// samples disagree the composite mixes each sample's own colour by its own
+// depth's amount, not the resolved pixel by sample 0's, so an in-focus
+// outline over the blurred background keeps its anti-aliasing with the
+// background half blurred; by adapter class, on for a discrete GPU; on and
+// off force it on any GPU; the first switch on compiles one pipeline);
 // hair_edge_on|hair_edge_off|hair_edge_rule switch the enhanced cutout's
 // alpha test per MSAA sample (np-look26 d; LookSettings::cutoutSampleTest; a
 // uniform, nothing compiles): on = mode E, off = the landed sharpened
@@ -240,11 +247,11 @@ Rnd::Rnd()
 // target takes the new size at its next clearing pass
 // (SetLookTexPassSizeForInspection);
 // adapter_apple|adapter_other|adapter_discrete|adapter_rule force the adapter
-// class the look's four per-adapter rules use (np-look49: the near field and
-// its spread, the texture pass's MSAA and size; an Apple GPU, any other
-// non-discrete GPU, a discrete GPU) or return it to the adapter's own; each
-// rule takes it as it takes its own token, and nothing that sizes the frame
-// reads it (SetLookAdapterClassForInspection);
+// class the look's per-adapter rules use (np-look49: the near field and
+// its spread, the edge rule, the texture pass's MSAA and size; an Apple
+// GPU, any other non-discrete GPU, a discrete GPU) or return it to the
+// adapter's own; each rule takes it as it takes its own token, and nothing
+// that sizes the frame reads it (SetLookAdapterClassForInspection);
 // text_bias_off|text_bias_half|text_bias_on|text_bias_rule put the text and
 // HUD LOD bias (np-look34, LookSettings::uiLodBias) at 0 / -0.5 / -1 or the
 // look's value; text_levels_2|text_levels_all|text_levels_rule set the text
@@ -291,6 +298,10 @@ static Symbol NativeLook(const DataArray *msg) {
         else if (s == "dof_near_spread_on") milo::SetLookDofNearForInspection(1, true);
         else if (s == "dof_near_spread_off") milo::SetLookDofNearForInspection(0, true);
         else if (s == "dof_near_spread_rule") milo::SetLookDofNearForInspection(-1, true);
+        // np-look51: the depth of field's edge rule.
+        else if (s == "dof_edge_on") milo::SetLookDofEdgeForInspection(1);
+        else if (s == "dof_edge_off") milo::SetLookDofEdgeForInspection(0);
+        else if (s == "dof_edge_rule") milo::SetLookDofEdgeForInspection(-1);
         else if (s == "hair_edge_on") milo::SetLookCutoutSampleTestForInspection(1);
         else if (s == "hair_edge_off") milo::SetLookCutoutSampleTestForInspection(0);
         else if (s == "hair_edge_rule") milo::SetLookCutoutSampleTestForInspection(-1);
@@ -358,7 +369,8 @@ static Symbol NativeLook(const DataArray *msg) {
                          "noise_rows_off, noise_rows_rule, dof_depth_weight_on, "
                          "dof_depth_weight_off, dof_depth_weight_rule, dof_near_on, dof_near_off, "
                          "dof_near_rule, dof_near_spread_on, dof_near_spread_off, "
-                         "dof_near_spread_rule, hair_edge_on, "
+                         "dof_near_spread_rule, dof_edge_on, dof_edge_off, dof_edge_rule, "
+                         "hair_edge_on, "
                          "hair_edge_off, hair_edge_rule, hair_edge_b, hair_edge_c, "
                          "hair_edge_e, hair_edge_centre, display_tv, display_srgb, "
                          "display_off, display_rule, crowd_shadow_on, crowd_shadow_off, "

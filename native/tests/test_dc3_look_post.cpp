@@ -1768,6 +1768,544 @@ TEST_F(DC3LookPostTest, DofNearFieldSoftensANearObjectsEdgeAndLeavesTheFarField)
                     << "x " << x << " y " << y;
 }
 
+// np-look51: LookSettings::postDofEdge, the edge rule. Every composite took
+// its mix amount from depth sample 0 of the 4x depth while the scene it mixes
+// is resolved, so a pixel an in-focus figure half covers was kept whole or
+// replaced whole (dc3 item 51). The rule composites per sample where the
+// pixel's depth samples disagree, with the 4x colour the scene was resolved
+// from: out = scene + (1/4) sum_i a_i (rgb_i - col_i). This drives DofPass
+// with a synthetic 4x depth AND colour written per sample (sample-rate
+// shading, the sample index choosing both), and a resolved scene uploaded as
+// the samples' mean (exact: every value a multiple of 4) plus a marker the
+// samples do not hold. Five zones across x:
+//   A all four samples far (factor 1), B all at the focus (factor ~0),
+//   C split: far samples (2 px grey stripes 228 / 20, so the sharp background
+//     B is far from its blur Bb ~124) and in-focus samples (F = 60,200,140)
+//     a little in front of the focal plane (t = -0.03) in the top half and a
+//     little behind it (+0.03) in the bottom half; sample 0 far at the
+//     odd-odd pixels the half-size factor pre-pass reads,
+//   D split on the even rows: near samples (t = -1.5: factor 1, near 1;
+//     N = 200,60,32) over in-focus ones (F, at the focus); the odd rows all
+//     near on the 2 px columns (x / 2) odd and all in focus on the others, so
+//     the depth-weighted blur (near texels only, as the pre-pass reads the
+//     odd-odd pixels) is far from the depth-blind one,
+//   E all four near.
+// A and B and E carry the marker (+24 blue in the scene, not in the samples)
+// everywhere, C on the rows y % 8 == 5.
+// Each wrong reading's value is known per pixel from a REFERENCE run: the
+// same scene with every sample of a C pixel far and of a D pixel near (the
+// odd rows of D as in the test, so the pre-pass, the blurs and the near
+// coverage are the same), rule off: it prints rgb_i for a far / near sample.
+// (1) C: on = scene + (1/4) sum_i f_i (ref - col_i) = c*F' + (1-c)*Bb (+ the
+//     marker) within 3 levels at every pixel, on every enhanced path; and it
+//     is neither the first rule's mix(scene, Bb, min f) ~ S, nor sample 0's
+//     (off), nor the mean of the factors' (each > 8 levels away at >= 90 % of
+//     the pixels: checked on the data, so the test cannot pass vacuously).
+// (2) A, B, E and D's odd rows (the samples agree): on equals off to the
+//     bit on every enhanced path; retail on equals off everywhere; with no
+//     colour view the rule does not run (LastRunEdge false, output = off).
+// (3) D, rule on, without the spread: each near sample mixes towards its own
+//     path's rgb (the near path: the depth-blind blur Nb, n = 1; weighted:
+//     the weighted blur; not weighted: the blur), each in-focus sample keeps
+//     its colour (f ~ 1e-7), so on = c_n * ref + (1 - c_n) * F within 3
+//     levels; on the near path that is c_n * Nb + (1 - c_n) * F. (With the
+//     spread an in-focus sample's amount is the blurred near coverage, which
+//     the test cannot know per pixel: D is not checked there; C is.)
+// (4) C's marker rows: the marker the resolved scene holds and the samples
+//     do not survives at the edge pixels (on - (E - marker) > 12 levels).
+// Warmed with the rule, no run compiles a pipeline.
+// Sabotages (item51/build/r2/sab/, each built, seen red on its assertion,
+// reverted): (a) the first rule back; (b) the mean of the factors on the
+// resolved colour; (c) sample 0's factor for every sample; (d1) the agreeing
+// branch always taken (= rule off); (d2) never taken; (e) the scene replaced by
+// the samples' mean; (f) sample 0's near value for every sample.
+TEST_F(DC3LookPostTest, DofEdgeRuleCompositesEachSample) {
+    ASSERT_TRUE(TheDOFProc);
+    GpuDevice &gpu = Gpu();
+    UIScreen *game = Hmx::Object::New<UIScreen>();
+    game->SetName("game_screen", ObjectDir::Main());
+    class ProbeUI : public UIManager {
+    public:
+        void SetCurrent(UIScreen *sc) { mCurrentScreen = sc; }
+    } ui;
+    UIManager *savedUI = TheUI;
+    TheUI = &ui;
+    ui.SetCurrent(game);
+    RndCam *prev = RndCam::Current();
+    RndCam::ClearCurrent();
+    // A blur depth of 0.3 (not 0.5): the far plane is then past factor 1
+    // (0.99 at 0.5), so the reference's far value is the blur itself.
+    TheDOFProc->Set(nullptr, 10.0f, 0.3f, 1.0f, 0.0f);
+    ASSERT_TRUE(TheDOFProc->Enabled());
+
+    constexpr int W = 1280, H = 720, kZone = 256;
+    auto &dev = gpu.Device();
+    wgpu::TextureDescriptor zd{};
+    zd.size = {(uint32_t)W, (uint32_t)H, 1};
+    zd.format = wgpu::TextureFormat::Depth32Float;
+    zd.sampleCount = 4;
+    zd.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+    wgpu::Texture depth = dev.CreateTexture(&zd), depthRef = dev.CreateTexture(&zd);
+    wgpu::TextureView depthView = depth.CreateView(), depthRefView = depthRef.CreateView();
+    wgpu::TextureDescriptor cd = zd;
+    cd.format = wgpu::TextureFormat::RGBA8Unorm;
+    wgpu::Texture colorMs = dev.CreateTexture(&cd);
+    wgpu::TextureView colorMsView = colorMs.CreateView();
+
+    DofPass dof;
+    const wgpu::TextureFormat kFmt = wgpu::TextureFormat::RGBA8Unorm;
+    // A first run for the constants (any scene and depth will do).
+    float c[4];
+    {
+        wgpu::Texture s0 = UploadOn(gpu, W, H, std::vector<uint8_t>((size_t)W * H * 4, 128));
+        wgpu::TextureView v0 = s0.CreateView();
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        ASSERT_TRUE(dof.Run(enc, v0, kFmt, depthView, 4, W, H, gpu, true, true, false, false, false));
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        for (int i = 0; i < 4; i++) c[i] = dof.LastCompositeConstants()[i];
+    }
+    ASSERT_NE(c[0], 0.0f);
+    auto factor = [&](float z) {
+        const float t = z * c[0] + c[1];
+        return std::clamp(std::min(std::max(std::fabs(t), c[2]), c[3]), 0.0f, 1.0f);
+    };
+    const float zFocus = -c[1] / c[0];
+    const float zNear = (-1.5f - c[1]) / c[0];
+    const float zInFront = (-0.03f - c[1]) / c[0], zBehind = (0.03f - c[1]) / c[0];
+    ASSERT_GT(zNear, 0.0f);
+    ASSERT_LT(zNear, zFocus);
+    ASSERT_LT(zBehind, 1.0f);
+    ASSERT_EQ(factor(1.0f), 1.0f) << "the far samples blur fully";
+    ASSERT_LT(factor(zFocus), 1e-4f);
+    ASSERT_EQ(factor(zNear), 1.0f);
+
+    // The sample pattern, the same in C++ and in the WGSL below. Kinds:
+    // 0 far, 1 in focus (C's +-0.03), 2 at the focus, 3 near.
+    static const unsigned kMasks[6] = {0x1, 0xE, 0x3, 0xC, 0x5, 0xA};
+    auto oddOdd = [](int x, int y) { return (x & y & 1) != 0; };
+    auto kind = [&](int x, int y, int s, bool ref) -> int {
+        const int zone = x / kZone;
+        if (zone == 0) return 0;
+        if (zone == 1) return 2;
+        if (zone == 4) return 3;
+        if (zone == 2) {
+            const unsigned m = oddOdd(x, y) ? 0x7u : kMasks[(x + 2 * y) % 6];
+            return ref || ((m >> s) & 1u) ? 0 : 1;
+        }
+        if (y & 1) return (x / 2) % 2 ? 3 : 2;
+        return ref || ((kMasks[(x + 2 * y) % 6] >> s) & 1u) ? 3 : 2;
+    };
+    const float kStripeHi = 228, kStripeLo = 20;
+    const float kF[3] = {60, 200, 140}, kN[3] = {200, 60, 32};
+    auto colOf = [&](int k, int x, int ch) -> float {
+        if (k == 0) return (x / 2) % 2 ? kStripeHi : kStripeLo;
+        if (k == 3) return kN[ch];
+        return kF[ch];
+    };
+    auto zOf = [&](int k, int y) {
+        return k == 0 ? 1.0f : k == 1 ? (y < H / 2 ? zInFront : zBehind) : k == 2 ? zFocus : zNear;
+    };
+    auto marked = [&](int x, int y) {
+        const int zone = x / kZone;
+        return zone == 0 || zone == 1 || zone == 4 || (zone == 2 && y % 8 == 5);
+    };
+    const int kMarker = 24;
+    // The resolved scene: the samples' mean (exact) plus the marker.
+    std::vector<uint8_t> px((size_t)W * H * 4);
+    for (int y = 0; y < H; y++)
+        for (int x = 0; x < W; x++) {
+            uint8_t *p = &px[((size_t)y * W + x) * 4];
+            for (int ch = 0; ch < 3; ch++) {
+                float sum = 0;
+                for (int s = 0; s < 4; s++) sum += colOf(kind(x, y, s, false), x, ch);
+                p[ch] = (uint8_t)(sum / 4 + (ch == 2 && marked(x, y) ? kMarker : 0));
+            }
+            p[3] = 255;
+        }
+    wgpu::Texture scene = UploadOn(gpu, W, H, px);
+    wgpu::TextureView sv = scene.CreateView();
+    // The reference first: its pass clears and discards the colour, and the
+    // test's pass then writes the samples the composites read.
+    for (int ref = 1; ref >= 0; ref--) {
+        char wgsl[4096];
+        snprintf(wgsl, sizeof(wgsl),
+                 "@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {\n"
+                 "  let x = f32(i32(i & 1u)) * 4.0 - 1.0;\n"
+                 "  let y = f32(i32(i >> 1u)) * 4.0 - 1.0;\n"
+                 "  return vec4f(x, y, 0.5, 1.0);\n}\n"
+                 "const kMasks = array<u32, 6>(1u, 14u, 3u, 12u, 5u, 10u);\n"
+                 "const kRef = %s;\n"
+                 "fn kind(x: i32, y: i32, s: u32) -> i32 {\n"
+                 "  let zone = x / %d; let odd = (x & y & 1) == 1;\n"
+                 "  if (zone == 0) { return 0; }\n"
+                 "  if (zone == 1) { return 2; }\n"
+                 "  if (zone == 4) { return 3; }\n"
+                 "  if (zone == 2) {\n"
+                 "    var m = kMasks[(x + 2 * y) %% 6]; if (odd) { m = 7u; }\n"
+                 "    return select(1, 0, kRef || ((m >> s) & 1u) == 1u);\n  }\n"
+                 "  if ((y & 1) == 1) { return select(2, 3, (x / 2) %% 2 == 1); }\n"
+                 "  return select(2, 3, kRef || ((kMasks[(x + 2 * y) %% 6] >> s) & 1u) == 1u);\n}\n"
+                 "struct Out { @location(0) c: vec4f, @builtin(frag_depth) z: f32 };\n"
+                 "@fragment fn fs(@builtin(position) pos: vec4f, @builtin(sample_index) s: u32) -> Out {\n"
+                 "  let x = i32(pos.x); let y = i32(pos.y); let k = kind(x, y, s);\n"
+                 "  var o: Out;\n"
+                 "  let stripe = select(%.1f, %.1f, (x / 2) %% 2 == 1) / 255.0;\n"
+                 "  let zc = select(%.9f, %.9f, y < %d);\n"
+                 "  if (k == 0) { o.c = vec4f(stripe, stripe, stripe, 1.0); o.z = 1.0; }\n"
+                 "  else if (k == 3) { o.c = vec4f(vec3f(%.1f, %.1f, %.1f) / 255.0, 1.0); o.z = %.9f; }\n"
+                 "  else { o.c = vec4f(vec3f(%.1f, %.1f, %.1f) / 255.0, 1.0); o.z = select(%.9f, zc, k == 1); }\n"
+                 "  return o;\n}\n",
+                 ref ? "true" : "false", kZone, kStripeLo, kStripeHi, zBehind, zInFront, H / 2, kN[0], kN[1],
+                 kN[2], zNear, kF[0], kF[1], kF[2], zFocus);
+        wgpu::ShaderSourceWGSL src;
+        src.code = wgsl;
+        wgpu::ShaderModuleDescriptor smd{};
+        smd.nextInChain = &src;
+        wgpu::ShaderModule sm = dev.CreateShaderModule(&smd);
+        wgpu::DepthStencilState ds{};
+        ds.format = wgpu::TextureFormat::Depth32Float;
+        ds.depthWriteEnabled = wgpu::OptionalBool::True;
+        ds.depthCompare = wgpu::CompareFunction::Always;
+        wgpu::ColorTargetState ct{};
+        ct.format = wgpu::TextureFormat::RGBA8Unorm;
+        ct.writeMask = wgpu::ColorWriteMask::All;
+        wgpu::FragmentState fs{};
+        fs.module = sm;
+        fs.entryPoint = "fs";
+        fs.targetCount = 1;
+        fs.targets = &ct;
+        wgpu::RenderPipelineDescriptor pd{};
+        pd.label = "TestDofEdgePerSample";
+        pd.vertex.module = sm;
+        pd.vertex.entryPoint = "vs";
+        pd.fragment = &fs;
+        pd.depthStencil = &ds;
+        pd.multisample.count = 4;
+        wgpu::RenderPipeline pipe = dev.CreateRenderPipeline(&pd);
+        wgpu::RenderPassColorAttachment ca{};
+        ca.view = colorMsView;
+        ca.loadOp = wgpu::LoadOp::Clear;
+        ca.storeOp = ref ? wgpu::StoreOp::Discard : wgpu::StoreOp::Store;  // the reference needs only its depth
+        ca.clearValue = {0, 0, 0, 0};
+        wgpu::RenderPassDepthStencilAttachment za{};
+        za.view = ref ? depthRefView : depthView;
+        za.depthLoadOp = wgpu::LoadOp::Clear;
+        za.depthStoreOp = wgpu::StoreOp::Store;
+        za.depthClearValue = 1.0f;
+        wgpu::RenderPassDescriptor rp{};
+        rp.label = "TestDofEdgeSamples";
+        rp.colorAttachmentCount = 1;
+        rp.colorAttachments = &ca;
+        rp.depthStencilAttachment = &za;
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = enc.BeginRenderPass(&rp);
+        pass.SetPipeline(pipe);
+        pass.Draw(3);
+        pass.End();
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+    }
+    dof.Prewarm(kFmt, gpu, true, false, false, true);
+    dof.Prewarm(kFmt, gpu, true, true, false, true);
+    dof.Prewarm(kFmt, gpu, true, true, true, true);
+    const uint64_t pipesWarm = GpuPipelineCreateCount();
+    auto run = [&](bool enhanced, bool weighted, bool nearField, bool spread, bool edge, bool withColor,
+                   const wgpu::TextureView &z, std::vector<uint8_t> &out) {
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        EXPECT_TRUE(dof.Run(enc, sv, kFmt, z, 4, W, H, gpu, enhanced, weighted, nearField, spread, edge,
+                            withColor ? colorMsView : wgpu::TextureView()));
+        EXPECT_EQ(dof.LastRunEdge(), enhanced && edge && withColor);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        out.assign((size_t)W * H * 4, 0);
+        EXPECT_TRUE(gpu.ReadbackTexture(dof.OutputTexture(), W, H, out.data(), out.size()));
+    };
+    struct Path {
+        const char *name;
+        bool enhanced, weighted, nearField, spread;
+    };
+    const Path paths[] = {
+        {"weighted (non-discrete)", true, true, false, false},
+        {"near field (discrete)", true, true, true, false},
+        {"near field + spread (discrete)", true, true, true, true},
+        {"not weighted", true, false, false, false},
+        {"retail", false, false, false, false},
+    };
+    // off, on, reference (off), on without the colour view.
+    std::vector<uint8_t> outs[5][4];
+    for (int k = 0; k < 5; k++) {
+        const Path &p = paths[k];
+        run(p.enhanced, p.weighted, p.nearField, p.spread, false, true, depthView, outs[k][0]);
+        run(p.enhanced, p.weighted, p.nearField, p.spread, true, true, depthView, outs[k][1]);
+        run(p.enhanced, p.weighted, p.nearField, p.spread, false, true, depthRefView, outs[k][2]);
+        run(p.enhanced, p.weighted, p.nearField, p.spread, true, false, depthView, outs[k][3]);
+    }
+    EXPECT_EQ(GpuPipelineCreateCount(), pipesWarm) << "Prewarm(.., edge) warms the edge rule's composites";
+    dof.Terminate();
+    TheDOFProc->UnSet();
+    if (prev) prev->Select(); else RndCam::ClearCurrent();
+    TheUI = savedUI;
+    ui.SetCurrent(nullptr);
+    delete game;
+
+    auto at = [&](const std::vector<uint8_t> &o, int x, int y, int ch) {
+        return (float)o[((size_t)y * W + x) * 4 + ch];
+    };
+    auto sceneAt = [&](int x, int y, int ch) { return (float)px[((size_t)y * W + x) * 4 + ch]; };
+    auto mixf = [](float a, float b, float t) { return a + (b - a) * t; };
+    const int kMargin = 48, y0 = 120, y1 = H - 120;
+    const float kTol = 3.0f, kApart = 8.0f;
+    for (int k = 0; k < 5; k++) {
+        const Path &p = paths[k];
+        const std::vector<uint8_t> &off = outs[k][0], &on = outs[k][1], &ref = outs[k][2], &noCol = outs[k][3];
+        // (2): the samples agree (A, B, E, D's odd-odd pixels); retail and
+        // no colour view everywhere.
+        size_t agreeDiff = 0, allDiff = 0, noColDiff = 0, agreeN = 0;
+        for (int y = 0; y < H; y++)
+            for (int x = 0; x < W; x++) {
+                const int zone = x / kZone;
+                const bool agree = zone == 0 || zone == 1 || zone == 4 || (zone == 3 && (y & 1));
+                agreeN += agree;
+                for (int ch = 0; ch < 4; ch++) {
+                    const size_t i = ((size_t)y * W + x) * 4 + ch;
+                    allDiff += on[i] != off[i];
+                    noColDiff += noCol[i] != off[i];
+                    agreeDiff += agree && on[i] != off[i];
+                }
+            }
+        EXPECT_EQ(noColDiff, 0u) << p.name << ": without the colour view the rule does not run";
+        if (!p.enhanced) {
+            EXPECT_EQ(allDiff, 0u) << "the retail composite does not read the edge rule";
+            continue;
+        }
+        EXPECT_EQ(agreeDiff, 0u) << p.name << ": where the samples agree the rule changes nothing ("
+                                 << agreeN << " pixels)";
+        // (1) and (4): zone C.
+        int cN = 0, cOk = 0, cFirst = 0, cOff = 0, cMean = 0, cMarkN = 0, cMarkKept = 0, cOffDiffers = 0;
+        float worst = 0;
+        for (int y = y0; y < y1; y++)
+            for (int x = 2 * kZone + kMargin; x < 3 * kZone - kMargin; x++) {
+                float fs[4], fMin = 1, fFront = 0, fMean = 0;
+                for (int s = 0; s < 4; s++) {
+                    const int kd = kind(x, y, s, false);
+                    const float z = zOf(kd, y);
+                    fs[s] = factor(z);
+                    fMin = std::min(fMin, fs[s]);
+                    if (z * c[0] + c[1] < 0) fFront = std::max(fFront, fs[s]);
+                    fMean += fs[s] / 4;
+                }
+                float dE = 0, dFirst = 0, dOff = 0, dMean = 0, dE0 = 0;
+                for (int ch = 0; ch < 3; ch++) {
+                    const float sc = sceneAt(x, y, ch), r = at(ref, x, y, ch);
+                    float e = sc;
+                    for (int s = 0; s < 4; s++) e += fs[s] * (r - colOf(kind(x, y, s, false), x, ch)) / 4;
+                    const float o = at(on, x, y, ch);
+                    dE = std::max(dE, std::fabs(o - e));
+                    dFirst = std::max(dFirst, std::fabs(e - mixf(sc, r, std::max(fMin, fFront))));
+                    dOff = std::max(dOff, std::fabs(e - mixf(sc, r, fs[0])));
+                    dMean = std::max(dMean, std::fabs(e - mixf(sc, r, fMean)));
+                    if (ch == 2) dE0 = o - (e - (marked(x, y) ? kMarker : 0));
+                }
+                cN++;
+                cOk += dE <= kTol;
+                worst = std::max(worst, dE);
+                cFirst += dFirst > kApart;
+                cOff += dOff > kApart;
+                cMean += dMean > kApart;
+                if (marked(x, y)) {
+                    cMarkN++;
+                    cMarkKept += dE0 > 12;
+                }
+                float dOffMeasured = 0;
+                for (int ch = 0; ch < 3; ch++)
+                    dOffMeasured = std::max(dOffMeasured, std::fabs(at(off, x, y, ch) - mixf(sceneAt(x, y, ch),
+                                                                                          at(ref, x, y, ch), fs[0])));
+                cOffDiffers += dOffMeasured <= kTol;
+            }
+        // (3): zone D, off the odd-odd pixels.
+        int dN = 0, dOk = 0, dOffApart = 0;
+        float dWorst = 0;
+        for (int y = y0; y < y1; y++)
+            for (int x = 3 * kZone + kMargin; x < 4 * kZone - kMargin; x++) {
+                if (y & 1) continue;
+                float cn = 0;
+                for (int s = 0; s < 4; s++) cn += kind(x, y, s, false) == 3 ? 0.25f : 0.0f;
+                float dE = 0, dO = 0;
+                for (int ch = 0; ch < 3; ch++) {
+                    const float e = cn * at(ref, x, y, ch) + (1 - cn) * kF[ch];
+                    dE = std::max(dE, std::fabs(at(on, x, y, ch) - e));
+                    const bool s0Near = kind(x, y, 0, false) == 3;
+                    dO = std::max(dO, std::fabs(e - (s0Near ? at(ref, x, y, ch) : sceneAt(x, y, ch))));
+                }
+                dN++;
+                dOk += dE <= kTol;
+                dWorst = std::max(dWorst, dE);
+                dOffApart += dO > kApart;
+            }
+        printf("DC3LookPost DOF edge rule, %s: C %d px: on = per-sample value (<= %.0f) %d, worst %.1f; apart (> %.0f) "
+               "from the first rule %d, sample 0 %d, mean factor %d; off = sample 0's value %d; marker kept %d/%d. "
+               "D %d px: on = c*ref + (1-c)*F %d, worst %.1f; apart from sample 0's %d. Pixels on != off %zu\n",
+               p.name, cN, kTol, cOk, worst, kApart, cFirst, cOff, cMean, cOffDiffers, cMarkKept, cMarkN, dN, dOk,
+               dWorst, dOffApart, allDiff / 4);
+        ASSERT_GT(cN, 10000);
+        ASSERT_GT(cFirst, cN * 9 / 10) << "the data tells the first rule apart (non-vacuous)";
+        ASSERT_GT(cOff, cN * 9 / 10) << "the data tells sample 0's rule apart (non-vacuous)";
+        ASSERT_GT(cMean, cN * 9 / 10) << "the data tells the mean factor apart (non-vacuous)";
+        EXPECT_GT(cOffDiffers, cN * 9 / 10) << p.name << ": off is sample 0's value (the reference is right)";
+        EXPECT_EQ(cOk, cN) << p.name << ": (1) a split pixel is each sample's own composite, averaged";
+        ASSERT_GT(cMarkN, 1000);
+        EXPECT_EQ(cMarkKept, cMarkN) << p.name << ": (4) what the resolved scene holds beyond its samples stays";
+        if (!p.spread) {
+            ASSERT_GT(dN, 10000);
+            EXPECT_GT(dOffApart, dN * 9 / 10) << p.name << ": the data tells sample 0's rule apart (non-vacuous)";
+            EXPECT_EQ(dOk, dN) << p.name << ": (3) near samples blur by their own value, in-focus ones keep theirs";
+        }
+    }
+    // (3), non-vacuous for the near value: on the near path the near samples'
+    // colour (the depth-blind blur) is far from the weighted blur.
+    {
+        int apart = 0, n = 0;
+        for (int y = y0; y < y1; y++)
+            for (int x = 3 * kZone + kMargin; x < 4 * kZone - kMargin; x++) {
+                if (y & 1) continue;
+                float d = 0;
+                for (int ch = 0; ch < 3; ch++) d = std::max(d, std::fabs(at(outs[1][2], x, y, ch) - at(outs[0][2], x, y, ch)));
+                n++;
+                apart += d > 2 * kApart;
+            }
+        printf("DC3LookPost DOF edge rule: D, depth-blind blur vs weighted blur > %.0f levels at %d of %d px\n",
+               2 * kApart, apart, n);
+        EXPECT_GT(apart, n * 9 / 10) << "the near path's two blurs differ in D (non-vacuous for the near value)";
+    }
+}
+
+// The edge rule through PostProcPass::Run: the world grade's depth of field
+// takes LookDofEdge for GpuDevice::LookClass(), so the class token reaches it
+// (enhanced: on for a discrete GPU, off for Apple and the rest), the edge
+// tokens force it on any class, and the retail and Native profiles never run
+// it whatever the token; without the 4x colour view (the rule reads its
+// samples) it never runs either. Sabotage: Run passing
+// LookAdapterClass::Discrete in place of LookClass() -- red (Apple and other
+// ran the rule).
+TEST_F(DC3LookPostTest, DofEdgeRuleFollowsTheAdapterClassThroughPostProcPass) {
+    ASSERT_TRUE(TheDOFProc);
+    GpuDevice &gpu = Gpu();
+    UIScreen *game = Hmx::Object::New<UIScreen>();
+    game->SetName("game_screen", ObjectDir::Main());
+    class ProbeUI : public UIManager {
+    public:
+        void SetCurrent(UIScreen *sc) { mCurrentScreen = sc; }
+    } ui;
+    UIManager *savedUI = TheUI;
+    TheUI = &ui;
+    ui.SetCurrent(game);
+    RndCam *prevCam = RndCam::Current();
+    RndCam::ClearCurrent();
+    TheDOFProc->Set(nullptr, 10.0f, 0.5f, 1.0f, 0.0f);
+    ASSERT_TRUE(TheDOFProc->Enabled());
+    RndPostProc *pp = Hmx::Object::New<RndPostProc>();
+    RndPostProc *prevPP = RndPostProc::Current();
+    pp->Select();
+    constexpr int W = 256, H = 144;
+    auto &dev = gpu.Device();
+    wgpu::Texture scene = UploadOn(gpu, W, H, std::vector<uint8_t>((size_t)W * H * 4, 128));
+    wgpu::TextureDescriptor d{};
+    d.size = {(uint32_t)W, (uint32_t)H, 1};
+    d.format = gpu.SurfaceFormat();
+    d.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture frame = dev.CreateTexture(&d);
+    wgpu::TextureDescriptor zd{};
+    zd.size = {(uint32_t)W, (uint32_t)H, 1};
+    zd.format = wgpu::TextureFormat::Depth32Float;
+    zd.sampleCount = 4;
+    zd.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+    wgpu::Texture depth = dev.CreateTexture(&zd);
+    wgpu::TextureDescriptor cd = zd;
+    cd.format = gpu.SurfaceFormat();
+    wgpu::Texture colorMs = dev.CreateTexture(&cd);
+    wgpu::TextureView colorMsView = colorMs.CreateView();
+    {
+        // Defined samples (a clear), as the main pass leaves them.
+        wgpu::RenderPassColorAttachment ca{};
+        ca.view = colorMsView;
+        ca.loadOp = wgpu::LoadOp::Clear;
+        ca.storeOp = wgpu::StoreOp::Store;
+        ca.clearValue = {0.5, 0.5, 0.5, 1.0};
+        wgpu::RenderPassDescriptor rp{};
+        rp.colorAttachmentCount = 1;
+        rp.colorAttachments = &ca;
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        enc.BeginRenderPass(&rp).End();
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+    }
+    std::vector<uint8_t> k = {0, 0, 0, 255};
+    wgpu::Texture black = UploadOn(gpu, 1, 1, k, wgpu::TextureUsage::None);
+    wgpu::TextureView sceneView = scene.CreateView(), frameView = frame.CreateView(),
+                      depthView = depth.CreateView(), blackView = black.CreateView();
+    PostProcPass pass;
+    pass.Init(gpu);
+    auto ranEdge = [&](bool withColor = true) {
+        pass.SetWorldGrade(true);
+        wgpu::CommandEncoder enc = dev.CreateCommandEncoder();
+        pass.Run(enc, sceneView, scene, W, H, depthView, 4, frameView, blackView, gpu,
+                 withColor ? colorMsView : wgpu::TextureView());
+        wgpu::CommandBuffer cmd = enc.Finish();
+        gpu.Queue().Submit(1, &cmd);
+        pass.SetWorldGrade(false);
+        return pass.Dof().LastRunEdge();
+    };
+    using milo::LookAdapterClass;
+    const LookAdapterClass classes[] = {LookAdapterClass::Discrete, LookAdapterClass::Apple,
+                                        LookAdapterClass::OtherNonDiscrete};
+    const char *names[] = {"discrete", "Apple", "other"};
+    {
+        milo::ScopedLookOverride o(milo::LookProfile::Enhanced);
+        const bool want[] = {true, false, false};
+        for (int c = 0; c < 3; c++) {
+            ASSERT_TRUE(milo::SetLookAdapterClassForInspection(false, classes[c]));
+            EXPECT_EQ(ranEdge(), want[c]) << "enhanced, the class token forced " << names[c];
+            EXPECT_TRUE(pass.Dof().LastRunDepthWeighted()) << "the depth of field ran (non-vacuous)";
+        }
+        ASSERT_TRUE(milo::SetLookDofEdgeForInspection(1));
+        for (int c = 0; c < 3; c++) {
+            ASSERT_TRUE(milo::SetLookAdapterClassForInspection(false, classes[c]));
+            EXPECT_TRUE(ranEdge()) << "dof_edge_on on " << names[c];
+            EXPECT_FALSE(ranEdge(false)) << "dof_edge_on without the 4x colour view on " << names[c];
+        }
+        ASSERT_TRUE(milo::SetLookDofEdgeForInspection(0));
+        for (int c = 0; c < 3; c++) {
+            ASSERT_TRUE(milo::SetLookAdapterClassForInspection(false, classes[c]));
+            EXPECT_FALSE(ranEdge()) << "dof_edge_off on " << names[c];
+        }
+        ASSERT_TRUE(milo::SetLookAdapterClassForInspection(true));
+        ASSERT_TRUE(milo::SetLookDofEdgeForInspection(-1));
+    }
+    {
+        milo::ScopedLookOverride o(milo::LookProfile::Retail);
+        ASSERT_TRUE(milo::SetLookDofEdgeForInspection(1));
+        for (int c = 0; c < 3; c++) {
+            ASSERT_TRUE(milo::SetLookAdapterClassForInspection(false, classes[c]));
+            EXPECT_FALSE(ranEdge()) << "retail's composite never takes the rule; " << names[c];
+        }
+        ASSERT_TRUE(milo::SetLookAdapterClassForInspection(true));
+    }
+    {
+        milo::ScopedLookOverride o(milo::LookProfile::Native);
+        EXPECT_FALSE(milo::SetLookDofEdgeForInspection(1));
+        EXPECT_FALSE(ranEdge()) << "Native";
+    }
+    pass.Terminate();
+    if (prevPP) prevPP->Select();
+    delete pp;
+    TheDOFProc->UnSet();
+    if (prevCam) prevCam->Select(); else RndCam::ClearCurrent();
+    TheUI = savedUI;
+    ui.SetCurrent(nullptr);
+    delete game;
+}
+
 // LookSettings::postDofNearField / Spread follow the look and their tokens
 // ({rnd native_look dof_near_on|_off|_rule, dof_near_spread_*}); retail and
 // Native take none, and Native refuses the token. Sabotage: the setter
