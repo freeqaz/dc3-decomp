@@ -1403,6 +1403,24 @@ package pins `@mediapipe/tasks-vision`, which `build.sh` vendors for pose input.
 
 Keyboard and gamepad reach the game through the engine's `Joypad_Native.cpp`.
 
+**Mouse, touch and pen (np-pointer):** `dc3_pre.js` sends Pointer Events on
+the canvas to the engine (`dc3_pointer`: the point relative to the picture
+`dc3PictureBox` finds inside the canvas's CSS box, that box's size -- the
+engine takes a finger's slop from it, 10 CSS px -- whether it is a finger, and
+the event's age from `e.timeStamp`, so a burst handed over by a slow frame
+keeps its own times). A finger's first tap on a row highlights it, the next
+picks it. While the pointer is on, the canvas is `touch-action: none` (a
+stylesheet rule as well as the inline style: the body's `manipulation` let a
+real phone cancel a drag), the wheel and the context menu are the game's, a
+press that dismisses the splash video is not sent, and a lost capture, a
+blurred window or a hidden tab cancel a press still down. `?env=DC3_POINTER=0`
+is the original page: nothing is sent and the browser keeps all three.
+`window.dc3PointerState()` is `GET /api/pointer/state`'s JSON (the desktop
+also has `POST /api/input/pointer?op=move|tap|down|up|drag|wheel|back|enable`;
+see `HttpServer.cpp`). The variables: [native.md](../debugging/native.md)
+(`DC3_POINTER*`). Proof: `scripts/web/phone_pointer.mjs` (Pixel 7, landscape
+or `&portrait=1`).
+
 **Pose (webcam):** the page asks for the camera on load, runs MediaPipe
 BlazePose in a worker, and pushes DC3's 20 joints into the same provider the
 desktop socket feeds — see [POSE_INPUT.md](POSE_INPUT.md#web). No camera,

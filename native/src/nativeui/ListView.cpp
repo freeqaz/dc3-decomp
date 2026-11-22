@@ -92,6 +92,21 @@ namespace nativeui {
                  highlightHeight_.Value() };
     }
 
+    int ListView::RowAt(Vec2 point) const {
+        const Rect &bounds = Bounds();
+        if (point.x < bounds.x || point.x >= bounds.x + bounds.width || point.y < bounds.y
+            || point.y >= bounds.y + bounds.height) {
+            return -1;
+        }
+        const float y = point.y - bounds.y + strip_.Scroll();
+        for (int i = 0; i < strip_.Count(); i++) {
+            if (y >= strip_.Start(i) && y < strip_.End(i)) {
+                return strip_.IsSelectable(i) ? i : -1;
+            }
+        }
+        return -1;
+    }
+
     Size ListView::OnMeasure(const Context &, const Constraints &constraints) {
         // A list takes the room it is given; with no limit it is as tall as its rows.
         return { constraints.Biggest().width,

@@ -360,3 +360,185 @@ Module.preRun.push(function () {
     dc3ApplyUrlEnv();
     dc3SaveStoreStart();
 });
+
+// Pointer input in the game's menus (np-pointer; native/src/platform/Pointer_Native.h):
+// a mouse hovers and clicks a row, a finger taps it, the wheel and a finger's
+// drag scroll the list (a flick keeps going), the right button is back.
+// Pointer Events on the canvas, so mouse, pen and touch share one path; the
+// on-screen pad (touch_controls.js) is its own elements above the canvas and
+// is not touched.  Coordinates go in relative to the PICTURE -- where the
+// canvas's buffer is shown inside its CSS box (dc3PictureBox: the whole box
+// when the buffer is stretched to it, which is the page's normal layout; the
+// contained/covered rectangle under object-fit, e.g. fullscreen's contain) --
+// with the picture's CSS size; the engine scales that onto its surface (the
+// canvas buffer, all of which is the frame on the web) and into the frame.
+// Nothing assumes 16:9 or a centred box.  ?env=DC3_POINTER=0 is the original:
+// nothing is sent and the canvas keeps the browser's touch, wheel and menu.
+function dc3PictureBox(c) {
+    var r = c.getBoundingClientRect();
+    // the content box: getBoundingClientRect includes border and padding
+    var cs = typeof getComputedStyle === 'function' ? getComputedStyle(c) : null;
+    function px(v) { var n = parseFloat(v); return isFinite(n) ? n : 0; }
+    var l = r.left, t = r.top, w = r.width, h = r.height;
+    if (cs) {
+        var bl = px(cs.borderLeftWidth) + px(cs.paddingLeft), bt = px(cs.borderTopWidth) + px(cs.paddingTop);
+        l += bl; t += bt;
+        w -= bl + px(cs.borderRightWidth) + px(cs.paddingRight);
+        h -= bt + px(cs.borderBottomWidth) + px(cs.paddingBottom);
+    }
+    var fit = cs ? cs.objectFit : 'fill', bw = c.width, bh = c.height;
+    if (!fit || fit === 'fill' || !(bw > 0 && bh > 0) || !(w > 0 && h > 0))
+        return { left: l, top: t, width: w, height: h };
+    var k = fit === 'cover' ? Math.max(w / bw, h / bh)
+          : fit === 'none' ? 1
+          : fit === 'scale-down' ? Math.min(1, Math.min(w / bw, h / bh))
+          : Math.min(w / bw, h / bh); // contain
+    var pw = bw * k, ph = bh * k;
+    // object-position: its computed form is two lengths/percentages ("50% 50%")
+    var pos = (cs.objectPosition || '50% 50%').split(/\s+/);
+    function at(v, free) { return /%$/.test(v) ? free * parseFloat(v) / 100 : px(v); }
+    return { left: l + at(pos[0] || '50%', w - pw), top: t + at(pos[1] || '50%', h - ph), width: pw, height: ph };
+}
+(function () {
+    if (typeof document === 'undefined') return;
+    var KIND = { move: 0, down: 1, up: 2, wheel: 3, cancel: 4, back: 5 };
+    var activeId = null;
+    var swallowId = null; // a press that dismissed the splash: not the game's
+    // DC3_POINTER=0 (?env=DC3_POINTER=0) is the original page: the browser
+    // keeps the canvas's touch gestures, wheel and context menu, and nothing
+    // is sent.  Unknown until the engine's runtime is up; until then nothing
+    // is sent either (there is nothing to send it to).
+    var enabled = null;
+    function isEnabled() {
+        if (enabled === null) {
+            var fn = Module['_dc3_pointer_enabled'];
+            // never call into the module before its runtime is up (a debug
+            // build aborts on that): runtimeInitialized is the generated
+            // code's own flag, in this --pre-js's scope
+            var up = typeof runtimeInitialized !== 'undefined' ? runtimeInitialized : !!Module['calledRun'];
+            if (typeof fn !== 'function' || !up) return false;
+            try { enabled = !!fn(); } catch (err) { return false; }
+            if (enabled) {
+                // the browser must not scroll, zoom or take a drag on the game
+                // as its own (body has touch-action: manipulation, under which
+                // a real phone cancelled a finger's drag after two moves --
+                // Fable review).  A rule, not only the inline style, so a
+                // layout script restyling the canvas cannot drop it.
+                var st = document.createElement('style');
+                st.textContent = 'html.dc3-pointer #dc3-canvas { touch-action: none !important; }';
+                (document.head || document.documentElement).appendChild(st);
+                document.documentElement.classList.add('dc3-pointer');
+                var c = document.getElementById('dc3-canvas');
+                if (c) c.style.touchAction = 'none';
+            }
+        }
+        return enabled;
+    }
+    // the runtime comes up a few seconds in: settle the switch then (bounded)
+    var polls = 0;
+    var poll = setInterval(function () {
+        isEnabled();
+        if (enabled !== null || ++polls > 600) clearInterval(poll);
+    }, 500);
+    function splashUp() {
+        var v = document.getElementById('splash-video');
+        return !!(v && v.style.opacity !== '0' && v.src && !v.ended);
+    }
+    function send(kind, e, wheel) {
+        var fn = Module['_dc3_pointer'];
+        var c = document.getElementById('dc3-canvas');
+        if (!fn || !c || !isEnabled()) return;
+        var r = dc3PictureBox(c);
+        if (r.width <= 0 || r.height <= 0) return;
+        var touch = e && e.pointerType && e.pointerType !== 'mouse' ? 1 : 0;
+        var x = e ? e.clientX - r.left : 0, y = e ? e.clientY - r.top : 0;
+        // the event's own time: a slow frame hands over a burst of events,
+        // and the release velocity needs when each happened (Fable review)
+        var age = e && typeof e.timeStamp === 'number' && typeof performance !== 'undefined'
+            ? (performance.now() - e.timeStamp) / 1000 : 0;
+        if (!(age >= 0 && age < 0.5)) age = 0; // another clock, or nonsense: now
+        fn(kind, x, y, r.width, r.height, wheel || 0, touch, age);
+    }
+    function lose() {
+        // a lost up (capture taken away, the tab hidden, the window blurred)
+        // must not leave a finger down on the game
+        if (activeId === null) return;
+        activeId = null;
+        send(KIND.cancel, null);
+    }
+    function attach() {
+        var c = document.getElementById('dc3-canvas');
+        if (!c || c.dataset.dc3Pointer) return !!c;
+        c.dataset.dc3Pointer = '1';
+        isEnabled();
+        c.addEventListener('pointerdown', function (e) {
+            if (!isEnabled()) return;
+            if (splashUp()) { swallowId = e.pointerId; return; } // it skips the splash (index.html)
+            if (e.button === 2) { send(KIND.back, e); return; }
+            if (e.button !== 0 || (activeId !== null && activeId !== e.pointerId)) return;
+            activeId = e.pointerId;
+            try { c.setPointerCapture(e.pointerId); } catch (err) { /* old browser */ }
+            send(KIND.down, e);
+            if (e.pointerType !== 'mouse') e.preventDefault();
+        });
+        c.addEventListener('pointermove', function (e) {
+            if (activeId !== null && e.pointerId !== activeId) return;
+            if (activeId === null && e.pointerType !== 'mouse') return;
+            send(KIND.move, e);
+        });
+        function end(kind) {
+            return function (e) {
+                if (e.pointerId === swallowId) { swallowId = null; return; }
+                if (e.pointerId !== activeId) return;
+                activeId = null;
+                send(kind, e);
+            };
+        }
+        c.addEventListener('pointerup', end(KIND.up));
+        c.addEventListener('pointercancel', end(KIND.cancel));
+        c.addEventListener('lostpointercapture', function (e) {
+            // fires after pointerup too; then activeId is already clear
+            if (e.pointerId === activeId) lose();
+        });
+        window.addEventListener('blur', lose);
+        document.addEventListener('visibilitychange', function () { if (document.hidden) lose(); });
+        c.addEventListener('wheel', function (e) {
+            if (!isEnabled()) return;
+            // pixels -> rows: a mouse notch is ~100 px (a line, 3 rows of text)
+            var rows = e.deltaMode === 1 ? e.deltaY / 3 : e.deltaMode === 2 ? e.deltaY * 5 : e.deltaY / 100;
+            send(KIND.wheel, e, rows);
+            e.preventDefault();
+        }, { passive: false });
+        c.addEventListener('contextmenu', function (e) { if (isEnabled()) e.preventDefault(); });
+        return true;
+    }
+    if (!attach()) document.addEventListener('DOMContentLoaded', attach);
+})();
+
+// For tests and tools (scripts/phone_pointer.mjs): GET /api/pointer/state's
+// JSON, from the engine now, with each drawn row's centre also in PAGE CSS
+// pixels (row.page = [x, y]) -- mapped back through the same two rectangles a
+// pointer is mapped in by: the picture inside the canvas's CSS box
+// (dc3PictureBox, s.picture) and where the frame sits on the engine's surface
+// (s.present; on the web the whole canvas buffer).  null before the engine is
+// up.
+Module.dc3PointerState = function () {
+    var fn = Module['_dc3_pointer_state'];
+    var c = typeof document !== 'undefined' && document.getElementById('dc3-canvas');
+    if (!fn || !c) return null;
+    var s = JSON.parse(UTF8ToString(fn()));
+    var r = dc3PictureBox(c), p = s.present;
+    if (p && p.surface_w > 0 && p.w > 0) {
+        s.lists.forEach(function (l) {
+            l.rows.forEach(function (row) {
+                var bx = p.x + row.x / p.frame_w * p.w, by = p.y + row.y / p.frame_h * p.h;
+                row.page = [r.left + bx * r.width / p.surface_w, r.top + by * r.height / p.surface_h];
+            });
+        });
+        s.picture = [r.left, r.top, r.width, r.height];
+        var cr = c.getBoundingClientRect();
+        s.canvas = [cr.left, cr.top, cr.width, cr.height, c.width, c.height];
+    }
+    return s;
+};
+if (typeof window !== 'undefined') window.dc3PointerState = Module.dc3PointerState;

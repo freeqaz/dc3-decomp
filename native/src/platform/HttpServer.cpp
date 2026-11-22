@@ -12,6 +12,7 @@
 #include "platform/TextInput_Native.h"
 #include "songbrowser/SongCatalogSource_Native.h" // GET /api/songs
 #include "platform/SongBrowserHooks_Native.h" // GET /api/songbrowser/state
+#include "platform/Pointer_Native.h" // POST /api/input/pointer
 #include "platform/Rnd_Wgpu.h"
 #include "telemetry/GameplayTelemetry.h"
 #include "gfx/Screenshot.h"
@@ -483,24 +484,7 @@ void HttpServer::ProcessCommands() {
 // that from the physical/scripted pad every poll), so code that samples held
 // buttons instead of listening for messages does not see it.
 static JoypadAction HttpButtonAction(JoypadButton btn, Symbol controllerType) {
-    JoypadAction action = ButtonToAction(btn, controllerType);
-    if (action != kAction_None)
-        return action;
-    switch (btn) { // milo-native-engine Joypad_Native.cpp nativeButtonToAction
-    case kPad_X: return kAction_Confirm;
-    case kPad_Circle: return kAction_Cancel;
-    case kPad_Start: return kAction_Start;
-    case kPad_Select: return kAction_Option;
-    case kPad_DUp: return kAction_Up;
-    case kPad_DDown: return kAction_Down;
-    case kPad_DLeft: return kAction_Left;
-    case kPad_DRight: return kAction_Right;
-    case kPad_L1: return kAction_PageUp;
-    case kPad_R1: return kAction_PageDown;
-    case kPad_Square: return kAction_ViewModify;
-    case kPad_Tri: return kAction_ShellOption;
-    default: return kAction_None;
-    }
+    return Dc3Pointer::PadButtonAction(btn, controllerType); // the pointer's presses share it
 }
 
 // Set by POST /api/input/press with "device":"pad" (under mInputMutex), taken
@@ -1836,6 +1820,77 @@ void HttpServer::RegisterEndpoints() {
             res.status = 500;
             res.set_content(JsonError(result.error), "application/json");
         }
+    });
+
+    // POST /api/input/pointer?op=...  — the mouse / a finger in the menus
+    // (np-pointer, native/src/platform/Pointer_Native.h).  x, y in the
+    // 1280x720 frame, or in window coordinates with space=window (mapped
+    // through the present scale like a real mouse).  touch=1: a finger.
+    //   op=move&x&y            a mouse moves here (hover)
+    //   op=tap&x&y             down + up in place
+    //   op=down|up&x&y         one edge
+    //   op=drag&x&y&x2&y2&ms   down, moves at 60 Hz over ms, up (a fast one flings)
+    //   op=wheel&rows&x&y      rows > 0 = later rows
+    //   op=back                the right button
+    //   op=enable&on=0|1       DC3_POINTER at run time
+    // GET /api/pointer/state  the switch, the lists drawn last frame with
+    // their rows' rectangles, and counters of what the pointer did.
+    svr->Post("/api/input/pointer", [](const httplib::Request& req, httplib::Response& res) {
+        auto num = [&](const char *k, float d) {
+            return req.has_param(k) ? (float)std::atof(req.get_param_value(k).c_str()) : d;
+        };
+        const std::string op = req.has_param("op") ? req.get_param_value("op") : "";
+        const bool window = req.has_param("space") && req.get_param_value("space") == "window";
+        const bool touch = num("touch", 0) != 0;
+        Dc3PointerGesture::Input in;
+        in.x = num("x", 640);
+        in.y = num("y", 360);
+        in.touch = touch;
+        in.t = Dc3Pointer::Now();
+        using namespace Dc3PointerGesture;
+        if (op == "enable") {
+            Dc3Pointer::SetEnabled(num("on", 1) != 0);
+        } else if (op == "move" || op == "down" || op == "up") {
+            in.kind = op == "move" ? kMove : op == "down" ? kDown : kUp;
+            Dc3Pointer::Push(in, 0, window);
+        } else if (op == "tap") {
+            in.kind = kDown;
+            Dc3Pointer::Push(in, 0, window);
+            in.kind = kUp;
+            in.t += 0.08f;
+            Dc3Pointer::Push(in, 0.08f, window);
+        } else if (op == "drag") {
+            const float x2 = num("x2", in.x), y2 = num("y2", in.y);
+            const float secs = std::max(0.02f, num("ms", 300) / 1000.0f);
+            const int n = std::max(2, (int)(secs * 60));
+            const float x0 = in.x, y0 = in.y, t0 = in.t;
+            in.kind = kDown;
+            Dc3Pointer::Push(in, 0, window);
+            for (int i = 1; i <= n; i++) {
+                in.kind = kMove;
+                in.x = x0 + (x2 - x0) * i / n;
+                in.y = y0 + (y2 - y0) * i / n;
+                in.t = t0 + secs * i / n;
+                Dc3Pointer::Push(in, secs * i / n, window);
+            }
+            in.kind = kUp;
+            Dc3Pointer::Push(in, secs + 0.001f, window);
+        } else if (op == "wheel") {
+            in.kind = kWheel;
+            in.wheel = num("rows", 1);
+            Dc3Pointer::Push(in, 0, window);
+        } else if (op == "back") {
+            in.kind = kBack;
+            Dc3Pointer::Push(in, 0, window);
+        } else {
+            res.status = 400;
+            res.set_content(JsonError("op: move|tap|down|up|drag|wheel|back|enable"), "application/json");
+            return;
+        }
+        res.set_content(JsonOk("{\"op\":\"" + JsonEscape(op) + "\"}"), "application/json");
+    });
+    svr->Get("/api/pointer/state", [](const httplib::Request&, httplib::Response& res) {
+        res.set_content(JsonOk(Dc3Pointer::StateJson()), "application/json");
     });
 
     // GET /api/pose_camera — the camera the pose server reads, where the

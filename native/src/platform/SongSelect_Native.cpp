@@ -574,6 +574,16 @@ void NativeSongBrowser::NoteInjectedPadPress() {
     if (sBrowserHooks) sBrowserHooks->injectedPadPress();
 }
 
+int NativeSongBrowser::PointerTap(float x, float y, bool firstHighlights) {
+    return sBrowserHooks && sBrowserHooks->pointerTap
+        ? sBrowserHooks->pointerTap(x, y, firstHighlights)
+        : 0;
+}
+
+bool NativeSongBrowser::PointerHover(float x, float y) {
+    return sBrowserHooks && sBrowserHooks->pointerHover && sBrowserHooks->pointerHover(x, y);
+}
+
 bool NativeSongBrowser::RunCommand(const std::string &name, std::string &error) {
     if (sBrowserHooks) return sBrowserHooks->command(name, error);
     error = "this binary has no song browser";

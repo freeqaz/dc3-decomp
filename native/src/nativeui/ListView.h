@@ -80,6 +80,10 @@ namespace nativeui {
         int TotalRowsBuilt() const { return totalRowsBuilt_; }
         // Where the highlight bar is now, in the same space as Bounds().
         Rect HighlightRect() const;
+        // The selectable row at `point` (the same space as Bounds()), or -1:
+        // outside the list, on a header, past the last row.  For a mouse or
+        // a finger (np-pointer).
+        int RowAt(Vec2 point) const;
 
     protected:
         Size OnMeasure(const Context &ctx, const Constraints &constraints) override;

@@ -54,6 +54,17 @@ void NoteInjectedPadPress();
 // name is unknown, the classic list has no such row in this mode).
 bool RunCommand(const std::string &name, std::string &error);
 
+// The mouse or a finger tapped (x, y) in the 1280x720 frame while the
+// browser is shown (Pointer_Native.cpp).  2: it was on a row of the song
+// list, and that row is now picked, as the pad's Down/Up and A would.  With
+// `firstHighlights` (a finger) a row that was not the selection only becomes
+// it: 1.  0: off the rows (nothing done).
+int PointerTap(float x, float y, bool firstHighlights);
+// The mouse rests over (x, y) while the browser is shown and the menus are
+// the pad's (controller mode): the row under it becomes the selection, as
+// the pad's Down/Up would; nothing is picked.  True when on a song row.
+bool PointerHover(float x, float y);
+
 struct Hooks {
     void (*enter)(UIPanel *);
     void (*exit)(UIPanel *);
@@ -65,6 +76,8 @@ struct Hooks {
     void (*anyButtonDown)(int);
     void (*injectedPadPress)();
     bool (*command)(const std::string &, std::string &);
+    int (*pointerTap)(float, float, bool);
+    bool (*pointerHover)(float, float);
 };
 // Called once, by the browser's translation unit.
 void Install(const Hooks *hooks);

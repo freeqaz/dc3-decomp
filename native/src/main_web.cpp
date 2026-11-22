@@ -12,6 +12,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "platform/Pointer_Native.h"
 #include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
 #include <emscripten/em_asm.h>
@@ -461,6 +462,10 @@ static void mainLoop() {
             gFrameTraceActive = true;
         const double t0 = trace ? emscripten_get_now() : 0.0;
         sApp->RunOneFrame();
+        // The mouse and the finger in the menus (np-pointer).  The desktop
+        // runs it from App::RunWithoutDebugging's frame (Dc3MenuSelectFramePoll);
+        // RunOneFrame has no such call, so the web's goes here.
+        Dc3Pointer::FramePoll();
         if (trace)
             FrameTraceRecord(sFrameCount, t0, emscripten_get_now());
         WebScreenBundleHook();

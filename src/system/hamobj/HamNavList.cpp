@@ -40,6 +40,7 @@
 #include <stdio.h>
 #ifdef HX_NATIVE
 #include "platform/MenuGesture_Native.h"
+#include "platform/Pointer_Native.h"
 #endif
 
 DECLARE_MESSAGE(LeftHandListEngagementMsg, "left_hand_list_engagement")
@@ -88,6 +89,9 @@ HamNavList::HamNavList()
 
 HamNavList::~HamNavList() {
 #ifdef HX_NATIVE
+    // The pointer's hit test keeps where this list's rows were drawn
+    // (native/src/platform/Pointer_Native.h).
+    Dc3Pointer::Forget(this);
     if (ObjectDir::InDeleteObjects()) {
         // Delete the widgets on this path too, exactly as below. They are
         // never in a dir -- UIListDir::CreateElements makes each one with
@@ -1910,6 +1914,11 @@ void HamNavList::DrawShowing() {
         }
     }
 
+#ifdef HX_NATIVE
+    // Where the rows are on screen this frame, for the mouse and the finger
+    // (native/src/platform/Pointer_Native.h).  The draw camera is current.
+    Dc3Pointer::NoteListDrawn(this, widgetState, WorldXfm(), RndCam::Current());
+#endif
     mListDirResource->DrawWidgets(
         widgetState, mListState, mListWidgets, WorldXfm(),
         GetState(), nullptr, false

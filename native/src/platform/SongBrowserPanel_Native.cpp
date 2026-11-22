@@ -385,6 +385,53 @@ public:
 
     bool HidesChrome() const { return shown_; }
 
+    // The mouse or a finger (Pointer_Native.cpp): a tap at (x, y) in the
+    // frame.  The selection walks to the tapped row as the pad's Down/Up
+    // would (so the classic list's highlight, sounds and preview follow), and
+    // then A picks it (2).  A finger (`firstHighlights`) on a row that was not
+    // the selection only walks there (1): a phone's rows are ~16 CSS px tall,
+    // and the row picked should be the one the player saw lit.  0, and nothing
+    // done, off the song list's rows or while the list does not have the focus
+    // (the Recently Played shelf).
+    int PointerTap(float x, float y, bool firstHighlights) {
+        const bool wasSelected = shown_ && screen_
+            && screen_->List().RowAt({x, y}) == screen_->List().SelectedIndex();
+        if (!MoveSelectionTo(x, y)) {
+            return 0;
+        }
+        if (firstHighlights && !wasSelected) {
+            return 1;
+        }
+        gate_.HandleEvent(nativeui::ActionEvent{nativeui::Action::Accept});
+        return 2;
+    }
+
+    // A resting mouse: the row under it is the selection (no pick).
+    bool PointerHover(float x, float y) { return MoveSelectionTo(x, y); }
+
+    // Walk the selection to the song row under (x, y) with the pad's own
+    // Down/Up, so every rule the pad obeys (headers, the gate) still holds.
+    bool MoveSelectionTo(float x, float y) {
+        if (!shown_ || !screen_ || gate_.frozen) {
+            return false;
+        }
+        const nativeui::ListView &list = screen_->List();
+        const int row = list.RowAt({x, y});
+        if (row < 0) {
+            return false;
+        }
+        for (int guard = 0; guard < 256 && list.SelectedIndex() != row; guard++) {
+            const int before = list.SelectedIndex();
+            const nativeui::Action step =
+                row > before ? nativeui::Action::Down : nativeui::Action::Up;
+            gate_.HandleEvent(nativeui::ActionEvent{step});
+            if (list.SelectedIndex() == before) {
+                return false; // the focus is not on the list
+            }
+        }
+        return list.SelectedIndex() == row;
+    }
+
     // POST /api/songbrowser/command: what the screen's onCommand runs.
     bool RunCommandNamed(const std::string &name, std::string &error) {
         songbrowser_ui::Command command;
@@ -1173,9 +1220,15 @@ bool HookCommand(const std::string &name, std::string &error) {
     return false;
 }
 
+int HookPointerTap(float x, float y, bool firstHighlights) {
+    return sBrowserMade ? TheBrowser().PointerTap(x, y, firstHighlights) : 0;
+}
+bool HookPointerHover(float x, float y) { return sBrowserMade && TheBrowser().PointerHover(x, y); }
+
 const NativeSongBrowser::Hooks kHooks = {
     HookEnter,       HookExit,      HookPoll,             HookDraw,   HookHandle,
     HookHidesChrome, HookStateJson, NoteButtonDown, HookInjectedPadPress, HookCommand,
+    HookPointerTap,  HookPointerHover,
 };
 
 struct Installer {
