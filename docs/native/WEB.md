@@ -1174,6 +1174,59 @@ class|rotate|switch|screen|size` breaks one part each and the matching check
 fails. `--only shots --tag T` saves title, menu, song select and gameplay in
 both orientations.
 
+### Portrait songs (np-portrait2, W-37 step 2)
+
+During a song (`game_screen`) on a phone held upright, the picture is 9:16:
+full width at the top (412x732 CSS px on a Pixel 7, buffer 1080x1920), with
+a slim strip under it holding the camera view (left) and B and Start (right).
+Menus, pause, results and landscape keep step 1's 16:9 picture.
+
+- **Page** (`portrait.js`): `html.dc3-portrait-song` while the portrait layout
+  is on and the screen is `game_screen`; it sizes the canvas box 9:16 (or
+  narrower when the screen is too short for that plus a 92 px strip) and
+  calls `Module._milo_web_set_portrait_frame(1)` (0 when it ends).
+  `window.dc3Portrait.song9x16` and `window.dc3PortraitFrame()` (the engine's
+  shape, read back) are for the tests.
+- **Engine** (`GpuDevice::SetPortraitFrame`, web only): the logical shape on
+  its side for `FollowCanvas`'s fit, taken once the new box has settled
+  (250 ms). The web's 1080-row cap now measures the short side
+  (`ResolveFrameSizesWithCap`), so the 9:16 frame is 1080x1920, not 608x1080.
+- **Game** (`native/src/platform/NativePortrait.{h,cpp}`, hooks in
+  `RndCam::UpdateLocal`/`Select`/`GetViewProjectXfms`, `HX_NATIVE` only): the
+  Rnd virtual screen stays 1280x720, so a full-screen viewport covers the tall
+  frame. The **world camera** (`TheWorld->Cam()`, the one the director cuts)
+  takes its aspect from the frame and keeps the shot's vertical view, so the
+  dancer is as tall as in landscape and fills the frame. **Every other camera**
+  (the `[ui.cam]`, panel cameras) draws the authored 16:9 HUD through a 2D
+  remap of its projection: 1.8 frame-widths wide (`MILO_PORTRAIT_HUD_SCALE`,
+  1..3), right edge on the frame's right edge, centred vertically, not
+  stretched. The single-player HUD (flashcards x 0.83..0.98, the score) is in
+  the right of the 16:9 screen, so it lands whole and 1.8x the size it would
+  have in a 16:9 strip; the left 44% of the HUD falls off the left edge. A
+  camera with a target texture is untouched; a 16:9 frame turns all of it off.
+- **Pointer mapping during a portrait song**: the canvas's bounding box is
+  the picture (9:16). The world is drawn 9:16 directly; the HUD's 16:9 design
+  point (u, v) in 0..1 is at canvas x = w * (k*u + 1 - k), y = h * (0.5 +
+  (v - 0.5) * k * (9/16) * (w/h)), with k = 1.8. Read `window.miloPortraitFrame`
+  (1 while the engine draws 9:16) rather than the class, since the frame
+  follows the box 250 ms later.
+
+**Switch:** `?portraitsong=0` keeps step 1's 16:9 picture during songs;
+`?portrait=0` turns all portrait layout off.
+
+**Why a remap and not re-anchored panels.** The HUD is authored Milo scenes
+with no authoring tool; moving each panel natively needs a per-object table
+that rots with every scene. One affine remap per camera is three lines in the
+projection and keeps every HUD element in its authored relation to the
+others. What it cannot do: a HUD element on the left of the 16:9 screen
+(player 2's flashcards in a two-player song) falls off the frame.
+
+`scripts/web/phone.mjs --only song [--device iphone] [--song-down N] [--tag T]`
+drives to a song upright and checks the 9:16 box, the engine's 9:16 frame,
+the strip's buttons, a rotation to landscape mid-song and back, and saves
+screenshots; `--sabotage-portrait song|frame|songrotate|strip` each break one
+part.
+
 ### iPhone and iPad (W-29..W-34, np-ios)
 
 The owner opened the site on an iPhone (Safari, iOS 26). The page refused the
