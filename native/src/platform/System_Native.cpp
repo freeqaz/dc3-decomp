@@ -177,6 +177,13 @@ static void Dc3ProfileBanner(const Dc3ProfileDefault *rows, int n) {
 }
 
 void Dc3ProfileApply() {
+    // The MILO_CAM_* variables (NativeSettings::Init: MILO_CAM_ASPECT,
+    // _FOV_SCALE, _NEAR, _FAR, _FORWARD, _HEIGHT, _LATERAL, _DEBUG) were
+    // documented and never read: nothing called Init(). Found by np-portrait
+    // (2026-11-22) measuring a portrait camera. Read here, first thing in
+    // main() on native and web, after the page's ?env= bridge; with none of
+    // them set it changes nothing.
+    NativeSettings::Get().Init();
     sDc3Profile = Dc3ProfileResolve();
     const bool explicitProfile = getenv("DC3_PROFILE") && *getenv("DC3_PROFILE");
     if (sDc3Profile == kDc3ProfileRelease) {

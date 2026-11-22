@@ -1117,6 +1117,63 @@ Not known without a real phone: the GPU and frame rate with the pose worker,
 and memory (the release peaks at 523 MB of wasm heap). The page must be served
 over https to reach a phone at all.
 
+### Portrait (np-portrait)
+
+A phone held upright used to show the 16:9 picture centred in the screen with
+black above and below, small buttons under it and a box asking to turn the
+phone. Now (`native/web/portrait.js`, `html.dc3-portrait`):
+
+- The picture is pinned to the top and fills the width. It is **the same
+  size** as before: a 16:9 picture in an upright phone is bound by the width
+  either way (412x232 CSS px on a Pixel 7, buffer 1081x608 device px). The
+  gain is everything around it.
+- Under it, a **deck** fills the rest of the screen (about 600 of 839 px on a
+  Pixel 7): a "Now" card that names the screen in a player's words ("Press A
+  to start", "Main menu", "Pick a song", "Now dancing") and, in a song, the
+  song's title (asked of the game: `{meta_performer get_song}`, then that
+  song's metadata `title`, through the page's `dc3_dta_eval` bridge); the
+  camera view at about 26vw tall (it was about 23 px inside the 16:9 strip);
+  and the buttons as one remote-style cluster at the bottom centre: the d-pad
+  with **A in its middle**, B and Start in two corners, each button about a
+  fifth of the screen wide (91 px on a Pixel 7, 62 before), less when the
+  deck is short, never under 44 px.
+- No "turn your phone" box; the "Now" card carries a small line instead.
+- Rotation switches the layout at once (`resize`, `orientationchange`, the
+  orientation media query); the engine takes the new canvas box after it has
+  held 250 ms (`GpuDevice::FollowCanvas`), as for any resize.
+
+**The switch:** `?portrait=0` is the old page exactly (centred picture, the
+hint). `?portrait=1` turns the layout on for any device whose window is
+portrait (a tall desktop browser window, which otherwise keeps the old centred
+picture). `?dev` keeps the developer harness's layout.
+
+**Why the picture is not bigger (measured options).** DC3's menus are Milo
+scenes authored for a 1280x720 virtual screen, and `RndCam` keeps the vertical
+field of view and derives the horizontal one from the frame's aspect
+(`Cam.cpp`, `UpdateLocal`: `ratio *= TheRnd.YRatio()` or `1/MILO_CAM_ASPECT`).
+A 9:16 frame therefore shows the middle 9/16 x 9/16 = 32% of each menu's width,
+and the same for the HUD. Measured with `MILO_CAM_ASPECT=0.5625` (the camera a
+portrait frame would get), un-stretched to 9:16: the title shows "NCE / TRAL 3"
+and a cut copyright line, song select shows only the album-art box with the
+song list off the right edge, and gameplay is the one screen that works -- the
+dancer fills the frame well -- but the flashcards and score are off the sides. A taller UI needs each screen re-anchored natively (or new
+milos), and a portrait gameplay camera needs the HUD moved off the cropped
+sides. `MILO_CAM_ASPECT` (and the other `MILO_CAM_*` variables) had never
+worked: `NativeSettings::Init()`, which reads them, was never called.
+`Dc3ProfileApply()` calls it now (test: `Dc3ProfileTest.MiloCamVariablesAreReadAtStartup`).
+
+**Desktop.** A tall *browser* window keeps the old centred picture unless
+`?portrait=1`. A tall *native* window is letterboxed by the present pass
+(H-18): a 720x1280 window shows the picture at 720x405, centred, black above
+and below.
+
+`scripts/web/phone.mjs --only portrait` checks the layout, a rotation to
+landscape and back (layout, the engine's buffer, a drawn picture, a tap on A
+after it), the switch back and the desktop window; `--sabotage-portrait
+class|rotate|switch|screen|size` breaks one part each and the matching check
+fails. `--only shots --tag T` saves title, menu, song select and gameplay in
+both orientations.
+
 ### iPhone and iPad (W-29..W-34, np-ios)
 
 The owner opened the site on an iPhone (Safari, iOS 26). The page refused the
