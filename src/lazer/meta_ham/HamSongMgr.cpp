@@ -36,6 +36,9 @@
 #include <cstdio>
 #include <map>
 #include <vector>
+#ifdef HX_NATIVE
+#include "platform/SongId_Native.h"
+#endif
 
 HamSongMgr TheHamSongMgr;
 SongMgr &TheSongMgr = TheHamSongMgr;
@@ -243,7 +246,17 @@ void HamSongMgr::AddSongData(
         static Symbol song_id("song_id");
         Symbol curSym = curArr->Sym(0);
         int songID = 0;
+#ifdef HX_NATIVE
+        // A community package gives a name, `(song_id thefox)`.  Int() on it
+        // logged a MILO_FAIL and returned half of the symbol's address, a
+        // different id in each process that read the file, so the song's
+        // saved scores were lost with the song cache.  A name now becomes a
+        // number that depends on the name alone; an integer is passed through
+        // (platform/SongId_Native.h).
+        NativeSongId::Find(curArr, song_id, songID);
+#else
         curArr->FindData(song_id, songID, false);
+#endif
 #ifdef HX_NATIVE
         if (songID == 0) {
             fprintf(
@@ -253,6 +266,20 @@ void HamSongMgr::AddSongData(
                 curArr->Size(),
                 a->File()
             );
+        }
+        // A hashed id can land on one that another song has: the song that
+        // came second is refused, with one line naming both.  Sharing the id
+        // would share the saved scores, and moving to a free id would make
+        // the id depend on which packages are installed.
+        {
+            auto known = mSongNameLookup.find(songID);
+            if (NativeSongId::Collides(
+                    songID,
+                    known != mSongNameLookup.end() ? known->second.Str() : nullptr,
+                    curSym.Str()
+                )) {
+                continue;
+            }
         }
 #endif
         static Symbol missing_song_data("missing_song_data");
