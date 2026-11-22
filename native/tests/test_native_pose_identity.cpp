@@ -726,7 +726,8 @@ protected:
 
     // One sensor frame (33 ms).  Returns the result; applies its bindings.
     Players::Result Tick(int autoPlayers = 1, int windowMs = kWindowMs) {
-        Players::Result r = mPlayers.Update(mSlots, mBound, autoPlayers, 33.0f, windowMs, 1000);
+        Players::Result r =
+            mPlayers.Update(mSlots, mBound, autoPlayers, 33.0f, windowMs, 1000, mReleaseWaitMs);
         for (int p = 0; p < 2; p++) {
             if (r.assign[p] >= 0) {
                 mBound[p] = r.assign[p];
@@ -759,6 +760,7 @@ protected:
     int mBound[2] = { -1, -1 };
     int mBinds[2] = { 0, 0 };
     int mLastRule[2] = { 0, 0 };
+    int mReleaseWaitMs = 0; // a song (or DC3_POSE_RELEASE_WAIT_MS=0); menus set it
 };
 
 TEST_F(PoseIdentityPlayersTest, ALostPlayerTwoIsBoundAgainWhenHerSkeletonReturns) {
@@ -1183,6 +1185,131 @@ TEST_F(PoseIdentityPlayersTest, ZeroIsTheOldRule) {
     Skeleton(2, 603, 0.9f);
     Ticks(60, 1, 0);
     EXPECT_EQ(mBound[1], -1);
+}
+
+// LET GO IN VIEW (gpd-menubind).  Song select, replay menu24 of the GPD
+// session: the image unbinds player 1 with her skeleton in view on about half
+// of all frames, and MediaPipe reports one of two people a frame; the frame
+// after a release often holds only the other one, 1.9 m deeper, and she was
+// bound to that one at once.  In a menu she now waits up to kReleaseWaitMs
+// for a body near where she was.
+class PoseIdentityReleaseTest : public PoseIdentityPlayersTest {
+protected:
+    // Player 1 on 701 (z 1.5); a second person, 702, at z 3.4, 0.3 m aside.
+    void Bound() {
+        mReleaseWaitMs = Dc3PoseIdentity::kDefaultReleaseWaitMs;
+        Skeleton(0, 701, 0.0f, 1.5f);
+        Tick();
+        ASSERT_EQ(mBound[0], 701);
+        Ticks(10);
+    }
+    // The camera frame holds only the other one (701's slot given up).
+    void OnlyTheOther() {
+        Gone(0);
+        Skeleton(1, 702, 0.3f, 3.4f);
+    }
+    void OnlyHer() {
+        Gone(1);
+        Skeleton(0, 701, 0.0f, 1.5f);
+    }
+};
+
+TEST_F(PoseIdentityReleaseTest, AlternatingFramesNeverHandHerToTheOtherPerson) {
+    Bound();
+    int changes = 0, last = mBound[0];
+    for (int f = 0; f < 60; f++) {
+        if (mBound[0] == 701 && mSlots[0].tracked) {
+            Unbind(0); // the image, with her in view
+            Tick();
+        }
+        if (f % 2)
+            OnlyHer();
+        else
+            OnlyTheOther();
+        Players::Result r = Tick();
+        if (mBound[0] >= 0 && mBound[0] != last) {
+            changes++;
+            last = mBound[0];
+        }
+        if (mSlots[1].tracked)
+            EXPECT_NE(mBound[0], 702) << "frame " << f << " rule " << r.rule[0];
+    }
+    EXPECT_EQ(changes, 0);
+    EXPECT_EQ(mBound[0], 701);
+}
+
+TEST_F(PoseIdentityReleaseTest, AFarBodyWaitsThenIsTaken) {
+    Bound();
+    Unbind(0); // let go, and the next frame holds only the other one
+    OnlyTheOther();
+    Players::Result r = Tick();
+    EXPECT_EQ(mBound[0], -1);
+    EXPECT_TRUE(r.waiting[0]);
+    // 33 ms a frame: still waiting at 660 ms, the other person's past 700.
+    Ticks(19);
+    EXPECT_EQ(mBound[0], -1);
+    Ticks(3);
+    EXPECT_EQ(mBound[0], 702);
+}
+
+TEST_F(PoseIdentityReleaseTest, HerBodyUnderANewIdIsBoundAtOnce) {
+    Bound();
+    Unbind(0);
+    Gone(0);
+    Skeleton(2, 703, 0.2f, 1.7f); // 0.22 m from where she was
+    Skeleton(1, 702, 0.3f, 3.4f);
+    Players::Result r = Tick();
+    EXPECT_EQ(mBound[0], 703);
+    EXPECT_FALSE(r.waiting[0]);
+}
+
+TEST_F(PoseIdentityReleaseTest, InASongSheIsBoundAtOnceAsBefore) {
+    Bound();
+    mReleaseWaitMs = 0; // NativeSongInPlay: a pause is worse
+    Unbind(0);
+    OnlyTheOther();
+    Tick();
+    EXPECT_EQ(mBound[0], 702);
+}
+
+TEST_F(PoseIdentityReleaseTest, HerSkeletonHeldButNotValidIsPreferredToAFarValidOne) {
+    // The measured shape of menu24's "rule=auto lost=0ms dist=1.9m": her
+    // skeleton still in its slot (the dropout hold) but not passing the
+    // quality filter, the other one passing it.  Valid-first took the other.
+    Bound();
+    Skeleton(0, 701, 0.0f, 1.5f, false);
+    Skeleton(1, 702, 0.3f, 3.4f);
+    Unbind(0);
+    Tick();
+    EXPECT_EQ(mBound[0], 701);
+}
+
+TEST_F(PoseIdentityReleaseTest, AfterALossInAMenuAFarBodyWaitsToo) {
+    // Out of view first, the image holding her binding, then let go: the
+    // wait runs from the let-go, and the other body is hers after it.
+    Bound();
+    OnlyTheOther();
+    Ticks(5);
+    Unbind(0);
+    Ticks(15);
+    EXPECT_EQ(mBound[0], -1);
+    Ticks(10);
+    EXPECT_EQ(mBound[0], 702);
+}
+
+TEST_F(PoseIdentityReleaseTest, PlayerTwoIsBoundBackToHerBodyAtOnce) {
+    // A two-player mode's menu: the image lets player 2 go in view; her own
+    // body is there, and is hers on the next frame.
+    mReleaseWaitMs = Dc3PoseIdentity::kDefaultReleaseWaitMs;
+    Skeleton(0, 711, 0.0f, 2.0f);
+    Skeleton(1, 712, -0.8f, 2.0f);
+    Ticks(10, 2);
+    ASSERT_EQ(mBound[0], 711);
+    ASSERT_EQ(mBound[1], 712);
+    Unbind(1);
+    Players::Result r = Tick(2);
+    EXPECT_EQ(mBound[1], 712);
+    EXPECT_FALSE(r.waiting[1]);
 }
 
 } // namespace

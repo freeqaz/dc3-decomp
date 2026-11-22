@@ -556,7 +556,15 @@ static bool NativeModeNeedsTwoPlayers() {
 // unbound while her skeleton was in view (the chooser, a one-player mode) is
 // not remembered, so the first rule above still holds.  Anyone else joins the
 // image's way.  DC3_POSE_REACQUIRE_MS=0 is the behaviour before this.
+//
+// And it must not hand player 1 to whoever else the frame holds the moment her
+// skeleton misses a frame or the image lets her go (song select lets her go on
+// about half of all frames, gpd-menubind): outside a song the auto-assign
+// binds her at once only near where her bound skeleton was last seen, and a
+// farther body waits DC3_POSE_RELEASE_WAIT_MS (Dc3PoseIdentity::
+// kDefaultReleaseWaitMs; 0 = the behaviour before).
 static int sAutoAssignCount[2] = { 0, 0 };
+static bool NativeSongInPlay();
 
 static SkeletonChooser *NativeChooser() {
     ShellInput *shell = TheHamUI.GetShellInput();
@@ -590,8 +598,18 @@ static void NativeAutoAssignPlayers(float elapsedMs) {
     }
     static bool sDebug = Dc3EnvFlag("DC3_SCORING_DEBUG", false);
     const int autoPlayers = NativeModeNeedsTwoPlayers() ? 2 : 1;
-    Dc3PoseIdentity::Players::Result result = gPlayers.Update(
-        slots, boundId, autoPlayers, elapsedMs, Dc3PoseIdentity::ReacquireMs(), NativePoseHoldMs());
+    const int releaseWaitMs = NativeSongInPlay() ? 0 : Dc3PoseIdentity::ReleaseWaitMs();
+    Dc3PoseIdentity::Players::Result result =
+        gPlayers.Update(slots, boundId, autoPlayers, elapsedMs, Dc3PoseIdentity::ReacquireMs(),
+                        NativePoseHoldMs(), releaseWaitMs);
+    static bool sWaiting[2] = { false, false };
+    for (int p = 0; p < 2; p++) {
+        if (result.waiting[p] && !sWaiting[p] && BindingLog())
+            fprintf(stderr,
+                "DC3 SCORING: p%d waits up to %d ms for a body where her skeleton was\n",
+                p, releaseWaitMs);
+        sWaiting[p] = result.waiting[p];
+    }
     const Skeleton *bound[2] = { nullptr, nullptr };
     static int sLastAssign[2] = { -1, -1 };
     static int sLastRule[2] = { 0, 0 };

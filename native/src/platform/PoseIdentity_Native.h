@@ -587,6 +587,39 @@ static const float kFreshSlackMs = 250.0f;
 // player danced on unbound.)  Only past the window is the stand-in the player.
 static const float kAutoWaitMs = 700.0f;
 
+// LET GO (branch gpd-menubind, PLAN P-24).  In song select the image unbinds
+// player 1 -- MEASURED on the GPD session of 2026-11-21, on about half of all
+// sensor frames, mostly with her skeleton in view -- and the auto-assign used
+// to bind her again at once to whatever free skeleton the frame held: the one
+// that passes the quality filter first, and her own, held through a dropout,
+// often does not.  MediaPipe at num_poses 2 often reports one of two people a
+// frame, so that was the other person as often as not: replay menu24,
+// tracking ids at z 3.4 and 1.5 m took the binding (and the menu's hand
+// cursor) in turn.  And the image let go of her in view, she is not
+// remembered (see Update), so on the next frame her skeleton misses -- the
+// next frame, often -- the binding the image still holds counts for nothing
+// and the other person was bound at once too.  A stand-in hops the same way.
+// So, outside a song: for kReleaseWaitMs after the skeleton she was bound to
+// was last in the frame, the auto-assign binds her only to a skeleton within
+// kRebindMax of where it was (her own, or the same body under a new id); a
+// farther one waits for that time.  Rules 1 and 2 (her own id, a fresh body
+// where she stood) come first as before.  Not in a song: there Game::CheckForSkeletonLoss
+// pauses on the first frame nobody is bound, and a wrong body for a few frames
+// is the lesser harm.  DC3_POSE_RELEASE_WAIT_MS sets the wait; 0 is the
+// behaviour before this.
+static const int kDefaultReleaseWaitMs = 700;
+
+inline int ReleaseWaitMs() {
+    const char *v = getenv("DC3_POSE_RELEASE_WAIT_MS");
+    if (!v || !*v)
+        return kDefaultReleaseWaitMs;
+    char *end = nullptr;
+    long ms = strtol(v, &end, 10);
+    if (end == v || *end != '\0' || ms < 0)
+        return kDefaultReleaseWaitMs;
+    return ms > kMaxReacquireMs ? kMaxReacquireMs : (int)ms;
+}
+
 struct SlotView {
     bool tracked = false; // a skeleton is in this slot
     bool valid = false;   // and it passes the image's quality filter
@@ -623,6 +656,8 @@ public:
             mSlotId[s] = -1;
             mSlotAgeMs[s] = 0.0f;
         }
+        for (int p = 0; p < kPlayers; p++)
+            mRelease[p] = Release();
     }
 
     struct Result {
@@ -637,15 +672,19 @@ public:
         // GestureMgr / SkeletonChooser) has to forget this one, or she is
         // left looking like somebody who joined.
         int released[kPlayers];
+        // Not bound this frame because every free skeleton is too far from
+        // where her bound skeleton was last seen (kReleaseWaitMs).
+        bool waiting[kPlayers];
     };
 
     // One sensor frame.  boundId[p] is the tracking id player p holds (-1 =
     // none), `autoPlayers` how many players the auto-assign may bind without
     // being asked (1, or 2 in a two-player mode), `windowMs` the reacquire
     // window (0 = strict: no memory, first free slot), `holdMs` the dropout
-    // hold (how long a slot kept reporting a skeleton nobody saw).
+    // hold (how long a slot kept reporting a skeleton nobody saw),
+    // `releaseWaitMs` the let-go-in-view wait (0 = none: in a song, or off).
     Result Update(const SlotView *slots, const int *boundId, int autoPlayers, float elapsedMs,
-                  int windowMs, int holdMs = 0) {
+                  int windowMs, int holdMs = 0, int releaseWaitMs = 0) {
         Result r;
         for (int p = 0; p < kPlayers; p++) {
             r.slot[p] = -1;
@@ -654,6 +693,7 @@ public:
             r.distance[p] = -1.0f;
             r.lostMs[p] = 0.0f;
             r.released[p] = -1;
+            r.waiting[p] = false;
         }
         // How long each slot's skeleton has been there.
         for (int s = 0; s < kSlots; s++) {
@@ -667,6 +707,19 @@ public:
         for (int p = 0; p < kPlayers; p++) {
             if (boundId[p] >= 0)
                 r.slot[p] = Find(slots, boundId[p]);
+        }
+        // Where the skeleton she is bound to was last in the frame, and how
+        // long ago (kReleaseWaitMs).
+        for (int p = 0; p < kPlayers; p++) {
+            Release &rel = mRelease[p];
+            if (r.slot[p] >= 0) {
+                rel.seen = true;
+                rel.x = slots[r.slot[p]].x;
+                rel.z = slots[r.slot[p]].z;
+                rel.ms = 0.0f;
+            } else {
+                rel.ms += elapsedMs;
+            }
         }
         if (windowMs <= 0) {
             for (int p = 0; p < kPlayers; p++)
@@ -779,6 +832,8 @@ public:
                 // and the image unbinds her 250 sensor-ms in.)
                 if (m.known && m.lost && m.lostMs < kAutoWaitMs && boundId[p] > 0)
                     continue; // still waiting for her own body
+                const Release &rel = mRelease[p];
+                const bool nearOnly = rel.seen && rel.ms < (float)releaseWaitMs;
                 int best = -1;
                 float bestD = -1.0f;
                 for (int s = 0; s < kSlots; s++) {
@@ -786,6 +841,19 @@ public:
                         continue;
                     if (claimed[s])
                         continue;
+                    if (nearOnly) {
+                        // Let go in view: only where she was, for now.
+                        float d = Flat(rel.x, rel.z, slots[s]);
+                        if (d > kRebindMax) {
+                            r.waiting[p] = true;
+                            continue;
+                        }
+                        if (best < 0 || d < bestD) {
+                            best = s;
+                            bestD = d;
+                        }
+                        continue;
+                    }
                     if (!m.known && !m.placed) {
                         best = s;
                         break;
@@ -796,8 +864,10 @@ public:
                         bestD = d;
                     }
                 }
-                if (best >= 0)
+                if (best >= 0) {
+                    r.waiting[p] = false;
                     Bind(r, claimed, slots, boundId, p, best, kRuleAuto, bestD);
+                }
             }
         }
         return r;
@@ -875,7 +945,17 @@ private:
         }
     }
 
+    // Where the skeleton each player was bound to was last in the frame
+    // (kReleaseWaitMs).  Kept apart from Memory: it is about the binding, not
+    // the person, and holds with no reacquire window.
+    struct Release {
+        bool seen = false; // (x, z) is known
+        float x = 0.0f, z = 0.0f; // where her bound skeleton was last in the frame
+        float ms = 0.0f;   // since then
+    };
+
     Memory mMem[kPlayers];
+    Release mRelease[kPlayers];
     int mSlotId[kSlots] = { -1, -1, -1, -1, -1, -1 };
     float mSlotAgeMs[kSlots] = { 0, 0, 0, 0, 0, 0 };
 };
