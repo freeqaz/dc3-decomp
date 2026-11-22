@@ -45,6 +45,12 @@ PERF_RE = re.compile(r"DC3 PERF: fps=([\d.]+) pose_fps=([\d.]+) persons=([\d.]+)
 POSE_RE = re.compile(r"POSE_STATS: fps=([\d.]+) infer_ms_mean=([\d.]+) infer_ms_p95=([\d.]+)")
 BEAT_RE = re.compile(r"DC3_HEARTBEAT: uptime_s=(\d+) rss_kb=(\d+)")
 EXIT_RE = re.compile(r"DC3_EXIT: how=(\S+) detail=(\S+) code=(-?\d+) uptime_s=(\d+) rss_kb=(\d+)")
+# The engine's AudioDevice says when the window stops drawing (the display is
+# off, the lid is shut, the window is hidden) and when it draws again.  While it
+# does not draw, the main loop runs at about 1 frame a second, waiting for the
+# compositor: those DC3 PERF windows measure the display being off, not the game.
+HIDDEN_RE = re.compile(r"AudioDevice: window hidden and not drawing")
+SHOWN_RE = re.compile(r"AudioDevice: window is drawing again")
 SIGNAL_RE = re.compile(r"Caught signal|SIGSEGV|SIGABRT|SIGBUS|Segmentation fault")
 GAMEPLAY_SCREENS = ("game_screen",)
 RESULT_SCREENS = ("perform_endgame_screen", "practice_endgame_screen", "battle_endgame_screen",
@@ -59,6 +65,8 @@ def mean(xs):
 def parse_log(path):
     songs, cur = [], None
     modals, screens, perf, pose, rss = {}, [], [], [], []
+    perf_lines, notices, hidden_at = [], [], []   # line numbers; hidden state per PERF line
+    hidden = False
     exit_info, signal = None, None
     with open(path, "rb") as fh:
         for n, raw in enumerate(fh, 1):
@@ -105,6 +113,12 @@ def parse_log(path):
             m = PERF_RE.search(line)
             if m:
                 perf.append(tuple(float(x) for x in m.groups()))
+                perf_lines.append(n)
+                hidden_at.append(hidden)
+                continue
+            if HIDDEN_RE.search(line) or SHOWN_RE.search(line):
+                hidden = bool(HIDDEN_RE.search(line))
+                notices.append(n)
                 continue
             m = POSE_RE.search(line)
             if m:
@@ -123,7 +137,46 @@ def parse_log(path):
                 signal = line[:300]
     songs = [s for s in songs if s["moves"] or s["results_screen"]]
     return {"songs": songs, "modals": modals, "screens": screens, "perf": perf, "pose": pose,
-            "rss": rss, "exit": exit_info, "signal": signal}
+            "rss": rss, "exit": exit_info, "signal": signal,
+            "perf_not_drawing": not_drawing(perf_lines, hidden_at, notices),
+            "sleeps": sleeps(rss, exit_info)}
+
+
+def not_drawing(perf_lines, hidden_at, notices):
+    """For each DC3 PERF window: True when the window was not drawing in it.
+
+    The hidden notice comes after the stall that caused it (the mute is decided
+    on the frame that ends the gap), so a window is counted as not drawing when
+    the window was hidden at its line, or when a notice falls between the PERF
+    lines either side of it."""
+    out, j = [], 0
+    for i, n in enumerate(perf_lines):
+        lo = perf_lines[i - 1] if i else 0
+        hi = perf_lines[i + 1] if i + 1 < len(perf_lines) else float("inf")
+        while j < len(notices) and notices[j] <= lo:
+            j += 1
+        out.append(hidden_at[i] or (j < len(notices) and notices[j] < hi))
+    return out
+
+
+def sleeps(rss, exit_info):
+    """Spans the machine was asleep (or the process frozen): [(from_s, to_s)].
+
+    DC3_HEARTBEAT sleeps on the steady clock and prints the wall-clock uptime,
+    so heartbeats that are much further apart on the wall clock than their
+    interval mean the steady clock stopped -- a suspend.  The same holds from
+    the last heartbeat to DC3_EXIT, which a suspend just before quitting leaves
+    as one long silent stretch."""
+    if len(rss) < 2:
+        return []
+    steps = sorted(b[0] - a[0] for a, b in zip(rss, rss[1:]))
+    interval = steps[len(steps) // 2]
+    if interval <= 0:
+        return []
+    marks = [t for t, _ in rss]
+    if exit_info and exit_info["uptime_s"] >= marks[-1]:
+        marks.append(exit_info["uptime_s"])
+    return [(a, b) for a, b in zip(marks, marks[1:]) if b - a > interval * 1.5 + 30]
 
 
 def summarise(session):
@@ -158,12 +211,24 @@ def summarise(session):
                 lines.append(f"  {'':<22}    {'':<7} {n:3d} of them with the body seen in under "
                              f"{SEEN_LOW:.0%} of the measure's camera frames"
                              + (f": move_bad {lo.get('move_bad', 0)}" if n else ""))
+    asleep = sum(b - a for a, b in r["sleeps"])
+    if asleep:
+        lines.append(f"asleep: {asleep / 60:.1f} min with the game stopped (the machine slept?), "
+                     + ", ".join(f"{a} s..{b} s" for a, b in r["sleeps"])
+                     + f"; awake {(ex['uptime_s'] - asleep) / 60 if ex else 0:.1f} min")
     if r["perf"]:
-        fps = [p[0] for p in r["perf"]]
-        pfs = [p[1] for p in r["perf"] if p[1] > 0]
-        lines.append(f"game fps: mean {mean(fps):.1f}, lowest 5 s window {min(fps):.1f}; "
-                     f"pose frames the game accepted: mean {mean(pfs):.1f}/s"
-                     + (f", lowest {min(pfs):.1f}" if pfs else ""))
+        dark = r["perf_not_drawing"]
+        drawn = [p for p, d in zip(r["perf"], dark) if not d]
+        fps = [p[0] for p in drawn]
+        pfs = [p[1] for p in drawn if p[1] > 0]
+        if fps:
+            lines.append(f"game fps: mean {mean(fps):.1f}, lowest 5 s window {min(fps):.1f}; "
+                         f"pose frames the game accepted: mean {mean(pfs):.1f}/s"
+                         + (f", lowest {min(pfs):.1f}" if pfs else ""))
+        if any(dark):
+            lines.append(f"window not drawing (display off, lid shut or hidden; the game waits "
+                         f"for the compositor, about 1 fps): {sum(dark)} of {len(dark)} PERF "
+                         f"windows, about {sum(dark) * 5 / 60:.1f} min, left out of the fps above")
     if r["pose"]:
         lines.append(f"tracker: {mean([p[0] for p in r['pose']]):.1f} fps, inference "
                      f"{mean([p[1] for p in r['pose']]):.1f} ms mean, "
@@ -172,7 +237,8 @@ def summarise(session):
         first, last = r["rss"][0], r["rss"][-1]
         peak = max(x[1] for x in r["rss"])
         lines.append(f"memory: {first[1] / 1024:.0f} MB at {first[0]} s, {last[1] / 1024:.0f} MB "
-                     f"at {last[0]} s, peak {peak / 1024:.0f} MB")
+                     f"at {last[0]} s, peak {peak / 1024:.0f} MB"
+                     + (f", {ex['rss_kb'] / 1024:.0f} MB at exit" if ex and ex["rss_kb"] > 0 else ""))
     lines.append(f"game messages (MILO_FAIL/ASSERT/NOTIFY/WARN): {len(r['modals'])} kinds, "
                  f"{sum(e['count'] for e in r['modals'].values())} total")
     order = {"FAIL": 0, "ASSERT": 0, "WARN": 1, "NOTIFY": 2}

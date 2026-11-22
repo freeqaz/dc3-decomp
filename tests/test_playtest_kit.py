@@ -275,6 +275,48 @@ class SessionSummaryTest(unittest.TestCase):
         self.assertIn("p1 expert", text)
         self.assertIn("1 of them with the body seen in under 80%", text)
         self.assertIn("fireburning", text)
+    def test_a_downloaded_song_has_its_name(self):
+        # A DLC song's midi path carries its package's device prefix; it used to
+        # match nothing, so its moves were added to the song before it (or "?").
+        self.write(LOG.replace("midi='songs/macarena/", "midi='cnt00000004:/songs/thefox/"))
+        text, r = session_summary.summarise(self.dir)
+        self.assertEqual([s["song"] for s in r["songs"]], ["thefox"])
+
+    def test_a_window_that_is_not_drawing_is_left_out_of_the_fps(self):
+        # GPD 2026-11-22: the lid was shut for 18 min on the title screen; the
+        # main loop ran at 1 fps waiting for the compositor, and the summary
+        # reported "game fps: mean 28.5, lowest 5 s window 1.0".  The hidden
+        # notice is printed after the frame that ended the stall, so the window
+        # just before it is the stall's too.
+        perf = "DC3 PERF: fps=%s pose_fps=16.0 persons=1.00 window_s=5.0 provider=1\n"
+        log = (perf % "72.0" + perf % "72.0" + perf % "45.0"
+               + "AudioDevice: window hidden and not drawing, audio muted (x)\n"
+               + perf % "1.0" * 4
+               + "AudioDevice: window is drawing again, audio back on\n"
+               + perf % "26.0" + perf % "60.0" + perf % "60.0")
+        self.write(log)
+        text, r = session_summary.summarise(self.dir)
+        self.assertEqual(r["perf_not_drawing"],
+                         [False, False, True, True, True, True, True, True, False, False])
+        self.assertIn("game fps: mean 66.0, lowest 5 s window 60.0", text)  # 72 72 60 60
+        self.assertIn("window not drawing", text)
+        self.assertIn("6 of 10 PERF windows", text)
+
+    def test_a_suspend_is_reported_as_asleep(self):
+        # GPD 2026-11-21: 36 min of play, then the machine slept 2.2 h; the
+        # summary said "after 168.7 min" with nothing about the gap.
+        self.write(LOG + "DC3_HEARTBEAT: uptime_s=180 rss_kb=700000\n"
+                   "DC3_EXIT: how=main_loop_returned detail=window_closed code=0 "
+                   "uptime_s=8000 rss_kb=700000 pid=1\n")
+        text, r = session_summary.summarise(self.dir)
+        self.assertEqual(r["sleeps"], [(180, 8000)])
+        self.assertIn("asleep: 130.3 min", text)
+        # Heartbeats on time and an exit soon after the last one: no sleep.
+        self.write(LOG + "DC3_EXIT: how=main_loop_returned detail=quit_key code=0 uptime_s=150 "
+                   "rss_kb=700000 pid=1\n")
+        text, r = session_summary.summarise(self.dir)
+        self.assertEqual(r["sleeps"], [])
+        self.assertNotIn("asleep", text)
 
     def test_no_exit_line_says_so(self):
         self.write(LOG)
