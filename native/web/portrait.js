@@ -20,15 +20,28 @@
 // the engine then takes the new canvas box once it has held 250 ms
 // (GpuDevice::FollowCanvas), as for any resize.
 //
-// window.dc3Portrait = { mode, active, changes, screen, song } for the tests
-// (scripts/web/phone.mjs).
+// A song held upright (np-portrait2, PLAN W-37 step 2): on game_screen the
+// picture turns portrait-shaped. The page sets html.dc3-portrait-song (the
+// canvas box becomes 9:16, full width at the top, a slim strip under it with
+// B, Start and the camera view) and asks the engine for a 9:16 frame
+// (milo_web_set_portrait_frame). The engine draws the world camera 9:16
+// with the 16:9 shot's vertical view -- the dancer fills the frame -- and the
+// 16:9 HUD larger and right-anchored, so the flashcards and the score are
+// whole (native/src/platform/NativePortrait.h). Anything else (a menu,
+// pause, results, landscape) is the 16:9 frame and step 1's layout.
+// ?portraitsong=0 keeps step 1's 16:9 picture during songs too.
+//
+// window.dc3Portrait = { mode, active, changes, screen, song, song9x16,
+// frame } for the tests (scripts/web/phone.mjs).
 (function () {
     'use strict';
     var q = new URLSearchParams(location.search).get('portrait');
     var mode = q === '0' ? 'off' : q === '1' ? 'on' : 'auto';
     var fine = window.matchMedia && window.matchMedia('(any-pointer: fine)').matches;
     var touchOnly = !fine && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-    var state = window.dc3Portrait = { mode: mode, active: false, changes: 0, screen: '', song: '' };
+    var songMode = new URLSearchParams(location.search).get('portraitsong') !== '0';
+    var state = window.dc3Portrait = { mode: mode, active: false, changes: 0, screen: '', song: '',
+                                       song9x16: false, songChanges: 0, frameAsked: -1 };
     // The page refused to boot (no secure context, WebGPU or JSPI): its card
     // owns the screen.
     if (window.dc3BootBlocked) { state.blocked = String(window.dc3BootBlocked); return; }
@@ -80,7 +93,39 @@
             root.classList.toggle('dc3-portrait', on);
             window.dispatchEvent(new CustomEvent('dc3-portrait', { detail: { active: on } }));
         }
+        updateSong();
     }
+
+    // The song's 9:16 frame: on only while the layout is portrait and the
+    // game is on game_screen. The class first (the canvas box), then the
+    // engine's frame shape; the engine waits for the new box to settle.
+    var frameTimer = 0;
+    function askFrame() {
+        frameTimer = 0;
+        var want = state.song9x16 ? 1 : 0;
+        if (state.frameAsked === want) return;
+        try {
+            if (window.Module && typeof Module._milo_web_set_portrait_frame === 'function') {
+                Module._milo_web_set_portrait_frame(want);
+                state.frameAsked = want;
+                return;
+            }
+        } catch (err) { /* not ready */ }
+        frameTimer = setTimeout(askFrame, 500);  // the engine is not up yet
+    }
+    function updateSong() {
+        var on = songMode && state.active && state.screen === 'game_screen';
+        if (on !== state.song9x16) {
+            state.song9x16 = on;
+            state.songChanges++;
+            root.classList.toggle('dc3-portrait-song', on);
+            window.dispatchEvent(new CustomEvent('dc3-portrait-song', { detail: { active: on } }));
+        }
+        if (!frameTimer) askFrame();
+    }
+    window.dc3PortraitFrame = function () {  // the engine's frame shape, for the tests
+        try { return Module._milo_web_portrait_frame(); } catch (err) { return -1; }
+    };
 
     // The song being played, asked of the game itself (dc3_dta_eval, the
     // page's DTA bridge): MetaPerformer's song, then its metadata's title.
@@ -120,6 +165,7 @@
         if (/^(title|main|choose_mode|song_select|attract)_screen$/.test(state.screen)) state.song = '';
         if (state.screen === 'game_screen' && !songTimer) { songTries = 0; songTimer = setTimeout(askSong, 3000); }
         render();
+        updateSong();
     });
 
     update();

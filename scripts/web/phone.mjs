@@ -60,7 +60,7 @@
 //                         after the change, the deck must name the song
 // --sabotage-portrait class|rotate|switch|screen|size breaks one part of the
 // portrait layout (see the comment at its route); run with --only portrait.
-// --only iphone|sound|portrait|shots runs just those checks.
+// --only iphone|sound|portrait|shots|song runs just those checks.
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import os from 'node:os';
@@ -148,6 +148,11 @@ async function open({ landscape = false, mobile = true, query = '?pose=off', hos
     //   switch  ?portrait=0 is ignored
     //   screen  the page never tells portrait.js the screen
     //   size    the buttons keep the old landscape size in portrait
+    //   (--only song, np-portrait2:)
+    //   song    portrait.js never sets html.dc3-portrait-song (no 9:16 box)
+    //   frame   portrait.js never asks the engine for the 9:16 frame
+    //   songrotate  the song's 9:16 ignores the phone turning to landscape
+    //   strip   the d-pad and A stay on screen during a song
     const sabPortrait = arg('sabotage-portrait', '');
     if (sabPortrait) {
         const edits = {
@@ -156,6 +161,10 @@ async function open({ landscape = false, mobile = true, query = '?pose=off', hos
             switch: ['portrait.js', "q === '0' ? 'off'", "false ? 'off'"],
             screen: ['index', "if (sm) document.dispatchEvent(new CustomEvent('dc3-screen'", "if (false) document.dispatchEvent(new CustomEvent('dc3-screen'"],
             size: ['touch_controls.js', "'html.dc3-portrait #dc3-touch { --b:var(--tb, 18vw); }' +", ''],
+            song: ['portrait.js', "root.classList.toggle('dc3-portrait-song', on);", 'void 0;'],
+            frame: ['portrait.js', 'Module._milo_web_set_portrait_frame(want);', 'void 0;'],
+            songrotate: ['portrait.js', "var on = songMode && state.active && state.screen === 'game_screen';", "var on = songMode && state.screen === 'game_screen';"],
+            strip: ['touch_controls.js', "'html.dc3-portrait-song #dc3-touch .dpad, html.dc3-portrait-song #dc3-touch button[data-key=\"Enter\"] { display:none; }' +", ''],
         };
         const [file, from, to] = edits[sabPortrait];
         await page.route(file === 'index' ? /\/(index\.html)?(\?.*)?$/ : '**/' + file, async (route) => {
@@ -388,7 +397,7 @@ try {
     }
 
     // --- portrait layout, rotation, the switch back (np-portrait) -----------
-    if (!only || only === 'portrait') {
+    if (!only || only === 'portrait' || only === 'song') {
         const P = (page) => page.evaluate(() => {
             const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
             const vis = (el) => !!el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().height > 0;
@@ -424,6 +433,88 @@ try {
             }, png.toString('base64'));
         };
         const near = (a, b, tol = 1.5) => Math.abs(a - b) <= tol;
+        // --- song: a song held upright draws 9:16 (np-portrait2, W-37 step 2) ---
+        // --only song [--device iphone] [--song-down N] [--tag T]: drive to a
+        // song in portrait, check the 9:16 picture, the engine's 9:16 frame,
+        // the strip's buttons, a rotation to landscape and back mid-song, and
+        // save <tag>-<n>.png at several points of the song.
+        if (only === 'song') {
+            const tag = arg('tag', 'song');
+            const downs = +arg('song-down', '2');
+            const dev = arg('device', '') === 'iphone' ? iphone : null;
+            const name = dev ? 'iphone' : 'pixel7';
+            const key = async (page, k) => {
+                const send = (t) => page.evaluate(([t, k]) => document.dispatchEvent(new KeyboardEvent(t, { key: k, code: k === ' ' ? 'Space' : k, bubbles: true })), [t, k]);
+                await send('keydown'); await sleep(160); await send('keyup'); await sleep(300);
+            };
+            const advance = async (page, st) => {
+                for (let i = 0; i < 3; i++) {
+                    const n = st.screens.length, from = st.screen;
+                    await key(page, 'Enter');
+                    if (await waitFor(() => st.screens.length > n && st.screen !== from, 12000)) return true;
+                }
+                return false;
+            };
+            const q = '?pose=off&env=' + encodeURIComponent('DC3_AUDIO_GAIN=0') + arg('query-extra', '');
+            const { ctx, page, st } = await open({ query: q, camera: true, device: dev });
+            const S = async () => ({ ...(await P(page)),
+                song: await page.evaluate(() => ({ cls: document.documentElement.classList.contains('dc3-portrait-song'),
+                    on: !!(window.dc3Portrait && window.dc3Portrait.song9x16), frame: window.dc3PortraitFrame ? window.dc3PortraitFrame() : -1,
+                    vis: [...document.querySelectorAll('#dc3-touch button')].filter((b) => getComputedStyle(b).display !== 'none' && b.getBoundingClientRect().width > 0).map((b) => b.dataset.key) })) });
+            const shotN = async (n) => {
+                const f = path.join(out, `${tag}-${n}.png`);
+                await page.screenshot({ path: f });
+                const L = await P(page);
+                console.log(`     ${f}  screen=${st.screen} canvas ${L.canvas.w.toFixed(0)}x${L.canvas.h.toFixed(0)}+${L.canvas.l.toFixed(0)}+${L.canvas.t.toFixed(0)} buffer ${L.buffer.join('x')} viewport ${L.vw}x${L.vh}`);
+            };
+            await waitFor(() => st.screen === 'title_screen', 240000);
+            await sleep(2000);
+            let L = await S();
+            check(!L.song.cls && L.song.frame === 0 && near(L.buffer[0] / L.buffer[1], 16 / 9, 0.02), `${name} title: the 16:9 picture (song class ${L.song.cls}, frame ${L.song.frame}, buffer ${L.buffer.join('x')})`);
+            await advance(page, st); await sleep(2000);
+            for (let i = 0; i < 5 && st.screen !== 'song_select_screen'; i++) { await advance(page, st); await sleep(2000); }
+            for (let i = 0; i < downs; i++) { await key(page, 'ArrowDown'); await sleep(500); }
+            await sleep(800); await key(page, 'Enter');
+            const entered = () => st.screens.includes('game_screen') || st.logs.some((l) => /PollForLoading|DONE \(state 4\)/.test(l));
+            for (let i = 0; i < 30 && !entered(); i++) { await sleep(2000); if (!entered()) await key(page, 'Enter'); }
+            const loaded = await waitFor(() => st.logs.some((l) => l.includes('DONE (state 4)')), 120000);
+            check(loaded, `${name}: a song loaded (screen ${st.screen}; ${st.screens.slice(-4).join(' > ')})`);
+            await waitFor(() => st.screen === 'game_screen', 30000);
+            await sleep(4000);
+            L = await S();
+            const songOn = (L, what) => {
+                check(L.song.cls && L.song.on && L.canvas && near(L.canvas.t, 0, 1) && near(L.canvas.w, Math.min(L.vw, (L.vh - 92) * 9 / 16), 2) && near(L.canvas.h, L.canvas.w * 16 / 9, 2),
+                    `${what}: the picture is 9:16 at the top (${L.canvas && L.canvas.w.toFixed(0)}x${L.canvas && L.canvas.h.toFixed(0)} in ${L.vw}x${L.vh}, class ${L.song.cls})`);
+                check(L.song.frame === 1 && L.buffer[1] > L.buffer[0] && near(L.buffer[1] / L.buffer[0], 16 / 9, 0.02),
+                    `${what}: the engine draws a 9:16 frame (buffer ${L.buffer.join('x')}, frame ${L.song.frame})`);
+                const vis = L.btns.filter((b) => L.song.vis.includes(b.key));
+                check(L.song.vis.sort().join(',') === ' ,Escape' && vis.every((b) => b.t >= L.canvas.b - 0.5 && b.b <= L.vh + 0.5 && b.r <= L.vw + 0.5) && (!L.view || vis.every((b) => !overlaps(b, L.view))),
+                    `${what}: only B and Start, in the strip under the picture, clear of the camera view (${JSON.stringify(L.song.vis)})`);
+            };
+            songOn(L, `${name} song`);
+            let pic = await lit(page, L.canvas);
+            check(pic.share > 0.2, `${name} song: the picture is drawn (mean ${pic.mean.toFixed(1)}, ${(pic.share * 100).toFixed(0)}% lit)`);
+            await shotN('1-portrait');
+            await sleep(15000); await shotN('2-portrait');
+            // Turn the phone mid-song: the 16:9 picture and frame, and back.
+            const pv = (dev || pixel).viewport;
+            await page.setViewportSize({ width: pv.height, height: pv.width });
+            await sleep(3000);
+            L = await S();
+            check(!L.song.cls && L.song.frame === 0 && near(L.buffer[0] / L.buffer[1], 16 / 9, 0.02) && near(L.canvas.w / L.canvas.h, 16 / 9, 0.02),
+                `${name} song, turned to landscape: the 16:9 picture and frame (buffer ${L.buffer.join('x')}, canvas ${L.canvas.w.toFixed(0)}x${L.canvas.h.toFixed(0)}, frame ${L.song.frame})`);
+            pic = await lit(page, L.canvas);
+            check(pic.share > 0.2, `${name} song, landscape: the picture is drawn (${(pic.share * 100).toFixed(0)}% lit)`);
+            await shotN('3-landscape');
+            await page.setViewportSize(pv);
+            await sleep(3000);
+            L = await S();
+            songOn(L, `${name} song, turned back upright`);
+            await shotN('4-portrait-back');
+            await sleep(20000); await shotN('5-portrait');
+            await ctx.close();
+            throw 'only';
+        }
         const portraitOk = (L, name) => {
             check(L.cls && L.state && L.state.active && L.state.mode === 'auto', `${name}: portrait layout on (class=${L.cls}, state=${JSON.stringify(L.state && { mode: L.state.mode, active: L.state.active, changes: L.state.changes })})`);
             check(L.canvas && near(L.canvas.t, 0) && near(L.canvas.l, 0) && near(L.canvas.w, L.vw) && near(L.canvas.h, L.vw * 9 / 16),

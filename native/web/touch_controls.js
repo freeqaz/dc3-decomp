@@ -66,7 +66,15 @@
         '  width:calc(var(--b) * 0.92); height:calc(var(--b) * 0.92); margin:calc(var(--b) * 0.04); }' +
         'html.dc3-portrait #dc3-touch button[data-key="Enter"] { background:#a0c8; border-color:#fffa; font-size:calc(var(--b) * 0.4); }' +
         'html.dc3-portrait #dc3-touch button[data-key="Escape"], html.dc3-portrait #dc3-touch button[data-key=" "] {' +
-        '  width:calc(var(--b) * 0.8); height:calc(var(--b) * 0.8); font-size:calc(var(--b) * 0.28); }';
+        '  width:calc(var(--b) * 0.8); height:calc(var(--b) * 0.8); font-size:calc(var(--b) * 0.28); }' +
+        // A song held upright (portrait.js, html.dc3-portrait-song): the
+        // picture is 9:16 and a slim strip is left under it; a song needs
+        // only B and Start, side by side at its right. No d-pad, no A.
+        'html.dc3-portrait-song #dc3-touch .dpad, html.dc3-portrait-song #dc3-touch button[data-key="Enter"] { display:none; }' +
+        'html.dc3-portrait-song #dc3-touch .face { left:auto; transform:none; width:calc(var(--b) * 2.2); height:var(--b);' +
+        '  right:calc(10px + env(safe-area-inset-right, 0px)); bottom:calc((var(--strip, 92px) - var(--b)) / 2 + env(safe-area-inset-bottom, 0px)); }' +
+        'html.dc3-portrait-song #dc3-touch button[data-key="Escape"] { left:0; top:0; }' +
+        'html.dc3-portrait-song #dc3-touch button[data-key=" "] { left:calc(var(--b) * 1.2); top:0; }';
     var style = document.createElement('style');
     style.textContent = css;
     document.head.appendChild(style);

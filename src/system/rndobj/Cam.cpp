@@ -15,6 +15,7 @@
 #include "rndobj\Trans.h"
 #ifdef HX_NATIVE
 #include "platform\NativeSettings.h"
+#include "platform\NativePortrait.h"
 #endif
 
 // Transpose is inline in math/Mtx.h
@@ -148,8 +149,11 @@ void RndCam::UpdateLocal() {
     } else {
 #ifdef HX_NATIVE
         float aspectOvr = NativeSettings::Get().aspectOverride;
+        float portraitRatio;
         if (aspectOvr > 0)
             ratio *= 1.0f / aspectOvr;  // override the display aspect
+        else if (NativePortraitWorldRatio(this, portraitRatio))
+            ratio *= portraitRatio;  // the world camera in a portrait frame
         else
 #endif
         ratio *= TheRnd.YRatio();
@@ -175,6 +179,13 @@ void RndCam::UpdateLocal() {
     }
     UpdatedWorldXfm();
     mAspect = TheRnd.GetAspect();
+#ifdef HX_NATIVE
+    // A portrait frame (NativePortrait.h): mark the projection stale, so
+    // Select recomputes it each time -- whether this is the world camera can
+    // change between selects -- and once more after the frame turns back.
+    if (NativePortraitFrame())
+        mAspect = (Rnd::Aspect)-1;
+#endif
 }
 
 void RndCam::UpdatedWorldXfm() {
@@ -443,6 +454,20 @@ void RndCam::GetViewProjectXfms(Transform &viewXfm, Hmx::Matrix4 &projMtx) const
         if (fovScale != 1.0f) {
             projMtx.x.x *= fovScale;
             projMtx.y.y *= fovScale;
+        }
+    }
+    // A portrait frame: the 16:9 HUD drawn larger, right-anchored
+    // (NativePortrait.h). NDC x' = kx*x + tx*w (row vectors: every row's x
+    // column takes kx times itself plus tx times its w column), y alike.
+    {
+        float kx, tx, ky, ty;
+        if (NativePortraitHudRemap(this, kx, tx, ky, ty)) {
+            Vector4 *rows[4] = { &projMtx.x, &projMtx.y, &projMtx.z, &projMtx.w };
+            for (int i = 0; i < 4; i++) {
+                Vector4 &r = *rows[i];
+                r.x = kx * r.x + tx * r.w;
+                r.y = ky * r.y + ty * r.w;
+            }
         }
     }
 #endif

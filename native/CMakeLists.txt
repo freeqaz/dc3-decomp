@@ -1250,6 +1250,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Skeleton_Native.cpp
     src/platform/ProcessSpawner_Native.cpp # pose_server.py launched from a pristine fork (RLIMIT_RTTIME)
     src/platform/NativeNotice.cpp
+    src/platform/NativePortrait.cpp # a portrait frame during a song: world camera aspect + HUD remap (PLAN W-37)
     src/platform/GestureMgr_Native.cpp
     src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
     src/platform/SongSelect_Native.cpp # song select: Recently Played, sort by artist, section jumps (docs/native/SONG_SELECT.md)
@@ -1537,6 +1538,7 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/Skeleton_Native.cpp
     src/platform/ProcessSpawner_Native.cpp # pose_server.py launched from a pristine fork (RLIMIT_RTTIME)
     src/platform/NativeNotice.cpp
+    src/platform/NativePortrait.cpp # a portrait frame during a song: world camera aspect + HUD remap (PLAN W-37)
     src/platform/GestureMgr_Native.cpp
     src/platform/JoypadSelect_Native.cpp # scripted input `highlight NAME` (flows pick songs by name)
     src/platform/SongSelect_Native.cpp # song select: Recently Played, sort by artist, section jumps (docs/native/SONG_SELECT.md)
@@ -2321,6 +2323,7 @@ if(BUILD_TESTS)
         tests/test_native_song_select.cpp  # song select: Recently Played, sort by artist, section jumps, the classic switch, the song browser
         tests/test_song_browser.cpp  # song browser data: search, arrangements, recents; GET /api/songs against song select
         tests/test_native_profile.cpp
+        tests/test_native_portrait.cpp # np-portrait2: a 9:16 frame during a song (PLAN W-37)
         tests/test_native_glyph_render.cpp
         tests/test_native_ui_material_terms.cpp
         tests/test_frame_pacer.cpp     # H-29 frame cap + engine CPU-use guards

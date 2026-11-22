@@ -113,6 +113,33 @@
         }
         html.dc3-portrait:not(.dev) #pose-view { height: min(26vw, calc(var(--deck-h) - 156px - 3.4 * var(--tb))); min-height: 48px; border-radius: 10px; }
         html.dc3-portrait:not(.dev) #pose-status { max-width: 56vw; }
+        /* A song held upright (portrait.js, html.dc3-portrait-song; the
+           engine draws a 9:16 frame then): the picture is 9:16, full width
+           at the top, unless the screen is too short for that and a strip;
+           under it a slim strip with the camera view (left) and B and Start
+           (right). The deck's "now" card and the d-pad give way. */
+        html.dc3-portrait.dc3-portrait-song {
+            --strip: 92px;
+            --song-w: min(calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)),
+                          calc((100vh - var(--strip) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * 9 / 16));
+            --pic-h: calc(var(--song-w) * 16 / 9);
+            --tb: 60px;
+        }
+        @supports (height: 100dvh) {
+            html.dc3-portrait.dc3-portrait-song {
+                --song-w: min(calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)),
+                              calc((100dvh - var(--strip) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * 9 / 16));
+            }
+        }
+        html.dc3-portrait.dc3-portrait-song:not(.dev) #canvas-container { width: var(--song-w); height: var(--pic-h); }
+        html.dc3-portrait.dc3-portrait-song:not(.dev) #dc3-deck .now,
+        html.dc3-portrait.dc3-portrait-song:not(.dev) #dc3-deck .tip { display: none; }
+        html.dc3-portrait.dc3-portrait-song:not(.dev) #pose-panel {
+            top: calc(env(safe-area-inset-top, 0px) + var(--pic-h) + 8px); left: max(10px, env(safe-area-inset-left, 0px));
+            transform: none; max-width: 52vw; gap: 6px; font-size: 11px;
+        }
+        html.dc3-portrait.dc3-portrait-song:not(.dev) #pose-view { height: calc(var(--strip) - 22px); min-height: 40px; }
+        html.dc3-portrait.dc3-portrait-song:not(.dev) #pose-status { display: none; }
         #loading {
             position: absolute;
             inset: 0;
