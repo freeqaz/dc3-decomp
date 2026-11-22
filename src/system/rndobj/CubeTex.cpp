@@ -41,6 +41,19 @@ void RndCubeTex::CubeTexProperties::Load(BinStream &bs) {
 
 RndCubeTex::RndCubeTex() {}
 
+#ifdef HX_NATIVE
+// The native renderer keeps each cube map's GPU texture in a side table keyed
+// on the RndCubeTex ADDRESS (sCubeTexGpuData in the engine's Tex_Wgpu.cpp), as
+// it does for RndTex -- see RndTex::~RndTex in Tex.cpp for why only the
+// destructor can keep such a table honest. Without this, every unloaded
+// venue's and character's cube maps stayed on the GPU until exit, and a new
+// cube map placed at a dead one's address drew the dead one's faces.
+RndCubeTex::~RndCubeTex() {
+    extern void CleanupGpuCubeTex(RndCubeTex *);
+    CleanupGpuCubeTex(this);
+}
+#endif
+
 BEGIN_HANDLERS(RndCubeTex)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
@@ -230,10 +243,22 @@ bool RndCubeTex::ValidateBitmapProperties(std::vector<CubeFace> &faces) {
 void RndCubeTex::Update() {
     std::vector<CubeFace> vec;
     if (!ValidateBitmapProperties(vec)) {
+#ifdef HX_NATIVE
+        // Retail's DxCubeTex::Reset releases its D3D texture; natively Reset()
+        // is the empty base, so drop the GPU copy here (see the destructor).
+        extern void CleanupGpuCubeTex(RndCubeTex *);
+        CleanupGpuCubeTex(this);
+#endif
         Reset();
         return;
     } else {
         props = moreprops[0];
+#ifdef HX_NATIVE
+        // Retail's DxCubeTex::Sync re-creates its D3D texture from the faces;
+        // natively the next draw uploads them again once the copy is gone.
+        extern void CleanupGpuCubeTex(RndCubeTex *);
+        CleanupGpuCubeTex(this);
+#endif
         Sync();
         return;
     }

@@ -336,7 +336,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "270c2351eb7a8ee3a8168d618c420f79907dbb43"
+set(MILO_ENGINE_PIN "4dc0c526f40e8222ca3d5f66995252cdb4fd4ef7"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -2226,6 +2226,7 @@ if(BUILD_TESTS)
         tests/test_pipeline_disk_cache.cpp # hitch: the persistent pipeline cache reads back exactly or misses
         tests/test_tex_share.cpp # framecost: byte-identical bitmaps share one GPU texture
         tests/test_tex_bytes.cpp # H-116: [GPUCOUNT] texBytes / texBytesPeak count a mip chain, a shared texture once
+        tests/test_cube_tex_release.cpp # item 58: a cube map's GPU copy goes with it; changed faces upload again
         tests/test_frame_times.cpp # H-116: frame-times header and rows: [FT] prefix on stdout, columns agree
         tests/test_outfit_remap_cost.cpp # H-118: GetEntriesForOutfit searches OUTFIT_REMAP once a call
         tests/test_color_pack_roundtrip.cpp
