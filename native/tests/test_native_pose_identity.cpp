@@ -1417,6 +1417,44 @@ TEST(PoseTwinTest, OneBodyReportedTwiceIsOneDetection) {
     EXPECT_FALSE(r.drop[1]);
 }
 
+// The pair holds the body a player is bound to: that one is kept, whatever
+// the joint counts say.  MEASURED, replay of the 2026-11-21 results screen:
+// kept by joints alone, player 1's own body was the dropped twin for ~6 s,
+// player 2 was bound to the twin and player 1 sat unbound.
+TEST(PoseTwinTest, TheBoundTwinIsKept) {
+    TwinEnv env;
+    Dc3PoseTwin::Twins twins;
+    Dc3PoseTwin::View v[2] = { TwinBody(64, 0.35f, -0.15f, 1.10f, 1.0f, 16),
+                               TwinBody(68, 0.35f, -0.03f, 1.10f, 1.4f, 11) };
+    // Player 1 is bound to 68, the one with fewer joints: it stays.
+    const int bound[4] = { -1, 68, -1, -1 };
+    for (int f = 0; f < 3; f++) {
+        Dc3PoseTwin::Result r = twins.Update(v, 2, 0.06f, bound, 4);
+        EXPECT_TRUE(r.drop[0]) << "frame " << f;
+        EXPECT_FALSE(r.drop[1]) << "frame " << f;
+        EXPECT_EQ(r.rawId[1], 68);
+    }
+    // Either order.
+    Dc3PoseTwin::View w[2] = { v[1], v[0] };
+    Dc3PoseTwin::Result r = twins.Update(w, 2, 0.06f, bound, 4);
+    EXPECT_FALSE(r.drop[0]);
+    EXPECT_TRUE(r.drop[1]);
+    // And her body alone, the other report, is still the bound one.
+    Dc3PoseTwin::View alone = TwinBody(64, 0.36f, -0.15f, 1.10f, 1.0f, 16);
+    r = twins.Update(&alone, 1, 0.06f, bound, 4);
+    EXPECT_EQ(r.rawId[0], 68);
+    // Player 1's binding outranks player 2's when both are on the pair.
+    const int both[4] = { -1, 68, -1, 64 };
+    r = twins.Update(v, 2, 0.06f, both, 4);
+    EXPECT_TRUE(r.drop[0]);
+    EXPECT_FALSE(r.drop[1]);
+    // Nobody bound to either: joints decide, as before.
+    const int other[4] = { 3, -1, 5, -1 };
+    r = twins.Update(v, 2, 0.06f, other, 4);
+    EXPECT_FALSE(r.drop[0]);
+    EXPECT_TRUE(r.drop[1]);
+}
+
 TEST(PoseTwinTest, TheTwinAloneIsHerAtHerDepth) {
     TwinEnv env;
     Dc3PoseTwin::Twins twins;

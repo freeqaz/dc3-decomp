@@ -20,8 +20,14 @@
 // So, before People sees the frame:
 //  1. two detections in one frame whose head, shoulder centre and both
 //     shoulders all lie within kTwinRatio torso lengths of each other in the
-//     picture are one body: the one with more joints the camera saw is kept
-//     (a tie keeps last frame's), the other is not passed on;
+//     picture are one body: the one a player is bound to is kept (the
+//     caller's `bound` list, player 1's first), else the one with more joints
+//     the camera saw (a tie keeps last frame's); the other is not passed on.
+//     MEASURED, replay of that evening's results screen: kept by joints
+//     alone, the twin player 1 was NOT bound to won for ~6 s, her own body
+//     stopped reaching the game, player 2 was bound to the twin and player 1
+//     sat unbound until a new tracker id came (frames with player 1 bound
+//     1098 on main, ~926 with joints alone);
 //  2. the dropped report's tracker id is remembered as that body's for
 //     kTwinMemorySec after they were last seen together; when it is the only
 //     report of her (the kept one absent) it is her -- her tracker id, and
@@ -107,8 +113,12 @@ public:
         mLastKept = -1;
     }
 
-    // One camera frame; `dtSec` the time since the previous one.
-    Result Update(const View *views, int count, float dtSec) {
+    // One camera frame; `dtSec` the time since the previous one.  `bound`:
+    // the tracker ids (the views' rawId) of the bodies players are bound to
+    // or wait for, the first the most wanted; a twin pair holding one of
+    // them keeps it.
+    Result Update(const View *views, int count, float dtSec, const int *bound = nullptr,
+                  int boundCount = 0) {
         Result r;
         for (int i = 0; i < kMaxDetections; i++) {
             r.drop[i] = false;
@@ -137,8 +147,12 @@ public:
                     continue;
                 }
                 int keep = i, drop = j;
-                if (views[j].seen > views[i].seen
-                    || (views[j].seen == views[i].seen && views[j].rawId == mLastKept))
+                int wanted = Wanted(views[i].rawId, views[j].rawId, bound, boundCount);
+                if (wanted == 1)
+                    keep = j, drop = i;
+                else if (wanted < 0
+                         && (views[j].seen > views[i].seen
+                             || (views[j].seen == views[i].seen && views[j].rawId == mLastKept)))
                     keep = j, drop = i;
                 r.drop[drop] = true;
                 mLastKept = views[keep].rawId;
@@ -188,6 +202,18 @@ public:
     int StoodIn() const { return mStoodIn; }
 
 private:
+    // 0: `a` is the more wanted, 1: `b`, -1: neither is bound.
+    static int Wanted(int a, int b, const int *bound, int boundCount) {
+        for (int k = 0; bound && k < boundCount; k++) {
+            if (bound[k] < 0)
+                continue;
+            if (bound[k] == a)
+                return 0;
+            if (bound[k] == b)
+                return 1;
+        }
+        return -1;
+    }
     struct Alias {
         int twinId, keptId;
         float keptZ, age;

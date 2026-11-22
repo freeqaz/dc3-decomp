@@ -1361,8 +1361,18 @@ static void DropTwins(NativeSkeletonProvider::PersonData *persons, int numPerson
         }
         index[count++] = i;
     }
+    // The bodies the players are bound to, and the one a lost player is
+    // waited for under, as tracker ids: a twin pair keeps the bound one.
+    int bound[4];
+    int boundCount = 0;
+    for (int p = 0; p < 2; p++) {
+        HamPlayerData *playerData = TheGameData ? TheGameData->Player(p) : nullptr;
+        int id = playerData ? playerData->GetSkeletonTrackingID() : -1;
+        bound[boundCount++] = gPeople.RawForStable(gPlayers.LostId(p));
+        bound[boundCount++] = gPeople.RawForStable(id);
+    }
     int stoodIn = gTwins.StoodIn();
-    Dc3PoseTwin::Result r = gTwins.Update(views, count, dt);
+    Dc3PoseTwin::Result r = gTwins.Update(views, count, dt, bound, boundCount);
     for (int k = 0; k < count; k++) {
         NativeSkeletonProvider::PersonData &p = persons[index[k]];
         if (r.drop[k]) {

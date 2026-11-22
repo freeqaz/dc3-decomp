@@ -299,6 +299,19 @@ public:
         return rawId;
     }
 
+    // The tracker id the person with this tracking id was last seen under
+    // (-1: nobody, or none now) -- the twin pass (PoseTwin_Native.h) works
+    // in tracker ids and asks which ones the players are bound to.
+    int RawForStable(int id) const {
+        if (id < 0)
+            return -1;
+        for (int p = 0; p < mCount; p++) {
+            if (mPeople[p].id == id)
+                return mPeople[p].rawId;
+        }
+        return -1;
+    }
+
     // How long the person with this tracking id has actually been seen, in
     // seconds (0: unknown or just arrived).  The dropout hold asks: someone
     // seen for half a second is a person, not a one-frame false detection,
@@ -882,6 +895,9 @@ public:
     bool Remembered(int p) const { return mMem[p].known; }
     bool Lost(int p) const { return mMem[p].known && mMem[p].lost; }
     bool StandIn(int p) const { return Lost(p) && mMem[p].standIn; }
+    // The tracking id she was bound to and is waited for while lost (-1 =
+    // none): her own body, whoever stands in for her meanwhile.
+    int LostId(int p) const { return Lost(p) ? mMem[p].id : -1; }
 
 private:
     struct Memory {
