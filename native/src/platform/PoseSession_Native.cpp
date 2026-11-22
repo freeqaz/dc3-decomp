@@ -199,6 +199,12 @@ void RecorderOpen(const char *p) {
     char stamp[64];
     strftime(stamp, sizeof(stamp), "%Y-%m-%dT%H:%M:%S%z", localtime(&now));
     fprintf(gRec.fp, "%s\n# started %s pid %d\n", kHeader, stamp, (int)getpid());
+    // The wall column's zero on steady_clock, which on Linux is
+    // CLOCK_MONOTONIC -- the pose server's time.monotonic(), the clock of the
+    // ts column and of a camera recording's sidecar (video_recorder.py).
+    // wall + steady_t0 - ts is then how long the game took to accept a
+    // frame after its capture (scripts/playtest/camera_video.py).
+    fprintf(gRec.fp, "# steady_t0 %.9f\n", gRec.t0);
     fprintf(gRec.fp, "# F seq rnd wall song frame_id ts unlevelled level nx ny nz num_persons\n");
     fprintf(gRec.fp, "# P track_id valid 20 x (x y z confidence 0/1/2)\n");
     fflush(gRec.fp);

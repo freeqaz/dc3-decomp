@@ -26,6 +26,7 @@
 #include "platform/HttpServer.h"
 #include "platform/Skeleton_Native.h"
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -243,6 +244,53 @@ TEST(PoseServerCommandTest, CameraByDefaultVideoAndInterpreterWhenAsked) {
         Cmd c = NativeSkeletonProvider::ServerCommand("/t/pose_server.py", "/s.sock", "/m.task", 2);
         EXPECT_EQ(c, cam);
     }
+    // DC3_POSE_RECORD_VIDEO (play.sh's video recording): --record-video, and
+    // its cap only with it; unset or empty passes nothing (a server from
+    // before it must still start).
+    {
+        Env rv("DC3_POSE_RECORD_VIDEO", "/s/camera.mkv"), mx("DC3_POSE_RECORD_VIDEO_MAX_GB", nullptr);
+        Cmd c = NativeSkeletonProvider::ServerCommand("/t/pose_server.py", "/s.sock", "/m.task", 2);
+        EXPECT_EQ(c, (Cmd{ py0, "/t/pose_server.py", "--socket", "/s.sock", "--model", "/m.task",
+                           "--camera", "2", "--frames", "320x240", "--record-video",
+                           "/s/camera.mkv" }));
+        Env mx2("DC3_POSE_RECORD_VIDEO_MAX_GB", "12");
+        Cmd capped = NativeSkeletonProvider::ServerCommand("/t/pose_server.py", "/s.sock", "/m.task", 2);
+        ASSERT_GE(capped.size(), 2u);
+        EXPECT_EQ(capped[capped.size() - 2], "--record-max-gb");
+        EXPECT_EQ(capped.back(), "12");
+    }
+    {
+        Env empty("DC3_POSE_RECORD_VIDEO", ""), mx("DC3_POSE_RECORD_VIDEO_MAX_GB", "12");
+        Cmd c = NativeSkeletonProvider::ServerCommand("/t/pose_server.py", "/s.sock", "/m.task", 2);
+        EXPECT_EQ(c, cam);
+    }
+}
+
+// The session file says where its wall column starts on steady_clock, so a
+// camera recording's capture timestamps (time.monotonic(), the same clock on
+// Linux) can be placed on the session's own time line.
+TEST(PoseSessionFileTest, TheHeaderCarriesTheWallColumnsZeroOnTheSteadyClock) {
+    char tmpl[] = "/tmp/dc3_pose_t0_XXXXXX";
+    int fd = mkstemp(tmpl);
+    ASSERT_GE(fd, 0);
+    close(fd);
+    double before = std::chrono::duration<double>(
+                        std::chrono::steady_clock::now().time_since_epoch()).count();
+    Dc3PoseSessionRecordTo(tmpl);
+    double after = std::chrono::duration<double>(
+                       std::chrono::steady_clock::now().time_since_epoch()).count();
+    Dc3PoseSessionRecordTo(nullptr);
+    FILE *fp = fopen(tmpl, "r");
+    ASSERT_NE(fp, nullptr);
+    char line[256];
+    double t0 = -1;
+    while (fgets(line, sizeof(line), fp))
+        if (sscanf(line, "# steady_t0 %lf", &t0) == 1)
+            break;
+    fclose(fp);
+    unlink(tmpl);
+    EXPECT_GE(t0, before - 1e-6);
+    EXPECT_LE(t0, after + 1e-6);
 }
 
 // ---- Which Python the game runs the pose server under ----------------------
