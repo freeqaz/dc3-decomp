@@ -1373,3 +1373,57 @@ TEST(PoseFillDwellTest, TheDwellParsesWithinZeroToAMinute) {
     f.SetReleaseDwell(1e9);
     EXPECT_EQ(f.ReleaseDwell(), kMaxReleaseDwell);
 }
+
+// gpd-menubind: a dancer the camera missed for one frame is moved on from her
+// last frame, not held for the next period.  Two people at 8 Hz, both moving
+// at 1 m/s (x = capture time); the second is missing from the frame at 12.0 s.
+TEST(PoseFillScheduleTest, OneMissedFrameKeepsHerVelocity) {
+    for (bool lastSeen : { true, false }) {
+        if (lastSeen)
+            unsetenv("DC3_POSE_FILL_VELOCITY");
+        else
+            setenv("DC3_POSE_FILL_VELOCITY", "prev", 1);
+        Filler f;
+        f.SetMode(kExtrap);
+        f.SetGain(1.0f);
+        const double period = 0.125, tick = 1.0 / 120.0;
+        double next = 10.0;
+        int checked = 0;
+        float worst = 0.0f;
+        for (int i = 0;; i++) {
+            double song = 10.0 + i * tick;
+            if (song > 13.0)
+                break;
+            bool engaged = f.Engaged();
+            if (song + 1e-9 >= next) {
+                std::vector<Person> people;
+                people.push_back(MakePerson(5, (float)next));
+                if (fabs(next - 12.0) > 1e-6)
+                    people.push_back(MakePerson(6, (float)next + 10.0f));
+                engaged = f.Push(MakeSource(song, next, people));
+                next += period;
+            }
+            Output o;
+            if (!engaged || !f.Poll(song, o) || o.real)
+                continue;
+            // The fills in the period after she is back (12.125 s).
+            if (o.shows < 12.125 + 1e-6 || o.shows > 12.25 - 1e-6)
+                continue;
+            for (int k = 0; k < o.numPersons; k++) {
+                if (o.persons[k].trackId != 6)
+                    continue;
+                float want = (float)song + 10.0f;
+                float err = fabsf(o.persons[k].joints[kJointHandLeft].x - want);
+                worst = std::max(worst, err);
+                checked++;
+            }
+        }
+        ASSERT_TRUE(f.Engaged());
+        ASSERT_GE(checked, 2);
+        if (lastSeen)
+            EXPECT_LT(worst, 1e-3f) << "moved on at her own velocity";
+        else
+            EXPECT_GT(worst, 0.02f) << "DC3_POSE_FILL_VELOCITY=prev holds her (the behaviour before)";
+    }
+    unsetenv("DC3_POSE_FILL_VELOCITY");
+}

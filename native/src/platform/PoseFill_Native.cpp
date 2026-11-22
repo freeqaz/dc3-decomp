@@ -180,16 +180,38 @@ static bool LooksSwapped(const Person &prev, const Person &last) {
     return false;
 }
 
-void ExtrapolateGuarded(const Source &prev, const Source &last, float seconds, float period, float gain,
-                        Output &out) {
+bool VelocityFromLastSeen() {
+    const char *v = getenv("DC3_POSE_FILL_VELOCITY");
+    return !(v && !strcmp(v, "prev"));
+}
+
+void ExtrapolateGuarded(const Source &prev, const Source &last, float seconds, float period0, float gain,
+                        Output &out, const Earlier *earlier, int numEarlier) {
     CopyFrame(last, out);
-    if (period <= 1e-3f || seconds <= 0.0f || gain <= 0.0f)
+    if (seconds <= 0.0f || gain <= 0.0f)
         return;
     for (int i = 0; i < out.numPersons; i++) {
         Person &p = out.persons[i];
         if (!p.valid)
             continue;
+        float period = period0;
         const Person *q = FindValid(prev, p.trackId);
+        if (!q) {
+            for (int e = 0; e < numEarlier && earlier; e++) {
+                const Earlier &E = earlier[e];
+                if (!E.person.valid || E.person.trackId != p.trackId)
+                    continue;
+                double span = (last.ts >= 0.0 && E.ts >= 0.0 && last.ts > E.ts) ? last.ts - E.ts
+                                                                                 : last.arrival - E.arrival;
+                if (span > 1e-3) {
+                    q = &E.person;
+                    period = (float)span;
+                }
+                break;
+            }
+        }
+        if (period <= 1e-3f)
+            continue;
         if (!q || LooksSwapped(*q, p))
             continue; // held: nothing to step from, or a step that is a swap
         for (int j = 0; j < kNumJoints; j++) {
@@ -280,6 +302,32 @@ void Filler::Reset() {
     mSigma = -1e30;
     mArrivalElapsedMs = 33;
     mFills = mReals = 0;
+    mNumSeen = 0;
+}
+
+void Filler::NoteSeen(const Source &s) {
+    for (int i = 0; i < s.numPersons; i++) {
+        const Person &p = s.persons[i];
+        if (!p.valid || p.trackId < 0)
+            continue;
+        int e = 0;
+        while (e < mNumSeen && mSeen[e].person.trackId != p.trackId)
+            e++;
+        if (e == mNumSeen) {
+            if (mNumSeen < kMaxPersons) {
+                mNumSeen++;
+            } else {
+                e = 0; // the longest unseen goes
+                for (int k = 1; k < mNumSeen; k++) {
+                    if (mSeen[k].arrival < mSeen[e].arrival)
+                        e = k;
+                }
+            }
+        }
+        mSeen[e].person = p;
+        mSeen[e].ts = s.ts;
+        mSeen[e].arrival = s.arrival;
+    }
 }
 
 void Filler::SetReleaseDwell(double seconds) {
@@ -499,6 +547,8 @@ bool Filler::Poll(double song, Output &out) {
         mHaveOut = true;
         mLastShows = song;
         mReals++;
+        for (int k = 0; k + 1 < n; k++)
+            NoteSeen(mBuf[k]); // frames that stop being `prev` now, oldest first
         Drop(n - 1);
         return true;
     }
@@ -539,8 +589,19 @@ bool Filler::Poll(double song, Output &out) {
     } else if (mMode == kExtrap) {
         if (prev->arrival < a.arrival - std::min(kGapFactor * MedianInterval(), kMaxGap))
             CopyFrame(a, out); // the pair straddles a camera gap: no velocity from it
-        else
+        else if (!VelocityFromLastSeen())
             ExtrapolateGuarded(*prev, a, (float)sinceReal, (float)period, mGain, out);
+        else {
+            // Her last frame within the gap limit, for a person `prev` lacks.
+            double maxGap = std::min(kGapFactor * MedianInterval(), kMaxGap);
+            Earlier near[kMaxPersons];
+            int numNear = 0;
+            for (int e = 0; e < mNumSeen; e++) {
+                if (mSeen[e].arrival >= a.arrival - maxGap)
+                    near[numNear++] = mSeen[e];
+            }
+            ExtrapolateGuarded(*prev, a, (float)sinceReal, (float)period, mGain, out, near, numNear);
+        }
     } else {
         double horizon = mMode == kExtrapClamped ? 0.5 * period : period;
         float k = (float)(std::min(sinceReal, horizon) / period);
