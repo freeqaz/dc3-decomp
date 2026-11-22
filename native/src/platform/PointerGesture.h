@@ -32,6 +32,13 @@ Rect FitFrame(float frameW, float frameH, float boxW, float boxH);
 bool BoxToFrame(float bx, float by, float boxW, float boxH, float frameW, float frameH,
                 bool letterbox, float &fx, float &fy);
 
+// A point on the presenting surface (window framebuffer or canvas buffer
+// pixels) -> the frame, through `present`: where the engine last put the frame
+// on that surface (GpuDevice::LastPresentRect -- the bars, the scale, a canvas
+// of any shape).  False outside it.
+bool PresentToFrame(float sx, float sy, const Rect &present, float frameW, float frameH,
+                    float &fx, float &fy);
+
 // A row of a list as drawn this frame, in frame pixels: centre and half-size.
 struct Row {
     int index = -1; // what the list calls the row (HamNavList: its showing index)
@@ -92,6 +99,16 @@ struct Output {
     bool dragging = false;
     bool flinging = false;
 };
+
+// Gesture safety (the GPD: a camera, the menus on the hands, a mouse that may
+// be bumped).  Whether what the pointer did this frame takes the menus from the
+// hands (controller mode): only a deliberate act -- a tap or click, the back
+// button, a scroll by wheel or drag.  A mouse that moves, or rests, never does.
+bool TakesTheMenus(const Output &out);
+// Whether a hover may move a list's highlight: only while the menus are
+// already the pad's, keyboard's or pointer's.  Under the hands, the hand
+// cursor owns the highlight and a passing mouse leaves it alone.
+bool HoverMayHighlight(bool controllerMode);
 
 class Tracker {
 public:

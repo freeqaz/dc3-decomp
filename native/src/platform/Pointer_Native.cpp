@@ -24,14 +24,14 @@
 #include "ui/UIListProvider.h"
 #include "ui/UIListWidget.h"
 
+#include "platform/Rnd_Wgpu.h"
+extern WgpuRnd *gWgpuRnd;
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
 #else
 #include "gfx/ImGuiBackend.h"
-#include "platform/Rnd_Wgpu.h"
 #include <GLFW/glfw3.h>
 extern GLFWwindow *gNativeWindow;
-extern WgpuRnd *gWgpuRnd;
 #endif
 
 #include <algorithm>
@@ -99,6 +99,7 @@ struct Dc3PointerAccess {
 };
 
 namespace Dc3Pointer {
+static bool PresentInfo(Rect &present, int &surfW, int &surfH);
 namespace {
 
 using Clock = std::chrono::steady_clock;
@@ -273,6 +274,16 @@ void WriteState() {
              gTracker.Flinging() ? "true" : "false", gPendingSteps, gTaps, gTapSelects,
              gTapPresses, gHovers, gBacks, gStepsDone, gLastAction.c_str());
     j += buf;
+    {
+        Rect pr;
+        int sw = 0, sh = 0;
+        PresentInfo(pr, sw, sh);
+        snprintf(buf, sizeof buf,
+                 ",\"present\":{\"surface_w\":%d,\"surface_h\":%d,\"x\":%.0f,\"y\":%.0f,"
+                 "\"w\":%.0f,\"h\":%.0f,\"frame_w\":%d,\"frame_h\":%d}",
+                 sw, sh, pr.x, pr.y, pr.w, pr.h, TheRnd.Width(), TheRnd.Height());
+        j += buf;
+    }
     j += ",\"lists\":[";
     bool first = true;
     UIComponent *focus = TheUI ? TheUI->FocusComponent() : nullptr;
@@ -383,6 +394,10 @@ void Act(const Output &out) {
     }
     if (!any)
         return;
+    // Only a deliberate act takes the menus from the hands; a mouse that
+    // moves or rests never does (TakesTheMenus, tested).
+    if (TakesTheMenus(out))
+        TakeTheMenus();
     // a tap ends any scroll still owed (a fling the press stopped)
     if (out.tap || out.back)
         gPendingSteps = 0;
@@ -409,7 +424,6 @@ void Act(const Output &out) {
     }
 
     if (out.back) {
-        TakeTheMenus();
         PressButton(kPad_Circle);
         gBacks++;
         gLastAction = "back";
@@ -421,7 +435,6 @@ void Act(const Output &out) {
         int row = -1;
         HamNavList *list = ListAt(out.tapX, out.tapY, row);
         if (list) {
-            TakeTheMenus();
             if (Dc3PointerAccess::CanAct(list) && Dc3PointerAccess::IsActive(list, row)) {
                 if (Dc3PointerAccess::Selected(list) != row)
                     Dc3PointerAccess::Highlight(list, row);
@@ -434,7 +447,6 @@ void Act(const Output &out) {
         } else if (!AnyRows()) {
             // nothing to aim at (the title, a movie, a screen of buttons the
             // pad drives): a tap is the pad's A
-            TakeTheMenus();
             PressButton(kPad_X);
             gTapPresses++;
             gLastAction = "press A (no list drawn)";
@@ -448,8 +460,8 @@ void Act(const Output &out) {
         int row = -1;
         HamNavList *list = ListAt(out.x, out.y, row);
         if (list && Dc3PointerAccess::IsActive(list, row)) {
-            TakeTheMenus();
-            if (TheGestureMgr && TheGestureMgr->InControllerMode() && Dc3PointerAccess::CanAct(list)
+            if (HoverMayHighlight(TheGestureMgr && TheGestureMgr->InControllerMode())
+                && Dc3PointerAccess::CanAct(list)
                 && Dc3PointerAccess::Selected(list) != row) {
                 Dc3PointerAccess::Highlight(list, row);
                 gHovers++;
@@ -462,7 +474,6 @@ void Act(const Output &out) {
     if (out.steps) {
         HamNavList *target = ScrollTarget(gLastX, gLastY);
         if (target) {
-            TakeTheMenus();
             if (target != gStepList)
                 gPendingSteps = 0;
             gStepList = target;
@@ -531,14 +542,43 @@ void Push(const Input &in, float delaySeconds, bool windowSpace) {
     gQueue.push_back({in, Now() + delaySeconds, windowSpace});
 }
 
+// Where the engine last put the frame on its surface, in surface pixels, and
+// the surface's size: the real picture rectangle, whatever the window or the
+// canvas is (GpuDevice::LastPresentRect, written by every present: the
+// PresentScale letterbox on the desktop, the canvas buffer on the web).
+static bool PresentInfo(Rect &present, int &surfW, int &surfH) {
+    if (!gWgpuRnd)
+        return false;
+    GpuDevice &g = gWgpuRnd->Gpu();
+    surfW = g.SurfaceWidth();
+    surfH = g.SurfaceHeight();
+    const PresentRect r = g.LastPresentRect();
+    if (r.w > 0 && r.h > 0) {
+        present = {(float)r.x, (float)r.y, (float)r.w, (float)r.h};
+    } else {
+        present = {0.0f, 0.0f, (float)surfW, (float)surfH};
+    }
+    return surfW > 0 && surfH > 0;
+}
+
+bool BoxToFramePresent(float bx, float by, float boxW, float boxH, float &fx, float &fy) {
+    Rect present;
+    int surfW = 0, surfH = 0;
+    const float fw = TheRnd.Width() > 0 ? (float)TheRnd.Width() : 1280.0f;
+    const float fh = TheRnd.Height() > 0 ? (float)TheRnd.Height() : 720.0f;
+    if (!PresentInfo(present, surfW, surfH) || boxW <= 0 || boxH <= 0)
+        return BoxToFrame(bx, by, boxW, boxH, fw, fh, true, fx, fy);
+    // the box (window points / canvas CSS pixels) -> surface pixels (HiDPI,
+    // a canvas buffer that is not its CSS size)
+    return PresentToFrame(bx * surfW / boxW, by * surfH / boxH, present, fw, fh, fx, fy);
+}
+
 bool WindowToFrame(double wx, double wy, float &fx, float &fy) {
 #ifndef __EMSCRIPTEN__
-    if (gWgpuRnd && gWgpuRnd->Gpu().Window()) {
-        double x = 0, y = 0;
-        const bool inside = gWgpuRnd->Gpu().WindowToFrame(wx, wy, x, y);
-        fx = (float)x;
-        fy = (float)y;
-        return inside;
+    if (gNativeWindow) {
+        int ww = 0, wh = 0;
+        glfwGetWindowSize(gNativeWindow, &ww, &wh);
+        return BoxToFramePresent((float)wx, (float)wy, (float)ww, (float)wh, fx, fy);
     }
 #endif
     fx = (float)wx;
@@ -667,6 +707,12 @@ void FramePoll() {
         WriteState();
 }
 
+std::string StateJsonNow() {
+    WriteState();
+    std::lock_guard<std::mutex> lk(gStateMutex);
+    return gStateSnapshot;
+}
+
 std::string StateJson() {
     std::unique_lock<std::mutex> lk(gStateMutex);
     const unsigned seq = gStateSeq;
@@ -690,12 +736,17 @@ extern "C" EMSCRIPTEN_KEEPALIVE void dc3_pointer(int kind, float bx, float by, f
     in.t = Dc3Pointer::Now();
     in.wheel = wheel;
     in.touch = touch != 0;
-    const float fw = TheRnd.Width() > 0 ? (float)TheRnd.Width() : 1280.0f;
-    const float fh = TheRnd.Height() > 0 ? (float)TheRnd.Height() : 720.0f;
-    const bool inside = BoxToFrame(bx, by, boxW, boxH, fw, fh, true, in.x, in.y);
+    const bool inside = Dc3Pointer::BoxToFramePresent(bx, by, boxW, boxH, in.x, in.y);
     if (in.kind == kDown && !inside)
         return;
     Dc3Pointer::Push(in);
+}
+// The same JSON as GET /api/pointer/state, now (the web has no HTTP server;
+// native/web/dc3_pre.js window.dc3PointerState()).  Valid until the next call.
+extern "C" EMSCRIPTEN_KEEPALIVE const char *dc3_pointer_state() {
+    static std::string sJson;
+    sJson = Dc3Pointer::StateJsonNow();
+    return sJson.c_str();
 }
 extern "C" EMSCRIPTEN_KEEPALIVE int dc3_pointer_enabled() { return Dc3Pointer::Enabled() ? 1 : 0; }
 #endif

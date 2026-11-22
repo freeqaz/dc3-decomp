@@ -38,6 +38,24 @@ bool BoxToFrame(float bx, float by, float boxW, float boxH, float frameW, float 
     return fx >= 0 && fy >= 0 && fx < frameW && fy < frameH;
 }
 
+bool PresentToFrame(float sx, float sy, const Rect &present, float frameW, float frameH,
+                    float &fx, float &fy) {
+    if (present.w <= 0 || present.h <= 0) {
+        fx = sx;
+        fy = sy;
+        return false;
+    }
+    fx = (sx - present.x) * frameW / present.w;
+    fy = (sy - present.y) * frameH / present.h;
+    return fx >= 0 && fy >= 0 && fx < frameW && fy < frameH;
+}
+
+bool TakesTheMenus(const Output &out) {
+    return out.tap || out.back || out.steps != 0 || out.dragging;
+}
+
+bool HoverMayHighlight(bool controllerMode) { return controllerMode; }
+
 int HitRow(const std::vector<Row> &rows, float x, float y) {
     int best = -1;
     float bestDist = 0.0f;

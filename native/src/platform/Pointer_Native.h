@@ -67,5 +67,12 @@ void FramePoll();
 // GET /api/pointer/state: the switch, the lists drawn last frame with their
 // rows' rectangles, what the pointer did.
 std::string StateJson();
+// The same, built now: main thread only (the web's dc3_pointer_state()).
+std::string StateJsonNow();
+// A point in a box (desktop window points, web canvas CSS pixels) of
+// boxW x boxH -> the frame, through the picture rectangle the engine last
+// presented (GpuDevice::LastPresentRect on its SurfaceWidth x SurfaceHeight
+// surface).  False outside the picture.
+bool BoxToFramePresent(float bx, float by, float boxW, float boxH, float &fx, float &fy);
 
 } // namespace Dc3Pointer

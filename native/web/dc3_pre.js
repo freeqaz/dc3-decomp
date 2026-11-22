@@ -423,3 +423,28 @@ Module.preRun.push(function () {
     }
     if (!attach()) document.addEventListener('DOMContentLoaded', attach);
 })();
+
+// For tests and tools (scripts/phone_pointer.mjs): GET /api/pointer/state's
+// JSON, from the engine now, with each drawn row's centre also in PAGE CSS
+// pixels (row.page = [x, y]) -- mapped back through the picture rectangle the
+// engine last presented (state.present, GpuDevice::LastPresentRect on the
+// canvas buffer) and the canvas's CSS box, the same two the engine uses to
+// map a pointer in.  null before the engine is up.
+Module.dc3PointerState = function () {
+    var fn = Module['_dc3_pointer_state'];
+    var c = typeof document !== 'undefined' && document.getElementById('dc3-canvas');
+    if (!fn || !c) return null;
+    var s = JSON.parse(UTF8ToString(fn()));
+    var r = c.getBoundingClientRect(), p = s.present;
+    if (p && p.surface_w > 0 && p.w > 0) {
+        s.lists.forEach(function (l) {
+            l.rows.forEach(function (row) {
+                var bx = p.x + row.x / p.frame_w * p.w, by = p.y + row.y / p.frame_h * p.h;
+                row.page = [r.left + bx * r.width / p.surface_w, r.top + by * r.height / p.surface_h];
+            });
+        });
+        s.canvas = [r.left, r.top, r.width, r.height];
+    }
+    return s;
+};
+if (typeof window !== 'undefined') window.dc3PointerState = Module.dc3PointerState;

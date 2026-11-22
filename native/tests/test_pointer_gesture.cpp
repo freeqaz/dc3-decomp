@@ -23,6 +23,10 @@
 //     (the first build had exactly this bug; these two tests found it)
 // (the harness: each defect applied alone, milo-tests rebuilt, Pointer* run:
 // 7 of 7 failed, each in the tests named and no others)
+// Round 2 (same harness, 3 of 3 failed):
+//   TakesTheMenus counts a hover                      -> PointerSafetyTest.* (both)
+//   HoverMayHighlight always true                     -> PointerSafetyTest.AMouseThatMoves...
+//   PresentToFrame ignores the rectangle's offset     -> PointerMapTest.ThePresentRectangleIsThePicture
 
 #include <gtest/gtest.h>
 
@@ -297,6 +301,66 @@ TEST(PointerTrackerTest, ACancelledPressIsNotATap) {
     f.Ev(kUp, 900, 320);
     f.Frame();
     EXPECT_EQ(f.taps, 0);
+}
+
+// The web's canvas in portrait, as a buffer the engine fills edge to edge
+// with the frame letterboxed in it: the present rectangle, not the canvas, is
+// the picture.
+TEST(PointerMapTest, ThePresentRectangleIsThePicture) {
+    Rect present;
+    present.x = 0;
+    present.y = 341;
+    present.w = 412;
+    present.h = 232; // 412x915 buffer, the 16:9 frame in the middle
+    float fx, fy;
+    ASSERT_TRUE(PresentToFrame(206, 341 + 116, present, 1280, 720, fx, fy));
+    EXPECT_NEAR(fx, 640, 0.01);
+    EXPECT_NEAR(fy, 360, 0.01);
+    EXPECT_FALSE(PresentToFrame(206, 100, present, 1280, 720, fx, fy)); // above the picture
+    // a present rectangle that is not 16:9 (a stretched canvas): its own scale
+    present = Rect{10, 20, 1000, 1000};
+    ASSERT_TRUE(PresentToFrame(510, 520, present, 1280, 720, fx, fy));
+    EXPECT_NEAR(fx, 640, 0.01);
+    EXPECT_NEAR(fy, 360, 0.01);
+}
+
+// The GPD: the menus on the hands, a mouse on the desk.
+TEST(PointerSafetyTest, AMouseThatMovesOrRestsNeverTakesTheMenus) {
+    Finger f;
+    f.Ev(kMove, 300, 300, false);
+    f.Frame();
+    ASSERT_TRUE(f.outs.back().hover);
+    EXPECT_FALSE(TakesTheMenus(f.outs.back()));
+    for (int i = 0; i < 120; i++) { // resting: two seconds of frames
+        f.Frame();
+        EXPECT_FALSE(TakesTheMenus(f.outs.back()));
+    }
+    // and a hover moves no highlight while the hands have the menus
+    EXPECT_FALSE(HoverMayHighlight(false));
+    EXPECT_TRUE(HoverMayHighlight(true));
+}
+
+TEST(PointerSafetyTest, AClickAWheelOrATouchDoes) {
+    Finger f;
+    f.Ev(kDown, 300, 300, false);
+    f.Frame();
+    EXPECT_FALSE(TakesTheMenus(f.outs.back())); // a press alone: not yet
+    f.Ev(kUp, 300, 300, false);
+    f.Frame();
+    EXPECT_TRUE(TakesTheMenus(f.outs.back())); // the click
+    Input w;
+    w.kind = kWheel;
+    w.wheel = 1;
+    f.tr.Feed(w, f.p);
+    f.Frame();
+    EXPECT_TRUE(TakesTheMenus(f.outs.back()));
+    Finger g;
+    g.Drag(500, 300, 0.5f, false); // a finger on the glass, dragging
+    EXPECT_TRUE(TakesTheMenus(g.outs.back()));
+    Finger b;
+    b.Ev(kBack, 0, 0, false);
+    b.Frame();
+    EXPECT_TRUE(TakesTheMenus(b.outs.back()));
 }
 
 } // namespace
