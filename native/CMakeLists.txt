@@ -2218,6 +2218,7 @@ if(BUILD_TESTS)
         tests/test_canvas2d.cpp # the engine's batched 2D canvas (gfx/Canvas2D.h): CPU half + rendered proof
         tests/test_flare_point_test.cpp
         tests/test_gpu_timers.cpp
+        tests/test_perf_window.cpp # the engine's MILO_PERF line: frames per wall second, render time as render time
         tests/test_retail_lighting.cpp
         tests/test_spot_beam_frame_cost.cpp # spotperf: an unchanged beam set uploads nothing per frame
         tests/test_text_frame_cost.cpp # framecost: unchanged text uploads nothing per frame

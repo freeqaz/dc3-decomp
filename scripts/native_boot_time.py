@@ -63,7 +63,9 @@ EXIT_RE = re.compile(rb"DC3 UI: Screen '([^']+)' Exit \(to")
 MARKS = [
     (re.compile(rb"DC3 Boot: (.*)"), "boot"),
     (re.compile(rb"DC3 Native: frame cap: (.*)"), "frame cap"),
-    (re.compile(rb"(\[PERF\] [0-9.]+ fps)"), "frame rate"),
+    # The engine's [PERF] line: "N fps" before engine gfx/PerfWindow.h, "N frames in
+    # S s (R a second)" after it.
+    (re.compile(rb"(\[PERF\] (?:[0-9.]+ fps|[0-9]+ frames in [0-9.]+ s \([0-9.]+ a second\)))"), "frame rate"),
 ]
 # A window takes real keys, not the input script (Joypad_Native.cpp): Enter is
 # A.  The first press on a screen comes this long after it was entered (the
