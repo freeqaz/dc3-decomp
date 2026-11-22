@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "platform/PoseIdentity_Native.h"
+#include "platform/PoseSeen_Native.h"
 
 #ifndef DC3_DECOMP_SRC_DIR
 #error "DC3_DECOMP_SRC_DIR is the repo's src/ (native/CMakeLists.txt)"
@@ -1184,3 +1185,31 @@ TEST_F(PoseIdentityPlayersTest, ZeroIsTheOldRule) {
 }
 
 } // namespace
+
+// MOVE_RATING's seen= (np-gpd-track): per body, the fraction of the camera's
+// frames since the previous question in which that body was detected.  The
+// 2026-11-21 GPD session's player 2 was in 55% of the frames, and most of her
+// move_bad came from measures she was barely in; the log said nothing of it.
+TEST(PoseSeenTest, CountsCameraFramesPerBodySinceTheLastQuestion) {
+    Dc3PoseSeen::Counter c;
+    const int both[2] = {7, 9};
+    const int left[1] = {7};
+    // her first sighting starts her span: 10 frames, she is in 5
+    for (int i = 0; i < 10; i++)
+        c.Frame(both, (i % 2) ? 2 : 1);
+    // 9 was first seen in frame 2 (i = 1): 5 of the 9 frames from there
+    EXPECT_FLOAT_EQ(c.Since(9), 5.0f / 9.0f);
+    EXPECT_FLOAT_EQ(c.Since(7), 1.0f);
+    // the next span starts where the question was asked
+    for (int i = 0; i < 4; i++)
+        c.Frame(left, 1);
+    c.Frame(nullptr, 0); // a camera frame with nobody in it
+    EXPECT_FLOAT_EQ(c.Since(7), 4.0f / 5.0f);
+    EXPECT_FLOAT_EQ(c.Since(9), 0.0f);
+    // no frame since, no body, a body never seen: not a measurement
+    EXPECT_FLOAT_EQ(c.Since(7), -1.0f);
+    EXPECT_FLOAT_EQ(c.Since(-1), -1.0f);
+    EXPECT_FLOAT_EQ(c.Since(42), -1.0f);
+    c.Reset();
+    EXPECT_FLOAT_EQ(c.Since(7), -1.0f);
+}

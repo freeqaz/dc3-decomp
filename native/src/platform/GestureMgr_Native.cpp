@@ -22,6 +22,7 @@
 #include "lazer/game/Game.h"       // TheGame->Paused(): the pause menu is a menu (DC3_POSE_FILL_MENU)
 #include "lazer/game/GamePanel.h"  // TheGamePanel: the stall notice is for a song in play
 #include "PoseFill_Native.h"      // DC3_POSE_FILL
+#include "PoseSeen_Native.h"      // MOVE_RATING seen=
 #include "MenuGesture_Native.h"   // DC3_MENU_ARC_START: the camera's own joint confidences
 #include "PoseCamera_Native.h"    // which camera: DC3_POSE_CAMERA, the saved choice, auto
 #include "PoseIdentity_Native.h"  // DC3_POSE_REACQUIRE_MS: who is who
@@ -891,6 +892,8 @@ void NativePoseEstimateTestSet(int mode, float gain) {
 
 const Dc3PoseEstimate::Estimator &NativePoseEstimator() { return gEstimate; }
 
+static Dc3PoseSeen::Counter gSeen;
+
 // Lay this frame's persons into their persistent slots.  `elapsedMs` is the
 // sensor time since the previous frame (the dropout hold's clock); `real` =
 // a camera frame, not one the fill made (only those teach the estimator).
@@ -908,8 +911,11 @@ static int FillPersonSlots(const NativeSkeletonProvider::PersonData *persons, in
     }
     int personForSlot[NUM_SKELETONS];
     int reassigns = AssignSlots(trackIds, hips, numValid, elapsedMs, personForSlot);
+    int seenIds[NUM_SKELETONS], numSeen = 0;
     for (int s = 0; s < NUM_SKELETONS; s++) {
         int k = personForSlot[s];
+        if (k >= 0)
+            seenIds[numSeen++] = persons[origIdx[k]].trackId;
         // DC3_MENU_ARC_START: what the camera itself said of each joint,
         // before the estimate below relabels the ones it lost
         Dc3MenuGesture::NoteSensorConfidence(s, nullptr);
@@ -941,8 +947,14 @@ static int FillPersonSlots(const NativeSkeletonProvider::PersonData *persons, in
             FinishTrackedSlot(s);
         }
     }
+    // A camera frame (not a fill frame, not the stall's empty frame): who it
+    // really showed, for MOVE_RATING's seen= (PoseSeen_Native.h).
+    if (real && persons)
+        gSeen.Frame(seenIds, numSeen);
     return reassigns;
 }
+
+float Dc3PoseSeenSince(int trackingId) { return gSeen.Since(trackingId); }
 
 // How many standing stand-ins the NO-PROVIDER sensor shows.  NATIVE POLICY, not
 // image behaviour: the dummy exists so the game is playable with a controller

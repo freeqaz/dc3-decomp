@@ -511,9 +511,14 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
                             async ? async->NativeFindDetector(current) : nullptr;
                         if (det && det->NativeActive())
                             last = det->LastDetectFrac(i1);
+                        // seen=: the fraction of the camera's frames since this
+                        // player's previous rating in which her body was really
+                        // detected (PoseSeen_Native.h); -1 = no body.
+                        extern float Dc3PoseSeenSince(int trackingId);
+                        int body = player_data->GetSkeletonTrackingID();
                         MILO_LOG(
                             "DC3 MOVE_RATING p=%d measure=%d move=%s rating=%s lastfrac=%.4f "
-                            "score=%d diff=%s songbeat=%d body=%d\n",
+                            "score=%d diff=%s songbeat=%d body=%d seen=%.2f\n",
                             i1,
                             i5,
                             current->Name(),
@@ -522,7 +527,8 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
                             (sc && sc->Type() == kDataInt) ? sc->Int() : -1,
                             DifficultyToSym(player_data->GetDifficulty()).Str(),
                             currentBeat,
-                            player_data->GetSkeletonTrackingID()
+                            body,
+                            Dc3PoseSeenSince(body)
                         );
                     }
                     // Observed-trigger evidence for the default-on runtime gate:
