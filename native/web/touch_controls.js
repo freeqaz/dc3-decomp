@@ -11,7 +11,8 @@
 // with ?touch=1; ?touch=0 hides it.  Layout: a d-pad on the left and
 // A (Enter, confirm) / B (Esc, back) / Start (Space) on the right, outside the
 // game picture when the window has room (portrait), over its lower corners
-// when it does not (landscape), clear of the pose panel in the bottom centre.
+// when it does not (landscape), clear of the pose panel in the bottom centre;
+// in the portrait layout (portrait.js) one big cluster at the deck's bottom.
 (function () {
     'use strict';
     var q = new URLSearchParams(location.search);
@@ -45,19 +46,41 @@
         '#dc3-touch .hint { position:absolute; left:50%; top:calc(var(--g) * 2 + env(safe-area-inset-top, 0px)); transform:translateX(-50%);' +
         '  color:#ccc; background:#000b; border:1px solid #555; border-radius:6px; padding:6px 10px;' +
         '  font:14px/1.35 system-ui,sans-serif; max-width:90vw; text-align:center; display:none; pointer-events:auto; }' +
-        '@media (orientation:portrait) { #dc3-touch .hint { display:block; } }';
+        '@media (orientation:portrait) { #dc3-touch .hint { display:block; } }' +
+        // Portrait layout (portrait.js, html.dc3-portrait): the picture is at
+        // the top and the deck under it; the buttons are one big remote-style
+        // cluster at the bottom centre -- the d-pad with A in its middle, B
+        // and Start in two corners -- as wide as a quarter of the screen per
+        // button, less when the deck is short. No hint: the deck replaces it.
+        '#dc3-touch button { left:calc(var(--b) * var(--lx)); top:calc(var(--b) * var(--ly)); }' +
+        'html.dc3-portrait #dc3-touch { --b:var(--tb, 18vw); }' +
+        'html.dc3-portrait #dc3-touch .hint { display:none; }' +
+        'html.dc3-portrait #dc3-touch .dpad, html.dc3-portrait #dc3-touch .face { left:50%; right:auto;' +
+        '  transform:translateX(-50%); width:calc(var(--b) * 3); height:calc(var(--b) * 3);' +
+        '  bottom:calc(var(--g) * 4 + env(safe-area-inset-bottom, 0px)); }' +
+        'html.dc3-portrait #dc3-touch .face { pointer-events:none; }' +
+        'html.dc3-portrait #dc3-touch button { left:calc(var(--b) * var(--px)); top:calc(var(--b) * var(--py)); }' +
+        'html.dc3-portrait #dc3-touch .dpad button { border-radius:22%; }' +
+        // a small gap between the d-pad's arms and the A in their middle
+        'html.dc3-portrait #dc3-touch .dpad button, html.dc3-portrait #dc3-touch button[data-key="Enter"] {' +
+        '  width:calc(var(--b) * 0.92); height:calc(var(--b) * 0.92); margin:calc(var(--b) * 0.04); }' +
+        'html.dc3-portrait #dc3-touch button[data-key="Enter"] { background:#a0c8; border-color:#fffa; font-size:calc(var(--b) * 0.4); }' +
+        'html.dc3-portrait #dc3-touch button[data-key="Escape"], html.dc3-portrait #dc3-touch button[data-key=" "] {' +
+        '  width:calc(var(--b) * 0.8); height:calc(var(--b) * 0.8); font-size:calc(var(--b) * 0.28); }';
     var style = document.createElement('style');
     style.textContent = css;
     document.head.appendChild(style);
 
     var root = document.createElement('div');
     root.id = 'dc3-touch';
-    // [label, key, container, left, top] in button units inside the container
+    // [label, key, container, left, top, portrait left, portrait top] in
+    // button units inside the container (in portrait both containers are the
+    // same 3x3 box, so the face buttons sit in the d-pad's middle and corners)
     var buttons = [
-        ['▲', 'ArrowUp', 'dpad', 1, 0], ['▼', 'ArrowDown', 'dpad', 1, 2],
-        ['◀', 'ArrowLeft', 'dpad', 0, 1], ['▶', 'ArrowRight', 'dpad', 2, 1],
-        ['A', 'Enter', 'face', 1.6, 1.0], ['B', 'Escape', 'face', 0.6, 2.0],
-        ['▶❙', ' ', 'face', 0.0, 0.0],
+        ['▲', 'ArrowUp', 'dpad', 1, 0, 1, 0], ['▼', 'ArrowDown', 'dpad', 1, 2, 1, 2],
+        ['◀', 'ArrowLeft', 'dpad', 0, 1, 0, 1], ['▶', 'ArrowRight', 'dpad', 2, 1, 2, 1],
+        ['A', 'Enter', 'face', 1.6, 1.0, 1, 1], ['B', 'Escape', 'face', 0.6, 2.0, 0.1, 2.1],
+        ['▶❙', ' ', 'face', 0.0, 0.0, 2.1, 0.1],
     ];
     var boxes = {};
     ['dpad', 'face'].forEach(function (k) {
@@ -80,8 +103,10 @@
         el.textContent = b[0];
         el.setAttribute('aria-label', b[1] === ' ' ? 'Start' : b[1]);
         el.dataset.key = b[1];
-        el.style.left = 'calc(var(--b) * ' + b[3] + ')';
-        el.style.top = 'calc(var(--b) * ' + b[4] + ')';
+        el.style.setProperty('--lx', b[3]);
+        el.style.setProperty('--ly', b[4]);
+        el.style.setProperty('--px', b[5]);
+        el.style.setProperty('--py', b[6]);
         // The engine samples the key bitmask once per game frame, so a tap whose
         // keydown and keyup land between two frames is never seen. Hold every
         // press for at least kMinHoldMs (a few frames even at 30 fps).

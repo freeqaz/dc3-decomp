@@ -68,6 +68,51 @@
            stretching it. */
         #canvas-container:fullscreen { background: #000; }
         #canvas-container:fullscreen #dc3-canvas { object-fit: contain; }
+        /* Portrait (portrait.js sets html.dc3-portrait on a phone held
+           upright; ?portrait=0 keeps the old centred picture). The 16:9
+           picture fills the width at the top -- the same size as before, it
+           is width-bound either way -- and the deck under it holds what is
+           on screen, the camera view and the button cluster. */
+        #dc3-deck { display: none; }
+        html.dc3-portrait {
+            --pic-h: calc((100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) * 9 / 16);
+            --deck-h: calc(100vh - var(--pic-h) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+            /* one touch button's size (touch_controls.js): a quarter of the
+               width, less when the deck is short, never under 44 px */
+            --tb: min(24vw, 112px, max(44px, calc((var(--deck-h) - 250px) / 3.2)));
+        }
+        @supports (height: 100dvh) {
+            html.dc3-portrait { --deck-h: calc(100dvh - var(--pic-h) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
+        }
+        html.dc3-portrait:not(.dev) body { justify-content: flex-start; }
+        html.dc3-portrait:not(.dev) #canvas-container { margin-top: env(safe-area-inset-top, 0px); }
+        html.dc3-portrait:not(.dev) #dc3-deck {
+            display: flex; flex-direction: column; align-items: stretch;
+            position: fixed; z-index: 15; left: 0; right: 0; bottom: 0;
+            top: calc(env(safe-area-inset-top, 0px) + var(--pic-h));
+            padding: 12px max(14px, env(safe-area-inset-right, 0px)) 0 max(14px, env(safe-area-inset-left, 0px));
+            pointer-events: none;
+            background: radial-gradient(120% 70% at 50% 100%, #2a0838 0%, #0b0610 55%, #000 100%);
+        }
+        #dc3-deck .now {
+            border-radius: 14px; padding: 10px 14px 11px;
+            background: linear-gradient(135deg, #c0f3, #40c3 60%, #0000);
+            border: 1px solid #c0f6; box-shadow: 0 4px 18px #c0f2;
+        }
+        #dc3-deck .label { font: 700 11px/1.2 system-ui, sans-serif; letter-spacing: 0.14em; color: #e9f; text-transform: uppercase; }
+        #dc3-deck .screen { font: 700 22px/1.25 system-ui, sans-serif; color: #fff; margin-top: 2px; }
+        #dc3-deck .song { font: 500 16px/1.3 system-ui, sans-serif; color: #fcf; margin-top: 2px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #dc3-deck .tip { font: 12px/1.3 system-ui, sans-serif; color: #998; text-align: center; margin-top: 8px; }
+        /* The camera view under the "now" card, at a size a player standing
+           back can read (in the 16:9 strip it was about 23 px tall). */
+        html.dc3-portrait:not(.dev) #pose-panel {
+            position: fixed; z-index: 16; bottom: auto; left: 50%; transform: translateX(-50%);
+            top: calc(env(safe-area-inset-top, 0px) + var(--pic-h) + 140px);
+            width: max-content; max-width: 92vw; gap: 10px; font-size: 13px; align-items: center;
+        }
+        html.dc3-portrait:not(.dev) #pose-view { height: min(26vw, calc(var(--deck-h) - 156px - 3.4 * var(--tb))); min-height: 48px; border-radius: 10px; }
+        html.dc3-portrait:not(.dev) #pose-status { max-width: 56vw; }
         #loading {
             position: absolute;
             inset: 0;
@@ -511,6 +556,9 @@
                     }
                     if (text.includes("will enter '")) {
                         gameRunning();
+                        // portrait.js shows the screen in its deck
+                        var sm = /will enter '([^']+)'/.exec(text);
+                        if (sm) document.dispatchEvent(new CustomEvent('dc3-screen', { detail: { screen: sm[1] } }));
                     }
                     if (text.includes('GPU init failed')) {
                         setStatus('GPU not available (headless mode)', 'error');
@@ -788,6 +836,8 @@
     <!-- Webcam pose input: camera panel + MediaPipe worker -> dc3_pose_push
          (native/web/pose/, docs/native/POSE_INPUT.md). ?pose=off disables. -->
     <script type="module" src="pose/pose_input.js"></script>
+    <!-- Portrait layout on a phone held upright (?portrait=0 off, =1 any device). -->
+    <script src="portrait.js"></script>
     <!-- On-screen buttons on touch-only devices (?touch=1 forces, ?touch=0 hides). -->
     <script src="touch_controls.js"></script>
 </body>
