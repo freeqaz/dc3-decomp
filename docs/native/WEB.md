@@ -1029,7 +1029,9 @@ black, the pose panel sits in the bottom band between the two help bars
 (below), and a loading card ("Loading… /
 Downloading game data… / Starting…") covers it until the first screen. Errors
 (no WebGPU, a device/adapter failure, no build on the server) replace the
-card's text and stay up. Double-click the game for fullscreen.
+card's text and stay up. With a mouse, double-click the game for fullscreen;
+with the on-screen buttons, the "Full screen" button (see "The deck, round
+2" below).
 
 `?dev` (any value but `0`/`false`/`off`), or `?debug=true` unless `?dev=0`,
 gives the developer harness: status bar, key help, Pause/Step (also `P` and
@@ -1204,6 +1206,11 @@ Menus, pause, results and landscape keep step 1's 16:9 picture.
   the right of the 16:9 screen, so it lands whole and 1.8x the size it would
   have in a 16:9 strip; the left 44% of the HUD falls off the left edge. A
   camera with a target texture is untouched; a 16:9 frame turns all of it off.
+  Measured on the desktop (round 2): `dc3-native` headless at
+  `MILO_WIDTH=720 MILO_HEIGHT=1280`, driven into a song over the debug server,
+  draws a 720x405 frame (`GpuDevice: frame 720x405 out`), prints no
+  `[portrait]` line, and its song screenshot is the ordinary 16:9 picture with
+  the flashcards at the right -- a tall native window never turns this on.
 - **Pointer mapping during a portrait song**: the canvas's bounding box is
   the picture (9:16). The world is drawn 9:16 directly; the HUD's 16:9 design
   point (u, v) in 0..1 is at canvas x = w * (k*u + 1 - k), y = h * (0.5 +
@@ -1225,7 +1232,62 @@ others. What it cannot do: a HUD element on the left of the 16:9 screen
 drives to a song upright and checks the 9:16 box, the engine's 9:16 frame,
 the strip's buttons, a rotation to landscape mid-song and back, and saves
 screenshots; `--sabotage-portrait song|frame|songrotate|strip` each break one
-part.
+part. Run a sabotage with no other browser on the box: under load the engine
+can miss the title within 240 s and the run fails on the wrong check (round
+1's `strip` run did; run alone it fails exactly the two strip checks, 9 of 11
+pass). A run that misses the title now prints its screens and last console
+lines.
+
+### The deck, round 2 (np-portrait2, W-37b)
+
+A review of step 1 (Fable, `probe.mjs` against `0771289b2`) found six
+defects; each now has a `phone.mjs --only deck` check that was made to fail
+first (`--sabotage-portrait <kind>`).
+
+- **Full screen hid every button.** A double tap on the picture made
+  `#canvas-container` fullscreen, and the buttons and the deck live on
+  `<body>`, outside it: on a Pixel 7 a finger on any of the 7 buttons reached
+  the canvas. The double-click handler now does nothing while the on-screen
+  buttons are shown; a **"Full screen" button** (`#dc3-fs`, 44 px, in the
+  corner of the Now card upright, the top-right corner sideways, hidden during
+  a portrait song and where the page cannot go fullscreen -- an iPhone allows
+  it only for video) makes the whole page (`document.documentElement`)
+  fullscreen, so the buttons and the deck stay. A mouse still double-clicks
+  the game. Sabotage `dbltap`, `fsbutton`.
+- **Screen wake lock** (`navigator.wakeLock`, `index.html`): held on every
+  screen but the idle ones (attract, title) -- a camera player does not touch
+  the phone, and it dimmed mid-song -- released there, and asked for again on
+  `visibilitychange` (the browser drops it when the page is hidden).
+  `?wakelock=0` never asks; `window.dc3WakeLock` for the tests. Sabotage
+  `wake`, `wakevis`.
+- **One touch test**, `(pointer: coarse)`, in `index.html` as
+  `window.dc3TouchOnly`; `portrait.js`, `touch_controls.js` and the sound
+  button read it. The old `!(any-pointer: fine)` (three copies) took the
+  buttons away from a phone with a stylus or a Bluetooth mouse paired. Sabotage
+  `coarse`.
+- **A true 44 px floor and no overlap on short screens.** B and Start were
+  0.8 of a button (35 px at 360x560); they are floored at 44 px, a button at
+  48 px (the d-pad's 0.92 is 44). `portrait.js` (`layoutDeck`) now **measures**
+  the deck instead of a fixed 140 px offset: the camera view sits under the
+  card and its tip whatever their height (a long screen name put it over the
+  tip), and when the stack does not fit (a 412x450 split screen, a 673x690
+  foldable) the deck goes **compact** (`html.dc3-portrait-compact`): the
+  cluster at the right, the card and the camera view in the column left of
+  it, no tip. `--tb`, `--panel-top`, `--view-h`, `--col-w` are set inline.
+  Checked on 11 upright screens (412x839, 393x659, 375x553, 360x560, 412x450,
+  673x690, 344x780, 820x1106, and three with a long name and a song).
+  Sabotage `floor`, `compact`, `paneltop`.
+- **Text, not emoji.** The triangles carry U+FE0E (a bare U+25B6/U+25C0 is a
+  colour emoji on iOS and Android); the buttons are named Up, Down, Left,
+  Right, "A, confirm", Back, Start (they were named by their keys: "Escape",
+  " "). Sabotage `glyph`, `labels`.
+- **`?portrait=` words**: `0/false/off/no` and `1/true/on/yes`, as `?dev`
+  (`window.dc3Switch`, also `?touch=`, `?portraitsong=`, `?wakelock=`).
+  Sabotage `switchwords`.
+
+`phone.mjs --only deck [--no-engine]` (`--no-engine` serves `dc3-web.js`
+empty and sends the title as a synthetic `dc3-screen`; every deck check is
+the page's, so the sabotage runs use it).
 
 ### iPhone and iPad (W-29..W-34, np-ios)
 
