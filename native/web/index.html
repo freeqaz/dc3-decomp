@@ -602,6 +602,9 @@
                 canvas: document.getElementById('dc3-canvas'),
                 onRuntimeInitialized: function() {
                     wasmReady = true;
+                    // portrait.js calls exports only after this (calling one
+                    // earlier aborts the runtime in a build with assertions)
+                    window.dc3RuntimeUp = true;
                     console.log('RUNTIME_INIT_OK');
                     setStatus('Downloading game data…', 'loading');
                 },

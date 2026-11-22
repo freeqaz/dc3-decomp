@@ -156,12 +156,20 @@
     // game is on game_screen. The class first (the canvas box), then the
     // engine's frame shape; the engine waits for the new box to settle.
     var frameTimer = 0;
+    // The runtime is up (index.html's onRuntimeInitialized sets
+    // dc3RuntimeUp). The export's wrapper exists BEFORE that, and calling it
+    // then ABORTS the whole runtime in a build with assertions (the debug
+    // build: "native function called before runtime initialization") -- a
+    // page that loaded upright then never reached the title, by timing.
+    function runtimeUp() { return !!(window.dc3RuntimeUp && window.Module); }
     function askFrame() {
         frameTimer = 0;
         var want = state.song9x16 ? 1 : 0;
         if (state.frameAsked === want) return;
+        // The engine starts with the 16:9 frame: nothing to ask until a song.
+        if (state.frameAsked === -1 && want === 0) { state.frameAsked = 0; return; }
         try {
-            if (window.Module && typeof Module._milo_web_set_portrait_frame === 'function') {
+            if (runtimeUp() && typeof Module._milo_web_set_portrait_frame === 'function') {
                 Module._milo_web_set_portrait_frame(want);
                 state.frameAsked = want;
                 return;
@@ -181,6 +189,7 @@
         if (!frameTimer) askFrame();
     }
     window.dc3PortraitFrame = function () {  // the engine's frame shape, for the tests
+        if (!runtimeUp()) return -1;
         try { return Module._milo_web_portrait_frame(); } catch (err) { return -1; }
     };
 
@@ -189,7 +198,7 @@
     // A few tries on game_screen only, and never while the deck is hidden.
     function dta(expr) {
         try {
-            if (!window.Module || typeof Module.ccall !== 'function') return null;
+            if (!runtimeUp() || typeof Module.ccall !== 'function') return null;
             var r = JSON.parse(Module.ccall('dc3_dta_eval', 'string', ['string'], [expr]));
             return r && r.ok ? r.result : null;
         } catch (err) { return null; }

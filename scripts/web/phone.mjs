@@ -496,7 +496,8 @@ try {
         const ne = argv.includes('--no-engine');
         const { ctx, page, st } = await open({ query: '?env=DC3_AUDIO_GAIN%3D0', camera: true, wakeStub: true, noEngine: ne });
         if (ne) { await sleep(3000); await page.evaluate(() => { const l = document.getElementById('loading'); if (l) l.classList.add('hidden'); }); await page.evaluate(() => document.dispatchEvent(new CustomEvent('dc3-screen', { detail: { screen: 'title_screen' } }))); st.screen = 'title_screen (synthetic)'; }
-        else await waitFor(() => st.screen === 'title_screen', 240000);
+        else check(await waitFor(() => st.screen === 'title_screen', 240000),
+            `deck: the engine reached the title (${st.screens.join(' > ') || 'no screen'}; without it the double tap lands on the loading card, not the game)`);
         await waitFor(() => ['tracking', 'noperson', 'waiting'].includes(st.pose), 30000);
         await sleep(1500);
         const coarse = await page.evaluate(() => ({ coarse: matchMedia('(pointer: coarse)').matches, anyFine: matchMedia('(any-pointer: fine)').matches, touchOnly: window.dc3TouchOnly }));
