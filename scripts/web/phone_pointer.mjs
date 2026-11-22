@@ -47,6 +47,8 @@ await shot('01_title');
   const at = t ? t.page : [pic[0] + pic[2] / 2, pic[1] + pic[3] / 2];
   const from = st.screen;
   await page.touchscreen.tap(at[0], at[1]);
+  // a finger's first tap on a row that is not lit only lights it: tap again
+  if (!(await waitFor(() => st.screen && st.screen !== from, 3000))) await page.touchscreen.tap(at[0], at[1]);
   check(await waitFor(() => st.screen && st.screen !== from, 20000),
     `a tap on ${from} (${t ? `${t.list} row ${t.row}` : 'centre'}, page ${at.map(Math.round)}) moved on -> ${st.screen}`); }
 await sleep(4000); await shot('02_menu');
@@ -55,6 +57,7 @@ for (let i = 0; i < 5 && !st.screen.includes('song_select'); i++) {
   await waitFor(async () => (t = rowOf(await S(), 'right_hand.hnl', 0)), 8000);
   if (!t) { console.log('   no rows on', s); break; }
   await page.touchscreen.tap(t.page[0], t.page[1]);
+  if (!(await waitFor(() => st.screen !== s, 3000))) await page.touchscreen.tap(t.page[0], t.page[1]); // highlight, then pick
   const moved = await waitFor(() => st.screen !== s, 15000);
   check(moved, `tap ${t.list} row ${t.row} (frame ${t.frame}, page ${t.page.map(Math.round)}) on ${s} -> ${st.screen}`);
   await sleep(4000);
@@ -80,16 +83,19 @@ check(ss.steps_done > before, `a flick from page y ${Math.round(a.y)} to ${Math.
 check(ss.tap_selects === selBefore && st.screen.includes('song_select'), `the flick selected nothing (still ${st.screen})`);
 await shot('04_after_flick');
 // tap a song: the classic list's rows can be section headers (a tap opens one);
-// so tap the third drawn row, then the row after the one tapped, up to 3 taps
+// so tap the third drawn row (twice: a finger's first tap lights it), then the
+// row after the one tapped, up to 5 taps
 const name0 = st.screen; let want = sl2.rows[Math.min(2, sl2.rows.length - 1)].row, picked = false;
-for (let k = 0; k < 3 && !picked; k++) {
+for (let k = 0; k < 5 && !picked; k++) {
   const cur = (await S()).lists.find((l) => l.name === songList.name);
   const pick = cur.rows.find((r) => r.row === want) || cur.rows[Math.min(2, cur.rows.length - 1)];
   await page.touchscreen.tap(pick.page[0], pick.page[1]);
   await sleep(800); await shot(`05_tap_song${k}`);
   picked = await waitFor(() => st.screen !== name0, 8000);
   console.log(`   tap row ${pick.row} (page ${pick.page.map(Math.round)}): ${st.ptr.slice(-1)[0] || ''} -> ${st.screen}`);
-  want = pick.row + 1;
+  // a finger's first tap only lit the row: the next tap on it picks; a tap
+  // that picked a section header opened it: try the row after
+  want = /highlight/.test(st.ptr.slice(-1)[0] || '') ? pick.row : pick.row + 1;
 }
 check(picked, `taps on the song list picked a song -> ${st.screen}`);
 await sleep(3000); await shot('06_after_pick');

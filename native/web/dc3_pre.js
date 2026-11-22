@@ -373,7 +373,7 @@ Module.preRun.push(function () {
 // with the picture's CSS size; the engine scales that onto its surface (the
 // canvas buffer, all of which is the frame on the web) and into the frame.
 // Nothing assumes 16:9 or a centred box.  ?env=DC3_POINTER=0 is the original:
-// the engine ignores them.
+// nothing is sent and the canvas keeps the browser's touch, wheel and menu.
 function dc3PictureBox(c) {
     var r = c.getBoundingClientRect();
     // the content box: getBoundingClientRect includes border and padding
@@ -403,23 +403,76 @@ function dc3PictureBox(c) {
     if (typeof document === 'undefined') return;
     var KIND = { move: 0, down: 1, up: 2, wheel: 3, cancel: 4, back: 5 };
     var activeId = null;
+    var swallowId = null; // a press that dismissed the splash: not the game's
+    // DC3_POINTER=0 (?env=DC3_POINTER=0) is the original page: the browser
+    // keeps the canvas's touch gestures, wheel and context menu, and nothing
+    // is sent.  Unknown until the engine's runtime is up; until then nothing
+    // is sent either (there is nothing to send it to).
+    var enabled = null;
+    function isEnabled() {
+        if (enabled === null) {
+            var fn = Module['_dc3_pointer_enabled'];
+            // never call into the module before its runtime is up (a debug
+            // build aborts on that): runtimeInitialized is the generated
+            // code's own flag, in this --pre-js's scope
+            var up = typeof runtimeInitialized !== 'undefined' ? runtimeInitialized : !!Module['calledRun'];
+            if (typeof fn !== 'function' || !up) return false;
+            try { enabled = !!fn(); } catch (err) { return false; }
+            if (enabled) {
+                // the browser must not scroll, zoom or take a drag on the game
+                // as its own (body has touch-action: manipulation, under which
+                // a real phone cancelled a finger's drag after two moves --
+                // Fable review).  A rule, not only the inline style, so a
+                // layout script restyling the canvas cannot drop it.
+                var st = document.createElement('style');
+                st.textContent = 'html.dc3-pointer #dc3-canvas { touch-action: none !important; }';
+                (document.head || document.documentElement).appendChild(st);
+                document.documentElement.classList.add('dc3-pointer');
+                var c = document.getElementById('dc3-canvas');
+                if (c) c.style.touchAction = 'none';
+            }
+        }
+        return enabled;
+    }
+    // the runtime comes up a few seconds in: settle the switch then (bounded)
+    var polls = 0;
+    var poll = setInterval(function () {
+        isEnabled();
+        if (enabled !== null || ++polls > 600) clearInterval(poll);
+    }, 500);
+    function splashUp() {
+        var v = document.getElementById('splash-video');
+        return !!(v && v.style.opacity !== '0' && v.src && !v.ended);
+    }
     function send(kind, e, wheel) {
         var fn = Module['_dc3_pointer'];
         var c = document.getElementById('dc3-canvas');
-        if (!fn || !c) return;
+        if (!fn || !c || !isEnabled()) return;
         var r = dc3PictureBox(c);
         if (r.width <= 0 || r.height <= 0) return;
         var touch = e && e.pointerType && e.pointerType !== 'mouse' ? 1 : 0;
         var x = e ? e.clientX - r.left : 0, y = e ? e.clientY - r.top : 0;
-        fn(kind, x, y, r.width, r.height, wheel || 0, touch);
+        // the event's own time: a slow frame hands over a burst of events,
+        // and the release velocity needs when each happened (Fable review)
+        var age = e && typeof e.timeStamp === 'number' && typeof performance !== 'undefined'
+            ? Math.max(0, (performance.now() - e.timeStamp) / 1000) : 0;
+        fn(kind, x, y, r.width, r.height, wheel || 0, touch, age);
+    }
+    function lose() {
+        // a lost up (capture taken away, the tab hidden, the window blurred)
+        // must not leave a finger down on the game
+        if (activeId === null) return;
+        activeId = null;
+        send(KIND.cancel, null);
     }
     function attach() {
         var c = document.getElementById('dc3-canvas');
         if (!c || c.dataset.dc3Pointer) return !!c;
         c.dataset.dc3Pointer = '1';
-        // the browser must not scroll or zoom the page under a drag on the game
-        c.style.touchAction = 'none';
+        isEnabled();
         c.addEventListener('pointerdown', function (e) {
+            if (!isEnabled()) return;
+            if (splashUp()) { swallowId = e.pointerId; return; } // it skips the splash (index.html)
             if (e.button === 2) { send(KIND.back, e); return; }
             if (e.button !== 0 || (activeId !== null && activeId !== e.pointerId)) return;
             activeId = e.pointerId;
@@ -434,6 +487,7 @@ function dc3PictureBox(c) {
         });
         function end(kind) {
             return function (e) {
+                if (e.pointerId === swallowId) { swallowId = null; return; }
                 if (e.pointerId !== activeId) return;
                 activeId = null;
                 send(kind, e);
@@ -441,13 +495,20 @@ function dc3PictureBox(c) {
         }
         c.addEventListener('pointerup', end(KIND.up));
         c.addEventListener('pointercancel', end(KIND.cancel));
+        c.addEventListener('lostpointercapture', function (e) {
+            // fires after pointerup too; then activeId is already clear
+            if (e.pointerId === activeId) lose();
+        });
+        window.addEventListener('blur', lose);
+        document.addEventListener('visibilitychange', function () { if (document.hidden) lose(); });
         c.addEventListener('wheel', function (e) {
+            if (!isEnabled()) return;
             // pixels -> rows: a mouse notch is ~100 px (a line, 3 rows of text)
             var rows = e.deltaMode === 1 ? e.deltaY / 3 : e.deltaMode === 2 ? e.deltaY * 5 : e.deltaY / 100;
             send(KIND.wheel, e, rows);
             e.preventDefault();
         }, { passive: false });
-        c.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+        c.addEventListener('contextmenu', function (e) { if (isEnabled()) e.preventDefault(); });
         return true;
     }
     if (!attach()) document.addEventListener('DOMContentLoaded', attach);

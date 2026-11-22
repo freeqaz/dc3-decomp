@@ -23,6 +23,8 @@ HamNavList), and checks:
     5 s after the last press -- the tap armed the hold)
   - song select: a flick, then a tap 1.2 s later while rows are still owed
     (pending_steps > 0): the tap selects nothing and the screen stays
+  - a song reached by taps: taps there log no `ControllerMode: enter` (the
+    game's panel is is_gameplay_panel; SKIP when no song is reached)
 
 Needs the GPU: run it with the sandbox off (and the NVIDIA prefix on this box).
 Exit: 0 every check passed; 1 a check failed; 2 setup error.
@@ -240,6 +242,34 @@ def run(a):
               "the tap that stopped the list selected nothing and the screen stayed",
               f"tap_selects {sel0} -> {st.get('tap_selects')}, screen {s} -> {eng.screen()}, "
               f"pending_steps now {st.get('pending_steps')}, last '{st.get('last')}'")
+
+        # -- a song: a tap there is the game's (is_gameplay_panel), never a takeover
+        if not a.no_song:
+            reached = None
+            end = time.monotonic() + a.song_timeout
+            while time.monotonic() < end:
+                s = eng.screen() or ""
+                if s.startswith("game"):
+                    reached = s
+                    break
+                l3, r3 = row_of(scrollable=True) if "song_select" in s else row_of("right_hand.hnl", 0)
+                if r3 and "song_select" in s:
+                    r3 = l3["rows"][min(2, len(l3["rows"]) - 1)]
+                ptr("tap", x=r3["x"] if r3 else 640, y=r3["y"] if r3 else 400)
+                wait_screen(lambda n: n != s, 6)
+                time.sleep(1.5)
+            if not reached:
+                print(f"SKIP: no song reached by taps in {a.song_timeout} s (at {eng.screen()})", flush=True)
+            else:
+                k.wait(6.0)
+                was = in_cm()
+                n0 = enters()
+                for _ in range(3):
+                    ptr("tap", x=640, y=360)
+                    time.sleep(1.0)
+                check(enters() == n0, f"3 taps during the song ({reached}) log no `ControllerMode: enter`",
+                      f"controller mode before {was}, after {in_cm()}, enters +{enters() - n0}, "
+                      f"pointer '{state().get('last')}'")
     except SetupError as ex:
         print(f"SETUP: {ex}", flush=True)
         results.append(None)
@@ -268,6 +298,8 @@ def main():
     ap.add_argument("--engine", required=True)
     ap.add_argument("--workdir", required=True)
     ap.add_argument("--env", action="append", default=[], help="extra KEY=VALUE for the engine")
+    ap.add_argument("--no-song", action="store_true", help="skip the in-song phase")
+    ap.add_argument("--song-timeout", type=float, default=120.0)
     a = ap.parse_args()
     if not os.path.exists(a.engine):
         print(f"engine not found: {a.engine}", file=sys.stderr)
