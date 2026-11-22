@@ -181,3 +181,9 @@ uv-cache/
 
 # class_layout_report per-TU layout cache (tools/header_offset_audit_par.py)
 .layout_cache/
+
+# Playtest camera recordings (scripts/play.sh --record-video): video of the
+# player's room. Never commit one, nor its frame sidecars.
+camera*.mkv
+*.frames.tsv
+*.cut.tsv

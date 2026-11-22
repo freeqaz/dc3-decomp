@@ -541,6 +541,19 @@ std::vector<std::string> NativeSkeletonProvider::ServerCommand(
         if (mask && !strcmp(mask, "raw"))
             argv.insert(argv.end(), { "--mask", "raw" });
     }
+    // DC3_POSE_RECORD_VIDEO=PATH: the server also writes the frames it gives
+    // MediaPipe to PATH, with a PATH-stem.frames.tsv of each frame's packet
+    // id and capture timestamp (native/scripts/video_recorder.py;
+    // scripts/play.sh sets it per session when video recording is on).
+    // DC3_POSE_RECORD_VIDEO_MAX_GB caps its size.  Nothing is passed when
+    // unset, so a server from before this (DC3_POSE_SERVER) still starts.
+    const char *recordVideo = getenv("DC3_POSE_RECORD_VIDEO");
+    if (recordVideo && *recordVideo) {
+        argv.insert(argv.end(), { "--record-video", recordVideo });
+        const char *maxGb = getenv("DC3_POSE_RECORD_VIDEO_MAX_GB");
+        if (maxGb && *maxGb)
+            argv.insert(argv.end(), { "--record-max-gb", maxGb });
+    }
     return argv;
 }
 

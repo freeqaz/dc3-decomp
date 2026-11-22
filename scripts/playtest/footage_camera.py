@@ -229,6 +229,8 @@ def main(argv):
     if not args.video:
         log("needs --video CLIP (scripts/play.sh --video sets it)")
         return 2
+    if args.record_video:
+        pose_server.sigterm_is_a_clean_shutdown()
     try:
         pose_server.run(args, cv2=FakeCv2())
     except pose_server.ServerExit as e:
