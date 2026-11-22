@@ -675,6 +675,10 @@ public:
         // Not bound this frame because every free skeleton is too far from
         // where her bound skeleton was last seen (kReleaseWaitMs).
         bool waiting[kPlayers];
+        // For an assign: how far the body is from where her bound skeleton
+        // was last seen, and how long ago that was (-1 = never seen).
+        float fromBound[kPlayers];
+        float sinceBoundMs[kPlayers];
     };
 
     // One sensor frame.  boundId[p] is the tracking id player p holds (-1 =
@@ -694,6 +698,8 @@ public:
             r.lostMs[p] = 0.0f;
             r.released[p] = -1;
             r.waiting[p] = false;
+            r.fromBound[p] = -1.0f;
+            r.sinceBoundMs[p] = -1.0f;
         }
         // How long each slot's skeleton has been there.
         for (int s = 0; s < kSlots; s++) {
@@ -921,6 +927,17 @@ private:
         r.slot[p] = s;
         claimed[s] = true;
         Memory &m = mMem[p];
+        Release &rel = mRelease[p];
+        if (rel.seen) {
+            r.fromBound[p] = Flat(rel.x, rel.z, slots[s]);
+            r.sinceBoundMs[p] = rel.ms;
+        }
+        // Bound here counts as seen bound: where the image does not keep a
+        // binding (song select) this is the only place she is.
+        rel.seen = true;
+        rel.x = slots[s].x;
+        rel.z = slots[s].z;
+        rel.ms = 0.0f;
         if (boundId[p] != slots[s].id) {
             r.assign[p] = slots[s].id;
             r.rule[p] = rule;

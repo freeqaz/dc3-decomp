@@ -1238,6 +1238,28 @@ TEST_F(PoseIdentityReleaseTest, AlternatingFramesNeverHandHerToTheOtherPerson) {
     EXPECT_EQ(mBound[0], 701);
 }
 
+TEST_F(PoseIdentityReleaseTest, WhereTheImageKeepsNoBindingSheStaysOnOneBody) {
+    // Song select, measured (menu24): the image drops the binding Players
+    // makes by the next frame, every frame, so the binding is only ever
+    // Players' own.  Two people a frame in turn: before this, she was on
+    // whichever the frame held.
+    Bound();
+    int changes = 0, last = mBound[0];
+    for (int f = 0; f < 60; f++) {
+        Unbind(0);
+        if (f % 2)
+            OnlyHer();
+        else
+            OnlyTheOther();
+        Tick();
+        if (mBound[0] >= 0 && mBound[0] != last) {
+            changes++;
+            last = mBound[0];
+        }
+    }
+    EXPECT_EQ(changes, 0);
+}
+
 TEST_F(PoseIdentityReleaseTest, AFarBodyWaitsThenIsTaken) {
     Bound();
     Unbind(0); // let go, and the next frame holds only the other one

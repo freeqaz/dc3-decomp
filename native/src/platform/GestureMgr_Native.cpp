@@ -631,9 +631,11 @@ static void NativeAutoAssignPlayers(float elapsedMs) {
         sSinceMs[p] = 0.0f;
         if (changed && BindingLog())
             fprintf(stderr,
-                "DC3 SCORING: bind p%d -> tracking id %d slot %d rule=%s lost=%.0fms dist=%.2fm\n",
+                "DC3 SCORING: bind p%d -> tracking id %d slot %d rule=%s lost=%.0fms dist=%.2fm "
+                "wait=%dms from-bound=%.2fm/%.0fms\n",
                 p, result.assign[p], result.slot[p], Dc3PoseIdentity::RuleName(result.rule[p]),
-                result.lostMs[p], result.distance[p]);
+                result.lostMs[p], result.distance[p], releaseWaitMs, result.fromBound[p],
+                result.sinceBoundMs[p]);
     }
     if (SkeletonChooser *chooser = NativeChooser()) {
         for (int p = 0; p < 2; p++) {
