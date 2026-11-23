@@ -336,7 +336,7 @@ set(MILO_ENGINE_PATH "${_milo_engine_default}"
 # Consequence, deliberately accepted: `-DMILO_ENGINE_PIN=...` on the cmake
 # command line no longer sticks. There is no legitimate reason to override a
 # provenance pin from the command line; edit this line instead.
-set(MILO_ENGINE_PIN "2d2b7a96b72288ff48be14c825c6450423b6c8a3"
+set(MILO_ENGINE_PIN "11d5f2bafb74425468df6058403b7b7427f03e4d"
     CACHE STRING "Engine commit SHA verified against" FORCE)
 if(EXISTS "${MILO_ENGINE_PATH}/.git")
     execute_process(COMMAND git rev-parse HEAD
@@ -2134,6 +2134,26 @@ target_precompile_headers(milo-pp-dump PRIVATE
     "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
 )
 
+# --- milo-env-dump ---
+# Every RndEnviron's ambient colour (alpha included), the use_environ materials
+# and environ PropAnim tracks of a .milo_xbox as JSON lines (lane A77).
+add_executable(milo-env-dump
+    src/tools/milo_env_dump.cpp
+    ${DC3_EXPORT_TOOL_SOURCES}
+)
+target_compile_options(milo-env-dump PRIVATE
+    ${DC3_MSVC_COMPAT_FLAGS}
+    ${DC3_DECOMP_FLAGS}
+    ${DC3_ATOMIC_COMPAT_FLAGS}
+)
+target_compile_definitions(milo-env-dump PRIVATE HX_NATIVE=1 MILO_DEBUG=1 _DEBUG=1)
+target_include_directories(milo-env-dump PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
+target_link_options(milo-env-dump PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
+target_link_libraries(milo-env-dump PRIVATE ${DC3_EXPORT_TOOL_LIBS})
+target_precompile_headers(milo-env-dump PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+)
+
 # --- milo2gltf ---
 add_executable(milo2gltf
     src/tools/milo2gltf.cpp
@@ -2262,6 +2282,7 @@ if(BUILD_TESTS)
         tests/test_rand_seed.cpp
         tests/test_threadtask_replace.cpp
         tests/test_hamnavlist_transition.cpp
+        tests/test_hamnavprovider_hidden.cpp
         tests/test_native_animbypass.cpp
         tests/test_ui_message_routing.cpp
         tests/test_shaderprogram_cache_logic.cpp
