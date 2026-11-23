@@ -2134,6 +2134,26 @@ target_precompile_headers(milo-pp-dump PRIVATE
     "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
 )
 
+# --- milo-env-dump ---
+# Every RndEnviron's ambient colour (alpha included), the use_environ materials
+# and environ PropAnim tracks of a .milo_xbox as JSON lines (lane A77).
+add_executable(milo-env-dump
+    src/tools/milo_env_dump.cpp
+    ${DC3_EXPORT_TOOL_SOURCES}
+)
+target_compile_options(milo-env-dump PRIVATE
+    ${DC3_MSVC_COMPAT_FLAGS}
+    ${DC3_DECOMP_FLAGS}
+    ${DC3_ATOMIC_COMPAT_FLAGS}
+)
+target_compile_definitions(milo-env-dump PRIVATE HX_NATIVE=1 MILO_DEBUG=1 _DEBUG=1)
+target_include_directories(milo-env-dump PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
+target_link_options(milo-env-dump PRIVATE ${DC3_PLATFORM_LINK_OPTIONS})
+target_link_libraries(milo-env-dump PRIVATE ${DC3_EXPORT_TOOL_LIBS})
+target_precompile_headers(milo-env-dump PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+)
+
 # --- milo2gltf ---
 add_executable(milo2gltf
     src/tools/milo2gltf.cpp
