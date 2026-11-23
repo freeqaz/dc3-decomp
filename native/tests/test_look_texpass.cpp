@@ -201,11 +201,12 @@ TEST(LookTexPass, EnhancedTurnsOnStep1RetailAndNativeNot) {
     {
         milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
         const milo::LookSettings &enh = milo::Look();
-        // Discrete GPUs only until an integrated GPU's timing says it fits.
-        EXPECT_TRUE(enh.texPassMsaa && !enh.texPassMsaaIntegrated);
-        EXPECT_TRUE(milo::LookTexPassMsaa(enh, milo::LookAdapterClass::Discrete) && !milo::LookTexPassMsaa(enh, milo::LookAdapterClass::OtherNonDiscrete));
-        EXPECT_TRUE(enh.texPassScale && !enh.texPassScaleIntegrated);
-        EXPECT_TRUE(milo::LookTexPassScale(enh, milo::LookAdapterClass::Discrete) && !milo::LookTexPassScale(enh, milo::LookAdapterClass::OtherNonDiscrete));
+        // Every class since np-rtt-int1024 (the other non-discrete class timed
+        // on the 890M with the cap at 1024; dc3 PLAN H-194).
+        EXPECT_TRUE(enh.texPassMsaa && enh.texPassMsaaIntegrated);
+        EXPECT_TRUE(milo::LookTexPassMsaa(enh, milo::LookAdapterClass::Discrete) && milo::LookTexPassMsaa(enh, milo::LookAdapterClass::OtherNonDiscrete));
+        EXPECT_TRUE(enh.texPassScale && enh.texPassScaleIntegrated);
+        EXPECT_TRUE(milo::LookTexPassScale(enh, milo::LookAdapterClass::Discrete) && milo::LookTexPassScale(enh, milo::LookAdapterClass::OtherNonDiscrete));
     }
     for (milo::LookProfile p : {milo::LookProfile::Retail, milo::LookProfile::Native}) {
         milo::ScopedLookOverride look(p);
@@ -314,7 +315,7 @@ TEST(LookTexPass, TheSizeSetterMovesTheCapAndTheRows) {
     EXPECT_EQ(Side1024(1440), 2048) << "the rule";
     EXPECT_EQ(Side1024(2160), 2048) << "the rule";
     // The numbers only: step 2 stays as it was, on and off.
-    EXPECT_TRUE(milo::Look().texPassScale && !milo::Look().texPassScaleIntegrated);
+    EXPECT_TRUE(milo::Look().texPassScale && milo::Look().texPassScaleIntegrated);
     ASSERT_TRUE(milo::SetLookTexPassScaleForInspection(0));
     ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(1536, 480));
     EXPECT_FALSE(milo::Look().texPassScale || milo::Look().texPassScaleIntegrated);
@@ -370,6 +371,70 @@ TEST_F(LookTexPassTokens, TheSizeTokensAndRttRule) {
     EXPECT_TRUE(s.texPassMsaa && s.texPassScale) << "rtt_rule: both steps the profile's";
     EXPECT_EQ(s.texPassMaxSide, 2048) << "rtt_rule: the profile's cap";
     EXPECT_EQ(s.texPassBaseRows, 360) << "rtt_rule: the profile's rows";
+}
+
+// np-rtt-int1024 (dc3 PLAN H-194): the other non-discrete class's enhanced
+// defaults are exactly the state the 890M timed, `rtt_on + rtt_cap_1024 +
+// rtt_rows_rule` (dc3-decomp-9c's rttsize57 run: +0.069 ms at 1268x713,
+// +0.071 at 1920x1080): step 1 on, step 2 on, cap 1024, base rows 360, and
+// the same GPU size for a 1024 and a 512 target at every output size. The
+// numbers are written out, so a revert of any one of the three defaults is
+// red, and the token state is compared with the rule state so the two cannot
+// drift apart. Sabotages, each seen red and reverted (H-194):
+// kIntegratedTexPassMsaa false; kIntegratedTexPassScale false;
+// kIntegratedTexPassMaxSide 2048.
+TEST_F(LookTexPassTokens, TheOtherClassDefaultIsTheTimedState) {
+    milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
+    const milo::LookAdapterClass O = milo::LookAdapterClass::OtherNonDiscrete;
+    struct State {
+        bool msaa, scale;
+        int cap, rows;
+        int side[2][7];  // a 1024 and a 512 target at kRows
+    };
+    static const int kRows[7] = {360, 540, 713, 720, 1080, 1440, 2160};
+    auto capture = [&]() {
+        State st;
+        const milo::LookSettings &s = milo::Look();
+        st.msaa = milo::LookTexPassMsaa(s, O);
+        st.scale = milo::LookTexPassScale(s, O);
+        st.cap = milo::LookTexPassMaxSide(s, O);
+        st.rows = milo::LookTexPassBaseRows(s, O);
+        for (int t = 0; t < 2; t++)
+            for (int i = 0; i < 7; i++) {
+                const int own = t == 0 ? 1024 : 512;
+                int w = 0, h = 0;
+                milo::TexPassGpuSize(s, O, own, own, kRows[i], w, h);
+                EXPECT_EQ(w, h);
+                st.side[t][i] = w;
+            }
+        return st;
+    };
+    const State rule = capture();
+    EXPECT_TRUE(rule.msaa) << "step 1 on the other non-discrete class";
+    EXPECT_TRUE(rule.scale) << "step 2 on the other non-discrete class";
+    EXPECT_EQ(rule.cap, 1024) << "the other class's cap";
+    EXPECT_EQ(rule.rows, 360) << "the other class's base rows";
+    // A 1024 projection stays 1024 (4 samples) at every output size; a 512
+    // target grows with the rows up to the cap.
+    const int want1024[7] = {1024, 1024, 1024, 1024, 1024, 1024, 1024};
+    const int want512[7] = {512, 768, 1014, 1024, 1024, 1024, 1024};
+    for (int i = 0; i < 7; i++) {
+        EXPECT_EQ(rule.side[0][i], want1024[i]) << "1024 target, " << kRows[i] << " rows";
+        EXPECT_EQ(rule.side[1][i], want512[i]) << "512 target, " << kRows[i] << " rows";
+    }
+    // The discrete class is untouched by it.
+    EXPECT_EQ(milo::LookTexPassMaxSide(milo::Look(), milo::LookAdapterClass::Discrete), 2048);
+    Token("rtt_on");
+    Token("rtt_cap_1024");
+    Token("rtt_rows_rule");
+    const State timed = capture();
+    EXPECT_EQ(timed.msaa, rule.msaa);
+    EXPECT_EQ(timed.scale, rule.scale);
+    EXPECT_EQ(timed.cap, rule.cap);
+    EXPECT_EQ(timed.rows, rule.rows);
+    for (int t = 0; t < 2; t++)
+        for (int i = 0; i < 7; i++) EXPECT_EQ(timed.side[t][i], rule.side[t][i]) << t << " " << kRows[i];
+    Token("rtt_rule");
 }
 
 // The box filter a scaled target is read back through: 1.5 texels a texel.
@@ -850,7 +915,7 @@ TEST(LookAdapterClasses, OtherNonDiscreteIsTodays) {
         ClassOutcomes discrete, other;
     };
     const Row today[] = {
-        {LookProfile::Enhanced, {true, true, true, true}, {true, true, false, false}},
+        {LookProfile::Enhanced, {true, true, true, true}, {true, true, true, true}},  // H-194
         {LookProfile::Retail, {false, false, false, false}, {false, false, false, false}},
         {LookProfile::Native, {false, false, false, false}, {false, false, false, false}},
     };
@@ -867,14 +932,16 @@ TEST(LookAdapterClasses, OtherNonDiscreteIsTodays) {
         const ClassOutcomes discrete = OutcomesFor(LookAdapterClass::Discrete);
         EXPECT_TRUE(Same(discrete, r.discrete)) << milo::LookProfileName(r.profile) << ": discrete "
                                                 << Describe(discrete) << ", today " << Describe(r.discrete);
-        // With step 2 forced on, a handheld got the discrete GPU's size (one
-        // pair of numbers), and still does: the size table at each row count
-        // is the discrete class's.
+        // With step 2 on, the other class's size is its own since H-194: the
+        // cap 1024 (a 1024 projection stays 1024 at every row count), in
+        // every profile; the base rows the discrete class's.
         if (r.profile != LookProfile::Native) {
             ASSERT_TRUE(milo::SetLookTexPassScaleForInspection(1));
             for (int rows : {360, 540, 713, 720, 1080, 1440})
-                EXPECT_EQ(Side1024(rows, LookAdapterClass::OtherNonDiscrete), Side1024(rows))
+                EXPECT_EQ(Side1024(rows, LookAdapterClass::OtherNonDiscrete), 1024)
                     << milo::LookProfileName(r.profile) << " " << rows << " rows";
+            EXPECT_EQ(milo::LookTexPassBaseRows(milo::Look(), LookAdapterClass::OtherNonDiscrete),
+                      milo::LookTexPassBaseRows(milo::Look(), LookAdapterClass::Discrete));
         }
     }
 }
@@ -966,23 +1033,24 @@ TEST(LookAdapterClasses, TheSizeNumbersArePerClass) {
     }
     const LookAdapterClass classes[] = {LookAdapterClass::Discrete, LookAdapterClass::Apple,
                                         LookAdapterClass::OtherNonDiscrete};
-    // 1024 and 480: no class's own number, so a class the setter skips shows.
-    ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(1024, 0));
+    // 1280 and 480: no class's own number, so a class the setter skips shows
+    // (1024 was, until H-194 made it the other class's cap).
+    ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(1280, 0));
     for (LookAdapterClass c : classes) {
-        EXPECT_EQ(milo::LookTexPassMaxSide(milo::Look(), c), 1024) << "cap, class " << (int)c;
+        EXPECT_EQ(milo::LookTexPassMaxSide(milo::Look(), c), 1280) << "cap, class " << (int)c;
         EXPECT_EQ(milo::LookTexPassBaseRows(milo::Look(), c), c == LookAdapterClass::Apple ? 720 : 360)
             << "0 leaves the rows, class " << (int)c;
     }
     ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(0, 480));
     for (LookAdapterClass c : classes) {
-        EXPECT_EQ(milo::LookTexPassMaxSide(milo::Look(), c), 1024) << "0 leaves the cap, class " << (int)c;
+        EXPECT_EQ(milo::LookTexPassMaxSide(milo::Look(), c), 1280) << "0 leaves the cap, class " << (int)c;
         EXPECT_EQ(milo::LookTexPassBaseRows(milo::Look(), c), 480) << "rows, class " << (int)c;
     }
     ASSERT_TRUE(milo::SetLookTexPassSizeForInspection(-1, -1));
     const milo::LookSettings &s = milo::Look();
     EXPECT_EQ(s.texPassMaxSide, 2048);
     EXPECT_EQ(s.texPassMaxSideApple, 1536);
-    EXPECT_EQ(s.texPassMaxSideIntegrated, 2048);
+    EXPECT_EQ(s.texPassMaxSideIntegrated, 1024);  // H-194
     EXPECT_EQ(s.texPassBaseRows, 360);
     EXPECT_EQ(s.texPassBaseRowsApple, 720);
     EXPECT_EQ(s.texPassBaseRowsIntegrated, 360);
@@ -1029,7 +1097,7 @@ TEST(LookAdapterClasses, TheSettersWriteAllThreeClasses) {
     ASSERT_TRUE(milo::SetLookTexPassMsaaForInspection(0));
     ASSERT_TRUE(milo::SetLookTexPassMsaaForInspection(-1));
     EXPECT_TRUE(milo::LookTexPassMsaa(milo::Look(), LookAdapterClass::Apple)) << "enhanced's Apple msaa is on";
-    EXPECT_FALSE(milo::LookTexPassMsaa(milo::Look(), LookAdapterClass::OtherNonDiscrete));
+    EXPECT_TRUE(milo::LookTexPassMsaa(milo::Look(), LookAdapterClass::OtherNonDiscrete)) << "and its other one (H-194)";
     {
         milo::ScopedLookOverride native(LookProfile::Native);
         for (const Rule &r : rules) EXPECT_FALSE(r.set(1)) << "Native refuses " << r.what;
@@ -1067,8 +1135,8 @@ TEST(LookAdapterClasses, TheClassLineWording) {
         << apple;
     const std::string other = line(LookAdapterType::Integrated, 0x1002, false, "Vulkan");
     EXPECT_TRUE(begins(other, "[look] adapter class: not a discrete GPU;")) << other;
-    EXPECT_NE(other.find("; depth of field near field 1, near spread 1, edge 0, texture pass msaa 0, scale 0 "
-                         "(cap 2048, base rows 360) [type integrated, vendor 0x1002, backend Vulkan] "
+    EXPECT_NE(other.find("; depth of field near field 1, near spread 1, edge 0, texture pass msaa 1, scale 1 "
+                         "(cap 1024, base rows 360) [type integrated, vendor 0x1002, backend Vulkan] "
                          "(profile enhanced)\n"),
               std::string::npos)
         << other;
@@ -1079,7 +1147,7 @@ TEST(LookAdapterClasses, TheClassLineWording) {
     testing::internal::CaptureStderr();
     milo::SetLookTexPassMsaaForInspection(-1);
     const std::string set = testing::internal::GetCapturedStderr();
-    EXPECT_EQ(set, "[look] texture pass msaa 1, 0 on a non-discrete GPU, 1 on an Apple GPU (the rule) "
+    EXPECT_EQ(set, "[look] texture pass msaa 1, 1 on a non-discrete GPU, 1 on an Apple GPU (the rule) "
                    "(inspection, profile enhanced)\n");
     testing::internal::CaptureStderr();
     milo::SetLookTexPassSizeForInspection(1536, 0);
@@ -1090,7 +1158,7 @@ TEST(LookAdapterClasses, TheClassLineWording) {
     testing::internal::CaptureStderr();
     milo::SetLookTexPassSizeForInspection(-1, 0);
     const std::string sizeRule = testing::internal::GetCapturedStderr();
-    EXPECT_EQ(sizeRule, "[look] texture pass size cap 2048, 2048 on a non-discrete GPU, 1536 on an Apple GPU (the "
+    EXPECT_EQ(sizeRule, "[look] texture pass size cap 2048, 1024 on a non-discrete GPU, 1536 on an Apple GPU (the "
                         "rule), base rows 360, 360 on a non-discrete GPU, 720 on an Apple GPU (the rule) "
                         "(inspection, profile enhanced)\n");
 }
@@ -1222,8 +1290,11 @@ TEST(LookAdapterClasses, TheClassTokenReachesEveryPickersCaller) {
     const LookAdapterClass classes[] = {LookAdapterClass::Discrete, LookAdapterClass::Apple,
                                         LookAdapterClass::OtherNonDiscrete};
     // What each class's callers get under enhanced (the two tables above).
+    // Since H-194 the four switches agree in all three classes, so the cap
+    // (2048 / 1536 / 1024) is what tells a forced class apart here.
     const ClassOutcomes want[] = {{true, true, true, true}, {true, true, true, true},
-                                  {true, true, false, false}};
+                                  {true, true, true, true}};
+    const int wantCap[] = {2048, 1536, 1024};
     GpuDevice noAdapter;  // a caller's accessor; its own class is other non-discrete
     for (int f = 0; f < 3; f++) {
         for (int c = 0; c < 3; c++) {
@@ -1232,6 +1303,7 @@ TEST(LookAdapterClasses, TheClassTokenReachesEveryPickersCaller) {
             EXPECT_EQ((int)got, (int)classes[c]) << "adapter " << f << " forced " << c;
             EXPECT_TRUE(Same(OutcomesFor(got), want[c])) << "adapter " << f << " forced " << c << ": "
                                                          << Describe(OutcomesFor(got));
+            EXPECT_EQ(milo::LookTexPassMaxSide(milo::Look(), got), wantCap[c]) << "adapter " << f << " forced " << c;
             EXPECT_EQ((int)noAdapter.LookClass(), (int)classes[c]) << "GpuDevice::LookClass() forced " << c;
         }
     }
@@ -1407,7 +1479,7 @@ TEST(LookAdapterClasses, TheBrowserClassLine) {
     milo::PrintLookAdapterClass(WebFacts("apple", true, false, "metal-3"));
     const std::string mac = testing::internal::GetCapturedStderr();
     EXPECT_EQ(mac, "[look] adapter class: not a discrete GPU; depth of field near field 1, near spread 1, edge 0, "
-                   "texture pass msaa 0, scale 0 (cap 2048, base rows 360) [browser vendor \"apple\", "
+                   "texture pass msaa 1, scale 1 (cap 1024, base rows 360) [browser vendor \"apple\", "
                    "architecture \"metal-3\", texture-compression-bc 1, fallback 0, backend WebGPU] (profile "
                    "enhanced)\n");
     milo::LogLookAdapterClass(nvidia);
@@ -1417,7 +1489,7 @@ TEST(LookAdapterClasses, TheBrowserClassLine) {
     EXPECT_EQ(forced, "[look] adapter class forced for inspection: not a discrete GPU; the adapter is a discrete "
                       "GPU [browser vendor \"nvidia\", architecture \"ampere\", texture-compression-bc 1, "
                       "fallback 0, backend WebGPU]; depth of field near field 1, near spread 1, edge 0, texture "
-                      "pass msaa 0, scale 0 (cap 2048, base rows 360) (profile enhanced)\n");
+                      "pass msaa 1, scale 1 (cap 1024, base rows 360) (profile enhanced)\n");
     ASSERT_TRUE(milo::SetLookAdapterClassForInspection(true));
     milo::LogLookAdapterClass(saved);
 }
@@ -1426,7 +1498,11 @@ TEST(LookAdapterClasses, TheBrowserClassLine) {
 // clearing pass (Tex_Wgpu's caller of LookTexPassMsaa), and nothing that
 // sizes the frame moves. Sabotage: GetGpuTexPassTarget deciding by
 // IsDiscreteGpu (the two-way flag) in place of LookClass() -> red (forced
-// other non-discrete still drew 4 samples on a discrete GPU).
+// other non-discrete still drew 4 samples on a discrete GPU). Since H-194
+// every class's enhanced value is 4 samples, so that sabotage no longer
+// shows here (it needs a class whose value differs); this pins the other
+// class's 4 samples on the device instead, and TheClassTokenReachesTheSize
+// still tells the classes apart by size.
 TEST_F(TexPassGpuTest, TheClassTokenReachesTheTexturePass) {
     ScopedPredicate yes(&AnyTarget);
     milo::ScopedLookOverride look(milo::LookProfile::Enhanced);
@@ -1442,11 +1518,11 @@ TEST_F(TexPassGpuTest, TheClassTokenReachesTheTexturePass) {
     };
     const uint32_t k4 = WgpuRnd::kTexPassMsaaSamples;
     const Step steps[] = {
-        {false, LookAdapterClass::OtherNonDiscrete, 1},
+        {false, LookAdapterClass::OtherNonDiscrete, k4},  // H-194: every class draws 4 samples
         {false, LookAdapterClass::Apple, k4},
-        {false, LookAdapterClass::OtherNonDiscrete, 1},
+        {false, LookAdapterClass::OtherNonDiscrete, k4},
         {false, LookAdapterClass::Discrete, k4},
-        {true, LookAdapterClass::Discrete, own == LookAdapterClass::OtherNonDiscrete ? 1u : k4},
+        {true, LookAdapterClass::Discrete, k4},
     };
     for (const Step &st : steps) {
         ASSERT_TRUE(milo::SetLookAdapterClassForInspection(st.rule, st.forced));
