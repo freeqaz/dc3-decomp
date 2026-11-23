@@ -175,6 +175,22 @@ Symbol HamNavProvider::DataSymbol(int idx) const {
     if (idx >= 0 && idx < mNavItems.size()) {
         MILO_ASSERT((0) <= (idx) && (idx) < (mNavItems.size()), 99);
         for (int i = 0; i <= idx; i++) {
+#ifdef HX_NATIVE
+            // BUG FIX (a80): `idx` is a VISIBLE-row index, but NumData() counts
+            // hidden rows too, so UIListProvider::DataIndex -- which asks for
+            // every index below NumData() -- walks this skip loop past the end
+            // of mNavItems whenever a row is hidden.  The image (0x82486BF8,
+            // 100% matched) has the same unbounded walk -- +0x90..+0xB8, the
+            // `lbz r8, 0x11(r8)` mHidden read at +0x9C has no size bound -- and
+            // reads heap past the vector; on native that garbage keeps `mHidden` nonzero
+            // and the walk runs into unmapped memory: SIGSEGV on the second
+            // perform_pause_screen entry, whose enter runs
+            // `{right_hand.hnl data_index pausecommand_practice}` after the
+            // first entry hid that row (beginner difficulty).  A visible index
+            // with no visible row is out of bounds: same answer as the else arm.
+            if (i >= mNavItems.size())
+                return gNullStr;
+#endif
             if (mNavItems[i].mHidden)
                 idx++;
         }
