@@ -2282,6 +2282,7 @@ if(BUILD_TESTS)
         tests/test_rand_seed.cpp
         tests/test_threadtask_replace.cpp
         tests/test_hamnavlist_transition.cpp
+        tests/test_hamnavprovider_hidden.cpp
         tests/test_native_animbypass.cpp
         tests/test_ui_message_routing.cpp
         tests/test_shaderprogram_cache_logic.cpp
