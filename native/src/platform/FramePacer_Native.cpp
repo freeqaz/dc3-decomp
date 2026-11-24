@@ -95,18 +95,36 @@ std::string Dc3ThermalNotice(int stepsDown, bool alreadySaid, bool inSong) {
            "smooth. It sharpens again once things cool down.";
 }
 
+std::string Dc3RateNotice(int rateStepsDown, bool alreadySaid, bool inSong, int outW, int outH) {
+    if (rateStepsDown <= 0 || alreadySaid || inSong || outW <= 0 || outH <= 0) return "";
+    char buf[192];
+    snprintf(buf, sizeof(buf),
+             "This display is too big to draw at full speed, so the picture is drawn at %dx%d "
+             "and scaled up to keep the game smooth.",
+             outW, outH);
+    return buf;
+}
+
 #ifndef __EMSCRIPTEN__
 void Dc3ThermalSetTarget(double capFps, double refreshHz) {
     milo::ThermalSetTargetFps(Dc3ThermalTargetFps(capFps, refreshHz));
 }
 
 void Dc3ThermalFramePoll(bool inSong) {
-    static bool sSaid = false;
-    if (sSaid) return;
-    const std::string warm = Dc3ThermalNotice(milo::ThermalGetStatus().stepsDown, sSaid, inSong);
-    if (warm.empty()) return;
-    NativeNotice::Post("thermal", warm, "", 10.0f);
-    sSaid = true;
+    static bool sSaid = false, sRateSaid = false;
+    if (sSaid && sRateSaid) return;
+    const milo::ThermalStatus t = milo::ThermalGetStatus();
+    const std::string warm = Dc3ThermalNotice(t.stepsDown, sSaid, inSong);
+    if (!warm.empty()) {
+        NativeNotice::Post("thermal", warm, "", 10.0f);
+        sSaid = true;
+    }
+    const std::string big =
+        Dc3RateNotice(t.rateStepsDown, sRateSaid, inSong, t.outputWidth, t.outputHeight);
+    if (!big.empty()) {
+        NativeNotice::Post("output_rate", big, "", 10.0f);
+        sRateSaid = true;
+    }
 }
 #endif
 

@@ -62,10 +62,19 @@ double Dc3ThermalTargetFps(double capFps, double refreshHz);
 // when there is nothing to say now: no step down yet, already said, or a song
 // is on (it waits for the next menu -- nothing is put over a routine).
 std::string Dc3ThermalNotice(int stepsDown, bool alreadySaid, bool inSong);
+// The governor's rate rule (engine gfx/ThermalGovernor.h, THE RATE RULE): an
+// output drawn above 1080 rows -- the cap lifted, MILO_OUTPUT_MAX_ROWS=0, as on
+// a Mac driving a 4K TV -- is made smaller (1440, then 1080 rows) when frames
+// are late against Dc3ThermalTargetFps, whatever the thermal level. Its banner
+// is its own (not "running warm": nothing is warm), for the first such step of
+// a session, with the size the picture is now drawn at; "" when there is
+// nothing to say now (no step yet, already said, a song is on, size unknown).
+std::string Dc3RateNotice(int rateStepsDown, bool alreadySaid, bool inSong, int outW, int outH);
 #ifndef __EMSCRIPTEN__
 // Give the engine's governor its target (once, when the frame cap is decided).
 void Dc3ThermalSetTarget(double capFps, double refreshHz);
-// Once per frame: post the notice when Dc3ThermalNotice has one.
+// Once per frame: post the notices when Dc3ThermalNotice / Dc3RateNotice
+// have one ("DC3 NOTICE [thermal]", "DC3 NOTICE [output_rate]").
 void Dc3ThermalFramePoll(bool inSong);
 #endif
 
