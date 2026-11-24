@@ -4,6 +4,7 @@
 #include "SongSelect_Native.h"
 
 #include "NativeSettings.h" // dc3's, same directory: Dc3EnvFlag
+#include "PgSongs_Native.h"
 #include "SongBrowserHooks_Native.h"
 #include "SongSelectState_Native.h"
 #include "game/GameMode.h"
@@ -12,6 +13,8 @@
 #include "math/Utl.h"
 #include "meta/Sorting.h"
 #include "meta_ham/AppLabel.h"
+#include "meta_ham/HamSongMgr.h"
+#include "meta_ham/Playlist.h"
 #include "meta_ham/SongSortMgr.h"
 #include "obj/Data.h"
 #include "os/Joypad.h"
@@ -21,6 +24,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstring>
 #include <map>
 #include <string>
 #include <utility>
@@ -29,6 +33,108 @@
 bool Dc3ClassicSongSelect() {
     static const bool sClassic = Dc3EnvFlag("DC3_CLASSIC_SONG_SELECT", false);
     return sClassic;
+}
+
+bool NativePgSongs::Enabled() {
+    static const bool enabled = Dc3EnvFlag("DC3_PG_SONGS", false);
+    return enabled;
+}
+
+bool NativePgSongs::AllowsSong(Symbol shortName) {
+    if (!Enabled()) return true;
+
+    // The disc and official import packs use the same rating for every song.
+    // Curate by the game's short names and consider the art shown in the browser.
+    static const char *const songs[] = {
+        "aroundtheworld",
+        "betteroffalone",
+        "bewareoftheboys",
+        "cupidshuffle",
+        "discoinferno",
+        "electricboogie",
+        "hello",
+        "iamthebest",
+        "iwillsurvive",
+        "letthemusicplay",
+        "macarena",
+        "sambadejaneiro",
+        "supersonic",
+        "thehustle",
+        "turnthebeataround",
+        "whatdoesntkillyou",
+        "ymca",
+        "yougotittherightstuff",
+        // Official imports and DLC.
+        "bulletproof",
+        "control",
+        "dance",
+        "daysgoby",
+        "dragosteadintei",
+        "escapade",
+        "funkytown",
+        "gonnamakeyousweat",
+        "iwishforyou",
+        "jungleboogie",
+        "lalaland",
+        "lefreak",
+        "neversaynever",
+        "nothinonyou",
+        "planetrock",
+        "pondereplay",
+        "pumpupthejam",
+        "replay",
+        "roundandround",
+        "sandstorm",
+        "satellite",
+        "sayhey",
+        "somebodytolove",
+        "straightup",
+        "technologic",
+        "venus",
+        "whatislove",
+        "whipmyhair",
+        "wordup",
+        // Additional mounted packs.
+        "aroundtheworldlalala",
+        "beautifullife",
+        "chericherilady",
+        "clocks",
+        "dancingqueen",
+        "faded",
+        "feelthelight",
+        "finalcountdown",
+        "flames",
+        "gotmymindsetonyou",
+        "halo",
+        "heroes",
+        "ilikechopin",
+        "illbethereforyou",
+        "jumpvanhalen",
+        "lalalashakira",
+        "lights",
+        "thefox",
+        "thesafetydance",
+        "tremor",
+        "tsunami",
+        "ucanttouchthis",
+        "wakawaka",
+        "whatsup",
+    };
+    for (const char *song : songs) {
+        if (std::strcmp(shortName.Str(), song) == 0) return true;
+    }
+    return false;
+}
+
+bool NativePgSongs::AllowsPlaylist(const Playlist &playlist) {
+    if (!Enabled()) return true;
+    for (int i = 0; i < playlist.GetNumSongs(); ++i) {
+        int id = playlist.GetSong(i);
+        if (id <= 0 || !AllowsSong(TheHamSongMgr.GetShortNameFromSongID(id, false))) {
+            return false;
+        }
+    }
+    return true;
 }
 
 // ---------------------------------------------------------------------------

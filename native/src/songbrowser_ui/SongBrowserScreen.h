@@ -210,6 +210,10 @@ namespace songbrowser_ui {
 
         // For tests and tools.
         const nativeui::ListView &List() const;
+        // The sort tab under `point` (frame space), or -1; and picking one as
+        // a press on it would (np-pointer).  False if it is already selected.
+        int TabAt(nativeui::Vec2 point) const;
+        bool SelectTab(int index);
         const nativeui::Shelf &Recents() const;
         // The command row the list's selection is on, if it is on one.
         std::optional<Command> SelectedCommand() const;

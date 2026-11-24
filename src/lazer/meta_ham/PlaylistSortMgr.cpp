@@ -35,6 +35,9 @@
 #include "utl\Symbol.h"
 #include "stl\_map.h"
 #include <list>
+#ifdef HX_NATIVE
+#include "platform/PgSongs_Native.h"
+#endif
 
 bool CompareType(const Playlist *p1, const Playlist *p2) {
     if (p1->GetType() == p2->GetType()) {
@@ -416,6 +419,9 @@ void PlaylistSortMgr::UpdateList() {
 
         for (int i = 0; i < 5; i++) {
             Playlist *p = &pActiveProfile->GetPlaylist(i);
+#ifdef HX_NATIVE
+            if (!NativePgSongs::AllowsPlaylist(*p)) continue;
+#endif
             if (p->GetNumSongs() != 0) {
                 ThePlaylistSortMgr->AddPlaylist(p);
             }

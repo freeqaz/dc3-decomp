@@ -14,12 +14,32 @@ native-only files or under `HX_NATIVE`.
 
 `DC3_CLASSIC_SONG_SELECT=1` turns all of it off at once: three sorts, no
 Recently Played, the four buttons inert, the sort not remembered. The list is
-then the image's row for row (`SongSelectClassicFlowTest`).
+then laid out like the image's list (`SongSelectClassicFlowTest`).
 
-On desktop a pad or keyboard player does not see that list at all: they get
-the natively drawn **song browser** over the same panel (next section). The
-list described in the rest of this page is what a gesture player gets, what
-the web gets, and what stays loaded underneath the browser.
+By default, desktop pad and keyboard players get the natively drawn **song
+browser** over the same panel. The classic list stays loaded underneath it
+and is the default for gesture and web play.
+
+## Family-friendly song selection
+
+The port can offer a curated PG song list for free play instead of the full
+catalog: `DC3_PG_SONGS=1`. It is off by default, so a plain launch, the web
+build and `scripts/play.sh` keep the full catalog, DLC included. On the Mac the
+Dock launcher and `dc3-play.command` ask which one on every launch
+(`scripts/mac/choose-song-mode.sh`, [MACOS.md](MACOS.md#choose-pg-songs-or-the-full-catalog)).
+The disc and
+official import packs use the same rating value for every song, so the filter
+uses short names from the known catalog. With it on, choose from 18 disc songs and up
+to 53 mounted import or DLC songs, including Macarena, Funkytown, Dancing Queen,
+Waka Waka and The Safety Dance. Search, Recently Played, Random Song, the
+random party pool and playlist selection use the same filter. Built-in
+playlists omit filtered songs and empty playlists are hidden. Saved playlists
+with filtered songs are hidden until the full catalog is enabled.
+
+The classic song-select switch (`DC3_CLASSIC_SONG_SELECT`) controls the
+presentation independently. Story uses its
+authored setlists. To verify songs after a transfer, launch once with the
+full catalog (`DC3_PG_SONGS=0`, the default). See [Copy more Dance Central songs to the Mac](MACOS.md#copy-more-dance-central-songs-to-the-mac).
 
 ## The song browser
 
@@ -58,7 +78,14 @@ keyboard or the pad takes the browser back at once.
 
 The classic list takes over when one of these happens:
 
-1. **A hand is held where the list takes it**, for 0.75 s of UI time. The
+1. **A hand is held where the list takes it**, for 2.5 s of UI time, and
+   no sooner than 8 s after the last press, tap, typed character or mouse
+   move (`DC3_SONG_HAND_DWELL_MS`, `DC3_SONG_HAND_QUIET_MS`). Both were
+   raised on the GPD (2026-11-22, from 0.75 s and no quiet): its webcam's
+   pose put a hand in the list's reach whenever somebody reached for the
+   screen, the mouse or the keyboard, and the browser was taken from them.
+   Each start of a hold, each takeover and each take-back is logged as a
+   `DC3 SONGBROWSER:` line. The
    test is the image's own: `DirectionGestureFilterSingleUser::IsValidSwipePosition`
    on the song list (`right_hand.hnl`) or the help bar's list
    (`left_hand.hnl`), for any tracked skeleton -- the list's hand outside the
@@ -417,6 +444,10 @@ three names, and `save_sort`, `save_focus` and `restore_focus` do nothing.
 `native/tests/test_native_song_select.cpp`:
 
 - `NativeSongSelectStateTest` (5): the file, against a scratch path.
+- `NativePgSongsFlowTest` (1) sets `DC3_PG_SONGS=1` and checks the filter
+  in the browser, classic list, Recently Played, search and random picks.
+  The test environment pins `DC3_PG_SONGS=0` (the default) for every other
+  flow, so a shell that exports it cannot change what they see.
 - `SongSelectFlowTest` (3), `SongSelectHistoryFlowTest` (2),
   `SongSelectClassicFlowTest` (1): child `dc3-native` runs driven over the
   HTTP debug server, headless, disc songs only, each on its own save
@@ -437,8 +468,9 @@ three names, and `save_sort`, `save_focus` and `restore_focus` do nothing.
   compiled in only where configure finds the package (`DC3_DLC_TESTS`).
 - `SongBrowserHandsTest` (1): the whole `auto` rule against a synthetic person
   (`scripts/song_browser_hands.py` on `scripts/synthetic_kinect.py`, no input
-  script): standing idle, an arm passing through, an arm held, dropped, a
-  press, a typed character with the arm still out, Start.
+  script): standing idle, an arm out for less than the 2.5 s hold, an arm
+  held, dropped, a press, a typed character with the arm still out, a hold
+  inside the 8 s quiet after it and then past it, Start.
 - `GestureMenusTest` (`native/tests/test_native_gesture_menus.cpp`) asserts
   the browser was hidden on a song select reached by gesture.
 - `NativeUiHostGpuTest.SongBrowserRunsInTheEngine`

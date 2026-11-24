@@ -65,6 +65,17 @@ namespace nativeui {
         return { width, ctx.theme.metric.controlHeight };
     }
 
+    int TabStrip::TabAt(Vec2 point) const {
+        for (std::size_t i = 0; i < tabRects_.size(); ++i) {
+            const Rect &r = tabRects_[i];
+            if (point.x >= r.x && point.x < r.x + r.width && point.y >= r.y
+                && point.y < r.y + r.height) {
+                return static_cast<int>(i);
+            }
+        }
+        return -1;
+    }
+
     void TabStrip::OnArrange(const Context &ctx, const Rect &bounds) {
         const std::vector<float> widths = TabWidths(ctx);
         tabRects_.clear();

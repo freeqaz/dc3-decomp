@@ -861,6 +861,40 @@ TEST(UiCoreTabStrip, ShoulderButtonsCycleArrowsStopAtTheEnds) {
     EXPECT_EQ(changes.back(), 2);
 }
 
+// A mouse or a finger on a sort tab (SongBrowserPanel_Native.cpp PointerTap,
+// np-pointer): the tab under the point, -1 in the gap between two tabs, past
+// the last one and above or below the strip; Select on it fires onChanged.
+TEST(UiCoreTabStrip, TabAtHitTestsTheArrangedTabs) {
+    const Harness h;
+    const Theme &theme = h.theme;
+    TabStrip tabs({ "Title", "Artist", "Skill" });
+    std::vector<int> changes;
+    tabs.onChanged = [&](int index) { changes.push_back(index); };
+    EXPECT_EQ(tabs.TabAt({ 1.0f, 1.0f }), -1) << "not arranged yet: no tabs to hit";
+    const Size viewport { 600.0f, theme.metric.controlHeight };
+    h.Settle(tabs, viewport);
+
+    const float first = MeasureWidth(h.text, theme.type.body, "TITLE") + 2.0f * theme.space.md;
+    const float second = MeasureWidth(h.text, theme.type.body, "ARTIST") + 2.0f * theme.space.md;
+    const float third = MeasureWidth(h.text, theme.type.body, "SKILL") + 2.0f * theme.space.md;
+    const float gap = theme.space.sm;
+    const float midY = theme.metric.controlHeight * 0.5f;
+    EXPECT_EQ(tabs.TabAt({ first * 0.5f, midY }), 0);
+    EXPECT_EQ(tabs.TabAt({ first + gap + second * 0.5f, midY }), 1);
+    const float thirdX = first + gap + second + gap;
+    EXPECT_EQ(tabs.TabAt({ thirdX + third * 0.5f, midY }), 2);
+    EXPECT_EQ(tabs.TabAt({ first + gap * 0.5f, midY }), -1) << "between two tabs";
+    EXPECT_EQ(tabs.TabAt({ thirdX + third + 1.0f, midY }), -1) << "past the last tab";
+    EXPECT_EQ(tabs.TabAt({ first * 0.5f, -1.0f }), -1) << "above the strip";
+    EXPECT_EQ(tabs.TabAt({ first * 0.5f, theme.metric.controlHeight + 1.0f }), -1)
+        << "below the strip";
+
+    EXPECT_TRUE(tabs.Select(tabs.TabAt({ thirdX + third * 0.5f, midY })));
+    EXPECT_EQ(tabs.SelectedIndex(), 2);
+    EXPECT_FALSE(tabs.Select(tabs.TabAt({ thirdX + 1.0f, midY }))) << "already the sort";
+    EXPECT_EQ(changes, (std::vector<int> { 2 }));
+}
+
 TEST(UiCoreTabStrip, PaintsLabelsAndAGlidingIndicator) {
     const Harness h;
     const Theme &theme = h.theme;

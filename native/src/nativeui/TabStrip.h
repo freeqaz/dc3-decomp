@@ -30,6 +30,10 @@ namespace nativeui {
         // True if the selection changed. Calls onChanged.
         bool Select(int index);
 
+        // The tab under `point` (the space of Bounds()), or -1.  For a mouse
+        // or a finger (np-pointer).
+        int TabAt(Vec2 point) const;
+
         std::function<void(int index)> onChanged;
 
         bool IsFocusable() const override { return true; }

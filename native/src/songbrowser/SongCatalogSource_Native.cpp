@@ -13,6 +13,7 @@
 #include "meta_ham/HamSongMgr.h"
 #include "meta_ham/ProfileMgr.h"
 #include "meta_ham/SongStatusMgr.h"
+#include "platform/PgSongs_Native.h"
 #include "platform/SongSelectState_Native.h"
 #include "utl/Locale.h"
 
@@ -89,7 +90,7 @@ void FillCatalogFromGame(SongCatalog &catalog, bool includeLocked) {
     HamProfile *profile = TheProfileMgr.GetActiveProfile(true);
     SongStatusMgr *statuses = profile ? profile->GetSongStatusMgr() : nullptr;
 
-    // SongSortMgr::RebuildSongRecordMap's loop and its three tests.  The
+    // SongSortMgr::RebuildSongRecordMap's song eligibility rules. The
     // manager's own map cannot be asked instead: it is only rebuilt when song
     // select is entered, and the sorts hold pointers into it.
     std::vector<int> rankedSongs;
@@ -97,7 +98,10 @@ void FillCatalogFromGame(SongCatalog &catalog, bool includeLocked) {
     std::set<int> tiers;
     for (size_t i = 0; i < rankedSongs.size(); i++) {
         const HamSongMetadata *metadata = TheHamSongMgr.Data(rankedSongs[i]);
-        if (!metadata || metadata->IsFake()) continue;
+        if (!metadata || metadata->IsFake()
+            || !NativePgSongs::AllowsSong(metadata->ShortName())) {
+            continue;
+        }
         bool unlocked = TheProfileMgr.IsContentUnlocked(metadata->ShortName());
         if (!unlocked && !includeLocked) continue;
 
