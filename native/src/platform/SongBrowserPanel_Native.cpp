@@ -99,7 +99,24 @@ enum Mode {
 // Seconds (the UI clock's) a hand must stay where the classic list needs it,
 // without a break and without a press, before the browser gives way to the
 // classic list (the auto rule).
-const double kHandTakeoverSeconds = 0.75;
+// A raised arm is deliberate only if it stays up this long: the webcam's pose
+// puts a hand in the list's reach whenever someone reaches for the screen, the
+// mouse or the keyboard.  DC3_SONG_HAND_DWELL_MS overrides.
+const double kHandTakeoverSeconds = 2.5;
+// ...and not within this long of a press, a tap or a mouse move: the hand that
+// just touched the browser is not asking for the gestures.
+// DC3_SONG_HAND_QUIET_MS overrides.
+const double kHandQuietSeconds = 8.0;
+
+double EnvSeconds(const char *name, double fallback) {
+    const char *v = std::getenv(name);
+    if (!v || !*v) {
+        return fallback;
+    }
+    char *end = nullptr;
+    const double ms = std::strtod(v, &end);
+    return (end != v && ms >= 0.0) ? ms / 1000.0 : fallback;
+}
 
 // The preview of the selected song starts once the selection has rested this
 // long (UI seconds).  The classic list asks for a preview on every highlight
@@ -394,6 +411,14 @@ public:
     // done, off the song list's rows or while the list does not have the focus
     // (the Recently Played shelf).
     int PointerTap(float x, float y, bool firstHighlights) {
+        NotePadActivity();
+        if (shown_ && screen_ && !gate_.frozen) {
+            const int tab = screen_->TabAt({x, y});
+            if (tab >= 0) {
+                screen_->SelectTab(tab);
+                return 2;
+            }
+        }
         const bool wasSelected = shown_ && screen_
             && screen_->List().RowAt({x, y}) == screen_->List().SelectedIndex();
         if (!MoveSelectionTo(x, y)) {
@@ -407,7 +432,14 @@ public:
     }
 
     // A resting mouse: the row under it is the selection (no pick).
-    bool PointerHover(float x, float y) { return MoveSelectionTo(x, y); }
+    bool PointerHover(float x, float y) {
+        if (x != hoverX_ || y != hoverY_) { // a resting mouse is not activity
+            hoverX_ = x;
+            hoverY_ = y;
+            NotePadActivity();
+        }
+        return MoveSelectionTo(x, y);
+    }
 
     // Walk the selection to the song row under (x, y) with the pad's own
     // Down/Up, so every rule the pad obeys (headers, the gate) still holds.
@@ -741,8 +773,12 @@ private:
             } else if (handArmed_) {
                 if (handSince_ < 0.0) {
                     handSince_ = now;
+                    std::fprintf(stderr, "DC3 SONGBROWSER: hand in list pose, dwell starts (ui_s=%.2f, %.1f s since activity)\n",
+                                 now, now - lastActivity_);
                 }
-                if (now - handSince_ >= kHandTakeoverSeconds) {
+                static const double dwell = EnvSeconds("DC3_SONG_HAND_DWELL_MS", kHandTakeoverSeconds);
+                static const double quiet = EnvSeconds("DC3_SONG_HAND_QUIET_MS", kHandQuietSeconds);
+                if (now - handSince_ >= dwell && now - lastActivity_ >= quiet) {
                     GiveToTheHands();
                 }
             }
@@ -1025,17 +1061,26 @@ private:
     // A press or typed text reached the browser: a hand that happens to be
     // out does not take the menu from it.
     void NotePadActivity() {
+        lastActivity_ = nativeui_host::GameUiSeconds();
         handSince_ = -1.0;
         handArmed_ = false;
     }
 
     void TakeForThePad() {
+        if (handsSteer_) {
+            std::fprintf(stderr, "DC3 SONGBROWSER: pad/pointer/keys take back (ui_s=%.2f)\n",
+                         nativeui_host::GameUiSeconds());
+        }
+        lastActivity_ = nativeui_host::GameUiSeconds();
         handsSteer_ = false;
         handSince_ = -1.0;
         handArmed_ = false;
     }
 
     void GiveToTheHands() {
+        std::fprintf(stderr, "DC3 SONGBROWSER: hands take over (ui_s=%.2f, dwell %.2f s, %.1f s since last pad/pointer activity)\n",
+                     nativeui_host::GameUiSeconds(), nativeui_host::GameUiSeconds() - handSince_,
+                     nativeui_host::GameUiSeconds() - lastActivity_);
         handSince_ = -1.0;
         handArmed_ = false;
         ShellInput *shell = TheHamUI.GetShellInput();
@@ -1156,6 +1201,8 @@ private:
     std::string handsWhy_;
     bool handNow_ = false; // a hand is where a list takes it, this frame
     bool handArmed_ = false; // the hand was seen away since the last press
+    float hoverX_ = -1.0f, hoverY_ = -1.0f;
+    double lastActivity_ = -1.0e9; // the last press, tap or mouse move
     double handSince_ = -1.0; // when the armed hand got there
     bool startPressed_ = false;
     bool wakeCapture_ = false;

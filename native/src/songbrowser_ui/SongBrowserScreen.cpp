@@ -247,6 +247,8 @@ namespace songbrowser_ui {
         }
 
         const ListView &List() const { return *list_; }
+        int TabAt(Vec2 point) const { return tabs_->TabAt(point); }
+        bool SelectTab(int index) { return tabs_->Select(index); }
         const Shelf &Recents() const { return *shelf_; }
         const DetailPane &Detail() const { return *detail_; }
         bool RecentsShown() const { return reveal_->Shown(); }
@@ -940,6 +942,10 @@ namespace songbrowser_ui {
     bool SongBrowserScreen::IsSettled() const { return impl_->IsSettled(); }
 
     const ListView &SongBrowserScreen::List() const { return impl_->List(); }
+
+    int SongBrowserScreen::TabAt(Vec2 point) const { return impl_->TabAt(point); }
+
+    bool SongBrowserScreen::SelectTab(int index) { return impl_->SelectTab(index); }
 
     const Shelf &SongBrowserScreen::Recents() const { return impl_->Recents(); }
 
