@@ -61,6 +61,10 @@ YMCA flow the Linux gate runs, before the window), `--assets <dir | orig-assets.
 Open **Dance Central 3** from the Dock or Finder, or double-click
 `~/Developer/dc3-play.command`. Choose **PG songs** for the curated free-play
 list or **Full catalog** for all available songs, including mounted DLC.
+The chooser (`scripts/mac/choose-song-mode.sh`) always sets `DC3_PG_SONGS`
+for the game; anywhere else (a bare `scripts/start-mac.sh`, Linux, the web)
+the default is the full catalog. Set `DC3_PG_SONGS` yourself to skip the
+chooser.
 Return starts the highlighted mode. The first launch highlights **PG songs**,
 and subsequent launches highlight your last choice. Quit and reopen the game
 to switch. Story keeps its authored setlists.
@@ -96,7 +100,7 @@ DC3_DLC_DIR="$dlc_root" DC3_PG_SONGS=0 scripts/start-mac.sh
 
 Look for the package's `DC3 Native: DLC package` line in the launch log,
 then select an imported song and start gameplay to check its chart and audio.
-Set `DC3_PG_SONGS=1` to return to the default curated list. Mounted songs
+Set `DC3_PG_SONGS=1` (or pick **PG songs**) for the curated list. Mounted songs
 appear there only if their short names are on the allowlist.
 See [family-friendly song selection](SONG_SELECT.md#family-friendly-song-selection).
 

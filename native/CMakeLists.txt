@@ -2529,7 +2529,8 @@ if(BUILD_TESTS)
     # list -- and runs the same tests -- as one without
     # (ContentMgr_Native.cpp NativeDlcRoots).
     list(APPEND MILO_TEST_ENV "DC3_DLC=0")
-    # Baseline flows use the full catalog. The PG flow exercises the launch default.
+    # The full catalog (DC3_PG_SONGS defaults off), whatever the shell exports;
+    # NativePgSongsFlowTest sets DC3_PG_SONGS=1 for its own run.
     list(APPEND MILO_TEST_ENV "DC3_PG_SONGS=0")
     # No test reads or writes the persistent pipeline cache (Dawn's blob
     # cache, milo-native-engine gfx/PipelineDiskCache.h) unless it names its

@@ -36,7 +36,7 @@ bool Dc3ClassicSongSelect() {
 }
 
 bool NativePgSongs::Enabled() {
-    static const bool enabled = Dc3EnvFlag("DC3_PG_SONGS", true);
+    static const bool enabled = Dc3EnvFlag("DC3_PG_SONGS", false);
     return enabled;
 }
 

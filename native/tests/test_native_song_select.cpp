@@ -1285,7 +1285,7 @@ const char *const kClassicToken = "$(ev '{song_select_panel get_selected_song_to
 
 } // namespace
 
-TEST(NativePgSongsFlowTest, DefaultFiltersTheBrowserClassicListHistoryAndRandomPicks) {
+TEST(NativePgSongsFlowTest, OnItFiltersTheBrowserClassicListHistoryAndRandomPicks) {
     if (!getenv("DC3_DTA_FLOW_TESTS")) {
         GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable (requires game assets)";
     }
@@ -1300,7 +1300,7 @@ TEST(NativePgSongsFlowTest, DefaultFiltersTheBrowserClassicListHistoryAndRandomP
           << "echo \"DRIVER: random "
           << "$(ev '{do ($s \"\") {foreach_int $i 0 40 "
           << "{set $s {sprint $s {song_mgr get_random_song} \";\"}}} $s}')\"; ";
-    EngineRun run = RunEngine(root, "pg", drive.str(), " DC3_SONG_BROWSER=1 DC3_PG_SONGS=");
+    EngineRun run = RunEngine(root, "pg", drive.str(), " DC3_SONG_BROWSER=1 DC3_PG_SONGS=1");
     ASSERT_TRUE(run.setupError.empty()) << run.setupError;
     ASSERT_NE(run.driver.find("DRIVER: at=song_select_screen"), std::string::npos)
         << run.driver << Tail(run.output);
