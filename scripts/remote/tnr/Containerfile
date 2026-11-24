@@ -17,7 +17,7 @@
 # headless under Dawn without touching tnr's GPUs (which are not ours).
 FROM docker.io/library/archlinux:base-20261018.0.612668
 
-ARG ARCH_SNAPSHOT=2026/10/20
+ARG ARCH_SNAPSHOT=2026/11/17
 
 # Rootless podman on tnr maps a single uid, so pacman cannot drop to its
 # 'alpm' download user: disable the download sandbox.
@@ -27,7 +27,7 @@ RUN echo "Server=https://archive.archlinux.org/repos/${ARCH_SNAPSHOT}/\$repo/os/
            -e 's/^DownloadUser/#DownloadUser/' /etc/pacman.conf \
  && { grep -q '^DisableSandbox' /etc/pacman.conf || echo 'DisableSandbox' >> /etc/pacman.conf; }
 
-RUN pacman -Syyuu --noconfirm --needed \
+RUN pacman -Syyuu --noconfirm --needed --disable-download-timeout \
         clang llvm-libs compiler-rt lld openmp cmake ninja \
         gtest ffmpeg glfw \
         python git rsync which procps-ng diffutils \
@@ -40,7 +40,7 @@ RUN pacman -Syyuu --noconfirm --needed \
 # libstdc++'s <execution> checks __has_include(<tbb/tbb.h>), so without it the
 # container would preprocess some TUs differently from the desk.
 # A separate layer, so adding to it does not re-download the toolchain.
-RUN pacman -S --noconfirm --needed pkgconf libx11 libxrandr xorgproto onetbb \
+RUN pacman -S --noconfirm --needed --disable-download-timeout pkgconf libx11 libxrandr xorgproto onetbb \
         curl libjpeg-turbo libvorbis libogg zlib \
  && pacman -Scc --noconfirm
 
@@ -49,7 +49,7 @@ RUN pacman -S --noconfirm --needed pkgconf libx11 libxrandr xorgproto onetbb \
 # the windowed NativeExitTest cases start a private Xvfb and drive it with
 # xdotool. Nothing in the build reads these. The desk has numpy and Pillow
 # from pip in ~/.local, not pacman, so those versions need not match.
-RUN pacman -S --noconfirm --needed python-numpy python-pillow nodejs \
+RUN pacman -S --noconfirm --needed --disable-download-timeout python-numpy python-pillow nodejs \
         xorg-server-xvfb xdotool \
  && pacman -Scc --noconfirm
 
