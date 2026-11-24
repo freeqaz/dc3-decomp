@@ -30,7 +30,7 @@
 #                    (needed for --test only; under TNR_ROOT, nowhere else)
 #
 # Environment: TNR_HOST (tnr-decomp), TNR_ROOT (/scratch/dc3-native-build),
-# TNR_IMAGE (localhost/dc3-native-build:20261020).
+# TNR_IMAGE (localhost/dc3-native-build:20261117).
 #
 # Exit: 0 built (and fetched), 1 build failed, 2 usage, 3 sync failed,
 # 4 built but the desk toolchain no longer matches the container's (not fetched
@@ -42,7 +42,7 @@
 set -u
 HOST="${TNR_HOST:-tnr-decomp}"
 B="${TNR_ROOT:-/scratch/dc3-native-build}"
-IMAGE="${TNR_IMAGE:-localhost/dc3-native-build:20261020}"
+IMAGE="${TNR_IMAGE:-localhost/dc3-native-build:20261117}"
 JOBS=32; FETCH=1; RECONF=0; MODE=build; TEST_ARGS=""; ACTION=build
 
 usage() { sed -n '2,38p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2; }
