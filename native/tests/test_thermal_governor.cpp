@@ -34,7 +34,8 @@ struct Sim {
     int baseRows = 1080;
     double target = 60.0;
     bool meaningful = true;
-    double gpuMs = -1.0;  // the headroom signal (the rate rule's step up); < 0 = none
+    double gpuMs = -1.0;  // the GPU's time for a frame (the rate rule); < 0 = none
+    bool discrete = false;
     std::vector<std::pair<double, int>> changes;  // (time, new cap)
 
     Sim() = default;
@@ -49,6 +50,7 @@ struct Sim {
         in.baseRows = baseRows;
         in.paceMeaningful = meaningful;
         in.gpuFrameMs = gpuMs;
+        in.discreteGpu = discrete;
         const int c = gov.Frame(in);
         if (c != cap) {
             changes.emplace_back(now, c);
@@ -507,6 +509,43 @@ TEST(ThermalRateRule, NeverTakesAFrameTo1080RowsOrUnder) {
     EXPECT_EQ(ThermalGovernor::RateStepUp(1080, 1440), 0);  // 1440 would not bind
 }
 
+TEST(ThermalRateRule, LateFramesTheGpuIsNotSlowForKeepTheSize) {
+    // MEASURED 2026-11-24, RTX 3090 headless at 3840x2160 under load: boot ran
+    // 28.7 fps against 60 with the GPU's span 0.6-5.7 ms. Fewer pixels would
+    // not have made it faster.
+    Sim cpu;
+    cpu.baseRows = 2160;
+    cpu.gpuMs = 5.0;  // under 0.75 * 16.7 ms
+    cpu.Run(120.0, 28.7);
+    EXPECT_TRUE(cpu.changes.empty());
+    Sim gpu;  // the same late frames with the GPU at 14 ms: the pixels are why
+    gpu.baseRows = 2160;
+    gpu.gpuMs = 14.0;
+    gpu.Run(120.0, 28.7);
+    EXPECT_EQ(gpu.Caps(), (std::vector<int>{1440, 1080}));
+    // Not measured: an adapter that is not discrete is blamed (the Mac's
+    // case), a discrete one never is.
+    Sim d;
+    d.baseRows = 2160;
+    d.discrete = true;
+    d.Run(120.0, 20.0);
+    EXPECT_TRUE(d.changes.empty());
+    d.gpuMs = 30.0;
+    d.Run(15.0, 20.0);  // one step (the second needs 5 s settle + 8 more)
+    EXPECT_EQ(d.Caps(), (std::vector<int>{1440}));
+    // One window the GPU is not blamed for breaks the run of eight.
+    Sim b;
+    b.baseRows = 2160;
+    b.gpuMs = 14.0;
+    for (int i = 0; i < 10; i++) {
+        b.Run(6.0, 28.7);
+        b.gpuMs = 5.0;
+        b.Run(1.5, 28.7);
+        b.gpuMs = 14.0;
+    }
+    EXPECT_TRUE(b.changes.empty());
+}
+
 TEST(ThermalRateRule, ASteady30OnA30HzDisplayIsNotLate) {
     // The target is the rate the display can show (dc3's Dc3ThermalTargetFps):
     // 30 frames a second on a 30 Hz TV is every frame on time.
@@ -597,10 +636,12 @@ TEST(ThermalRateRule, AStepUpThatDoesNotHoldWaitsTwiceAsLongNextTime) {
     s.gpuMs = 4.0;
     s.RunVsync(33.0, 30.0, 30.0);
     ASSERT_EQ(s.Caps(), (std::vector<int>{0}));
-    s.RunVsync(20.0, 20.0, 30.0);  // the full size is late again
+    s.gpuMs = 40.0;  // the full size is late again, and the GPU is why
+    s.RunVsync(20.0, 20.0, 30.0);
     ASSERT_EQ(s.Caps(), (std::vector<int>{0, 1440}));
     EXPECT_EQ(s.gov.RateUpDwellSeconds(), 60.0);
     const double t0 = s.now;
+    s.gpuMs = 4.0;
     s.RunVsync(50.0, 30.0, 30.0);
     EXPECT_EQ(s.changes.size(), 2u) << "back up after " << s.now - t0 << " s; the dwell is 60";
     s.RunVsync(20.0, 30.0, 30.0);
