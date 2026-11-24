@@ -568,15 +568,19 @@ static std::string ThermalStatusJson() {
         outW = gWgpuRnd->Gpu().OutputWidth();
         outH = gWgpuRnd->Gpu().OutputHeight();
     }
-    char buf[512];
+    char buf[768];
     snprintf(buf, sizeof(buf),
              "{\"enabled\":%s,\"level\":%d,\"level_name\":\"%s\",\"injected\":%s,"
              "\"target_fps\":%.2f,\"window_fps\":%.2f,\"late_windows\":%d,"
              "\"row_cap\":%d,\"base_rows\":%d,\"output_w\":%d,\"output_h\":%d,"
-             "\"steps_down\":%d,\"steps_up\":%d,\"cool_s\":%.1f}",
+             "\"steps_down\":%d,\"steps_up\":%d,\"cool_s\":%.1f,"
+             "\"rate_rule\":%s,\"thermal_row_cap\":%d,\"rate_row_cap\":%d,"
+             "\"rate_steps_down\":%d,\"rate_steps_up\":%d,\"gpu_frame_ms\":%.2f}",
              t.enabled ? "true" : "false", t.level, milo::ThermalLevelName(t.level),
              t.injected ? "true" : "false", t.targetFps, t.windowFps, t.lateWindows, t.rowCap,
-             t.baseRows, outW, outH, t.stepsDown, t.stepsUp, t.coolSeconds);
+             t.baseRows, outW, outH, t.stepsDown, t.stepsUp, t.coolSeconds,
+             t.rateRule ? "true" : "false", t.thermalRowCap, t.rateRowCap, t.rateStepsDown,
+             t.rateStepsUp, t.gpuFrameMs);
     return buf;
 }
 

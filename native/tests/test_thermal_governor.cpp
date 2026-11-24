@@ -34,6 +34,7 @@ struct Sim {
     int baseRows = 1080;
     double target = 60.0;
     bool meaningful = true;
+    double gpuMs = -1.0;  // the headroom signal (the rate rule's step up); < 0 = none
     std::vector<std::pair<double, int>> changes;  // (time, new cap)
 
     Sim() = default;
@@ -47,6 +48,7 @@ struct Sim {
         in.targetFps = target;
         in.baseRows = baseRows;
         in.paceMeaningful = meaningful;
+        in.gpuFrameMs = gpuMs;
         const int c = gov.Frame(in);
         if (c != cap) {
             changes.emplace_back(now, c);
@@ -58,11 +60,11 @@ struct Sim {
         const double dt = 1.0 / fps, end = now + seconds;
         while (now + dt <= end + 1e-9) Frame(dt);
     }
-    // `seconds` of a 60 Hz vsync'd game averaging `fps`: one-refresh frames
+    // `seconds` of a `hz` vsync'd game averaging `fps`: one-refresh frames
     // with two-refresh frames spread evenly among them.
-    void RunVsync(double seconds, double fps) {
-        const double refresh = 1.0 / 60.0, end = now + seconds;
-        const double lateShare = 60.0 / fps - 1.0;  // share of frames taking two refreshes
+    void RunVsync(double seconds, double fps, double hz = 60.0) {
+        const double refresh = 1.0 / hz, end = now + seconds;
+        const double lateShare = hz / fps - 1.0;  // share of frames taking two refreshes
         double debt = 0.0;
         while (now < end) {
             debt += lateShare;
@@ -459,4 +461,189 @@ TEST(ThermalRowCap, ACappedFrameIsNeverDrawnLargerThanTheUncappedOne) {
         EXPECT_EQ(s.scale, 1.0f) << cap;
         EXPECT_LT((long)s.drawnW * s.drawnH, (long)base.drawnW * base.drawnH) << cap;
     }
+}
+
+// --- the rate rule: outputs drawn above 1080 rows (gfx/ThermalGovernor.h) --------
+//
+// MEASURED 2026-11-23, the M3 Air on a 4K TV at 30 Hz with the cap lifted
+// (MILO_OUTPUT_MAX_ROWS=0): 3840x2160, songs 12.4-23.8 fps against 30 for half
+// an hour at thermal level nominal; the thermal rule never acted.
+
+TEST(ThermalRateRule, ACoolMachineDrawing2160RowsLateStepsTo1440Then1080) {
+    for (int level : {kThermalNominal, kThermalUnknown}) {
+        Sim s;
+        s.level = level;
+        s.baseRows = 2160;
+        s.target = 30.0;  // the 30 Hz TV
+        s.RunVsync(7.5, 20.0, 30.0);
+        EXPECT_TRUE(s.changes.empty()) << "level " << level << ": 8 late seconds, not 7";
+        s.RunVsync(120.0, 20.0, 30.0);
+        EXPECT_EQ(s.Caps(), (std::vector<int>{1440, 1080})) << "level " << level;
+        EXPECT_EQ(s.gov.RateStepsDown(), 2);
+        EXPECT_EQ(s.gov.StepsDown(), 0) << "the thermal rule's count (its notice) is untouched";
+        ASSERT_EQ(s.changes.size(), 2u);
+        EXPECT_GE(s.changes[1].first - s.changes[0].first, 13.0) << "5 s settle + 8 late windows";
+    }
+}
+
+TEST(ThermalRateRule, NeverTakesAFrameTo1080RowsOrUnder) {
+    for (int rows : {1080, 1000, 720}) {
+        Sim s;
+        s.baseRows = rows;
+        s.Run(300.0, 12.0);
+        EXPECT_TRUE(s.changes.empty()) << rows << " rows";
+    }
+    Sim s;  // a 1200-row window on a discrete GPU: one step, to 1080
+    s.baseRows = 1200;
+    s.Run(300.0, 12.0);
+    EXPECT_EQ(s.Caps(), (std::vector<int>{1080}));
+    EXPECT_EQ(ThermalGovernor::RateStepDown(0, 2160, 1080), 1440);
+    EXPECT_EQ(ThermalGovernor::RateStepDown(1440, 2160, 1080), 1080);
+    EXPECT_EQ(ThermalGovernor::RateStepDown(1080, 2160, 1080), 1080);
+    EXPECT_EQ(ThermalGovernor::RateStepDown(0, 1440, 1080), 1080);
+    EXPECT_EQ(ThermalGovernor::RateStepDown(0, 1080, 1080), 0);
+    EXPECT_EQ(ThermalGovernor::RateStepUp(1080, 2160), 1440);
+    EXPECT_EQ(ThermalGovernor::RateStepUp(1440, 2160), 0);
+    EXPECT_EQ(ThermalGovernor::RateStepUp(1080, 1440), 0);  // 1440 would not bind
+}
+
+TEST(ThermalRateRule, ASteady30OnA30HzDisplayIsNotLate) {
+    // The target is the rate the display can show (dc3's Dc3ThermalTargetFps):
+    // 30 frames a second on a 30 Hz TV is every frame on time.
+    Sim s;
+    s.baseRows = 2160;
+    s.target = 30.0;
+    s.RunVsync(600.0, 30.0, 30.0);
+    EXPECT_TRUE(s.changes.empty());
+    // 29 of them, a frame in thirty a refresh late, is not late either: 90 %.
+    s.RunVsync(600.0, 29.0, 30.0);
+    EXPECT_TRUE(s.changes.empty());
+    // The same 30 fps judged against 60 WOULD be late: the target is what
+    // decides, which is why it must be the display's.
+    Sim w;
+    w.baseRows = 2160;
+    w.target = 60.0;
+    w.RunVsync(60.0, 30.0, 60.0);
+    EXPECT_FALSE(w.changes.empty());
+}
+
+TEST(ThermalRateRule, AFewSlowSecondsDoNotCostTheSize) {
+    Sim s;
+    s.baseRows = 2160;
+    for (int i = 0; i < 20; i++) {  // 6 slow seconds, then 4 on time, again and again
+        s.Run(6.0, 30.0);
+        s.Run(4.0, 60.0);
+    }
+    EXPECT_TRUE(s.changes.empty());
+    // A load's hitch (one 3 s frame) inside a steady run is not a late window.
+    s.Run(5.0, 60.0);
+    s.Frame(3.0);
+    s.Run(30.0, 60.0);
+    EXPECT_TRUE(s.changes.empty());
+}
+
+// Stepped down at nominal on the Mac's numbers, then held at a steady 30.
+static Sim SteppedTo(int cap) {
+    Sim s;
+    s.baseRows = 2160;
+    s.target = 30.0;
+    while (s.cap != cap && s.now < 400.0) s.RunVsync(1.0, 20.0, 30.0);
+    s.RunVsync(6.0, 30.0, 30.0);  // on time, through the change's settle
+    return s;
+}
+
+TEST(ThermalRateRule, OnTimeFramesAloneNeverGiveTheSizeBack) {
+    Sim s = SteppedTo(1440);
+    ASSERT_EQ(s.cap, 1440);
+    s.changes.clear();
+    s.RunVsync(900.0, 30.0, 30.0);  // every frame on time, no GPU time known
+    EXPECT_TRUE(s.changes.empty()) << "under vsync on time says nothing about the next size";
+    s.gpuMs = 15.5;  // the Mac at 1440 rows: 15.5 * 2.25 = 34.9 ms > 0.7 * 33.3
+    s.RunVsync(900.0, 30.0, 30.0);
+    EXPECT_TRUE(s.changes.empty());
+    EXPECT_GT(s.gov.LastPredictedMs(), s.gov.LastBudgetMs());
+}
+
+TEST(ThermalRateRule, MeasuredHeadroomGivesOneStepBackPerThirtySeconds) {
+    Sim s = SteppedTo(1080);
+    ASSERT_EQ(s.cap, 1080);
+    s.changes.clear();
+    s.gpuMs = 5.8;  // 1080 rows on the Mac, cool: 5.8 * (1440/1080)^2 = 10.3 ms <= 23.3
+    const double t0 = s.now;
+    s.RunVsync(29.0, 30.0, 30.0);
+    EXPECT_TRUE(s.changes.empty()) << "gave a step back after " << s.changes[0].first - t0;
+    s.RunVsync(3.5, 30.0, 30.0);
+    EXPECT_EQ(s.Caps(), (std::vector<int>{1440}));
+    // At 1440 rows the measured time grows; 9 ms predicts 20.3 at 2160: under 23.3.
+    s.gpuMs = 9.0;
+    s.RunVsync(40.0, 30.0, 30.0);  // 5 s settle, then the dwell
+    EXPECT_EQ(s.Caps(), (std::vector<int>{1440, 0})) << "released: the size asked for";
+    EXPECT_EQ(s.gov.RateStepsUp(), 2);
+    // One window without headroom restarts the dwell.
+    Sim b = SteppedTo(1080);
+    b.changes.clear();
+    b.gpuMs = 5.8;
+    b.RunVsync(20.0, 30.0, 30.0);
+    b.gpuMs = 20.0;
+    b.RunVsync(1.5, 30.0, 30.0);
+    b.gpuMs = 5.8;
+    b.RunVsync(20.0, 30.0, 30.0);
+    EXPECT_TRUE(b.changes.empty());
+}
+
+TEST(ThermalRateRule, AStepUpThatDoesNotHoldWaitsTwiceAsLongNextTime) {
+    Sim s = SteppedTo(1440);
+    s.changes.clear();
+    s.gpuMs = 4.0;
+    s.RunVsync(33.0, 30.0, 30.0);
+    ASSERT_EQ(s.Caps(), (std::vector<int>{0}));
+    s.RunVsync(20.0, 20.0, 30.0);  // the full size is late again
+    ASSERT_EQ(s.Caps(), (std::vector<int>{0, 1440}));
+    EXPECT_EQ(s.gov.RateUpDwellSeconds(), 60.0);
+    const double t0 = s.now;
+    s.RunVsync(50.0, 30.0, 30.0);
+    EXPECT_EQ(s.changes.size(), 2u) << "back up after " << s.now - t0 << " s; the dwell is 60";
+    s.RunVsync(20.0, 30.0, 30.0);
+    EXPECT_EQ(s.Caps(), (std::vector<int>{0, 1440, 0}));
+}
+
+TEST(ThermalRateRule, ThermalPressureStillOwnsEverythingBelow1080) {
+    Sim s = SteppedTo(1440);
+    s.changes.clear();
+    s.level = kThermalSerious;
+    s.RunVsync(60.0, 20.0, 30.0);
+    EXPECT_EQ(s.Caps(), (std::vector<int>{1080, 900, 720}));
+    EXPECT_EQ(s.gov.StepsDown(), 3);
+    EXPECT_EQ(s.gov.RateCap(), 1440);
+    s.changes.clear();
+    s.level = kThermalNominal;
+    s.gpuMs = 2.0;  // plenty, but the thermal rule gives its own steps back first
+    s.RunVsync(275.0, 30.0, 30.0);
+    EXPECT_EQ(s.Caps(), (std::vector<int>{900, 1080, 1440}));
+    EXPECT_EQ(s.gov.ThermalCap(), 0);
+}
+
+TEST(ThermalRateRule, SwitchedOffAnOversizedFrameKeepsItsSize) {
+    ThermalGovernorConfig off;
+    off.rateRule = false;
+    Sim s(off);
+    s.baseRows = 2160;
+    s.target = 30.0;
+    s.RunVsync(300.0, 15.0, 30.0);
+    EXPECT_TRUE(s.changes.empty());
+    // The thermal rule alone, as before.
+    s.level = kThermalSerious;
+    s.RunVsync(6.0, 15.0, 30.0);  // two late windows: one step, then the settle
+    EXPECT_EQ(s.Caps(), (std::vector<int>{1080}));
+}
+
+TEST(ThermalRateRule, AWindowMadeSmallerThanTheCapStartsAfresh) {
+    Sim s = SteppedTo(1440);
+    ASSERT_EQ(s.cap, 1440);
+    s.baseRows = 1200;  // the player shrank the window: 1440 does not bind
+    s.RunVsync(2.0, 30.0, 30.0);
+    EXPECT_EQ(s.gov.RateCap(), 0);
+    s.baseRows = 2160;  // and made it big again: the size asked for, judged afresh
+    s.RunVsync(2.0, 30.0, 30.0);
+    EXPECT_EQ(s.gov.RowCap(), 0);
 }

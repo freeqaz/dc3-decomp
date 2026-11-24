@@ -143,6 +143,20 @@ TEST(FrameCap, TheFirstThermalStepDownIsSaidOnceAndNotOverASong) {
     EXPECT_EQ(Dc3ThermalNotice(1, false, true), "");   // waits for a menu
 }
 
+// The governor's rate rule (an output above 1080 rows on a cool machine): a
+// banner of its own, worded for a display too big, not a machine too warm.
+TEST(FrameCap, TheFirstRateStepDownIsSaidOnceWithTheNewSize) {
+    const std::string said = Dc3RateNotice(1, false, false, 2560, 1440);
+    EXPECT_NE(said.find("2560x1440"), std::string::npos) << said;
+    EXPECT_NE(said.find("too big"), std::string::npos) << said;
+    EXPECT_EQ(said.find("warm"), std::string::npos) << said;
+    EXPECT_LT(said.size(), 140u) << "a banner, not a paragraph";
+    EXPECT_EQ(Dc3RateNotice(0, false, false, 2560, 1440), "");  // nothing lowered yet
+    EXPECT_EQ(Dc3RateNotice(1, true, false, 2560, 1440), "");   // once a session
+    EXPECT_EQ(Dc3RateNotice(1, false, true, 2560, 1440), "");   // waits for a menu
+    EXPECT_EQ(Dc3RateNotice(1, false, false, 0, 0), "");        // size not known yet
+}
+
 // --- the pacer ---------------------------------------------------------------
 
 TEST(FramePacer, SleepsRatherThanSpins) {
