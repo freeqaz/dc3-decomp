@@ -58,7 +58,8 @@ bool RunCommand(const std::string &name, std::string &error);
 // browser is shown (Pointer_Native.cpp).  2: it was on a row of the song
 // list, and that row is now picked, as the pad's Down/Up and A would.  With
 // `firstHighlights` (a finger) a row that was not the selection only becomes
-// it: 1.  0: off the rows (nothing done).
+// it: 1.  3: on a sort tab, which is now the sort (already it: no change).
+// 0: off the rows and the tabs (nothing done).
 int PointerTap(float x, float y, bool firstHighlights);
 // The mouse rests over (x, y) while the browser is shown and the menus are
 // the pad's (controller mode): the row under it becomes the selection, as

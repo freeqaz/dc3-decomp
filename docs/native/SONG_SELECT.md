@@ -78,7 +78,14 @@ keyboard or the pad takes the browser back at once.
 
 The classic list takes over when one of these happens:
 
-1. **A hand is held where the list takes it**, for 0.75 s of UI time. The
+1. **A hand is held where the list takes it**, for 2.5 s of UI time, and
+   no sooner than 8 s after the last press, tap, typed character or mouse
+   move (`DC3_SONG_HAND_DWELL_MS`, `DC3_SONG_HAND_QUIET_MS`). Both were
+   raised on the GPD (2026-11-22, from 0.75 s and no quiet): its webcam's
+   pose put a hand in the list's reach whenever somebody reached for the
+   screen, the mouse or the keyboard, and the browser was taken from them.
+   Each start of a hold, each takeover and each take-back is logged as a
+   `DC3 SONGBROWSER:` line. The
    test is the image's own: `DirectionGestureFilterSingleUser::IsValidSwipePosition`
    on the song list (`right_hand.hnl`) or the help bar's list
    (`left_hand.hnl`), for any tracked skeleton -- the list's hand outside the
@@ -461,8 +468,9 @@ three names, and `save_sort`, `save_focus` and `restore_focus` do nothing.
   compiled in only where configure finds the package (`DC3_DLC_TESTS`).
 - `SongBrowserHandsTest` (1): the whole `auto` rule against a synthetic person
   (`scripts/song_browser_hands.py` on `scripts/synthetic_kinect.py`, no input
-  script): standing idle, an arm passing through, an arm held, dropped, a
-  press, a typed character with the arm still out, Start.
+  script): standing idle, an arm out for less than the 2.5 s hold, an arm
+  held, dropped, a press, a typed character with the arm still out, a hold
+  inside the 8 s quiet after it and then past it, Start.
 - `GestureMenusTest` (`native/tests/test_native_gesture_menus.cpp`) asserts
   the browser was hidden on a song select reached by gesture.
 - `NativeUiHostGpuTest.SongBrowserRunsInTheEngine`

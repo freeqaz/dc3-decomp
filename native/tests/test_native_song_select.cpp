@@ -2168,13 +2168,16 @@ HandsRun RunHands(const char *extraArgs) {
 // input script, so this is auto as a person gets it):
 //   - standing there for 60 s of game time, pressing nothing: the browser
 //   - one Down after that: exactly what one Down does
-//   - an arm through the list's pose for a quarter second: the browser
-//   - an arm HELD there: the classic list, after the hold (0.75 s)
+//   - 9 s later (past the 8 s quiet after a press), an arm in the list's
+//     pose for 1.5 s, under the 2.5 s hold: the browser
+//   - an arm HELD there: the classic list, after the hold (2.5 s)
 //   - the arm dropped: still the classic list (no flapping back)
 //   - a press: the browser at once, and it stays
 //   - a typed character with the arm still out: the browser at once, the
 //     character in the search box, and it stays although the arm is out
-//   - the arm away and out again: the classic list again
+//   - the arm away and out again, held 3 s but inside the 8 s quiet after
+//     the typed character: still the browser; held on: the classic list,
+//     8 s after the character
 //   - Start: the classic list (the image's own "hands" button), until a press
 // `switches` counts every show and hide, so each step is exact.
 TEST(SongBrowserHandsTest, ATrackedBodyIsNotIntentAHeldHandIs) {
@@ -2211,13 +2214,13 @@ TEST(SongBrowserHandsTest, ATrackedBodyIsNotIntentAHeldHandIs) {
         << "one Down after the idle moved a different distance from one Down without it\n"
         << r.output;
 
-    expect("short_hand", true, 0, "an arm that passes through the pose");
+    expect("short_hand", true, 0, "an arm in the pose for less than the hold");
     const std::string hand = expect("hand", false, 1, "a hand held in the list's pose");
     EXPECT_EQ(Sb(hand, "hand_in_pose"), "true") << hand;
     EXPECT_EQ(Sb(hand, "engine_text_capture"), "true")
         << "a typed character must still be heard while the classic list is up\n" << hand;
-    EXPECT_GE(r.Val("hand_seconds"), 0.75) << "sooner than the hold\n" << r.output;
-    EXPECT_LE(r.Val("hand_seconds"), 2.0) << r.output;
+    EXPECT_GE(r.Val("hand_seconds"), 2.5) << "sooner than the hold\n" << r.output;
+    EXPECT_LE(r.Val("hand_seconds"), 3.5) << r.output;
     const std::string away = expect("hand_away", false, 1, "the hand dropped: no flapping back");
     EXPECT_EQ(Sb(away, "hand_in_pose"), "false") << away;
     expect("press", true, 2, "a press brings the browser back at once");
@@ -2227,7 +2230,10 @@ TEST(SongBrowserHandsTest, ATrackedBodyIsNotIntentAHeldHandIs) {
     EXPECT_EQ(Sb(typed, "query"), "a") << "the character is the search's\n" << typed;
     EXPECT_EQ(Sb(typed, "hand_in_pose"), "true") << "precondition: the arm is still out\n" << typed;
     expect("typed_hold", true, 4, "the arm still out after typing does not take it back");
-    expect("rearm", false, 5, "the arm away and out again");
+    expect("rearm_quiet", true, 4, "a hold inside the quiet after a typed character");
+    expect("rearm", false, 5, "the arm away and out again, past the quiet");
+    EXPECT_GE(r.Val("rearm_since_typed"), 8.0) << "sooner than the quiet\n" << r.output;
+    EXPECT_LE(r.Val("rearm_since_typed"), 9.0) << r.output;
     const std::string hold = expect("press_hold", true, 6, "a press with the arm out, and it stays");
     EXPECT_EQ(Sb(hold, "hand_in_pose"), "true") << "precondition: the arm is still out\n" << hold;
     // Start is the image's own way to hand the menu to the hands.

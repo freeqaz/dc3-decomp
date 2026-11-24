@@ -481,6 +481,9 @@ void Act(const Output &out) {
             // a finger's first tap on a row highlights it, a tap on the
             // highlighted row picks it (a phone's rows are ~16 CSS px tall)
             switch (NativeSongBrowser::PointerTap(out.tapX, out.tapY, out.tapTouch)) {
+            case 3:
+                gLastAction = "browser: pick the tapped sort tab";
+                break;
             case 2:
                 gTapSelects++;
                 gLastAction = "browser: pick the tapped row";

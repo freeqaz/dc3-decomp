@@ -409,14 +409,16 @@ public:
     // the selection only walks there (1): a phone's rows are ~16 CSS px tall,
     // and the row picked should be the one the player saw lit.  0, and nothing
     // done, off the song list's rows or while the list does not have the focus
-    // (the Recently Played shelf).
+    // (the Recently Played shelf).  3: on a sort tab, which is now the sort
+    // (a press on it, as LB/RB would get there; already the sort: nothing
+    // changes, still 3).
     int PointerTap(float x, float y, bool firstHighlights) {
         NotePadActivity();
         if (shown_ && screen_ && !gate_.frozen) {
             const int tab = screen_->TabAt({x, y});
             if (tab >= 0) {
                 screen_->SelectTab(tab);
-                return 2;
+                return 3;
             }
         }
         const bool wasSelected = shown_ && screen_
@@ -745,9 +747,11 @@ private:
     // steers by hand, and comes back on a press or a typed character.
     //   to the hands   a tracked skeleton's hand is where the song list (or
     //                  the help bar's left-hand list) needs it, by the list's
-    //                  own test, for kHandTakeoverSeconds without a break --
-    //                  counted only from a moment the hand was NOT there
-    //                  since the last press or typed character; or Start,
+    //                  own test, for kHandTakeoverSeconds (2.5 s) without a
+    //                  break -- counted only from a moment the hand was NOT
+    //                  there since the last press or typed character -- and
+    //                  no sooner than kHandQuietSeconds (8 s) after the last
+    //                  press, tap, typed character or mouse move; or Start,
     //                  when the game then leaves controller mode
     //   to the pad     the game is in controller mode again (a press:
     //                  ShellInput::OnMsg), or a character was typed

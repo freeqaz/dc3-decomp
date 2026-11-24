@@ -19,7 +19,9 @@ SongBrowserHandsTest): this script only drives and records.  The sequence:
     after_down   one Down after that idle
     after_up     one Up (back where it was)
     control_down one Down again, with no idle before it
-    short_hand   an arm out for 0.25 s, then down again
+    (quiet)      9 s with nothing pressed, so the next holds are past the
+                 8 s quiet the rule asks of the last press
+    short_hand   an arm out for 1.5 s (under the 2.5 s hold), then down again
     hand         an arm out and held (VAL hand_seconds: game time to the switch)
     hand_away    the arm dropped, 2 s later
     press        one Down, 6 frames later
@@ -27,14 +29,21 @@ SongBrowserHandsTest): this script only drives and records.  The sequence:
     hand2        an arm out and held again
     typed        a typed character while the arm is still out, 6 frames later
     typed_hold   the arm still out 3 s later
-    rearm        the arm dropped, then out and held again
+    rearm_quiet  the arm dropped, then out and held again for 3 s, still
+                 inside the 8 s quiet after the typed character
+    rearm        held on until the switch (VAL rearm_since_typed: game time
+                 from the typed character to it)
     press_hold   one Down with the arm still out, then 2 s more of it
     start        Start, arm down, 10 frames later
     start_hold   2 s later
     start_press  one Down, 6 frames later
 
-Poses are held in ENGINE time (SyntheticKinect.follow_engine), so a hold of
-0.75 s is 0.75 s of the game's own UI clock whatever the machine is doing.
+The rule under test (SongBrowserPanel_Native.cpp Update): a hand held in the
+list's pose for 2.5 s, counted from a moment it was seen away since the last
+press, and no sooner than 8 s after the last press, tap, typed character or
+mouse move.  Poses are held in ENGINE time (SyntheticKinect.follow_engine), so
+a hold of 2.5 s is 2.5 s of the game's own UI clock whatever the machine is
+doing.
 The controller-mode timeout is wall clock, which is why idle60 also reports
 VAL idle_wall_seconds: the idle only proves anything if it outlasted it.
 
@@ -151,16 +160,19 @@ def sequence(r):
     r.frames(20)
     r.obs("control_down")
 
-    # An arm that passes through the pose is not a hand held there.
+    # Past the quiet after the last press, so the hold alone decides below.
+    k.wait(9.0)
+
+    # An arm out for less than the hold is not a hand held there.
     k.point(0, "right", 0.5)
-    k.wait(0.25)
+    k.wait(1.5)
     k.set_pose(0, "stand")
     k.wait(1.5)
     r.obs("short_hand")
 
     # Held: the list's own.
     k.point(0, "right", 0.5)
-    r.val("hand_seconds", f"{r.until_shown(False, 4.0):.3f}")
+    r.val("hand_seconds", f"{r.until_shown(False, 6.0):.3f}")
     k.wait(0.3)
     r.obs("hand")
     k.set_pose(0, "stand")
@@ -176,20 +188,25 @@ def sequence(r):
 
     # A typed character, with the arm still out.
     k.point(0, "right", 0.5)
-    r.val("hand2_seconds", f"{r.until_shown(False, 4.0):.3f}")
+    r.val("hand2_seconds", f"{r.until_shown(False, 6.0):.3f}")
     k.wait(0.3)
     r.obs("hand2")
     r.text("a")
+    typed_at = k.now()
     r.frames(6)
     r.obs("typed")
     k.wait(3.0)
     r.obs("typed_hold")
 
-    # The arm has to go away and come back to count again.
+    # The arm has to go away and come back to count again -- and a hold
+    # longer than 2.5 s still waits out the 8 s quiet after the character.
     k.set_pose(0, "stand")
     k.wait(0.6)
     k.point(0, "right", 0.5)
-    r.val("rearm_seconds", f"{r.until_shown(False, 4.0):.3f}")
+    k.wait(3.0)
+    r.obs("rearm_quiet")
+    switched = r.until_shown(False, 6.0)
+    r.val("rearm_since_typed", f"{(k.now() - typed_at) if switched >= 0 else -1.0:.3f}")
     k.wait(0.3)
     r.obs("rearm")
     r.press("down")
