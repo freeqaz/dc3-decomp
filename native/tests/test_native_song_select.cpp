@@ -1285,6 +1285,48 @@ const char *const kClassicToken = "$(ev '{song_select_panel get_selected_song_to
 
 } // namespace
 
+TEST(NativePgSongsFlowTest, DefaultFiltersTheBrowserClassicListHistoryAndRandomPicks) {
+    if (!getenv("DC3_DTA_FLOW_TESTS")) {
+        GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable (requires game assets)";
+    }
+    std::string error;
+    std::string root = MakeRoot(error);
+    ASSERT_TRUE(error.empty()) << error;
+    WriteFile(root + "/saves/song_select.txt", "dc3-song-select 1\nplayed getlow\nplayed ymca\n");
+    std::ostringstream drive;
+    drive << kToSongSelect
+          << "rows classic; echo \"DRIVER: browser $(sb)\"; "
+          << "typ 'get low'; echo \"DRIVER: search $(sb)\"; press cancel; "
+          << "echo \"DRIVER: random "
+          << "$(ev '{do ($s \"\") {foreach_int $i 0 40 "
+          << "{set $s {sprint $s {song_mgr get_random_song} \";\"}}} $s}')\"; ";
+    EngineRun run = RunEngine(root, "pg", drive.str(), " DC3_SONG_BROWSER=1 DC3_PG_SONGS=");
+    ASSERT_TRUE(run.setupError.empty()) << run.setupError;
+    ASSERT_NE(run.driver.find("DRIVER: at=song_select_screen"), std::string::npos)
+        << run.driver << Tail(run.output);
+
+    const auto rows = Rows(run, "classic");
+    std::vector<std::string> songs;
+    for (const auto &row : rows) {
+        if (IsSong(row)) songs.push_back(TokenOf(row));
+    }
+    EXPECT_EQ(songs.size(), 19u); // 18 disc songs and the Y.M.C.A. recent row
+    EXPECT_EQ(std::count(songs.begin(), songs.end(), "ymca"), 2);
+    EXPECT_EQ(std::count(songs.begin(), songs.end(), "macarena"), 1);
+    EXPECT_EQ(std::count(songs.begin(), songs.end(), "getlow"), 0);
+    EXPECT_EQ(std::count(songs.begin(), songs.end(), "firework"), 0);
+    EXPECT_EQ(Sb(DriverLine(run, "browser"), "songs"), "18");
+    EXPECT_EQ(Sb(DriverLine(run, "browser"), "selected_song"), "ymca");
+    EXPECT_EQ(Sb(DriverLine(run, "search"), "query"), "get low");
+    EXPECT_EQ(Sb(DriverLine(run, "search"), "selected_song"), "");
+
+    const auto random = Split(DriverValue(run, "random"), ";");
+    ASSERT_EQ(random.size(), 40u) << run.driver;
+    for (const auto &song : random) {
+        EXPECT_NE(std::find(songs.begin(), songs.end(), song), songs.end()) << song;
+    }
+}
+
 // One engine with DC3_SONG_BROWSER=1 and a history: arrive, pick from the
 // shelf, come back, pick from the list, come back, search and pick from the
 // results, come back, clear the query, change the sort, leave with Back.

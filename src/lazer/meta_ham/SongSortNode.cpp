@@ -456,6 +456,9 @@ Symbol SongFunctionNode::OnSelect() {
         pPanel->HandleType(msg);
     } else if (GetToken() == random_song) {
         Symbol song = TheHamSongMgr.GetRandomSong();
+#ifdef HX_NATIVE
+        if (song.Null()) return gNullStr;
+#endif
         static Symbol special_select_song("special_select_song");
         UIPanel *pPanel = ObjectDir::Main()->Find<UIPanel>("song_select_panel");
         MILO_ASSERT(pPanel, 0x139);

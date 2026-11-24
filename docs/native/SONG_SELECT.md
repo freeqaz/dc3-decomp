@@ -14,12 +14,27 @@ native-only files or under `HX_NATIVE`.
 
 `DC3_CLASSIC_SONG_SELECT=1` turns all of it off at once: three sorts, no
 Recently Played, the four buttons inert, the sort not remembered. The list is
-then the image's row for row (`SongSelectClassicFlowTest`).
+then laid out like the image's list (`SongSelectClassicFlowTest`).
 
-On desktop a pad or keyboard player does not see that list at all: they get
-the natively drawn **song browser** over the same panel (next section). The
-list described in the rest of this page is what a gesture player gets, what
-the web gets, and what stays loaded underneath the browser.
+By default, desktop pad and keyboard players get the natively drawn **song
+browser** over the same panel. The classic list stays loaded underneath it
+and is the default for gesture and web play.
+
+## Family-friendly song selection
+
+The port defaults to a curated PG song list for free play. The disc and
+official import packs use the same rating value for every song, so the filter
+uses short names from the known catalog. Choose from 18 disc songs and up to
+53 mounted import or DLC songs, including Macarena, Funkytown, Dancing Queen,
+Waka Waka and The Safety Dance. Search, Recently Played, Random Song, the
+random party pool and playlist selection use the same filter. Built-in
+playlists omit filtered songs and empty playlists are hidden. Saved playlists
+with filtered songs are hidden until the full catalog is enabled.
+
+Set `DC3_PG_SONGS=0` before launch to use the full catalog. The classic
+song-select switch controls the presentation independently. Story uses its
+authored setlists. To verify songs after a transfer, launch once with the
+full catalog enabled. See [Copy more Dance Central songs to the Mac](MACOS.md#copy-more-dance-central-songs-to-the-mac).
 
 ## The song browser
 
@@ -417,6 +432,9 @@ three names, and `save_sort`, `save_focus` and `restore_focus` do nothing.
 `native/tests/test_native_song_select.cpp`:
 
 - `NativeSongSelectStateTest` (5): the file, against a scratch path.
+- `NativePgSongsFlowTest` (1) checks the default filter in the browser,
+  classic list, Recently Played, search and random picks. The other CTest
+  flows use `DC3_PG_SONGS=0` so they can exercise the full catalog.
 - `SongSelectFlowTest` (3), `SongSelectHistoryFlowTest` (2),
   `SongSelectClassicFlowTest` (1): child `dc3-native` runs driven over the
   HTTP debug server, headless, disc songs only, each on its own save

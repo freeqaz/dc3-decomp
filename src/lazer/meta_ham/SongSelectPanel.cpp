@@ -15,6 +15,7 @@
 #include "utl\MakeString.h"
 #include "utl\Symbol.h"
 #ifdef HX_NATIVE
+#include "platform/PgSongs_Native.h"
 #include "platform/SongBrowserHooks_Native.h"
 #endif
 
@@ -114,6 +115,10 @@ RndTex *SongSelectPanel::GetTexForCharacter(Symbol s) {
 
 BEGIN_HANDLERS(SongSelectPanel)
 #ifdef HX_NATIVE
+    static Symbol special_select_song("special_select_song");
+    if (sym == special_select_song && !NativePgSongs::AllowsSong(_msg->Sym(2))) {
+        return 0;
+    }
     _HANDLE_CHECKED(NativeSongBrowser::OnPanelHandle(this, _msg))
 #endif
     HANDLE_EXPR(

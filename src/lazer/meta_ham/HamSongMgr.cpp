@@ -37,6 +37,7 @@
 #include <map>
 #include <vector>
 #ifdef HX_NATIVE
+#include "platform/PgSongs_Native.h"
 #include "platform/SongId_Native.h"
 #endif
 
@@ -474,6 +475,9 @@ void HamSongMgr::InitializePlaylists() {
             Symbol curSong = songArray->Sym(j);
             int songID = GetSongIDFromShortName(curSong, false);
             if (songID != 0) {
+#ifdef HX_NATIVE
+                if (!NativePgSongs::AllowsSong(curSong)) continue;
+#endif
                 p->AddSong(songID);
             } else {
                 MILO_NOTIFY(
@@ -486,11 +490,19 @@ void HamSongMgr::InitializePlaylists() {
         if (!p->IsEmpty()) {
             mPlaylists.push_back(p);
         }
+#ifdef HX_NATIVE
+        else {
+            delete p;
+        }
+#endif
     }
     // Lane history (27 lines moved): docs/decomp/notes/lazer/meta_ham/HamSongMgr.md
     std::map<Symbol, Playlist *> playlistMap;
     FOREACH (it, TheHamSongMgr.mRankedSongs) {
         const HamSongMetadata *data = TheHamSongMgr.Data(*it);
+#ifdef HX_NATIVE
+        if (!NativePgSongs::AllowsSong(data->ShortName())) continue;
+#endif
         if (data->IsComplete() && !data->IsFake()
             && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
             const Symbol &crewSym = GetCrewForCharacter(GetOutfitCharacter(data->Outfit()));
@@ -607,6 +619,9 @@ Symbol HamSongMgr::GetRandomSong() {
             vec68.push_back(*it);
         }
     }
+#ifdef HX_NATIVE
+    if (vec68.empty()) return gNullStr;
+#endif
     int randID = mJukebox.Pick(vec68);
     Symbol ret = GetShortNameFromSongID(randID);
     if (mRandomSongDebug) {
@@ -657,6 +672,9 @@ void HamSongMgr::GetRandomlySelectableRankedSongs(std::vector<int> &songIDs) con
     songIDs.clear();
     FOREACH (it, mAvailableSongs) {
         const HamSongMetadata *data = Data(*it);
+#ifdef HX_NATIVE
+        if (!NativePgSongs::AllowsSong(data->ShortName())) continue;
+#endif
         if (data->IsRanked() && data->IsComplete() && !data->IsFake()
             && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
             songIDs.push_back(*it);
@@ -783,6 +801,9 @@ void HamSongMgr::GetValidSongs(
     FOREACH (it, songIDs) {
         int songID = *it;
         Symbol shortName = GetShortNameFromSongID(songID);
+#ifdef HX_NATIVE
+        if (!NativePgSongs::AllowsSong(shortName)) continue;
+#endif
         const HamSongMetadata *data = Data(songID);
         if (data->IsVersionOK() && !performer.SongInSet(shortName)) {
             char const *title = data->Title();

@@ -25,6 +25,7 @@
 #include "utl\Std.h"
 #include "utl\Symbol.h"
 #ifdef HX_NATIVE
+#include "platform/PgSongs_Native.h"
 #include "platform/SongSelect_Native.h"
 #endif
 
@@ -182,9 +183,14 @@ Symbol SongSortMgr::DetermineHeaderSymbolForSong(Symbol sym) {
 
 void SongSortMgr::SetQuasiRandomSong() {
     int numIndices = mQuasiRandomIndices.size();
+#ifdef HX_NATIVE
+    if (numIndices == 0) return;
+    int randVal = rand() % Max(1, numIndices / 2);
+#else
     MILO_ASSERT(numIndices > 0, 0x175);
 
     int randVal = rand() % (numIndices / 2);
+#endif
     int val = mQuasiRandomIndices[randVal];
     mQuasiRandomIndices.erase(mQuasiRandomIndices.begin() + randVal);
     mQuasiRandomIndices.push_back(val);
@@ -248,6 +254,9 @@ void SongSortMgr::RebuildSongRecordMap() {
     mRankedSongCount = rankedSongs.size();
     FOREACH (it, rankedSongs) {
         const HamSongMetadata *metadata = TheHamSongMgr.Data(*it);
+#ifdef HX_NATIVE
+        if (metadata && !NativePgSongs::AllowsSong(metadata->ShortName())) continue;
+#endif
         if (metadata && !metadata->IsFake()
             && TheProfileMgr.IsContentUnlocked(metadata->ShortName())) {
             SongRecord second(metadata);
@@ -330,7 +339,11 @@ void SongSortMgr::SetupQuasiRandomSongs() {
         tempArr[random] = tempArr[i - 1];
     }
 
+#ifdef HX_NATIVE
+    delete[] tempArr;
+#else
     delete tempArr;
+#endif
     SetQuasiRandomSong();
 }
 

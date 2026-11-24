@@ -56,6 +56,88 @@ configures `native/build`, builds, and opens the game in a window. Without
 YMCA flow the Linux gate runs, before the window), `--assets <dir | orig-assets.tar.xz>`,
 `--jobs N`. Later launches: `scripts/start-mac.sh`.
 
+## Choose PG songs or the full catalog
+
+Open **Dance Central 3** from the Dock or Finder, or double-click
+`~/Developer/dc3-play.command`. Choose **PG songs** for the curated free-play
+list or **Full catalog** for all available songs, including mounted DLC.
+Return starts the highlighted mode. The first launch highlights **PG songs**,
+and subsequent launches highlight your last choice. Quit and reopen the game
+to switch. Story keeps its authored setlists.
+
+To open the same chooser from the checkout, run
+`scripts/mac/choose-song-mode.sh scripts/start-mac.sh`.
+
+## Copy more Dance Central songs to the Mac
+
+Copy already-extracted DLC and import packs one package directory at a time.
+Keep the lowercase paths and the complete `songs/` tree, including
+`songs/songs.dta`. If the source is an Xbox 360 STFS package file, use the
+importer to extract and hash-check it. See [DLC setup](DLC.md#use-it).
+
+For an already-extracted pack, run these commands from the DC3 checkout with
+the game closed. Replace the example source and package name with yours. The
+checksum pass should show no file changes before you launch the game.
+
+```sh
+dlc_root="${DC3_DATA:-$PWD/orig-assets}/dlc"
+package=dc2exportpackfordc3
+source_package="source-host:/path/to/orig-assets/dlc/$package"
+mkdir -p "$dlc_root/$package"
+rsync -ac --partial "$source_package/" "$dlc_root/$package/"
+rsync -acni "$source_package/" "$dlc_root/$package/"
+```
+
+Mount the copied packages and check the full song list.
+
+```sh
+DC3_DLC_DIR="$dlc_root" DC3_PG_SONGS=0 scripts/start-mac.sh
+```
+
+Look for the package's `DC3 Native: DLC package` line in the launch log,
+then select an imported song and start gameplay to check its chart and audio.
+Set `DC3_PG_SONGS=1` to return to the default curated list. Mounted songs
+appear there only if their short names are on the allowlist.
+See [family-friendly song selection](SONG_SELECT.md#family-friendly-song-selection).
+
+## Rock Band 3 on the Mac
+
+**Verified 2026-11-23 on Apple Silicon.** The local RB3 macOS fixes produce
+an arm64 executable with strict linking. A headless run rendered three Metal
+frames on an M3 and wrote the 256×256 smoke PNG. A full-game launch
+initialized the renderer and exited when it could not find the extracted
+Xbox assets. Booting to the menu and playing a song still need that data.
+
+Rock Band 3 has its own native build in a sibling `rb3` checkout. Use
+the shared `milo-native-engine` and point the RB3 build script at the
+macOS Dawn package installed by DC3's bootstrap.
+
+```sh
+cd ../rb3
+DAWN_DIR="$PWD/../dawn-prebuilt" scripts/native/build-macos.sh
+```
+
+The Metal smoke test can run before copying the game assets.
+
+```sh
+MILO_HEADLESS=1 RB3_GPU_SMOKE=1 RB3_GPU_SMOKE_PNG=/tmp/rb3-gpu-smoke.png \
+  native/build-macos/rb3-native
+```
+
+For a full game boot, point `RB3_DATA` at RB3's own extracted Xbox ARK
+assets and run the built executable from the RB3 checkout. Keep the RB3
+data and the Dance Central DLC root separate. If your RB3 data directory
+lives outside the checkout, set `RB3_DTA_OVERLAY="$PWD/native/dta"` as well.
+
+```sh
+RB3_DATA="$PWD/orig-assets/extracted" RB3_GAME=1 native/build-macos/rb3-native
+```
+
+For a headless run with the debug API, also set `MILO_HEADLESS=1 RB3_HTTP=1`.
+
+The build details, other runtime modes, and asset layout are documented in
+the [RB3 macOS build guide](../../../rb3/docs/native/MACOS_BUILD.md).
+
 ## Prerequisites (what the script checks)
 
 | Item | Check | Fix it prints / runs |
